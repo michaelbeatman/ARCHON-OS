@@ -689,15 +689,14 @@
     }    window.openSystemSettingsModal = openSystemSettingsModal;
     window.closeSystemSettingsModal = closeSystemSettingsModal;
     window.setSettingsTab = setSettingsTab;
-    window.saveSystemSettings = saveSystemSettings;
-    window.toggleJevSettings = toggleJevSettings;
-    window.toggleMemorySettings = toggleMemorySettings;
-    window.loadRolesToSettingsDropdown = loadRolesToSettingsDropdown;
-    window.loadThemeFromServer = loadThemeFromServer;
-    window.initLogoUpload = initLogoUpload;
-    window.populateSettingsRoleDropdown = populateSettingsRoleDropdown;
-    window.saveAgentSettings = saveAgentSettings;
-    window.openHermesProfileSettings = openHermesProfileSettings;
+    // GUARD (10.10.2026): Diese Funktionen leben in ANDEREN Dateien, die
+    // NACH system_settings.js laden. Die harte Zuweisung warf einen
+    // ReferenceError und brach den REST DER DATEI (Zeilen bis 822:
+    // Plugin-/Hermes-Settings-Exports, Kanban-Palette) ab.
+    [saveSystemSettings, toggleJevSettings, toggleMemorySettings,
+     loadRolesToSettingsDropdown, loadThemeFromServer, initLogoUpload,
+     populateSettingsRoleDropdown, saveAgentSettings, openHermesProfileSettings
+    ].forEach(fn => { if (typeof fn === "function") window[fn.name] = fn; });
     window.openSystemSettingsModal = openSystemSettingsModal;
     window.closeSystemSettingsModal = closeSystemSettingsModal;
     window.setSettingsTab = setSettingsTab;

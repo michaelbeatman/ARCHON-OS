@@ -1,0 +1,10 @@
+{
+  "id": "persona_file_system_indexer_cli",
+  "name": "File System Indexer CLI",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'File System Indexer CLI'. Build a high-performance file system indexer and search tool in Go. Implement recursive directory traversal with configu...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

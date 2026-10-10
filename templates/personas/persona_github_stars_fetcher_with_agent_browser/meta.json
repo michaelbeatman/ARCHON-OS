@@ -1,0 +1,10 @@
+{
+  "id": "persona_github_stars_fetcher_with_agent_browser",
+  "name": "GitHub Stars Fetcher with Agent Browser",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'GitHub Stars Fetcher with Agent Browser'. # Using Agent Browser to Fetch GitHub Starred Projects\n\n## Objective\nUse the Agent Browser skill to log into GitHub and ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,46 @@
+[
+  {
+    "id": "hermes-orchestrator",
+    "name": "Hermes Master Orchestrator",
+    "role": "System-Architekt & Paperclip Lead",
+    "model": "omniroute/best-reasoning",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "hermes-researcher",
+    "name": "Hermes Deep Researcher",
+    "role": "Web-Scraping, Markt- & SEO-Analysen",
+    "model": "omniroute/free-forever",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "hermes-coder",
+    "name": "Hermes Senior Coder",
+    "role": "Fullstack Software Engineer & Dev",
+    "model": "omniroute/deepseek-coder",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "hermes-odysseus",
+    "name": "Hermes Odysseus Strategist",
+    "role": "Business Strategy & Second Brain Vault",
+    "model": "omniroute/best-reasoning",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  }
+]

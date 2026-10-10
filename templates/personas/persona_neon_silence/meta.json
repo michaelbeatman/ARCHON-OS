@@ -1,0 +1,10 @@
+{
+  "id": "persona_neon_silence",
+  "name": "Neon Silence",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Neon Silence'. {\n  \"task\": \"style_transfer_portrait_poster\",\n  \"input\": {\n    \"reference_image\": \"${reference_image_url_or_path}\",\n    ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

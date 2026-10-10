@@ -1,0 +1,10 @@
+{
+  "id": "persona_memories_md_usage_instructions_system_prompt",
+  "name": "memories.md Usage Instructions (System Prompt)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'memories.md Usage Instructions (System Prompt)'. In this project/session, a file called `memories.md` is used to store persistent\ncontext carried over from past conversa...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_transform_the_provided_clothing_product_image",
+  "name": "Transform the provided clothing product image.",
+  "category": "2. Handel, Beschaffung & E-Commerce",
+  "description": "Fach-Experte: 'Transform the provided clothing product image.'. {\n  \"model\": \"nano-banana\",\n  \"task\": \"image_to_image_product_transformation\",\n\n  \"objective\": \"Transform the provided c...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

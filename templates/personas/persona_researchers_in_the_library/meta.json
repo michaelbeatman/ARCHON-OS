@@ -1,0 +1,10 @@
+{
+  "id": "persona_researchers_in_the_library",
+  "name": "Researchers in the Library",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Researchers in the Library'. Generate a video for Researchers in the Lab going to the library, make it programmatic video creation, maybe use LoRA an...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

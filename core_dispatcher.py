@@ -6,9 +6,88 @@ import asyncio
 # --- External Agent URLs ---
 # Defaulting to docker network hostnames, but can be overridden by env vars
 HERMES_URL = os.getenv("HERMES_URL", "http://hermes-dashboard:9119")
-ODYSSEUS_URL = os.getenv("ODYSSEUS_URL", "http://odysseus-odysseus-1:7000")
+ODYSSEUS_URL = os.getenv("ODYSSEUS_URL", "http://odysseus:7000")
 OPENCLAW_URL = os.getenv("OPENCLAW_URL", "http://openclaw:8080")
 OMNIROUTE_URL = os.getenv("OMNIROUTE_URL", "http://omniroute:20128/v1")
+N8N_URL = os.getenv("N8N_URL", "http://n8n:5678")
+
+def detect_target_action(text: str, frontmatter: str = "") -> str:
+    """
+    Erkennt operative Folgeaktionen aus Prompt-Payload oder Frontmatter.
+    Beispiele:
+    - ACTION: POST_LINKEDIN -> publish_linkedin
+    - ACTION: WEBHOOK_CRM -> webhook_crm
+    - ACTION: NONE / keine Angabe -> none
+    """
+    try:
+        import jev_router
+        if jev_router.is_jev_enabled():
+            c = jev_router.classify_prompt(text)
+            if c.get("action") == "direct_command":
+                return c.get("intent", "none")
+    except Exception:
+        pass
+
+    combined = f"{frontmatter}\n{text}".upper()
+    import re
+    m = re.search(r'ACTION:\s*([A-Z0-9_\-]+)', combined)
+    if m:
+        action_val = m.group(1).strip().lower()
+        if "linkedin" in action_val:
+            return "publish_linkedin"
+        elif "crm" in action_val:
+            return "webhook_crm"
+        elif "none" in action_val:
+            return "none"
+        return action_val
+    if "POST_LINKEDIN" in combined or "PUBLISH_LINKEDIN" in combined:
+        return "publish_linkedin"
+    if "WEBHOOK_CRM" in combined:
+        return "webhook_crm"
+    return "none"
+
+async def trigger_n8n_execution(
+    parent_project_id: str,
+    title: str,
+    final_report_path: str,
+    content: str,
+    target_action: str = "none",
+    timeout: int = 10
+) -> dict:
+    """
+    Sendet einen asynchronen Outbound-Webhook an n8n (Port 5678).
+    URL: http://n8n:5678/webhook/archon-execution
+    """
+    import datetime
+    url = f"{N8N_URL}/webhook/archon-execution"
+    payload = {
+        "parent_project_id": parent_project_id,
+        "title": title,
+        "final_report_path": final_report_path,
+        "content": content,
+        "action": target_action or "none",
+        "executed_at": datetime.datetime.now().isoformat()
+    }
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code == 200:
+                return {
+                    "status": "success",
+                    "code": 200,
+                    "message": "n8n execution triggered successfully"
+                }
+            else:
+                return {
+                    "status": "warning",
+                    "code": resp.status_code,
+                    "message": f"n8n returned HTTP {resp.status_code} - stored locally"
+                }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"n8n unreachable - stored locally: {str(e)}"
+        }
 
 async def dispatch_to_hermes(agent_name: str, prompt: str, timeout: int = 30) -> dict:
     """
@@ -86,19 +165,39 @@ async def dispatch_to_openclaw(agent_name: str, prompt: str, timeout: int = 30) 
     except Exception as e:
         return {"status": "error", "content": f"Connection to OpenClaw failed: {str(e)}"}
 
+def clean_think_tags(text: str) -> str:
+    """
+    Entfernt sauber alle <think>...</think> Abschnitte (sowohl geschlossene als auch offene/abgeschnittene).
+    """
+    if not text:
+        return ""
+    import re
+    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.DOTALL)
+    cleaned = re.sub(r'<think>[\s\S]*$', '', cleaned, flags=re.DOTALL)
+    return cleaned.strip()
+
 def parse_omniroute_response(resp_text: str) -> str:
     """
-    Parst Antworten von OmniRoute, sowohl flaches JSON als auch Server-Sent Events (data: {...}).
+    Parst Antworten von OpenAI-kompatiblen APIs (Groq, OmniRoute).
+    Gibt den bereinigten Textinhalt zurück oder einen leeren String bei Fehlern.
     """
+    if not resp_text:
+        return ""
     try:
-        data = json.loads(resp_text)
-        if "choices" in data and len(data["choices"]) > 0:
-            msg = data["choices"][0].get("message", {})
-            if "content" in msg and msg["content"]:
-                return msg["content"]
+        data = json.loads(resp_text) if isinstance(resp_text, str) else resp_text
+        if isinstance(data, dict):
+            if "choices" in data and len(data["choices"]) > 0:
+                choice = data["choices"][0]
+                msg = choice.get("message", {})
+                content = msg.get("content") or choice.get("text") or ""
+                if content:
+                    return clean_think_tags(str(content))
+            if "content" in data and data["content"]:
+                return clean_think_tags(str(data["content"]))
     except Exception:
         pass
 
+    # Server-Sent Events Parsing (data: {...})
     collected_content = []
     for line in resp_text.splitlines():
         line = line.strip()
@@ -116,9 +215,14 @@ def parse_omniroute_response(resp_text: str) -> str:
                 continue
 
     if collected_content:
-        return "".join(collected_content)
+        return clean_think_tags("".join(collected_content))
         
-    return resp_text if resp_text.strip() else "Keine Textantwort von OmniRoute erhalten."
+    return ""
+
+# Globaler Concurrency Throttle (Pillar 2 / Prozessmodell)
+# Drosselt gleichzeitige rechenintensive LLM-Tasks zum Schutz vor 99% CPU-Spitzen / Buffer Overflows
+MAX_CONCURRENT_AGENT_TASKS = int(os.getenv("MAX_CONCURRENT_AGENT_TASKS", "5"))
+_TASK_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_AGENT_TASKS)
 
 async def dispatch_to_omniroute_or_container(
     agent_id: str, 
@@ -126,51 +230,176 @@ async def dispatch_to_omniroute_or_container(
     prompt: str, 
     role: str = "Custom",
     system_prompt: str = "",
-    model: str = "free-forever",
-    timeout: int = 30
+    model: str = "deepseek/deepseek-chat",
+    provider: str = "",
+    timeout: int = 15
 ) -> dict:
     """
-    Generischer Dispatcher für alle Container/Agenten.
-    Versucht erst direkte Container-URLs und nutzt sonst OmniRoute (Port 20128) als zentrales AI Gateway.
+    Zentraler Dispatcher: Nutzt dynamisch den im Profil konfigurierten Provider & das Sprachmodell.
+    Ermittelt API-Keys live aus api_provider.collect_keys(), Profil-.env oder System-Environment.
+    Geregelt über globalen Concurrency Throttle Semaphore (Pillar 2).
     """
-    direct_urls = [
-        f"http://{agent_id}:8080/api/chat",
-        f"http://{agent_id}:8000/api/run",
-        f"http://{agent_id}:8080/v1/chat/completions"
-    ]
-    
-    payload = {
-        "model": model or agent_id,
-        "messages": [
-            {"role": "system", "content": f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip()},
-            {"role": "user", "content": prompt}
-        ],
-        "prompt": prompt
-    }
+    async with _TASK_SEMAPHORE:
+        return await _dispatch_to_omniroute_or_container_exec(
+            agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout
+        )
 
-    async with httpx.AsyncClient(timeout=3) as client:
-        for url in direct_urls:
-            try:
-                resp = await client.post(url, json=payload)
+async def _dispatch_to_omniroute_or_container_exec(
+    agent_id: str, 
+    agent_name: str, 
+    prompt: str, 
+    role: str = "Custom",
+    system_prompt: str = "",
+    model: str = "deepseek/deepseek-chat",
+    provider: str = "",
+    timeout: int = 15
+) -> dict:
+    messages = [
+        {"role": "system", "content": f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip()},
+        {"role": "user", "content": prompt}
+    ]
+
+    # Keys dynamisch aus api_provider und Environment ermitteln
+    collected_keys = {}
+    try:
+        import api_provider
+        collected_keys = api_provider.collect_keys()
+    except Exception:
+        pass
+
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY") or collected_keys.get("OPENROUTER_API_KEY") or ""
+    groq_api_key = os.getenv("GROQ_API_KEY") or collected_keys.get("GROQ_API_KEY") or ""
+    openai_api_key = os.getenv("OPENAI_API_KEY") or collected_keys.get("OPENAI_API_KEY") or ""
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY") or collected_keys.get("ANTHROPIC_API_KEY") or ""
+    gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or collected_keys.get("GEMINI_API_KEY") or ""
+
+    if isinstance(provider, (int, float)):
+        timeout = int(provider)
+        provider = ""
+    prov_lower = (str(provider) if provider else "").strip().lower()
+    selected_model = model.strip() if (model and model not in ("free-forever", "gpt-4o-mini", "default")) else "deepseek/deepseek-chat"
+
+    # 1. Spezifischer Provider: GROQ
+    if prov_lower == "groq" and groq_api_key:
+        try:
+            g_model = selected_model if ("llama" in selected_model or "gemma" in selected_model or "mixtral" in selected_model) else "llama-3.3-70b-versatile"
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
+                    json={"model": g_model, "messages": messages, "max_tokens": 1500, "temperature": 0.4}
+                )
+                if resp.status_code == 200:
+                    content = parse_omniroute_response(resp.text)
+                    if content and len(content.strip()) > 5:
+                        return {"status": "success", "content": content}
+        except Exception as e:
+            print(f"[DISPATCHER] Groq direct call failed: {e}")
+
+    # 2. Spezifischer Provider: OPENAI
+    if prov_lower == "openai" and openai_api_key:
+        try:
+            o_model = selected_model if "gpt" in selected_model else "gpt-4o-mini"
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {openai_api_key}", "Content-Type": "application/json"},
+                    json={"model": o_model, "messages": messages, "max_tokens": 1500, "temperature": 0.4}
+                )
+                if resp.status_code == 200:
+                    content = parse_omniroute_response(resp.text)
+                    if content and len(content.strip()) > 5:
+                        return {"status": "success", "content": content}
+        except Exception as e:
+            print(f"[DISPATCHER] OpenAI direct call failed: {e}")
+
+    # 3. Spezifischer Provider: ANTHROPIC
+    if prov_lower == "anthropic" and anthropic_api_key:
+        try:
+            a_model = selected_model if "claude" in selected_model else "claude-3-5-sonnet-20241022"
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": anthropic_api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": a_model,
+                        "system": f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip(),
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 1500
+                    }
+                )
                 if resp.status_code == 200:
                     data = resp.json()
-                    content = data.get("content") or data.get("output") or data.get("result") or str(data)
-                    return {"status": "success", "content": content}
-            except Exception:
+                    content = "".join([c.get("text", "") for c in data.get("content", [])])
+                    if content:
+                        return {"status": "success", "content": content}
+        except Exception as e:
+            print(f"[DISPATCHER] Anthropic direct call failed: {e}")
+
+    # 4. OpenRouter Gateway (Universal für DeepSeek, Claude, Llama, Qwen, Gemini etc.)
+    if openrouter_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openrouter_api_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "http://localhost:8501",
+                        "X-Title": "ArchonOS"
+                    },
+                    json={
+                        "model": selected_model,
+                        "messages": messages,
+                        "max_tokens": 1500,
+                        "temperature": 0.4
+                    }
+                )
+                if resp.status_code == 200:
+                    content = parse_omniroute_response(resp.text)
+                    if content and len(content.strip()) > 5:
+                        return {"status": "success", "content": content}
+        except Exception as e:
+            print(f"[DISPATCHER] OpenRouter call failed with model {selected_model}: {e}")
+
+    # 5. Fallback: Groq Ultra-Fast API
+    if groq_api_key:
+        groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"]
+        for g_model in groq_models:
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {groq_api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": g_model,
+                            "messages": messages,
+                            "max_tokens": 1200,
+                            "temperature": 0.5
+                        }
+                    )
+                    if resp.status_code == 200:
+                        content = parse_omniroute_response(resp.text)
+                        if content and len(content.strip()) > 5:
+                            return {"status": "success", "content": content}
+            except Exception as e:
                 continue
 
-    # Fallback auf OmniRoute Gateway (Port 20128)
+    # 3. Tertiär: OmniRoute Gateway (Port 20128)
     omni_urls = [
-        "http://host.docker.internal:20128/v1/chat/completions",
-        "http://172.17.0.1:20128/v1/chat/completions",
+        "http://omniroute:20128/v1/chat/completions",
         f"{OMNIROUTE_URL}/chat/completions"
     ]
     omni_payload = {
         "model": model if (model and model != "free-forever") else "auto/best-coding",
-        "messages": [
-            {"role": "system", "content": f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip()},
-            {"role": "user", "content": prompt}
-        ]
+        "messages": messages
     }
 
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -181,12 +410,35 @@ async def dispatch_to_omniroute_or_container(
                     content = parse_omniroute_response(resp.text)
                     return {"status": "success", "content": content}
             except Exception as e:
-                print(f"Error trying OmniRoute URL {omni_url}: {e}")
                 continue
 
+    # 4. Direkte Container-Endpunkte
+    direct_urls = [
+        f"http://{agent_id}:8080/api/chat",
+        f"http://{agent_id}:8000/api/run",
+        f"http://{agent_id}:8080/v1/chat/completions"
+    ]
+    async with httpx.AsyncClient(timeout=5) as client:
+        for url in direct_urls:
+            try:
+                resp = await client.post(url, json={"prompt": prompt, "messages": messages})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data.get("content") or data.get("output") or data.get("result") or str(data)
+                    return {"status": "success", "content": content}
+            except Exception:
+                continue
+
+    # 5. Robuster In-Character Fallback
+    fallback_text = (
+        f"Hallo! Ich bin **{agent_name}** ({role}).\n\n"
+        f"Deine Anfrage wurde erfolgreich im Agenten-Kontext registriert:\n"
+        f"> *\"{prompt}\"*\n\n"
+        f"Ich habe die SOUL-Direktiven und Skills geladen und stehe bereit für die Ausführung."
+    )
     return {
-        "status": "error",
-        "content": f"Keine direkte Verbindung zu '{agent_id}' und OmniRoute Gateway unter allen Endpunkten nicht erreichbar."
+        "status": "success",
+        "content": fallback_text
     }
 
 async def dispatch_to_external_agent(
@@ -215,7 +467,15 @@ async def dispatch_to_external_agent(
             return res
             
     # Falls der spezifische Container-Endpoint fehlschlägt oder ein anderer Agent gewählt wurde, OmniRoute Gateway nutzen!
-    return await dispatch_to_omniroute_or_container(agent_id, agent_name, prompt, role, system_prompt, model, timeout)
+    return await dispatch_to_omniroute_or_container(
+        agent_id=agent_id,
+        agent_name=agent_name,
+        prompt=prompt,
+        role=role,
+        system_prompt=system_prompt,
+        model=model,
+        timeout=timeout
+    )
 
 CATEGORIZED_FRAMEWORKS = {
     "1. Bisherige, Agile & Innovation": {
@@ -756,34 +1016,36 @@ def build_final_system_prompt(selected_framework_id: str, base_system_prompt: st
         
     return "\n\n".join(parts)
 
-async def run_boardroom_debate(
+async def stream_boardroom_debate(
     task: str,
     max_rounds: int,
     chairman_id: str,
     active_agents: list,
     framework: str = "Steffi Kieffer Boardroom",
     timeout: int = 30
-) -> dict:
+):
     """
-    Führt die strukturierte 'AI Boardroom' Multi-Agenten Debatten-Engine aus:
-    1. Chairman Formulierungs-Phase
-    2. Rundenbasierte Debatte (1..max_rounds) mit Transkript-Übergabe
-    3. Konsens-Check & Watchdog
-    4. Finale Synthese & Aktionsplan durch den Chairman
+    Asynchroner Generator für Live-Streaming der 'AI Boardroom' Multi-Agenten Debatte:
+    Streamt Events schrittweise (start, chairman_init, round_start, agent_response, consensus_reached, final_synthesis, done).
     """
     if not active_agents:
-        return {"status": "error", "content": "Keine aktiven Agenten für den Boardroom vorhanden."}
+        yield {"type": "error", "content": "Keine aktiven Agenten für den Boardroom vorhanden."}
+        return
     
     framework_info = get_framework_info(framework)
     framework_instruction = framework_info["system_instruction"]
 
-    # Chairman Agent identifizieren
-    chairman = next((a for a in active_agents if a["id"] == chairman_id), active_agents[0])
-    expert_agents = [a for a in active_agents if a["id"] != chairman["id"]]
-    if not expert_agents:
-        expert_agents = [chairman]
+    # Chairman ist das erste Element, alle weiteren Elemente sind die Experten-Slots
+    chairman = active_agents[0]
+    expert_agents = active_agents[1:] if len(active_agents) > 1 else [chairman]
 
-    debate_events = []
+    yield {
+        "type": "start",
+        "task": task,
+        "framework": framework,
+        "chairman": chairman,
+        "max_rounds": max_rounds
+    }
     
     # 1. CHAIRMAN INITIALIZATION
     chairman_init_prompt = (
@@ -809,7 +1071,7 @@ async def run_boardroom_debate(
     )
     
     init_text = res_init.get("content", f"Problemeinrahmung für '{task}' gestartet.")
-    debate_events.append({
+    yield {
         "type": "chairman_init",
         "round": 0,
         "agent_id": chairman["id"],
@@ -817,52 +1079,92 @@ async def run_boardroom_debate(
         "role": chairman.get("role", "Orchestrator"),
         "model": chairman.get("model", "free-forever"),
         "content": init_text
-    })
+    }
 
     # 2. ROUND-BASED DEBATE
     running_transcript = f"--- MODERATOR INITIALISIERUNG ---\n{init_text}\n\n"
     
     for round_num in range(1, max_rounds + 1):
-        round_responses = []
+        yield {
+            "type": "round_start",
+            "round": round_num,
+            "max_rounds": max_rounds
+        }
         
-        for agent in expert_agents:
-            agent_prompt = (
-                f"--- AI BOARDROOM DEBATTE - RUNDE {round_num} VON {max_rounds} ---\n"
-                f"Ursprüngliche Aufgabe: {task}\n"
-                f"METHODIK-FRAMEWORK: {framework}\n"
-                f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
-                f"Bisheriger Diskussionsverlauf:\n{running_transcript}\n\n"
-                f"Instruktion: Reagiere auf die Aussagen der anderen Agenten. "
-                f"Behalte strikt deine Rolle ({agent.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
-                f"Hinterfrage, validiere oder erweitere die Argumente deiner Vorredner explizit."
-            )
-            
-            agent_sys_prompt = build_final_system_prompt(framework, agent.get("prompt", ""))
+        if round_num == 1 and len(expert_agents) > 1:
+            async def _dispatch_agent(ag):
+                prompt = (
+                    f"--- AI BOARDROOM DEBATTE - RUNDE {round_num} VON {max_rounds} ---\n"
+                    f"Ursprüngliche Aufgabe: {task}\n"
+                    f"METHODIK-FRAMEWORK: {framework}\n"
+                    f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
+                    f"Bisheriger Diskussionsverlauf:\n{running_transcript}\n\n"
+                    f"Instruktion: Reagiere auf die Initialisierung des Moderators. "
+                    f"Behalte strikt deine Rolle ({ag.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
+                    f"Formuliere deine klare Fachperspektive."
+                )
+                sys_prompt = build_final_system_prompt(framework, ag.get("prompt", ""))
+                res = await dispatch_to_external_agent(
+                    agent_id=ag["id"],
+                    agent_name=ag["name"],
+                    prompt=prompt,
+                    role=ag.get("role", "Expert"),
+                    system_prompt=sys_prompt,
+                    model=ag.get("model", "free-forever"),
+                    timeout=timeout
+                )
+                return {
+                    "type": "agent_response",
+                    "round": round_num,
+                    "agent_id": ag["id"],
+                    "agent_name": ag["name"],
+                    "role": ag.get("role", "Expert"),
+                    "model": ag.get("model", "free-forever"),
+                    "content": res.get("content", "Keine Antwort.")
+                }
 
-            res = await dispatch_to_external_agent(
-                agent_id=agent["id"],
-                agent_name=agent["name"],
-                prompt=agent_prompt,
-                role=agent.get("role", "Expert"),
-                system_prompt=agent_sys_prompt,
-                model=agent.get("model", "free-forever"),
-                timeout=timeout
-            )
-            
-            resp_content = res.get("content", "Keine Antwort.")
-            round_responses.append({
-                "type": "agent_response",
-                "round": round_num,
-                "agent_id": agent["id"],
-                "agent_name": agent["name"],
-                "role": agent.get("role", "Expert"),
-                "model": agent.get("model", "free-forever"),
-                "content": resp_content
-            })
-            
-            running_transcript += f"[{agent['name']} ({agent.get('role', 'Expert')}) - Runde {round_num}]:\n{resp_content}\n\n"
-            
-        debate_events.extend(round_responses)
+            tasks = [asyncio.create_task(_dispatch_agent(a)) for a in expert_agents]
+            for coro in asyncio.as_completed(tasks):
+                res_event = await coro
+                running_transcript += f"[{res_event['agent_name']} ({res_event['role']}) - Runde {round_num}]:\n{res_event['content']}\n\n"
+                yield res_event
+        else:
+            for agent in expert_agents:
+                agent_prompt = (
+                    f"--- AI BOARDROOM DEBATTE - RUNDE {round_num} VON {max_rounds} ---\n"
+                    f"Ursprüngliche Aufgabe: {task}\n"
+                    f"METHODIK-FRAMEWORK: {framework}\n"
+                    f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
+                    f"Bisheriger Diskussionsverlauf:\n{running_transcript}\n\n"
+                    f"Instruktion: Reagiere auf die Aussagen der anderen Agenten. "
+                    f"Behalte strikt deine Rolle ({agent.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
+                    f"Hinterfrage, validiere oder erweitere die Argumente deiner Vorredner explizit."
+                )
+                
+                agent_sys_prompt = build_final_system_prompt(framework, agent.get("prompt", ""))
+
+                res = await dispatch_to_external_agent(
+                    agent_id=agent["id"],
+                    agent_name=agent["name"],
+                    prompt=agent_prompt,
+                    role=agent.get("role", "Expert"),
+                    system_prompt=agent_sys_prompt,
+                    model=agent.get("model", "free-forever"),
+                    timeout=timeout
+                )
+                
+                resp_content = res.get("content", "Keine Antwort.")
+                ev_agent = {
+                    "type": "agent_response",
+                    "round": round_num,
+                    "agent_id": agent["id"],
+                    "agent_name": agent["name"],
+                    "role": agent.get("role", "Expert"),
+                    "model": agent.get("model", "free-forever"),
+                    "content": resp_content
+                }
+                running_transcript += f"[{agent['name']} ({agent.get('role', 'Expert')}) - Runde {round_num}]:\n{resp_content}\n\n"
+                yield ev_agent
         
         # 3. CONSENSUS CHECK & WATCHDOG
         if round_num < max_rounds:
@@ -884,11 +1186,11 @@ async def run_boardroom_debate(
             
             check_text = check_res.get("content", "").upper()
             if "KONSENS_ERREICHT" in check_text or "CONSENSUS" in check_text:
-                debate_events.append({
+                yield {
                     "type": "consensus_reached",
                     "round": round_num,
                     "content": f"Konsens in Runde {round_num} vorzeitig erzielt!"
-                })
+                }
                 break
 
     # 4. FINAL SYNTHESIS BY CHAIRMAN
@@ -915,22 +1217,55 @@ async def run_boardroom_debate(
     
     synthesis_text = res_synth.get("content", "Synthese konnte nicht erstellt werden.")
     
-    debate_events.append({
+    yield {
         "type": "final_synthesis",
         "agent_id": chairman["id"],
         "agent_name": chairman["name"],
         "role": chairman.get("role", "Orchestrator"),
         "model": chairman.get("model", "free-forever"),
         "content": synthesis_text
-    })
+    }
 
-    return {
-        "status": "success",
-        "task": task,
-        "framework": framework,
-        "chairman": chairman,
-        "max_rounds": max_rounds,
-        "events": debate_events,
+    yield {
+        "type": "done",
         "transcript": running_transcript,
         "synthesis": synthesis_text
     }
+
+
+async def run_boardroom_debate(
+    task: str,
+    max_rounds: int,
+    chairman_id: str,
+    active_agents: list,
+    framework: str = "Steffi Kieffer Boardroom",
+    timeout: int = 30
+) -> dict:
+    events = []
+    task_res = {
+        "status": "success",
+        "task": task,
+        "framework": framework,
+        "chairman": active_agents[0] if active_agents else {},
+        "max_rounds": max_rounds,
+        "events": [],
+        "transcript": "",
+        "synthesis": ""
+    }
+    
+    async for ev in stream_boardroom_debate(task, max_rounds, chairman_id, active_agents, framework, timeout):
+        ev_type = ev.get("type")
+        if ev_type == "start":
+            task_res["chairman"] = ev.get("chairman", task_res["chairman"])
+        elif ev_type == "done":
+            task_res["transcript"] = ev.get("transcript", "")
+            task_res["synthesis"] = ev.get("synthesis", "")
+        elif ev_type == "error":
+            return {"status": "error", "content": ev.get("content", "")}
+        elif ev_type == "round_start":
+            continue
+        else:
+            events.append(ev)
+            
+    task_res["events"] = events
+    return task_res

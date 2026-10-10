@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_cv_reader",
+  "name": "CV Reader (Crews)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Extract relevant information from the CV, such as skills, experience, and education.",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

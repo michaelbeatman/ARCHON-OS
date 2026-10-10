@@ -1,0 +1,10 @@
+{
+  "id": "persona_passenger_seat_car_selfie_golden_hour_candid",
+  "name": "Passenger Seat Car Selfie (golden hour, candid)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Passenger Seat Car Selfie (golden hour, candid)'. {\n  \"category\": \"CAR_PASSENGER_SEAT_SELFIE\",\n  \"identity_lock\": {\n    \"enabled\": true,\n    \"priority\": \"ABSOLUTE_MAX\",\n ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

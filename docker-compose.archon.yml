@@ -1,0 +1,154 @@
+name: archon-os
+
+networks:
+  agents_net:
+    external: true
+
+services:
+  archon-os:
+    image: agent-os-container:latest
+    container_name: ARCHON-OS
+    restart: unless-stopped
+    user: root
+    networks:
+      - agents_net
+    ports:
+      - "8501:8501"
+    volumes:
+      - //var/run/docker.sock:/var/run/docker.sock
+      - ./:/app
+      - ${USERPROFILE}/.hermes:/opt/data
+      - C:\Mein Obsidian:/opt/data/obsidian
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    networks:
+      - agents_net
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+      - NETWORKS=1
+      - SERVICES=1
+      - TASKS=1
+      - VOLUMES=1
+      - POST=1
+      - DELETE=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  hermes-webui:
+    image: hermes-agent-plus:latest
+    container_name: hermes-webui
+    restart: unless-stopped
+    networks:
+      - agents_net
+    volumes:
+      - ${USERPROFILE}/.hermes:/opt/data
+      - ./obsidian_vault:/opt/data/obsidian
+      - ./agent_workspace:/projects
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - HERMES_HOME=/opt/data
+      - HERMES_WEBUI_AGENT_DIR=/opt/hermes
+      - HERMES_WEBUI_PYTHON=/opt/hermes/.venv/bin/python
+      - HERMES_WEBUI_STATE_DIR=/opt/data/webui
+      - HERMES_WEBUI_HOST=0.0.0.0
+      - HERMES_WEBUI_PORT=8787
+      - HERMES_WEBUI_ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8787,http://127.0.0.1:8787,http://localhost:9119,http://127.0.0.1:9119
+      - HERMES_WEBUI_TRUST_FORWARDED_HOST=true
+    ports:
+      - "127.0.0.1:8787:8787"
+    command: ["/opt/hermes/.venv/bin/python", "/opt/data/plugins/hermes-webui/server.py"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_HOST=localhost
+      - N8N_EDITOR_BASE_URL=http://localhost:5678/
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_PREVIEW_MODE=true
+      - N8N_XFRAME_BYPASS=true
+      - N8N_DISABLE_UI_SECURITY=true
+      - N8N_SECURE_COOKIE=false
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_HIRING_BANNER_ENABLED=false
+      - N8N_UNVERIFIED_PACKAGES_ENABLED=true
+      - N8N_RUNNERS_TASK_TIMEOUT=300
+      - N8N_DISABLE_PRODUCTION_MAIN_PROCESS=false
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - GENERIC_TIMEZONE=Europe/Berlin
+      - TZ=Europe/Berlin
+    volumes:
+      - n8n_data:/home/node/.n8n
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  paperclip:
+    image: paperclip-orchestrator:latest
+    container_name: paperclip-orchestrator
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "3180:3100"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3100
+      - PAPERCLIP_HOME=/paperclip
+      - PAPERCLIP_BIND=all-interfaces
+      - PAPERCLIP_DEPLOYMENT_MODE=authenticated
+      - PAPERCLIP_DEPLOYMENT_EXPOSURE=private
+      - PAPERCLIP_PUBLIC_URL=http://localhost:3180
+      - BETTER_AUTH_URL=http://localhost:3180
+      - BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8501,http://localhost:3180,http://127.0.0.1:8501,http://127.0.0.1:3180,http://localhost:3100
+      - BETTER_AUTH_SECRET=archon-os-paperclip-secure-secret-key-2026-auth
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - paperclip_volume:/paperclip
+      - ./scripts/paperclip_hire_agent.cjs:/app/paperclip_hire_agent.cjs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  omniroute:
+    image: diegosouzapw/omniroute:3.8.50
+    container_name: omniroute
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "20128:20128"
+    environment:
+      - PORT=20128
+      - HOSTNAME=0.0.0.0
+      - OMNIROUTE_MEMORY_MB=1024
+      - DATA_DIR=/app/data
+      - INITIAL_PASSWORD=Start123!
+    volumes:
+      - omniroute-data:/app/data
+      - ./scripts/patch_omniroute_headers.js:/app/patch_omniroute_headers.js:ro
+    entrypoint: ["/bin/sh", "-c", "node /app/patch_omniroute_headers.js 2>/dev/null || true; exec /app/check-permissions.sh node dev/run-standalone.mjs"]
+
+volumes:
+  n8n_data:
+    name: archon-os_n8n_data
+  paperclip_volume:
+    name: archon-os_paperclip_volume
+  omniroute-data:
+    name: omniroute-data

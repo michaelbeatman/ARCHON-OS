@@ -1,0 +1,10 @@
+{
+  "id": "persona_comprehensive_repository_audit_remediation_prompt",
+  "name": "Comprehensive Repository Audit & Remediation Prompt",
+  "category": "3. Recht, Steuern & Compliance",
+  "description": "Fach-Experte: 'Comprehensive Repository Audit & Remediation Prompt'. ## Objective\nConduct a thorough analysis of the entire repository to identify, prioritize, fix, and document ALL verifia...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,315 @@
+name: ARCHON-OS-DEV
+
+networks:
+  agents_net:
+    driver: bridge
+
+services:
+  # -------------------------------------------------------------
+  # 1. CORE ENGINE & WEB-DASHBOARD (Hot-Reloading Bind Mounts)
+  # -------------------------------------------------------------
+  archon-os:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: archon-os-dev:latest
+    container_name: ARCHON-OS
+    restart: unless-stopped
+    user: root
+    networks:
+      - agents_net
+    ports:
+      - "${ARCHON_PORT:-8501}:8501"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=development
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - HERMES_DASHBOARD_SESSION_TOKEN=${HERMES_DASHBOARD_SESSION_TOKEN:-***REMOVED_HERMES_DASHBOARD_SESSION_TOKEN***}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./main.py:/app/main.py
+      - ./core_dispatcher.py:/app/core_dispatcher.py
+      - ./core_skills_engine.py:/app/core_skills_engine.py
+      - ./local_memory_bridge.py:/app/local_memory_bridge.py
+      - ./watchdog_daemon.py:/app/watchdog_daemon.py
+      - ./agent_profiles.json:/app/agent_profiles.json
+      - ./roles.json:/app/roles.json
+      - ./static:/app/static
+      - ./manifests:/app/manifests
+      - ./data:/app/data
+      - ./scripts:/app/scripts
+      - ./agent_workspace:/app/agent_workspace
+      - ${USERPROFILE}/.hermes:/opt/data
+      - C:\Mein Obsidian:/opt/data/obsidian
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8501", "--reload"]
+
+  # -------------------------------------------------------------
+  # 2. AUTOMATION ENGINE (n8n on Port 5678)
+  # -------------------------------------------------------------
+  n8n:
+    image: n8nio/n8n:task-runners
+    container_name: n8n
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_HOST=localhost
+      - N8N_EDITOR_BASE_URL=http://localhost:5678/
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_XFRAME_BYPASS=true
+      - N8N_DISABLE_UI_SECURITY=true
+      - N8N_SECURE_COOKIE=false
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_HIRING_BANNER_ENABLED=false
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Berlin}
+      - TZ=${TZ:-Europe/Berlin}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # -------------------------------------------------------------
+  # 3. DOCKER SOCKET PROXY (Safe API Access for Agents)
+  # -------------------------------------------------------------
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    networks:
+      - agents_net
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+      - NETWORKS=1
+      - SERVICES=1
+      - TASKS=1
+      - VOLUMES=1
+      - POST=1
+      - DELETE=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # -------------------------------------------------------------
+  # 4. HERMES AGENT ORCHESTRATOR (Core Gateway on Port 8644)
+  # -------------------------------------------------------------
+  hermes:
+    image: hermes-agent-plus:latest
+    container_name: hermes
+    restart: unless-stopped
+    networks:
+      - agents_net
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      - docker-socket-proxy
+    ports:
+      - "127.0.0.1:8644:8644"
+    volumes:
+      - ${USERPROFILE}/.hermes:/opt/data
+      - ./obsidian_vault:/opt/data/obsidian
+      - ./agent_workspace:/projects
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - HERMES_DASHBOARD_SESSION_TOKEN=${HERMES_DASHBOARD_SESSION_TOKEN:-***REMOVED_HERMES_DASHBOARD_SESSION_TOKEN***}
+    command: ["gateway", "run"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # -------------------------------------------------------------
+  # 5. HERMES DASHBOARD (Metrics & Trace Inspector on Port 9119)
+  # -------------------------------------------------------------
+  hermes-dashboard:
+    image: hermes-agent-plus:latest
+    container_name: hermes-dashboard
+    restart: unless-stopped
+    networks:
+      - agents_net
+    depends_on:
+      - hermes
+    volumes:
+      - ${USERPROFILE}/.hermes:/opt/data
+      - ./obsidian_vault:/opt/data/obsidian
+      - ./agent_workspace:/projects
+    environment:
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - HERMES_DASHBOARD_SESSION_TOKEN=${HERMES_DASHBOARD_SESSION_TOKEN:-***REMOVED_HERMES_DASHBOARD_SESSION_TOKEN***}
+      - HERMES_DASHBOARD_HOST=127.0.0.1
+      - HERMES_DASHBOARD_PORT=9120
+    ports:
+      - "127.0.0.1:9119:9119"
+    command: ["dashboard", "--host", "127.0.0.1", "--port", "9120", "--no-open"]
+
+  hermes-dashboard-proxy:
+    image: alpine/socat:latest
+    container_name: hermes-dashboard-proxy
+    restart: unless-stopped
+    network_mode: service:hermes-dashboard
+    depends_on:
+      - hermes-dashboard
+    entrypoint: ["socat"]
+    command: ["tcp-listen:9119,fork,reuseaddr", "tcp-connect:127.0.0.1:9120"]
+
+  # -------------------------------------------------------------
+  # 6. HERMES WEBUI (Master Chat Interface on Port 8787)
+  # -------------------------------------------------------------
+  hermes-webui:
+    image: hermes-agent-plus:latest
+    container_name: hermes-webui
+    restart: unless-stopped
+    networks:
+      - agents_net
+    depends_on:
+      - hermes
+    volumes:
+      - ${USERPROFILE}/.hermes:/opt/data
+      - C:\Mein Obsidian:/opt/data/obsidian # FIX: WebUI -> echter Vault (Personalakten)
+      - ./agent_workspace:/projects
+      # Bind-Mount: Hermes-Home plugins/api live mounten (Fixes ueberleben Recreate)
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - HERMES_HOME=/opt/data
+      - HERMES_WEBUI_AGENT_DIR=/opt/hermes
+      - HERMES_WEBUI_PYTHON=/opt/hermes/.venv/bin/python
+      - HERMES_WEBUI_STATE_DIR=/opt/data/webui
+      - HERMES_WEBUI_HOST=0.0.0.0
+      - HERMES_WEBUI_PORT=8787
+      - HERMES_WEBUI_ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8787,http://127.0.0.1:8787,http://localhost:9119,http://127.0.0.1:9119,*
+      - HERMES_WEBUI_TRUST_FORWARDED_HOST=true
+      - HERMES_WEBUI_SLOW_REQUEST_SECONDS=15 # Slow-Request-Warnung erst nach 15s
+    ports:
+      - "127.0.0.1:8787:8787"
+    command: ["/opt/hermes/.venv/bin/python", "/opt/data/plugins/hermes-webui/server.py"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # -------------------------------------------------------------
+  # 7. PAPERCLIP ORCHESTRATOR (Autonomous Multi-Agent on Port 3180)
+  # -------------------------------------------------------------
+  paperclip:
+    build:
+      context: ./paperclip
+      dockerfile: Dockerfile
+    image: paperclip-orchestrator:latest
+    container_name: paperclip-orchestrator
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "${PAPERCLIP_PORT:-3180}:3100"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3100
+      - PAPERCLIP_HOME=/paperclip
+      - PAPERCLIP_BIND=all-interfaces
+      - PAPERCLIP_DEPLOYMENT_MODE=authenticated
+      - PAPERCLIP_DEPLOYMENT_EXPOSURE=private
+      - PAPERCLIP_PUBLIC_URL=http://localhost:3180
+      - BETTER_AUTH_URL=http://localhost:3180
+      - BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8501,http://localhost:3180,http://127.0.0.1:8501,http://127.0.0.1:3180,http://localhost:3100
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-archon-os-paperclip-secure-secret-key-2026-auth}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - paperclip_volume:/paperclip
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # -------------------------------------------------------------
+  # 8. CRM FRONTEND & WORKSPACE (Port 3005)
+  # -------------------------------------------------------------
+  crm:
+    image: crm-frontend:latest
+    container_name: CRM
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "${CRM_PORT:-3005}:3005"
+    volumes:
+      - ./CRM:/app
+    environment:
+      - PORT=3005
+      - NODE_ENV=development
+
+  # -------------------------------------------------------------
+  # 9. POCKETBASE MEDIA & DATABASE (Port 8092 / 8090)
+  # -------------------------------------------------------------
+  pocketbase-media:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase-Media
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "${POCKETBASE_MEDIA_PORT:-8092}:8090"
+    volumes:
+      - ./pocketbase-media/pb_data:/pb_data
+      - ./pocketbase-media/pb_hooks:/pb_hooks
+      - ./pocketbase-media/pb_public:/pb_public
+
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "${POCKETBASE_PORT:-8090}:8090"
+    volumes:
+      - ./pocketbase/pb_data:/pb_data
+      - ./pocketbase/pb_hooks:/pb_hooks
+      - ./pocketbase/pb_public:/pb_public
+
+  # -------------------------------------------------------------
+  # 10. AUTOGEN STUDIO (Port 8083)
+  # -------------------------------------------------------------
+  autogen-studio:
+    image: python:3.11-slim
+    container_name: autogen-studio
+    restart: unless-stopped
+    networks:
+      - agents_net
+    command: sh -c "pip install --no-cache-dir autogenstudio && autogenstudio ui --port 8081 --host 0.0.0.0"
+    ports:
+      - "${AUTOGEN_PORT:-8083}:8081"
+    volumes:
+      - ./data/autogen:/root/.autogenstudio
+
+  # -------------------------------------------------------------
+  # 11. REDIS CACHE & EVENT QUEUE
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: archon-redis
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  n8n_data:
+  hermes_home:
+  paperclip_volume:
+  redis_data:

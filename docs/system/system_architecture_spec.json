@@ -1,0 +1,233 @@
+{
+  "system": {
+    "name": "AgenticOS-2026 (Archon OS)",
+    "version": "2.4.0-2026",
+    "architecture_type": "Multi-Agent Executive Operating System",
+    "primary_gateway_port": 8501,
+    "daemon_target_port": 8420,
+    "last_audit_timestamp": "2026-10-07T17:15:00Z"
+  },
+  "runtime_containers": [
+    {
+      "name": "ARCHON-OS",
+      "image": "archon-os-dev:latest",
+      "host_port": 8501,
+      "role": "Core FastAPI Backend & UI Gateway Monolith",
+      "health": "UP",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "omniroute",
+      "image": "diegosouzapw/omniroute:3.8.50",
+      "host_port": 20128,
+      "role": "Multi-Provider AI Model Router & Gateway",
+      "health": "HEALTHY",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "hermes",
+      "image": "hermes-agent-plus:latest",
+      "host_port": 8644,
+      "role": "Autonomous Agent Runtime, State Machine & Gateway",
+      "health": "UP",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "Pocketbase",
+      "image": "ghcr.io/muchobien/pocketbase",
+      "host_port": 8090,
+      "role": "Primary Relational & Contact Data Store (CRM backend)",
+      "health": "UP",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "Pocketbase-Media",
+      "image": "ghcr.io/muchobien/pocketbase",
+      "host_port": 8092,
+      "role": "Media, Audio & Asset Storage",
+      "health": "UP",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "CRM",
+      "image": "crm-frontend:latest",
+      "host_port": 3005,
+      "role": "Dedicated CRM Web Frontend",
+      "health": "UP",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "n8n",
+      "image": "n8nio/n8n:latest",
+      "host_port": 5678,
+      "role": "Workflow Automation Engine & Event Triggers",
+      "health": "UP",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "docker-socket-proxy",
+      "image": "tecnativa/docker-socket-proxy",
+      "host_port": 2375,
+      "role": "Secure Docker Daemon API Bridge for Subagents",
+      "health": "UP",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "anything-llm",
+      "image": "mintplexlabs/anythingllm",
+      "host_port": 3001,
+      "role": "Local Knowledge RAG Engine",
+      "health": "HEALTHY",
+      "internal_network": "agents_net"
+    },
+    {
+      "name": "freellmapi",
+      "image": "freellmapi",
+      "host_port": 3002,
+      "role": "Free LLM Proxy / Fallback Layer",
+      "health": "HEALTHY",
+      "internal_network": "agents_net"
+    }
+  ],
+  "agent_ecosystem": {
+    "total_agent_profiles": 56,
+    "organizational_hierarchy_nodes": 56,
+    "hierarchical_links": 55,
+    "teams_count": 6,
+    "teams": [
+      {
+        "id": "team_strategy",
+        "name": "Geschäftsführung, Strategie & M&A",
+        "lead": "executive_decision_architect",
+        "member_count": 13
+      },
+      {
+        "id": "team_tech",
+        "name": "Software, Cloud & System-Architektur",
+        "lead": "system_architect_orchestrator",
+        "member_count": 5
+      },
+      {
+        "id": "team_legal",
+        "name": "Recht, Verträge & Governance",
+        "lead": "commercial_jurist_contracts",
+        "member_count": 6
+      },
+      {
+        "id": "team_realestate",
+        "name": "Bau, Immobilien & ESG",
+        "lead": "construction_project_manager",
+        "member_count": 8
+      },
+      {
+        "id": "team_growth",
+        "name": "Vertrieb, Marketing & Media",
+        "lead": "gtm_launch_strategist",
+        "member_count": 15
+      },
+      {
+        "id": "team_operations",
+        "name": "Supply Chain, Einkauf & Scrum",
+        "lead": "logistics_supply_chain_manager",
+        "member_count": 9
+      }
+    ]
+  },
+  "storage_architecture": {
+    "databases": [
+      {
+        "path": "data/agentic_memory.db",
+        "type": "SQLite (WAL mode)",
+        "tables": ["user_profile", "learnings", "kv_store", "tasks", "conversations"],
+        "status": "active"
+      },
+      {
+        "path": "opt/data/kanban.db",
+        "type": "SQLite",
+        "tables": ["tasks", "task_comments", "task_events", "task_links"],
+        "status": "active"
+      },
+      {
+        "path": "opt/data/state.db",
+        "type": "SQLite",
+        "role": "Hermes conversation session logs & chat history",
+        "status": "active"
+      },
+      {
+        "path": "pocketbase/pb_data",
+        "type": "PocketBase embedded SQLite",
+        "role": "CRM contacts, messages, appointments, applicants",
+        "status": "active"
+      }
+    ],
+    "primary_json_configs": [
+      "agent_profiles.json",
+      "config/org_hierarchy.json",
+      "config/teams.json",
+      "roles.json",
+      "services.json"
+    ]
+  },
+  "seven_pillars_maturity": {
+    "1_kernel_scheduling": {
+      "target": "Asyncio daemon on port 8420, Tickless Sleep, Watchdog 30s",
+      "implementation_status": "PARTIAL",
+      "current_reality": "Watchdog thread active (watchdog_daemon.py, 60s interval); primary port is 8501 via Uvicorn."
+    },
+    "2_process_model": {
+      "target": "Subagents as OS processes, state machine, crash recovery, concurrency throttle",
+      "implementation_status": "PARTIAL",
+      "current_reality": "56 declarative agent profiles; background execution via asyncio tasks; tasks table exists in SQLite; global concurrency semaphore missing."
+    },
+    "3_device_drivers_mcp": {
+      "target": "MCP tool interface, naming mcp__{server}__{tool}, lock scheduler",
+      "implementation_status": "PARTIAL",
+      "current_reality": "Archon CRM MCP and n8n MCP driver active; tool calls implemented; lock scheduler missing."
+    },
+    "4_filesystem_memory": {
+      "target": "RAM/Disk segregation, SQLite WAL, 5 tables, LRU-K cache eviction at 80%",
+      "implementation_status": "IMPLEMENTED",
+      "current_reality": "local_memory_bridge.py enforces WAL mode, 5 tables, LRU-K decay logic implemented."
+    },
+    "5_hardware_abstraction_routing": {
+      "target": "Multi-provider AI routing via OmniRoute, logit snapshots",
+      "implementation_status": "IMPLEMENTED",
+      "current_reality": "OmniRoute running on :20128, routing between OpenAI, Anthropic, Gemini, Groq, DeepSeek, Local Ollama."
+    },
+    "6_governance_security": {
+      "target": "RBAC, HITL approval gating, tamper-proof hash-chain audit log, prompt injection scanner",
+      "implementation_status": "PARTIAL",
+      "current_reality": "Prompt injection sanitizer active in local_security_guard.py; cryptographical hash-chain audit log and strict user RBAC missing."
+    },
+    "7_self_evolution": {
+      "target": "Dynamic runtime skill compilation and automated test gating",
+      "implementation_status": "PARTIAL",
+      "current_reality": "core_skills_engine.py generates and tests skills; skill marketplace integrated."
+    }
+  },
+  "identified_risks_and_debt": [
+    {
+      "severity": "CRITICAL",
+      "issue": "Hardcoded API fallback token in core_dispatcher.py",
+      "file": "core_dispatcher.py",
+      "recommendation": "Purge hardcoded token and require environment variable injection."
+    },
+    {
+      "severity": "HIGH",
+      "issue": "Unauthenticated container execution endpoint /api/v1/container/exec",
+      "file": "main.py",
+      "recommendation": "Restrict to internal host or add bearer token authentication."
+    },
+    {
+      "severity": "MEDIUM",
+      "issue": "Open SSRF proxy endpoint /api/proxy",
+      "file": "main.py",
+      "recommendation": "Whitelist target origins and prevent scanning of internal Docker services."
+    },
+    {
+      "severity": "LOW",
+      "issue": "Legacy backup files and test scripts polluting root directory",
+      "recommendation": "Move .bak files, scratch scripts, and PNG test logs into dedicated archive folders."
+    }
+  ]
+}

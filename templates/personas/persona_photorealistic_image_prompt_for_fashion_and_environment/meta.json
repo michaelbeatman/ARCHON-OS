@@ -1,0 +1,10 @@
+{
+  "id": "persona_photorealistic_image_prompt_for_fashion_and_environment",
+  "name": "Photorealistic Image Prompt for Fashion and Environment",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Photorealistic Image Prompt for Fashion and Environment'. {\n  \"image_prompt\": {\n    \"subject\": {\n      \"type\": \"Adult woman (21+) matching the reference image identity\",\n      \"a...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

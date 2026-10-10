@@ -1,0 +1,11 @@
+{
+  "id": "crew_flows_writer",
+  "name": "Chapter Writer (Flows)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Write a well-structured chapter for the book based on the provided chapter title, goal, and outline. The chapter should be written in markdo...",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

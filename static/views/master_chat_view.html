@@ -1,0 +1,246 @@
+<div id="view-master-chat" class="hidden flex-1 w-full h-full flex flex-row overflow-hidden bg-[var(--background)] text-[var(--foreground)]" style="height: 100%; width: 100%;">
+        
+        <!-- HAUPTBEREICH: CHAT WORKSPACE (LINKS) -->
+        <div id="master-chat-main-area" class="flex-1 flex flex-col overflow-hidden min-w-0 bg-[var(--background)]">
+          <!-- Top Toolbar: Profil Header (2 Zeilen) & kompakter Dual-Mode Switch -->
+          <div id="master-chat-header-bar" class="h-[76px] border-b border-[var(--border)] bg-[var(--card)] px-5 py-2 flex items-center gap-4 shrink-0">
+            <!-- Avatar: Klick springt zum Agenten-Kader Profil -->
+            <div id="master-chat-avatar-container" onclick="jumpToAgentProfile(currentMasterChatProfileId)" class="w-[50px] h-[50px] rounded-full border border-[var(--border)] overflow-hidden shrink-0 bg-[var(--secondary)] flex items-center justify-center cursor-pointer hover:border-zinc-950 dark:hover:border-zinc-50 transition duration-150 group" title="Profil &amp; Einstellungen im Agenten-Kader öffnen">
+              <img id="master-chat-selected-avatar" src="/static/avatars/hermes_default_avatar.png" class="w-full h-full object-cover group-hover:opacity-90 transition" onerror="this.src='/static/avatars/avatar_001.jpg'">
+            </div>
+            <div class="min-w-0 flex-1 flex flex-col justify-center space-y-1">
+              <!-- Zeile 1: Name / Dropdown -->
+              <div class="flex items-center gap-2">
+                <select 
+                  id="master-chat-profile-select" 
+                  onchange="onMasterChatProfileChanged(this.value)"
+                  class="bg-[var(--background)] border border-[var(--border)] rounded-md px-3 py-1 text-sm font-semibold text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 cursor-pointer font-sans"
+                >
+                  <!-- Profile dynamisch injiziert -->
+                </select>
+              </div>
+              <!-- Zeile 2: Kategorie & Beschreibung links, Switch rechtbündig ans Ende -->
+              <div class="flex items-center justify-between gap-3 w-full">
+                <div class="flex items-center gap-2 min-w-0 flex-1">
+                  <span id="master-chat-profile-category" class="h-5 px-2 rounded-md font-mono text-[11px] font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] inline-flex items-center justify-center truncate max-w-[260px] shrink-0">1. Strategie</span>
+                  <div id="master-chat-profile-desc" class="text-xs text-[var(--muted-foreground)] truncate leading-relaxed">Zentrales Hermes-Basissystem mit Zugriff auf Container Tools</div>
+                </div>
+                <!-- Zweifarbiger / Monochromer Switch: "Direkt" [Switch] "Mission" -->
+                <div class="flex items-center gap-2 shrink-0 select-none cursor-pointer" onclick="toggleMasterChatModeSwitch()" title="Zwischen Direkt-Dialog und Mission umschalten">
+                  <span id="master-chat-label-direct" class="text-xs font-mono font-bold transition-colors text-[var(--foreground)]">Direkt</span>
+                  <div 
+                    id="master-chat-mode-switch" 
+                    class="w-10 h-5 bg-zinc-900 dark:bg-zinc-100 rounded-full p-0.5 transition-colors duration-200 ease-in-out relative flex items-center"
+                  >
+                    <div 
+                      id="master-chat-switch-pill" 
+                      class="w-4 h-4 bg-white dark:bg-zinc-900 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out translate-x-0"
+                    ></div>
+                  </div>
+                  <span id="master-chat-label-mission" class="text-xs font-mono font-medium transition-colors text-[var(--muted-foreground)]">Mission</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Chat Messages Area -->
+          <div id="master-chat-native-container" class="flex-1 flex flex-col overflow-hidden p-3 sm:p-4 bg-[var(--background)]">
+            <div id="master-chat-messages" class="flex-1 overflow-y-auto space-y-3.5 pr-2 font-sans custom-scrollbar"></div>
+            
+            <!-- Quick Chat Attachment Preview Bar -->
+            <div id="master-chat-attachment-bar" class="px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg mb-2 flex items-center justify-between text-xs hidden">
+              <div class="flex items-center gap-2 text-[var(--foreground)] font-mono text-[11px] truncate">
+                <i data-lucide="paperclip" class="w-3.5 h-3.5 text-black dark:text-white shrink-0"></i>
+                <span class="text-[var(--muted-foreground)] font-medium">Anhang:</span>
+                <span id="master-chat-attachment-name" class="truncate font-semibold text-[var(--foreground)]">datei.txt</span>
+                <span id="master-chat-attachment-size" class="text-[10px] text-[var(--muted-foreground)] font-normal"></span>
+              </div>
+              <button type="button" onclick="removeMasterChatAttachment()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-1 cursor-pointer" title="Anhang entfernen">
+                <i data-lucide="x" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+              </button>
+            </div>
+            <!-- Input Bar mit Auto-Resize, Quick Chat Attachment, STT Audio Recorder -->
+            <div id="master-chat-input-wrapper" class="border-t border-[var(--border)] pt-3 mt-1 shrink-0 bg-[var(--background)]">
+              <div id="master-chat-input-card" class="border border-[var(--border)] rounded-xl p-2 bg-[var(--card)] shadow-xs focus-within:border-zinc-500 transition">
+                <div class="flex items-end gap-2">
+                  <!-- Hidden File Input -->
+                  <input type="file" id="master-chat-file-input" onchange="handleMasterChatFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
+                  
+                  <!-- Attachment Button -->
+                  <button 
+                    type="button" 
+                    id="master-chat-attach-btn"
+                    onclick="document.getElementById('master-chat-file-input').click()" 
+                    class="p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer" 
+                    title="Datei anhängen (PDF, TXT, CSV, MD, Bild)"
+                  >
+                    <i data-lucide="paperclip" class="w-4 h-4 text-black dark:text-white"></i>
+                  </button>
+                  <!-- Screen / Browser Capture Button (Vision) -->
+                  <button 
+                    type="button" 
+                    id="master-chat-screen-capture-btn"
+                    onclick="captureScreenForMasterChat()" 
+                    class="p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer" 
+                    title="Bildschirm- / Browser-Foto aufnehmen (Vision / Screenshot)"
+                  >
+                    <i data-lucide="camera" class="w-4 h-4 text-black dark:text-white"></i>
+                  </button>
+                  <!-- Quick Chat Microphone / Speech Dictation Button -->
+                  <button 
+                    type="button" 
+                    id="master-chat-mic-btn"
+                    onclick="toggleMasterChatDictation()" 
+                    class="p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer" 
+                    title="Spracheingabe / Diktat starten (Mikrofon)"
+                  >
+                    <i data-lucide="mic" class="w-4 h-4 text-black dark:text-white"></i>
+                  </button>
+                  <!-- Archon Prompt Studio Button (579+ Vorlagen: Enterprise & Fabric SOP) -->
+                  <button 
+                    type="button" 
+                    id="master-chat-sureprompts-btn"
+                    onclick="openSurePromptsModal('master')" 
+                    class="p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer" 
+                    title="Archon Prompt Studio (579+ Vorlagen: Enterprise-Baukasten &amp; Fabric SOP-Muster)"
+                  >
+                    <i data-lucide="layers" class="w-4 h-4 text-black dark:text-white"></i>
+                  </button>
+                  <!-- KI-Prompt-Optimizer Button -->
+                  <button 
+                    type="button" 
+                    id="master-chat-optimize-btn"
+                    onclick="optimizeMasterChatPrompt('master')" 
+                    class="p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer" 
+                    title="KI-Optimizer: Rohtext in professionellen 5-Felder-Prompt transformieren"
+                  >
+                    <i data-lucide="sparkles" class="w-4 h-4 text-black dark:text-white"></i>
+                  </button>
+                  <!-- Textarea mit dynamischem Auto-Resize bis max 30% Viewport-Höhe -->
+                  <textarea 
+                    id="master-chat-input" 
+                    onkeydown="handleMasterChatInputKey(event)"
+                    oninput="autoResizeMasterChatInput(this)"
+                    onpaste="handleMasterChatInputPaste(event)"
+                    placeholder="Nachricht an den Agenten eingeben (Enter zum Senden, Shift+Enter für Zeilenumbruch)..." 
+                    rows="1"
+                    style="max-height: 30vh; min-height: 40px;"
+                    class="flex-1 bg-transparent border-none p-2 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none resize-none font-sans leading-relaxed transition-all"
+                  ></textarea>
+                  <!-- Senden Button (Solid shadcn button) -->
+                  <button 
+                    id="master-chat-send-btn" 
+                    onclick="sendMasterChatMessage()" 
+                    class="px-4 py-2 rounded-lg text-white dark:text-zinc-950 font-semibold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200"
+                  >
+                    <span>Senden</span>
+                    <i data-lucide="send" class="w-3.5 h-3.5 text-white dark:text-zinc-950"></i>
+                  </button>
+                </div>
+              </div>
+              <!-- Footer Toolbar mit Modellauswahl -->
+              <div id="master-chat-footer-bar" class="mt-2 flex items-center justify-between text-[11px] font-mono px-1 gap-3 text-[var(--muted-foreground)]">
+                <!-- Left: Provider & Model Selector Dropdowns -->
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide">Provider:</span>
+                  <select 
+                    id="master-chat-provider-select" 
+                    onchange="onMasterChatProviderChanged(this.value)"
+                    class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono font-medium text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 cursor-pointer w-28"
+                  >
+                    <option value="openrouter" selected>OpenRouter</option>
+                    <option value="google">Google AI (Gemini)</option>
+                    <option value="omniroute">OmniRoute</option>
+                    <option value="groq">Groq</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="nvidia">NVIDIA NIM</option>
+                  </select>
+                  <span class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide ml-1">Modell:</span>
+                  <select 
+                    id="master-chat-model-select" 
+                    onchange="onMasterChatModelChanged(this.value)"
+                    class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2.5 py-1 text-[11px] font-mono font-medium text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 cursor-pointer max-w-[240px] truncate"
+                  >
+                    <option value="meta-llama/llama-3.3-70b-instruct" selected>meta-llama/llama-3.3-70b-instruct</option>
+                    <option value="anthropic/claude-3.7-sonnet">anthropic/claude-3.7-sonnet</option>
+                    <option value="deepseek/deepseek-v3">deepseek/deepseek-v3</option>
+                    <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+                  </select>
+                </div>
+                <!-- Center: Upload / Status Indicator -->
+                <span id="master-chat-upload-indicator" class="text-[var(--foreground)] font-semibold truncate max-w-[240px]"></span>
+                <!-- Right: Status -->
+                  <div class="flex items-center gap-2">
+                    <button id="master-chat-jev-badge" onclick="toggleJevFromMasterChat()" class="flex items-center gap-1.5 px-2 py-0.5 rounded border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] font-mono text-[10px] font-semibold cursor-pointer transition-all" title="Decision & Reasoning Engine umschalten">
+                      <i data-lucide="brain-circuit" class="w-3 h-3 text-[var(--foreground)] shrink-0"></i>
+                      <span>Reasoning:</span>
+                      <span id="master-chat-jev-state">OFF</span>
+                    </button>
+                    <span class="text-[var(--border)]">|</span>
+                    <div class="flex items-center gap-1.5">
+                      <span id="master-chat-current-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Online</span>
+                    </div>
+                  </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- SIDEBAR: SESSIONS HISTORIE (RECHTE SEITE) -->
+        <div id="master-chat-sessions-sidebar" class="w-72 sm:w-80 border-l border-[var(--border)] bg-[var(--card)] flex flex-col shrink-0 overflow-hidden">
+          <!-- Header: Agenten & Gruppen Tabs + Session durchsuchen (Exakt h-[76px] wie der Haupt-Chat Header) -->
+          <div id="master-chat-sidebar-header" class="h-[76px] border-b border-[var(--border)] bg-[var(--card)] px-3 py-2 flex flex-col justify-center gap-1.5 shrink-0">
+            <!-- Tabs für 1:1 Agenten vs. Gruppe -->
+            <div id="master-chat-tabs-container" class="flex items-center gap-1.5">
+              <button 
+                type="button" 
+                id="master-chat-tab-agents" 
+                onclick="setMasterChatTab('agents')" 
+                class="flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]"
+              >
+                <i data-lucide="user" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                <span>Agenten</span>
+                <span id="master-chat-agents-count" class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]">0</span>
+              </button>
+              <button 
+                type="button" 
+                id="master-chat-tab-group" 
+                onclick="setMasterChatTab('group')" 
+                class="flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] border border-transparent"
+              >
+                <i data-lucide="users" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                <span>Gruppe</span>
+                <span id="master-chat-group-count" class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--secondary)] text-[var(--muted-foreground)]">0</span>
+              </button>
+            </div>
+            <!-- Session durchsuchen Input direkt unter Agenten & Gruppe -->
+            <div id="master-chat-search-container" class="relative flex items-center">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-[var(--muted-foreground)] absolute left-2.5 pointer-events-none"></i>
+              <input 
+                type="text" 
+                id="master-chat-session-search" 
+                oninput="filterMasterChatSessions(this.value)"
+                placeholder="Sessions durchsuchen..." 
+                class="w-full bg-[var(--background)] border border-[var(--border)] rounded-md pl-8 pr-2.5 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 font-sans transition"
+              />
+            </div>
+          </div>
+          <!-- Sessions Liste (Scrollbereich) -->
+          <div id="master-chat-sessions-list" class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar bg-[var(--card)]">
+            <!-- Dynamisch aus SQLite sessions geladen -->
+            <div class="text-xs text-[var(--muted-foreground)] p-4 text-center italic">Lade Sessions...</div>
+          </div>
+          <!-- Footer: Großer schwarzer "Neuer Chat" Button unten rechts -->
+          <div id="master-chat-sidebar-footer" class="p-3 border-t border-[var(--border)] bg-[var(--card)] shrink-0">
+            <button 
+              type="button"
+              id="master-chat-new-btn" 
+              onclick="createNewMasterChatSession()" 
+              class="w-full py-2.5 px-3 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-mono text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+              title="Neuen Chat starten"
+            >
+              <i data-lucide="plus" class="w-4 h-4 text-white dark:text-zinc-900"></i>
+              <span>Neuer Chat</span>
+            </button>
+          </div>
+        </div>
+      </div>

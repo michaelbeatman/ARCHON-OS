@@ -1,0 +1,1432 @@
+[
+  {
+    "id": "agent-rag-retrieval-evaluator",
+    "name": "RAG-Retrieval-Evaluator & Chunking-Audit",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Systematische Bewertung von RAG-Pipelines (Treffergenauigkeit, Halluzinationsrate, Kontextrauschen).",
+    "form_fields": [
+      {
+        "id": "knowledge_base_type",
+        "label": "Wissensdatenbank (PDF, SQL, Wiki)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "chunking_strategy",
+        "label": "Chunking-Strategie & Overlap",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "retrieval_metrics",
+        "label": "Testfragen & Fehlertoleranz",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "embedding_model",
+        "label": "Embedding-Modell & Vektorstore",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: RAG-RETRIEVAL-EVALUATOR & CHUNKING-AUDIT\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Wissensdatenbank (PDF, SQL, Wiki) (Pflicht): {{ knowledge_base_type }}\n- Chunking-Strategie & Overlap (Pflicht): {{ chunking_strategy }}\n- Testfragen & Fehlertoleranz (Pflicht): {{ retrieval_metrics }}\n- Embedding-Modell & Vektorstore (Pflicht): {{ embedding_model }}\n\n3. METHODISCHE AUSARBEITUNG\nFühren Sie das RAG-Audit für {{ knowledge_base_type }} durch:\n## 1. Bewertung Chunking: {{ chunking_strategy }} mit {{ embedding_model }}\n## 2. RAGAS-Metriken (Precision, Recall, Faithfulness)\n## 3. Rauschanalyse bei: {{ retrieval_metrics }}\n## 4. Halluzinations-Beseitigung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "llm-routing-cost-latency-optimizer",
+    "name": "LLM-Routing & Latenz-Kosten-Optimierung",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Klassifizierung von Prompts zur dynamischen Verteilung auf High-End- vs. Fast-Modelle.",
+    "form_fields": [
+      {
+        "id": "task_complexity_matrix",
+        "label": "Aufgabentypen (Klassifikation, Reasoning)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "budget_latency_caps",
+        "label": "Budget- & Latenzgrenzen (z. B. max 1.2s)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "available_models",
+        "label": "Modellportfolio (Claude, GPT, Llama)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: LLM-ROUTING & LATENZ-KOSTEN-OPTIMIERUNG\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Aufgabentypen (Klassifikation, Reasoning) (Pflicht): {{ task_complexity_matrix }}\n- Budget- & Latenzgrenzen (z. B. max 1.2s) (Pflicht): {{ budget_latency_caps }}\n- Modellportfolio (Claude, GPT, Llama) (Pflicht): {{ available_models }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das LLM-Routing:\n## 1. Intent-Klassifizierung für {{ task_complexity_matrix }}\n## 2. Dynamic Model Selection gegen {{ available_models }}\n## 3. Fallback-Kaskade (Grenzen: {{ budget_latency_caps }})\n## 4. Semantic Caching\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "agentic-tool-calling-json-schema-spec",
+    "name": "Agentic Tool-Calling & Schnittstellen (JSON-Schema)",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Entwurf deterministischer Funktionsaufrufe für autonome KI-Agenten ohne Syntaxbrüche.",
+    "form_fields": [
+      {
+        "id": "tool_name_purpose",
+        "label": "Werkzeug-Name & Funktion",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "input_parameters_spec",
+        "label": "Eingabeparameter (Typen, Enums)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "error_handling_retry",
+        "label": "Fehlerbehandlung & Retries",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: AGENTIC TOOL-CALLING & SCHNITTSTELLEN (JSON-SCHEMA)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Werkzeug-Name & Funktion (Pflicht): {{ tool_name_purpose }}\n- Eingabeparameter (Typen, Enums) (Pflicht): {{ input_parameters_spec }}\n- Fehlerbehandlung & Retries (Pflicht): {{ error_handling_retry }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Tool-Calling Spezifikation für {{ tool_name_purpose }}:\n## 1. Valides JSON-Schema für: {{ input_parameters_spec }}\n## 2. Input-Validierung & Injection-Schutz\n## 3. Determinismus-Vorgaben für Agenten\n## 4. Fehlerlogik: {{ error_handling_retry }}\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "prompt-injection-red-teaming-audit",
+    "name": "Prompt-Injection & Jailbreak Red-Teaming Audit",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Härtung von System-Prompts gegen Angriffe (Indirect Injection, System Prompt Leakage).",
+    "form_fields": [
+      {
+        "id": "system_prompt_under_test",
+        "label": "Zu testender System-Prompt & Rolle",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "exposed_tools_apis",
+        "label": "Zugängliche Werkzeuge / Datenbanken",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "risk_exposure_level",
+        "label": "Sicherheitsniveau (Öffentlich vs. Intern)",
+        "type": "select",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: PROMPT-INJECTION & JAILBREAK RED-TEAMING AUDIT\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Zu testender System-Prompt & Rolle (Pflicht): {{ system_prompt_under_test }}\n- Zugängliche Werkzeuge / Datenbanken (Pflicht): {{ exposed_tools_apis }}\n- Sicherheitsniveau (Öffentlich vs. Intern) (Pflicht): {{ risk_exposure_level }}\n\n3. METHODISCHE AUSARBEITUNG\nFühren Sie das Red-Teaming Audit durch:\n## 1. Bedrohungsanalyse für Tools: {{ exposed_tools_apis }} (Klasse: {{ risk_exposure_level }})\n## 2. 5 Angriffsszenarien gegen {{ system_prompt_under_test }}\n## 3. Gehärtete System-Prompt-Version\n## 4. Guardrail-Architektur\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "synthetic-data-generation-pipeline",
+    "name": "Synthetische Datengenerierung & Finetuning-Dataset",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Erstellung hochwertiger Trainings- und Testdatensätze ohne Persönlichkeitsrechte-Risiko.",
+    "form_fields": [
+      {
+        "id": "domain_target_task",
+        "label": "Fachdomäne & Zielaufgabe",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "required_edge_cases",
+        "label": "Abzudeckende Randfälle",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "dataset_size_format",
+        "label": "Datensatzgröße & Format (JSONL)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: SYNTHETISCHE DATENGENERIERUNG & FINETUNING-DATASET\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Fachdomäne & Zielaufgabe (Pflicht): {{ domain_target_task }}\n- Abzudeckende Randfälle (Pflicht): {{ required_edge_cases }}\n- Datensatzgröße & Format (JSONL) (Pflicht): {{ dataset_size_format }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Synthetik-Pipeline für {{ domain_target_task }}:\n## 1. Seed-Prompt Architektur\n## 2. Randfall-Abdeckung: {{ required_edge_cases }}\n## 3. LLM-as-a-Judge Filterung\n## 4. Formatierung: {{ dataset_size_format }}\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "ai-agent-memory-state-architecture",
+    "name": "Agenten-Gedächtnis & State-Management (Short/Long-Term)",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Architektur für persistente Zustandsverwaltung autonomer Agenten über Sessions hinweg.",
+    "form_fields": [
+      {
+        "id": "agent_role_mandate",
+        "label": "Rolle & Mandat des Agenten",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "memory_types_needed",
+        "label": "Erforderliche Gedächtnistypen",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "storage_technology",
+        "label": "Speichertechnologie (SQLite, Redis)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: AGENTEN-GEDÄCHTNIS & STATE-MANAGEMENT (SHORT/LONG-TERM)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Rolle & Mandat des Agenten (Pflicht): {{ agent_role_mandate }}\n- Erforderliche Gedächtnistypen (Pflicht): {{ memory_types_needed }}\n- Speichertechnologie (SQLite, Redis) (Pflicht): {{ storage_technology }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Memory-Framework für {{ agent_role_mandate }}:\n## 1. Schichten: Working vs. Episodic vs. Semantic Memory ({{ memory_types_needed }})\n## 2. Persistenz auf {{ storage_technology }}\n## 3. Pruning & Vergessenskurve\n## 4. Konfliktauflösung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "multi-agent-consensus-protocol",
+    "name": "Multi-Agenten Konsens- & Debatten-Protokoll",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Strukturiertes Abstimmungsverfahren zwischen Fachagenten zur Beseitigung von Denkfehlern.",
+    "form_fields": [
+      {
+        "id": "debate_topic",
+        "label": "Entscheidungsgegenstand / Problem",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "participating_agents",
+        "label": "Beteiligte Agentenprofile",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "consensus_rules",
+        "label": "Beschlussregel (Einstimmig, Veto, Mehrheit)",
+        "type": "select",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: MULTI-AGENTEN KONSENS- & DEBATTEN-PROTOKOLL\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Entscheidungsgegenstand / Problem (Pflicht): {{ debate_topic }}\n- Beteiligte Agentenprofile (Pflicht): {{ participating_agents }}\n- Beschlussregel (Einstimmig, Veto, Mehrheit) (Pflicht): {{ consensus_rules }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Konsensprotokoll für: {{ debate_topic }}:\n## 1. 3 Runden Debattenablauf zwischen {{ participating_agents }}\n## 2. Veto-Regeln ({{ consensus_rules }})\n## 3. Synthese & finaler Mehrheitsbeschluss\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "computer-use-gui-automation-safety",
+    "name": "GUI-Automatisierung & Computer-Use Sicherheitsprotokoll",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Restriktionen und Sicherheitsgrenzen für autonome Desktop-/Browser-Steuerung.",
+    "form_fields": [
+      {
+        "id": "target_applications",
+        "label": "Gesteuerte Anwendungen (Browser, OS)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "prohibited_actions",
+        "label": "Harte Sperrzonen (Zahlung, Löschung)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "human_in_loop_triggers",
+        "label": "Kriterien für Benutzerbestätigung",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: GUI-AUTOMATISIERUNG & COMPUTER-USE SICHERHEITSPROTOKOLL\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Gesteuerte Anwendungen (Browser, OS) (Pflicht): {{ target_applications }}\n- Harte Sperrzonen (Zahlung, Löschung) (Pflicht): {{ prohibited_actions }}\n- Kriterien für Benutzerbestätigung (Pflicht): {{ human_in_loop_triggers }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das GUI-Sicherheitsframework für {{ target_applications }}:\n## 1. Sandboxing-Vorgaben\n## 2. Hard-Interlocks gegen: {{ prohibited_actions }}\n## 3. Human-in-the-Loop Schaltstellen: {{ human_in_loop_triggers }}\n## 4. Killswitch-Mechanismus\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "llm-as-a-judge-eval-suite",
+    "name": "LLM-as-a-Judge Evaluation-Suite & Testkatalog",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Automatisiertes Benchmarking generierter Modellergebnisse gegen standardisierte Rubriken.",
+    "form_fields": [
+      {
+        "id": "evaluated_task_output",
+        "label": "Zu bewertende Aufgabenergebnisse",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "scoring_rubric_criteria",
+        "label": "Bewertungskriterien (Fakten, Ton)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "judge_model",
+        "label": "Evaluator-Modell & Kalibrierung",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: LLM-AS-A-JUDGE EVALUATION-SUITE & TESTKATALOG\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Zu bewertende Aufgabenergebnisse (Pflicht): {{ evaluated_task_output }}\n- Bewertungskriterien (Fakten, Ton) (Pflicht): {{ scoring_rubric_criteria }}\n- Evaluator-Modell & Kalibrierung (Pflicht): {{ judge_model }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Evaluation-Suite für {{ evaluated_task_output }}:\n## 1. Rubrik mit Punktwerten 1-5 basierend auf {{ scoring_rubric_criteria }}\n## 2. Richter-Prompt für Modell {{ judge_model }} (mit CoT-Pflicht)\n## 3. Bias-Beseitigung\n## 4. Validierung gegen Experten\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "agent-observability-cost-telemetry",
+    "name": "Agenten-Observability & Token-Verbrauchs-Dashboard",
+    "category": "KI & Automatisierung",
+    "category_slug": "ai-automation",
+    "description": "Telemetrie-Konzept zur Überwachung von Token-Verbrauch, Kosten und Latenz je Agent.",
+    "form_fields": [
+      {
+        "id": "orchestration_stack",
+        "label": "Orchestrierungs-Stack (FastAPI, Docker)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "logged_attributes",
+        "label": "Erfasste Metriken (Tokens, Latenz, Calls)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "cost_alert_thresholds",
+        "label": "Budget-Warnschwellen (Tag / Monat)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: AGENTEN-OBSERVABILITY & TOKEN-VERBRAUCHS-DASHBOARD\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für KI & Automatisierung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Orchestrierungs-Stack (FastAPI, Docker) (Pflicht): {{ orchestration_stack }}\n- Erfasste Metriken (Tokens, Latenz, Calls) (Pflicht): {{ logged_attributes }}\n- Budget-Warnschwellen (Tag / Monat) (Pflicht): {{ cost_alert_thresholds }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Observability-Konzept für {{ orchestration_stack }}:\n## 1. Tracing-Architektur für: {{ logged_attributes }}\n## 2. Kostenallokation je Task\n## 3. Drosselung bei: {{ cost_alert_thresholds }}\n## 4. Dashboard-Spezifikation\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "gdp-pharmaceutical-temperature-excursion",
+    "name": "GDP Temperaturabweichungs-Report & Risikoanalyse",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Qualitätsbewertung von Kühlkettenbrüchen beim Transport von Arzneimitteln nach EU-GDP.",
+    "form_fields": [
+      {
+        "id": "medicine_batch_details",
+        "label": "Arzneimittel & Chargennummer",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "temp_storage_condition",
+        "label": "Solllagerung (2-8°C vs. 15-25°C)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "excursion_duration_peak",
+        "label": "Abweichungsdauer & Maximaltemperatur",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "stability_data_available",
+        "label": "Stabilitätsdaten des Herstellers",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: GDP TEMPERATURABWEICHUNGS-REPORT & RISIKOANALYSE\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Arzneimittel & Chargennummer (Pflicht): {{ medicine_batch_details }}\n- Solllagerung (2-8°C vs. 15-25°C) (Pflicht): {{ temp_storage_condition }}\n- Abweichungsdauer & Maximaltemperatur (Pflicht): {{ excursion_duration_peak }}\n- Stabilitätsdaten des Herstellers (Pflicht): {{ stability_data_available }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie den GDP-Abweichungsbericht für {{ medicine_batch_details }}:\n## 1. Sachverhalt (Soll: {{ temp_storage_condition }} vs. Abweichung: {{ excursion_duration_peak }})\n## 2. Bewertung anhand Stabilitätsdaten: {{ stability_data_available }}\n## 3. Freigabeentscheidung der Verantwortlichen Person\n## 4. CAPA-Plan gegen Logistiker\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "pharma-wholesale-vendor-qualification-audit",
+    "name": "Lieferantenqualifizierung im Pharmagroßhandel (§ 52a AMG)",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Sicherheitsüberprüfung von Vorlieferanten zur Verhinderung gefälschter Arzneimittel.",
+    "form_fields": [
+      {
+        "id": "vendor_company_name",
+        "label": "Lieferant & Sitz",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "wda_license_status",
+        "label": "Großhandelserlaubnis (WDA) & GDP-Status",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "supply_chain_verification",
+        "label": "Echtheitsprüfung (SecurPharm / FMD)",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: LIEFERANTENQUALIFIZIERUNG IM PHARMAGROSSHANDEL (§ 52A AMG)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Lieferant & Sitz (Pflicht): {{ vendor_company_name }}\n- Großhandelserlaubnis (WDA) & GDP-Status (Pflicht): {{ wda_license_status }}\n- Echtheitsprüfung (SecurPharm / FMD) (Pflicht): {{ supply_chain_verification }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Qualifizierungsdossier für {{ vendor_company_name }}:\n## 1. Lizenzprüfung (Gültigkeit: {{ wda_license_status }})\n## 2. Due Diligence & Fälschungssicherheit: {{ supply_chain_verification }}\n## 3. Audit des Transport-QM\n## 4. Requalifizierungsfristen\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "narcotics-btm-inventory-reconciliation",
+    "name": "Betäubungsmittel (BtM) Bestandsabgleich & Meldung",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Lückenlose Dokumentation und Meldung nach dem Betäubungsmittelgesetz (BtMG).",
+    "form_fields": [
+      {
+        "id": "reporting_period",
+        "label": "Meldezeitraum (z. B. Halbjahr)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "btm_substances_scope",
+        "label": "BtM-Substanzen im Bestand",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "inventory_discrepancies",
+        "label": "Differenzen Buch- vs. Zählbestand",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: BETÄUBUNGSMITTEL (BTM) BESTANDSABGLEICH & MELDUNG\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Meldezeitraum (z. B. Halbjahr) (Pflicht): {{ reporting_period }}\n- BtM-Substanzen im Bestand (Pflicht): {{ btm_substances_scope }}\n- Differenzen Buch- vs. Zählbestand (Pflicht): {{ inventory_discrepancies }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das BtM-Dossier für {{ reporting_period }}:\n## 1. Soll-Ist-Abgleich der BtM-Kartei für: {{ btm_substances_scope }}\n## 2. Ursachenanalyse bei Differenzen: {{ inventory_discrepancies }}\n## 3. Bundesopiumstellen-Meldung (BfArM)\n## 4. Tresorsicherheits-Prüfung nach BtMVV\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "pharma-cold-chain-logistics-validation",
+    "name": "Kühlketten-Transportvalidierung (Thermal Shipper SOP)",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Validierungsplan für passive Kühlboxen und temperaturgeführte Transporte.",
+    "form_fields": [
+      {
+        "id": "packaging_configuration",
+        "label": "Kühlbox-Typ, Packmittel & PCM-Elemente",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "transit_route_duration",
+        "label": "Laufzeit & Sommer-/Winter-Extremprofil",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "data_logger_specs",
+        "label": "Datenlogger & Kalibrierung",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: KÜHLKETTEN-TRANSPORTVALIDIERUNG (THERMAL SHIPPER SOP)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Kühlbox-Typ, Packmittel & PCM-Elemente (Pflicht): {{ packaging_configuration }}\n- Laufzeit & Sommer-/Winter-Extremprofil (Pflicht): {{ transit_route_duration }}\n- Datenlogger & Kalibrierung (Pflicht): {{ data_logger_specs }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie den Validierungsplan:\n## 1. Testprofile für {{ transit_route_duration }}\n## 2. Packanweisung für: {{ packaging_configuration }}\n## 3. Logger-Platzierung: {{ data_logger_specs }}\n## 4. Akzeptanzkriterien (2-8°C Grenze)\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "pharmaceutical-product-recall-sop",
+    "name": "Dringender Arzneimittelrückruf & Chargensperrung (SOP)",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Verfahrensanweisung zur Einleitung eines Rückrufs Klasse I-III binnen weniger Stunden.",
+    "form_fields": [
+      {
+        "id": "recall_class",
+        "label": "Rückruf-Klasse (I, II oder III)",
+        "type": "select",
+        "required": true
+      },
+      {
+        "id": "affected_medicine_batch",
+        "label": "Präparat & Chargennummer",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "distribution_scope",
+        "label": "Belieferte Kunden (Apotheken, Kliniken)",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: DRINGENDER ARZNEIMITTELRÜCKRUF & CHARGENSPERRUNG (SOP)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Rückruf-Klasse (I, II oder III) (Pflicht): {{ recall_class }}\n- Präparat & Chargennummer (Pflicht): {{ affected_medicine_batch }}\n- Belieferte Kunden (Apotheken, Kliniken) (Pflicht): {{ distribution_scope }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie den Rückrufplan für Charge {{ affected_medicine_batch }}:\n## 1. Sofortige EDV-Lagersperre\n## 2. Behördenmeldeweg nach {{ recall_class }}\n## 3. Kundenanschreiben an: {{ distribution_scope }}\n## 4. Quarantänelagerung & Reconciliation (> 98%)\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "pharma-parallel-import-margin-analyzer",
+    "name": "Parallelimport & Reimport Margenkalkulation (B2B Pharma)",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Wirtschaftlichkeitsberechnung für EU-Arzneimittelimporte inkl. Umpackkosten.",
+    "form_fields": [
+      {
+        "id": "origin_country_price",
+        "label": "EU-Einkaufspreis & Währung",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "german_target_price",
+        "label": "Deutscher Festbetrag / AEP",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "repackaging_regulatory_cost",
+        "label": "Umpack- & Zulassungskosten",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "statutory_rebates",
+        "label": "Gesetzliche Rabatte (§ 130a SGB V)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: PARALLELIMPORT & REIMPORT MARGENKALKULATION (B2B PHARMA)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- EU-Einkaufspreis & Währung (Pflicht): {{ origin_country_price }}\n- Deutscher Festbetrag / AEP (Pflicht): {{ german_target_price }}\n- Umpack- & Zulassungskosten (Pflicht): {{ repackaging_regulatory_cost }}\n- Gesetzliche Rabatte (§ 130a SGB V) (Pflicht): {{ statutory_rebates }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Import-Kalkulation:\n## 1. Marge (Einkauf {{ origin_country_price }} vs. AEP {{ german_target_price }})\n## 2. Umpackkosten: {{ repackaging_regulatory_cost }}\n## 3. SGB V Abschläge: {{ statutory_rebates }}\n## 4. Break-Even Absatzvolumen\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "gdp-internal-inspection-self-audit",
+    "name": "GDP Selbstinspektion & Audit-Bericht für Pharmagroßhändler",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Jahres-Auditprogramm zur Einhaltung aller 10 Kapitel der EU-GDP-Leitlinien.",
+    "form_fields": [
+      {
+        "id": "audit_focus_chapter",
+        "label": "Auditierte GDP-Kapitel",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "identified_deviations",
+        "label": "Abweichungen (Kritisch, Wesentlich)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "responsible_auditors",
+        "label": "Auditteam & Bereichsleiter",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: GDP SELBSTINSPEKTION & AUDIT-BERICHT FÜR PHARMAGROSSHÄNDLER\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Auditierte GDP-Kapitel (Pflicht): {{ audit_focus_chapter }}\n- Abweichungen (Kritisch, Wesentlich) (Pflicht): {{ identified_deviations }}\n- Auditteam & Bereichsleiter (Pflicht): {{ responsible_auditors }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie den GDP-Selbstinspektionsbericht:\n## 1. Audit-Kriterienkatalog zu: {{ audit_focus_chapter }}\n## 2. Bewertung der Abweichungen: {{ identified_deviations }}\n## 3. CAPA-Maßnahmen mit Fristen\n## 4. Vorbereitung Behördeninspektion\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "pharma-tender-health-insurance-bid",
+    "name": "Krankenkassen-Rabattvertrag: Ausschreibungs-Kalkulation",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Kalkulation für bundesweite Generika-Ausschreibungen nach § 130a Abs. 8 SGB V.",
+    "form_fields": [
+      {
+        "id": "active_ingredient_volume",
+        "label": "Wirkstoff & Jahresvolumen (GKV)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "production_procurement_cost",
+        "label": "Herstell- & Beschaffungskosten",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "penalty_supply_failure",
+        "label": "Pönalen bei Lieferausfall",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "bid_strategy_target",
+        "label": "Zuschlagsmodell (Exklusiv vs. Multi)",
+        "type": "select",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: KRANKENKASSEN-RABATTVERTRAG: AUSSCHREIBUNGS-KALKULATION\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Wirkstoff & Jahresvolumen (GKV) (Pflicht): {{ active_ingredient_volume }}\n- Herstell- & Beschaffungskosten (Pflicht): {{ production_procurement_cost }}\n- Pönalen bei Lieferausfall (Pflicht): {{ penalty_supply_failure }}\n- Zuschlagsmodell (Exklusiv vs. Multi) (Pflicht): {{ bid_strategy_target }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Ausschreibungskalkulation:\n## 1. Grenzpreis für Volumen {{ active_ingredient_volume }} (Kosten: {{ production_procurement_cost }})\n## 2. Pönalen-Risikoabsicherung: {{ penalty_supply_failure }}\n## 3. Rabattsatz nach Modell {{ bid_strategy_target }}\n## 4. 6-Monats-Reserveplanung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "pharma-quarantine-blocked-stock-sop",
+    "name": "Quarantänelagerung & Chargenfreigabe-SOP (Pharma)",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Physische und elektronische Trennung von freigegebener, gesperrter und Retouren-Ware.",
+    "form_fields": [
+      {
+        "id": "warehouse_quarantine_zone",
+        "label": "Quarantänebereich / Zugangsbeschränkung",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "erp_system_blocking",
+        "label": "ERP-Sperrstatus & Prozessblockade",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "release_authority_roles",
+        "label": "Freigabeberechtigte Personen",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: QUARANTÄNELAGERUNG & CHARGENFREIGABE-SOP (PHARMA)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Quarantänebereich / Zugangsbeschränkung (Pflicht): {{ warehouse_quarantine_zone }}\n- ERP-Sperrstatus & Prozessblockade (Pflicht): {{ erp_system_blocking }}\n- Freigabeberechtigte Personen (Pflicht): {{ release_authority_roles }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Quarantäne-SOP:\n## 1. Einlagerung in Zone {{ warehouse_quarantine_zone }}\n## 2. ERP-Blockade in {{ erp_system_blocking }}\n## 3. Freigabeprotokoll durch {{ release_authority_roles }}\n## 4. Vernichtung & Sonderabfallnachweis\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "pharma-supply-chain-shortage-mitigation",
+    "name": "Lieferengpass-Management & Kontingentierungs-Plan",
+    "category": "Operations & Prozesse",
+    "category_slug": "operations-processes",
+    "description": "Prozess zur Allokation versorgungsrelevanter Arzneimittel bei Hersteller-Lieferabrissen.",
+    "form_fields": [
+      {
+        "id": "critical_medicine_name",
+        "label": "Kritisches Arzneimittel",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "incoming_vs_demand_ratio",
+        "label": "Liefermenge vs. Kundenbedarf (Quote)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "customer_prioritization_rules",
+        "label": "Verteilungsschlüssel (Klinik, Apotheke)",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: LIEFERENGPASS-MANAGEMENT & KONTINGENTIERUNGS-PLAN\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Operations & Prozesse innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Kritisches Arzneimittel (Pflicht): {{ critical_medicine_name }}\n- Liefermenge vs. Kundenbedarf (Quote) (Pflicht): {{ incoming_vs_demand_ratio }}\n- Verteilungsschlüssel (Klinik, Apotheke) (Pflicht): {{ customer_prioritization_rules }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie den Kontingentierungs-Plan für {{ critical_medicine_name }}:\n## 1. BfArM-Engpassmeldung\n## 2. Verteilungslogik bei Quote von {{ incoming_vs_demand_ratio }}\n## 3. Priorisierung nach: {{ customer_prioritization_rules }}\n## 4. Proaktive Kundenkommunikation\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "discounted-cash-flow-dcf-valuation",
+    "name": "DCF-Unternehmensbewertung (WACC & Entity-Ansatz)",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Mathematisch fundierte Bewertung von Unternehmen nach dem Discounted Cash Flow Verfahren.",
+    "form_fields": [
+      {
+        "id": "forecast_cash_flows_5y",
+        "label": "Freie Cashflows (5-Jahres-Planung)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "terminal_growth_rate",
+        "label": "Ewige Wachstumsrate in %",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "wacc_calculation_inputs",
+        "label": "WACC-Parameter (EK, FK, Beta, Tax)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "net_debt_reconciliation",
+        "label": "Nettofinanzschulden",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: DCF-UNTERNEHMENSBEWERTUNG (WACC & ENTITY-ANSATZ)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Freie Cashflows (5-Jahres-Planung) (Pflicht): {{ forecast_cash_flows_5y }}\n- Ewige Wachstumsrate in % (Pflicht): {{ terminal_growth_rate }}\n- WACC-Parameter (EK, FK, Beta, Tax) (Pflicht): {{ wacc_calculation_inputs }}\n- Nettofinanzschulden (Pflicht): {{ net_debt_reconciliation }}\n\n3. METHODISCHE AUSARBEITUNG\nFühren Sie die DCF-Bewertung durch:\n## 1. Barwert der Cashflows ({{ forecast_cash_flows_5y }}) mit WACC ({{ wacc_calculation_inputs }})\n## 2. Terminal Value mit {{ terminal_growth_rate }}% Wachstum\n## 3. Enterprise Value (EV)\n## 4. Equity Value Bridge unter Abzug von {{ net_debt_reconciliation }}\n## 5. Sensitivitätstabelle\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "ebitda-multiple-peer-group-valuation",
+    "name": "Multiplikator-Bewertung (Peer Group Multiples)",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Marktbasierte Bewertung anhand von Peer-Group-Kennzahlen (EV/EBITDA, EV/Sales).",
+    "form_fields": [
+      {
+        "id": "target_financials",
+        "label": "Finanzdaten des Targets (Umsatz, EBITDA)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "industry_peer_multiples",
+        "label": "Peer-Group Multiples (Median, Spanne)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "size_liquidity_discounts",
+        "label": "Abschläge (Small-Cap, Fungibilität)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: MULTIPLIKATOR-BEWERTUNG (PEER GROUP MULTIPLES)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Finanzdaten des Targets (Umsatz, EBITDA) (Pflicht): {{ target_financials }}\n- Peer-Group Multiples (Median, Spanne) (Pflicht): {{ industry_peer_multiples }}\n- Abschläge (Small-Cap, Fungibilität) (Pflicht): {{ size_liquidity_discounts }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Multiplikator-Bewertung:\n## 1. Finanzdaten-Basis: {{ target_financials }}\n## 2. Multiple-Anwendung ({{ industry_peer_multiples }})\n## 3. Begründung von Abschlägen ({{ size_liquidity_discounts }})\n## 4. Bewertungsspanne (EV & Kaufpreis)\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "spa-share-purchase-agreement-audit",
+    "name": "Unternehmenskaufvertrag (SPA): Klausel- & Risiko-Audit",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Überprüfung von Unternehmenskaufverträgen auf Haftungsfallen, Garantien und Freistellungen.",
+    "form_fields": [
+      {
+        "id": "purchase_price_mechanism",
+        "label": "Kaufpreismechanismus (Locked Box vs. Closing Accounts)",
+        "type": "select",
+        "required": true
+      },
+      {
+        "id": "representations_warranties",
+        "label": "Garantiekatalog des Verkäufers",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "liability_caps_de_minimis",
+        "label": "Haftungsgrenzen (De-Minimis, Basket, Cap)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: UNTERNEHMENSKAUFVERTRAG (SPA): KLAUSEL- & RISIKO-AUDIT\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Kaufpreismechanismus (Locked Box vs. Closing Accounts) (Pflicht): {{ purchase_price_mechanism }}\n- Garantiekatalog des Verkäufers (Pflicht): {{ representations_warranties }}\n- Haftungsgrenzen (De-Minimis, Basket, Cap) (Pflicht): {{ liability_caps_de_minimis }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das SPA-Audit:\n## 1. Kaufpreismechanismus: {{ purchase_price_mechanism }}\n## 2. Prüfung Garantiekatalog ({{ representations_warranties }})\n## 3. Haftungsdeckel ({{ liability_caps_de_minimis }})\n## 4. Freistellungen & Verjährung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "earnout-mechanism-structure-term-sheet",
+    "name": "Earn-Out Vereinbarung & Kaufpreisstaffel",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Strukturierung erfolgsabhängiger Kaufpreiskomponenten zur Überbrückung von Bewertungslücken.",
+    "form_fields": [
+      {
+        "id": "valuation_gap_amount",
+        "label": "Bewertungslücke in €",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "earnout_metrics",
+        "label": "Erfolgsmetriken (z. B. EBITDA-Ziele)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "operational_control_rights",
+        "label": "Führungsbefugnisse während Earn-Out",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: EARN-OUT VEREINBARUNG & KAUFPREISSTAFFEL\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Bewertungslücke in € (Pflicht): {{ valuation_gap_amount }}\n- Erfolgsmetriken (z. B. EBITDA-Ziele) (Pflicht): {{ earnout_metrics }}\n- Führungsbefugnisse während Earn-Out (Pflicht): {{ operational_control_rights }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Earn-Out Klausel:\n## 1. Schließung der Lücke von {{ valuation_gap_amount }}\n## 2. Bereinigung der Kennzahlen ({{ earnout_metrics }})\n## 3. Schutzrechte des Verkäufers ({{ operational_control_rights }})\n## 4. Schiedsgutachterklausel\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "management-buy-in-mbi-search-mandate",
+    "name": "Management-Buy-In (MBI / MBO) Profil & Struktur",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Anforderungsprofil und Transaktionsstruktur für Unternehmernachfolgen.",
+    "form_fields": [
+      {
+        "id": "target_industry_parameters",
+        "label": "Branche, Umsatzkorridor & Region",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "manager_equity_contribution",
+        "label": "Eigenkapitalbeitrag des Managers",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "financing_structure",
+        "label": "Finanzierungsstruktur (Bank, Mezzanine, Vendor Loan)",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: MANAGEMENT-BUY-IN (MBI / MBO) PROFIL & STRUKTUR\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Branche, Umsatzkorridor & Region (Pflicht): {{ target_industry_parameters }}\n- Eigenkapitalbeitrag des Managers (Pflicht): {{ manager_equity_contribution }}\n- Finanzierungsstruktur (Bank, Mezzanine, Vendor Loan) (Pflicht): {{ financing_structure }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das MBI-Dossier:\n## 1. Akquisitionskriterien für {{ target_industry_parameters }}\n## 2. Eigenmittel: {{ manager_equity_contribution }}\n## 3. LBO-Finanzierung aus: {{ financing_structure }}\n## 4. Ansprache von Altinhabern\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "vendor-due-diligence-factbook-prep",
+    "name": "Vendor Due Diligence Factbook (Verkaufsvorbereitung)",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Strukturierte Aufbereitung von Unternehmensdaten zur Beschleunigung von Exit-Prozessen.",
+    "form_fields": [
+      {
+        "id": "exit_timeline",
+        "label": "Geplanter Verkaufszeitpunkt",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "business_model_kpis",
+        "label": "Kennzahlen der letzten 3 Jahre",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "potential_buyer_universe",
+        "label": "Käuferkreis (Strategen, PE)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: VENDOR DUE DILIGENCE FACTBOOK (VERKAUFSVORBEREITUNG)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Geplanter Verkaufszeitpunkt (Pflicht): {{ exit_timeline }}\n- Kennzahlen der letzten 3 Jahre (Pflicht): {{ business_model_kpis }}\n- Käuferkreis (Strategen, PE) (Pflicht): {{ potential_buyer_universe }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Vendor Factbook:\n## 1. Equity Story für {{ potential_buyer_universe }}\n## 2. VDR-Datenraumindex\n## 3. KPI-Aufbereitung: {{ business_model_kpis }}\n## 4. Exit-Roadmap bis {{ exit_timeline }}\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "m-and-a-synergy-valuation-matrix",
+    "name": "M&A Synergiebewertung & Integrationskosten-Matrix",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Quantitative Berechnung von Kostensynergien (Headcount, IT, Einkauf) und Einmalkosten.",
+    "form_fields": [
+      {
+        "id": "cost_synergies_identified",
+        "label": "Identifizierte Einsparpotenziale",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "revenue_synergies",
+        "label": "Umsatzsynergien (Cross-Selling)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "one_time_integration_costs",
+        "label": "Einmalige Integrationskosten",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: M&A SYNERGIEBEWERTUNG & INTEGRATIONSKOSTEN-MATRIX\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Identifizierte Einsparpotenziale (Pflicht): {{ cost_synergies_identified }}\n- Umsatzsynergien (Cross-Selling) (Pflicht): {{ revenue_synergies }}\n- Einmalige Integrationskosten (Pflicht): {{ one_time_integration_costs }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Synergiematrix:\n## 1. Kostensynergien-Run-Rate aus {{ cost_synergies_identified }}\n## 2. Umsatzsynergien: {{ revenue_synergies }}\n## 3. Gegenrechnung Einmalkosten: {{ one_time_integration_costs }}\n## 4. NPV der Synergien\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "carve-out-transitional-service-agreement",
+    "name": "Carve-Out & Transitional Service Agreement (TSA)",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Vertragliche Regelung von Übergangsleistungen bei Herauslösung von Unternehmensteilen.",
+    "form_fields": [
+      {
+        "id": "carved_out_entity",
+        "label": "Herausgelöste Sparte / Tochter",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "shared_services_scope",
+        "label": "Übergangsdienste (IT, HR, ERP)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "tsa_duration_pricing",
+        "label": "Laufzeit & Kostenmodell (Cost-Plus)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: CARVE-OUT & TRANSITIONAL SERVICE AGREEMENT (TSA)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Herausgelöste Sparte / Tochter (Pflicht): {{ carved_out_entity }}\n- Übergangsdienste (IT, HR, ERP) (Pflicht): {{ shared_services_scope }}\n- Laufzeit & Kostenmodell (Cost-Plus) (Pflicht): {{ tsa_duration_pricing }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das TSA-Framework für {{ carved_out_entity }}:\n## 1. Leistungskatalog: {{ shared_services_scope }}\n## 2. Abrechnungslogik ({{ tsa_duration_pricing }})\n## 3. SLAs & Haftungsregeln\n## 4. Entflechtungs-Fahrplan (Exit from TSA)\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "commercial-register-notary-closing-checklist",
+    "name": "Notar-Closing-Checkliste & Handelsregister-Vollzug",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Prüfliste für den Vollzug von Gesellschafterwechseln, Satzungsänderungen und Registeranmeldungen.",
+    "form_fields": [
+      {
+        "id": "notarial_transaction_type",
+        "label": "Art der Beurkundung",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "closing_conditions_precedent",
+        "label": "Closing Conditions (Freigaben, Beschlüsse)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "commercial_register_filings",
+        "label": "Erforderliche Registeranmeldungen",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: NOTAR-CLOSING-CHECKLISTE & HANDELSREGISTER-VOLLZUG\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Art der Beurkundung (Pflicht): {{ notarial_transaction_type }}\n- Closing Conditions (Freigaben, Beschlüsse) (Pflicht): {{ closing_conditions_precedent }}\n- Erforderliche Registeranmeldungen (Pflicht): {{ commercial_register_filings }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Notar-Checkliste für {{ notarial_transaction_type }}:\n## 1. Vorbereitende Dokumente & Vollmachten\n## 2. Nachweis der Conditions Precedent ({{ closing_conditions_precedent }})\n## 3. Signing/Closing Ablauf\n## 4. Handelsregister-Einreichung: {{ commercial_register_filings }}\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "w-and-i-insurance-due-diligence-package",
+    "name": "Warranty & Indemnity (W&I) Versicherungs-Dossier",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Strukturierung von Transaktionsversicherungen zur Absicherung von Verkäufergarantien.",
+    "form_fields": [
+      {
+        "id": "transaction_enterprise_value",
+        "label": "Unternehmenswert / Kaufpreis",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "covered_warranty_catalogue",
+        "label": "Zu versichernde Garantien",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "known_excluded_risks",
+        "label": "Bekannte Risiken aus der Due Diligence",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: WARRANTY & INDEMNITY (W&I) VERSICHERUNGS-DOSSIER\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Unternehmenswert / Kaufpreis (Pflicht): {{ transaction_enterprise_value }}\n- Zu versichernde Garantien (Pflicht): {{ covered_warranty_catalogue }}\n- Bekannte Risiken aus der Due Diligence (Pflicht): {{ known_excluded_risks }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das W&I-Dossier für Kaufpreis {{ transaction_enterprise_value }}:\n## 1. Deckungssumme & Retention\n## 2. Versicherbarkeit des Katalogs: {{ covered_warranty_catalogue }}\n## 3. Umgang mit Ausschlüssen: {{ known_excluded_risks }}\n## 4. Underwriting-Vorbereitung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "bve-bafa-crisis-supply-disruption",
+    "name": "Kritisches Energie- & Rohstoff-Notfallprotokoll (BNetzA/BAFA)",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Handlungsleitfaden bei behördlicher Gas-/Stromabschaltung oder Rohstoff-Embargos.",
+    "form_fields": [
+      {
+        "id": "production_site_energy_needs",
+        "label": "Standort, Energieart & Mindestlast",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "critical_customer_impact",
+        "label": "Schadensausmaß bei Ausfall (Kliniken, Industrie)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "emergency_generator_fuel_reserve",
+        "label": "Notstromaggregate & Treibstoffreichweite",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: KRITISCHES ENERGIE- & ROHSTOFF-NOTFALLPROTOKOLL (BNETZA/BAFA)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Standort, Energieart & Mindestlast (Pflicht): {{ production_site_energy_needs }}\n- Schadensausmaß bei Ausfall (Kliniken, Industrie) (Pflicht): {{ critical_customer_impact }}\n- Notstromaggregate & Treibstoffreichweite (Pflicht): {{ emergency_generator_fuel_reserve }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Energie-Krisenprotokoll:\n## 1. Härtefallantrag bei BNetzA\n## 2. Notbetriebsfahrplan (Mindestlast: {{ production_site_energy_needs }})\n## 3. Priorisierung kritischer Kunden: {{ critical_customer_impact }}\n## 4. Notstrombetrieb: {{ emergency_generator_fuel_reserve }}\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "social-engineering-vishing-ceo-fraud-sop",
+    "name": "CEO Fraud & Social Engineering Sofort-Reaktions-SOP",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Akut-Workflow bei versuchter oder erfolgter Überweisung durch gefälschte Chef-Anweisungen.",
+    "form_fields": [
+      {
+        "id": "fraud_incident_details",
+        "label": "Vorfall (Fake-Überweisung, Deepfake)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "diverted_amount_bank",
+        "label": "Betrag, Empfänger-IBAN & Bank",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "time_elapsed_since_transfer",
+        "label": "Verstrichene Zeit seit Transaktion",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: CEO FRAUD & SOCIAL ENGINEERING SOFORT-REAKTIONS-SOP\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Vorfall (Fake-Überweisung, Deepfake) (Pflicht): {{ fraud_incident_details }}\n- Betrag, Empfänger-IBAN & Bank (Pflicht): {{ diverted_amount_bank }}\n- Verstrichene Zeit seit Transaktion (Pflicht): {{ time_elapsed_since_transfer }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die CEO Fraud SOP:\n## 1. Sofortmaßnahme: SWIFT-Recall binnen {{ time_elapsed_since_transfer }}\n## 2. Strafanzeige bei Cybercrime-Behörden für {{ diverted_amount_bank }}\n## 3. Beweissicherung aus {{ fraud_incident_details }}\n## 4. Prozess-Nachschärfung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "gdpr-article-34-individual-breach-notification",
+    "name": "Betroffenenbenachrichtigung nach Datenleck (Art. 34 DSGVO)",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Verständliche, transparente Benachrichtigung von Kunden oder Mitarbeitern bei Datenkompromittierung.",
+    "form_fields": [
+      {
+        "id": "compromised_data_types",
+        "label": "Kompromittierte Daten (Passwörter, IBAN)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "breach_consequences",
+        "label": "Mögliche Gefahren für Betroffene",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "remedy_protection_measures",
+        "label": "Schutzmaßnahmen (Passwort-Reset, Monitoring)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: BETROFFENENBENACHRICHTIGUNG NACH DATENLECK (ART. 34 DSGVO)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Kompromittierte Daten (Passwörter, IBAN) (Pflicht): {{ compromised_data_types }}\n- Mögliche Gefahren für Betroffene (Pflicht): {{ breach_consequences }}\n- Schutzmaßnahmen (Passwort-Reset, Monitoring) (Pflicht): {{ remedy_protection_measures }}\n\n3. METHODISCHE AUSARBEITUNG\nVerfassen Sie die Benachrichtigung nach Art. 34 DSGVO:\n## 1. Klare Sachverhaltsdarstellung\n## 2. Betroffene Daten: {{ compromised_data_types }}\n## 3. Handlungsempfehlungen gegen Gefahren: {{ breach_consequences }}\n## 4. Ergriffene Schutzmaßnahmen: {{ remedy_protection_measures }}\n## 5. DPO-Kontakt\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "defamation-fake-review-removal-request",
+    "name": "Abmahnung & Löschungsantrag: Verleumderische Online-Bewertungen",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Rechtssicheres Vorgehen gegen falsche Tatsachenbehauptungen auf Bewertungsportalen.",
+    "form_fields": [
+      {
+        "id": "platform_review_url",
+        "label": "Plattform & URL der Rezension",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "defamatory_statements",
+        "label": "Falsche Behauptungen oder Schmähkritik",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "proof_non_customer",
+        "label": "Nachweis fehlender Kundenbeziehung",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: ABMAHNUNG & LÖSCHUNGSANTRAG: VERLEUMDERISCHE ONLINE-BEWERTUNGEN\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Plattform & URL der Rezension (Pflicht): {{ platform_review_url }}\n- Falsche Behauptungen oder Schmähkritik (Pflicht): {{ defamatory_statements }}\n- Nachweis fehlender Kundenbeziehung (Pflicht): {{ proof_non_customer }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie den Löschungsantrag an {{ platform_review_url }}:\n## 1. Juristische Rüge unwahrer Tatsachenbehauptungen ({{ defamatory_statements }})\n## 2. Nachweis fehlenden Kontakts: {{ proof_non_customer }}\n## 3. Fristsetzung zur Entfernung\n## 4. Musterabmahnung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "insider-trading-compliance-policy",
+    "name": "Insider-Compliance & Ad-hoc-Mitteilungspflicht (MAR)",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Führung von Insiderlisten und Pflichtmitteilungen nach der Marktmissbrauchsverordnung.",
+    "form_fields": [
+      {
+        "id": "price_sensitive_event",
+        "label": "Kursrelevantes Ereignis",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "insider_circle_persons",
+        "label": "Kreis informierter Personen",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "postponement_grounds",
+        "label": "Gründe für Aufschub der Veröffentlichung",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: INSIDER-COMPLIANCE & AD-HOC-MITTEILUNGSPFLICHT (MAR)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Kursrelevantes Ereignis (Pflicht): {{ price_sensitive_event }}\n- Kreis informierter Personen (Pflicht): {{ insider_circle_persons }}\n- Gründe für Aufschub der Veröffentlichung (Pflicht): {{ postponement_grounds }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das MAR-Dossier:\n## 1. Prüfung Insidereigenschaft von {{ price_sensitive_event }}\n## 2. Formelle Insiderliste nach Art. 18 MAR für {{ insider_circle_persons }}\n## 3. Aufschubprüfung ({{ postponement_grounds }})\n## 4. Ad-hoc Mitteilungsentwurf\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "press-spokesperson-q-and-a-crisis-holding",
+    "name": "Pressesprecher Q&A-Dossier & Holding Statement (Schwere Krise)",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Interview-Vorbereitung für Unternehmenssprecher bei Unfällen, Razzien oder Insolvenzen.",
+    "form_fields": [
+      {
+        "id": "crisis_scenario_trigger",
+        "label": "Krisenanlass (Unfall, Razzia)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "known_verified_facts",
+        "label": "Gesicherte Fakten",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "critical_media_questions",
+        "label": "Top-5 aggressive Fragen",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: PRESSESPRECHER Q&A-DOSSIER & HOLDING STATEMENT (SCHWERE KRISE)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Krisenanlass (Unfall, Razzia) (Pflicht): {{ crisis_scenario_trigger }}\n- Gesicherte Fakten (Pflicht): {{ known_verified_facts }}\n- Top-5 aggressive Fragen (Pflicht): {{ critical_media_questions }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Krisen-Sprecherdossier:\n## 1. Holding Statement binnen 30 Min. zu: {{ crisis_scenario_trigger }}\n## 2. Fakten-Leitplanken (Bestätigt: {{ known_verified_facts }})\n## 3. Q&A-Matrix zu: {{ critical_media_questions }}\n## 4. Verhaltensregeln vor der Kamera\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "product-liability-insurance-claim-dossier",
+    "name": "Produkthaftpflicht-Schadenmeldung & Deckungsantrag",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Regresssichere Schadenanzeige beim Versicherer bei Personen- oder Sachschäden durch Produkte.",
+    "form_fields": [
+      {
+        "id": "incident_damage_description",
+        "label": "Schadensfall & Personenschaden",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "alleged_product_defect",
+        "label": "Vorgeworfener Produktfehler",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "third_party_claims_amount",
+        "label": "Geltend gemachte Forderungen",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: PRODUKTHAFTPFLICHT-SCHADENMELDUNG & DECKUNGSANTRAG\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Schadensfall & Personenschaden (Pflicht): {{ incident_damage_description }}\n- Vorgeworfener Produktfehler (Pflicht): {{ alleged_product_defect }}\n- Geltend gemachte Forderungen (Pflicht): {{ third_party_claims_amount }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Schadenmeldung:\n## 1. Detaillierter Unfallbericht zu: {{ incident_damage_description }}\n## 2. Stellungnahme zum behaupteten Fehler: {{ alleged_product_defect }}\n## 3. Abwehr unberechtigter Forderungen (Höhe: {{ third_party_claims_amount }})\n## 4. Deckungsschutzprüfung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "competition-cartel-dawn-raid-sop",
+    "name": "Kartellamts-Razzia (Dawn Raid) Verhalten-SOP",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Verhaltensanweisungen für Rezeption und Geschäftsleitung bei unangekündigten Hausdurchsuchungen.",
+    "form_fields": [
+      {
+        "id": "investigating_authority",
+        "label": "Ermittelnde Behörde",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "internal_shadowing_team",
+        "label": "Benanntes Begleitteam (Legal, GF)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "it_seizure_rights",
+        "label": "Regeln zur IT- und Daten-Sicherstellung",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: KARTELLAMTS-RAZZIA (DAWN RAID) VERHALTEN-SOP\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Ermittelnde Behörde (Pflicht): {{ investigating_authority }}\n- Benanntes Begleitteam (Legal, GF) (Pflicht): {{ internal_shadowing_team }}\n- Regeln zur IT- und Daten-Sicherstellung (Pflicht): {{ it_seizure_rights }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Dawn-Raid SOP:\n## 1. Empfangs-Protokoll & Alarmierung von {{ internal_shadowing_team }}\n## 2. Rechte & Pflichten gegenüber {{ investigating_authority }}\n## 3. IT-Sicherstellung: {{ it_seizure_rights }}\n## 4. Beschlagnahmeprotokoll\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "workplace-safety-fatal-incident-sop",
+    "name": "Tödlicher Arbeitsunfall & Berufsgenossenschafts-Eskalation",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Krisenleitfaden bei schwersten Betriebsunfällen (Notruf, BG, Seelsorge, Angehörige).",
+    "form_fields": [
+      {
+        "id": "incident_location_machinery",
+        "label": "Unfallort, Maschine & Hergang",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "emergency_services_status",
+        "label": "Eingesetzte Behörden (Polizei, BG)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "next_of_kin_support",
+        "label": "Betreuung von Angehörigen und Team",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: TÖDLICHER ARBEITSUNFALL & BERUFSGENOSSENSCHAFTS-ESKALATION\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Unfallort, Maschine & Hergang (Pflicht): {{ incident_location_machinery }}\n- Eingesetzte Behörden (Polizei, BG) (Pflicht): {{ emergency_services_status }}\n- Betreuung von Angehörigen und Team (Pflicht): {{ next_of_kin_support }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie den Leitfaden für schwere Unfälle:\n## 1. Sicherung der Unfallstelle an: {{ incident_location_machinery }}\n## 2. Sofortmeldung an BG & Gewerbeaufsicht ({{ emergency_services_status }})\n## 3. Angehörigen-Kommunikation: {{ next_of_kin_support }}\n## 4. Krisenintervention\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "supply-chain-force-majeure-notification",
+    "name": "Höhere Gewalt (Force Majeure) Erklärung & Leistungsbefreiung",
+    "category": "Recht & Compliance",
+    "category_slug": "legal-compliance",
+    "description": "Rechtssichere Geltendmachung unverschuldeter Lieferverzögerungen gegenüber Kunden nach BGB.",
+    "form_fields": [
+      {
+        "id": "unforeseen_event",
+        "label": "Unvorhersehbares Ereignis (Natur, Streik)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "affected_contractual_obligations",
+        "label": "Betroffene Lieferpflichten",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "mitigation_efforts",
+        "label": "Ergriffene Gegenmaßnahmen",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: HÖHERE GEWALT (FORCE MAJEURE) ERKLÄRUNG & LEISTUNGSBEFREIUNG\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Recht & Compliance innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Unvorhersehbares Ereignis (Natur, Streik) (Pflicht): {{ unforeseen_event }}\n- Betroffene Lieferpflichten (Pflicht): {{ affected_contractual_obligations }}\n- Ergriffene Gegenmaßnahmen (Pflicht): {{ mitigation_efforts }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Force-Majeure Mitteilung:\n## 1. Darlegung der Unabwendbarkeit von {{ unforeseen_event }}\n## 2. Kausalitätsnachweis für Ausfälle: {{ affected_contractual_obligations }}\n## 3. Nachweis aller Gegenmaßnahmen ({{ mitigation_efforts }})\n## 4. Haftungsausschluss nach BGB\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "plg-product-led-growth-flywheel-spec",
+    "name": "Product-Led Growth (PLG) Onboarding & Freemium-Architektur",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Konzeption von Self-Service Funnels, die das Produkt selbst zum Haupt-Wachstumstreiber machen.",
+    "form_fields": [
+      {
+        "id": "product_core_loop",
+        "label": "Kern-Loop des Produkts",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "free_tier_paywall_trigger",
+        "label": "Paywall-Schwellenwert",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "time_to_value_target",
+        "label": "Time-to-Value Zielwert (z. B. < 3 Min.)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: PRODUCT-LED GROWTH (PLG) ONBOARDING & FREEMIUM-ARCHITEKTUR\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Kern-Loop des Produkts (Pflicht): {{ product_core_loop }}\n- Paywall-Schwellenwert (Pflicht): {{ free_tier_paywall_trigger }}\n- Time-to-Value Zielwert (z. B. < 3 Min.) (Pflicht): {{ time_to_value_target }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die PLG-Architektur:\n## 1. Onboarding Journey bis {{ time_to_value_target }}\n## 2. Viraler Kern-Loop: {{ product_core_loop }}\n## 3. Paywall-Logik: {{ free_tier_paywall_trigger }}\n## 4. PQL-Routing für Vertrieb\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "feature-flag-canary-rollout-strategy",
+    "name": "Feature Flagging & Progressive Delivery Strategie",
+    "category": "Technik & Entwicklung",
+    "category_slug": "tech-development",
+    "description": "Risikominimierter Rollout neuer Funktionen über Canary-Deployments und Flags.",
+    "form_fields": [
+      {
+        "id": "feature_under_rollout",
+        "label": "Neues Feature / Komponente",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "rollout_phases_pct",
+        "label": "Phasenstaffelung (1% -> 5% -> 25% -> 100%)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "health_metrics_killswitch",
+        "label": "Abbruchkriterien (Fehlerrate, Latenz)",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: FEATURE FLAGGING & PROGRESSIVE DELIVERY STRATEGIE\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Technik & Entwicklung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Neues Feature / Komponente (Pflicht): {{ feature_under_rollout }}\n- Phasenstaffelung (1% -> 5% -> 25% -> 100%) (Pflicht): {{ rollout_phases_pct }}\n- Abbruchkriterien (Fehlerrate, Latenz) (Pflicht): {{ health_metrics_killswitch }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Rollout-Strategie für {{ feature_under_rollout }}:\n## 1. Phasenstaffelung nach: {{ rollout_phases_pct }}\n## 2. Automatischer Killswitch bei: {{ health_metrics_killswitch }}\n## 3. Feedback-Schleife\n## 4. Flag-Bereinigungsplan\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "customer-journey-drop-off-funnel-audit",
+    "name": "SaaS Funnel Drop-off Analyse & UX-Reibungs-Audit",
+    "category": "Daten & Analytics",
+    "category_slug": "data-analytics",
+    "description": "Identifikation von Conversion-Lecks zwischen Registrierung, Aktivierung und Bezahlung.",
+    "form_fields": [
+      {
+        "id": "funnel_steps_data",
+        "label": "Trichter-Schritte (Signup bis Paid)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "conversion_rates_per_step",
+        "label": "Durchlaufquoten je Schritt",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "assumed_friction_causes",
+        "label": "Vermutete Hürden",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: SAAS FUNNEL DROP-OFF ANALYSE & UX-REIBUNGS-AUDIT\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Daten & Analytics innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Trichter-Schritte (Signup bis Paid) (Pflicht): {{ funnel_steps_data }}\n- Durchlaufquoten je Schritt (Pflicht): {{ conversion_rates_per_step }}\n- Vermutete Hürden (Pflicht): {{ assumed_friction_causes }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Funnel-Audit für {{ funnel_steps_data }}:\n## 1. Drop-off Analyse anhand von: {{ conversion_rates_per_step }}\n## 2. Beseitigung von Reibungspunkten ({{ assumed_friction_causes }})\n## 3. 5 A/B-Testing Hypothesen\n## 4. Berechnete Hebelwirkung\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "saas-tier-packaging-pricing-redesign",
+    "name": "SaaS Paketierungs- & Preismodell-Redesign (Packaging)",
+    "category": "Marketing & Vertrieb",
+    "category_slug": "marketing-sales",
+    "description": "Neuaufstellung der Preis-Tiers (Starter, Professional, Enterprise) zur Erhöhung des ARPU.",
+    "form_fields": [
+      {
+        "id": "current_pricing_tiers",
+        "label": "Bestehende Pakete & Preise",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "value_metric",
+        "label": "Preistreiber / Value Metric",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "expansion_revenue_goal",
+        "label": "ARPU-Wachstumsziel",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: SAAS PAKETIERUNGS- & PREISMODELL-REDESIGN (PACKAGING)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Marketing & Vertrieb innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Bestehende Pakete & Preise (Pflicht): {{ current_pricing_tiers }}\n- Preistreiber / Value Metric (Pflicht): {{ value_metric }}\n- ARPU-Wachstumsziel (Pflicht): {{ expansion_revenue_goal }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das SaaS-Pricing Redesign:\n## 1. Kritik des Status Quo: {{ current_pricing_tiers }}\n## 2. Ausrichtung an Value Metric: {{ value_metric }}\n## 3. 3-Stufen Modell (Starter, Pro, Enterprise)\n## 4. Expansion-Revenue Hebel für {{ expansion_revenue_goal }}\n## 5. Bestandskunden-Regeln\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "design-system-component-tokens-spec",
+    "name": "Design System & UI Component Tokens Spezifikation",
+    "category": "Technik & Entwicklung",
+    "category_slug": "tech-development",
+    "description": "Standardisierung von UI-Komponenten (Figma to Code) für barrierefreie Frontends.",
+    "form_fields": [
+      {
+        "id": "core_ui_components",
+        "label": "Zu standardisierende Komponenten",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "brand_token_values",
+        "label": "Design-Tokens (Farbe, Typo, Spacing)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "accessibility_target",
+        "label": "Barrierefreiheitsvorgabe (WCAG 2.1 AA)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: DESIGN SYSTEM & UI COMPONENT TOKENS SPEZIFIKATION\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Technik & Entwicklung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Zu standardisierende Komponenten (Pflicht): {{ core_ui_components }}\n- Design-Tokens (Farbe, Typo, Spacing) (Pflicht): {{ brand_token_values }}\n- Barrierefreiheitsvorgabe (WCAG 2.1 AA) (Pflicht): {{ accessibility_target }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Design-System Spezifikation für {{ core_ui_components }}:\n## 1. Token-Architektur aus: {{ brand_token_values }}\n## 2. Komponenten-Zustände (Hover, Focus, Disabled)\n## 3. Barrierefreiheit nach {{ accessibility_target }}\n## 4. Versionierungsrichtlinie\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "saas-churn-post-mortem-root-cause",
+    "name": "Churn Deep-Dive & Exit-Interview Ursachenanalyse",
+    "category": "Marketing & Vertrieb",
+    "category_slug": "marketing-sales",
+    "description": "Analytische Aufarbeitung abgewanderter Kunden zur Ableitung strategischer Produktverbesserungen.",
+    "form_fields": [
+      {
+        "id": "churned_accounts_data",
+        "label": "Gekündigte Accounts & Vertragswert",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "stated_cancellation_reasons",
+        "label": "Genannte Kündigungsgründe",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "product_vs_pricing_gap",
+        "label": "Vermutete Hauptursache",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: CHURN DEEP-DIVE & EXIT-INTERVIEW URSACHENANALYSE\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Marketing & Vertrieb innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Gekündigte Accounts & Vertragswert (Pflicht): {{ churned_accounts_data }}\n- Genannte Kündigungsgründe (Pflicht): {{ stated_cancellation_reasons }}\n- Vermutete Hauptursache (Pflicht): {{ product_vs_pricing_gap }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Churn-Analyse:\n## 1. Clusterung von: {{ stated_cancellation_reasons }} für {{ churned_accounts_data }}\n## 2. Analyse der echten Ursache (vs. Vorwand: {{ product_vs_pricing_gap }})\n## 3. 3 Pflicht-Features für die Roadmap\n## 4. Frühwarn-Indikatoren\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "api-developer-portal-onboarding-experience",
+    "name": "Developer Portal & API Quickstart Experience (DX)",
+    "category": "Technik & Entwicklung",
+    "category_slug": "tech-development",
+    "description": "Konzeption einer erstklassigen Entwickler-Erfahrung zur Reduzierung der Integrationszeit.",
+    "form_fields": [
+      {
+        "id": "api_target_developers",
+        "label": "Ziel-Entwickler & Sprachen",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "first_api_call_task",
+        "label": "Erster 'Hello World' API-Aufruf",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "sdk_code_samples_needed",
+        "label": "Erforderliche Code-Beispiele",
+        "type": "multiline",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: DEVELOPER PORTAL & API QUICKSTART EXPERIENCE (DX)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Technik & Entwicklung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Ziel-Entwickler & Sprachen (Pflicht): {{ api_target_developers }}\n- Erster 'Hello World' API-Aufruf (Pflicht): {{ first_api_call_task }}\n- Erforderliche Code-Beispiele (Pflicht): {{ sdk_code_samples_needed }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Developer-Portal Konzept:\n## 1. 5-Minuten Quickstart für {{ first_api_call_task }}\n## 2. Interaktive OpenAPI-Dokumentation\n## 3. SDK-Snippets ({{ sdk_code_samples_needed }}) für {{ api_target_developers }}\n## 4. RFC-7807 Fehler-Glossar\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "product-roadmap-theme-based-now-next-later",
+    "name": "Theme-basierte Produkt-Roadmap (Now / Next / Later)",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Outcome-getriebene Roadmap ohne starre Datums-Zusagen zur Steuerung von Stakeholder-Erwartungen.",
+    "form_fields": [
+      {
+        "id": "company_strategic_themes",
+        "label": "Strategische Schwerpunkte",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "problem_spaces_addressed",
+        "label": "Zu lösende Kundenprobleme",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "target_stakeholders",
+        "label": "Ziel-Stakeholder (Vorstand, Sales)",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: THEME-BASIERTE PRODUKT-ROADMAP (NOW / NEXT / LATER)\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Strategische Schwerpunkte (Pflicht): {{ company_strategic_themes }}\n- Zu lösende Kundenprobleme (Pflicht): {{ problem_spaces_addressed }}\n- Ziel-Stakeholder (Vorstand, Sales) (Pflicht): {{ target_stakeholders }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Theme-Roadmap für {{ target_stakeholders }}:\n## 1. Ausrichtung an Säulen: {{ company_strategic_themes }}\n## 2. Spalte NOW: {{ problem_spaces_addressed }}\n## 3. Spalte NEXT & LATER\n## 4. Stakeholder-Kommunikationsleitfaden\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "user-research-discovery-interview-synthesis",
+    "name": "User Research & Discovery-Interview Synthese",
+    "category": "Business & Strategie",
+    "category_slug": "business-strategy",
+    "description": "Systematische Auswertung qualitativer Kundeninterviews zur Validierung neuer Produktideen.",
+    "form_fields": [
+      {
+        "id": "interviewed_user_cohort",
+        "label": "Befragte Nutzergruppe",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "raw_interview_notes",
+        "label": "Rohe Gesprächsnotizen & Zitate",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "tested_product_hypothesis",
+        "label": "Zu validierende Produkthypothese",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: USER RESEARCH & DISCOVERY-INTERVIEW SYNTHESE\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Business & Strategie innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Befragte Nutzergruppe (Pflicht): {{ interviewed_user_cohort }}\n- Rohe Gesprächsnotizen & Zitate (Pflicht): {{ raw_interview_notes }}\n- Zu validierende Produkthypothese (Pflicht): {{ tested_product_hypothesis }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie die Research-Synthese für {{ interviewed_user_cohort }}:\n## 1. Validierung der Hypothese: {{ tested_product_hypothesis }}\n## 2. Mustererkennung aus {{ raw_interview_notes }}\n## 3. Jobs-to-be-Done (JTBD) Formulierung\n## 4. 3 Schlüsselzitate für Entscheider\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "saas-security-questionnaire-response-kit",
+    "name": "B2B Enterprise Security Questionnaire Antwort-Kit",
+    "category": "Technik & Entwicklung",
+    "category_slug": "tech-development",
+    "description": "Standardisierte Antwortvorlagen auf 50+ typische IT-Sicherheitsfragen von Konzerneinkäufern.",
+    "form_fields": [
+      {
+        "id": "cloud_hosting_certifications",
+        "label": "Hosting & Zertifikate (ISO 27001, SOC 2)",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "encryption_access_standards",
+        "label": "Verschlüsselung (AES-256, TLS, MFA, SSO)",
+        "type": "multiline",
+        "required": true
+      },
+      {
+        "id": "backup_dr_metrics",
+        "label": "Backup-Rhythmus & Desaster Recovery",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: B2B ENTERPRISE SECURITY QUESTIONNAIRE ANTWORT-KIT\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Technik & Entwicklung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- Hosting & Zertifikate (ISO 27001, SOC 2) (Pflicht): {{ cloud_hosting_certifications }}\n- Verschlüsselung (AES-256, TLS, MFA, SSO) (Pflicht): {{ encryption_access_standards }}\n- Backup-Rhythmus & Desaster Recovery (Pflicht): {{ backup_dr_metrics }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Security-Antwortkit:\n## 1. Physische Sicherheit & Zertifikate: {{ cloud_hosting_certifications }}\n## 2. Verschlüsselung & Zugriffsschutz: {{ encryption_access_standards }}\n## 3. BCP & Desaster Recovery: {{ backup_dr_metrics }}\n## 4. Incident Response SLAs\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "id": "persona_todo_list",
+  "name": "Todo List",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'Todo List'. Create a responsive todo app with HTML5, CSS3 and vanilla JavaScript. The app should have a modern, clean UI using CSS G...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

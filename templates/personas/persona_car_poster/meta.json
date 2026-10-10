@@ -1,0 +1,10 @@
+{
+  "id": "persona_car_poster",
+  "name": "Car poster",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Car poster'. ${primary_text:Megane}{\n  \"category\": \"STUDIO_RACE_CAR_SIDE_PROFILE\",\n  \"subject\": {\n    \"vehicle_type\": \"GT endurance r...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,218 @@
+<div id="view-brain" class="hidden flex-1 w-full h-full flex flex-col p-6 space-y-6 overflow-y-auto bg-[var(--background)] text-[var(--foreground)]">
+        
+        <!-- Status & Architecture Banner -->
+        <div class="p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+                <span>SECOND BRAIN AKTIV &amp; SYNCHRONISIERT</span>
+              </span>
+              <span class="text-xs font-mono text-[var(--muted-foreground)]" id="current-vault-path-label">C:\Mein Obsidian</span>
+            </div>
+            <h3 class="text-lg font-bold text-[var(--foreground)] flex items-center gap-2">
+              🧠 Lokale Wissensbibliothek &amp; Obsidian-Architektur (Zero-Latency)
+            </h3>
+            <p class="text-xs text-[var(--muted-foreground)] leading-relaxed max-w-3xl">
+              Füge PDFs, DIN-Normen, B-Pläne oder Fachbücher hinzu. Das System extrahiert Texte, Tabellen und Pläne vollständig lokal per Text-Extraction &amp; OCR, sortiert sie thematisch und speichert sie als saubere Markdown-Dateien in deinem Obsidian Vault (<code class="bg-[var(--secondary)] text-[var(--foreground)] px-1 py-0.5 rounded">02_Wissensbibliothek/</code>).
+            </p>
+          </div>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+            <div class="flex items-center gap-1.5 bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 shadow-xs">
+              <i data-lucide="folder-git-2" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+              <select id="obsidian-vault-selector" onchange="onObsidianVaultChanged(this.value)" class="bg-transparent text-xs text-[var(--foreground)] font-mono focus:outline-none cursor-pointer">
+                <option value="C:\Mein Obsidian">📁 C:\Mein Obsidian (Haupt-Vault)</option>
+                <option value="C:\Users\micha\OneDrive\_Privat\Dokumente\_Mein Obsidian\Mein Obsidian">📁 OneDrive: _Mein Obsidian\Mein Obsidian</option>
+              </select>
+            </div>
+            <button onclick="openActiveObsidianVault()" class="px-4 py-2.5 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-bold text-xs flex items-center justify-center gap-2 transition shadow-xs cursor-pointer">
+              <i data-lucide="external-link" class="w-4 h-4"></i>
+              <span>🚀 In Obsidian App öffnen</span>
+            </button>
+          </div>
+        </div>
+        <!-- 4 Core Hubs Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1.5 shadow-xs">
+            <div class="flex items-center justify-between text-[var(--muted-foreground)] text-xs font-mono">
+              <span>HR &amp; AGENTEN</span>
+              <i data-lucide="users" class="w-4 h-4 text-black dark:text-white"></i>
+            </div>
+            <div class="text-base font-bold text-[var(--foreground)]">00_HR_Agenten</div>
+            <div class="text-[11px] text-[var(--muted-foreground)]">48 Personalakten &amp; Skill-Definitionen</div>
+          </div>
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1.5 shadow-xs">
+            <div class="flex items-center justify-between text-[var(--muted-foreground)] text-xs font-mono">
+              <span>WISSENSBIBLIOTHEK</span>
+              <i data-lucide="book" class="w-4 h-4 text-black dark:text-white"></i>
+            </div>
+            <div class="text-base font-bold text-[var(--foreground)]" id="lib-hub-books-count">02_Wissensbibliothek</div>
+            <div class="text-[11px] text-[var(--muted-foreground)]">DIN-Normen, B-Pläne &amp; OCR-Bücher</div>
+          </div>
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1.5 shadow-xs">
+            <div class="flex items-center justify-between text-[var(--muted-foreground)] text-xs font-mono">
+              <span>PROTOKOLLE</span>
+              <i data-lucide="clipboard-list" class="w-4 h-4 text-black dark:text-white"></i>
+            </div>
+            <div class="text-base font-bold text-[var(--foreground)]">Protokolle/</div>
+            <div class="text-[11px] text-[var(--muted-foreground)]">Sitzungen, Aufgaben &amp; Change-Logs</div>
+          </div>
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1.5 shadow-xs">
+            <div class="flex items-center justify-between text-[var(--muted-foreground)] text-xs font-mono">
+              <span>SYNTHESEN</span>
+              <i data-lucide="sparkles" class="w-4 h-4 text-black dark:text-white"></i>
+            </div>
+            <div class="text-base font-bold text-[var(--foreground)]">00_Notebook_Synthesen</div>
+            <div class="text-[11px] text-[var(--muted-foreground)]">Grounded Retrieval Erkenntnisse</div>
+          </div>
+        </div>
+        <!-- PDF & DOKUMENTEN-UPLOAD / INGEST DROPZONE -->
+        <div class="p-5 rounded-2xl border-2 border-dashed border-[var(--border)] bg-[var(--card)] space-y-4 shadow-xs relative transition-all" id="library-dropzone" ondragover="onLibraryDragOver(event)" ondragleave="onLibraryDragLeave(event)" ondrop="onLibraryDrop(event)">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-black dark:text-white">
+                <i data-lucide="file-up" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-[var(--foreground)] text-sm flex items-center gap-2">
+                  <span>📄 PDF-Dokumente &amp; Fachbücher erfassen</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] font-bold">Auto-OCR &amp; Markdown</span>
+                </h4>
+                <p class="text-xs text-[var(--muted-foreground)]">
+                  Ziehe PDF-, DOCX- oder TXT-Dateien hier hinein oder klicke auf Durchsuchen.
+                </p>
+              </div>
+            </div>
+            <!-- Category Pre-Selection -->
+            <div class="flex flex-wrap items-center gap-2 font-mono text-xs">
+              <span class="text-[var(--muted-foreground)] text-[11px]">Kategorie:</span>
+              <select id="library-upload-category" onchange="onLibraryCategorySelectChange(this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:outline-none font-sans">
+                <option value="auto">🤖 Automatisch erkennen (KI-Themenklassifikation)</option>
+                <option value="06_Cannabis_Wirtschaft_Medizin">🌿 06_Cannabis_Wirtschaft_Medizin</option>
+                <option value="07_Betriebswirtschaft_Finanzen">💼 07_Betriebswirtschaft_Finanzen</option>
+                <option value="08_Projektmanagement_Organisation">📋 08_Projektmanagement_Organisation</option>
+                <option value="01_Immobilien_Modulbau">🏗️ 01_Immobilien_Modulbau</option>
+                <option value="02_Recht_Steuern">⚖️ 02_Recht_Steuern</option>
+                <option value="03_Strategie_Markt">📈 03_Strategie_Markt</option>
+                <option value="09_Tech_Software_KI">💻 09_Tech_Software_KI</option>
+                <option value="10_Medizin_Gesundheit">🩺 10_Medizin_Gesundheit</option>
+                <option value="04_Allgemein">📚 04_Allgemein</option>
+                <option value="custom">➕ Neues Thema anlegen...</option>
+              </select>
+              <input type="text" id="library-custom-category-input" placeholder="z.B. 11_Vertrieb_Marketing" class="hidden bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none w-52">
+            </div>
+          </div>
+          <!-- Hidden Native File Input -->
+          <input type="file" id="library-file-input" multiple accept=".pdf,.docx,.doc,.txt,.md,.epub,.mobi,.azw" class="hidden" onchange="onLibraryFileInputChange(event)">
+          <!-- Visual Drop Area -->
+          <div class="py-6 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] text-center flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-zinc-500 transition" onclick="document.getElementById('library-file-input').click()">
+            <i data-lucide="upload-cloud" class="w-8 h-8 text-black dark:text-white"></i>
+            <div class="text-xs font-semibold text-[var(--foreground)]">
+              Klicke hier zum Auswählen oder ziehe Dateien direkt in diesen Bereich
+            </div>
+            <div class="text-[11px] text-[var(--muted-foreground)] font-mono">
+              Unterstützt: PDF (mit Auto-OCR), EPUB, MOBI/AZW, DOCX, TXT, MD (auch mehrere Dateien gleichzeitig)
+            </div>
+          </div>
+          <!-- Selected Files Queue Display -->
+          <div id="library-selected-files-container" class="hidden space-y-2">
+            <div class="flex items-center justify-between text-xs font-mono text-[var(--muted-foreground)] border-b border-[var(--border)] pb-1">
+              <span id="library-files-count-label">0 Dateien ausgewählt:</span>
+              <button type="button" onclick="clearLibrarySelectedFiles()" class="text-black dark:text-white underline text-[11px] cursor-pointer">Auswahl leeren</button>
+            </div>
+            <div id="library-selected-files-list" class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar"></div>
+            
+            <div class="pt-2 flex flex-wrap items-center gap-3">
+              <button type="button" id="btn-start-library-upload" onclick="startLibraryUploadAndIngest()" class="px-5 py-2.5 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-bold text-xs transition flex items-center gap-2 cursor-pointer shadow-xs">
+                <i data-lucide="play" class="w-4 h-4"></i>
+                <span>⚡ Jetzt hochladen &amp; in Obsidian einlesen</span>
+              </button>
+              <button type="button" onclick="runBatchLibraryIngest()" class="px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold text-xs transition flex items-center gap-2 cursor-pointer">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                <span>Alle Rohdokumente neu scannen</span>
+              </button>
+            </div>
+          </div>
+          <!-- Live Progress & Ingest Status Box -->
+          <div id="library-ingest-status-box" class="hidden p-3 rounded-xl bg-[var(--secondary)] border border-[var(--border)] space-y-2 font-mono text-xs">
+            <div class="flex items-center justify-between text-[var(--foreground)]">
+              <span id="library-ingest-status-title" class="flex items-center gap-2 font-semibold">
+                <span class="w-2 h-2 rounded-full bg-zinc-400 animate-ping"></span>
+                <span>Verarbeite Dokumente...</span>
+              </span>
+              <span id="library-ingest-status-percent" class="font-bold">0%</span>
+            </div>
+            <div class="w-full h-1.5 bg-[var(--background)] rounded-full overflow-hidden border border-[var(--border)]">
+              <div id="library-ingest-progress-bar" class="h-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-300 w-0"></div>
+            </div>
+            <div id="library-ingest-log" class="text-[11px] text-[var(--muted-foreground)] max-h-24 overflow-y-auto space-y-0.5 custom-scrollbar"></div>
+          </div>
+        </div>
+        <!-- VAULT & WISSENSBIBLIOTHEK NOTIZ-BROWSER -->
+        <div class="p-5 rounded-2xl border border-[var(--border)] bg-[var(--card)] space-y-4 shadow-xs">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h4 class="font-bold text-[var(--foreground)] text-sm flex items-center gap-2">
+                <i data-lucide="file-search" class="w-4 h-4 text-black dark:text-white"></i>
+                <span>Aktive Dokumente &amp; Fachbücher in 02_Wissensbibliothek</span>
+              </h4>
+              <span class="text-[11px] text-[var(--muted-foreground)]">Vollständig durchsuchbar, automatisch nach Themenbereichen sortiert</span>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-black dark:text-white"></i>
+                <input type="text" id="library-search-input" placeholder="Nach Titel oder Stichwort suchen..." oninput="filterLibraryTable()" class="pl-8 pr-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] focus:outline-none font-mono w-48 sm:w-64">
+              </div>
+              <button onclick="loadLibraryBooksList()" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] hover:bg-[var(--secondary)] flex items-center gap-1.5 transition cursor-pointer" title="Bibliothek neu laden">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span>Aktualisieren</span>
+              </button>
+            </div>
+          </div>
+          <!-- Category Filter Pills -->
+          <div id="library-category-filter-container" class="flex flex-wrap items-center gap-1.5 text-xs font-mono border-b border-[var(--border)] pb-3">
+            <button type="button" onclick="setLibraryCategoryFilter('ALL')" id="lib-filter-btn-ALL" class="lib-filter-btn px-3 py-1 rounded-full bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold transition cursor-pointer">
+              Alle (<span id="lib-count-all">0</span>)
+            </button>
+          </div>
+          <!-- Document Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)] font-mono text-[10px] uppercase">
+                  <th class="py-2.5 px-3">Titel &amp; Werk</th>
+                  <th class="py-2.5 px-3">Kategorie / Pfad</th>
+                  <th class="py-2.5 px-3">Umfang</th>
+                  <th class="py-2.5 px-3">Format / OCR</th>
+                  <th class="py-2.5 px-3 text-right">Aktionen</th>
+                </tr>
+              </thead>
+              <tbody id="library-books-table-body" class="divide-y divide-[var(--border)] font-mono text-[var(--foreground)]">
+                <tr>
+                  <td colspan="5" class="py-6 text-center text-[var(--muted-foreground)] text-xs">Lade Vault-Bestand...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Live Note Preview Drawer / Modal -->
+        <div id="library-reader-drawer" class="hidden p-5 rounded-2xl border border-[var(--border)] bg-[var(--card)] space-y-3 shadow-xl">
+          <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+            <div class="flex items-center gap-2">
+              <i data-lucide="file-text" class="w-4 h-4 text-black dark:text-white"></i>
+              <h4 id="reader-doc-title" class="font-bold text-[var(--foreground)] text-sm">Notiz-Vorschau</h4>
+            </div>
+            <div class="flex items-center gap-2">
+              <a id="reader-doc-obsidian-link" href="#" class="px-2.5 py-1 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-bold text-xs flex items-center gap-1.5 transition">
+                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                <span>In Obsidian öffnen</span>
+              </a>
+              <button onclick="closeLibraryReader()" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+          <pre id="reader-doc-content" class="bg-[var(--background)] p-4 rounded-xl border border-[var(--border)] text-xs font-mono text-[var(--foreground)] max-h-96 overflow-y-auto whitespace-pre-wrap leading-relaxed custom-scrollbar"></pre>
+        </div>
+      </div>

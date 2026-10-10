@@ -1,0 +1,10 @@
+{
+  "id": "persona_cyber_security_character_workflow",
+  "name": "Cyber Security Character Workflow",
+  "category": "3. Recht, Steuern & Compliance",
+  "description": "Fach-Experte: 'Cyber Security Character Workflow'. {\n  \"name\": \"Cyber Security Character\",\n  \"steps\": [\n    {\n      \"step_1\": \"Facial Identity Mapping\",\n      \"description...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

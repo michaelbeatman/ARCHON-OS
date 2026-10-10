@@ -1,0 +1,11 @@
+{
+  "id": "crew_flows_researcher",
+  "name": "Research Agent (Flows)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Gather comprehensive information about {topic} and {chapter_title} that will be used to enhance the content of the chapter. Here is some add...",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

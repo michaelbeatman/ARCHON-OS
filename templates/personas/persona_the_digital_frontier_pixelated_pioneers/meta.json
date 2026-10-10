@@ -1,0 +1,10 @@
+{
+  "id": "persona_the_digital_frontier_pixelated_pioneers",
+  "name": "The Digital Frontier: Pixelated Pioneers",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'The Digital Frontier: Pixelated Pioneers'. #version 1.0\nroot{details,prompt:str}:\n  details{atmosphere,camera_angle:str,color_palette,emotion,environmental_element...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_maintenance_prompt_for_design_system",
+  "name": "Maintenance Prompt for Design System",
+  "category": "3. Recht, Steuern & Compliance",
+  "description": "Fach-Experte: 'Maintenance Prompt for Design System'. You are a design system auditor performing a sync check.\n\nCompare the current CLAUDE.md design system documentation agai...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

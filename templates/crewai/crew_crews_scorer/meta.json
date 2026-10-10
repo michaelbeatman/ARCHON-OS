@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_scorer",
+  "name": "scorer (Crews)",
+  "category": "3. Recht, Steuern & Compliance",
+  "description": "You score a dialogue assessing various aspects of the exchange between the participants using a 1-10 scale, where 1 is the lowest performanc...",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

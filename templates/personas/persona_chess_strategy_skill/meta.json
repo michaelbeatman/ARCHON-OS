@@ -1,0 +1,10 @@
+{
+  "id": "persona_chess_strategy_skill",
+  "name": "chess-strategy-skill",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'chess-strategy-skill'. ---\nname: chess-strategy-skill\ndescription: A skill to guide AI agents in analyzing and suggesting chess strategies, und...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

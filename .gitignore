@@ -1,6 +1,103 @@
+# Python & Environment
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
+.Python
 .venv/
 venv/
+ENV/
+env/
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.*
+!.env.example
+credentials.json
+*token*.json
+gmail_token.json
+google_token.json
+**/API-Keys.md
+
+# Obsidian Vaults & Personal Knowledge / Correspondence / Protocols
+*obsidian*
+obsidian_vault/
+agent_workspace/
+**/obsidian_vault/
+**/agent_workspace/
+**/00_HR_Agenten/
+**/02_Wissensbibliothek/
+**/Protokolle/
+**/Archiv/
+**/Archiv-*
+**/*Protokoll*
+**/*protokoll*
+**/*Protocol*
+**/*protocol*
+**/*Korrespondenz*
+**/*korrespondenz*
+**/*Outreach*
+**/*Vakanzen*
+**/*Vakanz*
+**/*Report*
+**/*report*
+**/Bewerbung*/
+**/Bewerbungen*/
+**/*Lebensläufe*
+**/*Bewerbungsprotokoll*
+bewerbungen_*.csv
+potenzielle_neukontakte.json
+
+# Databases & Cache & Runtime Data
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
+chroma_db/
+paperclip_data/
+pb_data/
+data/
+
+# Node & Frontend
+node_modules/
+.npm/
+.next/
+dist/
+build/
+
+# Backups & Temporary files
+*.bak
+*.bak*
+*.backup
+_modifizierter Muell*
+backups/
+LinkedIn-backup/
+
+# Test Artifacts & Screenshots
+test_logs.txt
+test_output.html
+*.png
+run_pw*.js
+test_browser*.js
+test_dom.js
+scratch_*.js
+inspect_*.js
+
+# --- 2026-10-10 GitHub-Slim: große Altbestände & Seitenprojekte (bleiben auf der Platte) ---
+OpenMontage/
+paperclip/
+library/
+archive/
+static_backup/
+browser-use/
+antigravity_complete_skills_package/
+static/static/
+scratch/
+quartz_app/
+*.db-shm
+
+# OS specific
 .DS_Store
+Thumbs.db
+

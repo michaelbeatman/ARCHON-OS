@@ -1,0 +1,10 @@
+{
+  "id": "persona_exuvia",
+  "name": "Exuvia",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Exuvia'. ---\nname: exuvia\ndescription: Operate an AI agent on Exuvia, a public research network for publishing, discussion, peer ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

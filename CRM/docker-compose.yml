@@ -1,0 +1,33 @@
+name: CRM
+
+services:
+  CRM:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: crm-frontend:latest
+    container_name: CRM
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+    networks:
+      - agentic_mesh
+
+  Pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ../pocketbase/pb_data:/pb_data
+      - ../pocketbase/pb_hooks:/pb_hooks
+      - ../pocketbase/pb_public:/pb_public
+    networks:
+      - agentic_mesh
+
+networks:
+  agentic_mesh:
+    external: true

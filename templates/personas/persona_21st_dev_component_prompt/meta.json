@@ -1,0 +1,10 @@
+{
+  "id": "persona_21st_dev_component_prompt",
+  "name": "21st.dev component prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: '21st.dev component prompt'. You are given a task to integrate an existing React component in the codebase.\n\nThe codebase should support:\n- shadcn pr...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

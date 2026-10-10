@@ -1,0 +1,1125 @@
+{
+  "updated_at": "2026-10-07T18:36:03.656039",
+  "nodes": [
+    {
+      "id": "executive_decision_architect",
+      "x": 20,
+      "y": 200,
+      "tier": 1,
+      "team_id": "team_strategy",
+      "name": "CEO - Chief Executive Officer",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/custom_executive_decision_architect.png",
+      "model": "auto/best-reasoning",
+      "active_tasks": 0,
+      "status": "active",
+      "person_name": "Robert",
+      "provider": "omniroute"
+    },
+    {
+      "id": "system_architect_orchestrator",
+      "x": 220,
+      "y": 440,
+      "tier": 2,
+      "team_id": "team_tech",
+      "name": "Software- & Cloud-Architekt (IT-Infrastruktur)",
+      "role": "Software- & Cloud-Architekt (IT-Infrastruktur)",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_020.jpg?v=20260913_rev4",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "active",
+      "person_name": "Dr. Robert Neumann",
+      "provider": "omniroute"
+    },
+    {
+      "id": "red_team_challenger",
+      "x": 20,
+      "y": 2100,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Red Team / Critical Challenger",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_163.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Marcus Vance",
+      "provider": "omniroute"
+    },
+    {
+      "id": "tax_holding_advisor",
+      "x": 20,
+      "y": 1140,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Steuer- & Holding-Strukturberater",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_024.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Dr. Ulrich Tannenberg",
+      "provider": "omniroute"
+    },
+    {
+      "id": "pricing_discount_governor",
+      "x": 20,
+      "y": 660,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Pricing & Margin Governor",
+      "role": "2. Handel, Beschaffung & E-Commerce",
+      "category": "2. Handel, Beschaffung & E-Commerce",
+      "avatar": "/static/avatars/avatar_083.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Klaus Meissner",
+      "provider": "omniroute"
+    },
+    {
+      "id": "pitchdeck_offer_designer",
+      "x": 20,
+      "y": 980,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Offer & Pitch Deck Designer",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_034.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Simon Albrecht",
+      "provider": "omniroute"
+    },
+    {
+      "id": "personal_life_strategist",
+      "x": 20,
+      "y": 820,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Personal Life & Habit Strategist",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_006.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Dr. Elena Weber",
+      "provider": "omniroute"
+    },
+    {
+      "id": "senior_fullstack_engineer",
+      "x": 220,
+      "y": 1140,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "Senior Fullstack Engineer (Python/TypeScript)",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_174.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Niklas Dorn",
+      "provider": "omniroute"
+    },
+    {
+      "id": "devops_cloud_sec_specialist",
+      "x": 220,
+      "y": 980,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "DevOps & IT-Support Specialist",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/custom_devops_cloud_sec_specialist.png",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Dr. Hendrik Sasse",
+      "provider": "omniroute"
+    },
+    {
+      "id": "database_performance_tuner",
+      "x": 220,
+      "y": 660,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "Database & SQL Performance Tuner",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_027.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Svenja Kuhlmann",
+      "provider": "omniroute"
+    },
+    {
+      "id": "enterprise_solutions_architect",
+      "x": 220,
+      "y": 820,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "Enterprise Solutions Architect",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_002.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Dr. Hendrik Sasse",
+      "provider": "omniroute"
+    },
+    {
+      "id": "commercial_jurist_contracts",
+      "x": 420,
+      "y": 440,
+      "tier": 2,
+      "team_id": "team_legal",
+      "name": "Wirtschaftsjurist & Vertragsprüfer",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_094.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "active",
+      "person_name": "Dr. Maximilian von Walden",
+      "provider": "omniroute"
+    },
+    {
+      "id": "liability_risk_analyst",
+      "x": 420,
+      "y": 1300,
+      "tier": 3,
+      "team_id": "team_legal",
+      "name": "Risiko- & Haftungs-Analyst",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_127.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Dr. Andreas Kohl",
+      "provider": "omniroute"
+    },
+    {
+      "id": "compliance_gdpr_auditor",
+      "x": 420,
+      "y": 660,
+      "tier": 3,
+      "team_id": "team_legal",
+      "name": "Compliance & DSGVO-Auditor",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_023.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Sabine Becker",
+      "provider": "omniroute"
+    },
+    {
+      "id": "labor_law_hr_governance",
+      "x": 420,
+      "y": 980,
+      "tier": 3,
+      "team_id": "team_legal",
+      "name": "HR Direktor",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/custom_labor_law_hr_governance.png",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Sandy Hooks",
+      "provider": "omniroute"
+    },
+    {
+      "id": "ip_patent_analyst",
+      "x": 420,
+      "y": 820,
+      "tier": 3,
+      "team_id": "team_legal",
+      "name": "IP & Patent Research Analyst",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_018.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Dr. Florian Seidel",
+      "provider": "omniroute"
+    },
+    {
+      "id": "vendor_contract_negotiator",
+      "x": 420,
+      "y": 1140,
+      "tier": 3,
+      "team_id": "team_legal",
+      "name": "Vendor Contract Negotiator",
+      "role": "2. Handel, Beschaffung & E-Commerce",
+      "category": "2. Handel, Beschaffung & E-Commerce",
+      "avatar": "/static/avatars/avatar_070.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Corinna Franke",
+      "provider": "omniroute"
+    },
+    {
+      "id": "construction_project_manager",
+      "x": 620,
+      "y": 440,
+      "tier": 2,
+      "team_id": "team_realestate",
+      "name": "Bau-Projektleiter (HOAI / VOB)",
+      "role": "Bau-Projektleiter (HOAI / VOB)",
+      "category": "4. Immobilien & Objektentwicklung",
+      "avatar": "/static/avatars/custom_construction_project_manager.png",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Bobby Brown",
+      "provider": "omniroute"
+    },
+    {
+      "id": "baugb_permit_expert",
+      "x": 620,
+      "y": 1620,
+      "tier": 3,
+      "team_id": "team_realestate",
+      "name": "Baurechts- & Genehmigungsexperte",
+      "role": "4. Immobilien & Objektentwicklung",
+      "category": "4. Immobilien & Objektentwicklung",
+      "avatar": "/static/avatars/avatar_105.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Dipl.-Ing. Stefan Lindner",
+      "provider": "omniroute"
+    },
+    {
+      "id": "realestate_dcf_calculator",
+      "x": 620,
+      "y": 1460,
+      "tier": 3,
+      "team_id": "team_realestate",
+      "name": "Wirtschaftlichkeits- & DCF-Kalkulator",
+      "role": "4. Immobilien & Objektentwicklung",
+      "category": "4. Immobilien & Objektentwicklung",
+      "avatar": "/static/avatars/avatar_068.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Julian Falkenstein",
+      "provider": "omniroute"
+    },
+    {
+      "id": "realestate_concept_strategist",
+      "x": 620,
+      "y": 660,
+      "tier": 3,
+      "team_id": "team_realestate",
+      "name": "Konzept- & Erschließungsstratege",
+      "role": "4. Immobilien & Objektentwicklung",
+      "category": "4. Immobilien & Objektentwicklung",
+      "avatar": "/static/avatars/custom_realestate_concept_strategist.png",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Randy Marsh",
+      "provider": "omniroute"
+    },
+    {
+      "id": "esg_kfw_efficiency_auditor",
+      "x": 620,
+      "y": 980,
+      "tier": 3,
+      "team_id": "team_realestate",
+      "name": "ESG- & KfW-Effizienz-Auditor",
+      "role": "4. Immobilien & Objektentwicklung",
+      "category": "4. Immobilien & Objektentwicklung",
+      "avatar": "/static/avatars/avatar_119.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Nora Schultze",
+      "provider": "omniroute"
+    },
+    {
+      "id": "urban_planning_architect",
+      "x": 620,
+      "y": 1300,
+      "tier": 3,
+      "team_id": "team_realestate",
+      "name": "Raumplaner & Architektur-Konzepter",
+      "role": "4. Immobilien & Objektentwicklung",
+      "category": "4. Immobilien & Objektentwicklung",
+      "avatar": "/static/avatars/avatar_050.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Sophia von Berg",
+      "provider": "omniroute"
+    },
+    {
+      "id": "vvgmbh_immo_tax_lead",
+      "x": 620,
+      "y": 1140,
+      "tier": 3,
+      "team_id": "team_realestate",
+      "name": "Vermögensverwaltende GmbH / Immo-Tax",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_011.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Thorsten Reuter",
+      "provider": "omniroute"
+    },
+    {
+      "id": "facility_asset_manager",
+      "x": 620,
+      "y": 820,
+      "tier": 3,
+      "team_id": "team_realestate",
+      "name": "Facility- & Asset-Manager",
+      "role": "4. Immobilien & Objektentwicklung",
+      "category": "4. Immobilien & Objektentwicklung",
+      "avatar": "/static/avatars/avatar_130.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Heiko Westermann",
+      "provider": "omniroute"
+    },
+    {
+      "id": "gtm_launch_strategist",
+      "x": 820,
+      "y": 440,
+      "tier": 2,
+      "team_id": "team_growth",
+      "name": "Go-to-Market & Launch Stratege",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_046.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Katharina Völker",
+      "provider": "omniroute"
+    },
+    {
+      "id": "b2b_outreach_specialist",
+      "x": 820,
+      "y": 2420,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "B2B Outreach & LinkedIn Specialist",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_012.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Patrick Jensen",
+      "provider": "omniroute"
+    },
+    {
+      "id": "direct_response_copywriter",
+      "x": 820,
+      "y": 2260,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Senior Direct-Response Copywriter",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
+      "avatar": "/static/avatars/avatar_108.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "David Stein",
+      "provider": "omniroute"
+    },
+    {
+      "id": "storyteller_ghostwriter",
+      "x": 820,
+      "y": 2100,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Storyteller & LinkedIn Ghostwriter",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
+      "avatar": "/static/avatars/avatar_080.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Hannah Winter",
+      "provider": "omniroute"
+    },
+    {
+      "id": "video_script_architect",
+      "x": 820,
+      "y": 1940,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Video Script & Hook Architect",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
+      "avatar": "/static/avatars/avatar_082.jpg?v=20260913_rev4",
+      "model": "bytedance/seedance-2.5",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Vincent Larson",
+      "provider": "openrouter"
+    },
+    {
+      "id": "content_repurposing_specialist",
+      "x": 820,
+      "y": 1460,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Content Repurposing Specialist",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
+      "avatar": "/static/avatars/avatar_074.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Leonie Kramer",
+      "provider": "omniroute"
+    },
+    {
+      "id": "speechwriter_keynote_designer",
+      "x": 820,
+      "y": 1780,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Speechwriter & Keynote Designer",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
+      "avatar": "/static/avatars/avatar_044.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Leonard Sterling",
+      "provider": "omniroute"
+    },
+    {
+      "id": "pr_press_communicator",
+      "x": 820,
+      "y": 660,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "PR & Pressemitteilungs-Autor",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
+      "avatar": "/static/avatars/avatar_039.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Astrid Holst",
+      "provider": "omniroute"
+    },
+    {
+      "id": "affiliate_partner_manager",
+      "x": 820,
+      "y": 980,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Affiliate & Partner Manager",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_028.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Svenja Lorenzen",
+      "provider": "omniroute"
+    },
+    {
+      "id": "ecommerce_shopify_lead",
+      "x": 820,
+      "y": 1300,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "E-Commerce & Amazon/Shopify Lead",
+      "role": "2. Handel, Beschaffung & E-Commerce",
+      "category": "2. Handel, Beschaffung & E-Commerce",
+      "avatar": "/static/avatars/avatar_007.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Maximilian Vossi",
+      "provider": "omniroute"
+    },
+    {
+      "id": "lead_enrichment_analyst",
+      "x": 820,
+      "y": 820,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Lead Enrichment & Scoring Analyst",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_030.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Timon Engel",
+      "provider": "omniroute"
+    },
+    {
+      "id": "customer_retention_specialist",
+      "x": 820,
+      "y": 1140,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Customer Retention & Churn Specialist",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_008.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Miriam Althaus",
+      "provider": "omniroute"
+    },
+    {
+      "id": "brand_uiux_director",
+      "x": 820,
+      "y": 2580,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Brand & UI/UX Director",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_131.jpg?v=20260913_rev4",
+      "model": "google/gemini-3.1-flash-image",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Clara Moreau",
+      "provider": "openrouter"
+    },
+    {
+      "id": "logistics_supply_chain_manager",
+      "x": 1020,
+      "y": 420,
+      "tier": 2,
+      "team_id": "team_operations",
+      "name": "Logistics & Supply Chain Manager",
+      "role": "2. Handel, Beschaffung & E-Commerce",
+      "category": "2. Handel, Beschaffung & E-Commerce",
+      "avatar": "/static/avatars/avatar_013.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Dirk Hagemann",
+      "provider": "omniroute"
+    },
+    {
+      "id": "procurement_sourcing_scout",
+      "x": 1020,
+      "y": 980,
+      "tier": 3,
+      "team_id": "team_operations",
+      "name": "Procurement & Sourcing Scout",
+      "role": "2. Handel, Beschaffung & E-Commerce",
+      "category": "2. Handel, Beschaffung & E-Commerce",
+      "avatar": "/static/avatars/avatar_137.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Jonas Keller",
+      "provider": "omniroute"
+    },
+    {
+      "id": "inventory_stock_forecaster",
+      "x": 1020,
+      "y": 820,
+      "tier": 3,
+      "team_id": "team_operations",
+      "name": "Inventory & Stock Forecaster",
+      "role": "2. Handel, Beschaffung & E-Commerce",
+      "category": "2. Handel, Beschaffung & E-Commerce",
+      "avatar": "/static/avatars/avatar_045.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Matthias Brandt",
+      "provider": "omniroute"
+    },
+    {
+      "id": "agile_scrum_master",
+      "x": 1020,
+      "y": 1140,
+      "tier": 3,
+      "team_id": "team_operations",
+      "name": "Agile Scrum Master & Task Triage",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_037.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Sarah Lindemann",
+      "provider": "omniroute"
+    },
+    {
+      "id": "product_requirements_engineer",
+      "x": 1020,
+      "y": 660,
+      "tier": 3,
+      "team_id": "team_operations",
+      "name": "Product Manager / Requirements Engineer",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_040.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Tobias Merz",
+      "provider": "omniroute"
+    },
+    {
+      "id": "negotiation_master",
+      "x": 1020,
+      "y": 1300,
+      "tier": 3,
+      "team_id": "team_operations",
+      "name": "Negotiation Master (Harvard-Prinzip)",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_021.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Prof. Dr. Christian Berg",
+      "provider": "omniroute"
+    },
+    {
+      "id": "arbitrage_market_analyst",
+      "x": 1020,
+      "y": 1780,
+      "tier": 3,
+      "team_id": "team_operations",
+      "name": "Arbitrage & Market Opportunity Analyst",
+      "role": "2. Handel, Beschaffung & E-Commerce",
+      "category": "2. Handel, Beschaffung & E-Commerce",
+      "avatar": "/static/avatars/avatar_076.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Felix Sommer",
+      "provider": "omniroute"
+    },
+    {
+      "id": "competitive_intelligence_scout",
+      "x": 1020,
+      "y": 1460,
+      "tier": 3,
+      "team_id": "team_operations",
+      "name": "Markt- und Wettbewerbsanalyst",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/custom_competitive_intelligence_scout.png",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Rüdiger Cheng",
+      "provider": "omniroute"
+    },
+    {
+      "id": "crisis_escalation_lead",
+      "x": 1020,
+      "y": 1620,
+      "tier": 3,
+      "team_id": "team_operations",
+      "name": "Crisis & Escalation Lead",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_009.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Thomas Bernhardt",
+      "provider": "omniroute"
+    },
+    {
+      "id": "micha",
+      "x": 380,
+      "y": 20,
+      "tier": 1,
+      "team_id": "team_strategy",
+      "name": "Master of the universe",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/custom_micha.png",
+      "model": "z-ai/glm-5.3",
+      "active_tasks": 0,
+      "status": "active",
+      "person_name": "Michael Keller",
+      "provider": "openrouter"
+    },
+    {
+      "id": "default",
+      "x": 20,
+      "y": 20,
+      "tier": 1,
+      "team_id": "team_strategy",
+      "name": "Hermes Orchestrator (Root)",
+      "role": "Hermes Orchestrator (Root)",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/hermes_default_avatar.png",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "active",
+      "person_name": "Default",
+      "provider": "omniroute"
+    },
+    {
+      "id": "agility_story",
+      "x": 20,
+      "y": 1300,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Agility Story Test",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_003.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Agility Story Test",
+      "provider": "omniroute"
+    },
+    {
+      "id": "analyze_claims",
+      "x": 20,
+      "y": 1460,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Claim Analyst",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_001.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Claim Analyst",
+      "provider": "omniroute"
+    },
+    {
+      "id": "gpts_automation_specialist",
+      "x": 20,
+      "y": 1620,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Gpts Automation Specialist",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_106.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "gpts_automation_specialist",
+      "provider": "omniroute"
+    },
+    {
+      "id": "gpts_critical_reviewer",
+      "x": 20,
+      "y": 1780,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Gpts Critical Reviewer",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_150.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "gpts_critical_reviewer",
+      "provider": "omniroute"
+    },
+    {
+      "id": "gpts_primary_synthesizer",
+      "x": 20,
+      "y": 1940,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Gpts Primary Synthesizer",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_104.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "gpts_primary_synthesizer",
+      "provider": "omniroute"
+    },
+    {
+      "id": "growth_hacker_lead",
+      "x": 820,
+      "y": 1620,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Growth Hacker Lead",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_004.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Sarah Lindner",
+      "provider": "omniroute"
+    },
+    {
+      "id": "telegram_bot",
+      "x": 200,
+      "y": 20,
+      "tier": 1,
+      "team_id": "team_growth",
+      "name": "Telegram Assistant",
+      "role": "Telegram Assistant",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/custom_telegram_bot.png",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "TELEGRAM BOT",
+      "provider": "omniroute"
+    }
+  ],
+  "links": [
+    {
+      "from": "executive_decision_architect",
+      "to": "red_team_challenger"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "tax_holding_advisor"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "pitchdeck_offer_designer"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "personal_life_strategist"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "senior_fullstack_engineer"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "devops_cloud_sec_specialist"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "database_performance_tuner"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "enterprise_solutions_architect"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "commercial_jurist_contracts"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "liability_risk_analyst"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "compliance_gdpr_auditor"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "labor_law_hr_governance"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "ip_patent_analyst"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "vendor_contract_negotiator"
+    },
+    {
+      "from": "construction_project_manager",
+      "to": "baugb_permit_expert"
+    },
+    {
+      "from": "construction_project_manager",
+      "to": "realestate_dcf_calculator"
+    },
+    {
+      "from": "construction_project_manager",
+      "to": "realestate_concept_strategist"
+    },
+    {
+      "from": "construction_project_manager",
+      "to": "esg_kfw_efficiency_auditor"
+    },
+    {
+      "from": "construction_project_manager",
+      "to": "urban_planning_architect"
+    },
+    {
+      "from": "construction_project_manager",
+      "to": "vvgmbh_immo_tax_lead"
+    },
+    {
+      "from": "construction_project_manager",
+      "to": "facility_asset_manager"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "gtm_launch_strategist"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "b2b_outreach_specialist"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "direct_response_copywriter"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "storyteller_ghostwriter"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "video_script_architect"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "content_repurposing_specialist"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "speechwriter_keynote_designer"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "pr_press_communicator"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "affiliate_partner_manager"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "ecommerce_shopify_lead"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "lead_enrichment_analyst"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "customer_retention_specialist"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "brand_uiux_director"
+    },
+    {
+      "from": "logistics_supply_chain_manager",
+      "to": "procurement_sourcing_scout"
+    },
+    {
+      "from": "logistics_supply_chain_manager",
+      "to": "inventory_stock_forecaster"
+    },
+    {
+      "from": "logistics_supply_chain_manager",
+      "to": "agile_scrum_master"
+    },
+    {
+      "from": "logistics_supply_chain_manager",
+      "to": "product_requirements_engineer"
+    },
+    {
+      "from": "logistics_supply_chain_manager",
+      "to": "negotiation_master"
+    },
+    {
+      "from": "logistics_supply_chain_manager",
+      "to": "arbitrage_market_analyst"
+    },
+    {
+      "from": "logistics_supply_chain_manager",
+      "to": "competitive_intelligence_scout"
+    },
+    {
+      "from": "logistics_supply_chain_manager",
+      "to": "crisis_escalation_lead"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "logistics_supply_chain_manager"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "system_architect_orchestrator"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "agility_story"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "analyze_claims"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "gpts_automation_specialist"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "gpts_critical_reviewer"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "gpts_primary_synthesizer"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "growth_hacker_lead"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "pricing_discount_governor"
+    },
+    {
+      "from": "default",
+      "to": "executive_decision_architect"
+    },
+    {
+      "from": "telegram_bot",
+      "to": "default"
+    },
+    {
+      "from": "micha",
+      "to": "telegram_bot"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "construction_project_manager"
+    }
+  ],
+  "canvas_width": 3200,
+  "canvas_height": 4000
+}

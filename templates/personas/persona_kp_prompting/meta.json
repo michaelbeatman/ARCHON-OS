@@ -1,0 +1,10 @@
+{
+  "id": "persona_kp_prompting",
+  "name": "KP Prompting",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'KP Prompting'. ---\nname: kp-prompting\ndescription: Build advanced prompts, task specs, verification criteria, and Claude Code setup usi...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,432 @@
+<div id="view-guardian" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
+        <!-- Top Toolbar Header -->
+        <div class="px-6 py-3 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground)]">
+              <i data-lucide="shield-check" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 class="text-sm font-extrabold uppercase tracking-wide font-mono text-[var(--foreground)]">Guardian &amp; Token Analytics</h1>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--secondary)] text-[var(--foreground)] font-bold border border-[var(--border)] flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-pulse"></span> Wächter aktiv
+                </span>
+              </div>
+              <p class="text-[11px] text-[var(--muted-foreground)] font-medium">Kostenkontrolle, Schleifenschutz und 34 steuerbare Plugins für Hermes</p>
+            </div>
+          </div>
+          <!-- Controls: Timeframe Filter + Refresh & Cache Buttons -->
+          <div class="flex items-center gap-2.5">
+            <!-- Timeframe Filter Buttons: [ 24h | 7 Tage | 30 Tage | Gesamt ] -->
+            <div class="flex items-center bg-[var(--secondary)] border border-[var(--border)] rounded-xl p-0.5 text-xs font-mono">
+              <button onclick="setGuardianTimeframe('24h')" id="guard-tf-btn-24h" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer">24h</button>
+              <button onclick="setGuardianTimeframe('7d')" id="guard-tf-btn-7d" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer">7 Tage</button>
+              <button onclick="setGuardianTimeframe('30d')" id="guard-tf-btn-30d" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer">30 Tage</button>
+              <button onclick="setGuardianTimeframe('all')" id="guard-tf-btn-all" class="py-1 px-2.5 rounded-lg bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] shadow-2xs font-bold cursor-pointer">Gesamt</button>
+            </div>
+            <!-- Ungenutzte Zeit / Inaktivitäts-Badge -->
+            <div id="guard-idle-container" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] text-xs font-mono text-[var(--muted-foreground)] shadow-2xs" title="Zeitspanne seit der letzten protokollierten LLM-Aktivität">
+              <span class="w-2 h-2 rounded-full bg-zinc-400"></span>
+              <span class="text-[var(--muted-foreground)]">Ungenutzte Zeit:</span>
+              <span class="font-bold text-[var(--foreground)]" id="guard-idle-badge">--</span>
+              <span class="text-[10px] text-black dark:text-white pl-1 border-l border-[var(--border)]" id="guard-checked-badge">Stand: --:--:--</span>
+            </div>
+            <button onclick="loadGuardianData(true)" id="guard-refresh-btn" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+              <i data-lucide="refresh-cw" id="guard-refresh-icon" class="w-3.5 h-3.5"></i> Aktualisieren
+            </button>
+            <button onclick="clearGuardianCache()" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)] hover:opacity-80 text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Cache leeren
+            </button>
+          </div>
+        </div>
+        <!-- Guardian Sub-Tab Bar: [ 1. Übersicht & Dashboard | 2. Session-Detail-Verbrauch ] -->
+        <div class="px-6 border-b border-[var(--border)] bg-[var(--card)] flex items-center gap-2 shrink-0">
+          <button onclick="setGuardianSubTab('overview')" id="guard-subtab-btn-overview" class="py-2.5 px-3.5 border-b-2 border-zinc-900 dark:border-zinc-100 text-[var(--foreground)] font-mono text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
+            <span>Übersicht &amp; Dashboard</span>
+          </button>
+          <button onclick="setGuardianSubTab('sessions')" id="guard-subtab-btn-sessions" class="py-2.5 px-3.5 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-mono text-xs font-medium transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+            <span>Session-Detail-Verbrauch</span>
+            <span id="guard-sessions-badge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">0</span>
+          </button>
+          <button onclick="setGuardianSubTab('concurrency')" id="guard-subtab-btn-concurrency" class="py-2.5 px-3.5 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-mono text-xs font-medium transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+            <span>Ressourcen &amp; Task-Drosselung</span>
+            <span id="guard-concurrency-badge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">5 Max</span>
+          </button>
+        </div>
+        <!-- SUB-VIEW 1: OVERVIEW & DASHBOARD -->
+        <div id="guard-subview-overview" class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          
+          <!-- KPI Summary Cards (4 Cards) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Card 1: Total Tokens -->
+            <div class="bg-[var(--card)] p-4 rounded-2xl border border-[var(--border)] shadow-xs flex flex-col justify-between">
+              <div class="flex items-center justify-between text-[var(--muted-foreground)] mb-1">
+                <span class="text-xs font-bold uppercase tracking-wider font-mono">Tokens (<span id="guard-kpi-tf-label">Gesamt</span>)</span>
+                <i data-lucide="cpu" class="w-4 h-4 text-black dark:text-white"></i>
+              </div>
+              <div class="text-2xl font-extrabold font-mono text-[var(--foreground)]" id="guard-kpi-tokens">--</div>
+              <div class="text-[11px] text-[var(--muted-foreground)] mt-1 font-mono flex items-center justify-between">
+                <span><span class="text-[var(--foreground)] font-bold" id="guard-kpi-calls">-- Calls</span> im Zeitraum</span>
+                <span class="text-[var(--muted-foreground)] font-semibold" id="guard-kpi-idle" title="Zeit seit dem letzten Tokenverbrauch">Inaktiv: --</span>
+              </div>
+            </div>
+            <!-- Card 2: Estimated Cost -->
+            <div class="bg-[var(--card)] p-4 rounded-2xl border border-[var(--border)] shadow-xs flex flex-col justify-between">
+              <div class="flex items-center justify-between text-[var(--muted-foreground)] mb-1">
+                <span class="text-xs font-bold uppercase tracking-wider font-mono">Kosten (USD)</span>
+                <i data-lucide="dollar-sign" class="w-4 h-4 text-[var(--foreground)]"></i>
+              </div>
+              <div class="text-2xl font-extrabold font-mono text-[var(--foreground)]" id="guard-kpi-cost">$--</div>
+              <div class="text-[11px] text-[var(--muted-foreground)] mt-1 font-mono">
+                Tages-Budget: <span class="font-bold text-[var(--foreground)]" id="guard-kpi-daily-budget">$--</span>
+              </div>
+            </div>
+            <!-- Card 3: Active Plugins -->
+            <div class="bg-[var(--card)] p-4 rounded-2xl border border-[var(--border)] shadow-xs flex flex-col justify-between">
+              <div class="flex items-center justify-between text-[var(--muted-foreground)] mb-1">
+                <span class="text-xs font-bold uppercase tracking-wider font-mono">Aktive Plugins</span>
+                <i data-lucide="shield" class="w-4 h-4 text-black dark:text-white"></i>
+              </div>
+              <div class="text-2xl font-extrabold font-mono text-[var(--foreground)]" id="guard-kpi-plugins">-- / 34</div>
+              <div class="text-[11px] text-[var(--muted-foreground)] mt-1 font-mono">
+                <span id="guard-kpi-mcp-tools">-- MCP Tools</span> geladen
+              </div>
+            </div>
+            <!-- Card 4: Top Consumer Profile -->
+            <div class="bg-[var(--card)] p-4 rounded-2xl border border-[var(--border)] shadow-xs flex flex-col justify-between">
+              <div class="flex items-center justify-between text-[var(--muted-foreground)] mb-1">
+                <span class="text-xs font-bold uppercase tracking-wider font-mono">Top-Verursacher</span>
+                <i data-lucide="trending-up" class="w-4 h-4 text-black dark:text-white"></i>
+              </div>
+              <div class="text-lg font-extrabold font-mono text-[var(--foreground)] truncate" id="guard-kpi-top-profile">--</div>
+              <div class="text-[11px] text-[var(--muted-foreground)] mt-1 font-mono truncate" id="guard-kpi-top-tokens">
+                -- Tokens verbraucht
+              </div>
+            </div>
+          </div>
+          <!-- Token- & Kostenverlauf Graf (Daily Trend Chart) -->
+          <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="line-chart" class="w-4 h-4 text-black dark:text-white"></i>
+                <h2 class="text-xs font-extrabold uppercase tracking-wider font-mono text-[var(--foreground)]">Token- &amp; Kostenverlauf (Spitzen &amp; Tage)</h2>
+              </div>
+              <span class="text-[11px] font-mono text-[var(--muted-foreground)]">Visualisierung nach Tagen</span>
+            </div>
+            <div class="w-full h-56 relative">
+              <canvas id="guardian-trend-canvas" class="w-full h-full"></canvas>
+            </div>
+          </div>
+          <!-- Main 2-Column Section -->
+          <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+            
+            <!-- LEFT COLUMN: Analytics & Token Breakdown (6 Cols) -->
+            <div class="xl:col-span-6 space-y-6">
+              
+              <!-- Profile Consumption Table -->
+              <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="users" class="w-4 h-4 text-[var(--muted-foreground)]"></i>
+                    <h2 class="text-xs font-extrabold uppercase tracking-wider font-mono text-[var(--foreground)]">Verbrauch pro Agenten-Profil</h2>
+                  </div>
+                  <input 
+                    type="text" 
+                    id="guard-profile-filter" 
+                    placeholder="Profil filtern..." 
+                    oninput="filterGuardianProfiles(this.value)" 
+                    class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] placeholder-slate-400 font-mono w-40"
+                  >
+                </div>
+                <div class="overflow-x-auto max-h-[340px] custom-scrollbar">
+                  <table class="w-full text-left text-xs font-mono">
+                    <thead class="bg-[var(--card)] text-[var(--muted-foreground)] border-b border-[var(--border)] sticky top-0">
+                      <tr>
+                        <th class="py-2.5 px-4 font-bold">Profil</th>
+                        <th class="py-2.5 px-4 font-bold text-right">Calls</th>
+                        <th class="py-2.5 px-4 font-bold text-right">Tokens</th>
+                        <th class="py-2.5 px-4 font-bold text-right">Kosten ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="guard-profiles-table-body" class="divide-y divide-slate-100">
+                      <tr>
+                        <td colspan="4" class="py-6 text-center text-black dark:text-white italic">Lade Profildaten...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <!-- Model Breakdown Table -->
+              <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-[var(--muted-foreground)]"></i>
+                    <h2 class="text-xs font-extrabold uppercase tracking-wider font-mono text-[var(--foreground)]">Verbrauch nach LLM-Modell</h2>
+                  </div>
+                </div>
+                <div class="overflow-x-auto max-h-[260px] custom-scrollbar">
+                  <table class="w-full text-left text-xs font-mono">
+                    <thead class="bg-[var(--card)] text-[var(--muted-foreground)] border-b border-[var(--border)] sticky top-0">
+                      <tr>
+                        <th class="py-2.5 px-4 font-bold">Modell</th>
+                        <th class="py-2.5 px-4 font-bold text-right">Calls</th>
+                        <th class="py-2.5 px-4 font-bold text-right">Tokens</th>
+                        <th class="py-2.5 px-4 font-bold text-right">Kosten ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="guard-models-table-body" class="divide-y divide-slate-100">
+                      <tr>
+                        <td colspan="4" class="py-6 text-center text-black dark:text-white italic">Lade Modelldaten...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <!-- RIGHT COLUMN: Guardian Settings & Limits (5 Cols) -->
+            <div class="xl:col-span-5 space-y-6">
+              
+              <!-- Guardian Limits & Budget Settings Form -->
+              <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-[var(--muted-foreground)]"></i>
+                    <h2 class="text-xs font-extrabold uppercase tracking-wider font-mono text-[var(--foreground)]">Schutz-Schranken &amp; Budgets</h2>
+                  </div>
+                </div>
+                <form id="guard-settings-form" onsubmit="saveGuardianSettings(event)" class="p-5 space-y-4 text-xs font-mono">
+                  
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-[var(--muted-foreground)] font-bold mb-1">Max Kontext (Tokens)</label>
+                      <input type="number" step="1000" id="guard-set-max-context" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--foreground)] font-bold focus:bg-[var(--card)]" value="32000">
+                      <span class="text-[10px] text-black dark:text-white">Schneidet Prompt ab</span>
+                    </div>
+                    <div>
+                      <label class="block text-[var(--muted-foreground)] font-bold mb-1">Max Chat-Historie</label>
+                      <input type="number" id="guard-set-max-history" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--foreground)] font-bold focus:bg-[var(--card)]" value="20">
+                      <span class="text-[10px] text-black dark:text-white">Letzte N Nachrichten</span>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-[var(--muted-foreground)] font-bold mb-1">Tages-Budget ($)</label>
+                      <input type="number" step="0.1" id="guard-set-daily-budget" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--foreground)] font-bold focus:bg-[var(--card)]" value="2.0">
+                      <span class="text-[10px] text-black dark:text-white">Tägliche Obergrenze</span>
+                    </div>
+                    <div>
+                      <label class="block text-[var(--muted-foreground)] font-bold mb-1">Max pro Task ($)</label>
+                      <input type="number" step="0.05" id="guard-set-task-budget" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--foreground)] font-bold focus:bg-[var(--card)]" value="0.5">
+                      <span class="text-[10px] text-black dark:text-white">Limit pro Anfrage</span>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-[var(--muted-foreground)] font-bold mb-1">Max Steps / Task</label>
+                      <input type="number" id="guard-set-max-steps" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--foreground)] font-bold focus:bg-[var(--card)]" value="15">
+                      <span class="text-[10px] text-black dark:text-white">Stoppt Schleifen</span>
+                    </div>
+                    <div>
+                      <label class="block text-[var(--muted-foreground)] font-bold mb-1">Session Timeout (s)</label>
+                      <input type="number" id="guard-set-timeout" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--foreground)] font-bold focus:bg-[var(--card)]" value="60">
+                      <span class="text-[10px] text-black dark:text-white">Max Laufzeit</span>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-[var(--muted-foreground)] font-bold mb-1">Cache TTL (Stunden)</label>
+                      <input type="number" id="guard-set-cache-ttl" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--foreground)] font-bold focus:bg-[var(--card)]" value="24">
+                      <span class="text-[10px] text-black dark:text-white">Speicherungsdauer</span>
+                    </div>
+                    <div>
+                      <label class="block text-[var(--muted-foreground)] font-bold mb-1">Watchdog Intervall (s)</label>
+                      <input type="number" id="guard-set-watchdog-interval" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--foreground)] font-bold focus:bg-[var(--card)]" value="30">
+                      <span class="text-[10px] text-black dark:text-white">Prüfintervall</span>
+                    </div>
+                  </div>
+                  <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span id="guard-save-feedback" class="text-[var(--foreground)] font-bold text-[11px] hidden">✓ Gespeichert!</span>
+                    <button type="submit" class="ml-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1.5">
+                      <i data-lucide="check" class="w-3.5 h-3.5"></i> Einstellungen anwenden
+                    </button>
+                  </div>
+                </form>
+              </div>
+              <!-- Quick Link Card to Erweiterungen -->
+              <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-xs flex items-center justify-between">
+                <div class="space-y-1">
+                  <div class="text-xs font-extrabold uppercase font-mono text-[var(--foreground)] flex items-center gap-1.5">
+                    <i data-lucide="puzzle" class="w-4 h-4 text-black dark:text-white"></i>
+                    <span>Erweiterungen &amp; Module</span>
+                  </div>
+                  <p class="text-[11px] text-[var(--muted-foreground)]">Alle 34 Spezial-Plugins nach Fachbereichen und Reitern steuern.</p>
+                </div>
+                <button onclick="setTab('plugins')" class="px-4 py-2 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1 shrink-0">
+                  <span>Öffnen</span> <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- SUB-VIEW 2: INDIVIDUAL SESSIONS DETAIL DRILLDOWN -->
+        <div id="guard-subview-sessions" class="hidden flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          
+          <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+            <div class="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <i data-lucide="layers" class="w-4 h-4 text-black dark:text-white"></i>
+                <div>
+                  <h2 class="text-xs font-extrabold uppercase tracking-wider font-mono text-[var(--foreground)]">Einzel-Session Verbrauchs-Inspektor</h2>
+                  <p class="text-[11px] text-[var(--muted-foreground)]">Detaillierte Analyse aller Tasks &amp; Dialoge mit Token-Aufschlüsselung (Input, Output, Cache)</p>
+                </div>
+              </div>
+              <input 
+                type="text" 
+                id="guard-sessions-filter" 
+                placeholder="Session, Profil oder Modell suchen..." 
+                oninput="filterGuardianSessions(this.value)" 
+                class="bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-1.5 text-xs text-[var(--foreground)] placeholder-slate-400 font-mono w-64"
+              >
+            </div>
+            <div class="overflow-x-auto max-h-[calc(100vh-250px)] custom-scrollbar">
+              <table class="w-full text-left text-xs font-mono">
+                <thead class="bg-[var(--card)] text-[var(--muted-foreground)] border-b border-[var(--border)] sticky top-0 z-10">
+                  <tr class="select-none">
+                    <th class="py-3 px-3 font-bold text-center w-12 text-black dark:text-white">Chat</th>
+                    <th onclick="sortGuardianSessions('session_id')" class="py-3 px-4 font-bold cursor-pointer hover:text-[var(--foreground)] transition" title="Nach Session ID sortieren">
+                      <div class="flex items-center gap-1"><span>Session ID</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('profile')" class="py-3 px-4 font-bold cursor-pointer hover:text-[var(--foreground)] transition" title="Nach Profil sortieren">
+                      <div class="flex items-center gap-1"><span>Profil</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('model')" class="py-3 px-4 font-bold cursor-pointer hover:text-[var(--foreground)] transition" title="Nach Modell sortieren">
+                      <div class="flex items-center gap-1"><span>Modell</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('calls')" class="py-3 px-4 font-bold text-right cursor-pointer hover:text-[var(--foreground)] transition" title="Nach Anzahl Calls sortieren">
+                      <div class="flex items-center justify-end gap-1"><span>Calls</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('input_tokens')" class="py-3 px-4 font-bold text-right cursor-pointer hover:text-[var(--foreground)] transition" title="Nach Input Tokens sortieren">
+                      <div class="flex items-center justify-end gap-1"><span>Input</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('output_tokens')" class="py-3 px-4 font-bold text-right cursor-pointer hover:text-[var(--foreground)] transition" title="Nach Output Tokens sortieren">
+                      <div class="flex items-center justify-end gap-1"><span>Output</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('cache_tokens')" class="py-3 px-4 font-bold text-right cursor-pointer hover:text-[var(--foreground)] transition" title="Nach Cache-Read Tokens sortieren">
+                      <div class="flex items-center justify-end gap-1"><span>Cache-Read</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('total_tokens')" class="py-3 px-4 font-bold text-right cursor-pointer hover:text-[var(--foreground)] transition text-[var(--foreground)]" title="Nach Gesamt-Tokens sortieren">
+                      <div class="flex items-center justify-end gap-1"><span>Gesamt</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('cost')" class="py-3 px-4 font-bold text-right cursor-pointer hover:text-[var(--foreground)] transition" title="Nach Kosten sortieren">
+                      <div class="flex items-center justify-end gap-1"><span>Kosten ($)</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                    <th onclick="sortGuardianSessions('last_seen_ts')" class="py-3 px-4 font-bold text-right cursor-pointer hover:text-[var(--foreground)] transition" title="Nach letzter Aktivität sortieren">
+                      <div class="flex items-center justify-end gap-1"><span>Zuletzt aktiv</span><i data-lucide="arrow-up-down" class="w-3 h-3 text-black dark:text-white"></i></div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="guard-sessions-table-body" class="divide-y divide-slate-100">
+                  <tr>
+                    <td colspan="11" class="py-8 text-center text-black dark:text-white italic">Lade Einzelsitzungen...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUB-VIEW 3: CONCURRENCY THROTTLE & RESSOURCEN-STEUERUNG (Pillar 2) -->
+        <div id="guard-subview-concurrency" class="hidden flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          <div class="max-w-4xl mx-auto space-y-6">
+            
+            <!-- Info Box -->
+            <div class="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-xs flex items-start gap-3.5">
+              <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <i data-lucide="cpu" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-[var(--foreground)]">Globaler Task-Drossler &amp; Hardwareschutz (Asyncio Semaphore)</h3>
+                <p class="text-xs text-[var(--muted-foreground)] mt-0.5 leading-relaxed">
+                  Begrenzt die Anzahl gleichzeitig rechnender autonomer Agenten-Tasks und LLM-Aufrufe. Verhindert plötzliche 99% CPU-Spitzen, Pufferüberläufe und System-Einfrieren. Überschüssige Tasks warten geordnet in der FIFO-Warteschlange.
+                </p>
+              </div>
+            </div>
+
+            <!-- Steuerungs-Karten (Grid) -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-xs space-y-2">
+                <span class="text-xs font-mono font-bold text-[var(--muted-foreground)] uppercase">Aktive Tasks</span>
+                <div class="text-2xl font-black font-mono text-[var(--foreground)] flex items-center gap-2">
+                  <span id="concurrency-active-count">0</span>
+                  <span class="text-xs font-normal text-[var(--muted-foreground)]">in Bearbeitung</span>
+                </div>
+                <div class="w-full bg-[var(--secondary)] h-2 rounded-full overflow-hidden">
+                  <div id="concurrency-active-bar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-xs space-y-2">
+                <span class="text-xs font-mono font-bold text-[var(--muted-foreground)] uppercase">Verfügbare Slots</span>
+                <div class="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                  <span id="concurrency-available-count">5</span>
+                  <span class="text-xs font-normal text-[var(--muted-foreground)]">freie Plätze</span>
+                </div>
+                <div class="text-[11px] font-mono text-[var(--muted-foreground)]">Sofort auslieferbar</div>
+              </div>
+
+              <div class="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-xs space-y-2">
+                <span class="text-xs font-mono font-bold text-[var(--muted-foreground)] uppercase">Aktuelle Obergrenze</span>
+                <div class="text-2xl font-black font-mono text-sky-600 dark:text-sky-400 flex items-center gap-2">
+                  <span id="concurrency-limit-display">5</span>
+                  <span class="text-xs font-normal text-[var(--muted-foreground)]">Parallel-Limit</span>
+                </div>
+                <div class="text-[11px] font-mono text-[var(--muted-foreground)]">Pillar 2 Kernel Throttle</div>
+              </div>
+            </div>
+
+            <!-- Einstellungs-Formular -->
+            <div class="bg-[var(--card)] p-6 rounded-2xl border border-[var(--border)] shadow-xs space-y-5">
+              <div class="border-b border-[var(--border)] pb-3">
+                <h4 class="text-xs font-bold uppercase font-mono tracking-wider text-[var(--foreground)]">Obergrenze für gleichzeitige Aufgaben festlegen</h4>
+                <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Wähle den optimalen Schwellenwert für deinen Rechner (Empfohlen: 4–6 Tasks für flüssigen Parallelbetrieb).</p>
+              </div>
+
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <label for="concurrency-slider" class="text-xs font-mono font-bold text-[var(--foreground)]">Max. gleichzeitige Tasks:</label>
+                  <span id="concurrency-slider-val" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] font-mono font-black text-sm text-[var(--foreground)] border border-[var(--border)]">5</span>
+                </div>
+                <input 
+                  type="range" 
+                  id="concurrency-slider" 
+                  min="1" 
+                  max="16" 
+                  value="5" 
+                  oninput="document.getElementById('concurrency-slider-val').textContent = this.value"
+                  class="w-full accent-emerald-500 cursor-pointer"
+                >
+                <div class="flex justify-between text-[10px] font-mono text-[var(--muted-foreground)]">
+                  <span>1 (Streng sequentiell)</span>
+                  <span>4 (Ausgewogen)</span>
+                  <span>8 (High Performance)</span>
+                  <span>16 (Workstation)</span>
+                </div>
+              </div>
+
+              <div class="pt-2 flex items-center justify-end gap-2.5">
+                <button type="button" onclick="loadConcurrencySettings()" class="px-3.5 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-semibold transition cursor-pointer">
+                  Aktualisieren
+                </button>
+                <button type="button" onclick="saveConcurrencySettings()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1.5">
+                  <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                  <span>Limit speichern &amp; anwenden</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>

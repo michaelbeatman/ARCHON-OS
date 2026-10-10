@@ -1,0 +1,10 @@
+{
+  "id": "persona_sales_research",
+  "name": "Sales Research",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Sales Research'. ---\nname: sales-research\ndescription: This skill provides methodology and best practices for researching sales prospects...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

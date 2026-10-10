@@ -1,0 +1,13 @@
+name: MEDIA-PIPELINE
+
+services:
+  Pocketbase-Media:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase-Media
+    restart: unless-stopped
+    ports:
+      - "8092:8090"
+    volumes:
+      - ./pocketbase-media/pb_data:/pb_data
+      - ./pocketbase-media/pb_hooks:/pb_hooks
+      - ./pocketbase-media/pb_public:/pb_public

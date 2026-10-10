@@ -1,0 +1,10 @@
+{
+  "id": "persona_claude_code_skill_slash_command_review_and_commit_md",
+  "name": "Claude Code Skill (Slash Command): review-and-commit.md",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'Claude Code Skill (Slash Command): review-and-commit.md'. ---\nallowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*)\ndescription: Create a git commit\n---\n\n## Cont...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

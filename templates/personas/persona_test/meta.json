@@ -1,0 +1,10 @@
+{
+  "id": "persona_test",
+  "name": "test",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'test'. ---\nname: test\ndescription: A clear description of what this skill does and when to use it\n---\n\n# test\n\nDescribe what th...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_lifestyle_product_images",
+  "name": "Lifestyle Product Images",
+  "category": "2. Handel, Beschaffung & E-Commerce",
+  "description": "Fach-Experte: 'Lifestyle Product Images'. Using the uploaded product image of ${Product Name:MacBook Pro}, create an engaging lifestyle scene showing realistic us...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_page_by_page_build",
+  "name": "Page-by-Page Build",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Page-by-Page Build'. Based on the approved concept, build the [Homepage/About/etc.] page.\n\nConstraints:\n- Single-file React component with Ta...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

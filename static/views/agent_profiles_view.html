@@ -1,0 +1,983 @@
+<div id="view-agent-profiles" class="hidden h-screen p-2 overflow-hidden">
+        <div class="flex gap-2.5 h-full min-h-0 w-full overflow-hidden">
+          
+          <!-- 1. LINKE SPALTE: AGENTEN-KATALOG (DYNAMISCH 320px ODER 68px RAIL) -->
+          <div id="agent-catalog-col" class="w-[320px] min-w-[320px] max-w-[320px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-3 transition-all duration-200 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
+            
+            <!-- EXPANDED HEADER (Wenn nicht eingeklappt) -->
+            <div id="catalog-expanded-header" class="space-y-2.5 shrink-0">
+              <div class="h-[72px] flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-foreground hidden"></span>
+                  <h3 class="text-[22px] font-semibold tracking-tight text-[var(--foreground)]">Agenten-Katalog</h3>
+                  <button type="button" onclick="openContextHelp('kader')" title="Hilfe zum Agenten-Kader" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+                    <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" onclick="refreshPaperclipAndProfiles(true)" class="h-8 px-2.5 rounded-lg border border-[var(--border)] hover:border-zinc-400 dark:hover:border-zinc-600 bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer shadow-xs" title="Live-Status der Agenten synchronisieren">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    <span>Sync</span>
+                  </button>
+                  <button type="button" id="btn-catalog-collapse" onclick="toggleCatalogCollapse()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold cursor-pointer shadow-xs" title="Katalog auf 68px Icon-Rail einklappen">
+                    ◀
+                  </button>
+                </div>
+              </div>
+              <!-- Suchfeld & Domänen-Filter nebeneinander -->
+              <div class="grid grid-cols-2 gap-2">
+                <div class="relative">
+                  <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[var(--muted-foreground)] pointer-events-none"></i>
+                  <input type="text" id="profile-search-input" oninput="toggleClearBtn('profile-search-input'); onProfileSearchOrFilter()" placeholder="Suchen..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl pl-7 pr-6 py-1.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-medium shadow-2xs">
+                  <button id="profile-search-input-clear" onclick="clearSearchInput('profile-search-input', onProfileSearchOrFilter)" class="hidden absolute right-2 top-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-[11px] font-bold cursor-pointer" title="Suche zurücksetzen">✕</button>
+                </div>
+                <div class="relative flex items-center">
+                  <select 
+                    id="profile-category-dropdown" 
+                    onchange="filterProfilesByCategory(this.value)" 
+                    class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[11px] font-semibold text-[var(--foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 cursor-pointer shadow-2xs truncate"
+                  >
+                    <option value="all">Alle Domänen</option>
+                    <option value="1. Strategie, Führung & Lebensplanung">1. Strategie & Führung</option>
+                    <option value="2. Handel, Beschaffung & E-Commerce">2. Handel & E-Com</option>
+                    <option value="3. Recht, Steuern & Compliance">3. Recht & Steuern</option>
+                    <option value="4. Immobilien & Objektentwicklung">4. Immobilien</option>
+                    <option value="5. Kreation, Medien & Content">5. Medien & Content</option>
+                    <option value="6. Vertrieb, CRM & Growth">6. Vertrieb & Growth</option>
+                    <option value="7. Tech, Software & Data">7. Tech & Software</option>
+                  </select>
+                </div>
+              </div>
+              <!-- 3-Teilige Tab-Filterleiste (Aktiv, Favoriten, Alle) -->
+              <div class="grid grid-cols-3 gap-1 p-1 rounded-xl bg-[var(--secondary)] border border-[var(--border)] shadow-2xs">
+                <button type="button" id="tab-filter-active" onclick="setProfileTabFilter('active')" class="py-1 px-1.5 rounded-lg text-[10.5px] font-bold font-mono transition text-center cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] truncate">
+                  Aktiv (<span id="count-active">0</span>)
+                </button>
+                <button type="button" id="tab-filter-favorites" onclick="setProfileTabFilter('favorites')" class="py-1 px-1.5 rounded-lg text-[10.5px] font-medium font-mono transition text-center cursor-pointer bg-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent truncate">
+                  Favoriten (<span id="count-favorites">0</span>)
+                </button>
+                <button type="button" id="tab-filter-all" onclick="setProfileTabFilter('all')" class="py-1 px-1.5 rounded-lg text-[10.5px] font-medium font-mono transition text-center cursor-pointer bg-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent truncate">
+                  Alle (<span id="count-all">0</span>)
+                </button>
+              </div>
+            </div>
+            <!-- COLLAPSED HEADER (Wenn auf 68px eingeklappt) -->
+            <div id="catalog-collapsed-header" class="hidden flex flex-col items-center gap-2.5 pb-2.5 border-b border-[var(--border)] shrink-0 w-full">
+              <button type="button" onclick="toggleCatalogCollapse()" class="w-full py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-xs" title="Katalog auf 320px ausklappen">
+                ▶
+              </button>
+              <button type="button" onclick="refreshPaperclipAndProfiles(true)" class="p-2 rounded-xl border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center justify-center cursor-pointer shadow-xs" title="Sync">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <!-- Profil-Liste (Scrollt flexibel im Viewport) -->
+            <div id="hermes-profiles-list" class="flex-1 overflow-y-auto space-y-2 my-2 pr-1 min-h-0 custom-scrollbar w-full">
+              <!-- Dynamisch befüllt mit großen Profil-Karten -->
+            </div>
+            <!-- EXPANDED FOOTER -->
+            <div id="catalog-expanded-footer" class="pt-2 shrink-0 space-y-2 border-t border-[var(--border)]">
+              <!-- Profil-Aktionen: Neu, Speichern, Löschen -->
+              <div class="grid grid-cols-3 gap-1.5 w-full">
+                <button 
+                  type="button" 
+                  onclick="createNewProfileDraft()" 
+                  class="py-1.5 px-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                  title="Neues leeres Agenten-Profil anlegen"
+                >
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                  <span>Neu</span>
+                </button>
+                <button 
+                  id="btn-save-profile" 
+                  type="button" 
+                  onclick="saveCurrentProfile(event)" 
+                  class="py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950 font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                  title="Alle Änderungen dieses Agenten speichern"
+                >
+                  <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                  <span>Speichern</span>
+                </button>
+                <button 
+                  type="button" 
+                  onclick="deleteCurrentProfile()" 
+                  class="py-1.5 px-2 rounded-lg border border-[var(--border)] hover:bg-rose-500/10 hover:border-rose-500/40 hover:text-rose-500 text-[var(--muted-foreground)] font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                  title="Dieses Profil löschen"
+                >
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  <span>Löschen</span>
+                </button>
+              </div>
+              <!-- Gateway Manager Modul -->
+              <div id="agent-gateway-manager-widget" class="p-2.5 rounded-xl space-y-1.5 transition shadow-2xs bg-[var(--card)] border border-[var(--border)]">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                    <span class="text-[10px] font-bold font-mono uppercase tracking-wider text-[var(--foreground)]">OmniRoute Gateway</span>
+                  </div>
+                  <span id="gateway-widget-status-badge" class="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border bg-[var(--secondary)] text-[var(--foreground)] border-[var(--border)]">
+                    -- Aktiv
+                  </span>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5 pt-0.5">
+                  <button type="button" id="btn-gateway-toggle-active" onclick="toggleActiveAgentGateway()" class="py-1 px-1.5 rounded-lg font-mono text-[9.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+                    <i data-lucide="play" class="w-3 h-3"></i> Start
+                  </button>
+                  <button type="button" onclick="openGatewayManagerModal()" class="py-1 px-1.5 rounded-lg font-mono text-[9.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+                    <i data-lucide="settings-2" class="w-3 h-3"></i> Verwalten
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 2. RECHTE HAUPT-SPALTE: AGENTEN-COCKPIT -->
+          <div class="flex-1 h-full min-h-0 flex flex-col gap-2 min-w-0 overflow-hidden">
+            
+            <!-- GROSSER, HOCHWERTIGER AGENTEN-HEADER (MOCKUP-DESIGN) -->
+            <div class="prof-panel-card p-3 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs space-y-2.5">
+              
+              <!-- HAUPTREIHE: Links Avatar & Stammdaten | Rechts die 7 vertikalen Icon-Kacheln -->
+              <div class="flex items-center justify-between gap-4">
+                
+                <!-- Links: Avatar + Stammdaten -->
+                <div class="flex items-center gap-3.5 min-w-0 flex-1">
+                  <!-- Avatar Container mit Bild-Dropzone -->
+                  <div class="relative shrink-0 group">
+                    <div 
+                      id="prof-avatar-dropzone"
+                      onclick="triggerAvatarFileInput()" 
+                      ondragover="handleAvatarDragOver(event)"
+                      ondragleave="handleAvatarDragLeave(event)"
+                      ondrop="handleAvatarDrop(event)"
+                      class="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-[var(--border)] shadow-md bg-[var(--secondary)] overflow-hidden cursor-pointer flex items-center justify-center relative hover:ring-2 hover:ring-foreground/20 transition group"
+                      title="Klicken zum Auswählen, Bild hierher ziehen oder einfügen (Strg+V)"
+                    >
+                      <img id="prof-edit-avatar-preview" src="/static/avatars/avatar_001.jpg" alt="Avatar" class="w-full h-full object-cover" onerror="this.src='/static/avatars/avatar_001.jpg'">
+                      <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center text-white text-[9px] font-bold font-mono">
+                        <i data-lucide="upload" class="w-3.5 h-3.5 mb-0.5"></i>
+                        <span>Ändern</span>
+                      </div>
+                    </div>
+                    <input type="file" id="prof-avatar-file-input" accept="image/*" class="hidden" onchange="handleAvatarFileSelected(event)">
+                    <input type="hidden" id="prof-edit-avatar" value="/static/avatars/avatar_001.jpg">
+                    <textarea id="prof-edit-prompt" class="hidden"></textarea>
+                    <!-- Avatar Library Button -->
+                    <button 
+                      type="button" 
+                      onclick="openAvatarLibraryModal(event)" 
+                      class="absolute -bottom-1 -left-1 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-xs hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition" 
+                      title="Avatar-Bibliothek (174 Porträts) öffnen"
+                    >
+                      <i data-lucide="book-open" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                    </button>
+                    <!-- Zufalls Avatar Button -->
+                    <button 
+                      type="button" 
+                      onclick="handleDiceClick(event)" 
+                      class="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-xs hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition" 
+                      title="Zufälligen Avatar wählen"
+                    >
+                      <i data-lucide="dices" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                    </button>
+                    <!-- Standard Avatar Button (Reset) -->
+                    <button 
+                      type="button" 
+                      onclick="resetAvatarToDefault(event)" 
+                      class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-xs hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition" 
+                      title="Standard-Avatar wiederherstellen"
+                    >
+                      <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                    </button>
+                  </div>
+                  <!-- Agent Info Text -->
+                  <div class="min-w-0 space-y-1">
+                    <div class="flex items-center group cursor-pointer" onclick="focusProfileNameInput()" title="Klicken zum Bearbeiten">
+                      <h2 id="profile-editor-title" class="text-lg sm:text-xl font-black text-[var(--foreground)] tracking-tight leading-tight truncate">
+                        Alexander Richter
+                      </h2>
+                    </div>
+                    <div id="profile-editor-role" class="text-xs font-bold text-[var(--muted-foreground)] truncate">
+                      Executive Decision Architect
+                    </div>
+                    <!-- 3. Zeile: Kategorie -->
+                    <div class="pt-0.5">
+                      <span id="profile-editor-cat-tag" class="inline-block px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] truncate max-w-full">
+                        1. STRATEGIE, FÜHRUNG &amp; LEBENSPLANUNG
+                      </span>
+                    </div>
+                    <!-- 4. Zeile: ID Badge & KI-Modell-Wähler (Geklont aus Chat-Tab) -->
+                    <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span id="profile-editor-id-tag" class="inline-block px-2 py-0.5 rounded-full text-[9px] font-mono text-[var(--muted-foreground)] bg-[var(--background)] border border-[var(--border)] truncate max-w-full">
+                        id: default
+                      </span>
+                      <div class="inline-flex items-center gap-1 bg-[var(--secondary)]/60 px-1.5 py-0.5 rounded border border-[var(--border)] text-[9px] font-mono">
+                        <span class="text-[var(--muted-foreground)]">KI-Route:</span>
+                        <select id="agent-header-provider-select" onchange="onAgentHeaderProviderChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1 py-0.5 text-[9px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs">
+                          <option value="openrouter" selected>OpenRouter</option>
+                          <option value="google">Google AI (Gemini)</option>
+                          <option value="omniroute">OmniRoute</option>
+                          <option value="groq">Groq</option>
+                          <option value="openai">OpenAI</option>
+                          <option value="nvidia">NVIDIA NIM</option>
+                        </select>
+                        <select id="agent-header-model-select" onchange="onAgentHeaderModelChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1 py-0.5 text-[9px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs max-w-[150px] truncate">
+                          <option value="auto/best-free">auto/best-free</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Rechts: DIE 7 VERTIKALEN ICONS (OHNE RAND, ORIGINAL AUS USER-ICONSET) -->
+                <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
+                  
+                  <!-- 1. Übersicht -->
+                  <button 
+                    type="button" 
+                    id="agent-tab-btn-overview" 
+                    onclick="switchAgentCadreTab('overview')" 
+                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Übersicht"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                      <img src="/static/img/cadre_icons/overview.png" alt="Übersicht" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                    </div>
+                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold">Übersicht</span>
+                  </button>
+                  <!-- 2. Chat -->
+                  <button 
+                    type="button" 
+                    id="agent-tab-btn-chat" 
+                    onclick="switchAgentCadreTab('chat')" 
+                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Direkt-Chat"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                      <img src="/static/img/cadre_icons/chat.png" alt="Chat" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                    </div>
+                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Chat</span>
+                  </button>
+                  <!-- 3. Fähigkeiten -->
+                  <button 
+                    type="button" 
+                    id="agent-tab-btn-skills" 
+                    onclick="switchAgentCadreTab('skills')" 
+                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Fähigkeiten & Tools"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                      <img src="/static/img/cadre_icons/skills.png" alt="Fähigkeiten" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                    </div>
+                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Fähigkeiten</span>
+                  </button>
+                  <!-- 4. Operations -->
+                  <button 
+                    type="button" 
+                    id="agent-tab-btn-operations" 
+                    onclick="switchAgentCadreTab('operations')" 
+                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Operations & Disposition"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                      <img src="/static/img/cadre_icons/operations.png?v=2" alt="Operations" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                    </div>
+                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Operations</span>
+                  </button>
+                  <!-- 5. SOUL -->
+                  <button 
+                    type="button" 
+                    id="agent-tab-btn-soul" 
+                    onclick="switchAgentCadreTab('soul')" 
+                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="SOUL Direktiven"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                      <img src="/static/img/cadre_icons/soul.png" alt="SOUL" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                    </div>
+                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">SOUL</span>
+                  </button>
+                  <!-- 6. Personalakte -->
+                  <button 
+                    type="button" 
+                    id="agent-tab-btn-personalakte" 
+                    onclick="switchAgentCadreTab('personalakte')" 
+                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Personalakte (Dossier &amp; SOP)"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                      <img src="/static/img/cadre_icons/personalakte.png" alt="Personalakte" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                    </div>
+                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Personalakte</span>
+                  </button>
+                  <!-- 7. Marktplatz -->
+                  <button 
+                    type="button" 
+                    id="agent-tab-btn-marketplace" 
+                    onclick="switchAgentCadreTab('marketplace')" 
+                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Talent-Marktplatz"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                      <img src="/static/img/cadre_icons/marketplace.png" alt="Marktplatz" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                    </div>
+                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Marktplatz</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- HAUPTBEREICH: 7 DYNAMISCHE REITER-PANES -->
+            <div class="flex-1 min-h-0 relative overflow-hidden flex flex-col">
+              <!-- ========================================================= -->
+              <!-- REITER 1: 📊 ÜBERSICHT (360°-DOSSIER) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-overview" class="flex-1 min-h-0 flex flex-col justify-between gap-2 overflow-hidden">
+                
+                <!-- 2 Gleichwertige Spalten -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-2 flex-1 min-h-0 overflow-hidden">
+                  
+                  <!-- Linke Spalte: Stammdaten, Modell & Projekt-Historie -->
+                  <div class="prof-panel-card p-3 flex flex-col gap-2 min-h-0 overflow-y-auto custom-scrollbar">
+                    
+                    <div class="flex flex-col gap-2 flex-1 min-h-0">
+                      <!-- Persönlicher Name & Handle -->
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+                        <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Persönlicher Name</label>
+                          <input type="text" id="prof-edit-person-name" placeholder="z.B. Alexander Richter" oninput="onProfilePersonNameInputChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-semibold focus:outline-none shadow-2xs">
+                        </div>
+                        <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Hermes-Handle (ID)</label>
+                          <input type="text" id="prof-edit-id" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none shadow-2xs">
+                        </div>
+                      </div>
+                      <!-- Stellenbeschreibung & Domäne -->
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+                        <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Stellenbeschreibung / Rolle</label>
+                          <input type="text" id="prof-edit-name" placeholder="z.B. Executive Decision Architect" oninput="onProfileNameInputChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-semibold focus:outline-none shadow-2xs">
+                        </div>
+                        <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Domänen-Kategorie</label>
+                          <select id="prof-edit-category" onchange="onProfileCategoryChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                            <option value="1. Strategie, Führung & Lebensplanung">1. Strategie, Führung & Lebensplanung</option>
+                            <option value="2. Handel, Beschaffung & E-Commerce">2. Handel, Beschaffung & E-Commerce</option>
+                            <option value="3. Recht, Steuern & Compliance">3. Recht, Steuern & Compliance</option>
+                            <option value="4. Immobilien & Objektentwicklung">4. Immobilien & Objektentwicklung</option>
+                            <option value="5. Kreation, Medien & Content">5. Kreation, Medien & Content</option>
+                            <option value="6. Vertrieb, CRM & Growth">6. Vertrieb, CRM & Growth</option>
+                            <option value="7. Tech, Software & Data">7. Tech, Software & Data</option>
+                          </select>
+                        </div>
+                      </div>
+                      <!-- API & Modell-Router -->
+                      <div class="prof-box-card p-2 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1.5 shadow-xs shrink-0">
+                        <div class="flex items-center justify-between">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold">Modell-Router / LLM-Provider</label>
+                          <span id="prof-active-model-label" class="text-[9px] font-mono text-[var(--muted-foreground)]">aktiv: -</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          <select id="prof-edit-provider" onchange="onProfileProviderChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono">
+                            <option value="openrouter" selected>OpenRouter (Universal Gateway)</option>
+                            <option value="google">Google AI (Gemini API)</option>
+                            <option value="omniroute">OmniRoute (Multi-LLM Router)</option>
+                            <option value="groq">Groq (Ultra-Fast Cloud)</option>
+                            <option value="openai">OpenAI API</option>
+                            <option value="nvidia">NVIDIA NIM</option>
+                          </select>
+                          <div class="flex items-center gap-1">
+                            <input type="text" id="prof-edit-model" list="prof-edit-model-datalist" placeholder="Modell suchen oder manuell eingeben..." class="flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none shadow-2xs" />
+                            <datalist id="prof-edit-model-datalist"></datalist>
+                            <button type="button" onclick="applyProfileModelSelection()" class="py-1 px-2.5 rounded-lg text-xs font-bold font-mono transition cursor-pointer shadow-xs bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]" title="Modell aktiv zuweisen">
+                              ✓
+                            </button>
+                          </div>
+                        </div>
+                        <!-- Schnellauswahl entfernt (User-Wunsch 09.10.2026: überflüssige Modell-Presets) -->
+                      </div>
+                      <!-- Beschreibung & Aufgabenprofil -->
+                      <div class="prof-box-card p-2 rounded-xl bg-[var(--card)] space-y-1 shrink-0">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold">Aufgabenprofil & Beschreibung</label>
+                        <textarea id="prof-edit-desc" class="w-full h-20 bg-[var(--background)] border border-[var(--border)] rounded-lg p-2 text-xs text-[var(--foreground)] leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-2xs" placeholder="Definiere hier die Kernaufgaben und den Fokus des Agenten..."></textarea>
+                      </div>
+                      <!-- Projekt-Historie & Beteiligungen (bis zur Unterkante ausfüllend) -->
+                      <div class="prof-box-card p-2 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-[120px] flex flex-col space-y-1">
+                        <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
+                          <div class="flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-foreground/60 inline-block"></span>
+                            <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold">Projekt-Historie & Beteiligungen</label>
+                          </div>
+                          <span id="prof-projects-count" class="text-[9px] text-[var(--muted-foreground)] font-mono font-bold">0 Projekte</span>
+                        </div>
+                        <div id="prof-projects-list" class="w-full flex-1 min-h-0 bg-[var(--background)] border border-[var(--border)] rounded-lg p-1.5 overflow-y-auto custom-scrollbar space-y-1 shadow-2xs">
+                          <div class="text-[11px] text-[var(--muted-foreground)] italic p-1">Lade Projektbeteiligungen...</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Rechte Spalte: Aktivitäts-Log & Live-Feed in voller Höhe -->
+                  <div class="prof-panel-card p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+                    
+                    <!-- Aktivitäts-Log (Volle Höhe) -->
+                    <div class="prof-box-card p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-0 flex flex-col justify-between space-y-1 shadow-xs">
+                      <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-1.5 h-1.5 rounded-full bg-zinc-900 dark:bg-zinc-100 inline-block"></span>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold tracking-wider">Aktivitäts-Log & Live-Feed</label>
+                        </div>
+                        <span id="prof-log-status" class="text-[9px] font-mono text-[var(--muted-foreground)]">Live</span>
+                      </div>
+                      <div id="prof-activity-log-terminal" class="w-full flex-1 min-h-[150px] bg-[var(--background)] border border-[var(--border)] rounded-lg p-2 text-[11px] font-mono leading-tight text-[var(--foreground)] overflow-y-auto custom-scrollbar shadow-inner select-text">
+                        <div class="text-[var(--muted-foreground)] italic">Lade Agenten-Aktivität...</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Unten: KPI- & STATUS-KACHEL (DURCHGEHEND) -->
+                <div class="prof-panel-card p-2.5 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                  <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Zugeordnete Domäne</span>
+                      <div id="kpi-val-domain" class="text-xs font-bold text-[var(--foreground)] truncate">1. Strategie, Führung</div>
+                    </div>
+                    <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Direkter Supervisor / Lead</span>
+                      <div id="kpi-val-supervisor" class="text-xs font-bold text-[var(--foreground)] truncate">Michael Keller (Owner / CEO)</div>
+                    </div>
+                    <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Verarbeitete Tasks</span>
+                      <div id="kpi-val-tasks" class="text-xs font-bold text-[var(--foreground)] truncate">24 Tasks abgeschlossen</div>
+                    </div>
+                    <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Status & Erfolgsquote</span>
+                      <div id="kpi-val-success" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate">99.4% (Einsatzbereit)</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 2: 🛠️ FÄHIGKEITEN (SKILL- & MCP-STUDIO) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-skills" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between gap-3 overflow-hidden">
+                  
+                  <!-- Zugewiesene Skills -->
+                  <div class="prof-box-card p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-0 flex flex-col justify-between space-y-2 shadow-xs">
+                    <div class="flex items-center justify-between shrink-0 pb-1 border-b border-[var(--border)]">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="zap" class="w-4 h-4 text-emerald-500"></i>
+                        <h4 class="text-xs font-bold font-mono uppercase text-[var(--foreground)]">Zugewiesene Fach-Skills</h4>
+                      </div>
+                      <span id="prof-skills-count" class="text-xs font-mono font-bold text-[var(--muted-foreground)]">0 Skills aktiv</span>
+                    </div>
+                    <div id="prof-active-skills-tags" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg flex flex-wrap content-start gap-1.5 shadow-2xs">
+                      <!-- Dynamische Tool-Tags mit (X) -->
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0 pt-1">
+                      <select id="prof-add-skill-select" class="flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                        <option value="">Skill aus Katalog auswählen...</option>
+                      </select>
+                      <button type="button" onclick="addSelectedSkillToProfile()" class="px-4 py-1.5 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+                        + Hinzufügen
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Verfügbare Tools & MCP -->
+                  <div class="prof-box-card p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-0 flex flex-col justify-between space-y-2 shadow-xs">
+                    <div class="flex items-center justify-between shrink-0 pb-1 border-b border-[var(--border)]">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="wrench" class="w-4 h-4 text-blue-500"></i>
+                        <h4 class="text-xs font-bold font-mono uppercase text-[var(--foreground)]">Verfügbare System- & MCP-Tools</h4>
+                      </div>
+                      <span id="prof-tools-count" class="text-xs font-mono font-bold text-[var(--muted-foreground)]">18 Tools aktiv</span>
+                    </div>
+                    <div id="prof-active-tools-tags" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg flex flex-wrap content-start gap-1.5 shadow-2xs">
+                      <!-- Dynamische Tool-Tags mit (X) -->
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0 pt-1">
+                      <select id="prof-add-tool-select" class="flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                        <option value="">Tool aus Katalog auswählen...</option>
+                      </select>
+                      <button type="button" onclick="addSelectedToolToProfile()" class="px-4 py-1.5 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+                        + Hinzufügen
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 3: 💬 CHAT (MASTER-CHAT ENGINE & THREAD-MANAGER) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-chat" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                  
+                  <!-- Chat Header: Session-Auswahl & Neue Session & Master-Konsole Sprung -->
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0 gap-2">
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                      <span class="text-xs font-mono font-bold text-[var(--muted-foreground)] shrink-0">Sitzung:</span>
+                      <select id="agent-chat-session-select" onchange="loadAgentTabChatMessages(this.value)" class="flex-1 max-w-md bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] font-semibold focus:outline-none cursor-pointer shadow-2xs truncate">
+                        <!-- Dynamisch geladene Live-Sessions aus Master-Chat Backend -->
+                      </select>
+                      <button type="button" onclick="renameCurrentAgentTabSession()" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-2xs shrink-0" title="Aktuelle Sitzung umbenennen">
+                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button type="button" onclick="createNewAgentChatSession()" class="px-3 py-1 rounded-lg text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0" title="Neue Chat-Sitzung mit diesem Agenten starten">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        <span>Neue Session</span>
+                      </button>
+                      <button type="button" onclick="jumpToMasterChatWithCurrentAgent()" class="px-2.5 py-1 rounded-lg text-xs font-mono transition flex items-center gap-1.5 cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0" title="Diesen Agenten in der Master-Konsole öffnen">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">Master-Konsole</span>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Chat Verlauf (mit Markdown & SSE Streaming) -->
+                  <div id="agent-tab-chat-messages" class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-[var(--background)] border border-[var(--border)] rounded-xl my-2">
+                    <!-- Nachrichtenverlauf -->
+                  </div>
+                  <!-- Attachment Preview Bar (wenn Datei ausgewählt ist) -->
+                  <div id="agent-tab-attachment-bar" class="px-3 py-1.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg mb-1 flex items-center justify-between text-xs hidden">
+                    <div class="flex items-center gap-2 text-[var(--foreground)] font-mono text-[11px] truncate">
+                      <i data-lucide="paperclip" class="w-3.5 h-3.5 text-black dark:text-white shrink-0"></i>
+                      <span class="text-[var(--muted-foreground)] font-medium">Anhang:</span>
+                      <span id="agent-tab-attachment-name" class="truncate font-semibold text-[var(--foreground)]">datei.txt</span>
+                      <span id="agent-tab-attachment-size" class="text-[10px] text-[var(--muted-foreground)] font-normal"></span>
+                    </div>
+                    <button type="button" onclick="removeAgentTabAttachment()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-1 cursor-pointer" title="Anhang entfernen">
+                      <i data-lucide="x" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                    </button>
+                  </div>
+                  <!-- Prompt Eingabe & Toolbar (Feature-Parität mit Master-Konsole) -->
+                  <div class="shrink-0 pt-1">
+                    <div id="agent-tab-input-card" class="border border-[var(--border)] rounded-xl p-2.5 bg-[var(--background)] shadow-xs focus-within:border-zinc-500 transition flex flex-col gap-2">
+                      <!-- Hidden File Input -->
+                      <input type="file" id="agent-tab-file-input" onchange="handleAgentTabFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
+                      
+                      <!-- 1. Textarea mit voller Breite (w-full) und dynamischem Auto-Resize -->
+                      <textarea 
+                        id="agent-tab-chat-input" 
+                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAgentTabChatMessage();}"
+                        oninput="autoResizeAgentTabInput(this)"
+                        onpaste="handleAgentTabInputPaste(event)"
+                        placeholder="Nachricht an diesen Agenten eingeben (Enter zum Senden, Shift+Enter für Zeilenumbruch)..." 
+                        rows="2"
+                        style="max-height: 25vh; min-height: 48px;"
+                        class="w-full bg-transparent border-none p-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none resize-none font-sans leading-relaxed custom-scrollbar"
+                      ></textarea>
+                      <!-- 2. Toolbar-Reihe: Hilfs-Tools links, Senden-Button rechts -->
+                      <div class="flex items-center justify-between gap-2 pt-1 border-t border-[var(--border)]/40">
+                        <div class="flex items-center gap-1 sm:gap-1.5">
+                          <!-- Attachment Button (Paperclip) -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-attach-btn"
+                            onclick="document.getElementById('agent-tab-file-input').click()" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="Datei anhängen (PDF, TXT, CSV, MD, Bild, Code)"
+                          >
+                            <i data-lucide="paperclip" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                          <!-- Screen / Browser Capture Button (Vision) -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-screen-capture-btn"
+                            onclick="captureScreenForAgentChat()" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="Bildschirm- / Browser-Foto aufnehmen (Vision / Screenshot)"
+                          >
+                            <i data-lucide="camera" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                          <!-- Speech / Microphone Button -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-mic-btn"
+                            onclick="toggleAgentTabDictation()" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="Spracheingabe / Diktat starten (Mikrofon)"
+                          >
+                            <i data-lucide="mic" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                          <!-- Archon Prompt Studio Button (579+ Vorlagen) -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-sureprompts-btn"
+                            onclick="openSurePromptsModal('agent-tab')" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="Archon Prompt Studio (579+ Vorlagen: Enterprise-Baukasten &amp; Fabric SOP-Muster)"
+                          >
+                            <i data-lucide="layers" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                          <!-- KI-Prompt-Optimizer Button -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-optimize-btn"
+                            onclick="optimizeMasterChatPrompt('agent-tab')" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="KI-Optimizer: Rohtext in professionellen 5-Felder-Prompt transformieren"
+                          >
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                        </div>
+                        <!-- Senden Button -->
+                        <button 
+                          type="button" 
+                          id="agent-tab-send-btn"
+                          onclick="sendAgentTabChatMessage()" 
+                          class="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
+                          title="Nachricht senden (Enter)"
+                        >
+                          <span>Senden</span>
+                          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <!-- Footer Toolbar mit Modell, JEV & Status -->
+                    <div id="agent-tab-chat-footer" class="mt-1.5 flex items-center justify-between text-[11px] font-mono px-1 text-[var(--muted-foreground)]">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide">Provider:</span>
+                        <select id="agent-tab-provider-select" onchange="onAgentTabProviderChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1.5 py-0.5 text-[11px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs">
+                          <option value="openrouter" selected>OpenRouter</option>
+                          <option value="google">Google AI (Gemini)</option>
+                          <option value="omniroute">OmniRoute</option>
+                          <option value="groq">Groq</option>
+                          <option value="openai">OpenAI</option>
+                          <option value="nvidia">NVIDIA NIM</option>
+                        </select>
+                        <span class="font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide ml-1">Modell:</span>
+                        <select id="agent-tab-model-select" onchange="onAgentTabModelChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1.5 py-0.5 text-[11px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs max-w-[200px] truncate">
+                          <option value="meta-llama/llama-3.3-70b-instruct" selected>meta-llama/llama-3.3-70b-instruct</option>
+                          <option value="anthropic/claude-3.7-sonnet">anthropic/claude-3.7-sonnet</option>
+                          <option value="deepseek/deepseek-v3">deepseek/deepseek-v3</option>
+                          <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+                        </select>
+                        <span id="agent-tab-model-cost" class="text-[9.5px] text-amber-500 font-mono font-bold ml-1.5 bg-amber-500/10 px-1.5 py-0.5 rounded hidden"></span>
+                      </div>
+                        <span class="text-[var(--border)]">|</span>
+                        <!-- JEV Einstellung Button/Badge -->
+                        <button id="agent-tab-jev-badge" type="button" onclick="toggleJevFromMasterChat()" class="flex items-center gap-1.5 px-2 py-0.5 rounded border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] font-mono text-[10px] font-semibold cursor-pointer transition-all" title="PreDecision Fast-Routing &amp; Tool-Pruning umschalten (Klick öffnet oder schaltet)">
+                          <i data-lucide="zap" class="w-3 h-3 text-black dark:text-white shrink-0"></i>
+                          <span>Reasoning:</span>
+                          <span id="agent-tab-jev-state">OFF</span>
+                        </button>
+                        <span class="text-[var(--border)]">|</span>
+                        <!-- Flat-Version Direkt / Mission Switch -->
+                        <div 
+                          id="agent-tab-mode-flat-switch" 
+                          onclick="toggleAgentTabModeSwitch()" 
+                          class="flex items-center rounded border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono select-none cursor-pointer transition-all shadow-2xs" 
+                          title="Zwischen Direkt-Dialog und Mission umschalten"
+                        >
+                          <span id="agent-tab-flat-direct" class="px-2 py-0.5 rounded font-bold transition-all bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer">Direkt</span>
+                          <span id="agent-tab-flat-mission" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">Mission</span>
+                        </div>
+                      </div>
+                      <div id="agent-tab-status-indicator" class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">Online</span>
+                        <span id="agent-tab-chat-status" class="text-[10px]">Bereit</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <!-- ========================================================= -->
+              <!-- REITER 4: 🧬 SOUL (INLINE-EDITOR) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-soul" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                  
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <i data-lucide="dna" class="w-4 h-4 text-purple-500 shrink-0"></i>
+                      <span class="text-xs font-mono font-bold text-[var(--foreground)] truncate">SOUL.md Direktiven & System-Prompt</span>
+                      <code id="prof-soul-path-label" class="text-[10px] font-mono text-[var(--muted-foreground)] px-2 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] truncate">~/.hermes/profiles/SOUL.md</code>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <span id="prof-soul-save-status" class="text-[10px] font-mono text-[var(--muted-foreground)]">Bereit</span>
+                      <button type="button" onclick="copyInlineSoulMarkdown(this)" class="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-1.5" title="SOUL.md in Zwischenablage kopieren">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span>Kopieren</span>
+                      </button>
+                      <button type="button" onclick="loadInlineSoulMarkdown()" class="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]" title="Neu aus Datei laden">
+                        ↺ Neu laden
+                      </button>
+                      <button type="button" onclick="saveInlineSoulMarkdown()" class="px-3.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer shadow-xs bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950">
+                        💾 SOUL.md separat speichern
+                      </button>
+                    </div>
+                  </div>
+                  <div class="flex-1 min-h-0 my-2 relative group">
+                    <textarea 
+                      id="prof-soul-inline-editor" 
+                      class="w-full h-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 pr-12 text-xs text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-inner"
+                      placeholder="Lade SOUL.md Direktiven..."
+                    ></textarea>
+                    <button type="button" onclick="copyInlineSoulMarkdown(this)" class="absolute top-2.5 right-3 p-1.5 rounded-lg bg-[var(--card)]/90 hover:bg-[var(--secondary)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] shadow-xs transition opacity-70 group-hover:opacity-100 flex items-center gap-1 text-[11px] font-mono cursor-pointer z-10" title="Text dieses Feldes kopieren">
+                      <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                  <div class="text-[10.5px] font-mono text-[var(--muted-foreground)] flex items-center justify-between shrink-0 pt-1">
+                    <span>Definiert die Identität, Fach-Instruktionen, Denkweise und System-SOPs dieses Agenten.</span>
+                    <span class="text-[10px]">Wird auch automatisch beim globalen Speichern gesichert.</span>
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 5: 📋 PERSONALAKTE (OBSIDIAN-DOSSIER) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-personalakte" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                  
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <i data-lucide="clipboard-list" class="w-4 h-4 text-[#EF233C] shrink-0"></i>
+                      <span class="text-xs font-mono font-bold text-[var(--foreground)] truncate">Digitale Personalakte (Obsidian Vault)</span>
+                      <code id="pa-inline-path" class="text-[10px] font-mono text-[var(--muted-foreground)] px-2 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] truncate">00_HR_Agenten/Personalakten/agent.md</code>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <div class="flex items-center p-0.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)]">
+                        <button type="button" id="btn-pa-inline-dossier" onclick="toggleInlinePersonalakteView('dossier')" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer">
+                          Dossier
+                        </button>
+                        <button type="button" id="btn-pa-inline-raw" onclick="toggleInlinePersonalakteView('raw')" class="px-2 py-0.5 rounded text-[10px] font-mono text-[var(--muted-foreground)] hover:text-[var(--foreground)] bg-transparent cursor-pointer">
+                          Markdown
+                        </button>
+                      </div>
+                      <span id="pa-inline-save-status" class="text-[10px] font-mono text-[var(--muted-foreground)]">Synchronisiert</span>
+                      <button type="button" onclick="copyInlinePersonalakteMarkdown(this)" class="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-1.5" title="Personalakte kopieren">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span>Kopieren</span>
+                      </button>
+                      <button type="button" onclick="saveInlinePersonalakteMarkdown()" class="px-3.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer shadow-xs bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950">
+                        💾 Personalakte speichern
+                      </button>
+                    </div>
+                  </div>
+                  <!-- DOSSIER ANSICHT -->
+                  <div id="pa-inline-dossier-view" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar my-2 space-y-3 pr-1">
+                    
+                    <!-- Stammdaten Kachel -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                        <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Persönlicher Name</span>
+                        <div id="pa-inline-person-name" class="text-xs font-bold text-[var(--foreground)]">Alexander Richter</div>
+                      </div>
+                      <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                        <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Stellenbeschreibung</span>
+                        <div id="pa-inline-role-name" class="text-xs font-bold text-[var(--foreground)]">Executive Decision Architect</div>
+                      </div>
+                      <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                        <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Direkter Supervisor / Lead</span>
+                        <div id="pa-inline-supervisor" class="text-xs font-bold text-[var(--foreground)]">[[Michael Keller (Owner / CEO)]]</div>
+                      </div>
+                    </div>
+                    <!-- Kernauftrag & Tätigkeitsfeld -->
+                    <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1 shadow-2xs">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="target" class="w-4 h-4 text-[#EF233C]"></i>
+                        <h4 class="font-bold text-xs uppercase tracking-wide text-[var(--foreground)]">Kernauftrag & Tätigkeitsfeld</h4>
+                      </div>
+                      <p id="pa-inline-desc" class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+                        Trifft hochkomplexe strategische Unternehmensentscheidungen, führt Risiko- und Trade-Off-Analysen durch und strukturiert Entscheidungsvorlagen für die Geschäftsführung.
+                      </p>
+                    </div>
+                    <!-- Operative Leitlinie (SOP) mit schwarzem Text, weißem Hintergrund und rotem Rand -->
+                    <div id="pa-sop-callout" class="pa-sop-box p-3.5 rounded-xl shadow-xs space-y-1.5" style="background-color: #ffffff !important; border: 2px solid #EF233C !important; color: #000000 !important;">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="alert-circle" class="w-4 h-4 shrink-0" style="color: #EF233C !important; stroke: #EF233C !important;"></i>
+                        <h4 class="font-bold text-xs uppercase tracking-wide" style="color: #000000 !important;">Operative Leitlinie (SOP)</h4>
+                      </div>
+                      <p id="pa-inline-sop" class="text-xs leading-relaxed font-semibold" style="color: #000000 !important;">
+                        Arbeitet eigenständig, faktenbasiert und ergebnisorientiert. Trifft keine vagen Annahmen, liefert konkrete Handlungsempfehlungen und dokumentiert alle wesentlichen Entscheidungen im Obsidian-Vault.
+                      </p>
+                    </div>
+                    <!-- Autorisierte Fach-Skills Übersicht -->
+                    <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-2 shadow-2xs">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                          <i data-lucide="zap" class="w-4 h-4 text-emerald-500"></i>
+                          <h4 class="font-bold text-xs uppercase tracking-wide text-[var(--foreground)]">Autorisierte Fach-Skills</h4>
+                        </div>
+                      </div>
+                      <div id="pa-inline-skills-list" class="flex flex-wrap gap-1.5">
+                        <!-- Dynamisch geladen -->
+                      </div>
+                    </div>
+                    <!-- Vollständige Personalakte & Einsatzhistorie aus Obsidian gerendert -->
+                    <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-2 shadow-2xs">
+                      <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+                        <div class="flex items-center gap-2">
+                          <i data-lucide="file-check-2" class="w-4 h-4 text-emerald-500"></i>
+                          <h4 class="font-bold text-xs uppercase tracking-wide text-[var(--foreground)]">Dokumentierte Personalakte &amp; Einsatzhistorie (Obsidian)</h4>
+                        </div>
+                        <span id="pa-inline-sync-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">Synchronisiert</span>
+                      </div>
+                      <div id="pa-inline-rendered-markdown" class="select-text text-xs leading-relaxed max-w-none prose dark:prose-invert">
+                        <!-- Hier wird der vollständige Markdown-Inhalt aus Obsidian formatiert gerendert -->
+                      </div>
+                    </div>
+                  </div>
+                  <!-- RAW MARKDOWN EDITOR ANSICHT -->
+                  <div id="pa-inline-raw-view" class="hidden flex-1 min-h-0 my-2 relative group">
+                    <textarea 
+                      id="pa-inline-raw-markdown" 
+                      class="w-full h-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 pr-12 text-xs text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-inner"
+                      placeholder="Lade Obsidian Personalakte..."
+                    ></textarea>
+                    <button type="button" onclick="copyInlinePersonalakteMarkdown(this)" class="absolute top-2.5 right-3 p-1.5 rounded-lg bg-[var(--card)]/90 hover:bg-[var(--secondary)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] shadow-xs transition opacity-70 group-hover:opacity-100 flex items-center gap-1 text-[11px] font-mono cursor-pointer z-10" title="Text dieses Feldes kopieren">
+                      <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                  <div class="text-[10.5px] font-mono text-[var(--muted-foreground)] flex items-center justify-between shrink-0 pt-1">
+                    <span>Synchronisiert mit dem lokalen Obsidian HR-Vault (`C:\Mein Obsidian\00_HR_Agenten\Personalakten\`).</span>
+                    <span class="text-[10px]">Zwei-Wege-Sync aktiv</span>
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 4: ⚡ OPERATIONS (TASK- & TEAM-DISPOSITION) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-operations" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                  
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+                    <div class="flex items-center gap-2">
+                      <i data-lucide="kanban" class="w-4 h-4 text-indigo-500"></i>
+                      <span class="text-xs font-mono font-bold text-[var(--foreground)]">Operations &amp; Task-Disposition</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button type="button" onclick="openNewTaskModal('todo', currentSelectedProfileId)" class="px-3 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer shadow-xs bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] flex items-center gap-1.5">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        <span>+ Aufgabe zuweisen</span>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Operations Info Kacheln -->
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 my-2 shrink-0">
+                    <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Disposition Status</span>
+                      <div id="operations-pane-status" class="text-xs font-bold text-[var(--foreground)] flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Bereit für Aufgaben
+                      </div>
+                    </div>
+                    <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Orchestrierung</span>
+                      <div class="text-xs font-bold text-[var(--foreground)]">Hermes Core Task Engine</div>
+                    </div>
+                    <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Netzwerk-Anbindung</span>
+                      <div class="text-xs font-bold text-emerald-600 dark:text-emerald-400">Archon Mesh / Online</div>
+                    </div>
+                  </div>
+                  <!-- Zugewiesene Tasks & Workflows -->
+                  <div class="prof-box-card p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-0 flex flex-col justify-between space-y-1.5 shadow-xs">
+                    <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
+                      <h4 class="text-xs font-bold font-mono uppercase text-[var(--foreground)]">Zugewiesene Aufgaben &amp; Workflows</h4>
+                      <span id="operations-tasks-count" class="text-xs font-mono text-[var(--muted-foreground)]">0 aktive Tasks</span>
+                    </div>
+                    <div id="operations-assigned-tasks-list" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg space-y-2 shadow-2xs">
+                      <div class="p-3 text-center text-xs text-[var(--muted-foreground)] font-mono">Keine aktiven Aufgaben zugewiesen.</div>
+                    </div>
+                  </div>
+                  <div class="text-[10.5px] font-mono text-[var(--muted-foreground)] pt-1 shrink-0">
+                    Ermöglicht die kontinuierliche Zuordnung von autonomen Teilaufgaben an den Agenten über das Operations Control Center.
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 7: 🛒 MARKTPLATZ (TALENT- & SKILL-STORE) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-marketplace" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                  
+                  <!-- Tab Header: 2 Tabs (Talent-Marktplatz & Skill-Marktplatz) -->
+                  <div class="space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] shrink-0">
+                      <div class="grid grid-cols-2 gap-1 w-full p-1 rounded-xl bg-[var(--secondary)] border border-[var(--border)] shadow-xs">
+                        <button type="button" id="tab-market-talent" onclick="switchMarketplaceTab('talent')" class="py-1 px-2 rounded-lg text-xs font-bold font-mono transition text-center cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]">
+                          Talent-Marktplatz (Rollen & Vorlagen)
+                        </button>
+                        <button type="button" id="tab-market-skill" onclick="switchMarketplaceTab('skill')" class="py-1 px-2 rounded-lg text-xs font-medium font-mono transition text-center cursor-pointer bg-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent">
+                          Skill-Marktplatz (Module & MCP)
+                        </button>
+                      </div>
+                    </div>
+                    <!-- TAB 1: TALENT-MARKTPLATZ INHALT -->
+                    <div id="market-tab-content-talent" class="space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+                        <div>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Katalog-Quelle</label>
+                          <select id="market-source-select" onchange="onMarketplaceSourceSelectChange()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                            <option value="fabric" selected>Daniel Miessler Fabric (255 Patterns)</option>
+                            <option value="crewai">CrewAI Business Roles (51 Rollen)</option>
+                            <option value="personas">Professional Persona Hub (2.090+ Experten)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Vorlage suchen & filtern</label>
+                          <div class="relative">
+                            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2 top-2 text-black dark:text-white pointer-events-none"></i>
+                            <input type="text" id="market-search-input" oninput="toggleClearBtn('market-search-input'); onMarketplaceSearchInput()" placeholder="Vorlagen durchsuchen..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg pl-6 pr-6 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none font-medium shadow-2xs">
+                            <button id="market-search-input-clear" onclick="clearSearchInput('market-search-input', () => loadMarketplaceTemplates())" class="hidden absolute right-1.5 top-1.5 text-black dark:text-white hover:opacity-75 text-[10px] font-bold cursor-pointer" title="Suche zurücksetzen">✕</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="shrink-0">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Ausgewählte Vorlage</label>
+                        <select id="market-template-select" onchange="onMarketplaceTemplateSelectChange()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                          <!-- Dynamisch befüllt -->
+                        </select>
+                      </div>
+                      <div class="space-y-0.5 flex-1 min-h-0 flex flex-col">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold shrink-0">Vorlagen-Vorschau</label>
+                        <textarea id="market-template-preview" readonly class="w-full flex-1 min-h-[90px] bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-[11px] text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar cursor-default shadow-2xs" placeholder="Wähle eine Vorlage zur Vorschau..."></textarea>
+                      </div>
+                      <div class="pt-1 shrink-0">
+                        <button onclick="recruitSelectedMarketplaceTemplate()" class="w-full py-2 px-3 rounded-xl hover:bg-[var(--secondary)] font-bold text-xs font-mono transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-zinc-900 dark:border-zinc-100">
+                          <i data-lucide="zap" class="w-3.5 h-3.5 text-black dark:text-white"></i> ⚡ Vorlage in diesen Agenten importieren
+                        </button>
+                      </div>
+                    </div>
+                    <!-- TAB 2: SKILL-MARKTPLATZ INHALT -->
+                    <div id="market-tab-content-skill" class="hidden space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+                        <div>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Skill-Quelle</label>
+                          <select id="skill-market-source-select" onchange="onSkillMarketSourceSelectChange()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                            <option value="hermes_skills" selected>Hermes Skills (~/.hermes/skills)</option>
+                            <option value="gemini_skills">Gemini & Skills.sh Catalog (420+ Skills)</option>
+                            <option value="science_plugins">Science & MCP Plugins (41 Skills)</option>
+                            <option value="deutsch_fachskills">Deutsche Fach-Skills (74 Module)</option>
+                            <option value="realestate_skills">German Real Estate & Law Pack</option>
+                            <option value="mcp_tools">Model Context Protocol MCP Registry</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Skill suchen & filtern</label>
+                          <div class="relative">
+                            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2 top-2 text-black dark:text-white pointer-events-none"></i>
+                            <input type="text" id="skill-market-search-input" oninput="toggleClearBtn('skill-market-search-input'); onSkillMarketSearchInput()" placeholder="Skills durchsuchen..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg pl-6 pr-6 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none font-medium shadow-2xs">
+                            <button id="skill-market-search-input-clear" onclick="clearSearchInput('skill-market-search-input', () => loadSkillMarketplaceItems())" class="hidden absolute right-1.5 top-1.5 text-black dark:text-white hover:opacity-75 text-[10px] font-bold cursor-pointer" title="Suche zurücksetzen">✕</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="shrink-0">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold">Skill auswählen</label>
+                        <select id="skill-market-item-select" onchange="onSkillMarketItemSelectChange()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                          <!-- Dynamisch befüllt -->
+                        </select>
+                      </div>
+                      <div class="space-y-0.5 flex-1 min-h-0 flex flex-col">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold shrink-0">Skill-Spezifikation</label>
+                        <textarea id="skill-market-preview" readonly class="w-full flex-1 min-h-[90px] bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-[11px] text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar cursor-default shadow-2xs" placeholder="Wähle einen Skill zur Vorschau..."></textarea>
+                      </div>
+                      <div class="pt-1 shrink-0">
+                        <button onclick="assignSelectedMarketplaceSkillToProfile()" class="w-full py-2 px-3 rounded-xl hover:bg-[var(--secondary)] font-bold text-xs font-mono transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-zinc-900 dark:border-zinc-100">
+                          <i data-lucide="globe" class="w-3.5 h-3.5 text-black dark:text-white"></i> ⚡ Skill diesem Agenten zuweisen
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>

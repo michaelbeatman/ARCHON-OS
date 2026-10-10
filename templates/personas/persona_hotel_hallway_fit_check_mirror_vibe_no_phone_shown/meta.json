@@ -1,0 +1,10 @@
+{
+  "id": "persona_hotel_hallway_fit_check_mirror_vibe_no_phone_shown",
+  "name": "Hotel Hallway Fit Check (mirror vibe, no phone shown)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Hotel Hallway Fit Check (mirror vibe, no phone shown)'. {\n  \"category\": \"HOTEL_HALLWAY_FIT_CHECK\",\n  \"identity_lock\": {\n    \"enabled\": true,\n    \"priority\": \"ABSOLUTE_MAX\",\n   ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

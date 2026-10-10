@@ -1,0 +1,10 @@
+{
+  "id": "persona_recursive_niche_deconstruction_for_market_research",
+  "name": "Recursive Niche Deconstruction for Market Research",
+  "category": "2. Handel, Beschaffung & E-Commerce",
+  "description": "Fach-Experte: 'Recursive Niche Deconstruction for Market Research'. {\n  \"industry\": \"${industry}\",\n  \"region\": \"${region}\",\n  \"tree\": {\n    \"level\": \"Macro\",\n    \"name\": \"...\",\n    \"market...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

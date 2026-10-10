@@ -1,0 +1,10 @@
+{
+  "id": "persona_unity_architecture_specialist",
+  "name": "Unity Architecture Specialist",
+  "category": "4. Immobilien & Objektentwicklung",
+  "description": "Fach-Experte: 'Unity Architecture Specialist'. ---\nname: unity-architecture-specialist\ndescription: A Claude Code agent skill for Unity game developers. Provides exper...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

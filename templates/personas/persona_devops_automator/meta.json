@@ -1,0 +1,10 @@
+{
+  "id": "persona_devops_automator",
+  "name": "DevOps Automator",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'DevOps Automator'. ---\nname: devops-automator\ndescription: \"Use this agent when setting up CI/CD pipelines, configuring cloud infrastructur...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

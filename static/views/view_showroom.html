@@ -1,0 +1,177 @@
+<div id="view-showroom" class="hidden flex-1 w-full min-h-screen flex flex-col p-4 md:p-6 select-none bg-[var(--background)] text-[var(--foreground)]">
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-4 border-b border-[var(--border)] mb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full inline-block bg-emerald-500"></span>
+              <h1 class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">SHOWROOM (PROJEKT-EXPLORER &amp; ARTEFAKTE)</h1>
+              <button type="button" onclick="openContextHelp('showroom')" title="Hilfe zum Showroom" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+                <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <p class="text-xs mt-0.5 font-mono text-[var(--muted-foreground)]">Dateibaumstruktur nach Windows Explorer: Zwischenberichte, Medien &amp; Endprodukte mit Sofort-Vorschau</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="loadShowroomView(true)" class="px-3 py-1.5 rounded text-xs font-mono font-medium border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--secondary)] flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              <span>Aktualisieren</span>
+            </button>
+          </div>
+        </div>
+        <!-- Explorer 2-Spalten-Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 items-stretch" style="min-height: calc(100vh - 180px);">
+          
+          <!-- Linke Spalte: Windows-Explorer Dateibaum (4 von 12 Spalten) -->
+          <div class="lg:col-span-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 shadow-xs flex flex-col overflow-hidden" style="max-height: calc(100vh - 180px);">
+            <!-- Explorer Sidebar Header -->
+            <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border)] mb-2">
+              <div class="flex items-center gap-2">
+                <i data-lucide="folder-tree" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">PROJEKT-ORDNER</h3>
+              </div>
+              <span id="showroom-projects-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-[var(--foreground)] border border-[var(--border)]">
+                0 Projekte
+              </span>
+            </div>
+            <!-- Suchfeld Filter -->
+            <div class="relative mb-2">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[var(--muted-foreground)]"></i>
+              <input type="text" id="showroom-tree-filter" oninput="filterShowroomTree(this.value)" placeholder="Projekte oder Dateien suchen..." class="w-full text-xs font-mono rounded border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] pl-8 pr-2.5 py-1.5 outline-none focus:border-zinc-500">
+            </div>
+            <!-- Baum-Container mit Scrollbar -->
+            <div id="showroom-tree-container" class="flex-1 overflow-y-auto pr-1 space-y-1 font-mono text-xs select-none custom-scrollbar">
+              <div class="p-4 text-center text-xs text-[var(--muted-foreground)] italic">
+                Lade Projekt-Dateibaum...
+              </div>
+            </div>
+          </div>
+          <!-- Rechte Spalte: Datei-Vorschau & Aktionen (8 von 12 Spalten) -->
+          <!-- User-Vorgabe 09.10.2026: Vorschau nutzt die GESAMTE verfügbare Höhe
+               (height statt max-height — die Karte füllt den Bereich bis unten aus). -->
+          <div class="lg:col-span-8 rounded-lg border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs flex flex-col overflow-hidden" style="height: calc(100vh - 180px);">
+            <!-- Preview Header & Breadcrumb -->
+            <div class="flex flex-wrap items-center justify-between pb-3 border-b border-[var(--border)] gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <i id="showroom-file-icon" data-lucide="file-text" class="w-4 h-4 text-zinc-500 shrink-0"></i>
+                <div class="truncate">
+                  <div id="showroom-file-name" class="text-xs font-bold font-mono text-[var(--foreground)] truncate">Keine Datei ausgewählt</div>
+                  <div id="showroom-file-breadcrumb" class="text-[10px] font-mono text-[var(--muted-foreground)] truncate">Wähle links im Explorer einen Zwischenbericht, Medien oder ein Endprodukt</div>
+                </div>
+              </div>
+              <!-- Action Bar Rechts -->
+              <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+                <!-- Toggle: Formatiert / Quelltext / HTML (nur bei Markdown/Text aktiv) -->
+                <div id="showroom-md-toggle-group" class="hidden inline-flex rounded-md border border-[var(--border)] bg-[var(--background)] p-0.5">
+                  <button id="btn-md-mode-render" onclick="setShowroomMarkdownMode('render')" title="Formatierte Markdown-Ansicht" class="px-2 py-1 text-[10px] font-mono font-medium rounded bg-[var(--card)] text-[var(--foreground)] shadow-xs">Formatiert</button>
+                  <button id="btn-md-mode-raw" onclick="setShowroomMarkdownMode('raw')" title="Roher Quelltext" class="px-2 py-1 text-[10px] font-mono font-medium rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]">Quelltext</button>
+                  <button id="btn-md-mode-html" onclick="setShowroomMarkdownMode('html')" title="Formatiertes HTML (Word-kompatibel)" class="px-2 py-1 text-[10px] font-mono font-bold rounded text-blue-600 dark:text-blue-400 hover:text-[var(--foreground)]">HTML</button>
+                </div>
+                <!-- Pure Icon Actions -->
+                <!-- Copy Button -->
+                <button id="btn-showroom-copy" onclick="copyCurrentFileContent()" title="Inhalt in Zwischenablage kopieren" class="p-1.5 rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--secondary)] flex items-center justify-center transition cursor-pointer">
+                  <i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-300"></i>
+                </button>
+                <!-- Diskette / Download Button -->
+                <button id="btn-showroom-download" onclick="downloadCurrentShowroomFile()" title="Datei herunterladen" class="p-1.5 rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--secondary)] flex items-center justify-center transition cursor-pointer">
+                  <i data-lucide="save" class="w-3.5 h-3.5 text-emerald-500"></i>
+                </button>
+                <!-- Trash / Delete Button (Verschieben in Papierkorb) -->
+                <button id="btn-showroom-delete" onclick="deleteCurrentShowroomFile()" title="In den Papierkorb verschieben" class="p-1.5 rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center transition cursor-pointer">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-500"></i>
+                </button>
+                <!-- Restore Button (nur im Papierkorb sichtbar) -->
+                <button id="btn-showroom-restore" onclick="restoreCurrentShowroomFile()" title="Aus Papierkorb wiederherstellen" class="hidden p-1.5 rounded border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 flex items-center justify-center transition cursor-pointer">
+                  <i data-lucide="undo-2" class="w-3.5 h-3.5 text-emerald-600"></i>
+                </button>
+                <!-- Purge Button (nur im Papierkorb sichtbar) -->
+                <button id="btn-showroom-purge" onclick="purgeCurrentShowroomFile()" title="Endgültig vernichten" class="hidden p-1.5 rounded border border-red-500/40 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 hover:bg-red-100 flex items-center justify-center transition cursor-pointer">
+                  <i data-lucide="x-circle" class="w-3.5 h-3.5 text-red-600"></i>
+                </button>
+              </div>
+            </div>
+            <!-- Datei-Inhaltsbereich mit Preview-Typen -->
+            <div id="showroom-viewer-container" class="flex-1 min-h-0 overflow-y-auto mt-3 rounded border border-[var(--border)] bg-[var(--background)] p-4 relative custom-scrollbar">
+              
+              <!-- Placeholder: Keine Datei gewählt -->
+              <div id="showroom-viewer-placeholder" class="h-full flex flex-col items-center justify-center text-center p-8 text-[var(--muted-foreground)]">
+                <i data-lucide="folder-search" class="w-12 h-12 mb-3 stroke-[1.25] text-zinc-400"></i>
+                <div class="text-sm font-semibold font-mono text-[var(--foreground)] mb-1">Keine Datei ausgewählt</div>
+                <div class="text-xs font-mono max-w-md">Klicke links auf ein Projekt und öffne Zwischenberichte, Medien oder Endprodukte, um die Vorschau zu laden.</div>
+              </div>
+              <!-- Markdown Gerendert (Standard für .md) -->
+              <div id="showroom-viewer-markdown" class="hidden select-text text-xs leading-relaxed max-w-none prose dark:prose-invert showroom-markdown-view">
+                <!-- Gerenderter Markdown HTML Inhalt -->
+              </div>
+              <!-- Quelltext Raw / Code -->
+              <pre id="showroom-viewer-raw" class="hidden select-text font-mono text-xs whitespace-pre-wrap leading-relaxed m-0 text-[var(--foreground)]"></pre>
+              <!-- Formatiertes HTML Ansichts-Panel direkt im Ansichtsfenster -->
+              <div id="showroom-viewer-html-panel" class="hidden select-text text-xs leading-relaxed max-w-none">
+                <div class="flex items-center justify-between pb-2 mb-3 border-b border-[var(--border)] bg-[var(--card)] p-2 rounded">
+                  <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Formatiertes HTML (Word-kompatibel)</span>
+                  <button onclick="copyCurrentHtmlContent()" class="px-2 py-1 rounded border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[11px] font-mono flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="copy" class="w-3 h-3 text-blue-500"></i>
+                    <span>HTML Kopieren</span>
+                  </button>
+                </div>
+                <div id="showroom-viewer-html-content" class="p-3 bg-white text-zinc-900 rounded border border-zinc-200"></div>
+              </div>
+              <!-- Bild-Vorschau -->
+              <div id="showroom-viewer-image" class="hidden h-full flex flex-col items-center justify-center p-4">
+                <img id="showroom-img-elem" src="" alt="Vorschau" class="max-h-[70vh] max-w-full rounded shadow-md border border-[var(--border)] object-contain cursor-zoom-in" ondblclick="openShowroomImageModal(this.src)" title="Doppelklick für Vollansicht">
+                <div class="text-[11px] font-mono text-[var(--muted-foreground)] mt-2">Tipp: Doppelklick für Großansicht</div>
+              </div>
+              <!-- HTML / Web-App Iframe -->
+              <div id="showroom-viewer-iframe-wrap" class="hidden h-full flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)]">
+                  <span class="text-xs font-mono text-[var(--muted-foreground)]">Interaktive HTML / Web-App Vorschau</span>
+                  <button onclick="openCurrentIframeNewTab()" class="text-xs font-mono underline hover:text-[var(--foreground)] flex items-center gap-1">
+                    <i data-lucide="external-link" class="w-3 h-3"></i> Im neuen Tab öffnen
+                  </button>
+                </div>
+                <iframe id="showroom-viewer-iframe" src="about:blank" sandbox="allow-scripts allow-forms allow-same-origin" class="flex-1 w-full h-[65vh] border-none rounded bg-white"></iframe>
+              </div>
+            </div>
+            <!-- Toast-Feedback unten -->
+            <div id="showroom-toast" class="hidden mt-2 p-2 rounded text-xs font-mono border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] text-center transition-all"></div>
+          </div>
+        </div>
+        <!-- MODAL: HTML VORSCHAU & WORD-EXPORT -->
+        <div id="showroom-html-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-xl p-5 w-[92vw] max-w-4xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div class="flex items-center gap-2">
+                <i data-lucide="file-code" class="w-4 h-4 text-blue-500"></i>
+                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">HTML VORSCHAU &amp; WORD-EXPORT</h3>
+              </div>
+              <button onclick="closeShowroomHtmlModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <!-- Modal Action Bar -->
+            <div class="flex items-center justify-between py-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 px-3 my-2 rounded">
+              <span class="text-[11px] font-mono text-[var(--muted-foreground)]">Formatiertes HTML für Microsoft Word &amp; Outlook</span>
+              <div class="flex items-center gap-2">
+                <button onclick="copyHtmlForWord()" class="px-3 py-1.5 rounded text-xs font-mono font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 flex items-center gap-1.5 transition cursor-pointer shadow-xs">
+                  <i data-lucide="clipboard-copy" class="w-3.5 h-3.5"></i>
+                  <span>In Zwischenablage (Word-kompatibel) kopieren</span>
+                </button>
+                <button onclick="downloadHtmlFile()" class="px-2.5 py-1.5 rounded text-xs font-mono font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] flex items-center gap-1 transition cursor-pointer">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                  <span>HTML speichern</span>
+                </button>
+              </div>
+            </div>
+            <!-- Modal Body (Gerendertes HTML) -->
+            <div id="showroom-html-preview-body" class="flex-1 overflow-y-auto p-4 rounded border border-[var(--border)] bg-white text-zinc-900 font-sans text-sm leading-normal select-text custom-scrollbar">
+              <!-- Dynamisch mit HTML gefüllt -->
+            </div>
+            
+            <div id="showroom-html-toast" class="hidden mt-2 p-1.5 rounded text-xs font-mono bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-center"></div>
+          </div>
+        </div>
+        <!-- MODAL: BILD VOLLANSICHT -->
+        <div id="showroom-image-modal" onclick="closeShowroomImageModal()" class="hidden fixed inset-0 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 z-50 cursor-zoom-out">
+          <img id="showroom-modal-img" src="" alt="Vollbild" class="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl">
+        </div>
+      </div>

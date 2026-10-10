@@ -1,0 +1,10 @@
+{
+  "id": "persona_job_search_agent",
+  "name": "Job search agent",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Job search agent'. Create an agent to find and apply jobs daily and automatically in the areas of CISM,CISA  ,PMP in management role by upl...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

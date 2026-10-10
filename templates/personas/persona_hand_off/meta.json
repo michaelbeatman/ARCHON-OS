@@ -1,0 +1,10 @@
+{
+  "id": "persona_hand_off",
+  "name": "Hand-off",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Hand-off'. Produce a handoff summary of all decisions made in this session, formatted so I can paste it into a new chat to continue...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "crew_flows_x_post_verifier",
+  "name": "X Post Verifier (Flows)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Ensure that any X post meets the strict guidelines: it must be under 280 characters, contain no emojis, and be free of additional commentary...",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="de" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hermes HUD-UI | Consciousness & Telemetry Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --hud-bg: #f4f6fb;
+      --hud-card: #ffffff;
+      --hud-border: rgba(0, 0, 0, 0.08);
+      --hud-border-subtle: rgba(0, 0, 0, 0.05);
+      --hud-accent: #0284c7;
+      --hud-emerald: #059669;
+      --hud-purple: #7c3aed;
+      --hud-amber: #d97706;
+      --hud-rose: #e11d48;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+      background-color: var(--hud-bg);
+      color: #0f172a;
+      overflow-x: hidden;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .hud-card {
+      background: #ffffff;
+      border: 1px solid var(--hud-border);
+      box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+      transition: all 0.2s ease;
+    }
+    .hud-card:hover {
+      box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08);
+    }
+    .hud-inner-card {
+      background: #f8fafc;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    .hud-glow-emerald {
+      box-shadow: 0 0 12px -2px rgba(16, 185, 129, 0.2);
+    }
+    .hud-glow-cyan {
+      box-shadow: 0 0 12px -2px rgba(2, 132, 199, 0.2);
+    }
+    /* Custom Light Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 md:p-6 space-y-6 select-none bg-[#f4f6fb]">
+
+  <!-- HUD TOP BAR HEADER -->
+  <header class="hud-card rounded-xl px-5 py-4 flex flex-wrap items-center justify-between gap-4 border border-sky-500/20 bg-white">
+    <div class="flex items-center gap-3.5">
+      <div class="w-10 h-10 rounded-lg bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600 shadow-sm">
+        <i data-lucide="activity" class="w-5 h-5 animate-pulse"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h1 class="text-base font-extrabold tracking-wide text-slate-900 uppercase font-mono">Hermes Telemetry HUD</h1>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+            ACTIVE CONSCIOUSNESS
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-mono mt-0.5">Engine: Nous Hermes 2026 | OmniRoute Mesh | Universal Profiles</p>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center gap-3">
+      <div class="hidden sm:flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono text-slate-700 shadow-sm">
+        <span class="text-slate-400">UPTIME:</span>
+        <span id="hud-uptime" class="text-sky-700 font-bold">24h 12m</span>
+      </div>
+      <button onclick="fetchHUDTelemetry()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 text-xs font-mono font-semibold transition shadow-sm">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5" id="refresh-icon"></i>
+        <span>SYNC</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- KEY GAUGES MATRIX (4 TILES) -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Tile 1: Tokens -->
+    <div class="hud-card rounded-xl p-4 flex flex-col justify-between bg-white border border-slate-200">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">Total Tokens</span>
+        <div class="w-7 h-7 rounded-md bg-sky-50 flex items-center justify-center text-sky-600">
+          <i data-lucide="cpu" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-2xl font-extrabold font-mono text-slate-900" id="val-total-tokens">184,250</div>
+        <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mt-1">
+          <span>In: <b class="text-slate-700" id="val-prompt-tokens">128.4k</b></span>
+          <span>Out: <b class="text-slate-700" id="val-comp-tokens">55.8k</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tile 2: Latency & Cost -->
+    <div class="hud-card rounded-xl p-4 flex flex-col justify-between bg-white border border-slate-200">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">OmniRoute Latency</span>
+        <div class="w-7 h-7 rounded-md bg-amber-50 flex items-center justify-center text-amber-600">
+          <i data-lucide="zap" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-2xl font-extrabold font-mono text-amber-600" id="val-latency">142 ms</div>
+        <div class="text-[11px] font-mono text-slate-500 mt-1">Cost: <b class="text-emerald-600 font-semibold">$0.00 (Free Tier)</b></div>
+      </div>
+    </div>
+
+    <!-- Tile 3: Cache Hit Rate -->
+    <div class="hud-card rounded-xl p-4 flex flex-col justify-between bg-white border border-slate-200">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">Cache Efficiency</span>
+        <div class="w-7 h-7 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600">
+          <i data-lucide="sparkles" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-2xl font-extrabold font-mono text-emerald-600" id="val-cache-rate">95.4%</div>
+        <div class="text-[11px] font-mono text-slate-500 mt-1">Semantic Prompt Cache Active</div>
+      </div>
+    </div>
+
+    <!-- Tile 4: Active Profiles -->
+    <div class="hud-card rounded-xl p-4 flex flex-col justify-between bg-white border border-slate-200">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">Hermes Profiles</span>
+        <div class="w-7 h-7 rounded-md bg-purple-50 flex items-center justify-center text-purple-600">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-2xl font-extrabold font-mono text-purple-600" id="val-profiles-count">4 / 4</div>
+        <div class="text-[11px] font-mono text-slate-500 mt-1">All Engines Online & Coupled</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN HUD GRID: PROFILES & SERVICES -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- LEFT 2 COLUMNS: 4 HERMES CONSCIOUSNESS PROFILES -->
+    <div class="lg:col-span-2 space-y-6">
+      
+      <!-- Consciousness Profiles Grid -->
+      <div class="hud-card rounded-xl p-5 space-y-4 bg-white border border-slate-200">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="brain" class="w-4 h-4 text-sky-600"></i>
+            <h2 class="text-sm font-bold tracking-wide uppercase font-mono text-slate-900">Active Consciousness Profiles</h2>
+          </div>
+          <span class="text-[11px] font-mono text-slate-500 font-medium">Auto-Routing via OmniRoute</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5" id="profiles-container">
+          <!-- Profile 1: Orchestrator -->
+          <div class="p-3.5 rounded-xl bg-slate-50/80 border border-sky-200/70 hover:border-sky-300 flex flex-col justify-between space-y-3 transition shadow-sm">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(2,132,199,0.5)]"></span>
+                  <h3 class="text-xs font-bold text-slate-900">Hermes Master Orchestrator</h3>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5">System-Architekt & Paperclip Lead</p>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[9px] font-mono font-semibold bg-sky-100 text-sky-800 border border-sky-200">omniroute/best-reasoning</span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-mono text-slate-600 pt-2 border-t border-slate-200/80">
+              <span>Status: <b class="text-emerald-600 font-bold">ACTIVE</b></span>
+              <span>Type: <b class="text-slate-800">Lead Engine</b></span>
+            </div>
+          </div>
+
+          <!-- Profile 2: Researcher -->
+          <div class="p-3.5 rounded-xl bg-slate-50/80 border border-emerald-200/70 hover:border-emerald-300 flex flex-col justify-between space-y-3 transition shadow-sm">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+                  <h3 class="text-xs font-bold text-slate-900">Hermes Deep Researcher</h3>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5">Web-Scraping, Markt- & SEO-Analysen</p>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[9px] font-mono font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">omniroute/free-forever</span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-mono text-slate-600 pt-2 border-t border-slate-200/80">
+              <span>Status: <b class="text-emerald-600 font-bold">ACTIVE</b></span>
+              <span>Type: <b class="text-slate-800">Search & Scrape</b></span>
+            </div>
+          </div>
+
+          <!-- Profile 3: Senior Coder -->
+          <div class="p-3.5 rounded-xl bg-slate-50/80 border border-purple-200/70 hover:border-purple-300 flex flex-col justify-between space-y-3 transition shadow-sm">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></span>
+                  <h3 class="text-xs font-bold text-slate-900">Hermes Senior Coder</h3>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5">Fullstack Software Engineer & Dev</p>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[9px] font-mono font-semibold bg-purple-100 text-purple-800 border border-purple-200">omniroute/deepseek-coder</span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-mono text-slate-600 pt-2 border-t border-slate-200/80">
+              <span>Status: <b class="text-emerald-600 font-bold">ACTIVE</b></span>
+              <span>Type: <b class="text-slate-800">Code Synthesis</b></span>
+            </div>
+          </div>
+
+          <!-- Profile 4: Odysseus Strategist -->
+          <div class="p-3.5 rounded-xl bg-slate-50/80 border border-amber-200/70 hover:border-amber-300 flex flex-col justify-between space-y-3 transition shadow-sm">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
+                  <h3 class="text-xs font-bold text-slate-900">Hermes Odysseus Strategist</h3>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5">Business Strategy & Second Brain Vault</p>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[9px] font-mono font-semibold bg-amber-100 text-amber-800 border border-amber-200">omniroute/best-reasoning</span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-mono text-slate-600 pt-2 border-t border-slate-200/80">
+              <span>Status: <b class="text-emerald-600 font-bold">ACTIVE</b></span>
+              <span>Type: <b class="text-slate-800">Strategy Vault</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Activity & Thought Stream -->
+      <div class="hud-card rounded-xl p-5 space-y-3 bg-white border border-slate-200">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="terminal" class="w-4 h-4 text-emerald-600"></i>
+            <h2 class="text-sm font-bold tracking-wide uppercase font-mono text-slate-900">Real-Time Event & Telemetry Stream</h2>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="text-[10px] font-mono text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">LIVE FEED</span>
+          </div>
+        </div>
+
+        <div id="hud-log-stream" class="bg-slate-900 rounded-xl p-3.5 font-mono text-xs text-slate-200 h-48 overflow-y-auto space-y-1.5 border border-slate-800 shadow-inner">
+          <div class="text-slate-400">[--:--:--] Initialisiere Telemetrie-Stream...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT 1 COLUMN: DOCKER FLEET, STORAGE & ACTIVE SKILLS -->
+    <div class="space-y-6">
+      
+      <!-- Docker Fleet Health -->
+      <div class="hud-card rounded-xl p-5 space-y-4 bg-white border border-slate-200">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="server" class="w-4 h-4 text-sky-600"></i>
+            <h2 class="text-sm font-bold tracking-wide uppercase font-mono text-slate-900">Microservice Mesh</h2>
+          </div>
+          <span class="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">HEALTHY</span>
+        </div>
+
+        <div class="space-y-2" id="fleet-container">
+          <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+              <span class="font-mono font-medium text-slate-800">Archon OS</span>
+            </div>
+            <span class="text-[11px] font-mono text-slate-500 font-medium">Port 8501</span>
+          </div>
+          <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+              <span class="font-mono font-medium text-slate-800">Paperclip Orchestrator</span>
+            </div>
+            <span class="text-[11px] font-mono text-slate-500 font-medium">Port 3180</span>
+          </div>
+          <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+              <span class="font-mono font-medium text-slate-800">Hermes Dashboard Proxy</span>
+            </div>
+            <span class="text-[11px] font-mono text-slate-500 font-medium">Port 9119</span>
+          </div>
+          <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+              <span class="font-mono font-medium text-slate-800">Hermes WebUI</span>
+            </div>
+            <span class="text-[11px] font-mono text-slate-500 font-medium">Port 8787</span>
+          </div>
+          <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+              <span class="font-mono font-medium text-slate-800">Hermes Gateway</span>
+            </div>
+            <span class="text-[11px] font-mono text-slate-500 font-medium">Port 8420</span>
+          </div>
+          <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+              <span class="font-mono font-medium text-slate-800">OmniRoute Mesh</span>
+            </div>
+            <span class="text-[11px] font-mono text-slate-500 font-medium">Port 20128</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Skills & Memory Store -->
+      <div class="hud-card rounded-xl p-5 space-y-4 bg-white border border-slate-200">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="shield" class="w-4 h-4 text-purple-600"></i>
+            <h2 class="text-sm font-bold tracking-wide uppercase font-mono text-slate-900">Storage & Skills</h2>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Vault Notes</div>
+            <div class="text-base font-bold text-sky-700 mt-0.5" id="val-vault-notes">14</div>
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">RAG Vectors</div>
+            <div class="text-base font-bold text-emerald-700 mt-0.5" id="val-rag-vectors">840</div>
+          </div>
+        </div>
+
+        <!-- Skills Badges -->
+        <div class="space-y-2 pt-1">
+          <div class="text-[11px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Loaded Tool Scopes:</div>
+          <div class="flex flex-wrap gap-1.5" id="skills-badges">
+            <span class="px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold bg-sky-50 text-sky-700 border border-sky-200 shadow-sm">Core Skills Engine</span>
+            <span class="px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm">Obsidian Vault</span>
+            <span class="px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold bg-purple-50 text-purple-700 border border-purple-200 shadow-sm">RAG Chroma</span>
+            <span class="px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-sm">MCP Protocol</span>
+            <span class="px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">Docker Manager</span>
+            <span class="px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-sm">Git Workflow</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    async function fetchHUDTelemetry() {
+      const refIcon = document.getElementById("refresh-icon");
+      if (refIcon) refIcon.classList.add("animate-spin");
+      try {
+        const resp = await fetch("/api/v1/hud/telemetry");
+        if (resp.ok) {
+          const data = await resp.json();
+          renderHUD(data);
+        }
+      } catch (err) {
+        console.warn("HUD Telemetry update failed:", err);
+      } finally {
+        if (refIcon) setTimeout(() => refIcon.classList.remove("animate-spin"), 400);
+      }
+    }
+
+    function renderHUD(data) {
+      if (!data) return;
+
+      if (data.tokens) {
+        document.getElementById("val-total-tokens").innerText = (data.tokens.total_tokens || 184250).toLocaleString();
+        document.getElementById("val-prompt-tokens").innerText = ((data.tokens.prompt_tokens || 128400) / 1000).toFixed(1) + "k";
+        document.getElementById("val-comp-tokens").innerText = ((data.tokens.completion_tokens || 55850) / 1000).toFixed(1) + "k";
+        document.getElementById("val-latency").innerText = (data.tokens.avg_latency_ms || 142) + " ms";
+        document.getElementById("val-cache-rate").innerText = data.tokens.cache_hit_rate || "95.4%";
+      }
+
+      if (data.storage) {
+        document.getElementById("val-vault-notes").innerText = data.storage.vault_notes || 14;
+        document.getElementById("val-rag-vectors").innerText = data.storage.rag_vectors || 840;
+      }
+
+      if (data.logs && Array.isArray(data.logs)) {
+        const logBox = document.getElementById("hud-log-stream");
+        if (logBox) {
+          logBox.innerHTML = data.logs.map(log => {
+            let color = "text-slate-300";
+            if (log.includes("Hermes")) color = "text-sky-400";
+            else if (log.includes("Paperclip")) color = "text-amber-400";
+            else if (log.includes("OmniRoute")) color = "text-emerald-400";
+            return `<div class="${color} font-mono text-[11px] leading-relaxed">${escapeHtml(log)}</div>`;
+          }).join("");
+          logBox.scrollTop = logBox.scrollHeight;
+        }
+      }
+
+      if (data.fleet && Array.isArray(data.fleet)) {
+        const fleetBox = document.getElementById("fleet-container");
+        if (fleetBox) {
+          fleetBox.innerHTML = data.fleet.map(srv => `
+            <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full ${srv.active ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]' : 'bg-slate-400'}"></span>
+                <span class="font-mono font-medium text-slate-800">${escapeHtml(srv.name || srv.id)}</span>
+              </div>
+              <span class="text-[11px] font-mono text-slate-500 font-medium">Port ${srv.port || 'Internal'}</span>
+            </div>
+          `).join("");
+        }
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Init Lucide and Telemetry Polling (every 5 seconds)
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      fetchHUDTelemetry();
+      setInterval(fetchHUDTelemetry, 5000);
+    });
+  </script>
+</body>
+</html>

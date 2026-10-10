@@ -1,0 +1,10 @@
+{
+  "id": "persona_sniper_precision_debugging_skill",
+  "name": "Sniper-Precision Debugging Skill",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Sniper-Precision Debugging Skill'. ---\nname: sniper-precision-debugging-skill\ndescription: A step-by-step critical thinking debugging skill designed to fix...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

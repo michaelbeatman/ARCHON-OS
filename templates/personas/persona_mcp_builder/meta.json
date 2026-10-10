@@ -1,0 +1,10 @@
+{
+  "id": "persona_mcp_builder",
+  "name": "MCP Builder",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'MCP Builder'. ---\nname: mcp-builder\ndescription: Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

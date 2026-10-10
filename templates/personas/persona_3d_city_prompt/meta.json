@@ -1,0 +1,10 @@
+{
+  "id": "persona_3d_city_prompt",
+  "name": "3D City Prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: '3D City Prompt'. Hyper-realistic 3D square diorama of ${city_name:Istanbul}, carved out with exposed soil cross-section beneath showing r...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

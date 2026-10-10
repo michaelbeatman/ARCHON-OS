@@ -1,0 +1,449 @@
+/* Archon CSS Live Studio Compiled Overrides */
+
+#prof-projects-list {
+  border-width: 0px !important;
+}
+
+.bg-foreground {
+  display: none !important;
+}
+
+div.flex > div.flex > h3.text-sm {
+  font-size: 22px !important;
+}
+
+div.prof-panel-card > div.flex > div.flex {
+  padding-top: 5px !important;
+}
+
+#prof-edit-desc {
+  border-width: 0px !important;
+}
+
+div.prof-panel-card > div.grid > div.p-2 {
+  border-width: 1px !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  background-color: #ffffff !important;
+  border-color: #737373 !important;
+}
+
+div.grid > div.prof-panel-card > div.prof-box-card {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+div.flex > div.flex > label.block {
+  font-size: 14px !important;
+  font-family: inherit !important;
+}
+
+div.flex > div.flex > span.w-1\.5 {
+  display: none !important;
+}
+
+#master-chat-header-bar {
+  height: 72px !important;
+}
+
+div#view-showroom > div.flex {
+  height: 72px !important;
+}
+
+#view-showroom {
+  padding-top: 0px !important;
+}
+
+div > div.flex > span.w-2\.5 {
+  display: none !important;
+}
+
+#view-library {
+  padding-top: 0px !important;
+  padding-left: 7px !important;
+  padding-bottom: 5px !important;
+  padding-right: 5px !important;
+}
+
+div.w-full > div.flex > div.w-full {
+  border-width: 0px !important;
+  box-shadow: none !important;
+  border-radius: 9px !important;
+  transition: all !important;
+  cursor: auto !important;
+}
+
+div.flex > div.flex > h3.text-xs {
+  font-size: 17px !important;
+  font-family: inherit !important;
+  text-transform: none !important;
+}
+
+#view-ai-mastermind {
+  padding-top: 0px !important;
+}
+
+div#view-ai-mastermind > div.w-full > div.flex {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+div#view-ai-mastermind > div.w-full {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+#boardroom-framework-summary {
+  border-width: 1px !important;
+  border-color: #8a8a8a !important;
+}
+
+header#inbox-header-bar > div.flex > h1.text-sm {
+  font-size: 24px !important;
+}
+
+#inbox-filter-all {
+  font-family: inherit !important;
+  font-size: 17px !important;
+}
+
+#inbox-filter-intern {
+  font-family: inherit !important;
+  font-size: 17px !important;
+}
+
+#inbox-filter-email {
+  font-family: inherit !important;
+  font-size: 17px !important;
+}
+
+#inbox-filter-telegram {
+  font-family: inherit !important;
+  font-size: 17px !important;
+}
+
+header#inbox-header-bar > div.flex > div.inline-flex {
+  left: -514px !important;
+  top: -1px !important;
+}
+
+header#inbox-header-bar > div.flex > span.hidden {
+  left: -201px !important;
+  top: 21px !important;
+}
+
+header#inbox-header-bar > div.flex {
+  left: 1px !important;
+  top: -5px !important;
+  width: 594px !important;
+}
+
+header#inbox-header-bar > div.flex > div.relative {
+  left: 11px !important;
+  top: -1px !important;
+}
+
+header#inbox-header-bar > div.flex > button.h-8 {
+  left: -273px !important;
+  top: -1px !important;
+}
+
+div#mission-control-header-bar > div.flex > h1.text-sm {
+  font-family: 'Inter', sans-serif !important;
+  font-size: 24px !important;
+}
+
+div.shadcn-card > div.grid > div.rounded-lg {
+  background-color: #ffffff !important;
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+header#ops-header-bar > div.flex > h1.text-sm {
+  font-size: 23px !important;
+}
+
+button#ops-subtab-kanban > span {
+  font-size: 14px !important;
+}
+
+div > div.flex > h1.text-sm {
+  font-family: 'Inter', sans-serif !important;
+  text-transform: none !important;
+  font-size: 24px !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+}
+
+div#view-library > div.flex {
+  padding-top: 10px !important;
+  height: 72px !important;
+  padding-left: 7px !important;
+}
+
+#library-tab-btn-rag {
+  font-family: 'Inter', sans-serif !important;
+  font-size: 17px !important;
+}
+
+#library-tab-btn-erfasser {
+  font-family: 'Inter', sans-serif !important;
+  font-size: 17px !important;
+}
+
+#library-tab-btn-vault {
+  font-size: 17px !important;
+  font-family: 'Inter', sans-serif !important;
+  background-color: #ffffff !important;
+}
+
+div#view-library > div.flex > div.flex {
+  background-color: #ffffff !important;
+}
+
+body {
+  font-family: 'Inter', sans-serif !important;
+}
+
+div.min-w-0 > div.flex > div.inline-flex {
+  display: none !important;
+}
+
+div#view-showroom > div.grid > div.rounded-lg {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+div#ops-kanban-columns-container > div.w-80 {
+  width: 200px !important;
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+#mc-token-sparkline {
+  height: NaNpx !important;
+  border-width: 1px !important;
+  border-color: #b0b0b0 !important;
+}
+
+div#view-research > div.grid > div.rounded-lg {
+  height: 714px !important;
+}
+
+div#view-guardian > div.px-6 {
+  height: 73px !important;
+  padding-bottom: 05px !important;
+}
+
+#inbox-col-intern {
+  border-width: 0px !important;
+}
+
+#inbox-col-email {
+  border-width: 0px !important;
+}
+
+#inbox-col-telegram {
+  border-width: 0px !important;
+}
+
+#view-agent-profiles {
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+}
+
+#agent-catalog-col {
+  padding-left: 010.5px !important;
+  padding-right: 05px !important;
+  padding-bottom: 5px !important;
+}
+
+div#agent-pane-overview > div.grid > div.prof-panel-card {
+  padding-left: 0px !important;
+}
+
+button#ops-subtab-org > span {
+  font-size: 14px !important;
+}
+
+button#ops-subtab-comm > span {
+  font-size: 14px !important;
+}
+
+#sidebar-logo-wrapper {
+  height: 84px !important;
+}
+
+#ops-kanban-columns-container {
+  width: 1755px !important;
+}
+
+#inbox-list-intern {
+  box-shadow: none !important;
+}
+
+div#inbox-list-intern > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  border-color: #5c5c5c !important;
+  height: 161px !important;
+}
+
+div#inbox-list-email > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  border-color: #5c5c5c !important;
+  height: 161px !important;
+}
+
+div#inbox-list-telegram > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  border-color: #5c5c5c !important;
+  height: 161px !important;
+}
+
+.archon-nav-item.nav-item-active {
+  border-color: #000000 !important;
+  border-width: 2px !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div.prof-panel-card > div.flex > div.prof-box-card {
+  box-shadow: none !important;
+  border-width: 0px !important;
+}
+
+#ops-view-kanban {
+  background-color: #ffffff !important;
+}
+
+div#ops-kanban-columns-container > div.w-80 > div.flex-1 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+  border-width: 0px !important;
+  border-color: #a6b7d9 !important;
+}
+
+div#ops-kanban-columns-container > div.w-80 > div.p-3\.5 {
+  background-color: #4a4a4a !important;
+  color: #ffffff !important;
+}
+
+div.p-3\.5 > div.flex > span.text-xs {
+  color: #ffffff !important;
+}
+
+div.w-80 > div.p-3\.5 > button.p-1 {
+  color: #ffffff !important;
+  font-size: 19px !important;
+  font-family: inherit !important;
+}
+
+div.p-3\.5 > button.p-1 > svg {
+  font-family: inherit !important;
+  font-size: 22px !important;
+  font-weight: bold !important;
+}
+
+div.grid > div.prof-panel-card > div.flex {
+  box-shadow: none !important;
+}
+
+div.w-80 > div.flex-1 > div.group {
+  height: 200px !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  border-width: 1px !important;
+  border-color: #545454 !important;
+}
+
+div.px-3 > div.flex > span.text-xs {
+  font-size: 15px !important;
+}
+
+div.px-3 > button.p-1 > svg {
+  background-color: #ffffff !important;
+  opacity: 0.45 !important;
+  display: none !important;
+}
+
+div#ops-comm-messages > div.p-3 {
+  background-color: #ffffff !important;
+}
+
+#agent-tab-chat-messages {
+  border-width: 0px !important;
+}
+
+#agent-tab-input-card {
+  border-width: 1px !important;
+  border-color: #828282 !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+#agent-tab-chat-input {
+  border-color: #525252 !important;
+  border-width: 1px !important;
+}
+
+div.grid > div.space-y-6 > div.rounded-2xl {
+  width: 355px !important;
+  left: 367px !important;
+  top: -409px !important;
+  height: 390px !important;
+}
+
+div.grid > div.space-y-6 > div.border {
+  left: 372px !important;
+  top: -408px !important;
+}
+
+#guard-subview-overview {
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+  padding-left: 5px !important;
+  padding-right: 5px !important;
+}
+
+div#guard-subview-overview > div.rounded-2xl {
+  margin-top: 5px !important;
+}
+
+div#guard-subview-overview > div.grid > div.p-4 {
+  padding-left: 14px !important;
+  box-shadow: none !important;
+  border-width: 0px !important;
+  border-color: #ffffff !important;
+}
+
+div.flex-1 > div.group > h4.text-xs {
+  height: 80px !important;
+  margin-top: 8.75px !important;
+}
+
+div#inbox-list-email > div.group > h4.text-xs {
+  height: 34px !important;
+  font-size: 13px !important;
+}
+
+div#inbox-list-telegram > div.group > h4.text-xs {
+  font-size: 13px !important;
+  height: 35px !important;
+}
+
+div#inbox-list-intern > div.group > h4.text-xs {
+  height: 30px !important;
+}
+
+div.flex-1 > div.group > p.text-muted-custom {
+  margin-top: 3.75px !important;
+}
+
+div.flex > div.flex > span.px-1\.5 {
+  color: #303031 !important;
+  background-image: url("/static/uploads/studio-bg_1791614928494.jpg") !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  border-width: 0px !important;
+}
+
+div.p-3 > div.flex > button.px-2 {
+  background-color: #ffffff !important;
+}

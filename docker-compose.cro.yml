@@ -1,0 +1,47 @@
+name: cro
+
+networks:
+  agents_net:
+    external: true
+
+services:
+  crm:
+    image: crm-frontend:latest
+    container_name: CRM
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "3005:3005"
+    volumes:
+      - ./frontend:/app
+    environment:
+      - PORT=3005
+      - NODE_ENV=development
+    command: ["npm", "run", "dev"]
+
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./pocketbase/pb_data:/pb_data
+      - ./pocketbase/pb_hooks:/pb_hooks
+      - ./pocketbase/pb_public:/pb_public
+
+  pocketbase-media:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase-Media
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "8092:8090"
+    volumes:
+      - ./pocketbase-media/pb_data:/pb_data
+      - ./pocketbase-media/pb_hooks:/pb_hooks
+      - ./pocketbase-media/pb_public:/pb_public

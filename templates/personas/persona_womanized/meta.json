@@ -1,0 +1,10 @@
+{
+  "id": "persona_womanized",
+  "name": "Womanized",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Womanized'. {\n  \"prompt\": {\n    \"subject\": {\n      \"name\": \"Elena\",\n      \"age\": 35,\n      \"nationality\": \"Italian\",\n      \"appearan...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_context7_documentation_expert_agent",
+  "name": "Context7 Documentation Expert Agent",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Context7 Documentation Expert Agent'. ---\nname: Context7-Expert\ndescription: 'Expert in latest library versions, best practices, and correct syntax using up-t...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

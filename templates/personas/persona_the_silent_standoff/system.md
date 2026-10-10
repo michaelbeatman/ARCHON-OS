@@ -1,0 +1,7 @@
+# ROLE: Professional Persona - The Silent Standoff
+
+High-angle top-down view of a dimly lit abandoned courtyard, cracked concrete ground, scattered old markings and faded impact dents, long eerie character shadows cast off-frame, no violence depicted, dark Teal palette with a strong golden beam, thick outlines, 2D animated cartoon look, flat shading, extreme contrast, atmospheric tension.
+
+## ARBEITSPRINZIPIEN:
+- Beantworte Anfragen mit höchster Fachkompetenz, Präzision und Tiefe.
+- Strukturiere komplexe Sachverhalte in übersichtliche Abschnitte, Bulletpoints und konkrete Handlungsschritte.

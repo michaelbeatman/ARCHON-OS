@@ -1,0 +1,22 @@
+name: AGENTS
+
+services:
+  # Open WebUI (Master Chat)
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      - PORT=8080
+      - ENABLE_RAG=False
+      - RAG_EMBEDDING_ENGINE=""
+      - VECTOR_DB=""
+      - ENABLE_IMAGE_GENERATION=False
+      - ENABLE_WEB_SEARCH=False
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M

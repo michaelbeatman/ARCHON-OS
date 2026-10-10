@@ -1,0 +1,11 @@
+{
+  "id": "crew_flows_meeting_analyzer",
+  "name": "Meeting Transcript Analysis Agent (Flows)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Analyze the provided meeting transcript and extract important, actionable tasks or issues.  The goal is to break down the meeting content in...",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

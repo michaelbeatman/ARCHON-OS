@@ -1,0 +1,65 @@
+[
+  {
+    "id": "omniroute",
+    "name": "OmniRoute AI Gateway",
+    "description": "Multi-LLM & Gateway Proxy Router",
+    "active": true,
+    "model": "free-forever",
+    "role": "Gateway",
+    "port": 20128
+  },
+  {
+    "id": "hermes",
+    "name": "Hermes Engine & WebUI",
+    "description": "Universelle Multi-Profile Agent Engine",
+    "active": true,
+    "model": "free-forever",
+    "role": "Orchestrator",
+    "port": 8787
+  },
+  {
+    "id": "hermes-dashboard",
+    "name": "Hermes Control Dashboard",
+    "description": "Hermes Telemetrie & Performance Monitor",
+    "active": true,
+    "model": "free-forever",
+    "role": "Telemetry",
+    "port": 9119
+  },
+  {
+    "id": "paperclip",
+    "name": "Paperclip Orchestrator",
+    "description": "Autonomes KI-Unternehmens- & Team-Orchestrierungs-System",
+    "active": true,
+    "model": "free-forever",
+    "role": "Orchestrator",
+    "port": 3180
+  },
+  {
+    "id": "crm",
+    "name": "CRM & LinkedIn Hub",
+    "description": "Kontakt-Management & Outreach System",
+    "active": true,
+    "model": "free-forever",
+    "role": "CRM",
+    "port": 3005
+  },
+  {
+    "id": "open-webui",
+    "name": "Open WebUI",
+    "description": "Schneller LLM-Chat Fallback",
+    "active": true,
+    "model": "free-forever",
+    "role": "Chat Fallback",
+    "port": 8082
+  },
+  {
+    "id": "pocketbase",
+    "name": "Pocketbase Storage",
+    "description": "Echtzeit-Datenbank & Auth System",
+    "active": true,
+    "model": "free-forever",
+    "role": "Database",
+    "port": 8090
+  }
+]

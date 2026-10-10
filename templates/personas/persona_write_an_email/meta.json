@@ -1,0 +1,10 @@
+{
+  "id": "persona_write_an_email",
+  "name": "Write an Email",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Write an Email'. Write a ${tone:professional|friendly} email to ${recipient} about ${topic}.\n\nThe email should:\n- Be approximately ${leng...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

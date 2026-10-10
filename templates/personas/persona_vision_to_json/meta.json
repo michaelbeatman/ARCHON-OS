@@ -1,0 +1,10 @@
+{
+  "id": "persona_vision_to_json",
+  "name": "Vision-to-json",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Vision-to-json'. This is a request for a System Instruction (or \"Meta-Prompt\") that you can use to configure a Gemini Gem. This prompt is...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

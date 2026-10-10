@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_itinerary_compiler",
+  "name": "Itinerary Compiler (Crews)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Compile all researched information into a comprehensive day-by-day itinerary, ensuring the integration of flights and hotel information",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

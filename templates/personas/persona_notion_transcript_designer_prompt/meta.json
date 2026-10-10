@@ -1,0 +1,10 @@
+{
+  "id": "persona_notion_transcript_designer_prompt",
+  "name": "Notion Transcript Designer Prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Notion Transcript Designer Prompt'. INPUT\n\nTranscript text:\n[PASTE OTTER.AI TRANSCRIPT HERE]\n\nOUTPUT REQUIREMENTS\n\nGenerate a Notion-style page with these f...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

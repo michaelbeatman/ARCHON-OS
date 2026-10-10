@@ -1,0 +1,10 @@
+{
+  "id": "persona_question_list_for_reaserch",
+  "name": "question list for reaserch",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'question list for reaserch'. Create a list of interview questions for researching ${topic} in ${community}....",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

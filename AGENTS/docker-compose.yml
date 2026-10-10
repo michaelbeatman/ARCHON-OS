@@ -1,0 +1,216 @@
+name: AGENTS
+
+services:
+  # Docker Socket Proxy — exposes Docker daemon safely via TCP to internal containers
+  # Hermes connects to this via DOCKER_HOST=tcp://docker-socket-proxy:2375
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    environment:
+      # Grant read access (status, logs, stats)
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+      - NETWORKS=1
+      - SERVICES=1
+      - TASKS=1
+      - VOLUMES=1
+      # Grant controlled write access (restart, start, stop — NOT rm, pull)
+      - POST=1
+      - DELETE=0
+    volumes:
+      - //var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - agentic_mesh
+
+  # Position 4: AutoGen Studio
+  autogen-studio:
+    image: python:3.11-slim
+    container_name: autogen-studio
+    restart: unless-stopped
+    command: sh -c "pip install --no-cache-dir autogenstudio && autogenstudio ui --port 8081 --host 0.0.0.0"
+    ports:
+      - "8083:8081"
+
+  # Position 6: GPT Researcher
+  gpt-researcher:
+    image: python:3.11-slim
+    container_name: gpt-researcher
+    restart: unless-stopped
+    command: sh -c "pip install --no-cache-dir gpt-researcher && python -c 'import time; print(\"GPT-Researcher Daemon Ready\"); time.sleep(864000)'"
+    ports:
+      - "8000:8000"
+
+  # Position 7: Hermes Orchestrator
+  hermes:
+    image: hermes-agent-plus:latest
+    container_name: hermes
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      - docker-socket-proxy
+    networks:
+      - agentic_mesh
+    ports:
+      - "127.0.0.1:8644:8644"
+    volumes:
+      - ${USERPROFILE}/.hermes:/opt/data
+      - C:\Mein Obsidian:/opt/data/obsidian
+      - ${USERPROFILE}/AppData/Local/hermes/hermes-agent:/opt/hermes-agent
+      - C:\.Antigravity-projekte:/projects
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - HERMES_UID=10000
+      - HERMES_GID=10000
+      - GROQ_API_KEY=***REMOVED_GROQ_API_KEY***
+      - HERMES_DASHBOARD_SESSION_TOKEN=micha-hermes-agent-secure-token-2026
+    command: ["gateway", "run"]
+
+  # Position 8: Hermes Dashboard
+  hermes-dashboard:
+    image: hermes-agent-plus:latest
+    container_name: hermes-dashboard
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      - hermes
+    networks:
+      - agentic_mesh
+    volumes:
+      - ${USERPROFILE}/.hermes:/opt/data
+      - C:\Mein Obsidian:/opt/data/obsidian
+      - ${USERPROFILE}/AppData/Local/hermes/hermes-agent:/opt/hermes-agent
+      - C:\.Antigravity-projekte:/projects
+    environment:
+      - HERMES_UID=10000
+      - HERMES_GID=10000
+      - GROQ_API_KEY=***REMOVED_GROQ_API_KEY***
+      - HERMES_DASHBOARD_SESSION_TOKEN=micha-hermes-agent-secure-token-2026
+      - HERMES_DASHBOARD_HOST=127.0.0.1
+      - HERMES_DASHBOARD_PORT=9120
+    ports:
+      - "127.0.0.1:9119:9119"
+    command: ["dashboard", "--host", "127.0.0.1", "--port", "9120", "--no-open"]
+
+  # Position 9: Hermes Dashboard Proxy
+  hermes-dashboard-proxy:
+    image: alpine/socat:latest
+    container_name: hermes-dashboard-proxy
+    restart: unless-stopped
+    network_mode: service:hermes-dashboard
+    depends_on:
+      - hermes-dashboard
+    entrypoint: ["socat"]
+    command: ["tcp-listen:9119,fork,reuseaddr", "tcp-connect:127.0.0.1:9120"]
+
+  # Hermes Web UI for Master Chat integration (Port 8787)
+  # hermes-webui:
+  #   image: hermes-agent-plus:latest
+  #   container_name: hermes-webui
+  #   restart: unless-stopped
+  #   dns:
+  #     - 8.8.8.8
+  #     - 1.1.1.1
+  #   depends_on:
+  #     - hermes
+  #   networks:
+  #     - agentic_mesh
+  #   volumes:
+  #     - ${USERPROFILE}/.hermes:/opt/data
+  #     - C:\Mein Obsidian:/opt/data/obsidian
+  #     - ${USERPROFILE}/AppData/Local/hermes/hermes-agent:/opt/hermes-agent
+  #     - C:\.Antigravity-projekte:/projects
+  #   environment:
+  #     - DOCKER_HOST=tcp://docker-socket-proxy:2375
+  #     - HERMES_HOME=/opt/data
+  #     - HERMES_WEBUI_AGENT_DIR=/opt/hermes
+  #     - HERMES_WEBUI_PYTHON=/opt/hermes/.venv/bin/python
+  #     - HERMES_WEBUI_STATE_DIR=/opt/data/webui
+  #     - HERMES_WEBUI_HOST=0.0.0.0
+  #     - HERMES_WEBUI_PORT=8787
+  #     - HERMES_WEBUI_ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8787,http://127.0.0.1:8787,http://localhost:9119,http://127.0.0.1:9119,*
+  #     - HERMES_WEBUI_TRUST_FORWARDED_HOST=true
+  #   ports:
+  #     - "127.0.0.1:8787:8787"
+  #   command: ["/opt/hermes/.venv/bin/python", "/opt/data/plugins/hermes-webui/server.py"]
+
+  # Position 10: Odysseus Agent
+  odysseus-agent:
+    image: odysseus-odysseus
+    container_name: odysseus-agent
+    restart: unless-stopped
+    ports:
+      - "7000:7000"
+
+  # Position 11: OmniRoute Gateway
+  omniroute:
+    image: diegosouzapw/omniroute:3.8.44
+    container_name: omniroute
+    restart: unless-stopped
+    networks:
+      - agentic_mesh
+    ports:
+      - "20128:20128"
+
+  # Position 11: OpenClaw Bridge
+  openclaw:
+    image: python:3.11-slim
+    container_name: openclaw
+    restart: unless-stopped
+    command: sh -c "python -c 'import time; print(\"OpenClaw Bridge Agent Ready\"); time.sleep(864000)'"
+    ports:
+      - "18789:18789"
+
+  # Position 12: OpenHands Code Agent
+  openhands:
+    image: ghcr.io/all-hands-ai/openhands:latest
+    container_name: openhands
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=ghcr.io/all-hands-ai/runtime:0.28-nikola
+    volumes:
+      - //var/run/docker.sock:/var/run/docker.sock
+
+  # Position 13: Open WebUI (512MB RAM Limit aktiv)
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      - PORT=8080
+      - ENABLE_RAG=False
+      - RAG_EMBEDDING_ENGINE=""
+      - VECTOR_DB=""
+      - ENABLE_IMAGE_GENERATION=False
+      - ENABLE_WEB_SEARCH=False
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  # Position 14: Quartz Obsidian Digital Garden (Port 8085)
+  archon-quartz:
+    image: archon-quartz:latest
+    container_name: archon-quartz
+    restart: unless-stopped
+    volumes:
+      - C:\Mein Obsidian:/usr/src/app/content
+    ports:
+      - "8085:8085"
+    command: ["npx", "quartz", "build", "--serve", "--port", "8085"]
+
+networks:
+  agentic_mesh:
+    external: true
+
+

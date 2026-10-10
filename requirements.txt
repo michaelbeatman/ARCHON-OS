@@ -3,5 +3,9 @@ uvicorn
 openai
 aiofiles
 pyyaml
-httpx  
- 
+httpx
+pypdf
+pdfplumber
+python-docx
+Pillow
+python-multipart

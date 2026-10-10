@@ -1,0 +1,10 @@
+{
+  "id": "persona_mobile_app_builder",
+  "name": "Mobile App Builder",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'Mobile App Builder'. ---\nname: mobile-app-builder\ndescription: \"Use this agent when developing native iOS or Android applications, implementi...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_job_opportunities_parser",
+  "name": "Job Opportunities Parser (Crews)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Extract job descriptions from the CSV file, including job title, required skills, and responsibilities.",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

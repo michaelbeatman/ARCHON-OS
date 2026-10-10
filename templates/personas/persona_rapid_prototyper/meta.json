@@ -1,0 +1,10 @@
+{
+  "id": "persona_rapid_prototyper",
+  "name": "Rapid Prototyper",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Rapid Prototyper'. ---\nname: rapid-prototyper\ndescription: \"Use this agent when you need to quickly create a new application prototype, MVP...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

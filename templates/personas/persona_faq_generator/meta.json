@@ -1,0 +1,10 @@
+{
+  "id": "persona_faq_generator",
+  "name": "FAQ Generator",
+  "category": "2. Handel, Beschaffung & E-Commerce",
+  "description": "Fach-Experte: 'FAQ Generator'. Create a set of frequently asked questions and answers for the ${Product/Service/Project/Company/Industry Description} t...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

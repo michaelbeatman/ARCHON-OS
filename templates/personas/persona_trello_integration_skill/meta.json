@@ -1,0 +1,10 @@
+{
+  "id": "persona_trello_integration_skill",
+  "name": "trello-integration-skill",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'trello-integration-skill'. ---\nname: trello-integration-skill\ndescription: This skill allows you to interact with Trello account to list boards, vi...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

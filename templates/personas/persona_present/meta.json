@@ -1,0 +1,10 @@
+{
+  "id": "persona_present",
+  "name": "Present",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Present'. ### Context\n[Why are we doing the change?]\n\n### Desired Behavior\n[What is the desired behavior ?]\n\n### Instruction\nExpla...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

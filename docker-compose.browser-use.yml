@@ -1,0 +1,36 @@
+name: AGENTIC-OS-SYSTEM
+
+services:
+  browser-use:
+    build:
+      context: ./browser-use
+      dockerfile: Dockerfile
+      args:
+        TARGETPLATFORM: linux/amd64
+    image: browser-use-webui:latest
+    container_name: browser-use
+    restart: unless-stopped
+    ports:
+      - "7788:7788"
+      - "6080:6080"
+      - "5901:5901"
+      - "9222:9222"
+    environment:
+      - OPENAI_ENDPOINT=http://host.docker.internal:20128/v1
+      - OPENAI_API_KEY=omniroute-local-key
+      - ANONYMIZED_TELEMETRY=false
+      - BROWSER_USE_LOGGING_LEVEL=info
+      - BROWSER_DEBUGGING_PORT=9222
+      - BROWSER_DEBUGGING_HOST=localhost
+      - USE_OWN_BROWSER=false
+      - KEEP_BROWSER_OPEN=true
+      - DISPLAY=:99
+      - RESOLUTION=1920x1080x24
+      - RESOLUTION_WIDTH=1920
+      - RESOLUTION_HEIGHT=1080
+      - VNC_PASSWORD=youvncpassword
+    shm_size: "2gb"
+    cap_add:
+      - SYS_ADMIN
+    tmpfs:
+      - /tmp

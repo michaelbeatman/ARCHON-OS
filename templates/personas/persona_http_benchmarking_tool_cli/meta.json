@@ -1,0 +1,10 @@
+{
+  "id": "persona_http_benchmarking_tool_cli",
+  "name": "HTTP Benchmarking Tool CLI",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'HTTP Benchmarking Tool CLI'. Create a high-performance HTTP benchmarking tool in Go. Implement concurrent request generation with configurable thread...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_narrative_point_of_view_transformer",
+  "name": "Narrative Point of View Transformer",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Narrative Point of View Transformer'. ---\n{{input_text}}: The original text to convert.\n{{target_pov}}: → Desired point of view (first, second, or third).\n{{c...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

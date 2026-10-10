@@ -1,0 +1,10 @@
+{
+  "id": "persona_codebase_wiki_documentation_skill",
+  "name": "Codebase WIKI Documentation Skill",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Codebase WIKI Documentation Skill'. ---\nname: codebase-wiki-documentation-skill\ndescription: A skill for generating comprehensive WIKI.md documentation for ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

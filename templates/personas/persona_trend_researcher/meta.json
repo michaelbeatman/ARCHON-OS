@@ -1,0 +1,10 @@
+{
+  "id": "persona_trend_researcher",
+  "name": "Trend Researcher",
+  "category": "2. Handel, Beschaffung & E-Commerce",
+  "description": "Fach-Experte: 'Trend Researcher'. ---\nname: trend-researcher\ndescription: \"Use this agent when you need to identify market opportunities, analyze trending...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

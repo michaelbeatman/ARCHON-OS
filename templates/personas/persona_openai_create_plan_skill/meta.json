@@ -1,0 +1,10 @@
+{
+  "id": "persona_openai_create_plan_skill",
+  "name": "OpenAI Create Plan Skill",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'OpenAI Create Plan Skill'. ---\nname: create-plan\ndescription: Create a concise plan. Use when a user explicitly asks for a plan related to a coding...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

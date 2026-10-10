@@ -1,0 +1,10 @@
+{
+  "id": "persona_spec_interview",
+  "name": "Spec Interview",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Spec Interview'. read this${specmd:spec.md} and interview me in detail using the\nAskUserQuestionTool (or similar tool) about literally an...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

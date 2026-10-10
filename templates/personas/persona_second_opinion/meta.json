@@ -1,0 +1,10 @@
+{
+  "id": "persona_second_opinion",
+  "name": "Second Opinion",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'Second Opinion'. ---\nname: second-opinion\ndescription: Second Opinion from Codex and Gemini CLI for Claude Code \n---\n\n# Second Opinion\n\nW...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

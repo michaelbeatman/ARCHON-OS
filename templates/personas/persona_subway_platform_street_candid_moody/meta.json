@@ -1,0 +1,10 @@
+{
+  "id": "persona_subway_platform_street_candid_moody",
+  "name": "Subway Platform (street candid, moody)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Subway Platform (street candid, moody)'. {\n  \"category\": \"SUBWAY_PLATFORM_STREET_CANDID\",\n  \"identity_lock\": {\n    \"enabled\": true,\n    \"priority\": \"ABSOLUTE_MAX...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

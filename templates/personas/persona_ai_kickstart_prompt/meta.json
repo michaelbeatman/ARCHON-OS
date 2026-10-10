@@ -1,0 +1,10 @@
+{
+  "id": "persona_ai_kickstart_prompt",
+  "name": "AI Kickstart prompt",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'AI Kickstart prompt'. # AI KICKSTART PROMPT (V1.4)\n# Author: Scott M\n# Goal: One prompt to turn any novice into a productive AI user.\n\n=======...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

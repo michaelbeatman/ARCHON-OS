@@ -1,0 +1,10 @@
+{
+  "id": "persona_surreal_city_scene",
+  "name": "Surreal City Scene",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Surreal City Scene'. ​${current_weather} in a gravity-defying ${city_name}. The asphalt street curves seamlessly upwards, physically bending ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

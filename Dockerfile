@@ -18,9 +18,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Anwendungsdateien kopieren
 COPY --chown=streamlituser:streamlitgroup main.py .
 COPY --chown=streamlituser:streamlitgroup core_*.py .
+COPY --chown=streamlituser:streamlitgroup views_core.py .
 COPY --chown=streamlituser:streamlitgroup GUARDRAIL.md .
 COPY --chown=streamlituser:streamlitgroup manifests/ manifests/
 COPY --chown=streamlituser:streamlitgroup static/ static/
+COPY --chown=streamlituser:streamlitgroup agents.json /app/agent_workspace/agents.json
+COPY --chown=streamlituser:streamlitgroup agents.json /app/data/agents.json
 
 # Umgebungsvariablen setzen
 ENV PYTHONUNBUFFERED=1

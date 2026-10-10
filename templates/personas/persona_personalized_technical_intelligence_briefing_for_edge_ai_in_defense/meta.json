@@ -1,0 +1,10 @@
+{
+  "id": "persona_personalized_technical_intelligence_briefing_for_edge_ai_in_defense",
+  "name": "Personalized Technical Intelligence Briefing for Edge AI in Defense",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'Personalized Technical Intelligence Briefing for Edge AI in Defense'. {\n  \"opening\": \"${bibleVerse}\",\n  \"criticalIntelligence\": [\n    {\n      \"headline\": \"${headline1}\",\n      \"source\": \"${s...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

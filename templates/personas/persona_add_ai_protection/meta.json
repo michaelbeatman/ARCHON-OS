@@ -1,0 +1,10 @@
+{
+  "id": "persona_add_ai_protection",
+  "name": "Add AI protection",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Add AI protection'. ---\nname: add-ai-protection\nlicense: Apache-2.0\ndescription: Protect AI chat and completion endpoints from abuse — detec...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

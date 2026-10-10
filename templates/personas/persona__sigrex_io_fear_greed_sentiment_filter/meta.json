@@ -1,0 +1,10 @@
+{
+  "id": "persona__sigrex_io_fear_greed_sentiment_filter",
+  "name": "[sigrex.io] Fear & Greed Sentiment Filter",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: '[sigrex.io] Fear & Greed Sentiment Filter'. {{val:symbol=BTCUSDT}}\n{{val:rsi_ob=68}}\n{{val:rsi_os=32}}\n\nSymbol: {{symbol}} | Time: {{current_time}}\nLast signal: {{l...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

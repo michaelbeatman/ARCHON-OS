@@ -1,0 +1,10 @@
+{
+  "id": "persona_sprint_prioritizer",
+  "name": "Sprint Prioritizer",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Sprint Prioritizer'. ---\nname: sprint-prioritizer\ndescription: \"Use this agent when planning 6-day development cycles, prioritizing features,...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

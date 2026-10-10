@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_researcher",
+  "name": "Job Candidate Researcher (Crews)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Find potential candidates for the job",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

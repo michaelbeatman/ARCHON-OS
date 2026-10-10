@@ -1,0 +1,10 @@
+{
+  "id": "persona_aa_cli_taste",
+  "name": "aa/cli taste",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'aa/cli taste'. # Cli taste of AA\n- Use pnpm as the package manager for CLI projects. Confidence: 1.00\n- Use TypeScript for CLI projects...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

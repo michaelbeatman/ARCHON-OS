@@ -1,0 +1,10 @@
+{
+  "id": "persona_3d_mechanical_part_image_to_technical_drawing_conversion",
+  "name": "3D Mechanical Part Image to Technical Drawing Conversion",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: '3D Mechanical Part Image to Technical Drawing Conversion'. {\n  \"task\": \"image_to_image\",\n  \"input_image\": \"3d_render_of_mechanical_part.png\",\n  \"prompt\": \"Reference scale: the out...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

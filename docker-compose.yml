@@ -1,0 +1,229 @@
+name: ARCHON-OS
+
+networks:
+  agentic_mesh:
+    external: true
+
+services:
+  archon-os:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agent-os-container:latest
+    container_name: ARCHON-OS
+    restart: unless-stopped
+    user: root
+    networks:
+      - agentic_mesh
+    ports:
+      - "8501:8501"
+    environment:
+      # Telegram-Push (nur sendMessage — Polling macht ausschließlich der
+      # telegram_bot-Gateway im hermes-Container; paralleles Senden ist Telegram-konform)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - //var/run/docker.sock:/var/run/docker.sock
+      - ./:/app
+      - ./data/inbox:/opt/data/inbox
+      - ./agent_workspace/builds:/projects/builds
+      - ${USERPROFILE}/.hermes:/opt/data
+      - C:\Mein Obsidian:/opt/data/obsidian
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    networks:
+      - agentic_mesh
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_HOST=localhost
+      - N8N_EDITOR_BASE_URL=http://localhost:5678/
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_PREVIEW_MODE=true
+      - N8N_XFRAME_BYPASS=true
+      - N8N_SECURE_COOKIE=false
+      - N8N_SAMESITE_COOKIE=lax
+      - N8N_USER_MANAGEMENT_JWT_SECRET=***REMOVED_N8N_JWT_SECRET***
+      - N8N_USER_MANAGEMENT_JWT_DURATION_HOURS=720
+      - N8N_USER_MANAGEMENT_JWT_REFRESH_TIMEOUT_HOURS=72
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_HIRING_BANNER_ENABLED=false
+      - N8N_UNVERIFIED_PACKAGES_ENABLED=true
+      - N8N_RUNNERS_TASK_TIMEOUT=300
+      - GENERIC_TIMEZONE=Europe/Berlin
+      - TZ=Europe/Berlin
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  # -------------------------------------------------------------
+  # DOCKER SOCKET PROXY (Safe API Access for Agents / Paperclip)
+  # -------------------------------------------------------------
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    networks:
+      - agentic_mesh
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+      - NETWORKS=1
+      - SERVICES=1
+      - TASKS=1
+      - VOLUMES=1
+      - POST=1
+      - DELETE=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # -------------------------------------------------------------
+  # HERMES AGENT ORCHESTRATOR (Core Gateway on Port 8644)
+  # -------------------------------------------------------------
+  hermes:
+    image: hermes-agent-plus:latest
+    container_name: hermes
+    restart: unless-stopped
+    networks:
+      agentic_mesh:
+        aliases:
+          - hermes-agent
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      - docker-socket-proxy
+    ports:
+      - "127.0.0.1:8644:8642"
+    volumes:
+      - ${USERPROFILE}/.hermes:/opt/data
+      - C:\Mein Obsidian:/opt/data/obsidian
+      - ./agent_workspace:/projects
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - API_SERVER_HOST=0.0.0.0
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - HERMES_DASHBOARD_SESSION_TOKEN=${HERMES_DASHBOARD_SESSION_TOKEN:-***REMOVED_HERMES_DASHBOARD_SESSION_TOKEN***}
+    command: ["gateway", "run"]
+
+  # -------------------------------------------------------------
+  # HERMES DASHBOARD (Metrics & Trace on Port 9119)
+  # -------------------------------------------------------------
+  hermes-dashboard:
+    image: hermes-agent-plus:latest
+    container_name: hermes-dashboard
+    restart: unless-stopped
+    networks:
+      - agentic_mesh
+    depends_on:
+      - hermes
+    volumes:
+      - ${USERPROFILE}/.hermes:/opt/data
+      - C:\Mein Obsidian:/opt/data/obsidian
+      - ./agent_workspace:/projects
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - HERMES_DASHBOARD_SESSION_TOKEN=${HERMES_DASHBOARD_SESSION_TOKEN:-***REMOVED_HERMES_DASHBOARD_SESSION_TOKEN***}
+    ports:
+      - "127.0.0.1:9119:9119"
+    command: ["dashboard", "--host", "127.0.0.1", "--port", "9120", "--no-open"]
+
+  hermes-dashboard-proxy:
+    image: alpine/socat:latest
+    container_name: hermes-dashboard-proxy
+    restart: unless-stopped
+    network_mode: "service:hermes-dashboard"
+    depends_on:
+      - hermes-dashboard
+    entrypoint: ["socat"]
+    command: ["tcp-listen:9119,fork,reuseaddr", "tcp-connect:127.0.0.1:9120"]
+
+  # -------------------------------------------------------------
+  # HERMES WEBUI (Rückbau zu Gunsten nativer Chat-Integration)
+  # -------------------------------------------------------------
+  # hermes-webui:
+  #   image: hermes-agent-plus:latest
+  #   container_name: hermes-webui
+  #   restart: unless-stopped
+  #   networks:
+  #     - agentic_mesh
+  #   depends_on:
+  #     - hermes
+  #   volumes:
+  #     - ${USERPROFILE}/.hermes:/opt/data
+  #     - ./obsidian_vault:/opt/data/obsidian
+  #     - ./agent_workspace:/projects
+  #   environment:
+  #     - DOCKER_HOST=tcp://docker-socket-proxy:2375
+  #     - HERMES_HOME=/opt/data
+  #     - HERMES_WEBUI_AGENT_DIR=/opt/hermes
+  #     - HERMES_WEBUI_PYTHON=/opt/hermes/.venv/bin/python
+  #     - HERMES_WEBUI_STATE_DIR=/opt/data/webui
+  #     - HERMES_WEBUI_HOST=0.0.0.0
+  #     - HERMES_WEBUI_PORT=8787
+  #     - HERMES_WEBUI_ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8787,http://127.0.0.1:8787,http://localhost:9119,http://127.0.0.1:9119,*
+  #     - HERMES_WEBUI_TRUST_FORWARDED_HOST=true
+  #   ports:
+  #     - "127.0.0.1:8787:8787"
+  #   command: ["/opt/hermes/.venv/bin/python", "/opt/data/plugins/hermes-webui/server.py"]
+
+  # -------------------------------------------------------------
+  # PAPERCLIP ORCHESTRATOR — ENTFERNT 09.10.2026 (Orchestrierung läuft über Hermes Agent / Kanban)
+  # -------------------------------------------------------------
+  # paperclip:
+  #   build:
+  #     context: ./paperclip
+  #     dockerfile: Dockerfile
+  #   image: paperclip-orchestrator:latest
+  #   container_name: paperclip-orchestrator
+  #   restart: unless-stopped
+  #   networks:
+  #     - agentic_mesh
+  #   ports:
+  #     - "${PAPERCLIP_PORT:-3180}:3100"
+  #   environment:
+  #     - HOST=0.0.0.0
+  #     - PORT=3100
+  #     - PAPERCLIP_HOME=/paperclip
+  #     - PAPERCLIP_BIND=all-interfaces
+  #     - PAPERCLIP_DEPLOYMENT_MODE=authenticated
+  #     - PAPERCLIP_DEPLOYMENT_EXPOSURE=private
+  #     - PAPERCLIP_PUBLIC_URL=http://localhost:3180
+  #     - BETTER_AUTH_URL=http://localhost:3180
+  #     - BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8501,http://localhost:3180,http://127.0.0.1:8501,http://127.0.0.1:3180,http://localhost:3100
+  #     - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-archon-os-paperclip-secure-secret-key-2026-auth}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+  #   volumes:
+  #     - paperclip_volume:/paperclip
+  #     - ./scripts/paperclip_hire_agent.cjs:/app/paperclip_hire_agent.cjs:ro
+
+  anything-llm:
+    image: mintplexlabs/anythingllm:latest
+    container_name: anything-llm
+    restart: unless-stopped
+    networks:
+      - agentic_mesh
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      - STORAGE_DIR=/app/server/storage
+      - SERVER_PORT=3001
+      - DISABLE_TELEMETRY=true
+    volumes:
+      - anythingllm_storage:/app/server/storage
+      - C:\Mein Obsidian:/app/server/storage/obsidian_vault:ro
+
+
+volumes:
+  n8n_data:
+  paperclip_volume:
+  anythingllm_storage:

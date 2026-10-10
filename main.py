@@ -496,7 +496,14 @@ def api_save_theme_live_overrides(payload: Dict = Body(...)):
 
 @app.delete("/api/theme/live-overrides")
 def api_delete_theme_live_overrides():
-    _save_json(THEME_LIVE_FILE, {"rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {}})
+    # 10.10.2026: reset_all + frische migration_version, damit die Studio-Init
+    # in JEDEM Browser den Server-Reset erkennt und localStorage NICHT
+    # zurückspeichert (vorher: Branch 2 parste nie den Reset → Resurrection).
+    _save_json(THEME_LIVE_FILE, {
+        "rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {},
+        "migration_version": "2026_10_10_reset_v3", "reset_all": True,
+        "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    })
     for target_css in ["static/custom_studio.css", os.path.join(WORKSPACE_DIR, "static", "custom_studio.css")]:
         try:
             with open(target_css, "w", encoding="utf-8") as f:

@@ -110,7 +110,10 @@
               }));
               const localCount = Object.values(studioRules).reduce((a, c) => a + Object.keys(c).length, 0);
               const serverCount = Object.values(data.rules || {}).reduce((a, c) => a + Object.keys(c).length, 0);
-              if (data.reset_all || (serverCount === 0 && !data.rules)) {
+              // FIX 10.10.2026: alte Bedingung "(serverCount === 0 && !data.rules)" konnte
+              // NIE zutreffen (leeres Objekt ist truthy) → Server-Resets wurden nie erkannt
+              // und die lokalen Alt-Regeln per POST zurückerzeugt (Resurrection-Schleife).
+              if (data.reset_all || serverCount === 0) {
                 studioRules = {};
                 studioTextOverrides = {};
                 studioHtmlOverrides = {};

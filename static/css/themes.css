@@ -217,7 +217,7 @@ div#view-showroom > div.grid > div.rounded-lg {
 div#ops-kanban-columns-container > div.w-80 {
   flex: 1 1 0% !important;
   width: auto !important;
-  min-width: 200px !important;
+  min-width: 160px !important;
   border-width: 0px !important;
   box-shadow: none !important;
 }

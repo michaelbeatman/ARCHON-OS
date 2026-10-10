@@ -1642,11 +1642,19 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/chat_engine.js?v=202610082038"></script>
   <script src="/static/js/system_settings.js?v=202610101300"></script>
   <script src="/static/js/agent_profiles.js?v=202610101840"></script>
-  <script src="/static/js/customizer.js"></script>
+  <script src="/static/js/customizer.js?v=202610102000"></script>
+  <script>
+    // Custom CSS (inkl. Ansichts-Blöcken aus dem Design-Reiter) sofort beim
+    // App-Start anwenden — initCustomCSS lief bisher NUR beim Öffnen der Settings.
+    document.addEventListener('DOMContentLoaded', function () {
+      try { if (typeof initCustomCSS === 'function') initCustomCSS(); }
+      catch (e) { console.warn('[CustomCSS] Start-Anwendung fehlgeschlagen:', e); }
+    });
+  </script>
   <script src="/static/js/mission_control.js"></script>
   <script src="/static/js/mission_control_cockpit.js"></script>
   <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610101930"></script>
+  <script src="/static/js/operations_kanban.js?v=202610102000"></script>
   <script src="/static/js/appshell_architect.js"></script>
   <script src="/static/js/css_live_studio.js?v=202610101130"></script>
   <script src="/static/js/guardian.js?v=202610091700"></script>
@@ -2142,23 +2150,23 @@ print('Ausführung erfolgreich!')</textarea>
       // --- V2 COMPONENT FETCHES ---
       try {
         await Promise.all([
-          fetch('/static/views/system_settings_modal.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/agent_profiles_view.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/master_chat_view.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/operations_view.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/library_view.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/inbox_view.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
-fetch('/static/views/view_showroom.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/system_settings_modal.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/agent_profiles_view.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/master_chat_view.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/operations_view.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/library_view.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/inbox_view.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
+fetch('/static/views/view_showroom.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
 
-          fetch('/static/views/view_guardian.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_guardian.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
 
-          fetch('/static/views/view_plugins.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_plugins.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
 
-          fetch('/static/views/view_research.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_research.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
 
-          fetch('/static/views/view_brain.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_design_system.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-design-system-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_app_frame_studio.html?v=202610101930').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; })
+          fetch('/static/views/view_brain.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_design_system.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-design-system-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_app_frame_studio.html?v=202610102000').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; })
 
         ]);
         // Fix 2026-10-09 (Race Condition): #system-settings-mount entsteht erst durch
@@ -2166,7 +2174,7 @@ fetch('/static/views/view_showroom.html?v=202610101930').then(r => r.text()).the
         // Fetch ins Leere lief.
         if (!document.getElementById("system-settings-modal") && document.getElementById("system-settings-mount")) {
           try {
-            const r2 = await fetch('/static/views/system_settings_modal.html?v=202610101930');
+            const r2 = await fetch('/static/views/system_settings_modal.html?v=202610102000');
             const html2 = await r2.text();
             const el2 = document.getElementById('system-settings-mount');
             if (el2) el2.outerHTML = html2;

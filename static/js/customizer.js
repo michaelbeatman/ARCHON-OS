@@ -605,8 +605,10 @@
       }
     };
     function setDesignSubTab(tabName) {
-      currentDesignSubTab = tabName;
-      const subTabs = ["global", "tags", "profiles", "personalakte", "mastermind", "pipeline", "dashboard", "customcss"];
+          currentDesignSubTab = tabName;
+          const subTabs = ["global", "tags", "profiles", "personalakte", "mastermind", "pipeline", "dashboard", "palette",
+            "mission-control", "master-chat", "inbox", "automation", "showroom", "library", "research", "omniroute",
+            "guardian", "log-stream", "design-system", "crm", "customcss"];
       subTabs.forEach(t => {
         const btn = document.getElementById(`subtab-btn-${t}`);
         const content = document.getElementById(`subtab-content-${t}`);
@@ -623,6 +625,156 @@
         }
       });
       lucide.createIcons();
+      if (DESIGN_VIEW_TAB_IDS.indexOf(tabName) !== -1) ensureDesignViewPanel(tabName);
+    }
+
+    // =========================================================================
+    // ANSICHTS-REITER: pro Sicht eigener Sub-Reiter mit CSS-Werten
+    // (User-Wunsch 10.10.2026 — kuratiertes Set + freie Property-Zeilen,
+    //  live-wirksam über die bestehende Custom-CSS-Pipeline in
+    //  localStorage['archon_custom_user_css'] → <style id="archon-custom-user-css">)
+    // =========================================================================
+    const DESIGN_VIEW_TABS = [
+      { id: 'mission-control', label: 'Mission Control', root: '#view-mission-control' },
+      { id: 'master-chat', label: 'Master-Chat', root: '#view-master-chat' },
+      { id: 'inbox', label: 'Inbox', root: '#view-inbox' },
+      { id: 'automation', label: 'Automation', root: '#view-automation' },
+      { id: 'showroom', label: 'Showroom', root: '#view-showroom' },
+      { id: 'library', label: 'Wissensbibliothek', root: '#view-library' },
+      { id: 'research', label: 'Research', root: '#view-research' },
+      { id: 'omniroute', label: 'OmniRoute', root: '#view-omniroute' },
+      { id: 'guardian', label: 'Guardian', root: '#view-guardian' },
+      { id: 'log-stream', label: 'Log-Stream', root: '#view-log-stream' },
+      { id: 'design-system', label: 'Design-System', root: '#view-design-system' },
+      { id: 'crm', label: 'CRM', root: '#view-crm' }
+    ];
+    const DESIGN_VIEW_TAB_IDS = DESIGN_VIEW_TABS.map(v => v.id);
+    const CARD_SELECTOR_SUFFIX = ' [class*="rounded-2xl"], ' + 'ROOT' + ' [class*="rounded-xl"]';
+    const DESIGN_SHADOWS = {
+      '': 'keine',
+      '0 1px 3px rgba(0,0,0,0.12)': 'leicht',
+      '0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.12)': 'mittel',
+      '0 10px 15px -3px rgba(0,0,0,0.2), 0 4px 6px -4px rgba(0,0,0,0.15)': 'stark'
+    };
+
+    function _dvGetCfg(id) { return DESIGN_VIEW_TABS.find(v => v.id === id); }
+    function _dvBlock(all, id) {
+      const m = all.match(new RegExp('/\\* @@VIEW:' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '@@ \\*/([\\s\\S]*?)/\\* @@/VIEW:' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '@@ \\*/'));
+      return m ? m[1].trim() : '';
+    }
+    function _dvUpsert(all, id, block) {
+      const re = new RegExp('\\s*/\\* @@VIEW:' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '@@ \\*/[\\s\\S]*?/\\* @@/VIEW:' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '@@ \\*/\\s*', 'g');
+      const wrapped = block ? ('\n/* @@VIEW:' + id + '@@ */\n' + block + '\n/* @@/VIEW:' + id + '@@ */\n') : '';
+      if (re.test(all)) return all.replace(re, wrapped ? '\n' + wrapped + '\n' : '\n');
+      return all.replace(/\s*$/, '') + (wrapped ? '\n' + wrapped : '') + '\n';
+    }
+    function _dvApply(all) {
+      localStorage.setItem('archon_custom_user_css', all);
+      const ta = document.getElementById('custom-user-css-editor');
+      if (ta) ta.value = all;
+      liveApplyCustomCSS(all);
+    }
+    function _dvCardSel(root) {
+      return root + ' [class*="rounded-2xl"], ' + root + ' [class*="rounded-xl"]';
+    }
+    function _dvBuildCss(id) {
+      const cfg = _dvGetCfg(id);
+      const g = (sel) => { const el = document.getElementById('dv-' + id + '-' + sel); return el ? el.value.trim() : ''; };
+      const rootLines = [], cardLines = [];
+      if (g('bg')) rootLines.push('  background-color: ' + g('bg') + ';');
+      if (g('fg')) rootLines.push('  color: ' + g('fg') + ';');
+      if (g('pad')) rootLines.push('  padding: ' + g('pad') + 'px;');
+      if (g('font')) rootLines.push('  font-size: ' + g('font') + 'px;');
+      if (g('radius')) rootLines.push('  border-radius: ' + g('radius') + 'px;');
+      if (g('cardbg')) cardLines.push('  background-color: ' + g('cardbg') + ';');
+      if (g('cardborder')) cardLines.push('  border-color: ' + g('cardborder') + ';');
+      if (g('cardradius')) cardLines.push('  border-radius: ' + g('cardradius') + 'px;');
+      if (g('shadow')) cardLines.push('  box-shadow: ' + g('shadow') + ';');
+      // freie Property-Zeilen (Scope = Ansichts-Root)
+      document.querySelectorAll('#viewcss-freerows-' + id + ' .dv-free-row').forEach(row => {
+        const p = row.querySelector('.dv-free-prop').value.trim();
+        const v = row.querySelector('.dv-free-val').value.trim();
+        if (p && v) rootLines.push('  ' + p + ': ' + v + ';');
+      });
+      let css = '';
+      if (rootLines.length) css += cfg.root + ' {\n' + rootLines.join('\n') + '\n}\n';
+      if (cardLines.length) css += _dvCardSel(cfg.root) + ' {\n' + cardLines.join('\n') + '\n}\n';
+      if (g('hover') === 'an') css += cfg.root + ' [class*="cursor-pointer"]:hover {\n  box-shadow: 0 6px 14px -4px rgba(0,0,0,0.22);\n}\n';
+      return css.trim();
+    }
+    function saveDesignViewCss(id) {
+      const all = _dvUpsert(localStorage.getItem('archon_custom_user_css') || '', id, _dvBuildCss(id));
+      _dvApply(all);
+      const st = document.getElementById('viewcss-status-' + id);
+      if (st) { st.textContent = '✓ gespeichert ' + new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); st.style.color = '#4A6D88'; }
+    }
+    function resetDesignViewCss(id) {
+      const all = _dvUpsert(localStorage.getItem('archon_custom_user_css') || '', id, '');
+      _dvApply(all);
+      const panel = document.getElementById('subtab-content-' + id);
+      if (panel) { panel.innerHTML = ''; }
+      ensureDesignViewPanel(id, true);
+      const st = document.getElementById('viewcss-status-' + id);
+      if (st) { st.textContent = '↩ zurückgesetzt'; st.style.color = '#C15C53'; }
+    }
+    function addDesignViewFreeRow(id, prop, val) {
+      const box = document.getElementById('viewcss-freerows-' + id);
+      if (!box) return;
+      const row = document.createElement('div');
+      row.className = 'dv-free-row flex items-center gap-1.5';
+      row.innerHTML = '<input type="text" class="dv-free-prop flex-1 h-7 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[11px] font-mono text-[var(--foreground)] focus:outline-none" placeholder="z.B. letter-spacing" value="' + (prop || '').replace(/"/g, '&quot;') + '">' +
+        '<input type="text" class="dv-free-val flex-1 h-7 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[11px] font-mono text-[var(--foreground)] focus:outline-none" placeholder="z.B. 0.05em" value="' + (val || '').replace(/"/g, '&quot;') + '">' +
+        '<button type="button" onclick="this.closest(\'.dv-free-row\').remove()" class="h-7 w-7 rounded-lg border border-[var(--border)] text-red-500 font-bold cursor-pointer hover:bg-red-500/10" title="Zeile entfernen">✕</button>';
+      box.appendChild(row);
+    }
+    function ensureDesignViewPanel(id, force) {
+      const cfg = _dvGetCfg(id);
+      const panel = document.getElementById('subtab-content-' + id);
+      if (!cfg || !panel) return;
+      if (panel.innerHTML.trim() && !force) { return; }
+      const ctl = (key, label, type, extra) => {
+        if (type === 'select') return '<div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--card)] border border-[var(--border)]"><span class="font-mono font-bold text-[11px] text-[var(--foreground)]">' + label + '</span>' + extra + '</div>';
+        return '<div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--card)] border border-[var(--border)]"><span class="font-mono font-bold text-[11px] text-[var(--foreground)]">' + label + '</span><input type="color" id="dv-' + id + '-' + key + '" class="w-9 h-7 rounded cursor-pointer border border-[var(--border)] bg-transparent"></div>';
+      };
+      const shadowOpts = Object.keys(DESIGN_SHADOWS).map(v => '<option value="' + v + '">' + DESIGN_SHADOWS[v] + '</option>').join('');
+      panel.innerHTML =
+        '<div class="border border-[var(--border)] rounded-xl p-3.5 bg-[var(--background)] space-y-3 shadow-xs">' +
+        '<div class="flex items-center justify-between"><h5 class="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">CSS-WERTE — ' + cfg.label + '</h5><span id="viewcss-status-' + id + '" class="text-[9px] font-mono text-[var(--muted-foreground)]"></span></div>' +
+        '<p class="text-[10.5px] text-[var(--muted-foreground)]">Wirkung ist sofort sichtbar, erst mit 💾 dauerhaft. Scope: <code>' + cfg.root + '</code></p>' +
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
+        ctl('bg', 'Seitenhintergrund', 'color') + ctl('fg', 'Textfarbe', 'color') +
+        ctl('cardbg', 'Karten-Hintergrund', 'color') + ctl('cardborder', 'Karten-Rahmen', 'color') +
+        '<div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--card)] border border-[var(--border)]"><span class="font-mono font-bold text-[11px] text-[var(--foreground)]">Innenabstand (px)</span><input type="number" id="dv-' + id + '-pad" min="0" max="64" class="w-16 h-7 px-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-[11px] font-mono text-[var(--foreground)]"></div>' +
+        '<div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--card)] border border-[var(--border)]"><span class="font-mono font-bold text-[11px] text-[var(--foreground)]">Schriftgröße (px)</span><input type="number" id="dv-' + id + '-font" min="8" max="40" class="w-16 h-7 px-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-[11px] font-mono text-[var(--foreground)]"></div>' +
+        '<div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--card)] border border-[var(--border)]"><span class="font-mono font-bold text-[11px] text-[var(--foreground)]">Ansichts-Radius (px)</span><input type="number" id="dv-' + id + '-radius" min="0" max="40" class="w-16 h-7 px-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-[11px] font-mono text-[var(--foreground)]"></div>' +
+        '<div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--card)] border border-[var(--border)]"><span class="font-mono font-bold text-[11px] text-[var(--foreground)]">Karten-Radius (px)</span><input type="number" id="dv-' + id + '-cardradius" min="0" max="40" class="w-16 h-7 px-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-[11px] font-mono text-[var(--foreground)]"></div>' +
+        '<div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--card)] border border-[var(--border)]"><span class="font-mono font-bold text-[11px] text-[var(--foreground)]">Kartenschatten</span><select id="dv-' + id + '-shadow" class="h-7 px-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-[11px] font-mono text-[var(--foreground)] cursor-pointer">' + shadowOpts + '</select></div>' +
+        '<div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--card)] border border-[var(--border)]"><span class="font-mono font-bold text-[11px] text-[var(--foreground)]">Hover-Hebung (nur klickbar)</span><select id="dv-' + id + '-hover" class="h-7 px-1.5 rounded border border-[var(--border)] bg-[var(--background)] text-[11px] font-mono cursor-pointer"><option value="">aus</option><option value="an">an</option></select></div>' +
+        '</div>' +
+        '<div class="space-y-1.5"><label class="block text-[10px] uppercase font-mono font-bold text-[var(--muted-foreground)]">Freie CSS-Eigenschaften (Scope = Ansicht)</label><div id="viewcss-freerows-' + id + '" class="space-y-1.5"></div>' +
+        '<button type="button" onclick="addDesignViewFreeRow(\'' + id + '\')" class="h-7 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[11px] font-bold cursor-pointer hover:bg-[var(--secondary)]">+ freie Zeile</button></div>' +
+        '<div class="flex items-center gap-2 pt-1"><button type="button" onclick="saveDesignViewCss(\'' + id + '\')" class="bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] font-bold px-3.5 py-1.5 rounded-lg text-xs transition cursor-pointer shadow-xs">💾 Speichern</button>' +
+        '<button type="button" onclick="resetDesignViewCss(\'' + id + '\')" class="bg-[var(--secondary)] hover:opacity-90 text-[var(--foreground)] border border-[var(--border)] font-bold px-3.5 py-1.5 rounded-lg text-xs transition cursor-pointer">↩ Zurücksetzen</button></div>' +
+        '</div>';
+      _dvPrefill(id);
+    }
+    function _dvPrefill(id) {
+      const cfg = _dvGetCfg(id);
+      const block = _dvBlock(localStorage.getItem('archon_custom_user_css') || '', id);
+      if (!block) return;
+      const set = (key, val) => { const el = document.getElementById('dv-' + id + '-' + key); if (el && val != null) el.value = val; };
+      const rootMatch = block.match(new RegExp(cfg.root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([\\s\\S]*?)\\}'));
+      const cardMatch = block.match(new RegExp(cfg.root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\[class[^{]*\\{([\\s\\S]*?)\\}'));
+      const propsOf = (m) => { const o = {}; if (!m) return o; m[1].replace(/\/\*[\s\S]*?\*\//g, '').split(';').forEach(l => { const i = l.indexOf(':'); if (i > 0) o[l.slice(0, i).trim()] = l.slice(i + 1).trim(); }); return o; };
+      const rootP = propsOf(rootMatch), cardP = propsOf(cardMatch);
+      const num = (v) => (v || '').replace('px', '').trim();
+      set('bg', rootP['background-color']); set('fg', rootP['color']);
+      set('pad', num(rootP['padding'])); set('font', num(rootP['font-size'])); set('radius', num(rootP['border-radius']));
+      set('cardbg', cardP['background-color']); set('cardborder', cardP['border-color']);
+      set('cardradius', num(cardP['border-radius'])); set('shadow', cardP['box-shadow'] || '');
+      set('hover', block.indexOf(':hover') !== -1 ? 'an' : '');
+      const curatedRoot = ['background-color', 'color', 'padding', 'font-size', 'border-radius'];
+      Object.keys(rootP).forEach(p => { if (curatedRoot.indexOf(p) === -1) addDesignViewFreeRow(id, p, rootP[p]); });
     }
     function applyDesignPreset(presetKey) {
       const preset = DESIGN_PRESETS[presetKey];

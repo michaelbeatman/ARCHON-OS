@@ -565,20 +565,6 @@
               </div>
             </div>
           </div>
-          <!-- Kanban-Farbpalette (User-Wunsch 10.10.2026) -->
-          <div class="border border-[var(--border)] rounded-xl p-3.5 bg-[var(--background)] space-y-2.5 shadow-xs">
-            <div class="flex items-center justify-between">
-              <h4 class="font-bold text-[10.5px] uppercase font-mono tracking-wider text-[var(--foreground)]">KANBAN-FARBPALETTE (SPALTEN-HEADER)</h4>
-              <span id="kanban-palette-source" class="text-[9px] font-mono text-[var(--muted-foreground)]"></span>
-            </div>
-            <div id="kanban-palette-editor" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div class="text-[11px] text-[var(--muted-foreground)] font-mono italic">Lade Farbpalette…</div>
-            </div>
-            <div class="flex items-center gap-2 pt-1">
-              <button type="button" onclick="saveKanbanPaletteFromSettings()" class="bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] font-bold px-3.5 py-1.5 rounded-lg text-xs transition cursor-pointer shadow-xs">💾 Speichern</button>
-              <button type="button" onclick="resetKanbanPaletteInSettings()" class="bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 text-[var(--foreground)] border border-[var(--border)] font-bold px-3.5 py-1.5 rounded-lg text-xs transition cursor-pointer">↩ Posteo-Standard</button>
-            </div>
-          </div>
           <!-- Erscheinungsbild / Theme -->
           <div class="space-y-1.5">
             <label class="block text-[10.5px] uppercase font-mono font-bold text-[var(--muted-foreground)]">ERSCHEINUNGSBILD / THEME</label>
@@ -623,6 +609,19 @@
             <button type="button" onclick="setDesignSubTab('mastermind')" id="subtab-btn-mastermind" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">AI Mastermind</button>
             <button type="button" onclick="setDesignSubTab('pipeline')" id="subtab-btn-pipeline" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">Pipeline (Kanban)</button>
             <button type="button" onclick="setDesignSubTab('dashboard')" id="subtab-btn-dashboard" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">Hermes Dashboard</button>
+            <button type="button" onclick="setDesignSubTab('palette')" id="subtab-btn-palette" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🎨 Kanban-Farben</button>
+            <button type="button" onclick="setDesignSubTab('mission-control')" id="subtab-btn-mission-control" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🚀 Mission Control</button>
+            <button type="button" onclick="setDesignSubTab('master-chat')" id="subtab-btn-master-chat" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">💬 Master-Chat</button>
+            <button type="button" onclick="setDesignSubTab('inbox')" id="subtab-btn-inbox" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">📥 Inbox</button>
+            <button type="button" onclick="setDesignSubTab('automation')" id="subtab-btn-automation" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">⚙️ Automation</button>
+            <button type="button" onclick="setDesignSubTab('showroom')" id="subtab-btn-showroom" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🖼️ Showroom</button>
+            <button type="button" onclick="setDesignSubTab('library')" id="subtab-btn-library" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">📚 Bibliothek</button>
+            <button type="button" onclick="setDesignSubTab('research')" id="subtab-btn-research" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🔬 Research</button>
+            <button type="button" onclick="setDesignSubTab('omniroute')" id="subtab-btn-omniroute" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🌐 OmniRoute</button>
+            <button type="button" onclick="setDesignSubTab('guardian')" id="subtab-btn-guardian" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🛡️ Guardian</button>
+            <button type="button" onclick="setDesignSubTab('log-stream')" id="subtab-btn-log-stream" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">📜 Log-Stream</button>
+            <button type="button" onclick="setDesignSubTab('design-system')" id="subtab-btn-design-system" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🧩 Design-System</button>
+            <button type="button" onclick="setDesignSubTab('crm')" id="subtab-btn-crm" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🏢 CRM</button>
             <button type="button" onclick="setDesignSubTab('customcss')" id="subtab-btn-customcss" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">💻 CSS-Editor</button>
           </div>
           <!-- SUB-TAB 1: Global & Menü -->
@@ -1262,6 +1261,35 @@
               </div>
             </div>
           </div>
+          <!-- SUB-TAB: Kanban-Farbpalette (eigener Reiter, User-Wunsch 10.10.2026 — vor CSS-Editor) -->
+          <div id="subtab-content-palette" class="hidden space-y-3">
+            <div class="border border-[var(--border)] rounded-xl p-3.5 bg-[var(--background)] space-y-2.5 shadow-xs">
+              <div class="flex items-center justify-between">
+                <h4 class="font-bold text-[10.5px] uppercase font-mono tracking-wider text-[var(--foreground)]">KANBAN-FARBPALETTE (SPALTEN-HEADER)</h4>
+                <span id="kanban-palette-source" class="text-[9px] font-mono text-[var(--muted-foreground)]"></span>
+              </div>
+              <div id="kanban-palette-editor" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div class="text-[11px] text-[var(--muted-foreground)] font-mono italic">Lade Farbpalette…</div>
+              </div>
+              <div class="flex items-center gap-2 pt-1">
+                <button type="button" onclick="saveKanbanPaletteFromSettings()" class="bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] font-bold px-3.5 py-1.5 rounded-lg text-xs transition cursor-pointer shadow-xs">💾 Speichern</button>
+                <button type="button" onclick="resetKanbanPaletteInSettings()" class="bg-[var(--secondary)] hover:opacity-90 text-[var(--foreground)] border border-[var(--border)] font-bold px-3.5 py-1.5 rounded-lg text-xs transition cursor-pointer">↩ Posteo-Standard</button>
+              </div>
+            </div>
+          </div>
+          <!-- SUB-TABS: Ansichten (Panels werden beim ersten Öffnen von customizer.js befüllt) -->
+          <div id="subtab-content-mission-control" class="hidden space-y-3"></div>
+          <div id="subtab-content-master-chat" class="hidden space-y-3"></div>
+          <div id="subtab-content-inbox" class="hidden space-y-3"></div>
+          <div id="subtab-content-automation" class="hidden space-y-3"></div>
+          <div id="subtab-content-showroom" class="hidden space-y-3"></div>
+          <div id="subtab-content-library" class="hidden space-y-3"></div>
+          <div id="subtab-content-research" class="hidden space-y-3"></div>
+          <div id="subtab-content-omniroute" class="hidden space-y-3"></div>
+          <div id="subtab-content-guardian" class="hidden space-y-3"></div>
+          <div id="subtab-content-log-stream" class="hidden space-y-3"></div>
+          <div id="subtab-content-design-system" class="hidden space-y-3"></div>
+          <div id="subtab-content-crm" class="hidden space-y-3"></div>
           <!-- SUB-TAB 7: Custom CSS Editor -->
           <div id="subtab-content-customcss" class="hidden space-y-3">
             <div class="flex items-center justify-between">

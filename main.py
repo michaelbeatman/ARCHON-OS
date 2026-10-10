@@ -2382,6 +2382,12 @@ def build_skills_file_index(force: bool = False):
             continue
         try:
             for root, dirs, files in os.walk(s_dir):
+                # PRUNING (10.10.2026): Ausschluesse VOR dem Betreten abschneiden
+                # (top-down-Walk). Vorher wurde z.B. der komplette .git-Baum
+                # traversiert und erst pro Knoten per continue verworfen -
+                # gemessen: 10.2s Walk ueber 1671 Verzeichnisse / 4 .git-Baeume.
+                dirs[:] = [d for d in dirs if d not in
+                           ("node_modules", ".git", "backups", "__pycache__", ".venv", "venv")]
                 if "node_modules" in root or ".git" in root or "backups" in root:
                     continue
                 if "SKILL.md" in files:
@@ -2510,6 +2516,21 @@ def compose_skill_frontmatter(name: str, category: str, tags: List[str], descrip
     return frontmatter + body + "\n"
 
 _SKILLS_CACHE_DISK_PATH = os.path.join(DATA_DIR, "hermes_skills_cache.json")
+
+@app.on_event("startup")
+async def _warm_hermes_skill_caches():
+    """Skills-Caches VOR dem ersten Request warm machen (Disk -> Memory).
+    Sonst bezahlt der erste Request nach Restart den vollen Kaltbau
+    (gemessen: Walk 10.2s + 850 SKILL.md lesen = ~22s fuer das Panel)."""
+    def _warm():
+        t0 = time.time()
+        try:
+            build_skills_file_index()
+            api_get_hermes_skills()
+            print(f"[Skills-Warmup] caches warm after {time.time() - t0:.1f}s")
+        except Exception as e:
+            print(f"[Skills-Warmup] failed: {e}")
+    threading.Thread(target=_warm, daemon=True, name="skills-warmup").start()
 
 @app.get("/api/hermes/skills")
 def api_get_hermes_skills():

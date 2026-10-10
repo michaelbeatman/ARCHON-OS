@@ -215,7 +215,9 @@ div#view-showroom > div.grid > div.rounded-lg {
 }
 
 div#ops-kanban-columns-container > div.w-80 {
-  width: 200px !important;
+  flex: 1 1 0% !important;
+  width: auto !important;
+  min-width: 200px !important;
   border-width: 0px !important;
   box-shadow: none !important;
 }
@@ -275,7 +277,8 @@ button#ops-subtab-comm > span {
 }
 
 #ops-kanban-columns-container {
-  width: fit-content !important;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 #inbox-list-intern {

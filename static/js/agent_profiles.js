@@ -314,14 +314,14 @@
       
       if (col) {
         if (catalogCollapsed) {
-          col.classList.remove("w-[320px]", "min-w-[320px]", "max-w-[320px]", "p-3");
+          col.classList.remove("w-[250px]", "min-w-[250px]", "max-w-[250px]", "p-3");
           col.classList.add("w-[68px]", "min-w-[68px]", "max-w-[68px]", "p-1.5");
           if (expHeader) expHeader.classList.add("hidden");
           if (colHeader) colHeader.classList.remove("hidden");
           if (expFooter) expFooter.classList.add("hidden");
         } else {
           col.classList.remove("w-[68px]", "min-w-[68px]", "max-w-[68px]", "p-1.5");
-          col.classList.add("w-[320px]", "min-w-[320px]", "max-w-[320px]", "p-3");
+          col.classList.add("w-[250px]", "min-w-[250px]", "max-w-[250px]", "p-3");
           if (expHeader) expHeader.classList.remove("hidden");
           if (colHeader) colHeader.classList.add("hidden");
           if (expFooter) expFooter.classList.remove("hidden");

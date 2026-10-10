@@ -98,24 +98,30 @@ def get_kanban_tasks():
             "scheduled": []
         }
         
+        active_rows = 0
         for r in rows:
             task_dict = dict(r)
+            st = (task_dict.get("status") or "todo").lower()
+            if st == "archived":
+                # 2-Stufen-Archiv (10.10.2026): archiviert gehoert nicht aufs Board
+                # (vorher fiel archived still in den todo-Bucket)
+                continue
             assignee_id = task_dict.get("assignee")
             prof = profiles.get(assignee_id, {})
             task_dict["assignee_name"] = prof.get("name") or assignee_id or "Nicht zugewiesen"
             task_dict["assignee_role"] = prof.get("category") or prof.get("role") or "Spezialist"
             task_dict["assignee_avatar"] = prof.get("avatar") or _get_fallback_avatar(assignee_id)
             
-            st = task_dict.get("status", "todo").lower()
             if st in columns:
                 columns[st].append(task_dict)
             else:
                 columns["todo"].append(task_dict)
-                
+            active_rows += 1
+
         return {
             "status": "success",
             "columns": columns,
-            "total_tasks": len(rows),
+            "total_tasks": active_rows,
             "counts": {k: len(v) for k, v in columns.items()}
         }
     finally:

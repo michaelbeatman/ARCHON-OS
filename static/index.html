@@ -96,7 +96,7 @@
       } catch(e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/css/themes.css?v=202610101600">
+  <link rel="stylesheet" href="/static/css/themes.css?v=202610101801">
 
   <style id="archon-live-custom-styles"></style>
 </head>
@@ -1646,7 +1646,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/mission_control.js"></script>
   <script src="/static/js/mission_control_cockpit.js"></script>
   <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610101200"></script>
+  <script src="/static/js/operations_kanban.js?v=202610101800"></script>
   <script src="/static/js/appshell_architect.js"></script>
   <script src="/static/js/css_live_studio.js?v=202610101130"></script>
   <script src="/static/js/guardian.js?v=202610091700"></script>
@@ -8204,11 +8204,10 @@ ${logExcerpt}
           <div>
             <label class="block text-xs font-mono font-bold uppercase text-muted-custom mb-1">Start-Spalte</label>
             <select id="ops-task-column" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-primary-custom focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
-              <option value="triage">Triage</option>
               <option value="todo" selected>To-Do</option>
-              <option value="ready">Ready</option>
               <option value="in_progress">In Bearbeitung</option>
               <option value="review">Review &amp; QA</option>
+              <option value="blocked">Blockiert</option>
               <option value="done">Abgeschlossen</option>
             </select>
           </div>

@@ -275,7 +275,7 @@ button#ops-subtab-comm > span {
 }
 
 #ops-kanban-columns-container {
-  width: 1755px !important;
+  width: fit-content !important;
 }
 
 #inbox-list-intern {

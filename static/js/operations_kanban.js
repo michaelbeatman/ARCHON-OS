@@ -993,12 +993,8 @@
     // Spalten-Design (User-Vorgabe 10.10.2026): „Posteo-Regenbogen"-Naturpalette.
     // headerColor/headerTextColor = exakte Hex-Werte, inline gestylt.
     const OPS_COLUMNS_CONFIG = [
-      { id: 'triage', label: 'Triage', icon: 'help-circle', color: 'zinc', border: 'border-zinc-400/30', bg: 'bg-zinc-500/10', text: 'text-zinc-400',
-        headerColor: '#FFF5EB', headerTextColor: '#7c6a56' },
       { id: 'todo', label: 'To-Do', icon: 'circle', color: 'slate', border: 'border-slate-400/30', bg: 'bg-slate-500/10', text: 'text-slate-400',
         headerColor: '#F3E8DE', headerTextColor: '#6b5d4f' },
-      { id: 'ready', label: 'Ready', icon: 'check-circle', color: 'blue', border: 'border-blue-500/30', bg: 'bg-blue-500/10', text: 'text-blue-500',
-        headerColor: '#F1B56F', headerTextColor: '#7a4a12' },
       { id: 'in_progress', label: 'In Bearbeitung', icon: 'play-circle', color: 'amber', border: 'border-amber-500/30', bg: 'bg-amber-500/10', text: 'text-amber-500',
         headerColor: '#EED65B', headerTextColor: '#6b5c10' },
       { id: 'review', label: 'Review & QA', icon: 'eye', color: 'purple', border: 'border-purple-500/30', bg: 'bg-purple-500/10', text: 'text-purple-500',
@@ -1008,6 +1004,20 @@
       { id: 'done', label: 'Abgeschlossen', icon: 'check-check', color: 'emerald', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10', text: 'text-emerald-500',
         headerColor: '#4A6D88', headerTextColor: '#ffffff' }
     ];
+    // 10.10.2026 (User-Entscheidung): 5-Spalten-Modell. Maschinen-Status der
+    // Engine werden in der To-Do-Spalte gruppiert — reine UI-Sache, kein Engine-Eingriff.
+    const OPS_COLUMN_GROUPS = {
+      todo: ['todo', 'ready', 'triage', 'scheduled'],
+      in_progress: ['in_progress'],
+      review: ['review'],
+      blocked: ['blocked'],
+      done: ['done']
+    };
+    const OPS_STATUS_BADGES = {
+      ready:     { text: '⚡ bereit',  cls: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/30' },
+      triage:    { text: '🔍 Triage',  cls: 'bg-slate-500/10 text-slate-500 border-slate-500/30' },
+      scheduled: { text: '⏱ geplant', cls: 'bg-amber-500/10 text-amber-600 border-amber-500/30' }
+    };
 
     // Einstellbare Farbpalette (User-Wunsch 10.10.2026, Design-Tab der Einstellungen)
     let opsKanbanPalette = null;
@@ -1031,7 +1041,11 @@
 
       const cols = data.columns || {};
       container.innerHTML = OPS_COLUMNS_CONFIG.map(col => {
-        const tasks = cols[col.id] || [];
+        const group = OPS_COLUMN_GROUPS[col.id] || [col.id];
+        const tasks = group
+          .flatMap((s, si) => (cols[s] || []).map(t => ({ t, si })))
+          .sort((a, b) => a.si - b.si)
+          .map(o => o.t);
         const taskCards = tasks.map(t => {
           const priorityLabels = ['P3', 'P2', 'P1', 'P0'];
           const priorityColors = [
@@ -1052,6 +1066,8 @@
             if (node && node.person_name) assigneeName = node.person_name;
           }
           const modelBadge = t.model_override ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-500/10 text-slate-400 border border-slate-500/20 truncate max-w-[110px]">${t.model_override.split('/').pop()}</span>` : '';
+          const badgeInfo = OPS_STATUS_BADGES[t.status];
+          const statusBadge = badgeInfo ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold border ${badgeInfo.cls}">${badgeInfo.text}</span>` : '';
 
           return `
             <div draggable="true" 
@@ -1061,7 +1077,7 @@
               <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
                 <span class="px-1.5 py-0.2 rounded font-bold text-muted-custom bg-[var(--secondary)] border border-[var(--border)]">${t.id}</span>
                 <div class="flex items-center gap-1">
-                  ${modelBadge}
+                  ${statusBadge}${modelBadge}
                   <span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span> <button onclick="archiveKanbanTask(event, '${t.id}')" class="px-1.5 py-0.2 rounded border bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 transition-colors">Archiv</button>
                 </div>
               </div>

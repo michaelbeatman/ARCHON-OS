@@ -68,8 +68,56 @@
         </header>
 
         <!-- SUB-VIEW 1: KANBAN BOARD -->
-        <main id="ops-view-kanban" class="flex-1 w-full p-4 overflow-x-auto overflow-y-hidden flex gap-4 min-h-0 bg-[var(--page-bg)]">
-          <div id="ops-kanban-columns-container" class="flex gap-4 w-full h-full min-w-max pb-2">
+        <main id="ops-view-kanban" class="flex-1 w-full p-4 flex flex-col gap-2.5 min-h-0 overflow-hidden bg-[var(--page-bg)]">
+          <!-- BOARD-TOOLBAR (10.10.2026): Suche, Filter, Sortierung, WIP, Stats, Archiv -->
+          <div id="ops-kanban-toolbar" class="flex items-center gap-2 shrink-0 flex-wrap">
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-custom/60 pointer-events-none"></i>
+              <input id="ops-kanban-search" type="text" placeholder="Suchen… (Titel, Text, ID)" oninput="onOpsKanbanFilterChange()"
+                class="pl-8 pr-2.5 h-8 w-52 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs text-primary-custom focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+            </div>
+            <select id="ops-kanban-filter-assignee" onchange="onOpsKanbanFilterChange()" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs text-primary-custom cursor-pointer focus:outline-none">
+              <option value="">Alle Agenten</option>
+            </select>
+            <select id="ops-kanban-filter-prio" onchange="onOpsKanbanFilterChange()" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs text-primary-custom cursor-pointer focus:outline-none" title="Priorität filtern">
+              <option value="">Alle Prioritäten</option>
+              <option value="3">P0 (Kritisch)</option>
+              <option value="2">P1 (Hoch)</option>
+              <option value="1">P2 (Mittel)</option>
+              <option value="0">P3 (Normal)</option>
+            </select>
+            <select id="ops-kanban-sort" onchange="onOpsKanbanFilterChange()" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs text-primary-custom cursor-pointer focus:outline-none" title="Sortierung in den Spalten">
+              <option value="default">Sortierung: Engine</option>
+              <option value="prio">Nach Priorität</option>
+              <option value="newest">Neueste zuerst</option>
+              <option value="title">Titel (A–Z)</option>
+            </select>
+            <div class="flex items-center gap-1 h-8 pl-2 pr-1 rounded-lg border border-[var(--border)] bg-[var(--card)]" title="WIP-Limit je Spalte (0 = aufheben)">
+              <span class="text-[10px] font-mono font-bold text-muted-custom">WIP</span>
+              <select id="ops-kanban-wip-col" class="h-6 px-1 text-xs bg-transparent text-primary-custom focus:outline-none cursor-pointer">
+                <option value="todo">To-Do</option>
+                <option value="in_progress">In Arbeit</option>
+                <option value="review">Review</option>
+                <option value="blocked">Blockiert</option>
+                <option value="done">Erledigt</option>
+              </select>
+              <input id="ops-kanban-wip-n" type="number" min="0" max="99" placeholder="n" class="w-10 h-6 px-1 text-xs bg-transparent text-primary-custom focus:outline-none" />
+              <button onclick="saveOpsKanbanWip()" class="h-6 px-1.5 rounded bg-[var(--secondary)] hover:opacity-80 text-xs font-bold cursor-pointer text-primary-custom" title="WIP-Limit speichern">✓</button>
+            </div>
+            <div id="ops-kanban-stats" class="flex items-center gap-2.5 text-[10px] font-mono text-muted-custom"></div>
+            <button id="ops-kanban-archive-btn" onclick="toggleOpsKanbanArchive()" class="h-8 px-2.5 ml-auto rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-xs font-bold text-primary-custom transition cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="archive" class="w-3.5 h-3.5"></i> <span>Archiv (…)</span>
+            </button>
+          </div>
+          <!-- ARCHIV-ANSICHT (versteckt, Toggle über Toolbar-Button) -->
+          <div id="ops-kanban-archive" class="hidden flex-1 min-h-0 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
+            <div class="flex items-center justify-between mb-2.5">
+              <h4 class="text-xs font-bold uppercase font-mono tracking-wider text-primary-custom">🗂 Archivierte Tasks</h4>
+              <button onclick="toggleOpsKanbanArchive(false)" class="h-7 px-2.5 rounded-lg border border-[var(--border)] text-xs font-bold cursor-pointer hover:bg-[var(--secondary)] text-primary-custom">Schließen ✕</button>
+            </div>
+            <div id="ops-kanban-archive-list" class="space-y-2"></div>
+          </div>
+          <div id="ops-kanban-columns-container" class="flex gap-4 w-full flex-1 min-h-0 overflow-x-auto pb-2">
             <!-- Dynamische Spalten -->
           </div>
         </main>

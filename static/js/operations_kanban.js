@@ -81,6 +81,7 @@
         if (tasksRes.ok) {
           opsKanbanData = await tasksRes.json();
           renderOperationsKanban(opsKanbanData);
+          loadOpsKanbanStats();
         }
         if (orgRes.ok) {
           opsOrgData = await orgRes.json();
@@ -105,6 +106,163 @@
           hideLoadingOverlay();
         }
       }
+    }
+
+    // =========================================================================
+    // BOARD-TOOLBAR: Suche, Filter, Sortierung, WIP, Stats, Archiv (10.10.2026)
+    // =========================================================================
+    const opsKanbanFilters = { q: '', assignee: '', prio: '', sort: 'default' };
+    let opsKanbanWip = {};
+
+    function onOpsKanbanFilterChange() {
+      const q = document.getElementById('ops-kanban-search');
+      const fa = document.getElementById('ops-kanban-filter-assignee');
+      const fp = document.getElementById('ops-kanban-filter-prio');
+      const so = document.getElementById('ops-kanban-sort');
+      if (q) opsKanbanFilters.q = q.value.trim();
+      if (fa) opsKanbanFilters.assignee = fa.value;
+      if (fp) opsKanbanFilters.prio = fp.value;
+      if (so) opsKanbanFilters.sort = so.value;
+      if (typeof opsKanbanData !== 'undefined' && opsKanbanData) renderOperationsKanban(opsKanbanData);
+    }
+
+    function opsKanbanMatches(t) {
+      const f = opsKanbanFilters;
+      if (f.assignee && (t.assignee || '') !== f.assignee) return false;
+      if (f.prio !== '' && String(t.priority || 0) !== f.prio) return false;
+      if (f.q) {
+        const hay = ((t.title || '') + ' ' + (t.body || '') + ' ' + t.id).toLowerCase();
+        if (hay.indexOf(f.q.toLowerCase()) === -1) return false;
+      }
+      return true;
+    }
+
+    function populateOpsKanbanAssigneeFilter(data) {
+      const sel = document.getElementById('ops-kanban-filter-assignee');
+      if (!sel) return;
+      const current = sel.value;
+      const names = new Set();
+      Object.values(data.columns || {}).forEach(arr => arr.forEach(t => { if (t.assignee) names.add(t.assignee); }));
+      sel.innerHTML = ['<option value="">Alle Agenten</option>']
+        .concat([...names].sort().map(n => `<option value="${n}">${n}</option>`)).join('');
+      sel.value = (current && names.has(current)) ? current : '';
+      opsKanbanFilters.assignee = sel.value;
+    }
+
+    function saveOpsKanbanWip() {
+      const colEl = document.getElementById('ops-kanban-wip-col');
+      const nEl = document.getElementById('ops-kanban-wip-n');
+      if (!colEl || !nEl) return;
+      const limits = Object.assign({}, opsKanbanWip);
+      const n = parseInt(nEl.value, 10);
+      const col = colEl.value;
+      if (!n || n <= 0) delete limits[col]; else limits[col] = n;
+      fetch('/api/operations/kanban/meta', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'wip', limits })
+      }).then(r => r.json()).then(() => {
+        nEl.value = '';
+        loadOperationsData(false);
+      }).catch(e => console.error('[Kanban] WIP speichern fehlgeschlagen:', e));
+    }
+
+    async function loadOpsKanbanStats() {
+      try {
+        const res = await fetch('/api/operations/kanban/stats');
+        if (!res.ok) return;
+        const s = await res.json();
+        const el = document.getElementById('ops-kanban-stats');
+        if (el) {
+          const cyc = (s.avg_cycle_hours == null) ? '–'
+            : (s.avg_cycle_hours < 1 ? Math.round(s.avg_cycle_hours * 60) + 'm' : s.avg_cycle_hours + 'h');
+          el.innerHTML = `<span title="Ø Durchlaufzeit (Start → Ende)">⏱ ${cyc}</span>`
+            + `<span title="Erledigt in den letzten 7 Tagen">✓ 7T: ${s.done_7d}</span>`
+            + `<span title="Aktuell blockiert">⛔ ${s.blocked}</span>`;
+        }
+        const btnSpan = document.querySelector('#ops-kanban-archive-btn span');
+        if (btnSpan) btnSpan.textContent = `Archiv (${s.archived_total})`;
+      } catch (e) {
+        console.warn('[Kanban] Stats nicht ladbar:', e);
+      }
+    }
+
+    async function toggleOpsKanbanArchive(force) {
+      const panel = document.getElementById('ops-kanban-archive');
+      const cont = document.getElementById('ops-kanban-columns-container');
+      if (!panel || !cont) return;
+      const open = (typeof force === 'boolean') ? force : panel.classList.contains('hidden');
+      if (open) {
+        panel.classList.remove('hidden');
+        cont.classList.add('hidden');
+        const list = document.getElementById('ops-kanban-archive-list');
+        if (list) list.innerHTML = '<div class="text-xs text-muted-custom font-mono">Lade Archiv…</div>';
+        try {
+          const res = await fetch('/api/operations/kanban/tasks?archived=true');
+          const data = await res.json();
+          const tasks = data.tasks || [];
+          if (list) {
+            list.innerHTML = tasks.length ? tasks.map(t => {
+              const done = (typeof t.completed_at === 'number') ? new Date(t.completed_at * 1000)
+                : (t.completed_at ? new Date(String(t.completed_at).replace(' ', 'T')) : null);
+              return `
+              <div class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] flex items-center justify-between gap-2 text-xs">
+                <div class="min-w-0">
+                  <span class="font-mono font-bold text-muted-custom">${t.id}</span>
+                  <span class="font-semibold text-primary-custom ml-2">${opsEscapeHtml((t.title || '').slice(0, 90))}</span>
+                </div>
+                <div class="flex items-center gap-2.5 shrink-0 text-[10px] font-mono text-muted-custom">
+                  ${t.due_date ? `<span title="Fällig">📅 ${t.due_date}</span>` : ''}
+                  ${(t.tags || []).slice(0, 2).map(tg => `<span>#${opsEscapeHtml(tg)}</span>`).join('')}
+                  <span>${done && !isNaN(done) ? done.toLocaleDateString('de-DE') : ''}</span>
+                  <span title="Zugewiesen an">👤 ${opsEscapeHtml(t.assignee_name || '-')}</span>
+                </div>
+              </div>`;
+            }).join('') : '<div class="text-xs text-muted-custom font-mono">Archiv leer</div>';
+          }
+        } catch (e) {
+          if (list) list.innerHTML = '<div class="text-xs text-red-500 font-mono">Archiv nicht ladbar</div>';
+        }
+        if (window.lucide) lucide.createIcons();
+      } else {
+        panel.classList.add('hidden');
+        cont.classList.remove('hidden');
+      }
+    }
+
+    function populateOpsDetailMeta(taskId) {
+      const dueEl = document.getElementById('ops-detail-due');
+      const tagsEl = document.getElementById('ops-detail-tags');
+      if (!dueEl || !tagsEl) return;
+      let found = null;
+      if (typeof opsKanbanData !== 'undefined' && opsKanbanData && opsKanbanData.columns) {
+        for (const arr of Object.values(opsKanbanData.columns)) {
+          found = arr.find(t => t.id === taskId);
+          if (found) break;
+        }
+      }
+      dueEl.value = (found && found.due_date) ? found.due_date : '';
+      tagsEl.value = (found && found.tags && found.tags.length) ? found.tags.join(', ') : '';
+    }
+
+    function saveOpsDetailMeta() {
+      const dueEl = document.getElementById('ops-detail-due');
+      const tagsEl = document.getElementById('ops-detail-tags');
+      if (typeof currentOpsDetailTaskId === 'undefined' || !currentOpsDetailTaskId) return;
+      const tagList = ((tagsEl && tagsEl.value) || '').split(',').map(s => s.trim()).filter(Boolean);
+      const hasDue = !!(dueEl && dueEl.value);
+      fetch('/api/operations/kanban/meta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'task',
+          task_id: currentOpsDetailTaskId,
+          due: hasDue ? dueEl.value : null,
+          clear_due: !hasDue,
+          tags: tagList
+        })
+      }).then(r => r.json()).then(() => {
+        loadOperationsData(false);
+      }).catch(e => console.error('[Kanban] Fälligkeit/Tags speichern fehlgeschlagen:', e));
     }
 
     // =========================================================================
@@ -1038,14 +1196,25 @@
       const badge = document.getElementById('ops-kanban-badge');
       if (!container) return;
       if (badge) badge.textContent = data.total_tasks || 0;
+      opsKanbanWip = data.wip || {};
+      populateOpsKanbanAssigneeFilter(data);
 
       const cols = data.columns || {};
       container.innerHTML = OPS_COLUMNS_CONFIG.map(col => {
         const group = OPS_COLUMN_GROUPS[col.id] || [col.id];
-        const tasks = group
-          .flatMap((s, si) => (cols[s] || []).map(t => ({ t, si })))
-          .sort((a, b) => a.si - b.si)
-          .map(o => o.t);
+        const entries = [];
+        group.forEach((s, si) => (cols[s] || []).forEach(t => {
+          if (opsKanbanMatches(t)) entries.push({ t, si });
+        }));
+        const sortMode = opsKanbanFilters.sort;
+        if (sortMode === 'prio') entries.sort((a, b) => ((b.t.priority || 0) - (a.t.priority || 0)) || (a.si - b.si));
+        else if (sortMode === 'newest') entries.sort((a, b) => String(b.t.created_at || '').localeCompare(String(a.t.created_at || '')));
+        else if (sortMode === 'title') entries.sort((a, b) => String(a.t.title || '').localeCompare(String(b.t.title || ''), 'de'));
+        else entries.sort((a, b) => a.si - b.si);
+        const tasks = entries.map(o => o.t);
+        const wipLimit = (opsKanbanWip || {})[col.id] || 0;
+        const wipOver = wipLimit > 0 && tasks.length > wipLimit;
+        const countText = wipLimit > 0 ? `${tasks.length}/${wipLimit}` : String(tasks.length);
         const taskCards = tasks.map(t => {
           const priorityLabels = ['P3', 'P2', 'P1', 'P0'];
           const priorityColors = [
@@ -1068,6 +1237,21 @@
           const modelBadge = t.model_override ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-500/10 text-slate-400 border border-slate-500/20 truncate max-w-[110px]">${t.model_override.split('/').pop()}</span>` : '';
           const badgeInfo = OPS_STATUS_BADGES[t.status];
           const statusBadge = badgeInfo ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold border ${badgeInfo.cls}">${badgeInfo.text}</span>` : '';
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const isOverdue = !!(t.due_date && t.due_date < todayStr && t.status !== 'done');
+          const dueBadge = t.due_date
+            ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold border ${isOverdue ? 'bg-red-500/15 text-red-500 border-red-500/40' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}" title="Fällig bis ${t.due_date}${isOverdue ? ' — ÜBERFÄLLIG' : ''}">📅 ${t.due_date.slice(5)}</span>`
+            : '';
+          const countParts = [];
+          if (t.comment_count > 0) countParts.push(`💬${t.comment_count}`);
+          if (t.subtask_count > 0) countParts.push(`↳${t.subtask_count}`);
+          if (t.parent_count > 0) countParts.push(`⛓${t.parent_count}`);
+          const countBadge = countParts.length
+            ? `<span class="px-1 py-0.5 rounded text-[9px] font-bold border bg-slate-500/10 text-slate-500 border-slate-500/30" title="Kommentare / Subtasks / Abhängigkeiten">${countParts.join(' ')}</span>`
+            : '';
+          const tagPills = ((t.tags || []).slice(0, 3).map(tg =>
+              `<span class="px-1 py-0.5 rounded text-[9px] font-bold border bg-indigo-500/10 text-indigo-500 border-indigo-500/30 shrink-0">#${opsEscapeHtml(tg)}</span>`).join(''))
+            + ((t.tags || []).length > 3 ? `<span class="text-[9px] text-muted-custom shrink-0">+${t.tags.length - 3}</span>` : '');
 
           return `
             <div draggable="true" 
@@ -1077,7 +1261,7 @@
               <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
                 <span class="px-1.5 py-0.2 rounded font-bold text-muted-custom bg-[var(--secondary)] border border-[var(--border)]">${t.id}</span>
                 <div class="flex items-center gap-1">
-                  ${statusBadge}${modelBadge}
+                  ${statusBadge}${dueBadge}${countBadge}${modelBadge}
                   <span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span> <button onclick="archiveKanbanTask(event, '${t.id}')" class="px-1.5 py-0.2 rounded border bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 transition-colors">Archiv</button>
                 </div>
               </div>
@@ -1088,6 +1272,7 @@
                   <img src="${avatar}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)]" />
                   <span class="truncate text-muted-custom font-medium">${opsEscapeHtml(assigneeName)}</span>
                 </div>
+                ${tagPills}
                 <i data-lucide="chevron-right" class="w-3 h-3 text-muted-custom/40 group-hover:text-indigo-500 transition-colors"></i>
               </div>
             </div>
@@ -1101,7 +1286,7 @@
               <div class="flex items-center gap-2 min-w-0">
                 <span class="w-2.5 h-2.5 rounded-full ${col.bg} border ${col.border} shrink-0"></span>
                 <span class="text-xs font-bold font-mono uppercase tracking-wider truncate" style="color: ${((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].text) || col.headerTextColor)};">${col.label}</span>
-                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-[var(--card)] text-muted-custom border border-[var(--border)] shrink-0">${tasks.length}</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-[var(--card)] text-muted-custom border border-[var(--border)] shrink-0" ${wipOver ? 'style="color:#C15C53;border-color:#C15C53;" title="WIP-Limit überschritten!"' : (wipLimit > 0 ? `title="WIP-Limit: ${wipLimit}"` : '')}>${countText}</span>
               </div>
               <button onclick="openNewTaskModal('${col.id}')" class="p-1 rounded-lg hover:bg-[var(--card)] text-muted-custom hover:text-indigo-500 transition cursor-pointer shrink-0" title="Aufgabe hier hinzufügen">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
@@ -1674,6 +1859,7 @@
         if (nameEl) nameEl.textContent = task.assignee_name || task.assignee || 'Nicht zugewiesen';
         if (avatarEl) avatarEl.src = task.assignee_avatar || '/static/avatars/avatar_001.jpg';
         if (modelTag) modelTag.textContent = task.model_override ? task.model_override.split('/').pop() : 'OmniRoute Auto';
+        populateOpsDetailMeta(taskId);
 
         const subtasks = data.subtasks || [];
         if (subtasks.length > 0) {

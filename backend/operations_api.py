@@ -51,6 +51,46 @@ def _get_fallback_avatar(aid: str) -> str:
     return f"/static/avatars/avatar_{h:03d}.jpg"
 
 
+# ACHTUNG (10.10.2026): /app/data ist ein anonymer Volume, der den
+# Host-Bind-Mount überschattet — Dateien unter data/ sind host-seitig
+# UNSICHTBAR und gehen bei Container-Recreate verloren. Deshalb: config/!
+KANBAN_META_FILE = os.path.join(WORKSPACE_DIR, "config", "kanban_meta.json")
+
+
+def _load_kanban_meta() -> Dict:
+    """Sidecar-Metadaten (NICHT in kanban.db — Engine bleibt unberuehrt):
+    Due-Dates/Tags pro Task sowie WIP-Limits pro Spalte."""
+    if os.path.exists(KANBAN_META_FILE):
+        try:
+            with open(KANBAN_META_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                data.setdefault("tasks", {})
+                data.setdefault("wip", {})
+                return data
+        except Exception as e:
+            print(f"[OperationsAPI] meta load error: {e}", file=sys.stderr)
+    return {"tasks": {}, "wip": {}}
+
+
+def _save_kanban_meta(meta: Dict) -> None:
+    os.makedirs(os.path.dirname(KANBAN_META_FILE), exist_ok=True)
+    with open(KANBAN_META_FILE, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+
+
+def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
+    assignee_id = task_dict.get("assignee")
+    prof = profiles.get(assignee_id, {})
+    task_dict["assignee_name"] = prof.get("name") or assignee_id or "Nicht zugewiesen"
+    task_dict["assignee_role"] = prof.get("category") or prof.get("role") or "Spezialist"
+    task_dict["assignee_avatar"] = prof.get("avatar") or _get_fallback_avatar(assignee_id or "")
+    tmeta = (meta.get("tasks") or {}).get(task_dict.get("id")) or {}
+    task_dict["due_date"] = tmeta.get("due") or None
+    task_dict["tags"] = tmeta.get("tags") or []
+    return task_dict
+
+
 # =========================================================================
 # 1. KANBAN ENDPOINTS
 # =========================================================================
@@ -73,20 +113,29 @@ class TaskStatusUpdateRequest(BaseModel):
 
 
 @router.get("/kanban/tasks")
-def get_kanban_tasks():
-    """Gibt alle Tasks gruppiert nach den 6 Spalten von Hermes Kanban zurück."""
+def get_kanban_tasks(archived: bool = Query(False)):
+    """Board-Daten: aktive Tasks gruppiert nach Spalten; ?archived=true liefert die flache Archiv-Liste."""
     conn = _get_kanban_connection()
     profiles = _load_profiles_map()
+    meta = _load_kanban_meta()
+    base_select = """
+            SELECT id, title, body, assignee, status, priority, created_by,
+                   created_at, started_at, completed_at, result, model_override, provider_override,
+                   (SELECT count(*) FROM task_comments c WHERE c.task_id = tasks.id) AS comment_count,
+                   (SELECT count(*) FROM task_links l WHERE l.parent_id = tasks.id) AS subtask_count,
+                   (SELECT count(*) FROM task_links l WHERE l.child_id = tasks.id) AS parent_count
+            FROM tasks
+    """
     try:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, title, body, assignee, status, priority, created_by, 
-                   created_at, started_at, completed_at, result, model_override, provider_override
-            FROM tasks
-            ORDER BY priority DESC, created_at DESC
-        """)
+        if archived:
+            cursor.execute(base_select + " WHERE status = 'archived' ORDER BY completed_at DESC")
+            tasks = [_enrich_task(dict(r), profiles, meta) for r in cursor.fetchall()]
+            return {"status": "success", "archived": True, "tasks": tasks, "total": len(tasks)}
+
+        cursor.execute(base_select + " ORDER BY priority DESC, created_at DESC")
         rows = cursor.fetchall()
-        
+
         columns = {
             "triage": [],
             "todo": [],
@@ -97,7 +146,7 @@ def get_kanban_tasks():
             "blocked": [],
             "scheduled": []
         }
-        
+
         active_rows = 0
         for r in rows:
             task_dict = dict(r)
@@ -106,12 +155,7 @@ def get_kanban_tasks():
                 # 2-Stufen-Archiv (10.10.2026): archiviert gehoert nicht aufs Board
                 # (vorher fiel archived still in den todo-Bucket)
                 continue
-            assignee_id = task_dict.get("assignee")
-            prof = profiles.get(assignee_id, {})
-            task_dict["assignee_name"] = prof.get("name") or assignee_id or "Nicht zugewiesen"
-            task_dict["assignee_role"] = prof.get("category") or prof.get("role") or "Spezialist"
-            task_dict["assignee_avatar"] = prof.get("avatar") or _get_fallback_avatar(assignee_id)
-            
+            _enrich_task(task_dict, profiles, meta)
             if st in columns:
                 columns[st].append(task_dict)
             else:
@@ -122,7 +166,8 @@ def get_kanban_tasks():
             "status": "success",
             "columns": columns,
             "total_tasks": active_rows,
-            "counts": {k: len(v) for k, v in columns.items()}
+            "counts": {k: len(v) for k, v in columns.items()},
+            "wip": meta.get("wip", {})
         }
     finally:
         conn.close()
@@ -231,7 +276,8 @@ def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
 
 
 # --- Kanban-Farbpalette (User-Wunsch 10.10.2026: einstellbar über Design-Tab) ---
-_KANBAN_PALETTE_FILE = os.path.join(WORKSPACE_DIR, "data", "kanban_palette.json")
+# 10.10.2026: statt data/ (anonymer Volume, host-unsichtbar) → config/
+_KANBAN_PALETTE_FILE = os.path.join(WORKSPACE_DIR, "config", "kanban_palette.json")
 
 # Posteo-Naturpalette (Standard, wie fest im Kanban eingebaut)
 KANBAN_PALETTE_DEFAULTS = {
@@ -292,6 +338,100 @@ def save_kanban_palette(req: KanbanPaletteUpdate):
     with open(_KANBAN_PALETTE_FILE, "w", encoding="utf-8") as f:
         json.dump(cleaned, f, indent=2)
     return {"status": "ok", "saved": True, "columns": cleaned}
+
+
+@router.get("/kanban/meta")
+def get_kanban_meta():
+    """Sidecar-Metadaten: Due-Dates/Tags pro Task + WIP-Limits pro Spalte."""
+    return {"status": "ok", **_load_kanban_meta()}
+
+
+@router.post("/kanban/meta")
+def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
+    """Due/Tags (kind=task) oder WIP-Limits (kind=wip) speichern. Engine-DB bleibt unberuehrt."""
+    meta = _load_kanban_meta()
+    kind = str(payload.get("kind") or "task")
+    if kind == "wip":
+        limits = payload.get("limits") or {}
+        cleaned: Dict[str, int] = {}
+        for col, n in limits.items():
+            try:
+                v = int(n)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                cleaned[str(col)] = v
+        meta["wip"] = cleaned
+        _save_kanban_meta(meta)
+        return {"status": "ok", "wip": cleaned}
+    task_id = str(payload.get("task_id") or "").strip()
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id erforderlich")
+    tmeta = meta["tasks"].setdefault(task_id, {})
+    if payload.get("clear_due"):
+        tmeta.pop("due", None)
+    elif payload.get("due"):
+        try:
+            datetime.date.fromisoformat(str(payload["due"])[:10])
+            tmeta["due"] = str(payload["due"])[:10]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="due muss YYYY-MM-DD sein")
+    tags_in = payload.get("tags")
+    if tags_in is not None:
+        tags = [str(t).strip()[:24] for t in tags_in if str(t).strip()][:8]
+        if tags:
+            tmeta["tags"] = tags
+        else:
+            tmeta.pop("tags", None)
+    if not tmeta:
+        meta["tasks"].pop(task_id, None)
+    _save_kanban_meta(meta)
+    return {"status": "ok", "task": meta["tasks"].get(task_id, {})}
+
+
+@router.get("/kanban/stats")
+def kanban_stats():
+    """Board-Kennzahlen: Spaltenverteilung, Durchlaufzeit, 7-Tage-Flows."""
+    conn = _get_kanban_connection()
+    try:
+        cur = conn.cursor()
+        per_status: Dict[str, int] = {}
+        for st, n in cur.execute("SELECT status, count(*) FROM tasks GROUP BY status"):
+            per_status[st or "todo"] = n
+        active = {k: v for k, v in per_status.items() if k != "archived"}
+        cycles = []
+        for s, e in cur.execute(
+            "SELECT started_at, completed_at FROM tasks WHERE started_at IS NOT NULL AND completed_at IS NOT NULL"
+        ):
+            try:
+                cycles.append((float(e) - float(s)) / 3600.0)
+            except (TypeError, ValueError):
+                pass
+        avg_cycle = round(sum(cycles) / len(cycles), 1) if cycles else None
+        now = datetime.datetime.now()
+        created_7d = cur.execute(
+            "SELECT count(*) FROM tasks WHERE created_at >= ?", ((now - datetime.timedelta(days=7)).isoformat(),)
+        ).fetchone()[0]
+        epoch_7d = (now - datetime.timedelta(days=7)).timestamp()
+        done_7d = 0
+        for (e,) in cur.execute("SELECT completed_at FROM tasks WHERE completed_at IS NOT NULL"):
+            try:
+                if float(e) >= epoch_7d:
+                    done_7d += 1
+            except (TypeError, ValueError):
+                pass
+        return {
+            "status": "ok",
+            "active_total": sum(active.values()),
+            "per_status": active,
+            "archived_total": per_status.get("archived", 0),
+            "blocked": per_status.get("blocked", 0),
+            "done_7d": done_7d,
+            "created_7d": created_7d,
+            "avg_cycle_hours": avg_cycle,
+        }
+    finally:
+        conn.close()
 
 
 @router.get("/kanban/tasks/{task_id}")

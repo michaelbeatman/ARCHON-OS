@@ -160,8 +160,25 @@
       }
     });
     // Toggle Studio Open/Closed
-    function toggleCssStudio() {
-      const studio = document.getElementById("archon-css-studio");
+    async function toggleCssStudio() {
+      let studio = document.getElementById("archon-css-studio");
+      if (!studio) {
+        try {
+          const r = await fetch("/static/views/view_app_frame_studio.html");
+          const h = await r.text();
+          const m = document.getElementById("view-app-frame-studio-mount");
+          if (m) m.outerHTML = h;
+          else {
+             const div = document.createElement("div");
+             div.innerHTML = h;
+             document.body.appendChild(div);
+          }
+          studio = document.getElementById("archon-css-studio");
+        } catch(e) {}
+      }
+      // 10.10.2026: 'const studio' hier entfernt — 'studio' existiert seit
+      // Zeile 164 (let) und wurde oben ggf. nachgeladen; eine zweite Deklaration
+      // in derselben Funktion ist ein SyntaxError und tötet die ganze Datei.
       const minPill = document.getElementById("archon-css-studio-minimized");
       const btn = document.getElementById("btn-toggle-css-studio");
       if (!studio) return;
@@ -795,6 +812,62 @@
       }
     }
     window.onStudioBgFileChosen = onStudioBgFileChosen;
+    // ==========================================
+    // HINTERGRUND-BILD ENTFERNEN (User-Wunsch 10.10.2026: Gegenstück zum Upload)
+    // Entfernt background-image (+ die vom Upload erzwungenen Begleit-Defaults
+    // cover/no-repeat) aus ALLEN Studio-Regeln, aktualisiert den Runtime-Tag
+    // und speichert (localStorage + Server + kompilierte Datei) dauerhaft.
+    // ==========================================
+    function removeStudioBackground() {
+      const status = document.getElementById("st-bg-remove-status");
+      let removed = 0;
+      const rules = studioRules || {};
+      for (const [sel, props] of Object.entries(rules)) {
+        if (props && props["background-image"]) {
+          delete props["background-image"];
+          // Nur die Begleit-Werte zurücksetzen, die der Upload-Flow selbst erzwungen hat
+          if (props["background-size"] === "cover" || props["background-size"] === "contain") delete props["background-size"];
+          if (props["background-repeat"] === "no-repeat") delete props["background-repeat"];
+          removed++;
+          if (Object.keys(props).length === 0) delete rules[sel];
+        }
+      }
+      studioRules = rules;
+      // c) Das Studio schreibt Regeln zusätzlich INLINE (!important) auf das
+      // Ziel-Element — auch aufräumen, wenn die Regel längst aus dem Store ist
+      // (sonst überlebt das Bild jeden Reset, so wie beim User-Fall).
+      let inlineCleared = 0;
+      // WICHTIG: "body, body *" — der body selbst wird sonst NICHT erfasst
+      // (dort hängt das Hintergrundbild im User-Fall!).
+      document.querySelectorAll("body, body *").forEach(el => {
+        if (!el.style || !el.style.backgroundImage) return;
+        if (!/url\(/.test(el.style.backgroundImage)) return;
+        el.style.removeProperty("background-image");
+        if (el.style.backgroundSize === "cover" || el.style.backgroundSize === "contain") el.style.removeProperty("background-size");
+        if (el.style.backgroundRepeat === "no-repeat") el.style.removeProperty("background-repeat");
+        inlineCleared++;
+      });
+      // Eingabefelder auf Leerzustand zurücksetzen
+      const inp = document.getElementById("st-input-bg-image");
+      if (inp) inp.value = "";
+      const selSize = document.getElementById("st-select-bg-size");
+      if (selSize) selSize.value = "auto";
+      const selRepeat = document.getElementById("st-select-bg-repeat");
+      if (selRepeat) selRepeat.value = "repeat";
+      // 1. Runtime-Tag sofort aktualisieren, 2. dauerhaft speichern (stumm)
+      try { applyStudioRulesToDOM(); } catch (e) { console.warn("[CSS Studio] apply failed:", e); }
+      if (typeof saveStudioOverrides === "function") saveStudioOverrides(true);
+      if (typeof updateStudioActiveRulesCounters === "function") updateStudioActiveRulesCounters();
+      if (status) {
+        status.classList.remove("hidden", "text-rose-400", "text-zinc-400");
+        status.classList.add((removed || inlineCleared) ? "text-emerald-400" : "text-zinc-400");
+        status.textContent = (removed || inlineCleared)
+          ? `✓ Hintergrundbild entfernt (${removed} Regel(n) + ${inlineCleared} Inline-Style(s) bereinigt, dauerhaft gespeichert)`
+          : "Kein Hintergrundbild in den Studio-Regeln gefunden";
+      }
+      return removed + inlineCleared;
+    }
+    window.removeStudioBackground = removeStudioBackground;
     // ==========================================
     // APPLY PROPERTY LIVE & RECOMPILE STYLESHEET
     // ==========================================

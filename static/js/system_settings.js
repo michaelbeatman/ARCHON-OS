@@ -8,18 +8,16 @@
       if (document.getElementById("system-settings-modal")) return true;
       try {
         const res = await fetch("/static/views/system_settings_modal.html");
-        if (!res.ok) { console.error("Settings-Modal HTTP", res.status); return false; }
+        if (!res.ok) { return false; }
         const html = await res.text();
         let target = document.getElementById("system-settings-mount");
-        if (!target) {
-          target = document.createElement("div");
-          target.id = "system-settings-mount";
-          document.body.appendChild(target);
+        if (target) { target.outerHTML = html; } else {
+          const div = document.createElement("div");
+          div.innerHTML = html;
+          document.body.appendChild(div);
         }
-        target.outerHTML = html;
         return !!document.getElementById("system-settings-modal");
       } catch (e) {
-        console.error("Settings-Modal konnte nicht geladen werden:", e);
         return false;
       }
     }

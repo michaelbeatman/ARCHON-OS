@@ -276,7 +276,11 @@
                 🖼️ JPG/Bild hochladen
                 <input type="file" id="st-file-bg-image" accept=".jpg,.jpeg,.png,.webp,.gif" class="hidden" onchange="onStudioBgFileChosen(this)">
               </label>
+              <button type="button" onclick="removeStudioBackground()" title="Entfernt background-image aus ALLEN Studio-Regeln und speichert dauerhaft (Gegenstück zum Upload)" class="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-300 text-[10px] font-mono font-bold transition cursor-pointer mt-1">
+                🗑️ Hintergrundbild entfernen
+              </button>
               <div id="st-bg-upload-status" class="hidden text-[10px] font-mono text-emerald-400 mt-1"></div>
+              <div id="st-bg-remove-status" class="hidden text-[10px] font-mono mt-1"></div>
             </div>
             <!-- Bg Size & Repeat -->
             <div class="grid grid-cols-2 gap-2">

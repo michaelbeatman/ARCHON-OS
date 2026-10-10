@@ -689,14 +689,21 @@
     }    window.openSystemSettingsModal = openSystemSettingsModal;
     window.closeSystemSettingsModal = closeSystemSettingsModal;
     window.setSettingsTab = setSettingsTab;
-    // GUARD (10.10.2026): Diese Funktionen leben in ANDEREN Dateien, die
-    // NACH system_settings.js laden. Die harte Zuweisung warf einen
-    // ReferenceError und brach den REST DER DATEI (Zeilen bis 822:
-    // Plugin-/Hermes-Settings-Exports, Kanban-Palette) ab.
-    [saveSystemSettings, toggleJevSettings, toggleMemorySettings,
-     loadRolesToSettingsDropdown, loadThemeFromServer, initLogoUpload,
-     populateSettingsRoleDropdown, saveAgentSettings, openHermesProfileSettings
-    ].forEach(fn => { if (typeof fn === "function") window[fn.name] = fn; });
+    // GUARD (10.10.2026, korrigiert): Diese Funktionen leben in ANDEREN
+    // Dateien, die NACH system_settings.js laden. Die harte Zuweisung warf
+    // einen ReferenceError und brach den REST DER DATEI ab (Zeilen bis 822:
+    // Plugin-/Hermes-Settings-Exports, Kanban-Palette).
+    // WICHTIG: typeof-Muss DIREKT pro Name stehen - ein Array-Literal
+    // [fn] wertet die Variable aus und wirft selbst den ReferenceError.
+    if (typeof saveSystemSettings === "function") window.saveSystemSettings = saveSystemSettings;
+    if (typeof toggleJevSettings === "function") window.toggleJevSettings = toggleJevSettings;
+    if (typeof toggleMemorySettings === "function") window.toggleMemorySettings = toggleMemorySettings;
+    if (typeof loadRolesToSettingsDropdown === "function") window.loadRolesToSettingsDropdown = loadRolesToSettingsDropdown;
+    if (typeof loadThemeFromServer === "function") window.loadThemeFromServer = loadThemeFromServer;
+    if (typeof initLogoUpload === "function") window.initLogoUpload = initLogoUpload;
+    if (typeof populateSettingsRoleDropdown === "function") window.populateSettingsRoleDropdown = populateSettingsRoleDropdown;
+    if (typeof saveAgentSettings === "function") window.saveAgentSettings = saveAgentSettings;
+    if (typeof openHermesProfileSettings === "function") window.openHermesProfileSettings = openHermesProfileSettings;
     window.openSystemSettingsModal = openSystemSettingsModal;
     window.closeSystemSettingsModal = closeSystemSettingsModal;
     window.setSettingsTab = setSettingsTab;

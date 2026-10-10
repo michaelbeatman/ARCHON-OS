@@ -8461,11 +8461,13 @@ def _get_live_telemetry_metrics():
 
 @app.get("/api/mission-control/state")
 async def get_mission_control_state():
-    data = _load_mission_control_data()
+    # SYNC-CALLS IM ASYNC-LOOP = BLOCKIERT BEI LANGSAMKEIT ALLES (gemessen:
+    # health parallel 47ms -> 24.571ms). Deshalb aus dem Event-Loop auslagern.
+    data = await asyncio.to_thread(_load_mission_control_data)
     tasks = data.get("tasks", [])
     
     # 1. Profile aus agent_profiles.json laden (51 reale Profile)
-    profiles = api_get_hermes_profiles() if "api_get_hermes_profiles" in globals() else []
+    profiles = await asyncio.to_thread(api_get_hermes_profiles) if "api_get_hermes_profiles" in globals() else []
     total_profiles = max(len(profiles), 12)
     
     in_progress_tasks = [t for t in tasks if t.get("status") == "in_progress"]

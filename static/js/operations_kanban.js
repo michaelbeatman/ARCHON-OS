@@ -1865,11 +1865,53 @@
         const resultVal = (task.result || '').trim();
         const resultLabel = document.getElementById('ops-detail-result-label');
         const resultPath = document.getElementById('ops-detail-result-path');
-        if (resultPath) {
-          if (task.workspace_path) {
-            resultPath.classList.remove('hidden');
-            resultPath.textContent = 'Workspace-Pfad: ' + task.workspace_path;
-          } else { resultPath.classList.add('hidden'); resultPath.textContent = ''; }
+        if (resultPath) { resultPath.classList.add('hidden'); resultPath.textContent = ''; }
+        // PROJEKT-BRUECKE (Option A, 11.10.2026): toten workspace_path (scratch,
+        // nie angelegt) nicht mehr zeigen - stattdessen Sidecar 'obsidian' mit
+        // Dateiliste + Direkt-Leser der Projektdateien ueber die API.
+        const projSection = document.getElementById('ops-detail-project-section');
+        const projLabel = document.getElementById('ops-detail-project-label');
+        const projFilesEl = document.getElementById('ops-detail-project-files');
+        const projViewer = document.getElementById('ops-detail-project-viewer');
+        const projBtn = document.getElementById('ops-detail-project-open');
+        if (projSection && projLabel && projBtn) {
+          if (task.obsidian) {
+            projSection.classList.remove('hidden');
+            projLabel.textContent = '📁 Projekt: ' + task.obsidian;
+            projFilesEl.classList.add('hidden'); projViewer.classList.add('hidden');
+            projFilesEl.innerHTML = ''; projViewer.classList.add('hidden');
+            projBtn.onclick = async () => {
+              projBtn.disabled = true; projBtn.textContent = 'Lädt…';
+              try {
+                const r = await fetch(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}`,
+                                      { signal: AbortSignal.timeout(8000) });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const d = await r.json();
+                projFilesEl.classList.remove('hidden');
+                projFilesEl.innerHTML = (d.files || []).map(f => `
+                  <button type="button" class="block w-full text-left px-1.5 py-0.5 rounded hover:bg-[var(--card)] transition cursor-pointer"
+                    data-fpath="${opsEscapeHtml(f.path)}">
+                    <span class="text-muted-custom">${opsEscapeHtml(f.dir ? f.dir + '/' : '')}</span><span class="text-primary-custom font-semibold">${opsEscapeHtml(f.name)}</span>
+                    <span class="text-muted-custom"> · ${f.size}B</span>
+                  </button>`).join('') || '<span class="text-muted-custom">Leerer Ordner.</span>';
+                projFilesEl.querySelectorAll('button[data-fpath]').forEach(b => {
+                  b.onclick = async () => {
+                    try {
+                      const rf = await fetch(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}/file?path=${encodeURIComponent(b.dataset.fpath)}`,
+                                             { signal: AbortSignal.timeout(8000) });
+                      if (!rf.ok) throw new Error('HTTP ' + rf.status);
+                      const fd = await rf.json();
+                      projViewer.classList.remove('hidden');
+                      projViewer.textContent = '── ' + fd.path + ' ──\n\n' + fd.content;
+                    } catch (e) { projViewer.classList.remove('hidden'); projViewer.textContent = 'Fehler beim Laden: ' + e; }
+                  };
+                });
+              } catch (e) {
+                projFilesEl.classList.remove('hidden');
+                projFilesEl.innerHTML = '<span class="text-rose-500">Fehler: ' + opsEscapeHtml(String(e)) + '</span>';
+              } finally { projBtn.disabled = false; projBtn.textContent = 'Dateien laden'; }
+            };
+          } else { projSection.classList.add('hidden'); }
         }
         if (resultSection && resultText) {
           const zeige = (txt, quelle) => {

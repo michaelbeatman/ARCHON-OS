@@ -260,6 +260,21 @@ primary_document: "[[{task_id}_{task_slug}]]"
 """
     proj_md.write_text(proj_content, encoding="utf-8")
 
+    # SIDE-CAR (User-Entscheidung Option A, 11.10.2026): task <-> Obsidian-
+    # Projekt verknuepfen in config/kanban_meta.json (neben due/tags).
+    # Die Engine-DB bleibt unberuehrt; relativer Vault-Pfad, damit die API
+    # bei variabler Vault-Lage (get_vault_dir) aufloesen kann.
+    try:
+        meta_path = Path(__file__).resolve().parents[1] / "config" / "kanban_meta.json"
+        meta = {}
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta.setdefault("tasks", {}).setdefault(task_id, {})["obsidian"] = f"01_PROJEKTE/{folder_name}"
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as meta_err:
+        print(f"[PostTask] Obsidian-Sidecar fehlgeschlagen: {meta_err}", file=sys.stderr)
+
     # Spiegelung in Showroom-Verzeichnis
     showroom_dir = BASE_DIR / "agent_workspace" / "builds" / "reports"
     showroom_dir.mkdir(parents=True, exist_ok=True)

@@ -294,6 +294,57 @@ class KanbanPaletteUpdate(BaseModel):
     columns: Optional[Dict[str, Dict[str, str]]] = None
     reset: bool = False
 
+@router.get("/kanban/projects/{task_id}")
+def get_kanban_project_files(task_id: str):
+    """Listet die Dateien des verknuepften Obsidian-Projekts einer Task (Sidecar-Bruecke)."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+    meta = _load_kanban_meta()
+    rel = ((meta.get("tasks") or {}).get(task_id) or {}).get("obsidian")
+    if not rel:
+        raise HTTPException(status_code=404, detail="Kein Obsidian-Projekt verknuepft.")
+    vault = _P(get_vault_dir()).resolve()
+    proj = (vault / rel).resolve()
+    if not str(proj).startswith(str(vault)) or not proj.is_dir():
+        raise HTTPException(status_code=404, detail=f"Projektordner fehlt: {rel}")
+    files = []
+    for p in sorted(proj.rglob("*")):
+        if p.is_file():
+            relp = p.relative_to(proj)
+            files.append({
+                "path": relp.as_posix(),
+                "name": p.name,
+                "dir": relp.parent.as_posix() if str(relp.parent) != "." else "",
+                "size": p.stat().st_size,
+            })
+    return {"task_id": task_id, "relative": rel, "project_dir": str(proj), "files": files}
+
+
+@router.get("/kanban/projects/{task_id}/file")
+def get_kanban_project_file(task_id: str, path: str):
+    """Liefert EINE Projektdatei als Text - nur innerhalb des Projektordners (Traversal-Schutz)."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+    meta = _load_kanban_meta()
+    rel = ((meta.get("tasks") or {}).get(task_id) or {}).get("obsidian")
+    if not rel:
+        raise HTTPException(status_code=404, detail="Kein Obsidian-Projekt verknuepft.")
+    vault = _P(get_vault_dir()).resolve()
+    proj = (vault / rel).resolve()
+    if not str(proj).startswith(str(vault)):
+        raise HTTPException(status_code=400, detail="Pfad ausserhalb des Vaults.")
+    target = (proj / path).resolve()
+    if not str(target).startswith(str(proj)) or not target.is_file():
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    if target.suffix.lower() not in (".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html", ".log"):
+        raise HTTPException(status_code=415, detail="Nur Textdateien (.md/.txt/.csv/...).")
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lesen fehlgeschlagen: {e}")
+    return {"task_id": task_id, "path": path, "size": target.stat().st_size, "content": content}
+
+
 @router.get("/kanban/palette")
 def get_kanban_palette():
     """Liefert die Kanban-Spaltenfarben (Gespeicherte, mit Posteo-Standard gemischt)."""
@@ -451,6 +502,10 @@ def get_task_details(task_id: str):
         prof = profiles.get(assignee_id, {})
         task["assignee_name"] = prof.get("name") or assignee_id or "Nicht zugewiesen"
         task["assignee_avatar"] = prof.get("avatar") or _get_fallback_avatar(assignee_id)
+
+        # Obsidian-Projekt-Bruecke (Sidecar config/kanban_meta.json, Option A 11.10.2026)
+        _meta_all = _load_kanban_meta()
+        task["obsidian"] = ((_meta_all.get("tasks") or {}).get(task_id) or {}).get("obsidian") or None
         
         cursor.execute("SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at ASC", (task_id,))
         comments = [dict(r) for r in cursor.fetchall()]

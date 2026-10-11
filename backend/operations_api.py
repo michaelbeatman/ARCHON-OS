@@ -320,6 +320,51 @@ def get_kanban_project_files(task_id: str):
     return {"task_id": task_id, "relative": rel, "project_dir": str(proj), "files": files}
 
 
+@router.get("/vault/file")
+def get_vault_file(path: str):
+    """SYSTEMWEITER Datei-Reader: liefert EINE Vault-Datei (01_PROJEKTE/...) als Text.
+    Traversal-Schutz: resolve + startswith(Vault) + Suffix-Whitelist."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+    rel = path.strip().lstrip("/\\")
+    vault = _P(get_vault_dir()).resolve()
+    target = (vault / rel).resolve()
+    if not str(target).startswith(str(vault)) or not target.is_file():
+        raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {rel}")
+    if target.suffix.lower() not in (".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html", ".log"):
+        raise HTTPException(status_code=415, detail="Nur Textdateien (.md/.txt/...).")
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lesen fehlgeschlagen: {e}")
+    return {"path": rel, "size": target.stat().st_size, "content": content}
+
+
+@router.get("/vault/find")
+def find_vault_file(q: str, limit: int = 8):
+    """Findet Vault-Dateien per Name/Teilstring (fuer nackte .md-Namen aus Chat-Texten)."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+    q = (q or "").strip().lower()
+    if not q or len(q) < 3:
+        raise HTTPException(status_code=400, detail="Suchbegriff zu kurz.")
+    vault = _P(get_vault_dir()).resolve()
+    treffer, scanned = [], 0
+    try:
+        for p in vault.rglob("*.md"):
+            scanned += 1
+            if scanned > 6000:      # harte Grenze gegen Volllauf
+                break
+            rel = p.relative_to(vault).as_posix()
+            if q in p.name.lower() or q in rel.lower():
+                treffer.append({"path": rel, "name": p.name, "size": p.stat().st_size})
+                if len(treffer) >= limit:
+                    break
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Suche fehlgeschlagen: {e}")
+    return {"query": q, "files": treffer}
+
+
 @router.get("/kanban/projects/{task_id}/file")
 def get_kanban_project_file(task_id: str, path: str):
     """Liefert EINE Projektdatei als Text - nur innerhalb des Projektordners (Traversal-Schutz)."""

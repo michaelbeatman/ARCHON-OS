@@ -1639,7 +1639,7 @@ print('Ausführung erfolgreich!')</textarea>
       <div id="view-design-system-mount"></div>
 
   </script>
-  <script src="/static/js/chat_engine.js?v=202610082038"></script>
+  <script src="/static/js/chat_engine.js?v=202610102210"></script>
   <script src="/static/js/system_settings.js?v=202610102100"></script>
   <script src="/static/js/agent_profiles.js?v=202610101840"></script>
   <script src="/static/js/customizer.js?v=202610101615"></script>
@@ -1654,7 +1654,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/mission_control.js"></script>
   <script src="/static/js/mission_control_cockpit.js"></script>
   <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610102180"></script>
+  <script src="/static/js/operations_kanban.js?v=202610102210"></script>
   <script src="/static/js/appshell_architect.js"></script>
   <script src="/static/js/css_live_studio.js?v=202610102060"></script>
   <script src="/static/js/guardian.js?v=202610091700"></script>
@@ -8331,19 +8331,20 @@ ${logExcerpt}
         <!-- BODY / INSTRUCTION -->
         <div>
           <h4 class="text-xs font-mono uppercase font-bold text-muted-custom mb-2">Aufgabenstellung & Ziel</h4>
-          <div id="ops-detail-body" class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-xs leading-relaxed whitespace-pre-wrap font-sans text-primary-custom">
+          <div id="ops-detail-body" data-archon-linkify class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-xs leading-relaxed whitespace-pre-wrap font-sans text-primary-custom">
             Keine Beschreibung hinterlegt.
           </div>
           <div id="ops-detail-result-section" class="hidden">
             <div class="mt-3 flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               <span id="ops-detail-result-label">📄 Ergebnis / Deliverable</span>
             </div>
-            <div id="ops-detail-result-text" class="mt-1.5 max-h-52 overflow-y-auto p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 text-xs leading-relaxed whitespace-pre-wrap font-sans text-primary-custom"></div>
+            <div id="ops-detail-result-text" data-archon-linkify class="mt-1.5 max-h-52 overflow-y-auto p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 text-xs leading-relaxed whitespace-pre-wrap font-sans text-primary-custom"></div>
             <div id="ops-detail-result-path" class="hidden mt-1 text-[10.5px] font-mono text-muted-custom break-all"></div>
           <div id="ops-detail-project-section" class="hidden">
             <div class="mt-3 flex items-center justify-between">
               <span id="ops-detail-project-label" class="text-[11px] font-mono font-bold uppercase tracking-wider text-[#d42a2b]">📁 Projekt (Obsidian)</span>
-              <button id="ops-detail-project-open" type="button" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:border-[#d42a2b] text-[10.5px] font-mono font-semibold transition cursor-pointer">Dateien laden</button>
+              <button id="ops-detail-project-list" type="button" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:border-[#d42a2b] text-[10.5px] font-mono font-semibold transition cursor-pointer">Dateien laden</button>
+              <button id="ops-detail-project-open" type="button" class="px-2.5 py-1 rounded-lg border border-[#d42a2b]/50 bg-[#d42a2b]/10 text-[#d42a2b] hover:bg-[#d42a2b]/20 text-[10.5px] font-mono font-bold transition cursor-pointer">📁 Hauptdokument öffnen</button>
             </div>
             <div id="ops-detail-project-files" class="hidden mt-1.5 max-h-40 overflow-y-auto p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[11.5px] font-mono space-y-0.5"></div>
             <div id="ops-detail-project-viewer" class="hidden mt-1.5 max-h-64 overflow-auto p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[11.5px] leading-relaxed whitespace-pre-wrap font-mono text-primary-custom"></div>
@@ -8628,6 +8629,140 @@ ${logExcerpt}
     </div>
   </div>
 <div id="system-settings-mount"></div>
+
+<!-- ===== ARCHON systemweites Datei-Preview (klickbare Pfade, 11.10.2026) ===== -->
+<style>
+.archon-filelink { display:inline; padding:0 .18em; border:0; font:inherit; color:#4f9cff; background:rgba(79,156,255,.10);
+  border-bottom:1px dashed rgba(79,156,255,.65); border-radius:3px; cursor:pointer; word-break:break-all; }
+.archon-filelink:hover { background:rgba(79,156,255,.22); color:#7fb8ff; }
+.archon-filelink::after { content:" ↗"; font-size:.85em; opacity:.75; }
+</style>
+<div id="archon-file-preview" class="hidden fixed inset-0 z-[95] items-center justify-center bg-black/60 p-6" role="dialog">
+  <div class="w-full max-w-3xl max-h-[86vh] flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
+      <span id="afp-title" class="text-[11px] font-mono font-bold text-primary-custom truncate">…</span>
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="afp-copy" type="button" class="px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[#d42a2b] text-[10.5px] font-mono transition cursor-pointer">Pfad kopieren</button>
+        <button type="button" class="px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[#d42a2b] text-[10.5px] font-mono transition cursor-pointer" onclick="closeArchonFilePreview()">✕</button>
+      </div>
+    </div>
+    <div id="afp-body" class="flex-1 overflow-auto p-4 text-[11.5px] leading-relaxed whitespace-pre-wrap font-mono text-primary-custom"></div>
+  </div>
+</div>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  let afpRaw = "";
+
+  function afpResolve(raw) {
+    const p = String(raw || "").trim().replace(/[`"'«»]+/g, "").replace(/[,;:)]+$/, "");
+    let m;
+    if ((m = p.match(/(?:\/opt\/data\/obsidian\/)?(01_PROJEKTE\/[^\s"')`]+)/))) return { t: "vault", path: m[1] };
+    if ((m = p.match(/\/opt\/data\/kanban\/workspaces\/(t-[0-9a-f]{6})(?:\/([^\s"')`]+))?/))) return { t: "task", tid: m[1], fname: m[2] || null };
+    if ((m = p.match(/\b(t-[0-9a-f]{6})\b/))) return { t: "task", tid: m[1], fname: null };
+    if (/\.md$/i.test(p) || p.includes("/")) return { t: "find", q: p.split(/[\/]/).pop() };
+    return { t: "copy", raw: p };
+  }
+
+  async function afpShow(title, content, pathForCopy) {
+    afpRaw = pathForCopy || "";
+    $("afp-title").textContent = title;
+    $("afp-body").textContent = content;
+    const box = $("archon-file-preview");
+    box.classList.remove("hidden"); box.classList.add("flex");
+  }
+  function afpErr(title, msg) { afpShow(title, "⚠ " + msg, afpRaw); }
+
+  window.archonPreviewFile = async function (raw) {
+    afpRaw = String(raw || "");
+    const box = $("archon-file-preview");
+    box.classList.remove("hidden"); box.classList.add("flex");
+    $("afp-title").textContent = afpRaw;
+    $("afp-body").textContent = "Lädt…";
+    try {
+      const r = afpResolve(afpRaw);
+      const J = async (u) => { const res = await fetch(u, { signal: AbortSignal.timeout(9000) });
+        if (!res.ok) { let d = ""; try { d = (await res.json()).detail || ""; } catch (e) {}
+          throw new Error("HTTP " + res.status + (d ? " – " + d : "")); } return res.json(); };
+
+      if (r.t === "vault") {
+        const d = await J("/api/operations/vault/file?path=" + encodeURIComponent(r.path));
+        await afpShow("📁 " + d.path, d.content, r.path);
+      } else if (r.t === "task") {
+        const d = await J("/api/operations/kanban/projects/" + encodeURIComponent(r.tid));
+        let ziel = (d.files || []).find(f => r.fname && f.name === r.fname)
+                 || (d.files || []).find(f => f.path.startsWith("03_Endprodukte/"))
+                 || (d.files || []).find(f => f.path === "PROJEKT.md")
+                 || (d.files || [])[0];
+        if (!ziel) throw new Error("Keine Datei im Projekt.");
+        const fd = await J("/api/operations/kanban/projects/" + encodeURIComponent(r.tid) + "/file?path=" + encodeURIComponent(ziel.path));
+        await afpShow("📁 " + d.relative + "/" + ziel.path, fd.content, d.relative + "/" + ziel.path);
+      } else if (r.t === "find") {
+        const d = await J("/api/operations/vault/find?q=" + encodeURIComponent(r.q));
+        if (!(d.files || []).length) throw new Error("Keine Datei gefunden: " + r.q);
+        const fd = await J("/api/operations/vault/file?path=" + encodeURIComponent(d.files[0].path));
+        await afpShow("🔍 " + d.files[0].path, fd.content, d.files[0].path);
+      } else {
+        await afpShow(r.raw, "Keine Datei-Auflösung möglich für:\n" + r.raw +
+          "\n\n(Kopiere den Pfad über den Knopf oben rechts.)", r.raw);
+      }
+    } catch (e) {
+      afpErr(afpRaw, "Konnte Datei nicht laden: " + e.message);
+    }
+  };
+  window.closeArchonFilePreview = function (ev) {
+    if (ev && ev.target !== ev.currentTarget) return;
+    const box = $("archon-file-preview");
+    box.classList.add("hidden"); box.classList.remove("flex");
+  };
+
+  // ---- systemweiter Linkifier: rohe Pfade/IDs in klickbare Buttons ----
+  const PAT = /(?:\/opt\/data\/[^^\s"'<>)]+|01_PROJEKTE\/[^\s"'<>`)]+|\b[A-Za-z]:\\[^\s"'<>)]+\.md\b|\bt-[0-9a-f]{6}\b|\b[\w\-/]+\.md\b)/g;
+  function linkifyHtml(html) {
+    if (typeof html !== "string" || html.includes("archon-filelink")) return html;
+    if (!/(?:\/opt\/data\/|01_PROJEKTE\/|\bt-[0-9a-f]{6}\b|\.md\b)/.test(html)) return html;
+    return html.replace(PAT, (mm) => {
+      const safe = mm.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+      return '<button type="button" class="archon-filelink" data-path="' + safe + '">' + mm + "</button>";
+    });
+  }
+  window.archonLinkifyHtml = linkifyHtml;
+
+  // automatisch auf Chat-Bubbles + [data-archon-linkify] (debounce, idempotent)
+  let timer = null;
+  function sweep() {
+    document.querySelectorAll('.chat-assistant-body, .chat-markdown, [data-archon-linkify]').forEach(el => {
+      try {
+        if (el.querySelector(".archon-filelink")) return;
+        const neu = linkifyHtml(el.innerHTML);
+        if (neu !== el.innerHTML) el.innerHTML = neu;
+      } catch (e) {}
+    });
+  }
+  const mo = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(sweep, 150); });
+  mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+
+  // DELEGIERTER Klick: jeder .archon-filelink im GANZEN System
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest(".archon-filelink");
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    window.archonPreviewFile(b.dataset.path || b.textContent);
+  });
+
+  // Pfad-kopieren im Preview
+  const cp = $("afp-copy");
+  if (cp) cp.addEventListener("click", () => {
+    if (!afpRaw) return;
+    (navigator.clipboard ? navigator.clipboard.writeText(afpRaw) : Promise.reject())
+      .then(() => { cp.textContent = "✓ kopiert"; setTimeout(() => cp.textContent = "Pfad kopieren", 1500); })
+      .catch(() => { cp.textContent = "Kopieren fehlgeschlagen"; setTimeout(() => cp.textContent = "Pfad kopieren", 1500); });
+  });
+
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") window.closeArchonFilePreview(); });
+  setTimeout(sweep, 400);
+})();
+</script>
 </body>
 </html>
 

@@ -1880,13 +1880,34 @@
             projLabel.textContent = '📁 Projekt: ' + task.obsidian;
             projFilesEl.classList.add('hidden'); projViewer.classList.add('hidden');
             projFilesEl.innerHTML = ''; projViewer.classList.add('hidden');
-            projBtn.onclick = async () => {
+            const afpJ = async (u) => {
+              const r = await fetch(u, { signal: AbortSignal.timeout(9000) });
+              if (!r.ok) { let d = ''; try { d = (await r.json()).detail || ''; } catch (e) {}
+                throw new Error('HTTP ' + r.status + (d ? ' – ' + d : '')); }
+              return r.json();
+            };
+            const projListBtn = document.getElementById('ops-detail-project-list');
+            const zeigeHauptdok = async () => {
               projBtn.disabled = true; projBtn.textContent = 'Lädt…';
               try {
-                const r = await fetch(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}`,
-                                      { signal: AbortSignal.timeout(8000) });
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                const d = await r.json();
+                const d = await afpJ(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}`);
+                const ziel = (d.files || []).find(f => f.path.startsWith('03_Endprodukte/'))
+                          || (d.files || []).find(f => f.path === 'PROJEKT.md')
+                          || (d.files || [])[0];
+                if (!ziel) throw new Error('Keine Datei im Projekt.');
+                const fd = await afpJ(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}/file?path=${encodeURIComponent(ziel.path)}`);
+                projViewer.classList.remove('hidden');
+                projViewer.textContent = `── ${d.relative}/${ziel.path} ──\n\n${fd.content}`;
+              } catch (e) {
+                projViewer.classList.remove('hidden');
+                projViewer.textContent = 'Fehler beim Laden: ' + e;
+              } finally { projBtn.disabled = false; projBtn.textContent = '📁 Hauptdokument öffnen'; }
+            };
+            projBtn.onclick = zeigeHauptdok;
+            if (projListBtn) projListBtn.onclick = async () => {
+              projListBtn.disabled = true; projListBtn.textContent = 'Lädt…';
+              try {
+                const d = await afpJ(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}`);
                 projFilesEl.classList.remove('hidden');
                 projFilesEl.innerHTML = (d.files || []).map(f => `
                   <button type="button" class="block w-full text-left px-1.5 py-0.5 rounded hover:bg-[var(--card)] transition cursor-pointer"
@@ -1897,20 +1918,18 @@
                 projFilesEl.querySelectorAll('button[data-fpath]').forEach(b => {
                   b.onclick = async () => {
                     try {
-                      const rf = await fetch(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}/file?path=${encodeURIComponent(b.dataset.fpath)}`,
-                                             { signal: AbortSignal.timeout(8000) });
-                      if (!rf.ok) throw new Error('HTTP ' + rf.status);
-                      const fd = await rf.json();
+                      const fd = await afpJ(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}/file?path=${encodeURIComponent(b.dataset.fpath)}`);
                       projViewer.classList.remove('hidden');
-                      projViewer.textContent = '── ' + fd.path + ' ──\n\n' + fd.content;
-                    } catch (e) { projViewer.classList.remove('hidden'); projViewer.textContent = 'Fehler beim Laden: ' + e; }
+                      projViewer.textContent = `── ${fd.path} ──\n\n${fd.content}`;
+                    } catch (e) { projViewer.classList.remove('hidden'); projViewer.textContent = 'Fehler: ' + e; }
                   };
                 });
               } catch (e) {
                 projFilesEl.classList.remove('hidden');
                 projFilesEl.innerHTML = '<span class="text-rose-500">Fehler: ' + opsEscapeHtml(String(e)) + '</span>';
-              } finally { projBtn.disabled = false; projBtn.textContent = 'Dateien laden'; }
+              } finally { projListBtn.disabled = false; projListBtn.textContent = 'Alle Dateien'; }
             };
+
           } else { projSection.classList.add('hidden'); }
         }
         if (resultSection && resultText) {

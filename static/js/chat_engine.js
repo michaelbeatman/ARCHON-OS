@@ -748,7 +748,9 @@
               <span class="text-amber-500 font-bold ml-1">${match[3].trim()}</span>
             </div>`;
         }
-        const formattedContent = typeof formatMarkdownText === "function" ? formatMarkdownText(safeContent) : escapeHtml(safeContent);
+        const formattedContent = (window.archonLinkifyHtml
+          ? window.archonLinkifyHtml(typeof formatMarkdownText === "function" ? formatMarkdownText(safeContent) : escapeHtml(safeContent))
+          : (typeof formatMarkdownText === "function" ? formatMarkdownText(safeContent) : escapeHtml(safeContent)));
 
         // Prüfen, ob HITL Freigabe erforderlich ist
         const hasApprovalGate = safeContent.includes("Freigabe erforderlich") || safeContent.includes("Missions-Modus");

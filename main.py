@@ -4335,7 +4335,7 @@ async def api_chat_stream(req: ChatStreamRequest):
                 SELECT role, content FROM messages
                 WHERE session_id = ? AND active = 1
                 ORDER BY id DESC LIMIT 50
-            """).fetchall()
+            """, (session_id,)).fetchall()
             for r in reversed(rows):
                 content_val = r["content"]
                 role_val = r["role"]

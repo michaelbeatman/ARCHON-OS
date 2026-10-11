@@ -641,8 +641,9 @@
     "avatar": "/static/avatars/custom_micha.png",
     "provider": "openrouter",
     "model": "google/gemini-1.5-pro",
-    "status": "active",
-    "is_favorite": true
+    "status": "inactive",
+    "is_favorite": true,
+    "runtime_status": "inactive"
   },
   {
     "id": "agile_scrum_master",
@@ -2816,7 +2817,8 @@
       "operations-mesh",
       "converting-plans-to-tasks",
       "task-management",
-      "avoid-ai-writing"
+      "avoid-ai-writing",
+      "archon-remote-control"
     ],
     "tools": [
       "web_search",
@@ -3160,7 +3162,6 @@
     "provider": "omniroute",
     "model": "auto/best-free",
     "status": "active",
-    "is_favorite": false,
-    "runtime_status": "active"
+    "is_favorite": false
   }
 ]

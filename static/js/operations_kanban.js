@@ -1246,6 +1246,8 @@
           if (t.comment_count > 0) countParts.push(`💬${t.comment_count}`);
           if (t.subtask_count > 0) countParts.push(`↳${t.subtask_count}`);
           if (t.parent_count > 0) countParts.push(`⛓${t.parent_count}`);
+          // User-Wunsch 11.10.: Ergebnis-Fortschritt direkt auf der Card sichtbar
+          if (t.result && String(t.result).trim().length > 0) countParts.push(`📄`);
           const countBadge = countParts.length
             ? `<span class="px-1 py-0.5 rounded text-[9px] font-bold border bg-slate-500/10 text-slate-500 border-slate-500/30" title="Kommentare / Subtasks / Abhängigkeiten">${countParts.join(' ')}</span>`
             : '';
@@ -1856,6 +1858,60 @@
         if (titleEl) titleEl.textContent = task.title;
         if (statusSelect) statusSelect.value = (task.status || 'todo').toLowerCase();
         if (bodyEl) bodyEl.textContent = task.body || 'Keine Beschreibung hinterlegt.';
+        // ERGEBNIS direkt im Dialog anzeigen (User-Wunsch 11.10.2026):
+        // vorher nur body + wer/wann - das Ergebnis war nur per Suche zu finden.
+        const resultSection = document.getElementById('ops-detail-result-section');
+        const resultText = document.getElementById('ops-detail-result-text');
+        const resultVal = (task.result || '').trim();
+        const resultLabel = document.getElementById('ops-detail-result-label');
+        const resultPath = document.getElementById('ops-detail-result-path');
+        if (resultPath) {
+          if (task.workspace_path) {
+            resultPath.classList.remove('hidden');
+            resultPath.textContent = 'Workspace-Pfad: ' + task.workspace_path;
+          } else { resultPath.classList.add('hidden'); resultPath.textContent = ''; }
+        }
+        if (resultSection && resultText) {
+          const zeige = (txt, quelle) => {
+            resultText.textContent = txt;
+            if (resultLabel) resultLabel.textContent = quelle;
+            resultSection.classList.remove('hidden');
+          };
+          const verstecke = () => { resultSection.classList.add('hidden'); resultText.textContent = ''; };
+          if (resultVal) {
+            zeige(resultVal, '📄 Ergebnis / Deliverable');
+          } else {
+            // Befund 11.10.: die Engine befuellt tasks.result UND session_id NIE -
+            // das Ergebnis steht in der zugehoerigen mc-Chat-Session. Bruecke:
+            // 1) direkte session_id, sonst 2) Session suchen ueber
+            // Titel-Prefix + Agenten-Suffix in der Session-ID.
+            verstecke();
+            const lade = (sid) =>
+              fetch(`/api/chat/sessions/${encodeURIComponent(sid)}/messages`, { signal: AbortSignal.timeout(8000) })
+                .then(r => (r.ok ? r.json() : null));
+            const zeigeAntw = (d) => {
+              if (!d) return;
+              const msgs = (d.messages) || [];
+              const antw = [...msgs].reverse().find(m => m.role === 'assistant' && m.content && String(m.content).trim());
+              if (antw) zeige(String(antw.content).trim(), '📄 Ergebnis (aus zugehöriger Chat-Session)');
+            };
+            const sucheSession = () =>
+              fetch('/api/chat/sessions?limit=65', { signal: AbortSignal.timeout(8000) })
+                .then(r => (r.ok ? r.json() : null))
+                .then(d => {
+                  const ss = Array.isArray(d) ? d : ((d && (d.sessions || d.items)) || []);
+                  const hit = ss.find(s => {
+                    const id = s.id || '', t = s.title || '';
+                    if (task.assignee && !id.endsWith('_' + task.assignee)) return false;
+                    return !!(t && task.title && (task.title.startsWith(t) || t.startsWith(task.title.slice(0, 30))));
+                  });
+                  return hit ? lade(hit.id) : null;
+                });
+            (task.session_id ? lade(task.session_id) : sucheSession())
+              .then(zeigeAntw)
+              .catch(() => {});
+          }
+        }
         if (nameEl) nameEl.textContent = task.assignee_name || task.assignee || 'Nicht zugewiesen';
         if (avatarEl) avatarEl.src = task.assignee_avatar || '/static/avatars/avatar_001.jpg';
         if (modelTag) modelTag.textContent = task.model_override ? task.model_override.split('/').pop() : 'OmniRoute Auto';

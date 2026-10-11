@@ -6,6 +6,7 @@ div.flex > div.flex > span.px-1\.5 {
   border-width: 1px !important;
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
   height: 18px !important;
+  background-image: url("") !important;
 }
 
 div.p-3 > div.flex > button.px-2 {

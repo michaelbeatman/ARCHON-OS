@@ -1654,7 +1654,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/mission_control.js"></script>
   <script src="/static/js/mission_control_cockpit.js"></script>
   <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610101615"></script>
+  <script src="/static/js/operations_kanban.js?v=202610102170"></script>
   <script src="/static/js/appshell_architect.js"></script>
   <script src="/static/js/css_live_studio.js?v=202610102060"></script>
   <script src="/static/js/guardian.js?v=202610091700"></script>
@@ -8333,6 +8333,13 @@ ${logExcerpt}
           <h4 class="text-xs font-mono uppercase font-bold text-muted-custom mb-2">Aufgabenstellung & Ziel</h4>
           <div id="ops-detail-body" class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-xs leading-relaxed whitespace-pre-wrap font-sans text-primary-custom">
             Keine Beschreibung hinterlegt.
+          </div>
+          <div id="ops-detail-result-section" class="hidden">
+            <div class="mt-3 flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              <span id="ops-detail-result-label">📄 Ergebnis / Deliverable</span>
+            </div>
+            <div id="ops-detail-result-text" class="mt-1.5 max-h-52 overflow-y-auto p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 text-xs leading-relaxed whitespace-pre-wrap font-sans text-primary-custom"></div>
+            <div id="ops-detail-result-path" class="hidden mt-1 text-[10.5px] font-mono text-muted-custom break-all"></div>
           </div>
         </div>
 

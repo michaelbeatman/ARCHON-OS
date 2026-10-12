@@ -1255,27 +1255,39 @@
               `<span class="px-1 py-0.5 rounded text-[9px] font-bold border bg-indigo-500/10 text-indigo-500 border-indigo-500/30 shrink-0">#${opsEscapeHtml(tg)}</span>`).join(''))
             + ((t.tags || []).length > 3 ? `<span class="text-[9px] text-muted-custom shrink-0">+${t.tags.length - 3}</span>` : '');
 
+          const decOpen = !!(t.decision && ((t.decision.status || 'offen') === 'offen'));
+          const decTypName = { delegation_review: 'Delegation prüfen', synthesis_freigabe: 'Synthese freigeben',
+                               mission_freigabe: 'Mission freigeben', permission_gate: 'Rechte freigeben' };
+          const decTyp = decOpen ? (decTypName[t.decision.typ] || 'Entscheidung') : '';
+          const projektName = t.obsidian ? String(t.obsidian).split('/').filter(Boolean).pop() : '';
           return `
             <div draggable="true" 
                  ondragstart="onKanbanDragStart(event, '${t.id}')"
                  onclick="openTaskDetailModal('${t.id}')"
-                 class="group p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:border-indigo-500/40 hover:shadow-md transition-all duration-150 cursor-pointer space-y-2.5">
-              <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
-                <span class="px-1.5 py-0.2 rounded font-bold text-muted-custom bg-[var(--secondary)] border border-[var(--border)]">${t.id}</span>
-                <div class="flex items-center gap-1">
-                  ${statusBadge}${dueBadge}${countBadge}${modelBadge}
-                  <span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span> <button onclick="archiveKanbanTask(event, '${t.id}')" class="px-1.5 py-0.2 rounded border bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 transition-colors">Archiv</button>
+                 class="group rounded-xl border ${decOpen ? 'border-[#e8c37a]' : 'border-[var(--border)]'} bg-[var(--card)] hover:border-indigo-500/40 hover:shadow-md transition-all duration-150 cursor-pointer overflow-hidden">
+              ${decOpen ? `<div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-[#fdf3e2] border-b border-[#e8c37a]">
+                <span class="text-[9.5px] font-bold uppercase tracking-wider text-[#8a5d10] truncate">⏳ Offene Entscheidung · ${opsEscapeHtml(decTyp)}</span>
+                <span class="px-1.5 py-0.2 rounded border ${prioClass} text-[9px] shrink-0">${prioText}</span>
+              </div>` : ''}
+              <div class="p-3 space-y-2.5">
+                <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
+                  <div class="flex items-center gap-1 min-w-0 truncate">${statusBadge}${dueBadge}${modelBadge}</div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    ${countBadge}
+                    ${decOpen ? '' : `<span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span>`}
+                  </div>
                 </div>
-              </div>
-              <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2">${opsEscapeHtml(t.title)}</h4>
-              ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-relaxed">${opsEscapeHtml(t.body)}</p>` : ''}
-              <div class="pt-1 flex items-center justify-between border-t border-[var(--border)]/50 text-[10px]">
-                <div class="flex items-center gap-1.5 min-w-0">
-                  <img src="${avatar}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)]" />
-                  <span class="truncate text-muted-custom font-medium">${opsEscapeHtml(assigneeName)}</span>
+                <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2">${opsEscapeHtml(t.title)}</h4>
+                ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-relaxed">${opsEscapeHtml(t.body)}</p>` : ''}
+                ${projektName ? `<div class="inline-block max-w-full truncate px-1.5 py-0.5 rounded text-[9.5px] font-mono text-muted-custom bg-[var(--secondary)] border border-[var(--border)]" title="${opsEscapeHtml(t.obsidian)}">📁 ${opsEscapeHtml(projektName)}</div>` : ''}
+                <div class="pt-1 flex items-center justify-between border-t border-[var(--border)]/50 text-[10px]">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <img src="${avatar}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)]" />
+                    <span class="truncate text-muted-custom font-medium">${opsEscapeHtml(assigneeName)}</span>
+                  </div>
+                  ${tagPills}
+                  <i data-lucide="chevron-right" class="w-3 h-3 text-muted-custom/40 group-hover:text-indigo-500 transition-colors"></i>
                 </div>
-                ${tagPills}
-                <i data-lucide="chevron-right" class="w-3 h-3 text-muted-custom/40 group-hover:text-indigo-500 transition-colors"></i>
               </div>
             </div>
           `;

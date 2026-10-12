@@ -88,6 +88,14 @@ def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
     tmeta = (meta.get("tasks") or {}).get(task_dict.get("id")) or {}
     task_dict["due_date"] = tmeta.get("due") or None
     task_dict["tags"] = tmeta.get("tags") or []
+    # 2d (12.10.2026): Projektordner + Entscheidungs-Kontext auch LISTEN-seitig,
+    # damit die Card das Entscheidungs-Banner und die Projektzeile zeigen kann
+    # (der Detail-Dialog liefert weiterhin den vollen Block).
+    task_dict["obsidian"] = tmeta.get("obsidian") or None
+    _dec = tmeta.get("decision") or None
+    task_dict["decision"] = ({"typ": _dec.get("typ"),
+                              "status": _dec.get("status") or "offen",
+                              "titel": _dec.get("titel")} if isinstance(_dec, dict) else None)
     return task_dict
 
 

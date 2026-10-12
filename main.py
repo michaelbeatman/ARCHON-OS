@@ -3154,7 +3154,8 @@ def _create_permission_gate(kind: str, detail: str, requested_by: str, payload: 
             ref_id=gate_id,
             body=(f"Gate-ID: {gate_id}\n{detail}\nAngefordert von: {requested_by}\n\n"
                   f"Text-Fallback: \"Erlauben {gate_id}\" oder \"Verbieten {gate_id}\""),
-            extra={"gate_id": gate_id, "requested_by": requested_by},
+            extra={"gate_id": gate_id, "requested_by": requested_by,
+                   "von": requested_by, "projekt": str(detail)[:60]},
         )
         if not _dec:
             logger.warning("[Gate] Entscheidungs-Task nicht anlegbar — Fallback auf eigenen Ping.")
@@ -3344,14 +3345,37 @@ def register_decision(task_id: str, typ: str, titel: str, kurzfassung: str = "",
             {"text": "✅ Freigeben", "callback_data": f"app:approve:{task_id}"},
             {"text": "❌ Ablehnen", "callback_data": f"app:reject:{task_id}"},
         ]]}
-        caption = (f"🔐 ENTSCHEIDUNG NÖTIG — {titel}\n"
-                   f"Typ: {typ}\nKanban-Task: {task_id}\n\n{(kurzfassung or '')[:300]}"
-                   + ("\n\nDer vollständige Bericht liegt als Anhang bei." if dossier else ""))
+        # 2d: Nachrichtenformat "Kontext zuerst" (User-Entscheidung) via
+        # telegram_notify.decision_message -> HTML, damit '_' in Namen nicht mehr
+        # die Markdown-Entities zerbricht.
+        _ex = extra or {}
+        _zahlen = []
+        if _ex.get("teilberichte"):
+            _zahlen.append(f"Teilberichte {_ex['teilberichte']}")
+        if _ex.get("offene_punkte") is not None:
+            _zahlen.append(f"Offene Punkte {_ex['offene_punkte']}")
+        _anhang = None
+        if dossier and os.path.basename(dossier):
+            _bn = os.path.basename(dossier)
+            try:
+                _kb = max(1, round(os.path.getsize(dossier) / 1024))
+            except Exception:
+                _kb = 0
+            _anhang = _bn + (f" · HTML · {_kb} KB" if _kb else "")
+        _projekt = _ex.get("projekt") or (str(obsidian).split("/")[-1] if obsidian else "")
         sent = False
         try:
-            from telegram_notify import send_telegram_document, send_telegram_message
+            from telegram_notify import (send_telegram_document, send_telegram_message,
+                                         decision_message)
+            caption = decision_message(
+                typ=typ, titel=titel, projekt=_projekt, von=_ex.get("von", ""),
+                ref=ref_id, kurzfassung=(kurzfassung or "")[:600],
+                zahlen=_zahlen or None, anhang=_anhang, fallback_ref=task_id,
+                zeit=datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
+            )
             if dossier:
-                sent = send_telegram_document(dossier, caption=caption, reply_markup=markup)
+                sent = send_telegram_document(dossier, caption=caption,
+                                              reply_markup=markup, parse_mode="HTML")
             if not sent:
                 sent = send_telegram_message(caption, reply_markup=markup)
         except Exception as tg_err:
@@ -3437,6 +3461,13 @@ async def api_decide_decision(body: Dict = Body(...)):
         raise HTTPException(status_code=502, detail=f"Sidecar nicht lesbar: {e}")
     if not dec:
         raise HTTPException(status_code=404, detail=f"Kein Entscheidungs-Block für {task_id}")
+    # IDEMPOTENZ (12.10.2026): Der Adapter wiederholt Requests, die client-seitig
+    # in den Timeout laufen — serverseitig aber schon ausgefuehrt wurden. Ohne
+    # diese Sperre liefe die Folgeaktion ZWEIMAL (z.B. Mission doppelt starten).
+    if (dec.get("status") or "offen") != "offen":
+        return {"status": "already_decided", "task_id": task_id,
+                "decision": decision, "kanban_status": dec.get("status"),
+                "ergebnis": "Bereits entschieden — nicht erneut ausgeführt."}
     typ = dec.get("typ")
     ziel = _decision_kanban_status(typ, decision)
     # 1) kanban.db = Wahrheit -> Status dort setzen (source=decision: kein Doppel-Ping)
@@ -3465,10 +3496,11 @@ async def api_decide_decision(body: Dict = Body(...)):
     # 4) Bestaetigung (permission_gate pingt selbst)
     if typ != "permission_gate":
         try:
-            from telegram_notify import send_telegram_message
+            from telegram_notify import send_telegram_message, tg_escape
+            _e = tg_escape
             send_telegram_message(
-                f"{'✅' if decision == 'approve' else '❌'} {dec.get('titel') or task_id}\n"
-                f"Kanban: {ziel}\n{ergebnis[:700]}")
+                f"{'✅' if decision == 'approve' else '❌'} <b>{_e(dec.get('titel') or task_id)}</b>\n"
+                f"Kanban: <code>{_e(ziel)}</code>\n{_e(ergebnis[:700])}")
         except Exception as e:
             logger.warning(f"[Decision] Bestätigungs-Ping fehlgeschlagen: {e}")
     add_ticker("Entscheidung", f"{task_id} ({typ}) -> {decision}")
@@ -9922,7 +9954,9 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
         parent_project_id,        # ref_id
         _deci_dossier,            # dossier
         f"Lisas Entwurf: {draft_path}",   # body
-        {"parent_project_id": parent_project_id, "draft_path": draft_path},  # extra
+        {"parent_project_id": parent_project_id, "draft_path": draft_path,
+         "projekt": parent_title, "von": "Lisa · Ergebnis-Kuratorin",
+         "teilberichte": f"{len(reports)}/{len(reports)}"},                    # extra
         (f"01_PROJEKTE/{_fan_ordner}" if _fan_ordner else None),             # obsidian
     )
     now_t = datetime.datetime.now().strftime("%H:%M:%S")

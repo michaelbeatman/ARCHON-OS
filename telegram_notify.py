@@ -43,6 +43,53 @@ def telegram_enabled() -> bool:
     return bool(_TELEGRAM_BOT_TOKEN and _TELEGRAM_CHAT_ID)
 
 
+# --- 2d (12.10.2026, User-Entscheidung): HTML statt Markdown ---------------
+# Markdown zerbrach an jedem '_' (Tool-/Profilnamen) mit HTTP 400. Im HTML-Modus
+# muessen NUR <, > und & escaped werden -> robust. Aufrufer-Regel: eigene
+# Nutzdaten mit tg_escape() entschaerfen, fertige Tags selbst setzen.
+_TG_TYP_LABEL = {
+    "synthesis_freigabe": "Synthese freigeben",
+    "delegation_review": "Delegation prüfen",
+    "mission_freigabe": "Mission freigeben",
+    "permission_gate": "Rechte freigeben",
+}
+
+
+def tg_escape(s) -> str:
+    return (str(s) if s is not None else "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def decision_message(*, typ, titel="", projekt="", von="", ref="", kurzfassung="",
+                     zahlen=None, anhang=None, fallback_ref="", zeit=None) -> str:
+    """Nachrichtenformat 'Kontext zuerst' (Variante B): beschrifteter Kopf als
+    Monospace-Block (ausgerichtet), Kurzfassung, Zahlen, Anhang, dezenter
+    Text-Fallback. Gibt HTML zurueck (passend zu parse_mode=HTML)."""
+    e = tg_escape
+    kopf = "🔐 <b>ENTSCHEIDUNG NÖTIG</b>" + (f"     <i>{e(zeit)}</i>" if zeit else "")
+    kontext = [("Was", _TG_TYP_LABEL.get(typ, typ or "Entscheidung"))]
+    if titel:
+        kontext.append(("Titel", titel))
+    if projekt:
+        kontext.append(("Projekt", projekt))
+    if von:
+        kontext.append(("Von", von))
+    if ref:
+        kontext.append(("Referenz", ref))
+    breite = max(len(l) for l, _ in kontext)
+    block = "\n".join(f"{l.ljust(breite)}  {v}" for l, v in kontext)
+    teile = [kopf, f"<pre>{e(block)}</pre>"]
+    if kurzfassung:
+        teile.append("<b>Worum es geht</b>")
+        teile.append(e(kurzfassung))
+    if zahlen:
+        teile.append(e("\n".join(zahlen)))
+    if anhang:
+        teile.append(f"📎 {e(anhang)}")
+    if fallback_ref:
+        teile.append(f"Kein Knopf zur Hand? <code>Erlauben {e(fallback_ref)}</code>")
+    return "\n\n".join(teile)
+
+
 def _api_url(method: str) -> str:
     return _TELEGRAM_API_BASE.format(token=_TELEGRAM_BOT_TOKEN, method=method)
 
@@ -58,7 +105,7 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
     payload = {
         "chat_id": _TELEGRAM_CHAT_ID,
         "text": text[:4000],  # Telegram-Limit: 4096 Zeichen
-        "parse_mode": "Markdown",
+        "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
     if reply_markup:
@@ -95,7 +142,8 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
 
 
 def send_telegram_document(file_path: str, caption: str = "", filename: str = None,
-                           mime: str = "text/html", reply_markup: dict = None) -> bool:
+                           mime: str = "text/html", reply_markup: dict = None,
+                           parse_mode: str = None) -> bool:
     """Sendet eine Datei (z.B. das HTML-Dossier eines Zwischenberichts) als
     Telegram-Dokument an den Owner-Chat. Gibt True bei Erfolg zurueck.
 
@@ -126,6 +174,8 @@ def send_telegram_document(file_path: str, caption: str = "", filename: str = No
             data = {"chat_id": _TELEGRAM_CHAT_ID}
             if caption:
                 data["caption"] = caption[:1000]
+                if parse_mode:
+                    data["parse_mode"] = parse_mode
             if reply_markup:
                 data["reply_markup"] = json.dumps(reply_markup)
             with httpx.Client(timeout=45.0) as client:
@@ -159,7 +209,7 @@ def _hitl_keyboard(task_id: str) -> dict:
 def _excerpt(text: str, limit: int = 350) -> str:
     text = (text or "").strip()
     if not text:
-        return "_(keine Ergebnis-Text im Task hinterlegt — Details im Kanban/Showroom)_."
+        return "(kein Ergebnis-Text im Task hinterlegt — Details im Kanban/Showroom)."
     if len(text) <= limit:
         return text
     return text[:limit] + " […]"
@@ -175,31 +225,32 @@ def notify_task_status(task_id: str, status: str, title: str, result: str = "",
     Text-Ping - fehlertolerant, aber sichtbar geloggt.
     """
     head_map = {
-        "done": "✅ *AUFGABE ERLEDIGT*",
-        "blocked": "⛔ *AUFGABE BLOCKIERT*",
-        "review": "🔐 *ENTSCHEIDUNG NÖTIG*",
+        "done": "✅ <b>AUFGABE ERLEDIGT</b>",
+        "blocked": "⛔ <b>AUFGABE BLOCKIERT</b>",
+        "review": "🔐 <b>ENTSCHEIDUNG NÖTIG</b>",
     }
     plain_head_map = {
         "done": "✅ AUFGABE ERLEDIGT",
         "blocked": "⛔ AUFGABE BLOCKIERT",
         "review": "🔐 ENTSCHEIDUNG NÖTIG",
     }
-    emoji_head = head_map.get(status, "ℹ️ *AUFGABEN-STATUS*")
+    e = tg_escape
+    emoji_head = head_map.get(status, "ℹ️ <b>AUFGABEN-STATUS</b>")
     title = (title or task_id).strip()
     lines = [
         emoji_head,
-        f"*Task:* `{task_id}` — {title}",
+        f"<b>Task:</b> <code>{e(task_id)}</code> — {e(title)}",
         "",
-        _excerpt(result),
+        e(_excerpt(result)),
     ]
     if obsidian_rel:
         lines.append("")
-        lines.append(f"📁 Obsidian: `01_PROJEKTE/{obsidian_rel}`")
+        lines.append(f"📁 Obsidian: <code>{e('01_PROJEKTE/' + str(obsidian_rel))}</code>")
     # Freigabe-Buttons nur, wenn eine Entscheidung des Owners nötig ist
     if status in ("review", "blocked"):
         lines.append("")
-        lines.append("_Bitte Entscheidung treffen — oder als Text antworten:_")
-        lines.append(f"`Details {task_id}` · `Erlauben {task_id}` · `Verbieten {task_id}`")
+        lines.append("<i>Bitte Entscheidung treffen:</i>")
+        lines.append(f"<code>Details {e(task_id)}</code> · <code>Erlauben {e(task_id)}</code> · <code>Verbieten {e(task_id)}</code>")
         # 2a: vollen Bericht als Dossier ANHAENGEN (captions sind auf 1024 Zeichen begrenzt,
         # darum bewusst OHNE parse_mode und ohne den langen Text-Auszug)
         if dossier_dir and (result or "").strip():

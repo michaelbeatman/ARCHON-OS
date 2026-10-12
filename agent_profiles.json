@@ -960,8 +960,8 @@
       "vision_analyze"
     ],
     "avatar": "/static/avatars/avatar_006.jpg",
-    "provider": "omniroute",
-    "model": "auto/best-reasoning",
+    "provider": "openrouter",
+    "model": "xiaomi/mimo-v2.6-flash",
     "status": "active",
     "is_favorite": false
   },

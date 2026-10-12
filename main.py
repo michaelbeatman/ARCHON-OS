@@ -3667,13 +3667,36 @@ def _ensure_session_exists(conn: sqlite3.Connection, session_id: str, profile_id
     cur = conn.cursor()
     cur.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
     if not cur.fetchone():
-        cur.execute("""
-            INSERT INTO sessions (
-                id, source, display_name, title, model, profile_name, started_at, message_count,
-                input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd
-            ) VALUES (?, 'master_chat', ?, ?, ?, ?, ?, 0, 0, 0, 0.0, 0.0)
-        """, (session_id, title[:50], title[:50], model, profile_id, now))
-        conn.commit()
+        try:
+            cur.execute("""
+                INSERT INTO sessions (
+                    id, source, display_name, title, model, profile_name, started_at, message_count,
+                    input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd
+                ) VALUES (?, 'master_chat', ?, ?, ?, ?, ?, 0, 0, 0, 0.0, 0.0)
+            """, (session_id, title[:50], title[:50], model, profile_id, now))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            # 12.10.2026: UNIQUE(title) - zwei Delegationen mit gleichem Auftragstext
+            # (50-Zeichen-Schnitt) crashten. Idempotent: Zeitstempel der Session-ID
+            # als Suffix (eindeutig pro Sekunde), bei Restkollision Nanotime.
+            unique_title = f"{title[:36]} [{session_id[3:19]}]"
+            try:
+                cur.execute("""
+                    INSERT INTO sessions (
+                        id, source, display_name, title, model, profile_name, started_at, message_count,
+                        input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd
+                    ) VALUES (?, 'master_chat', ?, ?, ?, ?, ?, 0, 0, 0, 0.0, 0.0)
+                """, (session_id, unique_title, unique_title, model, profile_id, now))
+                conn.commit()
+            except sqlite3.IntegrityError:
+                unique_title = f"{title[:30]} [{time.time_ns() % 1000000000}]"
+                cur.execute("""
+                    INSERT INTO sessions (
+                        id, source, display_name, title, model, profile_name, started_at, message_count,
+                        input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd
+                    ) VALUES (?, 'master_chat', ?, ?, ?, ?, ?, 0, 0, 0, 0.0, 0.0)
+                """, (session_id, unique_title, unique_title, model, profile_id, now))
+                conn.commit()
 
 def _save_message_to_db(session_id: str, role: str, content: str, token_count: Optional[int] = None):
     try:
@@ -3962,11 +3985,12 @@ Wenn eine Aufgabe an einen anderen Agenten delegiert werden soll, MUSST du dafü
 den folgenden JSON-Block in deine Antwort schreiben (valides JSON, exakte Feldnamen):
 
 ```delegation
-{"ziel_agent": "<agent_id>", "auftrag": "<präzise Aufgabenbeschreibung mit Kontext>", "modell": "<auto/best-reasoning|auto/best-coding|auto/best-free|auto/best-vision>", "prioritaet": "normal|hoch"}
+{"ziel_agent": "<agent_id>", "auftrag": "<präzise Aufgabenbeschreibung mit Kontext>", "modell": "<auto/best-reasoning|auto/best-coding|auto/best-free|auto/best-vision>", "prioritaet": "normal|hoch", "parent_project_id": "<nur bei Zerlegung in mehrere Teilauftraege: IMMER dieselbe id fuer alle Bloecke, z.B. projekt-immobilienplattform>"}
 ```
 
 Regeln:
 - ziel_agent = exakte Agent-ID, nie der Anzeigename. Mehrere Blöcke für Parallelaufträge erlaubt.
+- ZERLEGST du EINEN Auftrag in MEHRERE Teilaufträge: gib in JEDEM Block dieselbe `parent_project_id` an (z.B. "projekt-<kurzname>"). Das löst automatisch die Synthese aus: Alle Teilergebnisse werden gesammelt, Lisa (aggregation_lisa) fügt sie zum Gesamtergebnis zusammen und Robert gibt es frei — du musst nicht selbst nachfragen.
 - Das System führt die Delegation serverseitig aus und schreibt dir eine QUITTUNG in den Chat:
   "✅ DELEGATION QUITTUNG" (mit Kanban-Task-ID und Sub-Session — merke dir die Task-ID),
   "❌ DELEGATION ABGELEHNT" (mit Grund) oder "⚠️ DELEGATION-FEHLER" (Block korrigieren und erneut senden).
@@ -4179,8 +4203,74 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
                 notify_task_status(task_id, status, final_title, result, obsidian_rel)
             except Exception as tg_err:
                 logger.warning(f"[Telegram] Delegations-Ping für Task {task_id} fehlgeschlagen: {tg_err}")
+            # --- FAN-IN RUECKLAUF (12.10.2026): MC-Subtask abschliessen und
+            # pruefen, ob alle Geschwister des Delegationsprojekts fertig sind
+            # (-> Synthese durch Lisa + Robert-Freigabe, siehe Synthese-Loop) ---
+            if status == "done":
+                try:
+                    fan_parent = None
+                    mc = _load_mission_control_data()
+                    for _t in mc.get("tasks", []):
+                        if _t.get("kanban_task_id") == task_id:
+                            _t["status"] = "completed"
+                            _t["result_summary"] = (result or "")[:800]
+                            _t["completed_at"] = time.time()
+                            fan_parent = _t.get("parent_project_id")
+                            break
+                    if fan_parent:
+                        _save_mission_control_data(mc)
+                        asyncio.create_task(_fan_in_maybe_start_synthesis(fan_parent))
+                except Exception as fan_err:
+                    logger.warning(f"[Delegation] Fan-in-Ruecklauf fehlgeschlagen: {fan_err}")
         except Exception as e:
             logger.error(f"[Delegation] Task-Watcher error: {e}")
+
+    # --- FAN-IN BRUECKE (12.10.2026, User-Wunsch "Teilergebnisse an Robert
+    # zurueck": Eltern-Projekt + MC-Subtask-Spiegel + Kanban-Beziehungen ---
+    parent_pid = str(payload.get("parent_project_id") or payload.get("projekt") or "").strip()
+    if parent_pid:
+        try:
+            mc_data = _load_mission_control_data()
+            mc_tasks = mc_data.setdefault("tasks", [])
+            # Auto-Parent anlegen, falls noch nicht vorhanden
+            if not any(t.get("id") == parent_pid for t in mc_tasks):
+                mc_tasks.append({
+                    "id": parent_pid,
+                    "title": str(payload.get("projekt_titel") or payload.get("titel") or f"Delegationsprojekt {parent_pid}"),
+                    "agent_id": delegator_id,
+                    "agent_name": d_name,
+                    "status": "active",
+                    "phase": "in_progress",
+                    "created_via": "delegation_bridge",
+                    "capture_input": auftrag[:400],
+                    "target_action": "none",
+                })
+                logger.info(f"[Delegation] Fan-in Parent '{parent_pid}' angelegt")
+            # MC-Subtask = Tracking-Spiegel des Kanban-Tasks (Wird in _bg_watch_task completed)
+            if task_id:
+                mc_tasks.append({
+                    "id": f"mcsub-{task_id}",
+                    "title": auftrag[:80],
+                    "agent_id": ziel,
+                    "agent_name": t_name,
+                    "status": "active",
+                    "phase": "in_progress",
+                    "parent_project_id": parent_pid,
+                    "kanban_task_id": task_id,
+                    "created_via": "delegation_bridge",
+                    "capture_input": auftrag[:400],
+                    "target_action": "none",
+                })
+            _save_mission_control_data(mc_data)
+            # Kanban: project_id + Eltern-Kind-Beziehung (task_links war bisher immer leer)
+            from backend.operations_api import _get_kanban_connection as _kg_link
+            kc_link = _kg_link()
+            kc_link.execute("UPDATE tasks SET project_id = ? WHERE id = ?", (parent_pid, task_id))
+            kc_link.execute("INSERT OR IGNORE INTO task_links (parent_id, child_id) VALUES (?, ?)", (parent_pid, task_id))
+            kc_link.commit()
+            kc_link.close()
+        except Exception as fan_err:
+            logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 
     asyncio.create_task(_bg_watch_task(task_id, tgt_sess, ziel))
     return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}) | Kanban-Task: {task_id or 'n/a'} | "
@@ -8805,13 +8895,7 @@ async def _execute_mission_control_task(task_id: str):
         # Cascade-Loop Schritt B: Ist ein Sub-Task fertig und alle Geschwister-Tasks abgeschlossen? -> Synthese starten
         parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
         if parent_pid and parent_pid != task_id:
-            all_siblings = [
-                t for t in data.get("tasks", [])
-                if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
-                and t.get("id") != parent_pid
-            ]
-            if all_siblings and all(s.get("status") == "completed" for s in all_siblings):
-                asyncio.create_task(_run_synthesis_cascade(parent_pid))
+            asyncio.create_task(_fan_in_maybe_start_synthesis(parent_pid))
         
     except Exception as ex:
         print(f"Error in _execute_mission_control_task {task_id}: {ex}")
@@ -8986,13 +9070,126 @@ Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, ful
     except Exception as e:
         logger.warning(f"[Cascade-Loop] Fehler bei Sandy-Staffing: {e}")
 
+async def _finalize_synthesis_after_approval(parent_pid: str, draft_path: str,
+                                              synthese_text: str, approver_note: str,
+                                              daten: dict = None):
+    """Schliesst die Synthese NACH Robert-Freigabe ab: finaler Bericht in
+    01_PROJEKTE, Parent-Task completed, Audit/Ticker, Demobilisierung, n8n.
+    (12.10.2026 Fan-in: Rueckweg 'Teilergebnisse -> Lisa -> Robert -> Gesamt'.)
+    daten: optionales, GERADE GELADENES mission_control-dict des Callers -
+    sonst ueberschreibt der Caller am Ende mit seinem alten Snapshot."""
+    try:
+        data = daten if daten is not None else _load_mission_control_data()
+        parent_task = next((t for t in data.get("tasks", []) if t.get("id") == parent_pid), None)
+        if not parent_task:
+            logger.warning(f"[Synthese] Parent '{parent_pid}' beim Finalisieren nicht gefunden")
+            return
+        if parent_task.get("synthesis_finalized"):
+            return
+        parent_title = parent_task.get("title", "Gesamtprojekt")
+        safe_pid = re.sub(r'[^a-zA-Z0-9_\-]+', '-', parent_pid).strip('-') or "projekt"
+        final_body = (f"# Finale Beschlussvorlage: {parent_title}\n\n"
+                      f"{synthese_text}\n\n---\n"
+                      f"**Freigabe:** {approver_note}\n")
+        final_name = f"{safe_pid}_final_beschlussvorlage.md"
+        target_dirs = [
+            "/opt/data/obsidian/01_PROJEKTE",
+            os.path.join(OBSIDIAN_VAULT_DIR, "01_PROJEKTE"),
+            os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"),
+        ]
+        final_obs_path = f"/opt/data/obsidian/01_PROJEKTE/{final_name}"
+        for d in target_dirs:
+            try:
+                os.makedirs(d, exist_ok=True)
+                p = os.path.join(d, final_name)
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write(final_body)
+                final_obs_path = p
+            except Exception as we:
+                logger.warning(f"[Synthese] Konnte finalen Bericht nicht nach {d} schreiben: {we}")
+        parent_task["status"] = "completed"
+        parent_task["phase"] = "completed"
+        parent_task["artifact_path"] = final_obs_path
+        parent_task["result_summary"] = (synthese_text[:500] + "...") if len(synthese_text) > 500 else synthese_text
+        parent_task["synthesis_finalized"] = True
+        parent_task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        now_t = datetime.datetime.now().strftime("%H:%M:%S")
+        data.setdefault("audit_logs", []).insert(0, {
+            "time": now_t, "source": "Synthese-Loop",
+            "msg": f"Finale Beschlussvorlage fuer #{parent_pid} freigegeben und abgelegt ({approver_note[:60]})"
+        })
+        add_ticker("Synthese-Loop", f"Freigabe: finale Beschlussvorlage fuer '{parent_title[:35]}...' bereit")
+        _save_mission_control_data(data)
+
+        # Demobilisierung der Fachagenten (Stammagenten bleiben aktiv)
+        try:
+            sibs = [t for t in data.get("tasks", [])
+                    if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)]
+            demob_ids = list({s.get("agent_id") for s in sibs if s.get("agent_id")})
+            for agent_id_dem in demob_ids:
+                if agent_id_dem in ("executive_decision_architect", "robert", "labor_law_hr_governance", "sandy", "aggregation_lisa"):
+                    continue
+                _set_agent_profile_status(agent_id_dem, "standby")
+            if demob_ids:
+                add_ticker("Demobilisierung", f"{len(demob_ids)} Fachagent(en) nach Projektabschluss auf Standby gesetzt")
+        except Exception as demob_err:
+            logger.warning(f"[Demobilisierung] Fehler: {demob_err}")
+
+        # n8n-Bridge (bestehender Einbaupunkt)
+        target_action = parent_task.get("target_action") or "none"
+        try:
+            n8n_res = await core_dispatcher.trigger_n8n_execution(
+                parent_project_id=parent_pid,
+                title=parent_title,
+                final_report_path=final_obs_path,
+                content=synthese_text,
+                target_action=target_action,
+            )
+            logger.info(f"[Synthese-Loop] n8n Webhook Ergebnis: {n8n_res}")
+            add_ticker("n8n Bridge", f"Action '{target_action}' an n8n uebergeben ({n8n_res.get('status')})")
+        except Exception as n8n_err:
+            logger.warning(f"[Synthese-Loop] n8n Trigger fehlgeschlagen: {n8n_err}")
+    except Exception as fin_err:
+        logger.warning(f"[Synthese] Finalisierung fehlgeschlagen: {fin_err}")
+
+
+async def _fan_in_maybe_start_synthesis(parent_pid: str):
+    """FAN-IN (12.10.2026): Alle Geschwister des Delegationsprojekts completed?
+    -> Synthese-Loop starten (dedupe ueber parent.synthesis_started-Flag).
+    Aus den beiden inline-Siblings-Checks herausgehoben, damit auch die
+    Delegations-Bruecke (_bg_watch_task) die Synthese ausloesen kann."""
+    if not parent_pid:
+        return
+    try:
+        data = _load_mission_control_data()
+        siblings = [t for t in data.get("tasks", [])
+                    if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
+                    and t.get("id") != parent_pid]
+        parent = next((t for t in data.get("tasks", []) if t.get("id") == parent_pid), None)
+        if not siblings or not parent:
+            return
+        if parent.get("synthesis_started"):
+            return
+        if not all(s.get("status") == "completed" for s in siblings):
+            return
+        parent["synthesis_started"] = True
+        _save_mission_control_data(data)
+        logger.info(f"[Fan-in] Alle {len(siblings)} Geschwister von '{parent_pid}' fertig -> Synthese starten")
+        asyncio.create_task(_run_synthesis_cascade(parent_pid))
+    except Exception as e:
+        logger.warning(f"[Fan-in] Synthese-Check fehlgeschlagen: {e}")
+
+
 async def _run_synthesis_cascade(parent_project_id: str):
     """
-    Sammelt alle Arbeitsergebnisse der Fachagenten für parent_project_id,
-    lässt Robert (executive_decision_architect) eine finale Beschlussvorlage schreiben,
-    legt das Dokument in Obsidian ab und triggert ggf. n8n.
+    FAN-IN SYNTHESE (12.10.2026, User-Entscheidung A+B):
+    1. Sammelt alle Teilergebnisse der Fachagenten fuer parent_project_id.
+    2. LISA (aggregation_lisa) fuegt sie zum Gesamtergebnis zusammen.
+    3. ROBERT (executive_decision_architect) gibt frei (FREIGABE/ABLEHNUNG).
+    4a. FREIGABE  -> finaler Bericht in 01_PROJEKTE + n8n-Bridge.
+    4b. ABLEHNUNG -> Entwurf bleibt als Approval-Task im Board liegen.
     """
-    logger.info(f"[Cascade-Loop] Starte automatische Synthese für Parent-Projekt {parent_project_id}")
+    logger.info(f"[Cascade-Loop] Starte Synthese fuer Parent-Projekt {parent_project_id}")
     data = _load_mission_control_data()
     tasks = data.get("tasks", [])
     parent_task = next((t for t in tasks if t.get("id") == parent_project_id), None)
@@ -9006,7 +9203,7 @@ async def _run_synthesis_cascade(parent_project_id: str):
         and t.get("id") != parent_project_id
     ]
 
-    # Berichte auslesen
+    # Berichte auslesen (Artifact bevorzugt, sonst result_summary)
     reports = []
     for s in siblings:
         sub_title = s.get("title", "Teilaufgabe")
@@ -9022,110 +9219,135 @@ async def _run_synthesis_cascade(parent_project_id: str):
         if not content:
             content = s.get("result_summary", "")
         reports.append(f"### Arbeitspaket von {sub_agent} ({sub_title})\n\n{content}\n")
-
-    combined_reports = "\n---\n\n".join(reports)
+    combined_reports = f"\n---\n\n".join(reports)
     parent_title = parent_task.get("title", "Gesamtprojekt")
-    
-    synthesis_prompt = f"""Führe als leitender Chefstratege die vorliegenden Arbeitsergebnisse der Fachagenten zu einer finalen, klaren und handlungsorientierten Management-Beschlussvorlage für folgendes Projekt zusammen:
+
+    # --- SCHRITT 1: LISA fuegt zusammen ---
+    lisa_prompt = f"""Fuehre die vorliegenden Teilergebnisse der Fachagenten zu einem konsistenten
+Gesamtergebnis zusammen. Du bist Lisa, Ergebnis-Kuratorin.
 
 PROJEKT: {parent_title}
-URSPRÜNGLICHE ANFORDERUNG:
+URSPRUEBLICHE ANFORDERUNG:
 {parent_task.get('capture_input', parent_title)}
 
-VORLIEGENDE ERGEBNISSE DER FACHAGENTEN:
+VORLIEGENDE TEILERGEBNISSE ({len(reports)} Arbeitspakete):
 {combined_reports}
 
 VORGABEN:
-1. Keine Begrüßungen, Höflichkeitsfloskeln oder Zwischenfragen.
-2. Formuliere ein Executive Summary mit konkreter Entscheidungsempfehlung.
-3. Führe die Kernbefunde der Spezialisten zusammen.
-4. Definiere die nächsten operativen Umsetzungsschritte und Verantwortlichkeiten.
-"""
+1. NUR integrieren, was vorliegt - keine neuen Fakten erfinden.
+2. Widersprueche und Luecken klar kennzeichnen, nicht glaetten.
+3. Struktur: Executive-Kurzfassung / Integriertes Ergebnis / Widersprueche & offene Punkte / Naechste Schritte.
+4. Keine Begruessungen, keine Floskeln. Deutsch, dicht, entscheidungsfaehig.
+5. Letzte Zeile exakt: SYNTHESE-BEREIT"""
 
     profiles = api_get_hermes_profiles() if "api_get_hermes_profiles" in globals() else []
-    prof = next((p for p in profiles if p.get("id") in ("executive_decision_architect", "robert")), None)
-    system_prompt = (prof.get("system_prompt") if prof else None) or "Du bist Robert, Executive Decision Architect und leitender Chefstratege von Archon OS. Liefere kompromisslos präzise Management-Beschlussvorlagen ohne Floskeln."
-    model = (prof.get("model") if prof else None) or "deepseek/deepseek-v4-flash-0731"
-
-    add_ticker("Robert", f"Startet finale Synthese für '{parent_title[:35]}...'")
+    lisa_prof = next((p for p in profiles if p.get("id") == "aggregation_lisa"), None)
+    lisa_system = ((lisa_prof or {}).get("system_prompt") or (lisa_prof or {}).get("prompt")
+                   or "Du bist Lisa, Ergebnis-Kuratorin von Archon OS. Du fuest Teilergebnisse zusammen, kennzeichnest Widersprueche und lieferst ein entscheidungsfaehiges Gesamtergebnis auf Deutsch ohne Floskeln.")
+    lisa_model = (lisa_prof or {}).get("model") or "deepseek/deepseek-v4-flash-0731"
+    add_ticker("Lisa", f"Fuegt {len(reports)} Teilergebnisse zu '{parent_title[:30]}...' zusammen")
     try:
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
-            agent_id="executive_decision_architect",
-            agent_name="Robert (Chefstratege)",
-            prompt=synthesis_prompt,
-            role="Executive Decision Architect",
-            system_prompt=system_prompt,
-            model=model
+            agent_id="aggregation_lisa",
+            agent_name="Lisa (Ergebnis-Kuratorin)",
+            prompt=lisa_prompt,
+            role="Ergebnis-Kuratorin & Synthese",
+            system_prompt=lisa_system,
+            model=lisa_model,
         )
         synthesis_reply = res.get("content", "").strip()
     except Exception as synth_err:
-        logger.warning(f"[Cascade-Loop] Dispatch an Robert fehlgeschlagen: {synth_err}")
+        logger.warning(f"[Cascade-Loop] Dispatch an Lisa fehlgeschlagen: {synth_err}")
         synthesis_reply = ""
-
     if not synthesis_reply or "Fehler" in synthesis_reply[:25]:
-        synthesis_reply = f"# Finale Beschlussvorlage: {parent_title}\n\nDie Synthese der Fachmodule wurde planmäßig abgeschlossen."
+        synthesis_reply = (f"# Synthese: {parent_title}\n\n"
+                           "Die Synthese der Fachmodule wurde planmaessig abgeschlossen "
+                           "(Modell-Antwort leer - Teilergebnisse liegen in den Projektordnern).")
 
-    safe_pid = re.sub(r'[^a-zA-Z0-9_\-]+', '-', parent_project_id).strip('-')
-    file_name = f"{safe_pid}_final_beschlussvorlage.md"
+    # Entwurf ablegen (Basis der Robert-Freigabe)
+    safe_pid = re.sub(r'[^a-zA-Z0-9_\-]+', '-', parent_project_id).strip('-') or "projekt"
+    draft_name = f"{safe_pid}_synthese_lisa_entwurf.md"
     target_dirs = [
         "/opt/data/obsidian/01_PROJEKTE",
         os.path.join(OBSIDIAN_VAULT_DIR, "01_PROJEKTE"),
-        os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE")
+        os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"),
     ]
-    final_obs_path = f"/opt/data/obsidian/01_PROJEKTE/{file_name}"
+    draft_path = f"/opt/data/obsidian/01_PROJEKTE/{draft_name}"
     for d in target_dirs:
         try:
             os.makedirs(d, exist_ok=True)
-            p = os.path.join(d, file_name)
+            p = os.path.join(d, draft_name)
             with open(p, "w", encoding="utf-8") as f:
-                f.write(synthesis_reply)
-            final_obs_path = p
-        except Exception as e:
-            logger.warning(f"[Cascade-Loop] Konnte Beschlussvorlage nicht nach {d} schreiben: {e}")
-
-    # Parent-Task updaten
-    parent_task["status"] = "completed"
-    parent_task["phase"] = "completed"
-    parent_task["artifact_path"] = final_obs_path
-    parent_task["result_summary"] = synthesis_reply[:500] + "..." if len(synthesis_reply) > 500 else synthesis_reply
-    parent_task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    now_t = datetime.datetime.now().strftime("%H:%M:%S")
-    data.setdefault("audit_logs", []).insert(0, {
-        "time": now_t,
-        "source": "Synthese-Loop",
-        "msg": f"Finale Beschlussvorlage für #{parent_project_id} erstellt & abgelegt"
-    })
-    add_ticker("Synthese-Loop", f"Finale Beschlussvorlage für #{parent_project_id} bereit in Obsidian")
+                f.write(f"# Synthese-Entwurf: {parent_title}\n\n{synthesis_reply}\n")
+            draft_path = p
+        except Exception:
+            continue
+    parent_task["synthesis_draft_path"] = draft_path
     _save_mission_control_data(data)
 
-    # --- DEMOBILISIERUNG: Fachagenten der Sibling-Tasks auf 'standby' zurücksetzen ---
-    try:
-        demob_ids = list({s.get("agent_id") for s in siblings if s.get("agent_id")})
-        for agent_id_dem in demob_ids:
-            if agent_id_dem in ("executive_decision_architect", "robert", "labor_law_hr_governance", "sandy"):
-                continue  # Stamm-Agenten bleiben aktiv
-            _set_agent_profile_status(agent_id_dem, "standby")
-            logger.info(f"[Demobilisierung] '{agent_id_dem}' → standby nach Projekt-Abschluss #{parent_project_id}")
-        if demob_ids:
-            add_ticker("Demobilisierung", f"{len(demob_ids)} Fachagent(en) nach Projektabschluss auf Standby gesetzt")
-    except Exception as demob_err:
-        logger.warning(f"[Demobilisierung] Fehler: {demob_err}")
+    # --- SCHRITT 2: ROBERT gibt frei ---
+    robert_prompt = f"""Lisa (aggregation_lisa) hat die Teilergebnisse folgenden Projekts zusammengefuegt:
 
+PROJEKT: {parent_title}
+ANFORDERUNG: {parent_task.get('capture_input', parent_title)}
 
-    target_action = parent_task.get("target_action") or "none"
+LISAS SYNTHESE:
+{synthesis_reply}
+
+Pruefe Vollstaendigkeit und Plausibilitaet. Antworte MIT GENAU EINEM DER ZWO
+WOERTER ALS ALLERERSTER ZEILE: FREIGABE oder ABLEHNUNG - danach hoechstens
+ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
+    r_prof = next((p for p in profiles if p.get("id") in ("executive_decision_architect", "robert")), None)
+    r_system = ((r_prof or {}).get("system_prompt") or (r_prof or {}).get("prompt")
+                or "Du bist Robert, Executive Decision Architect und leitender Chefstratege von Archon OS. Antworte mit FREIGABE oder ABLEHNUNG als erste Zeile.")
+    r_model = (r_prof or {}).get("model") or "deepseek/deepseek-v4-flash-0731"
+    add_ticker("Robert", f"Prueft Lisas Synthese fuer '{parent_title[:30]}...'")
+    robert_reply = ""
     try:
-        n8n_res = await core_dispatcher.trigger_n8n_execution(
-            parent_project_id=parent_project_id,
-            title=parent_title,
-            final_report_path=final_obs_path,
-            content=synthesis_reply,
-            target_action=target_action
+        rres = await core_dispatcher.dispatch_to_omniroute_or_container(
+            agent_id="executive_decision_architect",
+            agent_name="Robert (Chefstratege)",
+            prompt=robert_prompt,
+            role="Executive Decision Architect",
+            system_prompt=r_system,
+            model=r_model,
         )
-        logger.info(f"[Cascade-Loop] n8n Webhook Ergebnis: {n8n_res}")
-        add_ticker("n8n Bridge", f"Action '{target_action}' an n8n übergeben ({n8n_res.get('status')})")
-    except Exception as n8n_err:
-        logger.warning(f"[Cascade-Loop] n8n Trigger fehlgeschlagen: {n8n_err}")
+        robert_reply = (rres.get("content", "") or "").strip()
+    except Exception as r_err:
+        logger.warning(f"[Cascade-Loop] Freigabe-Dispatch an Robert fehlgeschlagen: {r_err}")
+
+    erste = robert_reply[:120].upper()
+    freigegeben = ("FREIGABE" in erste) and ("ABLEHNUNG" not in erste)
+
+    if freigegeben:
+        await _finalize_synthesis_after_approval(parent_project_id, draft_path,
+                                                  synthesis_reply, f"Robert: {robert_reply[:200]}")
+        return
+
+    # 4b: Ablehnung/unklar -> Entwurf als Approval-Task im Board
+    app_id = f"mcapp-{safe_pid}"[:40]
+    if not any(t.get("id") == app_id for t in data.get("tasks", [])):
+        data["tasks"].append({
+            "id": app_id,
+            "title": f"Freigabe noetig: Synthese '{parent_title[:55]}'",
+            "agent_id": "executive_decision_architect",
+            "agent_name": "Robert (Chefstratege)",
+            "status": "approval",
+            "phase": "approval",
+            "parent_project_id": parent_project_id,
+            "synthesis_draft_path": draft_path,
+            "capture_input": parent_task.get("capture_input", parent_title),
+            "result_summary": f"Lisas Entwurf liegt bereit ({draft_path}). Roberts Rueckmeldung: {robert_reply[:250] or 'keine'}",
+            "target_action": parent_task.get("target_action") or "none",
+            "created_via": "synthesis_loop",
+        })
+    now_t = datetime.datetime.now().strftime("%H:%M:%S")
+    data.setdefault("audit_logs", []).insert(0, {
+        "time": now_t, "source": "Synthese-Loop",
+        "msg": f"Lisa-Entwurf fuer #{parent_pid_placeholder}" if False else f"Lisa-Entwurf fuer #{parent_project_id} braucht Freigabe (Robert: {robert_reply[:60] or 'ohne Antwort'})"
+    })
+    add_ticker("Synthese-Loop", f"Freigabe noetig: Entwurf '{draft_name}' im Approval-Board")
+    _save_mission_control_data(data)
 
 @app.post("/api/mission-control/tasks/move")
 async def move_mission_control_task(req: TaskMoveRequest):
@@ -9160,15 +9382,23 @@ async def move_mission_control_task(req: TaskMoveRequest):
         task["artifact_path"] = obs_path
         add_ticker("Obsidian", f"Projekt-Dokumentation {os.path.basename(obs_path)} geschrieben")
 
+        # FAN-IN (12.10.2026): Diese Task IST Lisas Entwurf-Freigabe
+        # (synthesis_draft_path) -> beim Approved-Move finalisieren:
+        # finaler Bericht + Parent completed + n8n-Bridge.
+        if task.get("synthesis_draft_path") and not task.get("synthesis_finalized"):
+            task["synthesis_finalized"] = True
+            await _finalize_synthesis_after_approval(
+                task.get("parent_project_id") or req.task_id,
+                task.get("synthesis_draft_path"),
+                task.get("result_summary") or "",
+                "Freigabe per Board-Move (Approval-Gate)",
+                daten=data,   # GLEICHES dict wie der Handler - sonst ueberschreibt
+                              # das finale _save_mission_control_data(data) den Update
+            )
+
         parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
         if parent_pid and parent_pid != req.task_id:
-            all_siblings = [
-                t for t in data.get("tasks", [])
-                if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
-                and t.get("id") != parent_pid
-            ]
-            if all_siblings and all(s.get("status") == "completed" for s in all_siblings):
-                asyncio.create_task(_run_synthesis_cascade(parent_pid))
+            asyncio.create_task(_fan_in_maybe_start_synthesis(parent_pid))
         
     elif req.target_status == "dismissed":
         tasks.remove(task)

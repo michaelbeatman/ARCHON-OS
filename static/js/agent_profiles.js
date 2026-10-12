@@ -2610,6 +2610,15 @@
           }
           return;
         }
+        // PERMISSION-GATE (12.10.2026): Rechte-Erweiterung braucht die
+        // Owner-Bestaetigung per Telegram - NICHTS wird gespeichert.
+        let _gateData = null;
+        try { _gateData = await res.clone().json(); } catch(e) {}
+        if (_gateData && _gateData.status === "pending_owner_approval") {
+          showArchonToast("🔐 " + (_gateData.message || "Warte auf deine Telegram-Bestätigung."), "info");
+          if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHtml; if (window.lucide) lucide.createIcons(); }
+          return;
+        }
         // Parallel SOUL.md und Personalakte mitspeichern wenn Inhalte editiert wurden
         const soulEditor = document.getElementById("prof-soul-inline-editor");
         if (soulEditor && soulEditor.value.trim()) {

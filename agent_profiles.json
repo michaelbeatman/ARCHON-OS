@@ -2416,7 +2416,8 @@
       "clarify",
       "delegate_task",
       "cronjob",
-      "computer_use"
+      "computer_use",
+      "x_search"
     ],
     "avatar": "/static/avatars/avatar_080.jpg",
     "provider": "omniroute",

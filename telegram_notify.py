@@ -63,11 +63,29 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
     try:
         with httpx.Client(timeout=_TELEGRAM_TIMEOUT) as client:
             resp = client.post(_api_url("sendMessage"), json=payload)
-        data = resp.json()
-        if resp.status_code == 200 and data.get("ok"):
-            return True
-        logger.warning(f"[Telegram] sendMessage fehlgeschlagen: HTTP {resp.status_code} — {data.get('description', 'unbekannt')}")
-        return False
+            data = resp.json()
+            if resp.status_code == 200 and data.get("ok"):
+                return True
+            # 12.10.2026: Markdown-Entities-400 (z.B. Unterstrich in Tool-Namen
+            # 'x_search_probe' -> unvollstaendige Kursiv-Entity) -> EINMAL retry
+            # OHNE parse_mode, NOCH INNERHALB des with-Blocks (sonst:
+            # "client has been closed"). So kommt jede Nachricht an,
+            # Markdown bleibt fuer alle anderen Nachrichten aktiv.
+            if resp.status_code == 400 and "parse" in str(data.get("description", "")):
+                clean = {k: v for k, v in payload.items() if k != "parse_mode"}
+                try:
+                    resp2 = client.post(_api_url("sendMessage"), json=clean)
+                    data2 = resp2.json()
+                    if resp2.status_code == 200 and data2.get("ok"):
+                        logger.info("[Telegram] Nachricht ohne Markdown-Rendern zugestellt (Parse-Fallback).")
+                        return True
+                    logger.warning(f"[Telegram] Retry fehlgeschlagen: HTTP {resp2.status_code} — {data2.get('description', '')}")
+                    return False
+                except Exception as e_retry:
+                    logger.warning(f"[Telegram] Retry-Fehler: {e_retry}")
+                    return False
+            logger.warning(f"[Telegram] sendMessage fehlgeschlagen: HTTP {resp.status_code} — {data.get('description', 'unbekannt')}")
+            return False
     except Exception as e:
         logger.warning(f"[Telegram] sendMessage Fehler (Netzwerk): {e}")
         return False

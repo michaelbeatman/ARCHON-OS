@@ -1,4 +1,5 @@
 import os
+import secrets
 import sys
 import time
 import json
@@ -8,7 +9,7 @@ import asyncio
 import socket
 import re
 from typing import List, Dict, Optional, Any
-from fastapi import FastAPI, HTTPException, Query, Request, Body, File, UploadFile
+from fastapi import FastAPI, HTTPException, Query, Request, Body, File, UploadFile, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel
@@ -3084,6 +3085,190 @@ def save_all_agent_profiles(profiles_list):
         except Exception:
             pass
 
+# =========================================================================
+# PERMISSION-GATE (12.10.2026, User-Vorgabe): Rechte-Erweiterungen
+# (NEUE TOOLS im Profil, Profil-LOESCHEN) brauchen IMMER die Owner-
+# Bestaetigung per Telegram. Erst nach 'approve' wird gespeichert/loescht.
+# =========================================================================
+PERMISSION_GATES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                      "config", "permission_gates.json")
+
+
+def _load_permission_gates() -> dict:
+    try:
+        if os.path.exists(PERMISSION_GATES_FILE):
+            with open(PERMISSION_GATES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.warning(f"[Gate] Konnte permission_gates nicht laden: {e}")
+    return {"gates": []}
+
+
+def _save_permission_gates(data: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(PERMISSION_GATES_FILE), exist_ok=True)
+        with open(PERMISSION_GATES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"[Gate] Konnte permission_gates nicht speichern: {e}")
+
+
+def _create_permission_gate(kind: str, detail: str, requested_by: str, payload: dict) -> dict:
+    """Legt einen Pending-Gate an und pingt den Owner per Telegram
+    (Inline-Buttons gate:approve/reject:<id> + Text-Fallback)."""
+    gates = _load_permission_gates()
+    gate_id = f"gate-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2)}"
+    gate = {
+        "id": gate_id,
+        "kind": kind,
+        "detail": detail,
+        "requested_by": requested_by,
+        "payload": payload,
+        "status": "pending",
+        "created_at": datetime.datetime.now().isoformat(),
+    }
+    gates.setdefault("gates", []).append(gate)
+    _save_permission_gates(gates)
+
+    knopf_text = {"tools_erweiterung": "🧰 Neue Tools vergeben",
+                  "profil_loeschen": "🗑️ Profil löschen"}.get(kind, "Rechte-Erweiterung")
+    text = (f"🔐 RECHTE-FREIGABE NÖTIG\n\n"
+            f"{knopf_text}\n"
+            f"Details: {detail}\n"
+            f"Angefordert von: {requested_by}\n"
+            f"Gate-ID: {gate_id}\n\n"
+            f"Text-Fallback: \"Erlauben {gate_id}\" oder \"Verbieten {gate_id}\"")
+    reply_markup = {"inline_keyboard": [[
+        {"text": "✅ Erlauben", "callback_data": f"gate:approve:{gate_id}"},
+        {"text": "❌ Verbieten", "callback_data": f"gate:reject:{gate_id}"},
+    ]]}
+    try:
+        from telegram_notify import send_telegram_message
+        ok = send_telegram_message(text, reply_markup=reply_markup)
+        if not ok:
+            logger.warning("[Gate] Telegram-Ping nicht zugestellt (Config pruefen) - Gate bleibt pending.")
+    except Exception as tg_err:
+        logger.warning(f"[Gate] Telegram-Ping fehlgeschlagen: {tg_err}")
+    add_ticker("Rechte-Gate", f"Owner-Bestätigung offen: {knopf_text} ({gate_id})")
+    logger.info(f"[Gate] {kind} fuer '{detail}' -> Warte auf Telegram-Bestätigung ({gate_id})")
+    return gate
+
+
+@app.post("/api/permission-gates/{gate_id}/decide")
+def api_decide_permission_gate(gate_id: str, body: Dict = Body(...)):
+    """Owner-Entscheidung ueber Telegram (Buttons gate:approve/reject oder
+    Textbefehl 'Erlauben/Verbieten <gate_id>' via Skill).
+    12.10: bewusst SYNCHRON (fastapi-Threadpool) - als async blockierte
+    das sync-Innenleben (Save+Telegram) die Event-Loop der ganzen App."""
+    decision = str(body.get("decision") or "").lower().strip()
+    if decision not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="decision muss approve oder reject sein")
+    gates = _load_permission_gates()
+    gate = next((g for g in gates.get("gates", []) if g.get("id") == gate_id), None)
+    if not gate:
+        raise HTTPException(status_code=404, detail=f"Gate {gate_id} nicht gefunden")
+    if gate.get("status") != "pending":
+        return {"status": "already_decided", "decision": gate.get("status"), "gate_id": gate_id}
+
+    gate["status"] = "approved" if decision == "approve" else "rejected"
+    gate["decided_at"] = datetime.datetime.now().isoformat()
+    _save_permission_gates(gates)
+
+    ergebnis = ""
+    if decision == "approve":
+        payload = dict(gate.get("payload") or {})
+        try:
+            if gate.get("kind") == "tools_erweiterung":
+                payload["_approved_gate_id"] = gate_id
+                res = api_save_hermes_profile(payload)
+                ergebnis = f"Tools gespeichert fuer '{payload.get('id')}': " + str(res)
+            elif gate.get("kind") == "profil_loeschen":
+                res = api_delete_hermes_profile(payload.get("profile_id", ""), gate_approved_id=gate_id)
+                ergebnis = f"Profil '{payload.get('profile_id')}' archiviert/geloescht: " + str(res)[:120]
+            else:
+                ergebnis = "Unbekanntes Gate-Kind - nichts ausgefuehrt"
+        except Exception as dec_err:
+            logger.error(f"[Gate] Ausfuehrung nach Freigabe fehlgeschlagen: {dec_err}")
+            ergebnis = f"FEHLER bei der Ausfuehrung: {dec_err}"
+    else:
+        ergebnis = "Abgelehnt - NICHTS wurde geaendert."
+
+    try:
+        from telegram_notify import send_telegram_message as _stg
+        _stg(f"{'✅' if decision == 'approve' else '❌'} Rechte-Gate {gate_id}\n{ergebnis[:800]}")
+    except Exception as tg2:
+        logger.warning(f"[Gate] Bestaetigungs-Ping fehlgeschlagen: {tg2}")
+    add_ticker("Rechte-Gate", f"{gate_id}: {'erteilt' if decision == 'approve' else 'abgelehnt'}")
+    logger.info(f"[Gate] {gate_id} -> {decision}: {ergebnis[:200]}")
+    return {"status": "ok", "decision": decision, "gate_id": gate_id, "ergebnis": ergebnis}
+
+
+@app.post("/api/telegram/relay")
+async def api_telegram_relay(ziel_agent: str = Form(""), text: str = Form(""),
+                             datei_name: str = Form(""), datei_b64: str = Form("")):
+    """TELEGRAM-RELAY (12.10.2026, User-Vorgabe): Owner-Nachricht (Text +
+    optionale Datei als base64) 1:1 an einen Agenten weiterleiten und die
+    ANTWORT automatisch per Telegram zurueckschicken."""
+    ziel = (ziel_agent or "").strip() or "executive_decision_architect"
+    profiles = api_get_hermes_profiles()
+    prof = next((p for p in profiles if p.get("id") == ziel), None)
+    if not prof:
+        raise HTTPException(status_code=400, detail=f"Ziel-Agent '{ziel}' existiert nicht im Kader.")
+    agent_name = prof.get("person_name") or prof.get("name") or ziel
+    msg = (text or "").strip()
+    if not msg:
+        raise HTTPException(status_code=400, detail="text darf nicht leer sein")
+
+    anhang_hinweis = ""
+    if datei_b64:
+        try:
+            import base64 as _b64
+            safe_name = re.sub(r'[^a-zA-Z0-9._-]+', '_', (datei_name or "anhang.bin"))[-80:]
+            rel_dir = os.path.join("static", "uploads", "telegram")
+            os.makedirs(rel_dir, exist_ok=True)
+            rel_path = os.path.join(rel_dir, f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_name}")
+            with open(rel_path, "wb") as f_bin:
+                f_bin.write(_b64.b64decode(datei_b64))
+            groesse = os.path.getsize(rel_path)
+            anhang_hinweis = (f"\n\n📎 ANHANG des Owners ({safe_name}, {groesse} B): {rel_path}\n"
+                              f"Arbeite MIT dieser Datei (z.B. video_analyze/vision oder lesen).")
+            logger.info(f"[Relay] Anhang gespeichert: {rel_path} ({groesse} B)")
+        except Exception as anh_err:
+            logger.warning(f"[Relay] Anhang konnte nicht gespeichert werden: {anh_err}")
+            anhang_hinweis = f"\n\n(Anhang '{datei_name}' konnte nicht gespeichert werden: {anh_err})"
+
+    relay_prompt = (f"LEITUNG VOM OWNER PER TELEGRAM (1:1, unveraendert):\n\n"
+                    f"{msg}{anhang_hinweis}\n\n"
+                    f"Antworte mit dem Ergebnis der Aufgabe (Deutsch, ohne Begruessung).")
+
+    system_prompt = (prof.get("system_prompt") or prof.get("prompt")
+                     or f"Du bist {agent_name}. Antworte praezise auf Deutsch.")
+    model = (prof.get("model") if prof.get("model") not in ("", "free-forever") else "") or "deepseek/deepseek-v4-flash-0731"
+    def _tg_send_relay(text_out):
+        from telegram_notify import send_telegram_message
+        return send_telegram_message(f"🤖 {agent_name}:\n\n{text_out[:3900]}")
+    add_ticker("Telegram-Relay", f"Nachricht an {agent_name} weitergeleitet ({len(msg)} Z)")
+    try:
+        res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            agent_id=ziel, agent_name=agent_name, prompt=relay_prompt,
+            role=prof.get("category", "Relay-Ziel"), system_prompt=system_prompt, model=model)
+        antwort = (res.get("content") or "").strip()
+    except Exception as rel_err:
+        logger.error(f"[Relay] Dispatch an {ziel} fehlgeschlagen: {rel_err}")
+        antwort = ""
+
+    if not antwort:
+        antwort = (f"Der Relay an {agent_name} lieferte keine Antwort "
+                   f"(Grund: {res.get('error', 'unbekannt') if isinstance(res, dict) else 'dispatch-fehler'}).")
+    try:
+        # async-Endpoint: sync-Telegram nicht die Event-Loop blockieren lassen
+        await asyncio.to_thread(_tg_send_relay, antwort)
+    except Exception as tg3:
+        logger.warning(f"[Relay] Telegram-Rueckantwort fehlgeschlagen: {tg3}")
+    logger.info(f"[Relay] {ziel}: {len(msg)} Z rein, {len(antwort)} Z zurueck an Telegram")
+    return {"status": "ok", "ziel_agent": ziel, "antwort_kopf": antwort[:400]}
+
+
 @app.post("/api/hermes/profiles")
 def api_save_hermes_profile(profile_data: Dict = Body(...)):
     p_id = profile_data.get("id")
@@ -3095,6 +3280,32 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
     profile_data["person_name"] = person_name
     avatar_val = profile_data.get("avatar") or profile_data.get("avatar_url") or f"https://api.dicebear.com/7.x/notionists/svg?seed={p_id}&backgroundColor=3b82f6"
     profile_data["avatar"] = avatar_val
+    # --- PERMISSION-GATE: NEUE TOOLS = Rechte-Erweiterung -> Owner per Telegram ---
+    incoming_tools = profile_data.get("tools")
+    _gate_ok = bool(profile_data.get("_approved_gate_id"))
+    if isinstance(incoming_tools, list) and not _gate_ok:
+        _alt_tools = []
+        for p_base in get_hermes_profiles_base_dirs():
+            yml = os.path.join(p_base, p_id, "profile.yaml")
+            if os.path.exists(yml):
+                try:
+                    import yaml as _yaml
+                    with open(yml, "r", encoding="utf-8") as _fy:
+                        _alt_tools = (_yaml.safe_load(_fy) or {}).get("tools") or []
+                    break
+                except Exception:
+                    pass
+        _neue = [t for t in incoming_tools if t not in _alt_tools]
+        if _neue:
+            detail = (f"Profil '{p_id}' bekommt neue Tools: {', '.join(_neue[:8])}"
+                      + (f" (+{len(_neue)-8} weitere)" if len(_neue) > 8 else ""))
+            gate = _create_permission_gate(
+                "tools_erweiterung", detail,
+                f"agent:{profile_data.get('requested_by') or 'ui-owner'}",
+                {k: v for k, v in profile_data.items() if k != "_approved_gate_id"})
+            return {"status": "pending_owner_approval", "gate_id": gate["id"],
+                    "message": "Rechte-Erweiterung erkannt: Warte auf deine Telegram-Bestätigung. "
+                               f"Antworte dort: 'Erlauben {gate['id']}' oder 'Verbieten {gate['id']}'."}
     assigned_tools = profile_data.get("tools", DEFAULT_HERMES_TOOLS)
     profile_data["tools"] = assigned_tools
     assigned_skills = profile_data.get("skills", [])
@@ -6095,9 +6306,22 @@ async def api_studio_upload_bg(file: UploadFile = File(...)):
     return {"status": "success", "url": f"/static/uploads/{out_name}", "filename": out_name, "size": len(content)}
 
 @app.delete("/api/hermes/profiles/{profile_id}")
-def api_delete_hermes_profile(profile_id: str):
+def api_delete_hermes_profile(profile_id: str, gate_approved_id: str = ""):
     if profile_id in ["default", "hermes_default", "micha"]:
         raise HTTPException(status_code=400, detail=f"System-Profil '{profile_id}' kann nicht gelöscht werden.")
+    # --- PERMISSION-GATE: Loeschen = Rechte-Entzug -> Owner per Telegram ---
+    if not gate_approved_id:
+        _gates = _load_permission_gates().get("gates", [])
+        _pend = [g for g in _gates if g.get("status") == "pending"
+                 and g.get("kind") == "profil_loeschen"
+                 and (g.get("payload") or {}).get("profile_id") == profile_id]
+        if not _pend:
+            gate = _create_permission_gate(
+                "profil_loeschen", f"Profil '{profile_id}' soll Dauerhaft geloescht werden (Archiv)",
+                "agent:ui-owner", {"profile_id": profile_id})
+            return {"status": "pending_owner_approval", "gate_id": gate["id"],
+                    "message": "Loeschen braucht deine Telegram-Bestätigung. "
+                               f"Antworte: 'Erlauben {gate['id']}' oder 'Verbieten {gate['id']}'."}
 
     archived_locations = []
     for p_base in get_hermes_profiles_base_dirs():

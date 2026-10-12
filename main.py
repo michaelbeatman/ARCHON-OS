@@ -4447,7 +4447,17 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
             # Fehlertolerant: darf den Delegations-Fluss nie blockieren, loggt aber sichtbar.
             try:
                 from telegram_notify import notify_task_status
-                notify_task_status(task_id, status, final_title, result, obsidian_rel)
+                # 2a: Zielordner fuer das Bericht-Dossier (landet im Projektordner
+                # unter 01_Zwischenberichte, damit es Kanban/Showroom ebenfalls sieht)
+                _doss_dir = None
+                if obsidian_rel:
+                    try:
+                        _doss_dir = os.path.join(OBSIDIAN_VAULT_DIR, "01_PROJEKTE",
+                                                 obsidian_rel, "01_Zwischenberichte")
+                    except Exception:
+                        _doss_dir = None
+                notify_task_status(task_id, status, final_title, result, obsidian_rel,
+                                   dossier_dir=_doss_dir)
             except Exception as tg_err:
                 logger.warning(f"[Telegram] Delegations-Ping für Task {task_id} fehlgeschlagen: {tg_err}")
             # --- FAN-IN RUECKLAUF (12.10.2026): MC-Subtask abschliessen und
@@ -9457,6 +9467,45 @@ async def _fan_in_maybe_start_synthesis(parent_pid: str):
         logger.warning(f"[Fan-in] Synthese-Check fehlgeschlagen: {e}")
 
 
+def _tg_ping_synthesis(parent_title, parent_project_id, synthese_text, draft_path,
+                       app_id=None, dossier_dir=None):
+    """2a: Synthese-Bericht als Telegram-Ping MIT Dossier-Anhang.
+
+    app_id gesetzt -> Freigabe-Buttons (app:approve/reject) fuer den Approval-Task.
+    Fehlertolerant: darf die Synthese nie blockieren, loggt aber sichtbar.
+    """
+    try:
+        from telegram_notify import send_telegram_document, send_telegram_message
+        dpath = None
+        if dossier_dir:
+            try:
+                from dossier_builder import build_dossier_from_report
+                dpath = build_dossier_from_report(
+                    f"Synthese: {parent_title}", synthese_text, dossier_dir,
+                    f"{re.sub(r'[^a-zA-Z0-9_-]+', '-', str(parent_project_id))[:40]}_synthese",
+                    ref_id=parent_project_id, quelle="Lisa (aggregation_lisa)")
+            except Exception as _e:
+                logger.warning(f"[Synthese] Dossier-Aufbau fehlgeschlagen: {_e}")
+        _kurz = re.sub(r"\s+", " ", (synthese_text or "")).strip()[:300]
+        caption = ("🔐 ENTSCHEIDUNG NÖTIG — Synthese\n"
+                   f"Projekt: {parent_title}\n\n{_kurz}"
+                   + ("\n\nDer vollständige Entwurf liegt als Anhang bei." if dpath else ""))
+        markup = None
+        if app_id:
+            markup = {"inline_keyboard": [[
+                {"text": "✅ Freigeben", "callback_data": f"app:approve:{app_id}"},
+                {"text": "❌ Ablehnen", "callback_data": f"app:reject:{app_id}"},
+            ]]}
+        if dpath and send_telegram_document(dpath, caption=caption, reply_markup=markup):
+            return
+        if dpath:
+            logger.warning("[Synthese] Dossier-Ping fehlgeschlagen — Text-Ping stattdessen.")
+        send_telegram_message(caption + (f"\n\n📄 Entwurf: {draft_path}" if draft_path else ""),
+                              reply_markup=markup)
+    except Exception as e:
+        logger.warning(f"[Synthese] Telegram-Ping fehlgeschlagen: {e}")
+
+
 async def _run_synthesis_cascade(parent_project_id: str):
     """
     FAN-IN SYNTHESE (12.10.2026, User-Entscheidung A+B):
@@ -9557,6 +9606,14 @@ VORGABEN:
                                            "parent_project_title": parent_title})
     except Exception:
         _fan_ordner = ""
+    # 2a: Ablageordner fuer das Synthese-Dossier im Projektordner
+    _tg_doss_dir = None
+    try:
+        if _fan_ordner:
+            _tg_doss_dir = os.path.join(OBSIDIAN_VAULT_DIR, "01_PROJEKTE",
+                                        _fan_ordner, "01_Zwischenberichte")
+    except Exception:
+        _tg_doss_dir = None
     draft_path = (f"/opt/data/obsidian/01_PROJEKTE/{_fan_ordner}/03_Endprodukte/{draft_name}"
                   if _fan_ordner else f"/opt/data/obsidian/01_PROJEKTE/{draft_name}")
     for d in target_dirs:
@@ -9609,6 +9666,9 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     if freigegeben:
         await _finalize_synthesis_after_approval(parent_project_id, draft_path,
                                                   synthesis_reply, f"Robert: {robert_reply[:200]}")
+        # 2a: Owner informieren - kein Handlungsbedarf, aber Bericht mitliefern.
+        _tg_ping_synthesis(parent_title, parent_project_id, synthesis_reply, draft_path,
+                           app_id=None, dossier_dir=_tg_doss_dir)
         return
 
     # 4b: Ablehnung/unklar -> Entwurf als Approval-Task im Board
@@ -9636,6 +9696,9 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     })
     add_ticker("Synthese-Loop", f"Freigabe noetig: Entwurf '{draft_name}' im Approval-Board")
     _save_mission_control_data(data)
+    # 2a: Freigabe-Anfrage MIT Dossier-Anhang + Buttons an den Owner.
+    _tg_ping_synthesis(parent_title, parent_project_id, synthesis_reply, draft_path,
+                       app_id=app_id, dossier_dir=_tg_doss_dir)
 
 @app.post("/api/mission-control/tasks/move")
 async def move_mission_control_task(req: TaskMoveRequest):

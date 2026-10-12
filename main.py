@@ -8,6 +8,8 @@ import datetime
 import asyncio
 import socket
 import re
+import threading
+import tempfile
 from typing import List, Dict, Optional, Any
 from fastapi import FastAPI, HTTPException, Query, Request, Body, File, UploadFile, Form
 from fastapi.staticfiles import StaticFiles
@@ -8847,6 +8849,34 @@ from pydantic import BaseModel
 class OSKanbanTaskStatusUpdate(BaseModel):
     status: str
 
+# FAN-IN-RACE-FIX (Struktur-Thema 3, User-Entscheidung): der MC-Store ist eine
+# JSON-Datei mit vielen verstreuten Schreibern (Move-Handler, Watcher, Cascade).
+# _MC_DATA_LOCK serialisiert die Writes, _write_mc_atomic verhindert Halbstaende
+# (Temp-Datei + fsync + os.replace). Wer load->aendern->save als SEQUENZ braucht
+# (Fan-in-Check), haelt den Lock ueber alles (s. _fan_in_maybe_start_synthesis).
+_MC_DATA_LOCK = threading.Lock()
+
+
+def _write_mc_atomic(data: dict):
+    """Atomarer MC-Store-Write. Nur mit gehaltenem _MC_DATA_LOCK aufrufen
+    (Lock ist nicht reentrant - _save_mission_control_data haelt ihn aussen)."""
+    _dir = os.path.dirname(os.path.abspath(MISSION_CONTROL_FILE)) or "."
+    os.makedirs(_dir, exist_ok=True)
+    _fd, _tmp = tempfile.mkstemp(dir=_dir, prefix=".mission_control_", suffix=".tmp")
+    try:
+        with os.fdopen(_fd, "w", encoding="utf-8") as _f:
+            json.dump(data, _f, indent=2, ensure_ascii=False)
+            _f.flush()
+            os.fsync(_f.fileno())
+        os.replace(_tmp, MISSION_CONTROL_FILE)
+    except BaseException:
+        try:
+            os.unlink(_tmp)
+        except OSError:
+            pass
+        raise
+
+
 def _load_mission_control_data() -> dict:
     if os.path.exists(MISSION_CONTROL_FILE):
         try:
@@ -8924,8 +8954,8 @@ def _load_mission_control_data() -> dict:
 
 def _save_mission_control_data(data: dict):
     try:
-        with open(MISSION_CONTROL_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        with _MC_DATA_LOCK:
+            _write_mc_atomic(data)
     except Exception as e:
         print(f"Error saving mission_control_data: {e}")
 
@@ -9711,19 +9741,24 @@ async def _fan_in_maybe_start_synthesis(parent_pid: str):
     if not parent_pid:
         return
     try:
-        data = _load_mission_control_data()
-        siblings = [t for t in data.get("tasks", [])
-                    if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
-                    and t.get("id") != parent_pid]
-        parent = next((t for t in data.get("tasks", []) if t.get("id") == parent_pid), None)
-        if not siblings or not parent:
-            return
-        if parent.get("synthesis_started"):
-            return
-        if not all(s.get("status") == "completed" for s in siblings):
-            return
-        parent["synthesis_started"] = True
-        _save_mission_control_data(data)
+        # Struktur-Thema 3: die GANZE Pruef-Sequenz unter EINEM Lock (frisch
+        # laden, pruefen, Flag setzen, speichern). Sonst starten zwei zeitgleiche
+        # Fertigmeldungen die Synthese doppelt. _write_mc_atomic direkt: der Lock
+        # ist nicht reentrant, _save_mission_control_data wuerde verklemmen.
+        with _MC_DATA_LOCK:
+            data = _load_mission_control_data()
+            siblings = [t for t in data.get("tasks", [])
+                        if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
+                        and t.get("id") != parent_pid]
+            parent = next((t for t in data.get("tasks", []) if t.get("id") == parent_pid), None)
+            if not siblings or not parent:
+                return
+            if parent.get("synthesis_started"):
+                return
+            if not all(s.get("status") == "completed" for s in siblings):
+                return
+            parent["synthesis_started"] = True
+            _write_mc_atomic(data)
         logger.info(f"[Fan-in] Alle {len(siblings)} Geschwister von '{parent_pid}' fertig -> Synthese starten")
         asyncio.create_task(_run_synthesis_cascade(parent_pid))
     except Exception as e:
@@ -9852,6 +9887,47 @@ VORGABEN:
         synthesis_reply = (f"# Synthese: {parent_title}\n\n"
                            "Die Synthese der Fachmodule wurde planmaessig abgeschlossen "
                            "(Modell-Antwort leer - Teilergebnisse liegen in den Projektordnern).")
+        _lisa_leer = True
+    else:
+        _lisa_leer = False
+
+    # MARKER-KONTRAKT (Struktur-Thema 2, User-Entscheidung): Lisas Prompt verlangt
+    # als letzte Zeile exakt SYNTHESE-BEREIT. Fehlt der Marker bei echter Antwort:
+    # EIN Reparatur-Retry, danach Fallback MIT sichtbarer Warnung (nie still).
+    # Die Marker-Zeile ist Protokoll, kein Inhalt - sie wird vor Draft/Dossier/Robert entfernt.
+    _MARKER = "SYNTHESE-BEREIT"
+
+    def _lisa_marker_ok(txt):
+        _ls = [l.strip() for l in (txt or "").splitlines() if l.strip()]
+        return bool(_ls) and _ls[-1].upper() == _MARKER
+
+    if _lisa_leer:
+        logger.warning(f"[Cascade-Loop] Lisa lieferte keine Synthese fuer {parent_project_id} (Fallback-Text).")
+        add_ticker("Lisa", f"Keine Modell-Antwort fuer '{parent_title[:30]}...' - Fallback-Text verwendet")
+    elif not _lisa_marker_ok(synthesis_reply):
+        _repaired = ""
+        try:
+            _rres2 = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id="aggregation_lisa",
+                agent_name="Lisa (Ergebnis-Kuratorin)",
+                prompt=("Gib die folgende Synthese UNVERAENDERT erneut aus und setze "
+                        "als LETZTE ZEILE exakt: SYNTHESE-BEREIT\n\n" + synthesis_reply),
+                role="Ergebnis-Kuratorin & Synthese",
+                system_prompt=lisa_system,
+                model=lisa_model,
+            )
+            _repaired = (_rres2.get("content", "") or "").strip()
+        except Exception as _rep_err:
+            logger.warning(f"[Cascade-Loop] Marker-Repair an Lisa fehlgeschlagen: {_rep_err}")
+        if _lisa_marker_ok(_repaired):
+            synthesis_reply = _repaired
+            logger.info(f"[Cascade-Loop] Marker-Repair erfolgreich ({parent_project_id})")
+        else:
+            logger.warning(f"[Cascade-Loop] Synthese ohne {_MARKER}-Marker ({parent_project_id}) - ungeprueft verwendet")
+            add_ticker("Lisa", f"Synthese ohne {_MARKER}-Marker - ungeprueft verwendet")
+    _syn_lines = synthesis_reply.splitlines()
+    if _syn_lines and _syn_lines[-1].strip().upper() == _MARKER:
+        synthesis_reply = "\n".join(_syn_lines[:-1]).strip()
 
     # Entwurf ablegen (Basis der Robert-Freigabe)
     safe_pid = re.sub(r'[^a-zA-Z0-9_\-]+', '-', parent_project_id).strip('-') or "projekt"
@@ -9901,7 +9977,7 @@ ANFORDERUNG: {parent_task.get('capture_input', parent_title)}
 LISAS SYNTHESE:
 {synthesis_reply}
 
-Pruefe Vollstaendigkeit und Plausibilitaet. Antworte MIT GENAU EINEM DER ZWO
+Pruefe Vollstaendigkeit und Plausibilitaet. Antworte MIT GENAU EINEM DER ZWEI
 WOERTER ALS ALLERERSTER ZEILE: FREIGABE oder ABLEHNUNG - danach hoechstens
 ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     r_prof = next((p for p in profiles if p.get("id") in ("executive_decision_architect", "robert")), None)
@@ -9923,8 +9999,18 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     except Exception as r_err:
         logger.warning(f"[Cascade-Loop] Freigabe-Dispatch an Robert fehlgeschlagen: {r_err}")
 
-    erste = robert_reply[:120].upper()
-    freigegeben = ("FREIGABE" in erste) and ("ABLEHNUNG" not in erste)
+    # ROBUSTE FREIGABE-ERKENNUNG (Struktur-Thema 4/1, User-Entscheidung): NUR die
+    # exakte erste Zeile zaehlt. Alles andere (Floskeln, "KEINE FREIGABE", leer)
+    # geht an den Owner via Kanban-Entscheidung (4b-Pfad) - nie still, nie geraten.
+    _erste_zeile = ((robert_reply or "").splitlines() or [""])[0].strip().upper()
+    if _erste_zeile == "FREIGABE":
+        freigegeben = True
+    elif _erste_zeile == "ABLEHNUNG":
+        freigegeben = False
+    else:
+        logger.warning(f"[Cascade-Loop] Roberts Antwort unklar (erste Zeile: '{_erste_zeile[:60]}') - Owner entscheidet")
+        add_ticker("Robert", "Antwort unklar - Freigabe liegt beim Owner im Kanban")
+        freigegeben = False
 
     if freigegeben:
         await _finalize_synthesis_after_approval(parent_project_id, draft_path,

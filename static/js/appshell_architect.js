@@ -241,10 +241,21 @@
       if (originalOnload) {
         try { await originalOnload(); } catch (e) { console.error("Initial onload error:", e); }
       }
-      try { await loadBoardroomFrameworks(); } catch (e) {}
-      try { await initArchonCssStudio(); } catch (e) {}
-      try { initAppShellConfig(); } catch (e) {}
-      try { await fetchMissionControlData(false); } catch (e) {}
+      // 11.10.2026: hing/fehlschlag ein Schritt, starb die GANZE Kette
+      // still (stumme catchs) -> Studio-Init lief nie. Jetzt: harte
+      // Timeouts + sichtbare Fehler; das Studio-Init laeuft zusaetzlich
+      // unabhaengig ueber window.archonStudioAutoInit (css_live_studio.js).
+      const _withTimeout = (p, ms, name) => Promise.race([
+        Promise.resolve(p),
+        new Promise((_, rej) => setTimeout(() => rej(new Error(name + " Timeout nach " + ms + "ms")), ms))
+      ]);
+      try { await _withTimeout(loadBoardroomFrameworks(), 10000, "loadBoardroomFrameworks"); }
+      catch (e) { console.error("[AppShell] loadBoardroomFrameworks:", e); }
+      try { await _withTimeout(window.archonStudioAutoInit ? window.archonStudioAutoInit() : initArchonCssStudio(), 15000, "initArchonCssStudio"); }
+      catch (e) { console.error("[AppShell] initArchonCssStudio:", e); }
+      try { initAppShellConfig(); } catch (e) { console.error("[AppShell] initAppShellConfig:", e); }
+      try { await _withTimeout(fetchMissionControlData(false), 12000, "fetchMissionControlData"); }
+      catch (e) { console.error("[AppShell] fetchMissionControlData:", e); }
       startMissionControlStopwatches();
       setInterval(() => fetchMissionControlData(false), 30000);
     };

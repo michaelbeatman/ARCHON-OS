@@ -798,6 +798,16 @@
         const cssVal = `url("${data.url}")`;
         const inp = document.getElementById("st-input-bg-image");
         if (inp) inp.value = cssVal;
+        // 11.10.2026 FIX (User-Fall "nur Laden, Entfernen nichts"): ohne
+        // vorherige Element-Wahl brach onStudioPropChange mit Alert ab -
+        // Status log "✓ gesetzt", aber ES KAM KEINE REGEL (Schein-Erfolg).
+        // Hintergrund-Upload bekommt jetzt body als Standardziel.
+        let bgZielHinweis = "";
+        if (!studioSelectedSelector) {
+          studioSelectedSelector = "body";
+          studioSelectedElement = document.body;
+          bgZielHinweis = " (Ziel: body - kein Element zuvor gewählt)";
+        }
         onStudioPropChange("background-image", cssVal);
         // Sinnvolle Defaults für ein Vollflächen-Hintergrundbild
         const selSize = document.getElementById("st-select-bg-size");
@@ -807,7 +817,7 @@
         if (status) {
           status.classList.remove("hidden", "text-zinc-400", "text-rose-400");
           status.classList.add("text-emerald-400");
-          status.textContent = `✓ ${data.filename} (${Math.round((data.size || 0) / 1024)} KB) als Hintergrund gesetzt`;
+          status.textContent = `✓ ${data.filename} (${Math.round((data.size || 0) / 1024)} KB) als Hintergrund gesetzt${bgZielHinweis}`;
         }
       } catch (err) {
         if (status) {
@@ -1569,11 +1579,17 @@
           body: JSON.stringify(payload)
         });
         if (res.ok && !silent) {
-          alert("✅ Alle CSS-, Text- & HTML-Overrides wurden dauerhaft auf dem Archon-Server gespeichert!");
+          // 11.10.2026: alert() blockierte den Browser-Thread ("haengt beim
+          // Speichern") -> nicht-blockierende Notification.
+          if (typeof showNotification === "function") {
+            showNotification("Gespeichert", "CSS-, Text- & HTML-Overrides dauerhaft auf dem Server gespeichert.", "success");
+          }
         }
       } catch (e) {
         console.error("Save overrides error:", e);
-        if (!silent) alert("Verbindungsfehler beim Speichern der Overrides.");
+        if (!silent && typeof showNotification === "function") {
+          showNotification("Speichern fehlgeschlagen", "Verbindungsfehler beim Speichern der Overrides.", "error");
+        }
       }
     }
     function resetSelectedElementStyles() {
@@ -1839,4 +1855,37 @@ async function deleteThemeProfile() {
 
 // Call fetch on load
 setTimeout(fetchThemeProfiles, 2000);
+
+// ============================================================
+// AUTO-INIT (11.10.2026 - "gravierender Bug"): Der EINZIGE fruehere
+// Aufruf stand in appshell_architect.js als
+//   try { await initArchonCssStudio(); } catch (e) {}
+// in einer window.onload-Kette mit STUMMEN catchs - scheiterte oder
+// hing ein Schritt davor (z.B. loadBoardroomFrameworks ohne
+// Timeout), lief das Studio-Init NIE: die Regeln kamen nie im
+// Browser an, removeStudioBackground meldete "Kein Hintergrundbild"
+// obwohl der Server Regeln hatte. Jetzt: unabhaengiger Start +
+// sichtbare Fehler statt stummer catchs.
+let archonStudioInitRunning = false;
+let archonStudioInitTried = false;
+window.archonStudioAutoInit = async function archonStudioAutoInit() {
+  if (archonStudioInitRunning) return;
+  archonStudioInitRunning = true;
+  archonStudioInitTried = true;
+  try {
+    await initArchonCssStudio();
+  } catch (e) {
+    console.error("[CSS Studio] Init fehlgeschlagen - Studio-Regeln konnten nicht geladen werden:", e);
+    archonStudioInitTried = false;   // erlaubt spaeteren Erneutversuch
+  } finally {
+    archonStudioInitRunning = false;
+  }
+};
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => window.archonStudioAutoInit());
+} else {
+  window.archonStudioAutoInit();
+}
+// Spaetversuch, falls der erste Lauf im toten onload-Race landete
+setTimeout(() => { if (!archonStudioInitTried) window.archonStudioAutoInit(); }, 4000);
 

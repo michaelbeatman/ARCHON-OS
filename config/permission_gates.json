@@ -133,8 +133,9 @@
         "status": "standby",
         "is_favorite": false
       },
-      "status": "pending",
-      "created_at": "2026-10-12T14:26:48.242844"
+      "status": "rejected",
+      "created_at": "2026-10-12T14:26:48.242844",
+      "decided_at": "2026-10-12T16:00:32.509677"
     },
     {
       "id": "gate-20261012143110-9029",
@@ -201,8 +202,9 @@
         "status": "standby",
         "is_favorite": false
       },
-      "status": "pending",
-      "created_at": "2026-10-12T14:31:10.654035"
+      "status": "approved",
+      "created_at": "2026-10-12T14:31:10.654035",
+      "decided_at": "2026-10-12T14:47:35.987290"
     },
     {
       "id": "gate-20261012143147-f8ab",

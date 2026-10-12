@@ -246,6 +246,7 @@
         if (!res.ok) return;
         mcKanbanCache = await res.json();
         renderMissionControlKanban();
+        renderMissionControlActive();
         overrideMissionControlGovernance();
         overrideMissionControlCadre();
       } catch (e) {
@@ -663,30 +664,35 @@
       if (!str) return '';
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
-    async function onMissionControlTaskCapture(e) {
-      e.preventDefault();
-      const inp = document.getElementById("mc-capture-input");
-      if (!inp || !inp.value.trim()) return;
-      const title = inp.value.trim();
-      inp.value = "";
-      // Kanban-Wahrheit: neue Aufgabe landet als To-Do im Kanban (Hermes-Worker
-      // übernimmt die Ausführung), nicht mehr in der MC-Engine.
-      try {
-        const res = await fetch('/api/operations/kanban/tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(12000),
-          body: JSON.stringify({ title, column: 'todo' })
-        });
-        if (res.ok) {
-          showNotification("Mission Control", "Aufgabe im Kanban angelegt.", "success");
-          await fetchMissionControlKanban();
-        } else {
-          showNotification("Fehler", `Status ${res.status}: Aufgabe konnte nicht angelegt werden`, "error");
-        }
-      } catch (err) {
-        showNotification("Fehler", String(err), "error");
+    function renderMissionControlActive() {
+      // BOX 2 rechts: was gerade läuft (in_progress aus der Kanban-Wahrheit).
+      // Stoppuhr-Spans (.mc-stopwatch) werden vom bestehenden Intervall gepflegt.
+      const cols = (mcKanbanCache && mcKanbanCache.columns) || {};
+      const prog = cols.in_progress || [];
+      const listEl = document.getElementById('mc-active-list');
+      const countEl = document.getElementById('mc-active-count');
+      if (countEl) countEl.innerText = prog.length;
+      if (!listEl) return;
+      if (!prog.length) {
+        listEl.innerHTML = `<div class="p-2.5 text-center text-[10.5px] shadcn-muted bg-[var(--secondary)] rounded-lg border border-[var(--border)]">Gerade läuft nichts — alle Worker auf Standby.</div>`;
+        return;
       }
+      listEl.innerHTML = prog.map(t => {
+        let st = parseFloat(t.started_at);
+        if (!isFinite(st)) {
+          const p = Date.parse(t.started_at || '');
+          st = isFinite(p) ? p / 1000 : Date.now() / 1000 - 30;
+        }
+        const diff = Math.max(0, Date.now() / 1000 - st);
+        return `
+        <div class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+          <div class="text-[11.5px] font-semibold truncate text-[var(--foreground)] leading-tight">${escapeHtmlMC(t.title || '')}</div>
+          <div class="mt-0.5 flex items-center justify-between gap-1 text-[9.5px] shadcn-muted">
+            <span class="truncate">👤 ${escapeHtmlMC(t.assignee_name || 'Agent')}</span>
+            <span class="font-mono font-semibold mc-stopwatch shrink-0" data-start="${st}">${formatMissionControlDuration(diff)}</span>
+          </div>
+        </div>`;
+      }).join('');
     }
     function closeMissionControlArtifactModal() {
       const modal = document.getElementById("mc-artifact-modal");

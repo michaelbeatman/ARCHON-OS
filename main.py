@@ -3142,13 +3142,26 @@ def _create_permission_gate(kind: str, detail: str, requested_by: str, payload: 
         {"text": "✅ Erlauben", "callback_data": f"gate:approve:{gate_id}"},
         {"text": "❌ Verbieten", "callback_data": f"gate:reject:{gate_id}"},
     ]]}
+    # 12.10.2026 (2c): Freigabe laeuft ueber den ZENTRALEN Entscheidungs-Service —
+    # eine echte Kanban-Entscheidung (Status 'review') mit ✅/❌-Buttons. Der
+    # Service ruft bei Freigabe diesen Gate-Endpoint auf: EIN Schreibpfad fuer
+    # Telegram UND Kanban. Der frueher eigene gate:-Ping ist nur noch Fallback.
     try:
-        from telegram_notify import send_telegram_message
-        ok = send_telegram_message(text, reply_markup=reply_markup)
-        if not ok:
-            logger.warning("[Gate] Telegram-Ping nicht zugestellt (Config pruefen) - Gate bleibt pending.")
+        _dec = create_decision(
+            "permission_gate",
+            f"{knopf_text}: {str(detail)[:90]}",
+            kurzfassung=detail,
+            ref_id=gate_id,
+            body=(f"Gate-ID: {gate_id}\n{detail}\nAngefordert von: {requested_by}\n\n"
+                  f"Text-Fallback: \"Erlauben {gate_id}\" oder \"Verbieten {gate_id}\""),
+            extra={"gate_id": gate_id, "requested_by": requested_by},
+        )
+        if not _dec:
+            logger.warning("[Gate] Entscheidungs-Task nicht anlegbar — Fallback auf eigenen Ping.")
+            from telegram_notify import send_telegram_message
+            send_telegram_message(text, reply_markup=reply_markup)
     except Exception as tg_err:
-        logger.warning(f"[Gate] Telegram-Ping fehlgeschlagen: {tg_err}")
+        logger.warning(f"[Gate] Entscheidungs-Ping fehlgeschlagen: {tg_err}")
     add_ticker("Rechte-Gate", f"Owner-Bestätigung offen: {knopf_text} ({gate_id})")
     logger.info(f"[Gate] {kind} fuer '{detail}' -> Warte auf Telegram-Bestätigung ({gate_id})")
     return gate
@@ -3306,26 +3319,16 @@ def _decision_self_api(method: str, path: str, payload: dict = None, timeout: fl
         return json.loads(raw)
 
 
-def create_decision(typ: str, titel: str, kurzfassung: str = "", ref_id: str = "",
-                    dossier: str = None, body: str = "", extra: dict = None) -> dict:
-    """Legt den Entscheidungs-Task im Kanban an (Status 'review', Verantwortlicher
-    Robert), schreibt den Sidecar-Block und pingt den Owner mit ✅/❌.
-    Rueckgabe {"task_id":..., "decision": {...}} oder {} bei Fehler."""
-    if typ not in _DECISION_TYPEN:
-        logger.warning(f"[Decision] Unbekannter Typ '{typ}'")
+def register_decision(task_id: str, typ: str, titel: str, kurzfassung: str = "",
+                      ref_id: str = "", dossier: str = None, body: str = "",
+                      extra: dict = None) -> dict:
+    """Haengt den Entscheidungs-Block an einen BESTEHENDEN Kanban-Task und pingt
+    den Owner mit ✅/❌. Fuer Faelle, in denen der Task schon existiert (z.B. eine
+    Delegation im Status 'review') — so laufen ALLE Typen ueber denselben Pfad."""
+    if typ not in _DECISION_TYPEN or not task_id:
+        logger.warning(f"[Decision] register_decision ohne gueltigen Typ/Task ({typ}, {task_id})")
         return {}
     try:
-        res = _decision_self_api("POST", "/api/operations/kanban/tasks", {
-            "title": (titel or "Entscheidung")[:180],
-            "body": body or kurzfassung,
-            "assignee": "executive_decision_architect",
-            "column": "review",
-            "priority": 1,
-        })
-        task_id = res.get("task_id")
-        if not task_id:
-            logger.warning(f"[Decision] Task-Anlage lieferte keine ID: {res}")
-            return {}
         dec = {
             "typ": typ, "ref_id": ref_id, "titel": titel,
             "kurzfassung": (kurzfassung or "")[:600],
@@ -3352,11 +3355,37 @@ def create_decision(typ: str, titel: str, kurzfassung: str = "", ref_id: str = "
                 sent = send_telegram_message(caption, reply_markup=markup)
         except Exception as tg_err:
             logger.warning(f"[Decision] Telegram-Ping fehlgeschlagen: {tg_err}")
-        logger.info(f"[Decision] {typ} angelegt: Kanban {task_id} (ref={ref_id}), Ping={sent}")
+        logger.info(f"[Decision] {typ} registriert: Kanban {task_id} (ref={ref_id}), Ping={sent}")
         return {"task_id": task_id, "decision": dec}
     except Exception as e:
-        logger.warning(f"[Decision] Konnte Entscheidung nicht anlegen: {e}")
+        logger.warning(f"[Decision] Konnte Entscheidung nicht registrieren: {e}")
         return {}
+
+
+def create_decision(typ: str, titel: str, kurzfassung: str = "", ref_id: str = "",
+                    dossier: str = None, body: str = "", extra: dict = None) -> dict:
+    """Legt einen NEUEN Entscheidungs-Task im Kanban an (Status 'review',
+    Verantwortlicher Robert) und registriert die Entscheidung darauf.
+    Rueckgabe {"task_id":..., "decision": {...}} oder {} bei Fehler."""
+    if typ not in _DECISION_TYPEN:
+        logger.warning(f"[Decision] Unbekannter Typ '{typ}'")
+        return {}
+    try:
+        res = _decision_self_api("POST", "/api/operations/kanban/tasks", {
+            "title": (titel or "Entscheidung")[:180],
+            "body": body or kurzfassung,
+            "assignee": "executive_decision_architect",
+            "column": "review",
+            "priority": 1,
+        })
+        task_id = res.get("task_id")
+        if not task_id:
+            logger.warning(f"[Decision] Task-Anlage lieferte keine ID: {res}")
+            return {}
+    except Exception as e:
+        logger.warning(f"[Decision] Konnte Entscheidungs-Task nicht anlegen: {e}")
+        return {}
+    return register_decision(task_id, typ, titel, kurzfassung, ref_id, dossier, body, extra)
 
 
 async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
@@ -3372,7 +3401,11 @@ async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
         return "Synthese finalisiert (Abschlussbericht + Parent abgeschlossen)."
     if typ == "mission_freigabe":
         if ref:
-            asyncio.create_task(_execute_mission_control_task(ref))
+            # Der MC-Task steht auf 'approval' -> ueber den bestehenden Move-Pfad
+            # starten (setzt in_progress + startet die Ausfuehrung).
+            await asyncio.to_thread(_decision_self_api, "POST",
+                                    "/api/mission-control/tasks/move",
+                                    {"task_id": ref, "target_status": "in_progress"})
         return f"Ausführung für Mission {ref} gestartet."
     if typ == "permission_gate":
         if ref:
@@ -4619,7 +4652,6 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
             # Ping bei done/blocked/review aufs Handy; Freigabe via Inline-Buttons.
             # Fehlertolerant: darf den Delegations-Fluss nie blockieren, loggt aber sichtbar.
             try:
-                from telegram_notify import notify_task_status
                 # 2a: Zielordner fuer das Bericht-Dossier (landet im Projektordner
                 # unter 01_Zwischenberichte, damit es Kanban/Showroom ebenfalls sieht)
                 _doss_dir = None
@@ -4629,8 +4661,26 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
                                                  obsidian_rel, "01_Zwischenberichte")
                     except Exception:
                         _doss_dir = None
-                notify_task_status(task_id, status, final_title, result, obsidian_rel,
-                                   dossier_dir=_doss_dir)
+                if status in ("review", "blocked"):
+                    # 2c: Entscheidung ueber den zentralen Service. Der Kanban-Task
+                    # EXISTIERT hier bereits -> register_decision + app:-Buttons.
+                    _doss = None
+                    if _doss_dir and (result or "").strip():
+                        try:
+                            from dossier_builder import build_dossier_from_report
+                            _doss = build_dossier_from_report(
+                                f"{'Review' if status == 'review' else 'Blockiert'}: {final_title}",
+                                result, _doss_dir, f"{task_id}_{status}",
+                                ref_id=task_id, quelle="Archon-Delegation")
+                        except Exception as _de:
+                            logger.warning(f"[Delegation] Dossier fehlgeschlagen: {_de}")
+                    await asyncio.to_thread(
+                        register_decision, task_id, "delegation_review",
+                        final_title, result, task_id, _doss)
+                else:
+                    from telegram_notify import notify_task_status
+                    notify_task_status(task_id, status, final_title, result, obsidian_rel,
+                                       dossier_dir=_doss_dir)
             except Exception as tg_err:
                 logger.warning(f"[Telegram] Delegations-Ping für Task {task_id} fehlgeschlagen: {tg_err}")
             # --- FAN-IN RUECKLAUF (12.10.2026): MC-Subtask abschliessen und
@@ -4821,10 +4871,16 @@ async def api_chat_stream(req: ChatStreamRequest):
         data["audit_logs"] = data["audit_logs"][:25]
         _save_mission_control_data(data)
         
-        # --- Telegram-Push: Mission liegt im HITL-Approval-Gate (User-Vorgabe 09.10.2026) ---
+        # --- 2c: Mission liegt im HITL-Approval-Gate -> ueber den zentralen
+        # Entscheidungs-Service (echter Kanban-Task, EIN Schreibpfad) ---
         try:
-            from telegram_notify import notify_mission_approval
-            notify_mission_approval(task_id, title, agent_name)
+            _mdec = await asyncio.to_thread(
+                create_decision, "mission_freigabe",
+                f"Mission-Freigabe: {str(title)[:80]}",
+                f"Agent: {agent_name} ({agent_id})\nGeschätzte Kosten: ~{est_cost:.2f}",
+                task_id, None, "", None)
+            if not _mdec:
+                logger.warning(f"[Mission] Entscheidungs-Task für {task_id} nicht angelegt.")
         except Exception as tg_err:
             logger.warning(f"[Telegram] Missions-Freigabe-Ping für {task_id} fehlgeschlagen: {tg_err}")
 

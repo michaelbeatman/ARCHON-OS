@@ -6359,6 +6359,10 @@ ${logExcerpt}
       if (overlay) {
         overlay.classList.remove("pointer-events-none", "opacity-0");
         overlay.classList.add("opacity-100");
+        // 12.10.2026: hide blockiert jetzt per display:none !important (siehe
+        // hideLoadingOverlay) - show muss das hart zuruecksetzen.
+        overlay.style.removeProperty("display");
+        overlay.style.setProperty("opacity", "1", "important");
       }
       if (loadingOverlaySafetyTimeout) clearTimeout(loadingOverlaySafetyTimeout);
       // Sicherheits-Timeout: Verhindert jegliches Blockieren, falls ein Request hängen bleibt
@@ -6375,6 +6379,13 @@ ${logExcerpt}
       if (overlay) {
         overlay.classList.remove("opacity-100");
         overlay.classList.add("opacity-0", "pointer-events-none");
+        // 12.10.2026 FIX (User-Fall "Operations laedt sich tot"): Die
+        // opacity-Transition (transition-opacity duration-150) blieb
+        // eingefroren - CSSTransition "running" bei currentTime 0, der
+        // berechnete opacity-Wert blieb 1, obwohl opacity-0 UND sogar
+        // inline style.opacity=0 galten. Klassenbasiertes Ausblenden
+        // wirkte dadurch nie. Jetzt: harte Abschaltung OHNE Transition.
+        overlay.style.setProperty("display", "none", "important");
       }
     }
       // HERMES AGENT PROFILES EXTRACTED TO js/agent_profiles.js

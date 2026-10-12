@@ -4145,7 +4145,29 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
                     except Exception:
                         continue
                 if obsidian_rel:
-                    proj_name = f"{datetime.datetime.now().strftime('%Y%m%d')}-{task_id}-{slug}"
+                    # 12.10.2026 (User-Fix 'Ordnerflut'): EIN Ordner pro Projekt -
+                    # hat der Subtask ein parent, TEILT er sich den Eltern-Ordner
+                    # (Name ueber die gemeinsame Quelle project_folder_name).
+                    fan_parent = None
+                    fan_parent_title = None
+                    try:
+                        _mc = _load_mission_control_data()
+                        for _t in _mc.get("tasks", []):
+                            if _t.get("kanban_task_id") == task_id:
+                                fan_parent = _t.get("parent_project_id")
+                                fan_parent_title = _t.get("parent_project_title")
+                                break
+                    except Exception:
+                        pass
+                    try:
+                        from backend.post_task_pipeline import project_folder_name
+                        proj_name = project_folder_name({
+                            "id": task_id, "title": final_title or "Delegation",
+                            "parent_project_id": fan_parent or "",
+                            "parent_project_title": fan_parent_title or "",
+                        })
+                    except Exception:
+                        proj_name = f"{datetime.datetime.now().strftime('%Y%m%d')}-{task_id}-{slug}"
                     proj_folder = os.path.join(obsidian_rel, proj_name)
                     end_dir = os.path.join(proj_folder, "03_Endprodukte")
                     os.makedirs(end_dir, exist_ok=True)
@@ -4166,17 +4188,31 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
                         f.write(f"# {title}\n\n"
                                 f"**Task:** `{task_id}` | **Ziel-Agent:** `@{prof_id}` | **Status:** {status.upper()}\n\n"
                                 f"{result or '(Ergebnis siehe Kanban-Task-Events und Anhänge in 02_Medien/.)'}\n")
-                    with open(os.path.join(proj_folder, "PROJEKT.md"), "w", encoding="utf-8") as f:
-                        f.write(f"---\nproject_folder: \"{proj_name}\"\ncreated_at: \"{datetime.datetime.now().timestamp()}\"\n"
-                                f"title: \"{title}\"\nstatus: \"{status}\"\nsource_task: \"{task_id}\"\nsource: \"delegation_engine_v2\"\n---\n\n"
-                                f"# Projekt: {title}\n\n"
-                                f"- **Herkunft:** Delegation über Archon OS (Task `{task_id}`)\n"
-                                f"- **Ziel-Agent:** `@{prof_id}` | **Status:** {status.upper()}\n"
-                                f"- **Hauptdokument:** [[{task_id}-{slug}]]\n\n"
-                                f"### 📁 Projekt-Struktur:\n"
-                                f"- `01_Zwischenberichte/`: Entwürfe und Arbeitsprotokolle\n"
-                                f"- `02_Medien/`: Artefakte des Agenten\n"
-                                f"- `03_Endprodukte/`: [[{task_id}-{slug}]]\n\n---\n[[00_VAULT_KNOWLEDGE]] | [[Archiv-Hubs]]\n")
+                    # PROJEKT.md nur beim ERSTEN Schreiber (N-Worker parallel!),
+                    # Ueberschrift = Eltern-Projekttitel wenn parent vorhanden.
+                    proj_title = fan_parent_title if (fan_parent and fan_parent_title) else title
+                    p_herkunft = (f"Teilauftrag von Projekt `{fan_parent}`" if fan_parent
+                                  else f"Delegation über Archon OS (Task `{task_id}`)")
+                    p_parent_line = f'parent_project: "{fan_parent}"' if fan_parent else ""
+                    try:
+                        with open(os.path.join(proj_folder, "PROJEKT.md"), "x", encoding="utf-8") as f:
+                            f.write("---\nproject_folder: \"" + proj_name + "\"\ncreated_at: \""
+                                    + str(datetime.datetime.now().timestamp()) + "\"\n"
+                                    "title: \"" + proj_title + "\"\nstatus: \"" + str(status)
+                                    + "\"\nsource_task: \"" + task_id + "\"\n"
+                                    "source: \"delegation_engine_v2\"\n" + p_parent_line + "---\n\n"
+                                    "# Projekt: " + str(proj_title) + "\n\n"
+                                    "- **Herkunft:** " + p_herkunft + "\n"
+                                    "- **Ziel-Agent:** `@" + str(prof_id) + "` | **Status:** " + str(status).upper() + "\n"
+                                    "- **Hauptdokument:** [[" + task_id + "-" + slug + "]]\n\n"
+                                    "### 📁 Projekt-Struktur:\n"
+                                    "- `01_Zwischenberichte/`: Entwürfe und Arbeitsprotokolle\n"
+                                    "- `02_Medien/`: Artefakte der Fachagenten\n"
+                                    "- `03_Endprodukte/`: [[" + task_id + "-" + slug + "]]"
+                                    + ("+ Lisa-Synthese + finale Beschlussvorlage" if fan_parent else "")
+                                    + "\n\n---\n[[00_VAULT_KNOWLEDGE]] | [[Archiv-Hubs]]\n")
+                    except FileExistsError:
+                        pass  # Eltern-Ordner-Projekt.md existiert bereits
                     obsidian_rel = proj_name
             except Exception as oe:
                 logger.warning(f"[Delegation] Obsidian-Export fehlgeschlagen: {oe}")
@@ -4232,11 +4268,15 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
         try:
             mc_data = _load_mission_control_data()
             mc_tasks = mc_data.setdefault("tasks", [])
+            parent_title_var = str(payload.get("projekt_titel") or payload.get("titel") or "").strip()
             # Auto-Parent anlegen, falls noch nicht vorhanden
-            if not any(t.get("id") == parent_pid for t in mc_tasks):
+            existing_parent = next((t for t in mc_tasks if t.get("id") == parent_pid), None)
+            if existing_parent is None:
+                if not parent_title_var:
+                    parent_title_var = f"Delegationsprojekt {parent_pid}"
                 mc_tasks.append({
                     "id": parent_pid,
-                    "title": str(payload.get("projekt_titel") or payload.get("titel") or f"Delegationsprojekt {parent_pid}"),
+                    "title": parent_title_var,
                     "agent_id": delegator_id,
                     "agent_name": d_name,
                     "status": "active",
@@ -4246,6 +4286,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
                     "target_action": "none",
                 })
                 logger.info(f"[Delegation] Fan-in Parent '{parent_pid}' angelegt")
+            else:
+                # Eltern-Titel immer mitfuehren (Ordnername-Einheitlichkeit)
+                parent_title_var = str(existing_parent.get("title") or parent_title_var or parent_pid)
             # MC-Subtask = Tracking-Spiegel des Kanban-Tasks (Wird in _bg_watch_task completed)
             if task_id:
                 mc_tasks.append({
@@ -4256,6 +4299,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
                     "status": "active",
                     "phase": "in_progress",
                     "parent_project_id": parent_pid,
+                    "parent_project_title": parent_title_var,
                     "kanban_task_id": task_id,
                     "created_via": "delegation_bridge",
                     "capture_input": auftrag[:400],
@@ -9097,11 +9141,20 @@ async def _finalize_synthesis_after_approval(parent_pid: str, draft_path: str,
             os.path.join(OBSIDIAN_VAULT_DIR, "01_PROJEKTE"),
             os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"),
         ]
-        final_obs_path = f"/opt/data/obsidian/01_PROJEKTE/{final_name}"
+        # 12.10.2026 (Ordnerflut-Fix): finaler Bericht in den EINEN Projekt-Ordner.
+        try:
+            from backend.post_task_pipeline import project_folder_name
+            _fan_ordner = project_folder_name({"parent_project_id": parent_pid,
+                                               "parent_project_title": parent_title})
+        except Exception:
+            _fan_ordner = ""
+        final_obs_path = (f"/opt/data/obsidian/01_PROJEKTE/{_fan_ordner}/03_Endprodukte/{final_name}"
+                          if _fan_ordner else f"/opt/data/obsidian/01_PROJEKTE/{final_name}")
         for d in target_dirs:
             try:
-                os.makedirs(d, exist_ok=True)
-                p = os.path.join(d, final_name)
+                d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d
+                os.makedirs(d_ziel, exist_ok=True)
+                p = os.path.join(d_ziel, final_name)
                 with open(p, "w", encoding="utf-8") as f:
                     f.write(final_body)
                 final_obs_path = p
@@ -9272,11 +9325,21 @@ VORGABEN:
         os.path.join(OBSIDIAN_VAULT_DIR, "01_PROJEKTE"),
         os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"),
     ]
-    draft_path = f"/opt/data/obsidian/01_PROJEKTE/{draft_name}"
+    # 12.10.2026 (Ordnerflut-Fix): Entwurf + finaler Bericht gehoeren in den
+    # EINEN Projekt-Ordner des Eltern-Projekts, nicht als lose Dateien daneben.
+    try:
+        from backend.post_task_pipeline import project_folder_name
+        _fan_ordner = project_folder_name({"parent_project_id": parent_project_id,
+                                           "parent_project_title": parent_title})
+    except Exception:
+        _fan_ordner = ""
+    draft_path = (f"/opt/data/obsidian/01_PROJEKTE/{_fan_ordner}/03_Endprodukte/{draft_name}"
+                  if _fan_ordner else f"/opt/data/obsidian/01_PROJEKTE/{draft_name}")
     for d in target_dirs:
         try:
-            os.makedirs(d, exist_ok=True)
-            p = os.path.join(d, draft_name)
+            d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d
+            os.makedirs(d_ziel, exist_ok=True)
+            p = os.path.join(d_ziel, draft_name)
             with open(p, "w", encoding="utf-8") as f:
                 f.write(f"# Synthese-Entwurf: {parent_title}\n\n{synthesis_reply}\n")
             draft_path = p
@@ -9335,6 +9398,7 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
             "status": "approval",
             "phase": "approval",
             "parent_project_id": parent_project_id,
+            "parent_project_title": parent_title,   # 12.10: Einheitlicher Projekt-Ordner
             "synthesis_draft_path": draft_path,
             "capture_input": parent_task.get("capture_input", parent_title),
             "result_summary": f"Lisas Entwurf liegt bereit ({draft_path}). Roberts Rueckmeldung: {robert_reply[:250] or 'keine'}",

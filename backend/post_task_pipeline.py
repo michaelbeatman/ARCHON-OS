@@ -166,6 +166,24 @@ def send_smtp_email(subject: str, text_content: str, html_content: Optional[str]
         return {"status": "error", "message": f"SMTP-Fehler: {str(e)}"}
 
 
+def project_folder_name(task: dict) -> str:
+    """ORDNERNAME-QUELLE DER WAHRHEIT (12.10.2026, User-Fix 'ein Projekt = ein Ordner').
+
+    - Delegationskinder MIT parent_project_id TEILEN sich den EINEN
+      Eltern-Ordner (sonst: ein Projektordner pro Subtask -> Ordnerflut).
+    - Ohne parent (Einzel-Delegation): weiterhin eigener Task-Ordner.
+    """
+    date_prefix = datetime.date.today().strftime("%Y%m%d")
+    parent_pid = str(task.get("parent_project_id") or "").strip()
+    if parent_pid:
+        ptitle = str(task.get("parent_project_title") or parent_pid)
+        return f"{date_prefix}-{parent_pid}-{slugify(ptitle)}"
+    task_id = str(task.get("id") or "task-0").strip()
+    raw_title = task.get("title") or "task"
+    tid_core = task_id.replace("task-", "")
+    return f"{date_prefix}-{tid_core}-{slugify(raw_title)}"
+
+
 def write_project_folder_artifact(task: dict) -> Dict[str, str]:
     """
     Erstellt die 3-Ordner-Struktur in C:\Mein Obsidian\Projects\<folder_name>:
@@ -182,7 +200,9 @@ def write_project_folder_artifact(task: dict) -> Dict[str, str]:
     # Datum als Orientierungspräfix im Projektnamen (wie in Obsidian üblich).
     date_prefix = datetime.datetime.now().strftime("%Y%m%d")
     tid_core = task_id.replace("task-", "")
-    folder_name = f"{date_prefix}-{tid_core}-{task_slug}"
+    # 12.10.2026 (User-Fix Ordnerflut): EIN Ordner pro Projekt - Subtasks
+    # mit parent_project_id teilen sich den Eltern-Ordner.
+    folder_name = project_folder_name(task)
     file_name = f"{date_prefix}-{tid_core}-{task_slug}.md"
 
     # User-Vorgabe 09.10.2026: Mission-Projekte gehören in 01_PROJEKTE (wie

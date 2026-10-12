@@ -1,1 +1,5 @@
 /* Archon CSS Live Studio Compiled Overrides */
+
+div.px-3 > div.flex > span.px-1\.5 {
+  background-color: #ffffff !important;
+}

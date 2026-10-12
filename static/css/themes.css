@@ -442,9 +442,6 @@ div.flex-1 > div.group > p.text-muted-custom {
 
 div.flex > div.flex > span.px-1\.5 {
   color: #303031 !important;
-  background-image: url("/static/uploads/studio-bg_1791614928494.jpg") !important;
-  background-size: cover !important;
-  background-repeat: no-repeat !important;
   border-width: 0px !important;
 }
 

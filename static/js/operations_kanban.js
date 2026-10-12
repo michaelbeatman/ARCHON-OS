@@ -1932,6 +1932,99 @@
 
           } else { projSection.classList.add('hidden'); }
         }
+        // 2b (12.10.2026): Entscheidungs-Panel — Typ, Status, Kurzfassung, Bericht-Reader
+        // und Freigeben/Ablehnen ueber den ZENTRALEN Entscheidungs-Endpoint (derselbe
+        // Schreibpfad wie Telegram, damit auch die Folgeaktion wirklich laeuft).
+        const decSection = document.getElementById('ops-detail-decision-section');
+        if (decSection) {
+          const dec = task.decision || null;
+          if (!dec) {
+            decSection.classList.add('hidden');
+          } else {
+            decSection.classList.remove('hidden');
+            const _dj = async (u) => {
+              const r = await fetch(u, { signal: AbortSignal.timeout(12000) });
+              if (!r.ok) { let d = ''; try { d = (await r.json()).detail || ''; } catch (e) {} throw new Error('HTTP ' + r.status + (d ? ' – ' + d : '')); }
+              return r.json();
+            };
+            const decStatusEl = document.getElementById('ops-detail-decision-status');
+            const decMetaEl = document.getElementById('ops-detail-decision-meta');
+            const decKurzEl = document.getElementById('ops-detail-decision-kurz');
+            const decReader = document.getElementById('ops-detail-decision-reader');
+            const decReadBtn = document.getElementById('ops-detail-decision-read');
+            const decOkBtn = document.getElementById('ops-detail-decision-approve');
+            const decNoBtn = document.getElementById('ops-detail-decision-reject');
+            const decTypName = { delegation_review: 'Delegation prüfen', synthesis_freigabe: 'Synthese freigeben',
+                                 mission_freigabe: 'Mission freigeben', permission_gate: 'Rechte freigeben' };
+            const decOffen = (dec.status || 'offen') === 'offen';
+            if (decStatusEl) {
+              const st = dec.status || 'offen';
+              decStatusEl.textContent = st === 'offen' ? '⏳ offen' : (st === 'freigegeben' ? '✅ freigegeben' : '⛔ ' + st);
+            }
+            if (decMetaEl) {
+              const teile = ['Typ: ' + (decTypName[dec.typ] || dec.typ || '?')];
+              if (dec.ref_id) teile.push('Ref: ' + dec.ref_id);
+              if (dec.entschieden_von) teile.push('Entschieden von: ' + dec.entschieden_von);
+              if (dec.entschieden_am) teile.push(String(dec.entschieden_am).replace('T', ' ').slice(0, 16));
+              decMetaEl.textContent = teile.join('  ·  ');
+            }
+            if (decKurzEl) decKurzEl.textContent = dec.kurzfassung || '(keine Kurzfassung hinterlegt)';
+            if (decReader) { decReader.classList.add('hidden'); decReader.innerHTML = ''; }
+            [decOkBtn, decNoBtn].forEach(b => { if (b) { b.disabled = !decOffen; b.style.opacity = decOffen ? '1' : '.45'; } });
+            const entscheiden = async (decision) => {
+              if (!decOffen) return;
+              if (!confirm(decision === 'approve' ? 'Diese Entscheidung wirklich FREIGEBEN?' : 'Diese Entscheidung wirklich ABLEHNEN?')) return;
+              try {
+                const r = await fetch('/api/decisions/decide', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ task_id: task.id, decision, von: 'kanban' }),
+                  signal: AbortSignal.timeout(40000)
+                });
+                const d = await r.json().catch(() => ({}));
+                if (r.ok) {
+                  if (typeof showArchonToast === 'function') showArchonToast(`Entscheidung ${decision === 'approve' ? 'freigegeben' : 'abgelehnt'}.`, 'success');
+                  if (typeof loadOperationsData === 'function') await loadOperationsData();
+                  await openTaskDetailModal(task.id);
+                } else if (typeof showArchonToast === 'function') {
+                  showArchonToast('Fehler: ' + (d.detail || r.status), 'error');
+                }
+              } catch (e) {
+                if (typeof showArchonToast === 'function') showArchonToast('Fehler: ' + e, 'error');
+              }
+            };
+            if (decOkBtn) decOkBtn.onclick = () => entscheiden('approve');
+            if (decNoBtn) decNoBtn.onclick = () => entscheiden('reject');
+            if (decReadBtn && decReader) decReadBtn.onclick = async () => {
+              if (!decReader.classList.contains('hidden')) { decReader.classList.add('hidden'); return; }
+              decReader.classList.remove('hidden');
+              decReader.className = 'mt-2.5 p-3 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-muted-custom';
+              decReader.textContent = 'Lädt…';
+              const datei = (dec.dossier || '').split('/').pop();
+              if (!datei) { decReader.textContent = 'Kein Bericht hinterlegt.'; return; }
+              try {
+                const rel = '01_Zwischenberichte/' + datei;
+                const fd = await _dj(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}/file?path=${encodeURIComponent(rel)}`);
+                if (/\.html?$/i.test(datei)) {
+                  // .html-Dossier RENDERN statt Rohtext auswerfen
+                  decReader.className = 'mt-2.5 h-80 w-full overflow-hidden rounded-lg border border-[var(--border)] bg-white';
+                  decReader.innerHTML = '';
+                  const fr = document.createElement('iframe');
+                  fr.setAttribute('sandbox', '');
+                  fr.setAttribute('title', 'Zwischenbericht');
+                  fr.className = 'w-full h-full border-0 bg-white';
+                  fr.srcdoc = fd.content || '';
+                  decReader.appendChild(fr);
+                } else {
+                  decReader.className = 'mt-2.5 max-h-80 overflow-auto p-3 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[11.5px] leading-relaxed whitespace-pre-wrap font-mono text-primary-custom';
+                  decReader.textContent = fd.content || '(leer)';
+                }
+              } catch (e) {
+                decReader.className = 'mt-2.5 p-3 rounded-lg border border-rose-500/40 bg-rose-500/5 text-xs font-mono text-rose-600';
+                decReader.textContent = 'Bericht nicht lesbar: ' + e;
+              }
+            };
+          }
+        }
         if (resultSection && resultText) {
           const zeige = (txt, quelle) => {
             resultText.textContent = txt;
@@ -2039,6 +2132,38 @@
     async function updateCurrentTaskStatus(newStatus) {
       if (!currentOpsDetailTaskId) return;
       try {
+        // 2b/2c (12.10.2026): Entscheidungs-Tasks NICHT direkt verschieben — sonst
+        // aendert sich nur der Status, die Folgeaktion (Synthese-Finalisierung,
+        // Gate-Ausfuehrung, Missions-Start) laeuft aber NICHT. Darum ueber den
+        // zentralen Entscheidungs-Endpoint: derselbe Schreibpfad wie Telegram.
+        let dec = null;
+        try {
+          const rd = await fetch(`/api/operations/kanban/tasks/${currentOpsDetailTaskId}`, { signal: AbortSignal.timeout(10000) });
+          if (rd.ok) { const dd = await rd.json(); dec = (dd.task || dd).decision || null; }
+        } catch (e) {}
+        if (dec && (dec.status || 'offen') === 'offen') {
+          const aufloesend = { todo: 'approve', in_progress: 'approve', done: 'approve', archived: 'reject' };
+          const dec2 = aufloesend[String(newStatus).toLowerCase()];
+          if (dec2) {
+            const r2 = await fetch('/api/decisions/decide', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ task_id: currentOpsDetailTaskId, decision: dec2, von: 'kanban' }),
+              signal: AbortSignal.timeout(40000)
+            });
+            const d2 = await r2.json().catch(() => ({}));
+            if (r2.ok) {
+              if (typeof showArchonToast === 'function') {
+                showArchonToast(`Entscheidung ${dec2 === 'approve' ? 'freigegeben' : 'abgelehnt'} — Kanban: ${d2.kanban_status || newStatus}`, 'success');
+              }
+              await loadOperationsData();
+              await openTaskDetailModal(currentOpsDetailTaskId);
+            } else if (typeof showArchonToast === 'function') {
+              showArchonToast('Fehler: ' + (d2.detail || r2.status), 'error');
+            }
+            return;
+          }
+        }
         const res = await fetch(`/api/operations/kanban/tasks/${currentOpsDetailTaskId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },

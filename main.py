@@ -3321,7 +3321,7 @@ def _decision_self_api(method: str, path: str, payload: dict = None, timeout: fl
 
 def register_decision(task_id: str, typ: str, titel: str, kurzfassung: str = "",
                       ref_id: str = "", dossier: str = None, body: str = "",
-                      extra: dict = None) -> dict:
+                      extra: dict = None, obsidian: str = None) -> dict:
     """Haengt den Entscheidungs-Block an einen BESTEHENDEN Kanban-Task und pingt
     den Owner mit ✅/❌. Fuer Faelle, in denen der Task schon existiert (z.B. eine
     Delegation im Status 'review') — so laufen ALLE Typen ueber denselben Pfad."""
@@ -3338,7 +3338,8 @@ def register_decision(task_id: str, typ: str, titel: str, kurzfassung: str = "",
         if extra:
             dec.update(extra)
         _decision_self_api("POST", "/api/operations/kanban/meta",
-                           {"kind": "task", "task_id": task_id, "decision": dec})
+                           {"kind": "task", "task_id": task_id,
+                            "decision": dec, "obsidian": obsidian or ""})
         markup = {"inline_keyboard": [[
             {"text": "✅ Freigeben", "callback_data": f"app:approve:{task_id}"},
             {"text": "❌ Ablehnen", "callback_data": f"app:reject:{task_id}"},
@@ -3363,7 +3364,8 @@ def register_decision(task_id: str, typ: str, titel: str, kurzfassung: str = "",
 
 
 def create_decision(typ: str, titel: str, kurzfassung: str = "", ref_id: str = "",
-                    dossier: str = None, body: str = "", extra: dict = None) -> dict:
+                    dossier: str = None, body: str = "", extra: dict = None,
+                    obsidian: str = None) -> dict:
     """Legt einen NEUEN Entscheidungs-Task im Kanban an (Status 'review',
     Verantwortlicher Robert) und registriert die Entscheidung darauf.
     Rueckgabe {"task_id":..., "decision": {...}} oder {} bei Fehler."""
@@ -3385,7 +3387,7 @@ def create_decision(typ: str, titel: str, kurzfassung: str = "", ref_id: str = "
     except Exception as e:
         logger.warning(f"[Decision] Konnte Entscheidungs-Task nicht anlegen: {e}")
         return {}
-    return register_decision(task_id, typ, titel, kurzfassung, ref_id, dossier, body, extra)
+    return register_decision(task_id, typ, titel, kurzfassung, ref_id, dossier, body, extra, obsidian)
 
 
 async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
@@ -9921,6 +9923,7 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
         _deci_dossier,            # dossier
         f"Lisas Entwurf: {draft_path}",   # body
         {"parent_project_id": parent_project_id, "draft_path": draft_path},  # extra
+        (f"01_PROJEKTE/{_fan_ordner}" if _fan_ordner else None),             # obsidian
     )
     now_t = datetime.datetime.now().strftime("%H:%M:%S")
     data.setdefault("audit_logs", []).insert(0, {

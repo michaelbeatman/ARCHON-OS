@@ -539,6 +539,12 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
             tmeta.pop("tags", None)
     # 12.10.2026 (Decision-Service): Entscheidungs-Metadaten je Task.
     # kanban.db bleibt die Wahrheit (Status), der Sidecar traegt nur Kontext.
+    obs_in = payload.get("obsidian")
+    if obs_in is not None:
+        if str(obs_in).strip() == "":
+            tmeta.pop("obsidian", None)
+        else:
+            tmeta["obsidian"] = str(obs_in).strip()
     dec_in = payload.get("decision")
     if isinstance(dec_in, dict):
         if dec_in.get("clear"):
@@ -625,6 +631,9 @@ def get_task_details(task_id: str):
         # Obsidian-Projekt-Bruecke (Sidecar config/kanban_meta.json, Option A 11.10.2026)
         _meta_all = _load_kanban_meta()
         task["obsidian"] = ((_meta_all.get("tasks") or {}).get(task_id) or {}).get("obsidian") or None
+        # 2b (12.10.2026): Entscheidungs-Kontext mitliefern (Sidecar-Block), damit der
+        # Detail-Dialog Typ, Status, Kurzfassung und das Bericht-Dossier anzeigen kann.
+        task["decision"] = ((_meta_all.get("tasks") or {}).get(task_id) or {}).get("decision") or None
         
         cursor.execute("SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at ASC", (task_id,))
         comments = [dict(r) for r in cursor.fetchall()]

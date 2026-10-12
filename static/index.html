@@ -1654,7 +1654,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/mission_control.js"></script>
   <script src="/static/js/mission_control_cockpit.js"></script>
   <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610102220"></script>
+  <script src="/static/js/operations_kanban.js?v=202610121815"></script>
   <script src="/static/js/appshell_architect.js?v=202610112400"></script>
   <script src="/static/js/css_live_studio.js?v=202610112415"></script>
   <script src="/static/js/guardian.js?v=202610091700"></script>
@@ -8351,6 +8351,22 @@ ${logExcerpt}
             </div>
             <div id="ops-detail-result-text" data-archon-linkify class="mt-1.5 max-h-52 overflow-y-auto p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 text-xs leading-relaxed whitespace-pre-wrap font-sans text-primary-custom"></div>
             <div id="ops-detail-result-path" class="hidden mt-1 text-[10.5px] font-mono text-muted-custom break-all"></div>
+          <div id="ops-detail-decision-section" class="hidden">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-[#d42a2b]">🔐 Entscheidung</span>
+              <span id="ops-detail-decision-status" class="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold bg-[var(--card)] text-muted-custom border border-[var(--border)]"></span>
+            </div>
+            <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+              <div id="ops-detail-decision-meta" class="text-[10.5px] font-mono text-muted-custom mb-2"></div>
+              <div id="ops-detail-decision-kurz" data-archon-linkify class="text-xs leading-relaxed whitespace-pre-wrap text-primary-custom mb-2.5 max-h-40 overflow-y-auto"></div>
+              <div class="flex flex-wrap gap-2">
+                <button id="ops-detail-decision-read" type="button" class="px-2.5 py-1 rounded-lg border border-[#d42a2b]/50 bg-[#d42a2b]/10 text-[#d42a2b] hover:bg-[#d42a2b]/20 text-[10.5px] font-mono font-bold transition cursor-pointer">📄 Bericht lesen</button>
+                <button id="ops-detail-decision-approve" type="button" class="px-2.5 py-1 rounded-lg border border-emerald-600/50 bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-600/20 text-[10.5px] font-mono font-bold transition cursor-pointer">✅ Freigeben</button>
+                <button id="ops-detail-decision-reject" type="button" class="px-2.5 py-1 rounded-lg border border-rose-600/50 bg-rose-600/10 text-rose-700 dark:text-rose-400 hover:bg-rose-600/20 text-[10.5px] font-mono font-bold transition cursor-pointer">❌ Ablehnen</button>
+              </div>
+              <div id="ops-detail-decision-reader" class="hidden mt-2.5 h-80 w-full overflow-hidden rounded-lg border border-[var(--border)] bg-white"></div>
+            </div>
+          </div>
           <div id="ops-detail-project-section" class="hidden">
             <div class="mt-3 flex items-center justify-between">
               <span id="ops-detail-project-label" class="text-[11px] font-mono font-bold uppercase tracking-wider text-[#d42a2b]">📁 Projekt (Obsidian)</span>

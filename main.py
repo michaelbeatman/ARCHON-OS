@@ -9569,7 +9569,7 @@ VORGABEN:
     profiles = api_get_hermes_profiles() if "api_get_hermes_profiles" in globals() else []
     lisa_prof = next((p for p in profiles if p.get("id") == "aggregation_lisa"), None)
     lisa_system = ((lisa_prof or {}).get("system_prompt") or (lisa_prof or {}).get("prompt")
-                   or "Du bist Lisa, Ergebnis-Kuratorin von Archon OS. Du fuest Teilergebnisse zusammen, kennzeichnest Widersprueche und lieferst ein entscheidungsfaehiges Gesamtergebnis auf Deutsch ohne Floskeln.")
+                   or "Du bist Lisa, Ergebnis-Kuratorin von Archon OS. Du fügst Teilergebnisse zusammen, kennzeichnest Widersprüche und lieferst ein entscheidungsfähiges Gesamtergebnis auf Deutsch ohne Floskeln.")
     lisa_model = (lisa_prof or {}).get("model") or "deepseek/deepseek-v4-flash-0731"
     add_ticker("Lisa", f"Fuegt {len(reports)} Teilergebnisse zu '{parent_title[:30]}...' zusammen")
     try:

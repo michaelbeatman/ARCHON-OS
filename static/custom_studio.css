@@ -1,1 +1,24 @@
-/* Custom Studio CSS Reset */
+/* Archon CSS Live Studio Compiled Overrides */
+
+#inbox-col-intern {
+  padding-left: 10.5px !important;
+  padding-right: 1.5px !important;
+  width: 500px !important;
+}
+
+div#view-inbox > div.flex-1 {
+  padding-left: 1px !important;
+  padding-right: 1px !important;
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
+
+#inbox-col-email {
+  padding-left: 1.5px !important;
+  padding-right: 1.5px !important;
+  width: 505px !important;
+}
+
+#inbox-col-telegram {
+  width: 497px !important;
+}

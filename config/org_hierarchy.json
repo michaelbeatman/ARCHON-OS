@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-07T18:36:03.656039",
+  "updated_at": "2026-10-12T21:05:51.839084",
   "nodes": [
     {
       "id": "executive_decision_architect",
@@ -11,11 +11,11 @@
       "role": "1. Strategie, Führung & Lebensplanung",
       "category": "1. Strategie, Führung & Lebensplanung",
       "avatar": "/static/avatars/custom_executive_decision_architect.png",
-      "model": "auto/best-reasoning",
+      "model": "mistralai/mistral-large-4-0",
       "active_tasks": 0,
       "status": "active",
       "person_name": "Robert",
-      "provider": "omniroute"
+      "provider": "openrouter"
     },
     {
       "id": "system_architect_orchestrator",
@@ -612,7 +612,7 @@
     {
       "id": "logistics_supply_chain_manager",
       "x": 1020,
-      "y": 420,
+      "y": 440,
       "tier": 2,
       "team_id": "team_operations",
       "name": "Logistics & Supply Chain Manager",
@@ -763,7 +763,7 @@
       "role": "1. Strategie, Führung & Lebensplanung",
       "category": "1. Strategie, Führung & Lebensplanung",
       "avatar": "/static/avatars/custom_micha.png",
-      "model": "z-ai/glm-5.3",
+      "model": "google/gemini-1.5-pro",
       "active_tasks": 0,
       "status": "active",
       "person_name": "Michael Keller",

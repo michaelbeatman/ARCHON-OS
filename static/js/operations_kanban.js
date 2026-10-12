@@ -1191,6 +1191,14 @@
     window.fetchOpsKanbanPalette = fetchOpsKanbanPalette;
     fetchOpsKanbanPalette();
 
+    function opsHexToRgba(hex, alpha) {
+      // Header-Farbe (Palette oder Posteo-Default) -> 10 %-Tönung für den Spaltenkörper.
+      const h = String(hex || '').replace('#', '');
+      const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+      const n = parseInt(full.slice(0, 6), 16);
+      if (!isFinite(n)) return `rgba(128,128,128,${alpha})`;
+      return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+    }
     function renderOperationsKanban(data) {
       const container = document.getElementById('ops-kanban-columns-container');
       const badge = document.getElementById('ops-kanban-badge');
@@ -1294,7 +1302,7 @@
         }).join('');
 
         return `
-          <div class="w-80 shrink-0 flex flex-col h-full rounded-2xl border border-[var(--border)] bg-[var(--card)]/60 overflow-hidden shadow-2xs">
+          <div class="w-80 shrink-0 flex flex-col h-full rounded-2xl border border-[var(--border)] bg-[var(--card)]/60 overflow-hidden shadow-2xs" style="background-color: ${opsHexToRgba(((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].header) || col.headerColor), 0.10)};">
             <!-- Header (User-Design 10.10.2026): Palette aus Einstellungen, sonst Posteo-Default) -->
             <div class="px-3 py-2.5 min-h-[52px] flex items-center justify-between border-b border-[var(--border)] shrink-0" style="background-color: ${((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].header) || col.headerColor)}; color: ${((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].text) || col.headerTextColor)};">
               <div class="flex items-center gap-2 min-w-0">

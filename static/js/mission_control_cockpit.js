@@ -389,10 +389,10 @@
       const prog = cols.in_progress || [];
       const listEl = document.getElementById('mc-cadre-list');
       if (!listEl) return;
-      if (!prog.length) {
-        listEl.innerHTML = `<div class="p-2.5 text-center text-[10.5px] shadcn-muted bg-[var(--secondary)] rounded-lg border border-[var(--border)]">Keine aktiven Projekt-Agenten.</div>`;
-        return;
-      }
+      // Glitch-Fix: Kanban leer -> Flotten-Stand (mc-state) stehen lassen.
+      // Sonst flackert die Liste alle 4 s zwischen Kader und Leermeldung,
+      // obwohl Profile aktiv sind.
+      if (!prog.length) return;
       listEl.innerHTML = prog.map(t => `
         <div class="flex items-center justify-between p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)]">
           <div class="flex items-center gap-2 min-w-0">

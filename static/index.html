@@ -514,10 +514,10 @@
           </div>
         </div>
         <!-- ZONE 2 & 3 CONTAINER -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 min-h-0 items-stretch overflow-hidden" style="flex: 1 1 0%; min-height: 0;">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-0.5 flex-1 min-h-0 items-stretch overflow-hidden" style="flex: 1 1 0%; min-height: 0;">
           
-          <!-- ZONE 2: HITL KANBAN & PROCESS (LINKE SEITE, 8/12 SPALTEN) -->
-          <div class="lg:col-span-8 flex flex-col space-y-2 min-h-0 h-full overflow-hidden" style="height: 100%; min-height: 0;">
+          <!-- ZONE 2: HITL KANBAN & PROCESS (LINKE SEITE, 7/12 SPALTEN, schmal) -->
+          <div class="lg:col-span-7 flex flex-col space-y-2 min-h-0 h-full overflow-hidden" style="height: 100%; min-height: 0;">
             
             <!-- KANBAN BOARD CONTAINER -->
             <div class="shadcn-card p-2.5 flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -528,10 +528,10 @@
                 </div>
               </div>
               <!-- 5-Spalten Kanban Grid (Kanban-Wahrheit, wie Operations) -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 flex-1 min-h-0 items-stretch overflow-hidden mt-1.5" style="flex: 1 1 0%; min-height: 0;">
+              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-0.5 flex-1 min-h-0 items-stretch overflow-hidden mt-1.5" style="flex: 1 1 0%; min-height: 0;">
                 
                 <!-- SPALTE 1: TO-DO (reine Betrachtung, Anlage in Operations) -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#F3E8DE">
+                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#F3E8DE;background-color:rgba(243,232,222,0.10)">
                   <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#F3E8DE;color:#6b5d4f">
                     <div class="flex items-center gap-1.5">
                       <i data-lucide="circle" class="w-3.5 h-3.5"></i>
@@ -544,7 +544,7 @@
                   </div>
                 </div>
                 <!-- SPALTE 2: IN BEARBEITUNG -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#EED65B">
+                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#EED65B;background-color:rgba(238,214,91,0.10)">
                   <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#EED65B;color:#6b5c10">
                     <div class="flex items-center gap-1.5">
                       <i data-lucide="play" class="w-3.5 h-3.5"></i>
@@ -557,7 +557,7 @@
                   </div>
                 </div>
                 <!-- SPALTE 3: REVIEW & QA -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#7CA982">
+                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#7CA982;background-color:rgba(124,169,130,0.10)">
                   <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#7CA982;color:#2f4a33">
                     <div class="flex items-center gap-1.5">
                       <i data-lucide="eye" class="w-3.5 h-3.5"></i>
@@ -570,7 +570,7 @@
                   </div>
                 </div>
                 <!-- SPALTE 4: BLOCKIERT -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#C15C53">
+                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#C15C53;background-color:rgba(193,92,83,0.10)">
                   <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#C15C53;color:#ffffff">
                     <div class="flex items-center gap-1.5">
                       <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
@@ -583,7 +583,7 @@
                   </div>
                 </div>
                 <!-- SPALTE 5: ABGESCHLOSSEN -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#4A6D88">
+                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#4A6D88;background-color:rgba(74,109,136,0.10)">
                   <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#4A6D88;color:#ffffff">
                     <div class="flex items-center gap-1.5">
                       <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
@@ -598,7 +598,7 @@
               </div>
             </div>
             <!-- ACTIVE PROCESS INSPECTION BAR -->
-            <div id="mc-active-process-bar" class="w-full shadcn-card p-2 grid grid-cols-1 md:grid-cols-3 gap-2 items-center font-sans shrink-0">
+            <div id="mc-active-process-bar" class="w-full shadcn-card px-2 py-1 grid grid-cols-1 md:grid-cols-3 gap-1 items-center font-sans shrink-0">
               <!-- Slot A: Laufzeit & Heartbeat -->
               <div id="mc-inspect-slot-a" class="flex flex-col justify-center space-y-0.5 pr-2 border-b md:border-b-0 md:border-r border-[var(--border)] pb-1 md:pb-0">
                 <div class="flex items-center gap-1.5">
@@ -668,8 +668,8 @@
               </div>
             </div>
           </div>
-          <!-- ZONE 3: AGENTEN-KADER & LIVE-AUDIT FEED (RECHTE SEITE, 4/12 SPALTEN) -->
-          <div class="lg:col-span-4 flex flex-col space-y-2 min-h-0 h-full overflow-hidden font-sans" style="height: 100%; min-height: 0;">
+          <!-- ZONE 3: AGENTEN-KADER & LIVE-AUDIT FEED (RECHTE SEITE, 5/12 SPALTEN) -->
+          <div class="lg:col-span-5 flex flex-col space-y-2 min-h-0 h-full overflow-hidden font-sans" style="height: 100%; min-height: 0;">
             
             <!-- BOX 1: AKTIVER AGENTEN-KADER -->
             <div class="shadcn-card p-2.5 flex flex-col shrink-0 max-h-[140px] overflow-hidden">
@@ -1665,9 +1665,9 @@ print('Ausführung erfolgreich!')</textarea>
     });
   </script>
   <script src="/static/js/mission_control.js"></script>
-  <script src="/static/js/mission_control_cockpit.js?v=202610122335"></script>
+  <script src="/static/js/mission_control_cockpit.js?v=202610122345"></script>
   <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610121915"></script>
+  <script src="/static/js/operations_kanban.js?v=202610122345"></script>
   <script src="/static/js/appshell_architect.js?v=202610112400"></script>
   <script src="/static/js/css_live_studio.js?v=202610112415"></script>
   <script src="/static/js/guardian.js?v=202610091700"></script>

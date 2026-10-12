@@ -907,7 +907,7 @@
                       <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
                       <span>Arbeitsergebnis / Deliverable:</span>
                     </div>
-                    <div class="text-[11.5px] leading-relaxed text-primary-custom font-sans whitespace-pre-wrap">${opsEscapeHtml(t.result)}</div>
+                    <div data-archon-linkify class="text-[11.5px] leading-relaxed text-primary-custom font-sans whitespace-pre-wrap">${opsEscapeHtml(t.result)}</div>
                   </div>
                 ` : ''}
               </div>

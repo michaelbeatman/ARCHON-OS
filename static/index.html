@@ -1654,7 +1654,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/mission_control.js"></script>
   <script src="/static/js/mission_control_cockpit.js"></script>
   <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610102210"></script>
+  <script src="/static/js/operations_kanban.js?v=202610102220"></script>
   <script src="/static/js/appshell_architect.js"></script>
   <script src="/static/js/css_live_studio.js?v=202610102060"></script>
   <script src="/static/js/guardian.js?v=202610091700"></script>
@@ -8596,7 +8596,7 @@ ${logExcerpt}
             <i data-lucide="check-square" class="w-3.5 h-3.5 text-emerald-500"></i>
             <span>Aufgaben &amp; Arbeitsergebnisse (Hermes Kanban)</span>
           </h4>
-          <div id="ond-tasks-container" class="space-y-2.5 max-h-72 overflow-y-auto pr-1 custom-scrollbar"></div>
+          <div id="ond-tasks-container" data-archon-linkify class="space-y-2.5 max-h-72 overflow-y-auto pr-1 custom-scrollbar"></div>
         </div>
       </div>
 
@@ -8642,6 +8642,7 @@ ${logExcerpt}
     <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
       <span id="afp-title" class="text-[11px] font-mono font-bold text-primary-custom truncate">…</span>
       <div class="flex items-center gap-2 shrink-0">
+        <button id="afp-open-original" type="button" class="hidden px-2 py-1 rounded-lg border border-[#d42a2b]/60 bg-[#d42a2b]/10 text-[#d42a2b] hover:bg-[#d42a2b]/20 text-[10.5px] font-mono font-bold transition cursor-pointer">📥 Original öffnen</button>
         <button id="afp-copy" type="button" class="px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[#d42a2b] text-[10.5px] font-mono transition cursor-pointer">Pfad kopieren</button>
         <button type="button" class="px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[#d42a2b] text-[10.5px] font-mono transition cursor-pointer" onclick="closeArchonFilePreview()">✕</button>
       </div>
@@ -8660,16 +8661,22 @@ ${logExcerpt}
     if ((m = p.match(/(?:\/opt\/data\/obsidian\/)?(01_PROJEKTE\/[^\s"')`]+)/))) return { t: "vault", path: m[1] };
     if ((m = p.match(/\/opt\/data\/kanban\/workspaces\/(t-[0-9a-f]{6})(?:\/([^\s"')`]+))?/))) return { t: "task", tid: m[1], fname: m[2] || null };
     if ((m = p.match(/\b(t-[0-9a-f]{6})\b/))) return { t: "task", tid: m[1], fname: null };
-    if (/\.md$/i.test(p) || p.includes("/")) return { t: "find", q: p.split(/[\/]/).pop() };
-    return { t: "copy", raw: p };
+    // EXTERN zuerst (User-Vorgabe 11.10.): nur Dateien AUSSERHALB des
+    // Systems bekommen "Original oeffnen" - Systempfade nie in die Suche.
+    if (/^[A-Za-z]:\\/.test(p) || /^\/(opt\/data|app)\//.test(p)) return { t: "extern", raw: p };
+    if (/\.md$/i.test(p) && !p.includes("/")) return { t: "find", q: p.replace(/\.md$/i, "") };
+    return { t: "extern", raw: p };
   }
 
   async function afpShow(title, content, pathForCopy) {
     afpRaw = pathForCopy || "";
     $("afp-title").textContent = title;
     $("afp-body").textContent = content;
+    const ob = $("afp-open-original");
+    if (ob && !ob.dataset.path) ob.classList.add("hidden");
     const box = $("archon-file-preview");
     box.classList.remove("hidden"); box.classList.add("flex");
+    console.info("[archon-preview] offen:", afpRaw);
   }
   function afpErr(title, msg) { afpShow(title, "⚠ " + msg, afpRaw); }
 
@@ -8703,8 +8710,19 @@ ${logExcerpt}
         const fd = await J("/api/operations/vault/file?path=" + encodeURIComponent(d.files[0].path));
         await afpShow("🔍 " + d.files[0].path, fd.content, d.files[0].path);
       } else {
-        await afpShow(r.raw, "Keine Datei-Auflösung möglich für:\n" + r.raw +
-          "\n\n(Kopiere den Pfad über den Knopf oben rechts.)", r.raw);
+        // EXTERN (User-Vorgabe 11.10.): Datei ausserhalb des Systems/Viewers.
+        const istSystempfad = /^\/(opt\/data|app)\//.test(r.raw) && !r.raw.startsWith("/opt/data/obsidian/");
+        const hinweis = istSystempfad
+          ? "Systeminterne Datei (ausserhalb des Vaults).\n\nMit 'Original öffnen' im Browser ansehen oder laden."
+          : ("Datei ausserhalb des Systems (Container):\n" + r.raw +
+             "\n\nDer Server laeuft in Docker - diese Host-Datei ist nicht direkt erreichbar.\n" +
+             "-> 'Pfad kopieren', dann Win+R oder Explorer-Adressleiste -> Pfad einfuegen.");
+        await afpShow(r.raw, hinweis, r.raw);
+        const ob = $("afp-open-original");
+        if (ob) {
+          if (istSystempfad) { ob.classList.remove("hidden"); ob.dataset.path = r.raw; }
+          else { ob.classList.add("hidden"); delete ob.dataset.path; }
+        }
       }
     } catch (e) {
       afpErr(afpRaw, "Konnte Datei nicht laden: " + e.message);
@@ -8751,6 +8769,13 @@ ${logExcerpt}
   });
 
   // Pfad-kopieren im Preview
+  const org = $("afp-open-original");
+  if (org) org.addEventListener("click", () => {
+    const p = org.dataset.path;
+    if (!p) return;
+    window.open("/api/operations/raw?path=" + encodeURIComponent(p), "_blank", "noopener");
+  });
+
   const cp = $("afp-copy");
   if (cp) cp.addEventListener("click", () => {
     if (!afpRaw) return;

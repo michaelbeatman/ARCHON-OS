@@ -320,6 +320,36 @@ def get_kanban_project_files(task_id: str):
     return {"task_id": task_id, "relative": rel, "project_dir": str(proj), "files": files}
 
 
+@router.get("/raw")
+def get_raw_original(path: str):
+    """'Original oeffnen' fuer Dateien AUSSERHALB des Vaults (systeminterne
+    Pfade /opt/data, /app): liefert Bytes mit inline-disposition, damit der
+    Browser PDF/Bilder/MD direkt zeigt bzw. laedt. Traversal-Schutz ueber
+    erlaubte Basis-Pruefung."""
+    from pathlib import Path as _P
+    import mimetypes as _mt
+    from fastapi.responses import Response
+    raw = (path or "").strip()
+    p = _P(raw)
+    if not p.is_absolute():
+        raise HTTPException(status_code=400, detail="Absoluter Pfad erwartet (z.B. /opt/data/...).")
+    rp = p.resolve()
+    erlaubte_basen = ("/opt/data/", "/app/")
+    if not any(str(rp).startswith(b) for b in erlaubte_basen):
+        raise HTTPException(status_code=403,
+                            detail="Nur systeminterne Pfade sind oeffenbar (/opt/data, /app). "
+                                   "Host-Dateien ausserhalb der Container-Binds: Pfad kopieren.")
+    if not rp.is_file():
+        raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {raw}")
+    try:
+        data = rp.read_bytes()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lesen fehlgeschlagen: {e}")
+    mime = _mt.guess_type(rp.name)[0] or "application/octet-stream"
+    return Response(content=data, media_type=mime,
+                    headers={"Content-Disposition": f'inline; filename="{rp.name}"'})
+
+
 @router.get("/vault/file")
 def get_vault_file(path: str):
     """SYSTEMWEITER Datei-Reader: liefert EINE Vault-Datei (01_PROJEKTE/...) als Text.
@@ -351,15 +381,21 @@ def find_vault_file(q: str, limit: int = 8):
     vault = _P(get_vault_dir()).resolve()
     treffer, scanned = [], 0
     try:
-        for p in vault.rglob("*.md"):
-            scanned += 1
-            if scanned > 6000:      # harte Grenze gegen Volllauf
+        # ZUERST 01_PROJEKTE (Ergebnis-MDs), dann Rest - hart begrenzt
+        for raum in (vault / "01_PROJEKTE", vault):
+            if treffer:
                 break
-            rel = p.relative_to(vault).as_posix()
-            if q in p.name.lower() or q in rel.lower():
-                treffer.append({"path": rel, "name": p.name, "size": p.stat().st_size})
-                if len(treffer) >= limit:
+            if not raum.is_dir():
+                continue
+            for p in raum.rglob("*.md"):
+                scanned += 1
+                if scanned > 2500:
                     break
+                rel = p.relative_to(vault).as_posix()
+                if q in p.name.lower() or q in rel.lower():
+                    treffer.append({"path": rel, "name": p.name, "size": p.stat().st_size})
+                    if len(treffer) >= limit:
+                        break
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Suche fehlgeschlagen: {e}")
     return {"query": q, "files": treffer}

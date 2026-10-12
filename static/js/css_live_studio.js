@@ -114,11 +114,20 @@
               // NIE zutreffen (leeres Objekt ist truthy) → Server-Resets wurden nie erkannt
               // und die lokalen Alt-Regeln per POST zurückerzeugt (Resurrection-Schleife).
               if (data.reset_all || serverCount === 0) {
-                studioRules = {};
-                studioTextOverrides = {};
-                studioHtmlOverrides = {};
-                localStorage.removeItem("archon_theme_live_overrides");
-                localStorage.removeItem("archon_theme_html_overrides");
+                // FIX 11.10.2026 (User-Fall: lokale Regeln verschwanden bei
+                // leerem Server bei JEDEM F5): WIPE nur bei EKPLIZITEM
+                // reset_all-Signal (der DELETE-Endpoint setzt es). Server
+                // "leer" kann auch 'nie gespeichert' bedeuten - lokale
+                // Altregeln duerfen dann NICHT zerstoert werden.
+                if (data.reset_all) {
+                  studioRules = {};
+                  studioTextOverrides = {};
+                  studioHtmlOverrides = {};
+                  localStorage.removeItem("archon_theme_live_overrides");
+                  localStorage.removeItem("archon_theme_html_overrides");
+                } else if (localCount > serverCount) {
+                  saveStudioOverrides(true); // lokale Regeln nach oben synchronisieren
+                }
               } else if (localCount > serverCount) {
                 saveStudioOverrides(true);
               }
@@ -854,16 +863,35 @@
       if (selSize) selSize.value = "auto";
       const selRepeat = document.getElementById("st-select-bg-repeat");
       if (selRepeat) selRepeat.value = "repeat";
+      // QUELLE 3: Design-Reiter/CSS-Editor ('archon_custom_user_css') -
+      // eigenes Speicher-System, NICHT von saveStudioOverrides erfasst
+      // (User-Fall 11.10: Bild dort - Remove wirkte nicht, Speichern half
+      // nicht, F5 liess es via initCustomCSS zurueckkehren).
+      let customCssCleared = 0;
+      try {
+        const ckey = "archon_custom_user_css";
+        const ccss = localStorage.getItem(ckey) || "";
+        if (ccss && /background-image\s*:/i.test(ccss)) {
+          const neu = ccss.replace(/background-image\s*:\s*url\([^)]*\)\s*;?/gi, " ");
+          if (neu !== ccss) {
+            customCssCleared = (ccss.match(/background-image\s*:/gi) || []).length;
+            localStorage.setItem(ckey, neu);
+            try { if (typeof initCustomCSS === "function") initCustomCSS(); } catch (e2) {}
+            const taCss = document.getElementById("custom-user-css");
+            if (taCss && taCss !== document.activeElement) taCss.value = neu;
+          }
+        }
+      } catch (e3) { console.warn("[CSS Studio] custom_user_css cleanup:", e3); }
       // 1. Runtime-Tag sofort aktualisieren, 2. dauerhaft speichern (stumm)
       try { applyStudioRulesToDOM(); } catch (e) { console.warn("[CSS Studio] apply failed:", e); }
       if (typeof saveStudioOverrides === "function") saveStudioOverrides(true);
       if (typeof updateStudioActiveRulesCounters === "function") updateStudioActiveRulesCounters();
       if (status) {
         status.classList.remove("hidden", "text-rose-400", "text-zinc-400");
-        status.classList.add((removed || inlineCleared) ? "text-emerald-400" : "text-zinc-400");
-        status.textContent = (removed || inlineCleared)
-          ? `✓ Hintergrundbild entfernt (${removed} Regel(n) + ${inlineCleared} Inline-Style(s) bereinigt, dauerhaft gespeichert)`
-          : "Kein Hintergrundbild in den Studio-Regeln gefunden";
+        status.classList.add((removed || inlineCleared || customCssCleared) ? "text-emerald-400" : "text-zinc-400");
+        status.textContent = (removed || inlineCleared || customCssCleared)
+          ? `✓ Hintergrundbild entfernt (${removed} Studio-Regel(n) + ${inlineCleared} Inline-Style(s) + ${customCssCleared} Design-Editor-Regel(n) bereinigt, dauerhaft gespeichert)`
+          : "Kein Hintergrundbild gefunden - weder in Studio-Regeln, Inline-Styles noch im Design-Editor-CSS";
       }
       return removed + inlineCleared;
     }
@@ -879,8 +907,10 @@
       if (!studioRules[studioSelectedSelector]) {
         studioRules[studioSelectedSelector] = {};
       }
-      if (!value || value === 'none' || value === 'inherit' || (value === 'auto' && property === 'width')) {
-        if (value === '') {
+      // 'url("")' / leere url() = manuelles Leeren im Feld = LOESCHEN
+      const isEmptyUrl = typeof value === 'string' && /^url\(\s*["']?\s*["']?\s*\)$/.test(String(value).trim());
+      if (!value || value === 'none' || value === 'inherit' || isEmptyUrl || (value === 'auto' && property === 'width')) {
+        if (value === '' || isEmptyUrl) {
           delete studioRules[studioSelectedSelector][property];
           if (Object.keys(studioRules[studioSelectedSelector]).length === 0) {
             delete studioRules[studioSelectedSelector];
@@ -893,10 +923,10 @@
       }
       // Direct DOM Sync to selected element
       if (studioSelectedElement && studioSelectedElement instanceof HTMLElement) {
-        if (value && value !== 'none' && value !== 'inherit') {
+        if (value && value !== 'none' && value !== 'inherit' && !isEmptyUrl) {
           const cleanV = String(value).replace('!important', '').trim();
           studioSelectedElement.style.setProperty(property, cleanV, 'important');
-        } else if (value === '' || value === 'none') {
+        } else if (value === '' || value === 'none' || isEmptyUrl) {
           studioSelectedElement.style.removeProperty(property);
         }
       }

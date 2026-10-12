@@ -110,6 +110,10 @@ class TaskCreateRequest(BaseModel):
 class TaskStatusUpdateRequest(BaseModel):
     status: str
     result: Optional[str] = None
+    # 12.10.2026 (Decision-Service): "decision" = Aufruf kam vom zentralen
+    # Entscheidungs-Endpoint -> dann KEIN zusaetzlicher Telegram-Ping (der
+    # Service bestaetigt selbst), sonst Doppelnachricht.
+    source: Optional[str] = None
 
 
 @router.get("/kanban/tasks")
@@ -270,6 +274,24 @@ def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
         """, (task_id, "status_changed", json.dumps({"from": old_status, "to": new_status}), now_iso))
 
         conn.commit()
+
+        # 12.10.2026 (Decision-Service, Richtung Kanban -> Telegram): Wird ein
+        # Entscheidungs-Task (Sidecar-Block 'decision') ueber die Oberflaeche
+        # verschoben, informiert der Owner-Kanal. NICHT beim Aufruf durch den
+        # Decision-Service (source == 'decision') - der bestaetigt selbst.
+        if old_status == "review" and new_status != "review" and (req.source or "") != "decision":
+            try:
+                _dm = _load_kanban_meta().get("tasks", {}).get(task_id, {}).get("decision")
+                if _dm:
+                    from telegram_notify import send_telegram_message
+                    _verb = ("\u2705 freigegeben" if new_status in ("todo", "in_progress", "done")
+                             else "\u26d4 abgelehnt/verworfen")
+                    send_telegram_message(
+                        f"{_verb} \u2014 {_dm.get('titel') or task_id}\n"
+                        f"(im Kanban verschoben: review \u2192 {new_status})")
+            except Exception as _tg_err:
+                print(f"[OperationsAPI] Telegram-Benachrichtigung fehlgeschlagen: {_tg_err}", file=sys.stderr)
+
         return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
     finally:
         conn.close()
@@ -515,6 +537,22 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
             tmeta["tags"] = tags
         else:
             tmeta.pop("tags", None)
+    # 12.10.2026 (Decision-Service): Entscheidungs-Metadaten je Task.
+    # kanban.db bleibt die Wahrheit (Status), der Sidecar traegt nur Kontext.
+    dec_in = payload.get("decision")
+    if isinstance(dec_in, dict):
+        if dec_in.get("clear"):
+            tmeta.pop("decision", None)
+        else:
+            dec = tmeta.setdefault("decision", {})
+            for k in ("typ", "ref_id", "titel", "kurzfassung", "dossier", "body",
+                      "assignee", "status", "entschieden_von", "entschieden_am", "kanal"):
+                if k in dec_in:
+                    dec[k] = dec_in[k]
+            tg = dec_in.get("telegram")
+            if isinstance(tg, dict):
+                dec.setdefault("telegram", {}).update(tg)
+            dec.setdefault("erstellt", datetime.datetime.now().isoformat())
     if not tmeta:
         meta["tasks"].pop(task_id, None)
     _save_kanban_meta(meta)

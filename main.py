@@ -3269,6 +3269,179 @@ async def api_telegram_relay(ziel_agent: str = Form(""), text: str = Form(""),
     return {"status": "ok", "ziel_agent": ziel, "antwort_kopf": antwort[:400]}
 
 
+# =========================================================================
+# ZENTRALER ENTSCHEIDUNGS-SERVICE (12.10.2026, User-Entscheidung "2c")
+# kanban.db ist die WAHRHEIT: Eine Entscheidung IST ein Kanban-Task im Status
+# 'review' (+ Sidecar-Block config/kanban_meta.json -> tasks[tid].decision).
+# Telegram UND Kanban schreiben ueber EINEN Pfad:
+#   POST /api/decisions/decide {task_id, decision, von}
+# =========================================================================
+
+_DECISION_TYPEN = ("delegation_review", "synthesis_freigabe",
+                   "mission_freigabe", "permission_gate")
+
+
+def _decision_kanban_status(typ: str, decision: str) -> str:
+    """Semantik der Entscheidung -> Kanban-Zielstatus (review = offen)."""
+    approve = (decision == "approve")
+    return {
+        "delegation_review":  "todo" if approve else "archived",
+        "synthesis_freigabe": "done" if approve else "archived",
+        "mission_freigabe":   "in_progress" if approve else "archived",
+        "permission_gate":    "done" if approve else "archived",
+    }.get(typ, "todo" if approve else "archived")
+
+
+def _decision_self_api(method: str, path: str, payload: dict = None, timeout: float = 15.0):
+    """Selbstaufruf der eigenen API. Damit laufen Task-/Sidecar-Zugriffe ueber
+    DIESELBEN Endpunkte wie die UI - keine zweite Schreiblogik, keine
+    Direktschreibzugriffe auf kanban.db."""
+    import urllib.request
+    url = f"http://127.0.0.1:8501{path}"
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(url, data=data, method=method,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read().decode("utf-8") or "{}"
+        return json.loads(raw)
+
+
+def create_decision(typ: str, titel: str, kurzfassung: str = "", ref_id: str = "",
+                    dossier: str = None, body: str = "", extra: dict = None) -> dict:
+    """Legt den Entscheidungs-Task im Kanban an (Status 'review', Verantwortlicher
+    Robert), schreibt den Sidecar-Block und pingt den Owner mit ✅/❌.
+    Rueckgabe {"task_id":..., "decision": {...}} oder {} bei Fehler."""
+    if typ not in _DECISION_TYPEN:
+        logger.warning(f"[Decision] Unbekannter Typ '{typ}'")
+        return {}
+    try:
+        res = _decision_self_api("POST", "/api/operations/kanban/tasks", {
+            "title": (titel or "Entscheidung")[:180],
+            "body": body or kurzfassung,
+            "assignee": "executive_decision_architect",
+            "column": "review",
+            "priority": 1,
+        })
+        task_id = res.get("task_id")
+        if not task_id:
+            logger.warning(f"[Decision] Task-Anlage lieferte keine ID: {res}")
+            return {}
+        dec = {
+            "typ": typ, "ref_id": ref_id, "titel": titel,
+            "kurzfassung": (kurzfassung or "")[:600],
+            "dossier": dossier or "", "status": "offen",
+            "kanal": "telegram+kanban",
+        }
+        if extra:
+            dec.update(extra)
+        _decision_self_api("POST", "/api/operations/kanban/meta",
+                           {"kind": "task", "task_id": task_id, "decision": dec})
+        markup = {"inline_keyboard": [[
+            {"text": "✅ Freigeben", "callback_data": f"app:approve:{task_id}"},
+            {"text": "❌ Ablehnen", "callback_data": f"app:reject:{task_id}"},
+        ]]}
+        caption = (f"🔐 ENTSCHEIDUNG NÖTIG — {titel}\n"
+                   f"Typ: {typ}\nKanban-Task: {task_id}\n\n{(kurzfassung or '')[:300]}"
+                   + ("\n\nDer vollständige Bericht liegt als Anhang bei." if dossier else ""))
+        sent = False
+        try:
+            from telegram_notify import send_telegram_document, send_telegram_message
+            if dossier:
+                sent = send_telegram_document(dossier, caption=caption, reply_markup=markup)
+            if not sent:
+                sent = send_telegram_message(caption, reply_markup=markup)
+        except Exception as tg_err:
+            logger.warning(f"[Decision] Telegram-Ping fehlgeschlagen: {tg_err}")
+        logger.info(f"[Decision] {typ} angelegt: Kanban {task_id} (ref={ref_id}), Ping={sent}")
+        return {"task_id": task_id, "decision": dec}
+    except Exception as e:
+        logger.warning(f"[Decision] Konnte Entscheidung nicht anlegen: {e}")
+        return {}
+
+
+async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
+    """Fuehrt nach der Statusaenderung die typ-spezifische Folgeaktion aus."""
+    ref = dec.get("ref_id") or ""
+    dossier = dec.get("dossier") or ""
+    if decision != "approve":
+        return "Abgelehnt — keine Folgeaktion ausgeführt."
+    if typ == "synthesis_freigabe":
+        await _finalize_synthesis_after_approval(
+            ref or "projekt", dossier, dec.get("kurzfassung") or "",
+            "Owner-Freigabe über den Entscheidungs-Service")
+        return "Synthese finalisiert (Abschlussbericht + Parent abgeschlossen)."
+    if typ == "mission_freigabe":
+        if ref:
+            asyncio.create_task(_execute_mission_control_task(ref))
+        return f"Ausführung für Mission {ref} gestartet."
+    if typ == "permission_gate":
+        if ref:
+            await asyncio.to_thread(_decision_self_api, "POST",
+                                    f"/api/permission-gates/{ref}/decide",
+                                    {"decision": "approve"})
+        return f"Rechte-Gate {ref} ausgeführt."
+    return "Keine Folgeaktion nötig (Statusänderung genügt)."
+
+
+@app.post("/api/decisions/decide")
+async def api_decide_decision(body: Dict = Body(...)):
+    """EINZIGER Schreibpfad für Entscheidungen — Telegram UND Kanban rufen ihn."""
+    task_id = str(body.get("task_id") or "").strip()
+    decision = str(body.get("decision") or "").lower().strip()
+    von = str(body.get("von") or "owner")
+    if decision not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="decision muss approve oder reject sein")
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id fehlt")
+    try:
+        # WICHTIG: blockierender Selbst-HTTP-Aufruf NIE direkt im async-Handler
+        # (Event-Loop-Deadlock) -> in den Threadpool auslagern.
+        meta = await asyncio.to_thread(_decision_self_api, "GET", "/api/operations/kanban/meta")
+        dec = (meta.get("tasks", {}).get(task_id, {}) or {}).get("decision")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Sidecar nicht lesbar: {e}")
+    if not dec:
+        raise HTTPException(status_code=404, detail=f"Kein Entscheidungs-Block für {task_id}")
+    typ = dec.get("typ")
+    ziel = _decision_kanban_status(typ, decision)
+    # 1) kanban.db = Wahrheit -> Status dort setzen (source=decision: kein Doppel-Ping)
+    try:
+        await asyncio.to_thread(
+            _decision_self_api, "PATCH", f"/api/operations/kanban/tasks/{task_id}/status",
+            {"status": ziel, "source": "decision"})
+    except Exception as e:
+        logger.warning(f"[Decision] Kanban-Statusupdate fehlgeschlagen: {e}")
+    # 2) Folgeaktion
+    try:
+        ergebnis = await _decision_followup(typ, dec, decision)
+    except Exception as e:
+        logger.error(f"[Decision] Folgeaktion fehlgeschlagen: {e}")
+        ergebnis = f"FEHLER bei der Folgeaktion: {e}"
+    # 3) Sidecar aktualisieren (Audit)
+    try:
+        await asyncio.to_thread(_decision_self_api, "POST", "/api/operations/kanban/meta", {
+            "kind": "task", "task_id": task_id,
+            "decision": {"status": "freigegeben" if decision == "approve" else "abgelehnt",
+                         "entschieden_von": von,
+                         "entschieden_am": datetime.datetime.now().isoformat()},
+        })
+    except Exception as e:
+        logger.warning(f"[Decision] Sidecar-Update fehlgeschlagen: {e}")
+    # 4) Bestaetigung (permission_gate pingt selbst)
+    if typ != "permission_gate":
+        try:
+            from telegram_notify import send_telegram_message
+            send_telegram_message(
+                f"{'✅' if decision == 'approve' else '❌'} {dec.get('titel') or task_id}\n"
+                f"Kanban: {ziel}\n{ergebnis[:700]}")
+        except Exception as e:
+            logger.warning(f"[Decision] Bestätigungs-Ping fehlgeschlagen: {e}")
+    add_ticker("Entscheidung", f"{task_id} ({typ}) -> {decision}")
+    logger.info(f"[Decision] {task_id} ({typ}) -> {decision}: {ergebnis[:200]}")
+    return {"status": "ok", "task_id": task_id, "decision": decision,
+            "kanban_status": ziel, "ergebnis": ergebnis}
+
+
 @app.post("/api/hermes/profiles")
 def api_save_hermes_profile(profile_data: Dict = Body(...)):
     p_id = profile_data.get("id")
@@ -9671,34 +9844,40 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
                            app_id=None, dossier_dir=_tg_doss_dir)
         return
 
-    # 4b: Ablehnung/unklar -> Entwurf als Approval-Task im Board
-    app_id = f"mcapp-{safe_pid}"[:40]
-    if not any(t.get("id") == app_id for t in data.get("tasks", [])):
-        data["tasks"].append({
-            "id": app_id,
-            "title": f"Freigabe noetig: Synthese '{parent_title[:55]}'",
-            "agent_id": "executive_decision_architect",
-            "agent_name": "Robert (Chefstratege)",
-            "status": "approval",
-            "phase": "approval",
-            "parent_project_id": parent_project_id,
-            "parent_project_title": parent_title,   # 12.10: Einheitlicher Projekt-Ordner
-            "synthesis_draft_path": draft_path,
-            "capture_input": parent_task.get("capture_input", parent_title),
-            "result_summary": f"Lisas Entwurf liegt bereit ({draft_path}). Roberts Rueckmeldung: {robert_reply[:250] or 'keine'}",
-            "target_action": parent_task.get("target_action") or "none",
-            "created_via": "synthesis_loop",
-        })
+    # 4b: Ablehnung/unklar -> echte Entscheidung im KANBAN (2c). kanban.db ist
+    # die Wahrheit; der frühere parallele Mission-Control-Task (mcapp-*) entfällt.
+    _deci_dossier = None
+    if _tg_doss_dir:
+        try:
+            from dossier_builder import build_dossier_from_report
+            _deci_dossier = build_dossier_from_report(
+                f"Synthese: {parent_title}", synthesis_reply, _tg_doss_dir,
+                f"{safe_pid}_synthese", ref_id=parent_project_id,
+                quelle="Lisa (aggregation_lisa)")
+        except Exception as _de:
+            logger.warning(f"[Synthese] Dossier für die Entscheidung fehlgeschlagen: {_de}")
+    _deci = await asyncio.to_thread(
+        create_decision,
+        "synthesis_freigabe",
+        f"Freigabe: Synthese '{parent_title[:55]}'",
+        synthesis_reply,          # kurzfassung
+        parent_project_id,        # ref_id
+        _deci_dossier,            # dossier
+        f"Lisas Entwurf: {draft_path}",   # body
+        {"parent_project_id": parent_project_id, "draft_path": draft_path},  # extra
+    )
     now_t = datetime.datetime.now().strftime("%H:%M:%S")
     data.setdefault("audit_logs", []).insert(0, {
         "time": now_t, "source": "Synthese-Loop",
-        "msg": f"Lisa-Entwurf fuer #{parent_pid_placeholder}" if False else f"Lisa-Entwurf fuer #{parent_project_id} braucht Freigabe (Robert: {robert_reply[:60] or 'ohne Antwort'})"
+        "msg": (f"Lisa-Entwurf für #{parent_project_id} braucht Freigabe "
+                f"(Robert: {robert_reply[:60] or 'ohne Antwort'}) — "
+                f"Kanban-Entscheidung {_deci.get('task_id') or 'NICHT angelegt'}")
     })
-    add_ticker("Synthese-Loop", f"Freigabe noetig: Entwurf '{draft_name}' im Approval-Board")
+    add_ticker("Synthese-Loop", f"Entscheidung im Kanban angelegt: {draft_name}")
     _save_mission_control_data(data)
-    # 2a: Freigabe-Anfrage MIT Dossier-Anhang + Buttons an den Owner.
-    _tg_ping_synthesis(parent_title, parent_project_id, synthesis_reply, draft_path,
-                       app_id=app_id, dossier_dir=_tg_doss_dir)
+    if not _deci:
+        logger.warning(f"[Synthese] Entscheidung für #{parent_project_id} konnte NICHT "
+                       f"angelegt werden — Freigabe ist per Telegram/Kanban nicht möglich.")
 
 @app.post("/api/mission-control/tasks/move")
 async def move_mission_control_task(req: TaskMoveRequest):

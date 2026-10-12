@@ -285,13 +285,16 @@ primary_document: "[[{task_id}_{task_slug}]]"
     # Die Engine-DB bleibt unberuehrt; relativer Vault-Pfad, damit die API
     # bei variabler Vault-Lage (get_vault_dir) aufloesen kann.
     try:
-        meta_path = Path(__file__).resolve().parents[1] / "config" / "kanban_meta.json"
-        meta = {}
-        if meta_path.exists():
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        meta.setdefault("tasks", {}).setdefault(task_id, {})["obsidian"] = f"01_PROJEKTE/{folder_name}"
-        meta_path.parent.mkdir(parents=True, exist_ok=True)
-        meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+        # 12.10.2026 (Fix Punkt 1, Datenrisiko): KEIN direkter Dateizugriff mehr —
+        # der Sidecar hat EINEN Besitzer (backend/kanban_sidecar.py, Lock + atomar).
+        # Direkte read-modify-write hier wuerde parallele Endpoint-Schreibungen
+        # (Fan-in, Entscheidungen) still ueberbuegeln.
+        from backend.kanban_sidecar import update_kanban_meta
+
+        def _set_obsidian(meta):
+            meta.setdefault("tasks", {}).setdefault(task_id, {})["obsidian"] = f"01_PROJEKTE/{folder_name}"
+
+        update_kanban_meta(_set_obsidian)
     except Exception as meta_err:
         print(f"[PostTask] Obsidian-Sidecar fehlgeschlagen: {meta_err}", file=sys.stderr)
 

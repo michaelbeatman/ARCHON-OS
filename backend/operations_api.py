@@ -54,29 +54,24 @@ def _get_fallback_avatar(aid: str) -> str:
 # ACHTUNG (10.10.2026): /app/data ist ein anonymer Volume, der den
 # Host-Bind-Mount überschattet — Dateien unter data/ sind host-seitig
 # UNSICHTBAR und gehen bei Container-Recreate verloren. Deshalb: config/!
-KANBAN_META_FILE = os.path.join(WORKSPACE_DIR, "config", "kanban_meta.json")
+# 12.10.2026: Besitzer der Sidecar-Datei ist backend/kanban_sidecar.py
+# (Lock + atomares Schreiben) — hier NIE direkt auf die Datei zugreifen.
 
 
 def _load_kanban_meta() -> Dict:
     """Sidecar-Metadaten (NICHT in kanban.db — Engine bleibt unberuehrt):
     Due-Dates/Tags pro Task sowie WIP-Limits pro Spalte."""
-    if os.path.exists(KANBAN_META_FILE):
-        try:
-            with open(KANBAN_META_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                data.setdefault("tasks", {})
-                data.setdefault("wip", {})
-                return data
-        except Exception as e:
-            print(f"[OperationsAPI] meta load error: {e}", file=sys.stderr)
-    return {"tasks": {}, "wip": {}}
+    from backend.kanban_sidecar import load_kanban_meta
+    return load_kanban_meta()
 
 
 def _save_kanban_meta(meta: Dict) -> None:
-    os.makedirs(os.path.dirname(KANBAN_META_FILE), exist_ok=True)
-    with open(KANBAN_META_FILE, "w", encoding="utf-8") as f:
-        json.dump(meta, f, indent=2, ensure_ascii=False)
+    # 12.10.2026 (Fix Punkt 1, Datenrisiko): atomares Schreiben (Temp+replace).
+    # HINWEIS: Wer load-aendern-speichern als SEQUENZ braucht, muss
+    # backend.kanban_sidecar.update_kanban_meta nutzen (Lock!) — diese Funktion
+    # schreibt nur, sie sperrt nicht.
+    from backend.kanban_sidecar import _write_atomic
+    _write_atomic(meta)
 
 
 def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
@@ -511,7 +506,11 @@ def get_kanban_meta():
 @router.post("/kanban/meta")
 def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
     """Due/Tags (kind=task) oder WIP-Limits (kind=wip) speichern. Engine-DB bleibt unberuehrt."""
-    meta = _load_kanban_meta()
+    # 12.10.2026 (Fix Punkt 1, Datenrisiko): die GESAMTE Load-Aendern-Speichern-
+    # Sequenz laeuft unter EINER Sperre (backend.kanban_sidecar.update_kanban_meta),
+    # sonst verliert paralleler Fan-in Entscheidungs-Metadaten. Validierung VORHER
+    # (ohne Datei), damit kein Lock auf Fehlerpfaden gehalten wird.
+    from backend.kanban_sidecar import update_kanban_meta
     kind = str(payload.get("kind") or "task")
     if kind == "wip":
         limits = payload.get("limits") or {}
@@ -523,54 +522,63 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
                 continue
             if v > 0:
                 cleaned[str(col)] = v
-        meta["wip"] = cleaned
-        _save_kanban_meta(meta)
+
+        def _apply_wip(meta):
+            meta["wip"] = cleaned
+
+        update_kanban_meta(_apply_wip)
         return {"status": "ok", "wip": cleaned}
     task_id = str(payload.get("task_id") or "").strip()
     if not task_id:
         raise HTTPException(status_code=400, detail="task_id erforderlich")
-    tmeta = meta["tasks"].setdefault(task_id, {})
-    if payload.get("clear_due"):
-        tmeta.pop("due", None)
-    elif payload.get("due"):
+    due_in = payload.get("due")
+    if due_in and not payload.get("clear_due"):
         try:
-            datetime.date.fromisoformat(str(payload["due"])[:10])
-            tmeta["due"] = str(payload["due"])[:10]
+            datetime.date.fromisoformat(str(due_in)[:10])
         except ValueError:
             raise HTTPException(status_code=400, detail="due muss YYYY-MM-DD sein")
     tags_in = payload.get("tags")
-    if tags_in is not None:
-        tags = [str(t).strip()[:24] for t in tags_in if str(t).strip()][:8]
-        if tags:
-            tmeta["tags"] = tags
-        else:
-            tmeta.pop("tags", None)
-    # 12.10.2026 (Decision-Service): Entscheidungs-Metadaten je Task.
-    # kanban.db bleibt die Wahrheit (Status), der Sidecar traegt nur Kontext.
-    obs_in = payload.get("obsidian")
-    if obs_in is not None:
-        if str(obs_in).strip() == "":
-            tmeta.pop("obsidian", None)
-        else:
-            tmeta["obsidian"] = str(obs_in).strip()
-    dec_in = payload.get("decision")
-    if isinstance(dec_in, dict):
-        if dec_in.get("clear"):
-            tmeta.pop("decision", None)
-        else:
-            dec = tmeta.setdefault("decision", {})
-            for k in ("typ", "ref_id", "titel", "kurzfassung", "dossier", "body",
-                      "assignee", "status", "entschieden_von", "entschieden_am", "kanal"):
-                if k in dec_in:
-                    dec[k] = dec_in[k]
-            tg = dec_in.get("telegram")
-            if isinstance(tg, dict):
-                dec.setdefault("telegram", {}).update(tg)
-            dec.setdefault("erstellt", datetime.datetime.now().isoformat())
-    if not tmeta:
-        meta["tasks"].pop(task_id, None)
-    _save_kanban_meta(meta)
-    return {"status": "ok", "task": meta["tasks"].get(task_id, {})}
+
+    def _apply_task(meta):
+        tmeta = meta["tasks"].setdefault(task_id, {})
+        if payload.get("clear_due"):
+            tmeta.pop("due", None)
+        elif due_in:
+            tmeta["due"] = str(due_in)[:10]
+        if tags_in is not None:
+            tags = [str(t).strip()[:24] for t in tags_in if str(t).strip()][:8]
+            if tags:
+                tmeta["tags"] = tags
+            else:
+                tmeta.pop("tags", None)
+        # 12.10.2026 (Decision-Service): Entscheidungs-Metadaten je Task.
+        # kanban.db bleibt die Wahrheit (Status), der Sidecar traegt nur Kontext.
+        obs_in = payload.get("obsidian")
+        if obs_in is not None:
+            if str(obs_in).strip() == "":
+                tmeta.pop("obsidian", None)
+            else:
+                tmeta["obsidian"] = str(obs_in).strip()
+        dec_in = payload.get("decision")
+        if isinstance(dec_in, dict):
+            if dec_in.get("clear"):
+                tmeta.pop("decision", None)
+            else:
+                dec = tmeta.setdefault("decision", {})
+                for k in ("typ", "ref_id", "titel", "kurzfassung", "dossier", "body",
+                          "assignee", "status", "entschieden_von", "entschieden_am", "kanal"):
+                    if k in dec_in:
+                        dec[k] = dec_in[k]
+                tg = dec_in.get("telegram")
+                if isinstance(tg, dict):
+                    dec.setdefault("telegram", {}).update(tg)
+                dec.setdefault("erstellt", datetime.datetime.now().isoformat())
+        if not tmeta:
+            meta["tasks"].pop(task_id, None)
+        return dict(meta["tasks"].get(task_id, {}))
+
+    _, saved = update_kanban_meta(_apply_task)
+    return {"status": "ok", "task": saved}
 
 
 @router.get("/kanban/stats")

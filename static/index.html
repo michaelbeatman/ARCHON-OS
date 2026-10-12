@@ -516,8 +516,8 @@
         <!-- ZONE 2 & 3 CONTAINER -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 min-h-0 items-stretch overflow-hidden" style="flex: 1 1 0%; min-height: 0;">
           
-          <!-- ZONE 2: HITL KANBAN & PROCESS (LINKE SEITE, 8/12 SPALTEN) -->
-          <div class="lg:col-span-8 flex flex-col space-y-2 min-h-0 h-full overflow-hidden" style="height: 100%; min-height: 0;">
+          <!-- ZONE 2: HITL KANBAN & PROCESS (LINKE SEITE, 9/12 SPALTEN) -->
+          <div class="lg:col-span-9 flex flex-col space-y-2 min-h-0 h-full overflow-hidden" style="height: 100%; min-height: 0;">
             
             <!-- KANBAN BOARD CONTAINER -->
             <div class="shadcn-card p-2.5 flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -527,24 +527,24 @@
                   <span class="text-[10px] text-[var(--muted-foreground)] hidden sm:inline">HITL-Freigabe vor Ausführung</span>
                 </div>
               </div>
-              <!-- 4-Spalten Kanban Grid -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 flex-1 min-h-0 items-stretch overflow-hidden mt-1.5" style="flex: 1 1 0%; min-height: 0;">
+              <!-- 5-Spalten Kanban Grid (Kanban-Wahrheit, wie Operations) -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 flex-1 min-h-0 items-stretch overflow-hidden mt-1.5" style="flex: 1 1 0%; min-height: 0;">
                 
-                <!-- SPALTE 1: QUICK CAPTURE & BACKLOG -->
+                <!-- SPALTE 1: TO-DO (mit Quick Capture) -->
                 <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border border-[var(--border)]">
-                  <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-[var(--border)] shrink-0 font-sans">
+                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#F3E8DE;color:#6b5d4f">
                     <div class="flex items-center gap-1.5">
-                      <i data-lucide="inbox" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                      <span class="font-semibold text-xs text-[var(--foreground)]">Quick Capture</span>
+                      <i data-lucide="circle" class="w-3.5 h-3.5"></i>
+                      <span class="font-semibold text-xs">To-Do</span>
                     </div>
-                    <span id="mc-count-backlog" class="shadcn-badge shadcn-badge-outline text-[9px] px-1 py-0">0</span>
+                    <span id="mc-count-todo" class="shadcn-badge shadcn-badge-outline text-[9px] px-1 py-0">0</span>
                   </div>
                   <form onsubmit="onMissionControlTaskCapture(event)" class="mb-1.5 shrink-0">
                     <div class="relative flex items-center">
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         id="mc-capture-input"
-                        placeholder="Aufgabe erfassen..." 
+                        placeholder="Aufgabe erfassen..."
                         class="shadcn-input w-full pl-2 pr-7 py-0.5 text-xs font-sans h-7"
                       />
                       <button type="submit" class="absolute right-1 text-black dark:text-white hover:opacity-75 transition cursor-pointer">
@@ -552,29 +552,16 @@
                       </button>
                     </div>
                   </form>
-                  <div id="mc-col-backlog" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
+                  <div id="mc-col-todo" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
                     <!-- Dynamisch gerendert -->
                   </div>
                 </div>
-                <!-- SPALTE 2: APPROVAL GATE -->
-                <div id="mc-kanban-col-approval" class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border border-[var(--border)]">
-                  <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-[var(--border)] shrink-0 font-sans">
-                    <div class="flex items-center gap-1.5">
-                      <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                      <span class="font-semibold text-xs text-[var(--foreground)]">Approval Gate</span>
-                    </div>
-                    <span id="mc-count-approval" class="shadcn-badge shadcn-badge-outline text-[9px] px-1 py-0">0</span>
-                  </div>
-                  <div id="mc-col-approval" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
-                    <!-- Dynamisch gerendert -->
-                  </div>
-                </div>
-                <!-- SPALTE 3: IN ARBEIT -->
+                <!-- SPALTE 2: IN BEARBEITUNG -->
                 <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border border-[var(--border)]">
-                  <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-[var(--border)] shrink-0 font-sans">
+                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#EED65B;color:#6b5c10">
                     <div class="flex items-center gap-1.5">
-                      <i data-lucide="play" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                      <span class="font-semibold text-xs text-[var(--foreground)]">In Arbeit</span>
+                      <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                      <span class="font-semibold text-xs">In Bearbeitung</span>
                     </div>
                     <span id="mc-count-inprogress" class="shadcn-badge shadcn-badge-outline text-[9px] px-1 py-0">0</span>
                   </div>
@@ -582,16 +569,42 @@
                     <!-- Dynamisch gerendert -->
                   </div>
                 </div>
-                <!-- SPALTE 4: FERTIGGESTELLT -->
+                <!-- SPALTE 3: REVIEW & QA -->
                 <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border border-[var(--border)]">
-                  <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-[var(--border)] shrink-0 font-sans">
+                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#7CA982;color:#2f4a33">
                     <div class="flex items-center gap-1.5">
-                      <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                      <span class="font-semibold text-xs text-[var(--foreground)]">Fertiggestellt</span>
+                      <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                      <span class="font-semibold text-xs">Review &amp; QA</span>
                     </div>
-                    <span id="mc-count-completed" class="shadcn-badge shadcn-badge-outline text-[9px] px-1 py-0">0</span>
+                    <span id="mc-count-review" class="shadcn-badge shadcn-badge-outline text-[9px] px-1 py-0">0</span>
                   </div>
-                  <div id="mc-col-completed" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
+                  <div id="mc-col-review" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
+                    <!-- Dynamisch gerendert -->
+                  </div>
+                </div>
+                <!-- SPALTE 4: BLOCKIERT -->
+                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border border-[var(--border)]">
+                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#C15C53;color:#ffffff">
+                    <div class="flex items-center gap-1.5">
+                      <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
+                      <span class="font-semibold text-xs">Blockiert</span>
+                    </div>
+                    <span id="mc-count-blocked" class="shadcn-badge shadcn-badge-outline text-[9px] px-1 py-0">0</span>
+                  </div>
+                  <div id="mc-col-blocked" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
+                    <!-- Dynamisch gerendert -->
+                  </div>
+                </div>
+                <!-- SPALTE 5: ABGESCHLOSSEN -->
+                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border border-[var(--border)]">
+                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#4A6D88;color:#ffffff">
+                    <div class="flex items-center gap-1.5">
+                      <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
+                      <span class="font-semibold text-xs">Abgeschlossen</span>
+                    </div>
+                    <span id="mc-count-done" class="shadcn-badge shadcn-badge-outline text-[9px] px-1 py-0">0</span>
+                  </div>
+                  <div id="mc-col-done" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
                     <!-- Dynamisch gerendert -->
                   </div>
                 </div>
@@ -668,8 +681,8 @@
               </div>
             </div>
           </div>
-          <!-- ZONE 3: AGENTEN-KADER & LIVE-AUDIT FEED (RECHTE SEITE, 4/12 SPALTEN) -->
-          <div class="lg:col-span-4 flex flex-col space-y-2 min-h-0 h-full overflow-hidden font-sans" style="height: 100%; min-height: 0;">
+          <!-- ZONE 3: AGENTEN-KADER & LIVE-AUDIT FEED (RECHTE SEITE, 3/12 SPALTEN, schmal) -->
+          <div class="lg:col-span-3 flex flex-col space-y-2 min-h-0 h-full overflow-hidden font-sans" style="height: 100%; min-height: 0;">
             
             <!-- BOX 1: AKTIVER AGENTEN-KADER -->
             <div class="shadcn-card p-2.5 flex flex-col shrink-0 max-h-[140px] overflow-hidden">
@@ -1652,7 +1665,7 @@ print('Ausführung erfolgreich!')</textarea>
     });
   </script>
   <script src="/static/js/mission_control.js"></script>
-  <script src="/static/js/mission_control_cockpit.js"></script>
+  <script src="/static/js/mission_control_cockpit.js?v=202610122315"></script>
   <script src="/static/js/research_lab.js"></script>
   <script src="/static/js/operations_kanban.js?v=202610121915"></script>
   <script src="/static/js/appshell_architect.js?v=202610112400"></script>

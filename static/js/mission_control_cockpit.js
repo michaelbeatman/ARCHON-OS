@@ -18,6 +18,7 @@
         const data = await res.json();
         missionControlState = data;
         renderMissionControl(data);
+        await fetchMissionControlKanban();
       } catch (e) {
         console.error("Error fetching mission control state:", e);
       } finally {
@@ -161,169 +162,10 @@
           }
         }
       }
-      // 2. ZONE 2: Kanban Columns
-      const tasks = data.tasks || [];
-      const colBacklog = document.getElementById("mc-col-backlog");
-      const colApproval = document.getElementById("mc-col-approval");
-      const colInProgress = document.getElementById("mc-col-inprogress");
-      const colCompleted = document.getElementById("mc-col-completed");
-      const countBacklog = document.getElementById("mc-count-backlog");
-      const countApproval = document.getElementById("mc-count-approval");
-      const countInProgress = document.getElementById("mc-count-inprogress");
-      const countCompleted = document.getElementById("mc-count-completed");
-      let cBacklog = 0, cApproval = 0, cProgress = 0, cComp = 0;
-      let htmlBacklog = "", htmlApproval = "", htmlProgress = "", htmlComp = "";
-      tasks.forEach(t => {
-        const status = t.status || "backlog";
-        const isHighBudget = (t.estimated_tokens > 100000) || (t.estimated_cost_eur > 0.15) || (t.subagents_count > 2);
-        if (status === "backlog") {
-          cBacklog++;
-          htmlBacklog += `
-            <div id="mc-task-${t.id}" class="shadcn-card p-2 text-xs transition hover:shadow-xs">
-              <div class="flex items-start justify-between gap-1">
-                <h4 class="text-[11.5px] font-medium leading-tight text-[var(--foreground)]">${escapeHtmlMC(t.title)}</h4>
-              </div>
-              <div class="mt-1.5 text-[10px] shadcn-muted space-y-0.5">
-                <div class="flex items-center gap-1 text-[var(--foreground)] opacity-85">
-                  <i data-lucide="user" class="w-3 h-3 shadcn-muted"></i>
-                  <span>${escapeHtmlMC(t.agent_name || 'Hermes')}</span>
-                </div>
-                <div class="flex items-center justify-between text-[9.5px] shadcn-muted">
-                  <span>${(t.estimated_tokens || 0).toLocaleString()} Tok.</span>
-                  <span>~${(t.estimated_cost_eur || 0.04).toFixed(2)} €</span>
-                </div>
-              </div>
-              <div class="mt-2 pt-1.5 border-t border-[var(--border)] flex items-center justify-end">
-                <button onclick="moveMissionControlTask('${t.id}', 'approval')" class="shadcn-btn-primary px-2 py-0.5 text-[10px] cursor-pointer flex items-center gap-1 h-6">
-                  <span>Ans Gate</span>
-                  <i data-lucide="arrow-right" class="w-3 h-3"></i>
-                </button>
-              </div>
-            </div>
-          `;
-        } else if (status === "approval") {
-          cApproval++;
-          const cardBorder = isHighBudget ? "border: 1px solid var(--border) !important;" : "";
-          
-          let planListHtml = "";
-          if (Array.isArray(t.plan) && t.plan.length > 0) {
-            planListHtml = `<div class="mt-1.5 text-[9.5px] space-y-0.5 bg-[var(--secondary)] p-1.5 rounded border border-[var(--border)]">
-              <span class="font-semibold text-[var(--foreground)] text-[9px] uppercase">Plan:</span>
-              ${t.plan.slice(0, 3).map((p, idx) => `<div class="text-[var(--foreground)] opacity-85 flex items-start gap-1"><span>${idx+1}.</span> <span>${escapeHtmlMC(p)}</span></div>`).join('')}
-            </div>`;
-          }
-          htmlApproval += `
-            <div id="mc-task-${t.id}" class="shadcn-card p-2 text-xs transition" style="${cardBorder}">
-              ${isHighBudget ? `
-                <div class="mb-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold flex items-center gap-1 shadcn-badge-outline text-[var(--foreground)]">
-                  <i data-lucide="alert-circle" class="w-3 h-3 text-[var(--muted-foreground)]"></i>
-                  <span>Budget: ~${(t.estimated_cost_eur || 0.24).toFixed(2)} €</span>
-                </div>
-              ` : ''}
-              
-              <h4 class="text-[11.5px] font-medium leading-tight text-[var(--foreground)]">${escapeHtmlMC(t.title)}</h4>
-              
-              ${planListHtml}
-              <div class="mt-1.5 text-[9.5px] space-y-0.5 bg-[var(--secondary)] p-1.5 rounded border border-[var(--border)] text-[var(--foreground)] opacity-90">
-                <div class="flex justify-between">
-                  <span class="shadcn-muted">Agent:</span>
-                  <span class="font-medium text-[var(--foreground)]">${escapeHtmlMC(t.agent_name || 'Hermes')}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="shadcn-muted">Modell:</span>
-                  <span class="truncate max-w-[110px] text-[var(--foreground)]" title="${escapeHtmlMC(t.model)}">${escapeHtmlMC(t.model || 'Universal')}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="shadcn-muted">Kosten:</span>
-                  <span class="font-semibold text-[var(--foreground)]">${(t.estimated_tokens || 0).toLocaleString()} Tok. · ~${(t.estimated_cost_eur || 0.05).toFixed(2)} €</span>
-                </div>
-              </div>
-              <div class="mt-2 pt-1.5 border-t border-[var(--border)] flex items-center gap-1">
-                <button onclick="moveMissionControlTask('${t.id}', 'in_progress')" class="shadcn-btn-primary flex-1 py-0.5 text-[10px] cursor-pointer flex items-center justify-center gap-1 h-6">
-                  <i data-lucide="check" class="w-3 h-3"></i>
-                  <span>Starten</span>
-                </button>
-                <button onclick="moveMissionControlTask('${t.id}', 'dismissed')" class="shadcn-btn-outline px-1.5 py-0.5 text-[9px] cursor-pointer h-6" title="Verwerfen">
-                  <i data-lucide="x" class="w-3 h-3"></i>
-                </button>
-              </div>
-            </div>
-          `;
-        } else if (status === "in_progress") {
-          cProgress++;
-          const startedAt = t.started_at || (Date.now() / 1000 - 30);
-          const initialDiff = Math.max(0, Date.now() / 1000 - startedAt);
-          const initialTimeStr = formatMissionControlDuration(initialDiff);
-          const isOverHour = initialDiff >= 3600;
-          const stopwatchClass = isOverHour 
-            ? "text-[9.5px] font-mono text-amber-600 dark:text-amber-400 font-bold mc-stopwatch" 
-            : "text-[9.5px] font-mono text-[var(--muted-foreground)] font-semibold mc-stopwatch";
-          
-          htmlProgress += `
-            <div id="mc-task-${t.id}" class="shadcn-card p-2 text-xs transition">
-              <div class="flex items-center justify-between gap-1 mb-1">
-                <span class="shadcn-badge shadcn-badge-outline text-[9px] py-0 px-1.5 font-mono">
-                  LÄUFT
-                </span>
-                <span class="${stopwatchClass}" data-start="${startedAt}">${initialTimeStr}</span>
-              </div>
-              <h4 class="text-[11.5px] font-medium leading-tight text-[var(--foreground)]">${escapeHtmlMC(t.title)}</h4>
-              <div class="mt-1.5 p-1.5 rounded bg-[var(--secondary)] border border-[var(--border)] text-[9.5px] space-y-0.5">
-                <div class="flex items-center justify-between text-[var(--foreground)] opacity-85">
-                  <span>Lead: ${escapeHtmlMC(t.agent_name || 'Worker')}</span>
-                  <span class="shadcn-muted">1 Sub-Agent</span>
-                </div>
-                <div class="flex items-center gap-1 text-[var(--foreground)] font-medium truncate pt-0.5 border-t border-[var(--border)]">
-                  <i data-lucide="cpu" class="w-3 h-3 shadcn-muted"></i>
-                  <span>${escapeHtmlMC(t.active_tool || 'web_search')}</span>
-                </div>
-              </div>
-              <div class="mt-2 pt-1.5 border-t border-[var(--border)] flex items-center justify-end">
-                <button onclick="moveMissionControlTask('${t.id}', 'completed')" class="shadcn-btn-primary w-full py-0.5 text-[10px] cursor-pointer flex items-center justify-center gap-1 h-6">
-                  <i data-lucide="check-circle" class="w-3 h-3"></i>
-                  <span>Abschließen</span>
-                </button>
-              </div>
-            </div>
-          `;
-        } else if (status === "completed") {
-          cComp++;
-          htmlComp += `
-            <div id="mc-task-${t.id}" class="shadcn-card p-2 text-xs transition">
-              <div class="flex items-center justify-between text-[9.5px] font-mono shadcn-muted mb-0.5">
-                <span class="flex items-center gap-1 text-[var(--foreground)] font-medium">
-                  <i data-lucide="check" class="w-2.5 h-2.5 text-[var(--muted-foreground)]"></i>
-                  Fertig
-                </span>
-                <span>${t.created_at ? t.created_at.slice(11, 16) : 'Heute'}</span>
-              </div>
-              <h4 class="text-[11.5px] font-medium leading-tight text-[var(--foreground)]">${escapeHtmlMC(t.title)}</h4>
-              
-              <div class="mt-1 text-[9.5px] shadcn-muted bg-[var(--secondary)] p-1.5 rounded border border-[var(--border)] leading-relaxed">
-                ${escapeHtmlMC(t.result_summary ? t.result_summary.slice(0, 80) + '...' : 'Erfolgreich abgeschlossen & abgelegt.')}
-              </div>
-              <div class="mt-2 pt-1.5 border-t border-[var(--border)] flex items-center gap-1">
-                <button onclick="openMissionControlArtifactModal('${t.id}')" class="shadcn-btn-outline flex-1 py-0.5 text-[9.5px] cursor-pointer flex items-center justify-center gap-1 h-6">
-                  <i data-lucide="eye" class="w-3 h-3 shadcn-muted"></i>
-                  <span>Ergebnis</span>
-                </button>
-                <button onclick="openMissionControlInObsidian('${t.id}')" class="shadcn-btn-outline px-1.5 py-0.5 text-[9.5px] cursor-pointer flex items-center gap-1 h-6" title="In Obsidian öffnen">
-                  <i data-lucide="book-open" class="w-3 h-3 shadcn-muted"></i>
-                  <span>Obsidian</span>
-                </button>
-              </div>
-            </div>
-          `;
-        }
-      });
-      if (countBacklog) countBacklog.innerText = cBacklog;
-      if (countApproval) countApproval.innerText = cApproval;
-      if (countInProgress) countInProgress.innerText = cProgress;
-      if (countCompleted) countCompleted.innerText = cComp;
-      if (colBacklog) colBacklog.innerHTML = htmlBacklog || `<div class="p-3 text-center text-[10.5px] shadcn-muted">Keine Aufgaben.</div>`;
-      if (colApproval) colApproval.innerHTML = htmlApproval || `<div class="p-3 text-center text-[10.5px] shadcn-muted">Keine Freigaben.</div>`;
-      if (colInProgress) colInProgress.innerHTML = htmlProgress || `<div class="p-3 text-center text-[10.5px] shadcn-muted">Keine aktiven Jobs.</div>`;
-      if (colCompleted) colCompleted.innerHTML = htmlComp || `<div class="p-3 text-center text-[10.5px] shadcn-muted">Keine Aufgaben.</div>`;
+      // 2. ZONE 2: KANBAN-ORCHESTRIERUNG (User-Entscheidung 12.10.: kanban.db ist
+      // die Wahrheit; MC-Startseite = Monitoring + Orchestrierung, 5 Spalten wie
+      // Operations). Daten kommen aus dem Kanban-Cache (fetchMissionControlKanban).
+      renderMissionControlKanban();
       // 3. Sparkline Rendering
       renderMissionControlSparkline(data.sparkline_data);
       // 4. ACTIVE PROCESS INSPECTION BAR (Heartbeat, Tool-Parallelität, Kontextfenster-Druck)
@@ -383,8 +225,189 @@
         console.warn("Lucide icons update error:", e);
       }
     }
+    // KANBAN-ORCHESTRIERUNG (12.10., User-Entscheidung): 5-Spalten-Modell wie
+    // Operations (gleiche Gruppierung wie OPS_COLUMN_GROUPS), gespeist aus
+    // kanban.db. MC-Engine-Status entfallen; Steuerung nur ueber bestehende
+    // Endpoints (PATCH status, POST decide, POST tasks). Kein Fetch ohne Timeout.
+    const MC_KANBAN_GROUPS = {
+      todo: ['todo', 'ready', 'triage', 'scheduled'],
+      in_progress: ['in_progress'],
+      review: ['review'],
+      blocked: ['blocked'],
+      done: ['done']
+    };
+    const MC_KANBAN_BADGES = { ready: '⚡ bereit', triage: '🔍 Triage', scheduled: '⏱ geplant' };
+    const MC_KANBAN_COLS = ['todo', 'in_progress', 'review', 'blocked', 'done'];
+    let mcKanbanCache = null;
+
+    async function fetchMissionControlKanban() {
+      try {
+        const res = await fetch('/api/operations/kanban/tasks', { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return;
+        mcKanbanCache = await res.json();
+        renderMissionControlKanban();
+        overrideMissionControlGovernance();
+        overrideMissionControlCadre();
+      } catch (e) {
+        console.warn('[MC] Kanban-Snapshot fehlgeschlagen:', e);
+      }
+    }
+    function mcKanbanOverdue(due) {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        return String(due).slice(0, 10) < today;
+      } catch (e) { return false; }
+    }
+    function mcKanbanMetaLine(t) {
+      const parts = [];
+      if (t.due_date) {
+        parts.push(`<span class="${mcKanbanOverdue(t.due_date) ? 'text-rose-500 font-bold' : ''}">📅 ${escapeHtmlMC(t.due_date)}</span>`);
+      }
+      if (Array.isArray(t.tags) && t.tags.length) {
+        parts.push(`<span class="truncate">${t.tags.map(x => '#' + escapeHtmlMC(x)).join(' ')}</span>`);
+      }
+      if (t.obsidian) {
+        parts.push(`<span class="truncate">📁 ${escapeHtmlMC(String(t.obsidian).split('/').pop())}</span>`);
+      }
+      if (!parts.length) return '';
+      return `<div class="mt-1 text-[9.5px] shadcn-muted space-y-0.5">${parts.map(p => `<div class="truncate">${p}</div>`).join('')}</div>`;
+    }
+    function mcKanbanMoveBtn(taskId, target, label, primary) {
+      const cls = primary ? 'shadcn-btn-primary' : 'shadcn-btn-outline';
+      return `<button onclick="mcKanbanMove('${taskId}', '${target}')" class="${cls} flex-1 py-0.5 text-[10px] cursor-pointer flex items-center justify-center gap-1 h-6"><span>${label}</span></button>`;
+    }
+    function mcKanbanCard(t, col) {
+      const badge = MC_KANBAN_BADGES[t.status] ? `<span class="shadcn-badge shadcn-badge-outline text-[8.5px] py-0 px-1 font-mono">${MC_KANBAN_BADGES[t.status]}</span>` : '';
+      const dec = (t.decision && t.decision.status === 'offen') ? t.decision : null;
+      const decBanner = dec ? `<div class="mb-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">🗳️ ${escapeHtmlMC(dec.titel || 'Entscheidung')}</div>` : '';
+      let stopwatch = '';
+      if (col === 'in_progress') {
+        let st = parseFloat(t.started_at);
+        if (!isFinite(st)) {
+          const p = Date.parse(t.started_at || '');
+          st = isFinite(p) ? p / 1000 : Date.now() / 1000 - 30;
+        }
+        const diff = Math.max(0, Date.now() / 1000 - st);
+        stopwatch = `<span class="text-[9.5px] font-mono text-[var(--muted-foreground)] font-semibold mc-stopwatch" data-start="${st}">${formatMissionControlDuration(diff)}</span>`;
+      }
+      let buttons = '';
+      if (col === 'todo') {
+        buttons = mcKanbanMoveBtn(t.id, 'in_progress', 'Starten', true);
+      } else if (col === 'in_progress') {
+        buttons = mcKanbanMoveBtn(t.id, 'review', 'Review', true) + mcKanbanMoveBtn(t.id, 'blocked', 'Blockiert', false);
+      } else if (col === 'review') {
+        if (dec) {
+          buttons = `<button onclick="mcKanbanDecide('${t.id}', 'approve')" class="shadcn-btn-primary flex-1 py-0.5 text-[10px] cursor-pointer h-6">✅ Freigeben</button>`
+            + `<button onclick="mcKanbanDecide('${t.id}', 'reject')" class="shadcn-btn-outline flex-1 py-0.5 text-[10px] cursor-pointer h-6">❌ Ablehnen</button>`;
+        } else {
+          buttons = mcKanbanMoveBtn(t.id, 'done', 'Abschließen', true) + mcKanbanMoveBtn(t.id, 'todo', 'Zurück', false);
+        }
+      } else if (col === 'blocked') {
+        buttons = mcKanbanMoveBtn(t.id, 'todo', 'Entsperren', true);
+      } else if (col === 'done') {
+        buttons = `<button onclick="setTab('operations')" class="shadcn-btn-outline w-full py-0.5 text-[9.5px] cursor-pointer h-6">In Operations öffnen</button>`;
+      }
+      return `
+        <div id="mc-task-${t.id}" class="shadcn-card p-2 text-xs">
+          ${decBanner}
+          <div class="flex items-start justify-between gap-1">
+            <h4 class="text-[11.5px] font-medium leading-tight text-[var(--foreground)]">${escapeHtmlMC(t.title)}</h4>
+            ${badge}
+          </div>
+          <div class="mt-1 text-[10px] shadcn-muted flex items-center justify-between gap-1">
+            <span class="truncate">👤 ${escapeHtmlMC(t.assignee_name || 'Nicht zugewiesen')}</span>
+            ${stopwatch}
+          </div>
+          ${mcKanbanMetaLine(t)}
+          <div class="mt-2 pt-1.5 border-t border-[var(--border)] flex items-center gap-1">${buttons}</div>
+        </div>`;
+    }
+    function renderMissionControlKanban() {
+      const cols = (mcKanbanCache && mcKanbanCache.columns) || {};
+      MC_KANBAN_COLS.forEach(col => {
+        const group = MC_KANBAN_GROUPS[col] || [col];
+        const entries = [];
+        group.forEach(s => (cols[s] || []).forEach(t => entries.push(t)));
+        const el = document.getElementById('mc-col-' + col);
+        const countEl = document.getElementById('mc-count-' + col);
+        if (countEl) countEl.innerText = entries.length;
+        if (el) el.innerHTML = entries.length ? entries.map(t => mcKanbanCard(t, col)).join('') : `<div class="p-3 text-center text-[10.5px] shadcn-muted">Keine Aufgaben.</div>`;
+      });
+      try {
+        if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+      } catch (e) { /* Icons optional */ }
+    }
+    async function mcKanbanMove(taskId, targetStatus) {
+      try {
+        const res = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(taskId)}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(12000),
+          body: JSON.stringify({ status: targetStatus })
+        });
+        if (typeof showNotification === 'function') {
+          if (res.ok) showNotification('Orchestrierung', `${taskId} → ${targetStatus}`, 'success');
+          else showNotification('Fehler', `Status ${res.status}: Aufgabe konnte nicht aktualisiert werden`, 'error');
+        }
+      } catch (err) {
+        if (typeof showNotification === 'function') showNotification('Fehler', String(err), 'error');
+      } finally {
+        await fetchMissionControlKanban();
+      }
+    }
+    async function mcKanbanDecide(taskId, decision) {
+      try {
+        const res = await fetch('/api/decisions/decide', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(25000),
+          body: JSON.stringify({ task_id: taskId, decision, von: 'mc-startseite' })
+        });
+        if (typeof showNotification === 'function') {
+          if (res.ok) showNotification('Entscheidung', `${taskId} → ${decision}`, 'success');
+          else showNotification('Fehler', `Status ${res.status}: Entscheidung fehlgeschlagen`, 'error');
+        }
+      } catch (err) {
+        if (typeof showNotification === 'function') showNotification('Fehler', String(err), 'error');
+      } finally {
+        await fetchMissionControlKanban();
+      }
+    }
+    function overrideMissionControlGovernance() {
+      const cols = (mcKanbanCache && mcKanbanCache.columns) || {};
+      const n = (cols.review || []).length;
+      const countEl = document.getElementById('mc-kpi-governance-count');
+      const subEl = document.getElementById('mc-kpi-governance-subtext');
+      const barEl = document.getElementById('mc-bar-governance');
+      if (countEl) countEl.innerText = `${n} Ausstehend`;
+      if (subEl) subEl.innerText = n ? 'Review-Spalte (Kanban)' : 'Keine Sperren';
+      if (barEl) barEl.style.width = n ? '100%' : '4%';
+    }
+    function overrideMissionControlCadre() {
+      const cols = (mcKanbanCache && mcKanbanCache.columns) || {};
+      const prog = cols.in_progress || [];
+      const listEl = document.getElementById('mc-cadre-list');
+      if (!listEl) return;
+      if (!prog.length) {
+        listEl.innerHTML = `<div class="p-2.5 text-center text-[10.5px] shadcn-muted bg-[var(--secondary)] rounded-lg border border-[var(--border)]">Keine aktiven Projekt-Agenten.</div>`;
+        return;
+      }
+      listEl.innerHTML = prog.map(t => `
+        <div class="flex items-center justify-between p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+          <div class="flex items-center gap-2 min-w-0">
+            <img src="${escapeHtmlMC(t.assignee_avatar || '/static/avatars/avatar_001.jpg')}" class="w-6 h-6 rounded-full object-cover border border-[var(--border)] shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
+            <div class="min-w-0">
+              <div class="text-[11.5px] font-semibold truncate text-[var(--foreground)] leading-tight">${escapeHtmlMC(t.assignee_name || 'Agent')}</div>
+              <div class="text-[9.5px] shadcn-muted truncate">${escapeHtmlMC(t.title || '')}</div>
+            </div>
+          </div>
+          <span class="shadcn-badge shadcn-badge-outline text-[9px] py-0 px-1 font-mono shrink-0 ml-1.5">Aktiv</span>
+        </div>`).join('');
+    }
     function renderMissionControlProcessInspection(data) {
-      const tasks = (data && data.tasks) || [];
+      // Slot A nutzt die Kanban-Wahrheit (in_progress), MC-Tasks nur als Fallback.
+      const _kbProg = (mcKanbanCache && mcKanbanCache.columns && mcKanbanCache.columns.in_progress) || [];
+      const tasks = _kbProg.length ? _kbProg : ((data && data.tasks) || []);
       // Slot A: Längste aktive Aufgabe
       const inProgressTasks = tasks.filter(t => t.status === "in_progress");
       const dotA = document.getElementById("mc-inspect-heartbeat-dot");
@@ -626,7 +649,7 @@
       const pendingCount = kpis.pending_approvals || 0;
       if (pendingCount > 0) {
         // Direkter Sprung zur Spalte 2
-        const targetCol = document.getElementById("mc-kanban-col-approval") || document.getElementById("mc-col-approval");
+        const targetCol = document.getElementById("mc-col-review");
         if (targetCol) {
           targetCol.scrollIntoView({ behavior: 'smooth', block: 'center' });
           targetCol.classList.add("ring-2", "ring-rose-500");
@@ -646,88 +669,28 @@
       if (!inp || !inp.value.trim()) return;
       const title = inp.value.trim();
       inp.value = "";
+      // Kanban-Wahrheit: neue Aufgabe landet als To-Do im Kanban (Hermes-Worker
+      // übernimmt die Ausführung), nicht mehr in der MC-Engine.
       try {
-        const res = await fetch('/api/mission-control/tasks/capture', {
+        const res = await fetch('/api/operations/kanban/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title })
+          signal: AbortSignal.timeout(12000),
+          body: JSON.stringify({ title, column: 'todo' })
         });
         if (res.ok) {
-          showNotification("Mission Control", "Aufgabe erfasst & Hermes Triage initiiert.", "success");
-          await fetchMissionControlData(true);
+          showNotification("Mission Control", "Aufgabe im Kanban angelegt.", "success");
+          await fetchMissionControlKanban();
+        } else {
+          showNotification("Fehler", `Status ${res.status}: Aufgabe konnte nicht angelegt werden`, "error");
         }
       } catch (err) {
         showNotification("Fehler", String(err), "error");
       }
     }
-    async function moveMissionControlTask(taskId, targetStatus) {
-      // Sofortiges Optimistic UI Update für flüssige Haptik
-      if (missionControlState && Array.isArray(missionControlState.tasks)) {
-        if (targetStatus === 'dismissed') {
-          missionControlState.tasks = missionControlState.tasks.filter(x => x.id !== taskId);
-        } else {
-          const t = missionControlState.tasks.find(x => x.id === taskId);
-          if (t) {
-            t.status = targetStatus;
-            if (targetStatus === 'in_progress') {
-              t.started_at = Date.now() / 1000;
-              t.active_tool = "Tool: web_search & archon_core";
-            }
-          }
-        }
-        renderMissionControl(missionControlState);
-      }
-      try {
-        const res = await fetch('/api/mission-control/tasks/move', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: taskId, target_status: targetStatus })
-        });
-        if (res.ok) {
-          const actionText = targetStatus === 'approval' ? 'Ans Approval Gate übergeben' : targetStatus === 'in_progress' ? 'Genehmigt & gestartet' : targetStatus === 'completed' ? 'Abgeschlossen & Obsidian synchronisiert' : 'Verworfen';
-          if (typeof showNotification === 'function') {
-            showNotification("Workflow Board", actionText, "success");
-          }
-        } else {
-          if (typeof showNotification === 'function') {
-            showNotification("Fehler", `Status ${res.status}: Aufgabe konnte nicht aktualisiert werden`, "error");
-          }
-        }
-      } catch (err) {
-        if (typeof showNotification === 'function') {
-          showNotification("Fehler", String(err), "error");
-        }
-      } finally {
-        await fetchMissionControlData(true);
-      }
-    }
-    async function openMissionControlArtifactModal(taskId) {
-      const modal = document.getElementById("mc-artifact-modal");
-      const titleEl = document.getElementById("mc-artifact-modal-title");
-      const bodyEl = document.getElementById("mc-artifact-modal-body");
-      const pathEl = document.getElementById("mc-artifact-modal-path");
-      if (!modal) return;
-      modal.classList.remove("hidden");
-      if (bodyEl) bodyEl.innerText = "Lade Artefakt...";
-      try {
-        const res = await fetch(`/api/mission-control/task/${taskId}/artifact`);
-        if (res.ok) {
-          const data = await res.json();
-          if (titleEl) titleEl.innerText = `Obsidian Artefakt: ${taskId}`;
-          if (bodyEl) bodyEl.innerText = data.content || "Kein Inhalt verfügbar.";
-          if (pathEl) pathEl.innerText = data.path || "/opt/data/obsidian/Projects/";
-        }
-      } catch (e) {
-        if (bodyEl) bodyEl.innerText = "Fehler beim Laden des Artefakts.";
-      }
-    }
     function closeMissionControlArtifactModal() {
       const modal = document.getElementById("mc-artifact-modal");
       if (modal) modal.classList.add("hidden");
-    }
-    function openMissionControlInObsidian(taskId) {
-      setTab('brain');
-      showNotification("Obsidian", "Wissensbasis geöffnet. Artefakt liegt unter Projects/ abgelegt.", "info");
     }
     // Live Stoppuhr Update für Spalte 3 (In Arbeit)
     function startMissionControlStopwatches() {

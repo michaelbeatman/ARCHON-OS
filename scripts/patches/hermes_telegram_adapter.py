@@ -9631,59 +9631,93 @@ class TelegramAdapter(BasePlatformAdapter):
                 await msg.reply_text(menu_caption, reply_markup=keyboard)
             return
 
-        if cmd_lower.startswith(("/auftrag", "/robert")):
-            parts = cmd_text.split(None, 1)
-            prompt = parts[1].strip() if len(parts) > 1 else ""
-            if not prompt:
-                usage_msg = (
-                    "ℹ️ <b>Befehl unvollständig</b>\n\n"
-                    "Syntax: <code>/auftrag &lt;Deine Aufgabenstellung&gt;</code>\n"
-                    "<i>Beispiel:</i> <code>/auftrag Erstelle eine Marktanalyse für Gewerbeimmobilien in Leipzig.</code>"
-                )
+        # --- Archon Dynamisches Rufnamen-Routing (/alias <Prompt>) ---
+        if cmd_text.startswith("/") and len(cmd_text) > 1:
+            cmd_part = cmd_text[1:].split()[0].split("@")[0].lower()
+            # Ausnahmen für System-Kommandos
+            if cmd_part not in ("start", "help", "hilfe", "menu", "queue", "stop", "approve", "reject"):
+                parts = cmd_text.split(None, 1)
+                user_prompt = parts[1].strip() if len(parts) > 1 else ""
+                
+                # Profile von Archon-OS abrufen
+                import httpx as _httpx
+                import asyncio
+                _archon = "http://ARCHON-OS:8501"
+                matched_profiles = []
                 try:
-                    await msg.reply_text(usage_msg, parse_mode="HTML")
-                except Exception:
-                    await msg.reply_text(usage_msg)
-                return
+                    async with _httpx.AsyncClient(timeout=4.0) as client:
+                        r_prof = await client.get(f"{_archon}/api/agents/profiles")
+                        if r_prof.status_code == 200:
+                            all_p = r_prof.json() or []
+                            for p in all_p:
+                                p_callsign = str(p.get("callsign") or "").strip().lower()
+                                p_id = str(p.get("id") or "").strip().lower()
+                                p_pers = str(p.get("person_name") or "").strip().lower()
+                                # Fallback für Robert und Micha
+                                if not p_callsign:
+                                    if p_id == "executive_decision_architect":
+                                        p_callsign = "robert"
+                                    elif p_id == "micha":
+                                        p_callsign = "micha"
+                                if cmd_part == p_callsign or cmd_part == p_id:
+                                    matched_profiles.append(p)
+                except Exception as ex_p:
+                    logger.warning("[Telegram] Error fetching profiles for routing: %s", ex_p)
 
-            import httpx as _httpx
-            _archon = "http://ARCHON-OS:8501"
-            task_title = prompt[:80] + ("…" if len(prompt) > 80 else "")
-            success = False
-            task_id = ""
-            try:
-                async with _httpx.AsyncClient(timeout=8.0) as client:
-                    payload = {
-                        "title": task_title,
-                        "description": prompt,
-                        "column": "todo",
-                        "assignee": "executive_decision_architect"
-                    }
-                    r = await client.post(f"{_archon}/api/operations/kanban/tasks", json=payload)
-                    if r.status_code == 200:
-                        res_data = r.json() or {}
-                        success = True
-                        task_id = res_data.get("task_id", "")
-            except Exception as ex:
-                logger.error("[Telegram] Error creating task for Robert: %s", ex)
+                if matched_profiles:
+                    if not user_prompt:
+                        names = ", ".join([p.get("person_name") or p.get("name") or p.get("id") for p in matched_profiles])
+                        usage_msg = (
+                            f"👤 <b>Direktansprache: {names}</b>\n\n"
+                            f"Syntax: <code>/{cmd_part} &lt;Deine Frage oder Anweisung&gt;</code>\n"
+                            f"<i>Beispiel:</i> <code>/{cmd_part} Wie schätzt du die Marktlage aktuell ein?</code>"
+                        )
+                        try:
+                            await msg.reply_text(usage_msg, parse_mode="HTML")
+                        except Exception:
+                            await msg.reply_text(usage_msg)
+                        return
 
-            if success:
-                confirm_text = (
-                    f"✅ <b>Auftrag an Robert übergeben!</b>\n\n"
-                    f"• <b>Task-ID:</b> <code>{task_id}</code>\n"
-                    f"• <b>Titel:</b> {_html.escape(task_title)}\n"
-                    f"• <b>Status:</b> To Do (Operations Kanban)\n"
-                    f"• <b>Zuständig:</b> Robert (Lead-Architekt)\n\n"
-                    f"<i>Robert prüft die Aufgabe und leitet die nächsten Schritte ein.</i>"
-                )
-            else:
-                confirm_text = f"⚠️ Fehler beim Anlegen des Auftrags in Archon OS."
+                    # Sofort-Rückmeldung an den Nutzer (Typing / Status)
+                    try:
+                        await msg.reply_chat_action(action="typing")
+                    except Exception:
+                        pass
 
-            try:
-                await msg.reply_text(confirm_text, parse_mode="HTML")
-            except Exception:
-                await msg.reply_text(confirm_text)
-            return
+                    for target_prof in matched_profiles:
+                        target_id = target_prof.get("id")
+                        agent_display = target_prof.get("person_name") or target_prof.get("name") or target_id
+                        try:
+                            # Direkte Ausführung im Hermes-Container über hermes chat
+                            cmd_hermes = ["hermes", "-p", target_id, "chat", "-q", user_prompt, "-Q"]
+                            proc = await asyncio.create_subprocess_exec(
+                                *cmd_hermes,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE
+                            )
+                            stdout, stderr = await proc.communicate()
+                            raw_reply = (stdout.decode("utf-8", errors="replace") or "").strip()
+                            # Falls Reasoning-Block enthalten ist, nur die eigentliche Antwort senden
+                            cleaned_reply = raw_reply
+                            if "┌─ Reasoning" in cleaned_reply and "└" in cleaned_reply:
+                                parts_reasoning = cleaned_reply.split("└", 1)
+                                if len(parts_reasoning) > 1:
+                                    # Nach dem Box-Ende den Text nehmen
+                                    cleaned_reply = parts_reasoning[1].split("\n", 1)[-1].strip()
+
+                            if not cleaned_reply:
+                                cleaned_reply = raw_reply or "(Keine Antwort vom Agenten erhalten)"
+
+                            header_badge = f"🤖 <b>{_html.escape(agent_display)}</b>\n\n"
+                            final_msg = header_badge + _html.escape(cleaned_reply)
+                            try:
+                                await msg.reply_text(final_msg, parse_mode="HTML")
+                            except Exception:
+                                await msg.reply_text(f"{agent_display}:\n\n{cleaned_reply}")
+                        except Exception as ex_exec:
+                            logger.error("[Telegram] Error querying agent %s: %s", target_id, ex_exec)
+                            await msg.reply_text(f"⚠️ Fehler bei der Anfrage an {agent_display}: {ex_exec}")
+                    return
 
         event = self._build_message_event(msg, MessageType.COMMAND, update_id=update.update_id)
         event.text = self._clean_bot_trigger_text(event.text)

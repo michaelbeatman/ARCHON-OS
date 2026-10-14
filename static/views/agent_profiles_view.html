@@ -434,8 +434,17 @@
                 <div class="prof-panel-card p-2.5 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
                   <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                     <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
-                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Zugeordnete Domäne</span>
-                      <div id="kpi-val-domain" class="text-xs font-bold text-[var(--foreground)] truncate">1. Strategie, Führung</div>
+                      <div class="flex items-center justify-between">
+                        <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Rufname (/Kommando)</span>
+                        <span id="prof-callsign-status" class="text-[9px] font-mono text-emerald-500 font-bold hidden">✓ Gespeichert</span>
+                      </div>
+                      <input 
+                        type="text" 
+                        id="prof-edit-callsign" 
+                        onchange="onProfileCallsignChanged(this.value)"
+                        placeholder="z. B. robert" 
+                        class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-1.5 py-0.5 text-xs font-mono font-bold text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-sky-500 shadow-2xs"
+                      >
                     </div>
                     <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
                       <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Direkter Supervisor / Lead</span>

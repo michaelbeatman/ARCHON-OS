@@ -991,6 +991,15 @@
         populateAgentTabModelSelect();
       }
       // KPI Bar befüllen
+      const callsignInput = document.getElementById("prof-edit-callsign");
+      if (callsignInput) {
+        let defCallsign = prof.callsign || "";
+        if (!defCallsign) {
+          if (prof.id === "executive_decision_architect") defCallsign = "robert";
+          else if (prof.id === "micha") defCallsign = "micha";
+        }
+        callsignInput.value = defCallsign;
+      }
       const kpiDomain = document.getElementById("kpi-val-domain");
       if (kpiDomain) kpiDomain.innerText = prof.category || "1. Strategie, Führung";
       const kpiSupervisor = document.getElementById("kpi-val-supervisor");
@@ -2575,11 +2584,13 @@
         const provider = providerSelect?.value || (prof?.provider || "openrouter");
         const modelSelect = document.getElementById("prof-edit-model");
         const model = modelSelect?.value || (prof?.model || "deepseek/deepseek-v4-flash-0731");
+        const callsign = (document.getElementById("prof-edit-callsign")?.value || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
         const payload = {
           id,
           old_id,
           name: finalRoleName,
           person_name: finalPersonName,
+          callsign,
           category,
           description,
           avatar,
@@ -2654,7 +2665,6 @@
             }
           }, 2500);
         }
-        showArchonToast(`Profil '${finalPersonName}' (${finalRoleName}) erfolgreich gespeichert!`, "success");
       } catch (e) {
         console.error("Save profile error:", e);
         showArchonToast(`Verbindungsfehler: ${e.message}`, "error");
@@ -2665,6 +2675,33 @@
         }
       }
     }
+
+    async function onProfileCallsignChanged(val) {
+      const cleanVal = (val || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const input = document.getElementById("prof-edit-callsign");
+      if (input) input.value = cleanVal;
+      const statusEl = document.getElementById("prof-callsign-status");
+      if (statusEl) {
+        statusEl.classList.remove("hidden");
+        statusEl.innerText = "⏳ Speichere...";
+      }
+      try {
+        const prof = Array.isArray(hermesProfilesData) ? hermesProfilesData.find(p => p.id === currentSelectedProfileId) : null;
+        if (!prof) return;
+        prof.callsign = cleanVal;
+        await saveCurrentProfile(null);
+        if (statusEl) {
+          statusEl.innerText = "✓ Gespeichert";
+          setTimeout(() => { if (statusEl) statusEl.classList.add("hidden"); }, 2000);
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.innerText = "⚠️ Fehler";
+          setTimeout(() => { if (statusEl) statusEl.classList.add("hidden"); }, 3000);
+        }
+      }
+    }
+    window.onProfileCallsignChanged = onProfileCallsignChanged;
 // --- GLOBAL EXPORTS FR DOM-EVENTS ---
 window.onAgentTabProviderChange = typeof onAgentTabProviderChange !== 'undefined' ? onAgentTabProviderChange : null;
 window.onAgentTabModelChange = typeof onAgentTabModelChange !== 'undefined' ? onAgentTabModelChange : null;

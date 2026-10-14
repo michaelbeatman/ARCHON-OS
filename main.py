@@ -2907,6 +2907,13 @@ def api_get_hermes_profiles():
         model = ydata.get("model") or (cdata.get("model", {}).get("default") if isinstance(cdata.get("model"), dict) else None) or fallback.get("model", "auto/best-free")
         status_val = ydata.get("status") or fallback.get("status", "active")
         is_fav = bool(ydata.get("is_favorite") if "is_favorite" in ydata else fallback.get("is_favorite", (p_id in ["default", "micha"])))
+        callsign = ydata.get("callsign") or fallback.get("callsign") or ""
+        if not callsign:
+            if p_id == "executive_decision_architect":
+                callsign = "robert"
+            elif p_id == "micha":
+                callsign = "micha"
+        callsign = str(callsign).strip().lower()
 
         # Sonderbehandlung für default & micha
         if p_id in ["default", "hermes_default"]:
@@ -2959,6 +2966,7 @@ def api_get_hermes_profiles():
             "id": p_id,
             "name": name,
             "person_name": person_name,
+            "callsign": callsign,
             "category": category,
             "description": description,
             "prompt": prompt,
@@ -3662,6 +3670,7 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
             y_payload = {
                 "name": profile_data.get("name", p_id),
                 "person_name": person_name,
+                "callsign": str(profile_data.get("callsign", "")).strip().lower(),
                 "category": profile_data.get("category", "1. Strategie, Führung & Lebensplanung"),
                 "description": profile_data.get("description", ""),
                 "role_id": p_id,

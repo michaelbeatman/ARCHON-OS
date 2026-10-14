@@ -10,21 +10,167 @@ if (!fs.existsSync(OUTPUT_DIR)) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 }
 
+// DEFINITION ALLER HAUPT- UND SUB-ANSICHTEN INKL. SPEZIAL-STUDIOS
 const VIEWS = [
-  { id: "mission_control", tab: "mission-control" },
-  { id: "operations", tab: "operations", subtab: "kanban" },
-  { id: "org", tab: "operations", subtab: "org" },
-  { id: "inbox", tab: "inbox" },
-  { id: "kader", tab: "agent-profiles" },
-  { id: "showroom", tab: "showroom" },
-  { id: "library", tab: "library" },
-  { id: "brain", tab: "brain" },
-  { id: "automation", tab: "automation" },
-  { id: "omniroute", tab: "omniroute" },
-  { id: "guardian", tab: "guardian" },
-  { id: "plugins", tab: "plugins" },
-  { id: "research", tab: "research" },
-  { id: "log_stream", tab: "log-stream" }
+  // 1. Mission Control
+  { 
+    id: "mission_control", 
+    actionCode: `window.setTab("mission-control");` 
+  },
+
+  // 2. Operations (Kanban & Funk)
+  { 
+    id: "operations", 
+    actionCode: `window.setTab("operations"); if (typeof window.setOperationsTab === 'function') window.setOperationsTab("kanban");` 
+  },
+  { 
+    id: "ops_comm", 
+    actionCode: `window.setTab("operations"); if (typeof window.setOperationsTab === 'function') window.setOperationsTab("comm");` 
+  },
+
+  // 3. Organisation & Ablaufdiagramm
+  { 
+    id: "org", 
+    actionCode: `window.setTab("operations"); if (typeof window.setOperationsTab === 'function') window.setOperationsTab("org");` 
+  },
+
+  // 4. Eingang & Triage
+  { 
+    id: "inbox", 
+    actionCode: `window.setTab("inbox");` 
+  },
+
+  // 5. Agenten-Kader & die 7 Fach-Reiter
+  { 
+    id: "kader", 
+    actionCode: `window.setTab("agent-profiles"); if (typeof window.switchAgentCadreTab === 'function') window.switchAgentCadreTab("overview");` 
+  },
+  { 
+    id: "kader_chat", 
+    actionCode: `window.setTab("agent-profiles"); if (typeof window.switchAgentCadreTab === 'function') window.switchAgentCadreTab("chat");` 
+  },
+  { 
+    id: "kader_skills", 
+    actionCode: `window.setTab("agent-profiles"); if (typeof window.switchAgentCadreTab === 'function') window.switchAgentCadreTab("skills");` 
+  },
+  { 
+    id: "kader_operations", 
+    actionCode: `window.setTab("agent-profiles"); if (typeof window.switchAgentCadreTab === 'function') window.switchAgentCadreTab("operations");` 
+  },
+  { 
+    id: "kader_soul", 
+    actionCode: `window.setTab("agent-profiles"); if (typeof window.switchAgentCadreTab === 'function') window.switchAgentCadreTab("soul");` 
+  },
+  { 
+    id: "kader_personalakte", 
+    actionCode: `window.setTab("agent-profiles"); if (typeof window.switchAgentCadreTab === 'function') window.switchAgentCadreTab("personalakte");` 
+  },
+  { 
+    id: "kader_marketplace", 
+    actionCode: `window.setTab("agent-profiles"); if (typeof window.switchAgentCadreTab === 'function') window.switchAgentCadreTab("marketplace");` 
+  },
+
+  // 6. Showroom
+  { 
+    id: "showroom", 
+    actionCode: `window.setTab("showroom");` 
+  },
+
+  // 7. Zentralbibliothek & Subtabs
+  { 
+    id: "library", 
+    actionCode: `window.setTab("library"); if (typeof window.switchLibrarySubTab === 'function') window.switchLibrarySubTab("rag");` 
+  },
+  { 
+    id: "library_erfasser", 
+    actionCode: `window.setTab("library"); if (typeof window.switchLibrarySubTab === 'function') window.switchLibrarySubTab("erfasser");` 
+  },
+  { 
+    id: "library_vault", 
+    actionCode: `window.setTab("library"); if (typeof window.switchLibrarySubTab === 'function') window.switchLibrarySubTab("vault");` 
+  },
+
+  // 8. Second Brain
+  { 
+    id: "brain", 
+    actionCode: `window.setTab("brain");` 
+  },
+
+  // 9. Automation n8n
+  { 
+    id: "automation", 
+    actionCode: `window.setTab("automation");`,
+    waitTime: 4000
+  },
+
+  // 10. OmniRoute
+  { 
+    id: "omniroute", 
+    actionCode: `window.setTab("omniroute");`,
+    waitTime: 4000
+  },
+
+  // 11. Guardian
+  { 
+    id: "guardian", 
+    actionCode: `window.setTab("guardian");` 
+  },
+
+  // 12. Plugins
+  { 
+    id: "plugins", 
+    actionCode: `window.setTab("plugins");` 
+  },
+
+  // 13. Research
+  { 
+    id: "research", 
+    actionCode: `window.setTab("research");` 
+  },
+
+  // 14. Log Stream
+  { 
+    id: "log_stream", 
+    actionCode: `window.setTab("log-stream");` 
+  },
+
+  // 15. SPEZIAL-STUDIO: Archon Prompt Studio (1.079 Vorlagen & Fabric SOP)
+  {
+    id: "prompt_studio",
+    actionCode: `
+      window.setTab("operations");
+      if (typeof window.openSurePromptsModal === 'function') {
+        window.openSurePromptsModal('ops-task');
+      }
+    `,
+    cleanupCode: `
+      if (typeof window.closeSurePromptsModal === 'function') {
+        window.closeSurePromptsModal();
+      }
+    `,
+    waitTime: 3000
+  },
+
+  // 16. SPEZIAL-STUDIO: Visual CSS Live Studio & In-Place Inspector
+  {
+    id: "css_studio",
+    actionCode: `
+      if (typeof window.closeSurePromptsModal === 'function') window.closeSurePromptsModal();
+      window.setTab("mission-control");
+      if (typeof window.toggleCssStudio === 'function') {
+        window.toggleCssStudio();
+      }
+    `,
+    cleanupCode: `
+      if (typeof window.toggleCssStudio === 'function') {
+        const studio = document.getElementById("archon-css-studio");
+        if (studio && !studio.classList.contains("hidden")) {
+          window.toggleCssStudio();
+        }
+      }
+    `,
+    waitTime: 2500
+  }
 ];
 
 function sleep(ms) {
@@ -104,7 +250,6 @@ async function main() {
     'http://localhost:8501'
   ], { detached: false });
 
-  // Warte bis Port erreichbar ist und Page Target existiert
   let pageTarget = null;
   for (let i = 0; i < 30; i++) {
     await sleep(500);
@@ -138,7 +283,6 @@ async function main() {
 
   console.log("Warte auf vollständiges Laden und Montieren aller Archon OS Views...");
   
-  // Warte bis alle Subviews (operations, agent-profiles, inbox etc.) fertig gefetcht und gemountet sind
   let ready = false;
   for (let i = 0; i < 40; i++) {
     await sleep(500);
@@ -168,11 +312,9 @@ async function main() {
   }
 
   console.log("Archon OS Initialisierung & Mounts abgeschlossen (ready =", ready, ")");
-  
-  // Warte noch 1.5s für asynchrone Datenabfragen
   await sleep(1500);
 
-  // Entferne Loading-Overlay hart aus dem DOM und schalte initial auf mission-control
+  // Entferne Loading-Overlay hart aus dem DOM
   await client.send('Runtime.evaluate', {
     expression: `(function() {
       const overlay = document.getElementById('global-loading-overlay');
@@ -185,39 +327,21 @@ async function main() {
   await sleep(2000);
 
   for (const v of VIEWS) {
-    console.log(`\nSchalte auf View: ${v.id} (tab: ${v.tab})...`);
+    console.log(`\nSchalte auf View/Subtab: ${v.id}...`);
     
-    // Wechsle Tab per JS und bereinige Overlay falls neu erzeugt
+    // Führe Aktions-Code aus
     await client.send('Runtime.evaluate', {
       expression: `(function() {
         const overlay = document.getElementById('global-loading-overlay');
         if (overlay) overlay.remove();
         if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
         
-        window.setTab("${v.tab}");
-        if ("${v.subtab || ''}" && typeof window.setOperationsTab === 'function') {
-          window.setOperationsTab("${v.subtab}");
-        }
+        ${v.actionCode}
       })()`
     });
 
-    // Gib dem DOM, Charts, iframes und Tabellen ausreichend Zeit zum Rendern
-    const waitTime = (v.tab === "automation" || v.tab === "omniroute") ? 4500 : 2500;
+    const waitTime = v.waitTime || 2200;
     await sleep(waitTime);
-
-    // Optional: Überprüfe, ob view sichtbar ist
-    const checkView = await client.send('Runtime.evaluate', {
-      expression: `(function() {
-        const activeView = document.getElementById("view-${v.tab}");
-        return {
-          exists: !!activeView,
-          display: activeView ? window.getComputedStyle(activeView).display : null,
-          textLen: activeView ? (activeView.innerText || "").length : 0
-        };
-      })()`,
-      returnByValue: true
-    });
-    console.log(`  DOM-Status für view-${v.tab}:`, checkView.result.value);
 
     // Screenshot aufnehmen
     const screenshotRes = await client.send('Page.captureScreenshot', {
@@ -229,11 +353,19 @@ async function main() {
     const imgBuffer = Buffer.from(screenshotRes.data, 'base64');
     fs.writeFileSync(imgPath, imgBuffer);
     console.log(`  ✓ Gespeichert: ${imgPath} (${Math.round(imgBuffer.length / 1024)} KB)`);
+
+    // Cleanup-Code ausführen (z. B. Modal schließen)
+    if (v.cleanupCode) {
+      await client.send('Runtime.evaluate', {
+        expression: `(function() { ${v.cleanupCode} })()`
+      });
+      await sleep(500);
+    }
   }
 
   client.close();
   chromeProc.kill();
-  console.log("\nAlle 14 Screenshots erfolgreich generiert!");
+  console.log("\nAlle Screenshots (inklusive Unteransichten und Spezial-Studios) erfolgreich generiert!");
 }
 
 main().catch(err => {

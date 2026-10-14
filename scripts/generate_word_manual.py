@@ -17,7 +17,7 @@ DOCX_PATH = os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026.docx")
 os.makedirs(IMG_DIR, exist_ok=True)
 
 # -------------------------------------------------------------
-# DETAILLIERTE DATENSTRUKTUR FÜR ALLE 14 SYSTEM-ANSICHTEN
+# DETAILLIERTE DATENSTRUKTUR FÜR ALLE 16 SYSTEM-ANSICHTEN & STUDIOS
 # -------------------------------------------------------------
 VIEWS = [
     {
@@ -81,6 +81,7 @@ VIEWS = [
         "subsections": [
             {
                 "subtitle": "2.1 Kanban Board & Task-Engine",
+                "img_id": "operations",
                 "concept": (
                     "Jede geschäftliche Aufgabe wird im Board als strukturierte Karte geführt, einem Fachagenten zugewiesen "
                     "und durchläuft die Spalten To-Do, In Bearbeitung, Review & QA, Blockiert und Abgeschlossen. "
@@ -100,6 +101,7 @@ VIEWS = [
             },
             {
                 "subtitle": "2.2 Organisation & Ablaufdiagramm (Organigramm)",
+                "img_id": "org",
                 "concept": (
                     "Visualisiert die Aufbau- und Ablaufstruktur deines Unternehmens als interaktiven 2D-Graphen. "
                     "Die Verbindungslinien definieren echte Weisungs- und Berichtswege für autonome Eskalationen: "
@@ -119,6 +121,7 @@ VIEWS = [
             },
             {
                 "subtitle": "2.3 Interne Kommunikation (Agenten-Funk)",
+                "img_id": "ops_comm",
                 "concept": (
                     "Der interne Kommunikationskanal dient als Abhörzentrale für den automatischen Datenaustausch zwischen den Agenten. "
                     "Hier siehst du im Klartext, wie Teilaufträge zwischen Abteilungen übergeben werden, ohne dass dein persönlicher Chat überflutet wird."
@@ -233,6 +236,7 @@ VIEWS = [
         "subsections": [
             {
                 "subtitle": "5.0 Katalog-Verwaltung & Filter (Aktiv, Favoriten, Alle)",
+                "img_id": "kader",
                 "concept": (
                     "Der linke Katalog bietet schnellen Zugriff auf den gesamten Personalstamm. Die drei Filter-Reiter "
                     "strukturieren den Überblick: 'Aktiv' zeigt aktuell geladene Rollen, 'Favoriten' bietet Schnellzugriff "
@@ -252,6 +256,7 @@ VIEWS = [
             },
             {
                 "subtitle": "5.1 Modell-Wechsel & Provider-Wahl (KI-Routenwahl)",
+                "img_id": "kader",
                 "concept": (
                     "Jeder Agent kann mit einem individuellen Sprachmodell betrieben werden. Über die Dropdowns im Header "
                     "oder im Chat-Tab wechselst du den KI-Provider und das Zielmodell unterbrechungsfrei während des Betriebs."
@@ -270,6 +275,7 @@ VIEWS = [
             },
             {
                 "subtitle": "5.2 Übersicht (360°-Dossier & Rufname)",
+                "img_id": "kader",
                 "concept": (
                     "Das 360°-Dossier fasst die Kernstammdaten zusammen. Hier hinterlegst du den persönlichen Rufnamen, "
                     "über den der Agent direkt in Telegram angesprochen werden kann (z. B. /robert oder /anwalt)."
@@ -288,6 +294,7 @@ VIEWS = [
             },
             {
                 "subtitle": "5.3 Direkt-Chat",
+                "img_id": "kader_chat",
                 "concept": (
                     "Ermöglicht den unmittelbaren 1:1-Dialog mit dem ausgewählten Spezialisten direkt im Browser, "
                     "inklusive Parameter-Feinjustierung und Streaming-Antworten."
@@ -304,6 +311,7 @@ VIEWS = [
             },
             {
                 "subtitle": "5.4 Fähigkeiten (Skills & Tool-Sets)",
+                "img_id": "kader_skills",
                 "concept": (
                     "Hier weist du dem Agenten konkrete Werkzeuge und Schnittstellen zu (z. B. Web-Search, PDF-Reader, Code-Execution oder E-Mail-Versand)."
                 ),
@@ -319,6 +327,7 @@ VIEWS = [
             },
             {
                 "subtitle": "5.5 Operations (Zugeordnete Tasks & Historie)",
+                "img_id": "kader_operations",
                 "concept": (
                     "Zeigt alle Aufgaben aus dem Kanban-Board, die diesem spezifischen Agenten aktuell zugewiesen sind oder in der Vergangenheit erledigt wurden."
                 ),
@@ -334,6 +343,7 @@ VIEWS = [
             },
             {
                 "subtitle": "5.6 SOUL (System Prompt & Verhaltens-Direktiven)",
+                "img_id": "kader_soul",
                 "concept": (
                     "Die 'Seele' des Agenten: Hier wird der System-Prompt definiert, der Tonalität, Verhaltensregeln, ethische Leitplanken "
                     "und Denkweisen des Spezialisten festlegt."
@@ -350,6 +360,7 @@ VIEWS = [
             },
             {
                 "subtitle": "5.7 Personalakte (Dossier & SOP)",
+                "img_id": "kader_personalakte",
                 "concept": (
                     "Das formelle HR-Dossier des Agenten im Markdown-Format: Enthält Ausbildung, Werdegang, Standard Operating Procedures (SOPs) "
                     "und Qualitätsstandards für seine Arbeitsergebnisse."
@@ -366,6 +377,7 @@ VIEWS = [
             },
             {
                 "subtitle": "5.8 Talent-Marktplatz",
+                "img_id": "kader_marketplace",
                 "concept": (
                     "Erlaubt den Import und Export von Agenten-Profilen als JSON/Markdown-Pakete, um Rollen zwischen Projekten "
                     "oder aus Vorlagen-Katalogen auszutauschen."
@@ -437,6 +449,7 @@ VIEWS = [
         "subsections": [
             {
                 "subtitle": "7.1 RAG Wissens-Index (AnythingLLM)",
+                "img_id": "library",
                 "concept": (
                     "Eingebettete Schnittstelle zu AnythingLLM für semantische Vektorsuche und Grounded Retrieval. "
                     "Dokumente werden in Vektoren übersetzt; Agenten rufen exakte Textstellen passend zu Benutzerfragen ab."
@@ -453,6 +466,7 @@ VIEWS = [
             },
             {
                 "subtitle": "7.2 Dokumenten-Erfasser (File Ingest & Auto-OCR)",
+                "img_id": "library_erfasser",
                 "concept": (
                     "Der zentrale Upload-Trichter für neue Fachliteratur, Pläne, Verträge und Gutachten. "
                     "PDF-, DOCX- und Textdateien werden per Drag & Drop hochgeladen, durch den Docling-Dienst per Auto-OCR "
@@ -473,6 +487,7 @@ VIEWS = [
             },
             {
                 "subtitle": "7.3 Obsidian Vault (Dateibaum & Notiz-Viewer)",
+                "img_id": "library_vault",
                 "concept": (
                     "Direkter Einblick in deinen physischen Obsidian-Ordner auf der Festplatte. "
                     "Erlaubt das Durchsuchen, Filtern und Lesen aller Markdown-Notizen und Protokolle direkt im Browser."
@@ -724,6 +739,78 @@ VIEWS = [
             "lückenlos nachweisen, wer welche Aktion zu welchem Zeitpunkt freigegeben hat."
         ),
         "starter_prompt": "Zeige mir alle Warnungen und Fehler (WARN, ERROR) im Log-Stream der letzten 2 Stunden."
+    },
+    {
+        "id": "prompt_studio",
+        "title": "15. Spezial-Feature: Archon Prompt Studio (1.079 Vorlagen & Fabric SOP)",
+        "subtitle": "Enterprise Prompt-Engineering, 255+ Fabric Patterns & 5-Felder-Struktur",
+        "concept": (
+            "Das Archon Prompt Studio ist ein hochkarätiges Prompt-Engineering-Werkzeug direkt im Herzen des Betriebssystems. "
+            "Es löst das größte Problem bei der Arbeit mit LLMs: vage, unvollständige oder inkonsistente Instruktionen. "
+            "Das Studio bündelt 1.079 praxiserprobte Enterprise-Vorlagen und über 255 Fabric Standard Operating Procedures (SOPs). "
+            "Seine modulare 5-Felder-Architektur zwingt jede Aufgabenstellung in eine mathematisch präzise Form (Rolle, Kontext, "
+            "Aufgabe, Ausgabeformat, Restriktionen). Das Modul ist so performant und nützlich konzipiert, dass es als eigenständiges "
+            "Produkt oder als Chrome-Extension herausgelöst werden könnte."
+        ),
+        "elements": [
+            ("Katalog & Kategorien-Filter (1.079 Vorlagen)", 
+             "Filtert nach Fachdisziplinen wie Strategie, Recht, Coding, Marketing, Datenanalyse und Fabric-Mustern."),
+            ("Die 5-Felder-Formel für perfekte Prompts", 
+             "• 1. Rolle (Wer agiert?): z. B. 'Senior Compliance Officer'.\n"
+             "• 2. Kontext (Was ist die Ausgangslage?): Firmenhintergrund, Stakeholder, Zielgruppe.\n"
+             "• 3. Aufgabe (Was exakt ist zu tun?): Präziser Handlungsauftrag im Aktiv.\n"
+             "• 4. Format (Wie soll das Ergebnis aussehen?): Tabelle, Markdown-Dossier, JSON-Schema, Executive Summary.\n"
+             "• 5. Constraints & Negativ-Regeln (Was darf nicht sein?): Keine Annahmen, deutsches HGB, max. 500 Wörter."),
+            ("Live-Preview & Variablen-Injektion", 
+             "Rendert den finalen Prompt in Echtzeit während der Eingabe und markiert Platzhalter farblich."),
+            ("Aktions-Buttons: 'In Aufgabe übernehmen' & 'In Chat übernehmen'", 
+             "Überträgt den fertigen Prompt mit einem einzigen Klick direkt in das Kanban-Taskmodal oder den Agenten-Chat.")
+        ],
+        "workflow": [
+            "1. Klicke im Operations-Board bei '+ Neue Aufgabe' oder im Agenten-Chat auf 'Prompt Studio (1.079)'.",
+            "2. Wähle ein Fabric-Muster (z. B. 'extract_wisdom' oder 'write_legal_opinion') oder eine Enterprise-Vorlage.",
+            "3. Passe die 5 Felder an deine konkreten Projektdaten an.",
+            "4. Klicke auf 'In Aufgabe übernehmen' – der perfekt formatierte Prompt landet sofort im Aufgaben-Formular."
+        ],
+        "best_practices": (
+            "Nutze die 5-Felder-Struktur konsequent bei allen komplexen Delegationen. Die Ergebnisse der Agenten "
+            "werden dadurch dramatisch präziser, fehlerfreier und bedürfen kaum manueller Nacharbeit."
+        ),
+        "starter_prompt": "Öffne das Prompt Studio und zeige mir die 5 besten Vorlagen für die Due-Diligence-Prüfung von Verträgen."
+    },
+    {
+        "id": "css_studio",
+        "title": "16. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector",
+        "subtitle": "Echtzeit-Design-Studio, In-Place DOM-Inspector & Design-Token Management",
+        "concept": (
+            "Das Visual CSS Live Studio (Tastenkürzel: Alt + S) ist das Design- und Anpassungszentrum von Archon OS. "
+            "Es erlaubt dir, das gesamte Erscheinungsbild der Benutzeroberfläche in Echtzeit direkt im laufenden Betrieb "
+            "zu inspizieren, zu vermessen und anzupassen – ohne Neustart, ohne Code-Kompilierung und ohne Neuladen der Seite. "
+            "Änderungen an Farben, Schriften, Abständen oder Rahmen werden sofort sichtbar und im Browser persistent gespeichert."
+        ),
+        "elements": [
+            ("In-Place DOM-Inspector (Fadenkreuz-Modus)", 
+             "Klicke auf ein beliebiges UI-Element im Bildschirm: Das Studio springt sofort an die entsprechende Stelle im CSS-Baum "
+             "und zeigt Padding, Margin, Schriftarten und Farbwerte an."),
+            ("Farb- & Typography-Regler", 
+             "Schieberegler und Farbwähler für Primärfarben, Akzente, Rahmen-Stärken, Rundungen und Schriftgrößen."),
+            ("Theme-Presets & Dark/Light Synchronisation", 
+             "Ermöglicht den nahtlosen Wechsel zwischen verschiedenen Farbstimmungen und stellt sicher, dass Kontraste stets WCAG-konform bleiben."),
+            ("CSS Export & Reset", 
+             "Exportiert deine individuellen Anpassungen als saubere `custom_studio.css` oder setzt auf das offizielle Werksprofil zurück.")
+        ],
+        "workflow": [
+            "1. Drücke zu einem beliebigen Zeitpunkt auf deiner Tastatur die Tastenkombination 'Alt + S' (oder klicke auf das Paletten-Icon links unten).",
+            "2. Das CSS Live Studio klappt rechts als elegantes Panel auf.",
+            "3. Aktiviere den Inspektor und klicke auf eine Karte oder einen Button, den du anpassen möchtest.",
+            "4. Verändere Farbton oder Rundung – die Oberfläche aktualisiert sich im selben Sekundenbruchteil.",
+            "5. Schließe das Studio mit erneutem 'Alt + S' – deine Einstellungen bleiben dauerhaft erhalten."
+        ],
+        "best_practices": (
+            "Nutze das CSS Studio, um die Kontraste optimal an deine Lichtverhältnisse am Arbeitsplatz anzupassen. "
+            "Über die Export-Funktion kannst du dein Firmen-Farbschema sauber in die Quellcode-Repositorys übernehmen."
+        ),
+        "starter_prompt": "Öffne das Visual CSS Live Studio und passe die Akzentfarbe der Navigation an."
     }
 ]
 
@@ -796,7 +883,7 @@ run_sub.font.color.rgb = COLOR_ACCENT
 
 meta_p = doc.add_paragraph()
 meta_p.paragraph_format.space_after = Pt(24)
-run_meta = meta_p.add_run("Stand: 14. Oktober 2026 | Release: 2.0 Enterprise | 54 Autonome Spezialisten-Rollen")
+run_meta = meta_p.add_run("Stand: 14. Oktober 2026 | Release: 2.0 Enterprise | 54 Autonome Spezialisten-Rollen | 16 Fachmodule")
 run_meta.font.name = "Calibri"
 run_meta.font.size = Pt(9.5)
 run_meta.font.color.rgb = COLOR_MUTED
@@ -806,10 +893,10 @@ intro_p.paragraph_format.space_after = Pt(16)
 intro_p.paragraph_format.line_spacing = 1.15
 intro_run = intro_p.add_run(
     "Dieses System-Handbuch richtet sich an Betreiber, Entscheider und Nutzer des Archon Agentic Operating Systems. "
-    "Es vermittelt ein tiefgehendes Verständnis aller 14 Bedienoberflächen und ihrer technologischen Verzahnung. "
+    "Es vermittelt ein tiefgehendes Verständnis aller 16 Bedienoberflächen und Spezial-Studios und ihrer technologischen Verzahnung. "
     "Ziel dieses Handbuchs ist es, dass jeder Anwender ohne Vorwissen in die Lage versetzt wird, Aufgaben autonom "
     "zu delegieren, Überwachungs- und Freigabeprozesse (HITL) sicher auszuführen und das Zusammenspiel zwischen "
-    "Kanban-Board, Obsidian-Wissensbasis, Telegram-Steuerung und Hintergrund-Workflows voll auszuschöpfen."
+    "Kanban-Board, Obsidian-Wissensbasis, Telegram-Steuerung, Hintergrund-Workflows und Prompt-Studio voll auszuschöpfen."
 )
 intro_run.font.name = "Calibri"
 intro_run.font.size = Pt(11)
@@ -838,23 +925,25 @@ p_l.add_run(
     "4. Eingang & Triage (HITL & Postfach)\n"
     "5. Agenten-Kader (Profile, Routen & Subtabs)\n"
     "6. Showroom (Projekt-Explorer & Sandbox)\n"
-    "7. Zentralbibliothek (RAG, Erfasser & Vault)"
+    "7. Zentralbibliothek (RAG, Erfasser & Vault)\n"
+    "8. Second Brain (Obsidian Vault & OCR)"
 ).font.size = Pt(9.5)
 
 p_r = cell_r.paragraphs[0]
 p_r.paragraph_format.space_after = Pt(2)
-r_th2 = p_r.add_run("Kognition, Automation & Governance:\n")
+r_th2 = p_r.add_run("Automation, Governance & Studios:\n")
 r_th2.font.bold = True
 r_th2.font.size = Pt(10)
 r_th2.font.color.rgb = COLOR_PRIMARY
 p_r.add_run(
-    "8. Second Brain (Obsidian Vault & OCR)\n"
     "9. Workflow-Engine (n8n Automation)\n"
     "10. LLM Gateway (OmniRoute AI Router)\n"
     "11. Token Guard (Guardian & Budgets)\n"
     "12. Erweiterungen (Plugin-Zentrale)\n"
     "13. Research Lab (Evidenz-Recherche)\n"
-    "14. Telemetrie & Logs (Live-Audit Stream)"
+    "14. Telemetrie & Logs (Live-Audit Stream)\n"
+    "15. Spezial: Prompt Studio (1.079 Vorlagen)\n"
+    "16. Spezial: Visual CSS Live Studio (Alt + S)"
 ).font.size = Pt(9.5)
 
 doc.add_page_break()
@@ -910,7 +999,7 @@ pillars = [
      "schlägt Zwischenschritte vor und spiegelt alle Dialoge zur revisionssicheren Dokumentation synchron in die Zentrale."),
     
     ("2. Der visuelle Leitstand (Web-Browser Cockpit)", 
-     "Am Desktop hast du über 14 spezialisierte Ansichten die volle Kontrolle. Du verfolgst den Lebenszyklus von Aufgaben im "
+     "Am Desktop hast du über 16 spezialisierte Ansichten und Studios die volle Kontrolle. Du verfolgst den Lebenszyklus von Aufgaben im "
      "Kanban-Board, überwachst Kosten und Token-Verbrauch in Echtzeit in Mission Control, sichtet E-Mails im Eingang und gibst "
      "kritische Aktionen vor ihrer tatsächlichen Ausführung über das Human-in-the-Loop-Verfahren (HITL) frei."),
     
@@ -945,11 +1034,11 @@ p_vw1_body2.paragraph_format.space_after = Pt(10)
 p_vw1_body2.paragraph_format.line_spacing = 1.15
 r_vw1_b2 = p_vw1_body2.add_run(
     "Wie liest man dieses Handbuch?\n"
-    "Jedes der 14 Kapitel widmet sich einer dezidierten Bedienoberfläche. Alle Kapitel folgen einer einheitlichen Struktur: "
+    "Jedes der 16 Kapitel widmet sich einer dezidierten Bedienoberfläche oder einem Spezial-Studio. Alle Kapitel folgen einer einheitlichen Struktur: "
     "Kernkonzept, Steuerelemente im Detail, Schritt-für-Schritt-Workflow, Praxistipp und konkreter Muster-Prompt. "
     "Komplexe Oberflächen mit mehreren Reitern (wie der Agenten-Kader, Operations oder die Zentralbibliothek) sind in feingliedrige "
-    "Unterkapitel unterteilt. Wer das Zusammenspiel in der Praxis erleben möchte, findet im Anhang fünf detailliert durchgerechnete "
-    "Use Cases von der einfachen Rechtsauskunft bis zur 24/7-Hintergrundüberwachung."
+    "Unterkapitel unterteilt, jeweils illustriert mit einem hochauflösenden Screenshot des jeweiligen Subtabs. Wer das Zusammenspiel in der "
+    "Praxis erleben möchte, findet im Anhang fünf detailliert durchgerechnete Use Cases von der einfachen Rechtsauskunft bis zur 24/7-Hintergrundüberwachung."
 )
 r_vw1_b2.font.name = "Calibri"
 r_vw1_b2.font.size = Pt(10)
@@ -1061,7 +1150,7 @@ r_vw2_post.font.color.rgb = COLOR_SECONDARY
 doc.add_page_break()
 
 # -------------------------------------------------------------
-# HAUPTTEILE: DIE 14 ANSICHTEN IM DETAIL (MIT SUBSECTIONS)
+# HAUPTTEILE: DIE 16 ANSICHTEN & STUDIOS IM DETAIL (MIT SUBSECTIONS & SCREENSHOTS)
 # -------------------------------------------------------------
 for idx, v in enumerate(VIEWS, 1):
     # Kapitel-Überschrift
@@ -1083,7 +1172,7 @@ for idx, v in enumerate(VIEWS, 1):
     run_s.font.italic = True
     run_s.font.color.rgb = COLOR_ACCENT
 
-    # Screenshot einbetten
+    # Haupt-Screenshot einbetten (falls vorhanden)
     if os.path.exists(v.get("img_path", "")):
         try:
             p_img = doc.add_paragraph()
@@ -1132,10 +1221,10 @@ for idx, v in enumerate(VIEWS, 1):
         r_ed.font.size = Pt(9.5)
         r_ed.font.color.rgb = COLOR_SECONDARY
 
-    # WENN SUBSECTIONS VORHANDEN SIND: RENDERE JEDES SUBKAPITEL IM DETAIL!
+    # WENN SUBSECTIONS VORHANDEN SIND: RENDERE JEDES SUBKAPITEL MIT EIGENEM SCREENSHOT!
     if "subsections" in v:
         p_sub_intro = doc.add_paragraph()
-        p_sub_intro.paragraph_format.space_before = Pt(8)
+        p_sub_intro.paragraph_format.space_before = Pt(10)
         p_sub_intro.paragraph_format.space_after = Pt(4)
         r_si = p_sub_intro.add_run("Detaillierte Analyse der Unterbereiche & Funktionen:")
         r_si.font.name = "Calibri"
@@ -1145,13 +1234,27 @@ for idx, v in enumerate(VIEWS, 1):
 
         for sub_sec in v["subsections"]:
             p_stitle = doc.add_paragraph()
-            p_stitle.paragraph_format.space_before = Pt(8)
+            p_stitle.paragraph_format.space_before = Pt(10)
             p_stitle.paragraph_format.space_after = Pt(2)
             r_st = p_stitle.add_run(sub_sec["subtitle"])
             r_st.font.name = "Calibri"
-            r_st.font.size = Pt(11.5)
+            r_st.font.size = Pt(12)
             r_st.font.bold = True
             r_st.font.color.rgb = COLOR_PRIMARY
+
+            # Sub-Screenshot einbetten (falls für diesen Subtab vorhanden)
+            sub_img_id = sub_sec.get("img_id", "")
+            if sub_img_id:
+                sub_img_path = os.path.join(IMG_DIR, f"{sub_img_id}.png")
+                if os.path.exists(sub_img_path):
+                    try:
+                        p_simg = doc.add_paragraph()
+                        p_simg.paragraph_format.space_before = Pt(2)
+                        p_simg.paragraph_format.space_after = Pt(6)
+                        p_simg.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        doc.add_picture(sub_img_path, width=Inches(6.4))
+                    except Exception as e_simg:
+                        print(f"Fehler beim Einbetten von Sub-Screenshot {sub_img_id}: {e_simg}")
 
             p_sconc = doc.add_paragraph()
             p_sconc.paragraph_format.space_after = Pt(4)
@@ -1482,7 +1585,8 @@ targets = [
     DOCX_PATH,
     os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v2.docx"),
     os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v3.docx"),
-    os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v4.docx")
+    os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v4.docx"),
+    os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v5.docx")
 ]
 
 saved_files = []

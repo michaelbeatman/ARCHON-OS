@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import time
 import subprocess
@@ -31,7 +32,7 @@ VIEWS = [
         ),
         "elements": [
             ("5 vitale KPI-Kacheln (Kopfzeile)", 
-             "• Flottenlast: Zeigt die Anzahl gleichzeitig arbeitender Agenten im Verhältnis zum Gesamt-Kader (z. B. 0 / 56 aktiv).\n"
+             "• Flottenlast: Zeigt die Anzahl gleichzeitig arbeitender Agenten im Verhältnis zum Gesamt-Kader (z. B. 0 / 54 aktiv).\n"
              "• Durchsatz (TPM): Überwacht die erzeugten Tokens pro Minute gegenüber dem definierten Schwellenwert (z. B. 2M TPM Limit).\n"
              "• Kostenwächter: Kumulierte Tageskosten in USD mit farblicher Warnanzeige bei Annäherung an das Tageslimit ($5.00).\n"
              "• Stabilität: Erfolgsquote aller Tool- und Modellausführungen (100% nominal bedeutet fehlerfreie Ausführung).\n"
@@ -62,47 +63,88 @@ VIEWS = [
     },
     {
         "id": "operations",
-        "title": "2. Operations – Kanban Board & Task-Engine",
-        "subtitle": "Operative Steuerung, Aufgaben-Delegation, WIP-Limits & Obsidian-Verknüpfung",
+        "title": "2. Operations – Operative Projektsteuerung & Funk",
+        "subtitle": "Kanban Board, Organisation/Ablaufdiagramm & Interne Agenten-Kommunikation",
         "concept": (
-            "Das Operations-Kanban ist das schlagende Herz der operativen Ausführung in Archon OS. Jede geschäftliche Aufgabe "
-            "wird hier als strukturierte Karte erfasst, einem Agenten zugewiesen und durch einen definierten Lebenszyklus geführt. "
-            "Die Ansicht unterstützt flexible Filter, WIP-Limits (Work-in-Progress) gegen Überlastung und eine direkte Anbindung an Obsidian."
+            "Operations ist das operative Zentrum von Archon OS. Hier laufen die drei Säulen der täglichen Wertschöpfung "
+            "zusammen: Das Kanban Board zur Verwaltung des Aufgaben-Lebenszyklus, das Organigramm zur Definition von "
+            "Berichtslinien und Eskalationspfaden, sowie der interne Funkverkehr (Communication) für die inter-agentische Abstimmung."
         ),
         "elements": [
-            ("Die 5 Kanban-Spalten", 
-             "• TO-DO: Warteschlange neuer oder delegierter Aufgaben vor Bearbeitungsbeginn.\n"
-             "• IN BEARBEITUNG: Aufgaben, an denen ein Agent aktuell autonom arbeitet und Prompts/Tools ausführt.\n"
-             "• REVIEW & QA: Fertiggestellte Entwürfe, die auf inhaltliche Prüfung oder deine Freigabe warten.\n"
-             "• BLOCKIERT / ESKALATION: Aufgaben mit fehlenden Informationen, Rechten oder Tool-Fehlern (Eskalation zu Robert).\n"
-             "• ABGESCHLOSSEN: Erfolgreich fertiggestellte Arbeiten inklusive Ablage der Ergebnisse im Vault."),
-            ("Such- & Filter-Toolbar", 
-             "Ermöglicht Volltextsuche nach Begriffen oder Task-IDs, Filterung nach verantwortlichem Agenten sowie Filterung nach Prioritätsstufen "
-             "(P0 Kritisch bis P3 Normal). Über das Sortier-Menü sortierst du nach Priorität, Datum oder Titel."),
-            ("WIP-Limit Steuerung (Work in Progress)", 
-             "Direkt in der Toolbar konfigurierbar: Begrenze für jede Spalte die maximale Anzahl paralleler Aufgaben (z. B. max. 3 in Bearbeitung), "
-             "um Agenten-Überlastung und Token-Spitzen zuverlässig zu verhindern."),
+            ("Drei integrierte Arbeitsbereiche (Kopfzeile)", 
+             "Über die horizontalen Kacheln wechselst du nahtlos zwischen Kanban, Organisation und Kommunikation."),
             ("Button '+ Neue Aufgabe'", 
-             "Öffnet das Aufgaben-Erstellungsmodal. Hier definierst du Titel, ausführende Rolle, Priorität, ausführliche Instruktionen "
-             "und optionale Zieldateien."),
-            ("Archiv-Funktion (Toolbar rechts)", 
-             "Verschiebt erledigte Karten per Klick in das historische Archiv, um das Board übersichtlich und reaktionsschnell zu halten.")
+             "Öffnet das Aufgaben-Erstellungsmodal zur direkten Zuweisung an Rollen inklusive Priorität und Instruktionen."),
+            ("Sync-Button (Aktualisieren)", 
+             "Synchronisiert den aktuellen Board- und Funkstatus mit der zentralen kanban.db.")
+        ],
+        "subsections": [
+            {
+                "subtitle": "2.1 Kanban Board & Task-Engine",
+                "concept": (
+                    "Jede geschäftliche Aufgabe wird im Board als strukturierte Karte geführt, einem Fachagenten zugewiesen "
+                    "und durchläuft die Spalten To-Do, In Bearbeitung, Review & QA, Blockiert und Abgeschlossen. "
+                    "WIP-Limits (Work-in-Progress) verhindern Token-Spitzen und Überlastung."
+                ),
+                "elements": [
+                    ("Die 5 Lebenszyklus-Spalten", "To-Do (Warteschlange), In Bearbeitung (aktive Ausführung), Review & QA (Prüfung), Blockiert (Eskalation), Abgeschlossen (Erledigt)."),
+                    ("WIP-Limit Konfiguration", "Begrenze in der Toolbar die maximale Kartenzahl pro Spalte (z. B. max. 3 Tasks gleichzeitig in Bearbeitung)."),
+                    ("Toolbar mit Filtern & Archiv", "Volltextsuche, Filter nach verantwortlichem Agenten, Filter nach Priorität (P0 bis P3) sowie Klick-Archivierung erledigter Aufgaben.")
+                ],
+                "workflow": [
+                    "1. Erstelle eine neue Karte für eine Rolle oder empfange eine via Telegram delegierte Aufgabe.",
+                    "2. Beobachte, wie der Agent die Karte autonom bearbeitet und bei Fertigstellung nach 'Review & QA' schiebt.",
+                    "3. Öffne die Karte, prüfe das Ergebnis (oder nutze 'In Obsidian öffnen') und ziehe sie auf 'Abgeschlossen'."
+                ],
+                "tip": "Sollte ein Task auf 'Blockiert' springen, prüfe im Task-Detail die Ursache – oft fehlt ein Parameter oder ein API-Key."
+            },
+            {
+                "subtitle": "2.2 Organisation & Ablaufdiagramm (Organigramm)",
+                "concept": (
+                    "Visualisiert die Aufbau- und Ablaufstruktur deines Unternehmens als interaktiven 2D-Graphen. "
+                    "Die Verbindungslinien definieren echte Weisungs- und Berichtswege für autonome Eskalationen: "
+                    "von der Apex-Ebene über Robert (CEO) bis zu den Fach-Leads und Spezialisten."
+                ),
+                "elements": [
+                    ("Apex & CEO-Ebene", "Michael Keller und Telegram Gateway ganz oben; Robert als zentraler Executive Decision Architect darunter."),
+                    ("Lead- & Spezialisten-Kacheln", "Abteilungsleiter für Tech, Recht, Marketing etc. mit ihren jeweils unterstellten Fach-Agenten."),
+                    ("Interaktive Werkzeuge", "Modus-Umschaltung (Flowchart vs. Team-Karten), dynamisches Ziehen neuer Verbindungslinien, 'Hierarchie speichern' und 'Am Raster ausrichten'.")
+                ],
+                "workflow": [
+                    "1. Klicke auf eine Agenten-Kachel, um Rollenprofil, Modell und aktuelle Auslastung einzusehen.",
+                    "2. Ziehe Verbindungspunkte neu, um Fachrollen einer anderen Führungskraft zuzuordnen.",
+                    "3. Klicke auf 'Hierarchie speichern', um die neuen Eskalationspfade aktiv zu schalten."
+                ],
+                "tip": "Wenn ein Spezialist bei einer Aufgabe blockiert ist, eskaliert das System automatisch an den hier hinterlegten Supervisor."
+            },
+            {
+                "subtitle": "2.3 Interne Kommunikation (Agenten-Funk)",
+                "concept": (
+                    "Der interne Kommunikationskanal dient als Abhörzentrale für den automatischen Datenaustausch zwischen den Agenten. "
+                    "Hier siehst du im Klartext, wie Teilaufträge zwischen Abteilungen übergeben werden, ohne dass dein persönlicher Chat überflutet wird."
+                ),
+                "elements": [
+                    ("Kanalliste (Linke Spalte)", "Strukturiert nach Agenten, Teams und Domänen (z. B. #allgemein, #tech-dev, #legal, #marketing)."),
+                    ("Nachrichten-Feed (Rechte Spalte)", "Chronologischer Stream aller Inter-Agenten-Nachrichten und Status-Meldungen direkt aus kanban.db.")
+                ],
+                "workflow": [
+                    "1. Wähle links einen Kanal aus, um den Funkverkehr einer bestimmten Fachgruppe zu isolieren.",
+                    "2. Verfolge, wie Robert einem Spezialisten Kontext bereitstellt oder wie zwei Agenten Ergebnisse abgleichen."
+                ],
+                "tip": "Nutze die interne Kommunikation zur Fehlersuche, wenn bei komplexen Mehretappen-Aufgaben Unklarheiten zwischen Agenten entstehen."
+            }
         ],
         "workflow": [
-            "1. Klicke auf '+ Neue Aufgabe', wähle einen passenden Fachagenten (z. B. Wirtschaftsjurist) und formuliere den Auftrag.",
-            "2. Verfolge auf dem Board, wie die Karte von 'To-Do' in 'In Bearbeitung' wechselt.",
-            "3. Landet die Karte in 'Review & QA', öffne sie mit einem Klick: Du siehst das Zwischenergebnis und kannst es direkt über den Button 'In Obsidian öffnen' lokal begutachten.",
-            "4. Ist das Ergebnis zufriedenstellend, ziehe die Karte auf 'Abgeschlossen' oder klicke auf 'Archivieren'."
+            "1. Kontrolliere im Kanban-Board offene Tasks und weise neue Aufgaben gezielt zu.",
+            "2. Prüfe im Organigramm, ob alle Spezialisten der richtigen Führungskraft zugeordnet sind.",
+            "3. Wirf einen Blick in die interne Kommunikation, um autonome Absprachen zwischen Agenten zu verfolgen."
         ],
-        "best_practices": (
-            "Setze realistische WIP-Limits (z. B. 2 bis 3 Tasks gleichzeitig). Sollte ein Task auf 'Blockiert' springen, prüfe im Task-Detail "
-            "die Fehlermeldung – oft fehlt eine Datei oder ein API-Schlüssel."
-        ),
-        "starter_prompt": "Erstelle einen neuen Task im Operations-Board mit Priorität P1 für den Wirtschaftsjuristen zur Prüfung eines Dienstleistervertrags."
+        "best_practices": "Halte die Spalte 'In Bearbeitung' durch strikte WIP-Limits schlank. Verknüpfe neue Fachrollen immer mit einem klaren Supervisor im Organigramm.",
+        "starter_prompt": "Erstelle eine P1-Aufgabe im Kanban für Dr. Maximilian von W. zur Prüfung von Lizenzklauseln und weise Robert als Supervisor zu."
     },
     {
         "id": "org",
-        "title": "3. Operations – Organisation & Ablaufdiagramm",
+        "title": "3. Operations – Organisation & Ablaufdiagramm (Detail)",
         "subtitle": "Interaktiver 2D-Hierarchiebaum, Berichtslinien & dynamische Umhängung",
         "concept": (
             "Dieser Sub-Tab innerhalb von Operations visualisiert die Aufbau- und Ablaufstruktur deines Unternehmens als lebendigen 2D-Graphen. "
@@ -111,7 +153,7 @@ VIEWS = [
         ),
         "elements": [
             ("Apex-Ebene (Ganz oben)", 
-             "Repräsentiert die Systemspitze mit dem Default Orchestrator, dem Telegram-Bot-Gateway und Michael Keller (Master of the Universe)."),
+             "Repräsentiert die Systemspitze mit dem Default Orchestrator, dem Telegram-Bot-Gateway und Michael Keller."),
             ("CEO & Orchestrator (Robert)", 
              "Robert (Executive Decision Architect) fungiert als zentraler Dreh- und Angelpunkt: Er nimmt strategische Anweisungen entgegen, "
              "zerlegt komplexe Vorgaben und verteilt Teilaufgaben an die Fachabteilungen."),
@@ -141,382 +183,566 @@ VIEWS = [
     },
     {
         "id": "inbox",
-        "title": "4. Eingang & Triage (Intake)",
-        "subtitle": "Operative Triage: HITL-Freigabeprozess, E-Mail-Postfach & Telegram-Stream",
+        "title": "4. Eingang & Triage (HITL-Gatekeeper & Postfach)",
+        "subtitle": "3-Spalten-Zentrale: Human-in-the-Loop Freigaben, E-Mail-Postfach & Telegram-Stream",
         "concept": (
-            "Die Eingangszentrale ist die sichere Schnittstelle zwischen der Außenwelt und deinen Agenten. Alle eingehenden Signale – "
-            "seien es Systemwarnungen, externe E-Mails oder Telegram-Nachrichten – laufen hier zusammen. Gleichzeitig dient diese Ansicht "
-            "als Kontrollschleuse für den Human-in-the-Loop-Mechanismus (HITL), der riskante Aktionen vor der Ausführung stoppt."
+            "Die Eingang & Triage Ansicht ist das operative Nadelöhr für alle eingehenden Signale von außen sowie für kritische "
+            "Aktionen von innen. Das System trennt hier streng zwischen harmlosen Lese-Operationen und folgenreichen Schreib-Operationen "
+            "(z. B. E-Mail-Versand, Code-Deployment oder Datenbank-Änderungen). Diese Ansicht garantiert, dass kein Agent eigenmächtig "
+            "kritische Handlungen vollzieht, ohne deine ausdrückliche Bestätigung erhalten zu haben."
         ),
         "elements": [
-            ("Spalte 1: INTERN & SYSTEM", 
-             "Dokumentiert Kernel-Statusmeldungen (Tickless Kernel Sleep aktiv, Port 8501 bereit), automatische Health-Checks "
-             "und Systemhinweise in chronologischer Reihenfolge."),
-            ("Spalte 2: E-MAIL POSTFACH (IMAP/SMTP)", 
-             "Echtzeit-Synchronisierung mit deinem Postfach (archon.os.system@gmail.com, 180s Taktung). Zeigt Betreff, Absender und Inhalt. "
-             "Erlaubt es, eingehende Nachrichten per Klick einem Agenten zur Analyse oder Beantwortung zuzuweisen."),
-            ("Spalte 3: TELEGRAM STREAM", 
-             "Live-Feed aller Konversationen über deinen Bot (@Beatman_bot). Jede Frage, jeder Befehl und die Antworten der Agenten "
-             "werden hier in Echtzeit gespiegelt."),
-            ("Triage- & Filterleiste (Oben)", 
-             "Filtert die Ansicht nach Kategorien: Alle, Intern, E-Mail, Telegram. Über den Button 'Sync' wird eine sofortige "
-             "Postfach-Abfrage manuell forciert."),
-            ("Human-in-the-Loop (HITL) Freigabekarten", 
-             "Plant ein Agent eine Schreibaktion (E-Mail versenden, Code pushen, Datei löschen), erscheint hier eine gelb markierte Freigabekarte. "
-             "Erst wenn du auf 'Freigeben' klickst, wird die Aktion physisch ausgeführt.")
+            ("Spalte 1: Human-in-the-Loop Freigaben (HITL)", 
+             "Hier landen alle blockierten Tool-Aufrufe mit gelber Warnmarkierung. Du siehst exakt: Welcher Agent will welche Aktion "
+             "mit welchen Parametern ausführen? Mit 'Freigeben' wird die Aktion physisch ausgeführt, mit 'Ablehnen' verworfen."),
+            ("Spalte 2: E-Mail Postfach & Auto-Triage", 
+             "Synchronisiert ein- und ausgehende geschäftliche E-Mails via IMAP/SMTP. Neue Mails werden automatisch auf Dringlichkeit "
+             "gescannt und können direkt per Klick an einen zuständigen Fach-Agenten zur Beantwortung übergeben werden."),
+            ("Spalte 3: Telegram Stream (Live-Chat)", 
+             "Spiegelt den gesamten Live-Dialog zwischen dir und dem Telegram-Bot (@Beatman_bot). Hier siehst du Befehle wie /robert "
+             "oder /anwalt und die Antworten der Agenten in Echtzeit synchronisiert."),
+            ("Mail-Sync & Status-Controls (Header)", 
+             "Button 'Sync': Löst den sofortigen Mail-Abruf aus. Anzeige des Triage-Status (Nominal / Wartend).")
         ],
         "workflow": [
-            "1. Sichte im E-Mail-Postfach eingehende Nachrichten von Kunden oder Partnern.",
-            "2. Klicke auf eine Nachricht, um sie direkt an den passenden Agenten (z. B. Support oder Akquise) zu übergeben.",
-            "3. Prüfe vor dem endgültigen Versand den generierten Antwortentwurf in der HITL-Freigabekarte und bestätige mit 'Freigeben'."
+            "1. Prüfe Spalte 1 auf anstehende Freigabekarten. Lies den vorgeschlagenen Befehl oder Textentwurf durch.",
+            "2. Klicke auf 'Freigeben', wenn der Entwurf passt, oder 'Ablehnen' mit einer Korrektur-Notiz.",
+            "3. Sichte in Spalte 2 neue Mails. Klicke auf 'Delegieren', um die Mail z. B. Katharina Völker (Marketing/Sales) zuzuweisen.",
+            "4. Verfolge in Spalte 3 den Chatverlauf von deinem Smartphone."
         ],
         "best_practices": (
-            "Prüfe regelmäßig die HITL-Karten. Der Injektions- und E-Mail-Schutz verhindert verlässlich, dass schädliche Prompts aus eingehenden "
-            "Mails unbemerkt Aktionen auf deinem System ausführen."
+            "Behalte die HITL-Spalte im Blick: Wenn ein Agent auf deine Freigabe wartet, pausiert sein Task im Kanban-Board. "
+            "Durch zügige Freigaben hältst du den operativen Workflow flüssig."
         ),
-        "starter_prompt": "Welche neuen E-Mails sind im Eingang eingegangen und für welche liegt bereits ein Antwortentwurf vor?"
+        "starter_prompt": "Welche Freigaben stehen aktuell in der HITL-Spalte an und welche E-Mails sind in den letzten 24 Stunden eingegangen?"
     },
     {
         "id": "kader",
-        "title": "5. Agenten-Kader (Profile, Disposition & Rufnamen)",
-        "subtitle": "Katalog aller 56 Spezialisten-Rollen, Prompts, Werkzeuge & Telegram-Direktrouting",
+        "title": "5. Agenten-Kader & Flottenmanagement",
+        "subtitle": "Katalog-Filterung, KI-Routenwahl & die 7 Fach-Reiter im Agenten-Cockpit",
         "concept": (
-            "Im Agenten-Kader verwaltest du das gesamte Personal deines digitalen Unternehmens. Jedes der 56 Profile verfügt über eine "
-            "präzise Stellenbeschreibung, dedizierte Fach-Skills, Werkzeugberechtigungen und eine Modellzuweisung. Über das Feld "
-            "'Rufname' kannst du jedem Agenten ein persönliches Telegram-Kürzel zuweisen, unter dem er direkt ansprechbar ist."
+            "Der Agenten-Kader ist die Personalabteilung und das operative Einstellungszentrum deines Systems. "
+            "Hier verwaltest du alle 54 Spezialisten-Profile, weist Sprachmodelle dynamisch zu, bearbeitest Verhaltensrichtlinien "
+            "in der SOUL.md und konfigurierst persönliche Rufnamen für den direkten Messenger-Zugriff via Telegram."
         ),
         "elements": [
-            ("Linke Spalte: Schlanker Kader-Katalog", 
-             "Durchsuchbare Liste aller 56 Profile. Filterbar nach Fachabteilungen (Strategie & Führung, IT, Marketing, Recht, Finanzen, Bau). "
-             "Kompakte Kacheln mit Avatar, Stellenbezeichnung, Skill-Anzahl und Status (Aktiv / Standby)."),
-            ("Persönlicher Name & Hermes-Handle", 
-             "Eindeutige technische ID (z. B. default, robert, micha) zur systemweiten Adressierung."),
-            ("Modell-Router / LLM-Provider", 
-             "Legt fest, welches Sprachmodell diesen Agenten antreibt (z. B. auto/best-free für Standardaufgaben oder deepseek-reasoner für komplexe Logik)."),
-            ("Aufgabenprofil & System-Prompts", 
-             "Ausführliche Rollenanweisungen und Leitplanken, die das Verhalten, den Tonfall und die Fachkompetenz des Agenten steuern."),
-            ("NEU: Rufname (/Kommando)", 
-             "Eingabefeld im unteren Informationsblock (z. B. 'robert', 'micha', 'anwalt'). Trägst du hier einen Namen ein, "
-             "kannst du diesen Agenten in Telegram direkt über /<rufname> ansprechen (z. B. '/robert Prüfe die Zahlen')."),
-            ("Direkter Supervisor & Erfolgsquote", 
-             "Verknüpft die Führungskraft für Eskalationen und zeigt verarbeitete Einsätze sowie die Erfolgsquote (nominal 100%).")
+            ("Linke Spalte: Katalog & Schnellfilter", "Suche, Domänen-Auswahl, die drei Filter-Tabs (Aktiv, Favoriten, Alle) und Buttons für Neu, Speichern und Löschen."),
+            ("Rechte Spalte: Agenten-Cockpit", "Großer Header mit Avatar-Verwaltung, Rollenbezeichnung, Provider- und Modell-Dropdowns sowie die 7 Icon-Kacheln für die Fach-Reiter."),
+            ("OmniRoute Gateway Widget (Footer links)", "Zeigt den Status des lokalen LLM-Gateways an und erlaubt das Starten, Stoppen und Verwalten von KI-Routen.")
+        ],
+        "subsections": [
+            {
+                "subtitle": "5.0 Katalog-Verwaltung & Filter (Aktiv, Favoriten, Alle)",
+                "concept": (
+                    "Der linke Katalog bietet schnellen Zugriff auf den gesamten Personalstamm. Die drei Filter-Reiter "
+                    "strukturieren den Überblick: 'Aktiv' zeigt aktuell geladene Rollen, 'Favoriten' bietet Schnellzugriff "
+                    "auf deine wichtigsten täglichen Berater, und 'Alle' listet das gesamte Spektrum aller Fachbereiche."
+                ),
+                "elements": [
+                    ("Tab 'Aktiv'", "Filtert auf alle Agenten, die derzeit im Systemspeicher initialisiert oder mit offenen Tasks belegt sind."),
+                    ("Tab 'Favoriten'", "Persönliche Auswahlliste deiner meistgenutzten Agenten (z. B. Robert, Michael Keller, Wirtschaftsjurist)."),
+                    ("Tab 'Alle'", "Vollständiger Zugriff auf alle 54 Profile quer durch alle 7 Domänen."),
+                    ("Domänen-Dropdown", "Filtert gezielt nach Strategie, Handel, Recht, Immobilien, Medien, Vertrieb oder Tech.")
+                ],
+                "workflow": [
+                    "1. Nutze das Suchfeld oder das Domänen-Menü, um einen Spezialisten schnell zu finden.",
+                    "2. Klicke auf ein Profil, um dessen vollständiges Cockpit auf der rechten Seite zu laden."
+                ],
+                "tip": "Markiere Schlüsselrollen als Favoriten, um im Alltag ohne langes Scrollen direkt auf sie zugreifen zu können."
+            },
+            {
+                "subtitle": "5.1 Modell-Wechsel & Provider-Wahl (KI-Routenwahl)",
+                "concept": (
+                    "Jeder Agent kann mit einem individuellen Sprachmodell betrieben werden. Über die Dropdowns im Header "
+                    "oder im Chat-Tab wechselst du den KI-Provider und das Zielmodell unterbrechungsfrei während des Betriebs."
+                ),
+                "elements": [
+                    ("Provider-Dropdown", "Wahl zwischen OpenRouter, Google AI (Gemini), OmniRoute, Groq, OpenAI und NVIDIA NIM."),
+                    ("Modell-Dropdown", "Auswahl des konkreten Modells (z. B. 'auto/best-free' für kostenlose intelligente Routen, Claude 3.5 Sonnet für komplexe Analysen oder Gemini Flash für Höchstgeschwindigkeit)."),
+                    ("Hot-Swap", "Änderungen werden sofort wirksam – ein Neustart des Systems oder Daemons ist nicht erforderlich.")
+                ],
+                "workflow": [
+                    "1. Wähle im Header des Agenten den gewünschten Provider (z. B. OpenRouter).",
+                    "2. Wähle das passende Modell aus der Liste.",
+                    "3. Klicke links unten auf 'Speichern', um die Modell-Zuordnung dauerhaft im Profil zu sichern."
+                ],
+                "tip": "Nutze für Routineaufgaben 'auto/best-free' über OmniRoute, um API-Kosten zu minimieren, und schalte nur für strategische Meilensteine auf Premium-Modelle um."
+            },
+            {
+                "subtitle": "5.2 Übersicht (360°-Dossier & Rufname)",
+                "concept": (
+                    "Das 360°-Dossier fasst die Kernstammdaten zusammen. Hier hinterlegst du den persönlichen Rufnamen, "
+                    "über den der Agent direkt in Telegram angesprochen werden kann (z. B. /robert oder /anwalt)."
+                ),
+                "elements": [
+                    ("Persönlicher Name & Handle", "Vollständiger Name (z. B. Alexander Richter) und systemweites Hermes-Handle."),
+                    ("Stellenbeschreibung & Domäne", "Fachliche Rollenbezeichnung und Zuordnung zur primären Unternehmensdomäne."),
+                    ("Eingabefeld 'Rufname'", "Logische Verknüpfung für Messenger: Gibst du hier 'anwalt' ein, reagiert der Agent auf '/anwalt' in Telegram."),
+                    ("Kognitive Parameter", "Konfiguration von Temperature und Top-P für die Kreativität bzw. Exaktheit der Antworten.")
+                ],
+                "workflow": [
+                    "1. Trage im Feld 'Rufname' das gewünschte Kürzel ein (z. B. 'robert' oder 'steuer').",
+                    "2. Klicke auf 'Speichern'. Ab sofort leitet das Telegram-Gateway Nachrichten mit diesem Präfix an diesen Agenten."
+                ],
+                "tip": "Vergib kurze, prägnante Rufnamen ohne Sonderzeichen, um die Smartphone-Eingabe maximal komfortabel zu halten."
+            },
+            {
+                "subtitle": "5.3 Direkt-Chat",
+                "concept": (
+                    "Ermöglicht den unmittelbaren 1:1-Dialog mit dem ausgewählten Spezialisten direkt im Browser, "
+                    "inklusive Parameter-Feinjustierung und Streaming-Antworten."
+                ),
+                "elements": [
+                    ("Chat-Verlauf & Eingabezeile", "Vollwertige Chat-Oberfläche mit Markdown-Unterstützung und Code-Highlighting."),
+                    ("Parameter-Slider", "Schieberegler für Temperature und Kontextlänge für Ad-hoc-Experimente.")
+                ],
+                "workflow": [
+                    "1. Wechsle auf den Reiter 'Chat'.",
+                    "2. Stelle eine konkrete Fachfrage an den Spezialisten und beurteile dessen Rollenverhalten."
+                ],
+                "tip": "Ideal zum Kalibrieren und Testen von Agenten, bevor sie im Kanban-Board auf echte Kundenaufgaben losgelassen werden."
+            },
+            {
+                "subtitle": "5.4 Fähigkeiten (Skills & Tool-Sets)",
+                "concept": (
+                    "Hier weist du dem Agenten konkrete Werkzeuge und Schnittstellen zu (z. B. Web-Search, PDF-Reader, Code-Execution oder E-Mail-Versand)."
+                ),
+                "elements": [
+                    ("Skill-Katalog mit Checkboxen", "Aktivieren oder Deaktivieren einzelner Tool-Module per Mausklick."),
+                    ("Berechtigungsstufen", "Einschränkung von zerstörerischen Werkzeugen auf den Read-Only Modus.")
+                ],
+                "workflow": [
+                    "1. Prüfe die aktivierten Skills des Agenten.",
+                    "2. Aktiviere zusätzliche Tools, wenn der Agent z. B. Zugriff auf die Websuche oder das Dateisystem benötigt."
+                ],
+                "tip": "Vergib Werkzeuge nach dem Prinzip der geringsten Rechte (Least Privilege), um unerwünschte Nebeneffekte zu vermeiden."
+            },
+            {
+                "subtitle": "5.5 Operations (Zugeordnete Tasks & Historie)",
+                "concept": (
+                    "Zeigt alle Aufgaben aus dem Kanban-Board, die diesem spezifischen Agenten aktuell zugewiesen sind oder in der Vergangenheit erledigt wurden."
+                ),
+                "elements": [
+                    ("Aktive Tasks", "Karten in Bearbeitung inklusive Fortschritt und Token-Verbrauch."),
+                    ("Erledigte Aufgaben", "Historischer Leistungsnachweis und abgelegte Artefakte.")
+                ],
+                "workflow": [
+                    "1. Überprüfe die Auslastung des Agenten vor Zuweisung neuer Großaufträge.",
+                    "2. Springe per Klick direkt in die verknüpfte Task-Karte im Operations-Board."
+                ],
+                "tip": "Nutze diesen Reiter, um Engpässe bei einzelnen Spezialisten sofort zu erkennen."
+            },
+            {
+                "subtitle": "5.6 SOUL (System Prompt & Verhaltens-Direktiven)",
+                "concept": (
+                    "Die 'Seele' des Agenten: Hier wird der System-Prompt definiert, der Tonalität, Verhaltensregeln, ethische Leitplanken "
+                    "und Denkweisen des Spezialisten festlegt."
+                ),
+                "elements": [
+                    ("Inline-Markdown-Editor", "Direkte Bearbeitung der SOUL.md mit Syntax-Unterstützung."),
+                    ("Prompt-Vorschau", "Live-Rendering des finalen System-Prompts inklusive injizierter Variablen.")
+                ],
+                "workflow": [
+                    "1. Passe die Verhaltensrichtlinien im Editor an (z. B. 'Antworte stets nach deutschem HGB').",
+                    "2. Klicke auf 'Speichern', um die Direktiven sofort im Profil zu verankern."
+                ],
+                "tip": "Formuliere klare 'Negativ-Regeln' (was der Agent keinesfalls tun darf), um Halluzinationen wirksam zu unterbinden."
+            },
+            {
+                "subtitle": "5.7 Personalakte (Dossier & SOP)",
+                "concept": (
+                    "Das formelle HR-Dossier des Agenten im Markdown-Format: Enthält Ausbildung, Werdegang, Standard Operating Procedures (SOPs) "
+                    "und Qualitätsstandards für seine Arbeitsergebnisse."
+                ),
+                "elements": [
+                    ("Dossier-Viewer & Editor", "Umfangreiche Personalakte zur Dokumentation der Kompetenzen."),
+                    ("SOP-Abschnitte", "Konkrete Arbeitsanweisungen, wie Prüfberichte oder Gutachten aufgebaut sein müssen.")
+                ],
+                "workflow": [
+                    "1. Hinterlege firmenspezifische Vorlagen und Qualitätskriterien in der Personalakte.",
+                    "2. Der Agent zieht diese Vorgaben bei jeder Aufgabenbearbeitung als Referenz heran."
+                ],
+                "tip": "Pflege hier unternehmensspezifische Standards ein – so arbeiten neue Agenten sofort konform zu deinen Firmenrichtlinien."
+            },
+            {
+                "subtitle": "5.8 Talent-Marktplatz",
+                "concept": (
+                    "Erlaubt den Import und Export von Agenten-Profilen als JSON/Markdown-Pakete, um Rollen zwischen Projekten "
+                    "oder aus Vorlagen-Katalogen auszutauschen."
+                ),
+                "elements": [
+                    ("Rollen-Katalog", "Vorgefertigte Profile für spezielle Branchen (z. B. Modulbau, E-Commerce, Krypto-Compliance)."),
+                    ("Export-Funktion", "Sichert das vollständige Profil inklusive Skills und SOUL als portable Datei.")
+                ],
+                "workflow": [
+                    "1. Wähle ein Profil aus dem Katalog, um einen neuen Spezialisten mit einem Klick zu installieren.",
+                    "2. Exportiere eigene bewährte Profile zur Sicherung oder Wiederverwendung."
+                ],
+                "tip": "Nutze den Marktplatz, um deine Flotte bei neuen Geschäftszweigen schnell um erfahrene Rollen-Setups zu erweitern."
+            }
         ],
         "workflow": [
-            "1. Wähle im linken Katalog einen Agenten aus (z. B. Robert).",
-            "2. Passe bei Bedarf dessen Aufgabenprofil oder den System-Prompt an.",
-            "3. Trage unten im Feld 'Rufname' das gewünschte Kürzel ein (z. B. 'robert') und klicke auf 'Speichern'.",
-            "4. Sende in Telegram den Befehl '/robert Wie ist der aktuelle Status?' – Robert antwortet dir sofort persönlich."
+            "1. Wähle links einen Agenten (z. B. Robert) oder klicke auf 'Neu', um ein Profil anzulegen.",
+            "2. Passe im Header den Provider und das Sprachmodell an.",
+            "3. Hinterlege unter 'Übersicht' den gewünschten Rufnamen für Telegram.",
+            "4. Kalibriere Direktiven in 'SOUL' und Fähigkeiten in 'Skills', danach klicke auf 'Speichern'."
         ],
-        "best_practices": (
-            "Nutze prägnante Rufnamen ohne Sonderzeichen. Wenn du mehreren Agenten denselben Rufnamen gibst, kannst du "
-            "mit einem einzigen Telegram-Befehl eine ganze Gruppe gleichzeitig ansprechen."
-        ),
-        "starter_prompt": "Zeige mir das Profil von Robert, seinen hinterlegten System-Prompt und seinen aktuellen Rufnamen."
+        "best_practices": "Überprüfe regelmäßig die Modell-Zuweisung. Routine-Rollen sollten auf kostengünstigen Modellen laufen, strategische Leads auf Spitzenmodellen.",
+        "starter_prompt": "Öffne das Profil von Robert (Executive Decision Architect) und zeige mir seine SOUL-Direktiven sowie den hinterlegten Rufnamen."
     },
     {
         "id": "showroom",
-        "title": "6. Showroom (Projekt-Explorer & Artefakte)",
-        "subtitle": "Zentrale Galerie aller Agenten-Ergebnisse, Dokumente, Medien & Sofort-Vorschau",
+        "title": "6. Showroom (Projekt-Explorer & Artefakt-Galerie)",
+        "subtitle": "Verwaltung von Arbeitsergebnissen, Code-Artefakten & Python-Sandbox",
         "concept": (
-            "Im Showroom landen alle fertigen Arbeitsergebnisse der Agenten. Er ist wie ein moderner Windows-Explorer aufgebaut "
-            "und strukturiert alle Zwischenberichte, PDF-Dokumente, Code-Artefakte und Marktanalysen projektbezogen. Die integrierte "
-            "Sofort-Vorschau rendert Markdown, HTML und Code direkt im Browser."
+            "Der Showroom ist die Ausstellungs- und Prüfhalle für alle fertigen Arbeitsergebnisse, die deine Agenten erzeugt haben. "
+            "Statt unübersichtlicher Chat-Verläufe findest du hier sauber katalogisierte Artefakte: von fertigen HTML-Apps über generierte "
+            "Diagramme bis hin zu mehrseitigen Strategie-Dossiers. Die integrierte Python-Sandbox erlaubt die gefahrlose Ausführung von Skripten."
         ),
         "elements": [
-            ("Projekt-Ordnerbaum (Linke Spalte)", 
-             "Listet alle aktiven und archivierten Projekte chronologisch auf. Jeder Ordner unterteilt sich sauber in:\n"
-             "• 01_Zwischenberichte: Vorab-Entwürfe und Recherche-Auszüge.\n"
-             "• 02_Medien: Generierte Grafiken, Tabellen und Anhänge.\n"
-             "• 03_Endprodukte: Abnahmebereite finale Dokumente und PDFs."),
-            ("Sofort-Vorschau (Rechter Bereich)", 
-             "Klick auf eine Datei öffnet eine formatierte Leseansicht mit voller Markdown- und Typografie-Unterstützung. "
-             "Kein externes Programm erforderlich, um Ergebnisse zu prüfen."),
-            ("Dateityp-Badges & Metadaten", 
-             "Zeigt Dateigröße, Erstellungsdatum und Dateityp auf einen Blick an."),
-            ("Aktionen: Download & Explorer-Öffnung", 
-             "Dateien können mit einem Klick heruntergeladen oder direkt im lokalen Windows-Dateisystem geöffnet werden.")
+            ("Artefakt-Katalog & Filter", 
+             "Listet alle erzeugten Dateien geordnet nach Datum, Ersteller-Agent und Projekt. Filterung nach Dokumenten, Code, Bildern und Daten."),
+            ("Workspace Vault Reader", 
+             "Ermöglicht die strukturierte Inspektion von Projektordnern direkt im Browser mit Vorschaufunktion für Markdown, JSON und HTML."),
+            ("Python-Sandbox (Sub-Tab)", 
+             "Isolierte Laufzeitumgebung, in der erzeugter Python-Code direkt ausgeführt und visualisiert werden kann, ohne das Host-System zu gefährden."),
+            ("Download & Export Buttons", 
+             "Erlaubt den sofortigen Download einzelner Artefakte oder ganzer Projekt-Bundles als ZIP-Archiv.")
         ],
         "workflow": [
-            "1. Öffne den Projektordner des gewünschten Auftrags (z. B. Projektentwicklung Vakanz).",
-            "2. Klicke auf ein Dokument (z. B. 00_Stenia Vakanz - Business Development.md).",
-            "3. Lies den formatierten Bericht in der rechten Vorschau und lade ihn bei Bedarf als PDF/Dokument herunter."
+            "1. Nach Fertigstellung eines Tasks im Kanban-Board wechsle in den Showroom.",
+            "2. Wähle das neu erzeugte Artefakt aus der Liste aus.",
+            "3. Begutachte die Live-Vorschau (z. B. eine interaktive Kalkulationstabelle oder einen Bericht).",
+            "4. Führe bei Bedarf Code-Artefakte in der Sandbox aus oder lade das Dokument herunter."
         ],
         "best_practices": (
-            "Alle im Showroom angezeigten Dokumente liegen parallel physisch in deinem Arbeitsbereich (`agent_workspace/builds`). "
-            "Du kannst sie jederzeit mit externen Editoren weiterverarbeiten."
+            "Nutze den Showroom für finale Qualitätsprüfungen. Wenn ein Dokument hier fehlerfrei gerendert wird, "
+            "ist es bereit für den Kunden- oder Partnerkontakt."
         ),
-        "starter_prompt": "Welche Endprodukte wurden im Showroom für das jüngste Projekt abgelegt?"
+        "starter_prompt": "Zeige mir alle im Showroom abgelegten Artefakte der letzten 48 Stunden und öffne das jüngste Strategiedokument."
     },
     {
         "id": "library",
-        "title": "7. Zentralbibliothek (RAG & Knowledge Base)",
-        "subtitle": "Kollektiver Wissensspeicher, Vektorsuche & semantischer Dokumentenindex",
+        "title": "7. Zentralbibliothek & Wissensmanagement",
+        "subtitle": "RAG-Index (AnythingLLM), Dokumenten-Erfasser (Auto-OCR) & Obsidian-Vault",
         "concept": (
-            "Die Zentralbibliothek ist das Langzeitgedächtnis deines Systems. Hier hinterlegtes Wissen steht allen 56 Agenten "
-            "über semantische Vektorsuche (RAG – Retrieval Augmented Generation) zur Verfügung. Wenn ein Agent eine Fachaufgabe löst, "
-            "schlägt er relevante Gesetze, Normen oder Firmenrichtlinien hier nach, ohne das Prompt-Fenster zu überlasten."
+            "Die Zentralbibliothek ist das kollektive Gedächtnis deiner Organisation. Sie vereint semantische Vektorsuche (RAG), "
+            "automatisierte Dokumenten-Ingestion mit OCR und die Verwaltung deines lokalen Obsidian-Vaults unter einer konsistenten Oberfläche. "
+            "Hier abgelegtes Wissen steht allen 54 Agenten sofort für fundierte Antworten zur Verfügung."
         ),
         "elements": [
-            ("Semantischer RAG-Index", 
-             "Indexiert Dokumente in logische Abschnitte (Chunks) und berechnet Vektor-Embeddings für blitzschnelle Ähnlichkeitssuche."),
-            ("Dokumenten-Katalog & Kategorien", 
-             "Strukturiert Wissen nach Themenbereichen: Unternehmensrichtlinien, Rechtstexte, technische Handbücher und Best Practices."),
-            ("Suchleiste mit Vektorsuche", 
-             "Findet relevante Passagen auch dann, wenn in der Suchanfrage nicht die exakten Wörter des Originaldokuments verwendet werden."),
-            ("Synchronisierungs-Status", 
-             "Zeigt an, ob alle Dokumente aktuell indexiert sind und meldet eventuell ausstehende Neuindizierungen.")
+            ("Drei integrierte Sub-Tabs (Header)", "RAG Index, Dokumenten-Erfasser und Obsidian Vault."),
+            ("Hilfe- & Sync-Schalter", "Kontext-Hilfe und manuelle Synchronisation des Dokumentenbestands.")
+        ],
+        "subsections": [
+            {
+                "subtitle": "7.1 RAG Wissens-Index (AnythingLLM)",
+                "concept": (
+                    "Eingebettete Schnittstelle zu AnythingLLM für semantische Vektorsuche und Grounded Retrieval. "
+                    "Dokumente werden in Vektoren übersetzt; Agenten rufen exakte Textstellen passend zu Benutzerfragen ab."
+                ),
+                "elements": [
+                    ("Workspace-Verwaltung", "Strukturierung des Wissens nach Projekten oder Firmenbereichen."),
+                    ("Vektordatenbank-Status", "Überwachung der indizierten Dokumentenfragmente und Embedding-Modelle.")
+                ],
+                "workflow": [
+                    "1. Wähle den gewünschten Workspace aus.",
+                    "2. Teste semantische Abfragen direkt im Chat-Interface von AnythingLLM."
+                ],
+                "tip": "Halte Workspaces thematisch getrennt, um die Treffergenauigkeit bei Fachfragen zu maximieren."
+            },
+            {
+                "subtitle": "7.2 Dokumenten-Erfasser (File Ingest & Auto-OCR)",
+                "concept": (
+                    "Der zentrale Upload-Trichter für neue Fachliteratur, Pläne, Verträge und Gutachten. "
+                    "PDF-, DOCX- und Textdateien werden per Drag & Drop hochgeladen, durch den Docling-Dienst per Auto-OCR "
+                    "in sauberes Markdown konvertiert und vollautomatisch im Obsidian-Vault sowie im RAG-Index abgelegt."
+                ),
+                "elements": [
+                    ("4 Core Hubs", "00_HR_Agenten, 02_Wissensbibliothek, Protokolle/, 00_Notebook_Synthesen."),
+                    ("Upload-Dropzone", "Zieht Dateien per Drag & Drop hinein; automatische Themenklassifikation wählbar."),
+                    ("Tabelle der Werke", "Übersicht aller erfassten Dokumente mit Volltextsuche, Kategorie-Filtern und OCR-Status.")
+                ],
+                "workflow": [
+                    "1. Ziehe ein PDF (z. B. ein 80-seitiges Gutachten) in die Dropzone.",
+                    "2. Wähle eine Kategorie oder nutze 'Automatisch erkennen'.",
+                    "3. Klicke auf 'Jetzt erfassen & in Vault einlesen'. Der Fortschrittsbalken visualisiert den OCR-Lauf.",
+                    "4. Das Werk erscheint sofort in der Tabelle und steht allen Agenten zur Verfügung."
+                ],
+                "tip": "Dank Auto-OCR werden auch gescannte Dokumente und Tabellen zuverlässig in durchsuchbares Markdown übersetzt."
+            },
+            {
+                "subtitle": "7.3 Obsidian Vault (Dateibaum & Notiz-Viewer)",
+                "concept": (
+                    "Direkter Einblick in deinen physischen Obsidian-Ordner auf der Festplatte. "
+                    "Erlaubt das Durchsuchen, Filtern und Lesen aller Markdown-Notizen und Protokolle direkt im Browser."
+                ),
+                "elements": [
+                    ("Dateibaum (Linke Spalte)", "Hierarchische Ordneransicht aller Notizen mit Schnellfilter und Auf-/Zuklapp-Buttons."),
+                    ("Markdown-Viewer (Rechte Spalte)", "Formatierte Leseansicht der ausgewählten Notiz mit Pfadanzeige.")
+                ],
+                "workflow": [
+                    "1. Nutze die Suchleiste über dem Dateibaum, um eine Notiz nach Stichworten zu filtern.",
+                    "2. Klicke auf eine Datei, um ihren Inhalt sofort im rechten Viewer zu lesen."
+                ],
+                "tip": "Alle hier sichtbaren Notizen liegen als Standard-Dateien auf deiner Festplatte – du kannst sie jederzeit mit externen Editoren öffnen."
+            }
         ],
         "workflow": [
-            "1. Lade neue Richtlinien oder Firmenvorgaben über den Bibliotheks-Dialog hoch.",
-            "2. Das System parst den Text, berechnet Embeddings und aktualisiert den RAG-Index.",
-            "3. Agenten greifen bei künftigen Aufgaben automatisch auf dieses Wissen zu, wenn das Thema relevant ist."
+            "1. Lade neue Fachdokumente im Dokumenten-Erfasser per Drag & Drop hoch.",
+            "2. Verfolge die automatische OCR-Umwandlung und Vektor-Indizierung.",
+            "3. Kontrolliere im Obsidian Vault, ob die Markdown-Datei sauber abgelegt wurde.",
+            "4. Deine Agenten nutzen dieses Wissen ab sofort vollautomatisch bei der Beantwortung von Aufgaben."
         ],
-        "best_practices": (
-            "Hinterlege hier unveränderliche Fakten, Compliance-Vorgaben und Standardverträge. Für persönliche Notizen und "
-            "tägliche Arbeitsentwürfe nutze stattdessen das Second Brain (Obsidian)."
-        ),
-        "starter_prompt": "Welche Wissensdokumente sind aktuell in der Zentralbibliothek hinterlegt und abrufbar?"
+        "best_practices": "Pflege Fachliteratur strukturiert in den passenden Kategorien ein. So bleibt die Vektor-Suche schnell und hochpräzise.",
+        "starter_prompt": "Welche Fachbücher sind aktuell in '02_Wissensbibliothek' erfasst und wie viele Dokumente enthält der RAG-Index?"
     },
     {
         "id": "brain",
-        "title": "8. Second Brain (Lokales Obsidian-Vault & OCR-Archiv)",
-        "subtitle": "Zero-Latency Wissensmanagement, Auto-OCR für Fachbücher & Desktop-App Brücke",
+        "title": "8. Second Brain (Wissens-Galaxie & Notiz-Graph)",
+        "subtitle": "3D-Wissensgraph, semantische Vernetzung & Quartz Notiz-Synthesen",
         "concept": (
-            "Das Second Brain verbindet Archon OS direkt mit deinem persönlichen lokalen Obsidian-Vault auf der Festplatte (`C:\\Mein Obsidian`). "
-            "Es kombiniert blitzschnellen Dateizugriff ohne Cloud-Latenz mit einer intelligenten OCR-Pipeline für PDFs, Bebauungspläne und Bücher. "
-            "Über den Button 'In Obsidian App öffnen' wechselst du nahtlos in deine gewohnte Schreibumgebung."
+            "Das Second Brain visualisiert das gesammelte Unternehmenswissen als lebendiges, dreidimensionales "
+            "Netzwerk. Während traditionelle Ordnerstrukturen starr sind, zeigt die Wissens-Galaxie, wie Agenten-Profile, "
+            "Aufgaben, DIN-Normen und Protokolle semantisch miteinander verknüpft sind. Wissenslücken und isolierte "
+            "Informationsinseln werden auf einen Blick erkennbar."
         ),
         "elements": [
-            ("Vault-Auswahl & Statusanzeige (Kopfzeile)", 
-             "Zeigt das aktive Vault an (`C:\\Mein Obsidian (Haupt-Vault)`). Daneben befindet sich der Button 'In Obsidian App öffnen', "
-             "der die native Windows-Desktop-App per URI-Schema aufruft."),
-            ("4 thematische Wissens-Kacheln", 
-             "• 00_HR_Agenten: Personalakten, Skill-Definitionen und Leitlinien aller 56 Rollen.\n"
-             "• 02_Wissensbibliothek: DIN-Normen, B-Pläne und digitalisierte Fachbücher.\n"
-             "• Protokolle/: Sitzungsmitschriften, Aufgaben-Historie und Change-Logs.\n"
-             "• 00_Notebook_Synthesen: Synthetisierte Erkenntnisse und Grounded-Retrieval-Dossiers."),
-            ("Auto-OCR & Dokumenten-Erfasser (Mitte)", 
-             "Drag-and-Drop Uploadbereich für PDF-, DOCX- oder TXT-Dateien. Extrahiert Texte, Tabellen und Gliederungen vollautomatisch, "
-             "klassifiziert den Inhalt thematisch und speichert ihn als saubere Markdown-Datei im Vault ab."),
-            ("Vault-Bestandsliste (Unten)", 
-             "Durchsuchbare Übersicht aller im Vault vorhandenen Dokumente inklusive Angabe von Umfang, Format (OCR/MD) und Schnellaktionen.")
+            ("3D Force-Directed Graph (Galaxie)", 
+             "Interaktives 3D-Universum deiner Notizen: Knoten repräsentieren Dokumente (farblich codiert nach Typ: "
+             "Personalakten = Gelb, Wissensnotizen = Cyan, Core-System = Blau). Kanten stellen Hyperlinks und semantische Verwandtschaften dar."),
+            ("Graph-Steuerung & Filterleiste", 
+             "Erlaubt das Zoomen, Rotieren und Filtern nach Knotentypen (z. B. nur Agenten oder nur Fachbücher anzeigen). "
+             "Schieberegler für Knotenabstand und Gravitation."),
+            ("Detail-Inspektor (Rechte Sidebar)", 
+             "Klickst du auf einen Knoten, öffnet sich eine Vorschau mit Zusammenfassung, Verknüpfungen und direktem Sprung in die Quelldatei."),
+            ("Quartz- & Synthese-Modus (Sub-Tabs)", 
+             "Ermöglicht das Umschalten auf die 2D-Quartz-Publikationsansicht oder den Synthese-Berichtsgenerator.")
         ],
         "workflow": [
-            "1. Ziehe ein neues Fachbuch oder ein Gutachten (PDF) in den Erfassungsbereich.",
-            "2. Das System führt im Hintergrund die OCR-Texterkennung durch und legt die formatierte Markdown-Datei in '02_Wissensbibliothek' ab.",
-            "3. Klicke oben rechts auf 'In Obsidian App öffnen', um das Dokument direkt in deiner Obsidian-Desktop-App zu bearbeiten oder zu verlinken."
+            "1. Navigiere mit der Maus durch die 3D-Galaxie (Linksklick: Rotieren, Rechtsklick: Verschieben, Scrollen: Zoomen).",
+            "2. Klicke auf einen zentralen Knoten (z. B. 'Robert' oder eine DIN-Norm), um dessen Vernetzung zu analysieren.",
+            "3. Nutze die Filterknöpfe oben, um isolierte Cluster ohne Querverweise aufzuspüren.",
+            "4. Öffne im Detail-Inspektor die verknüpfte Markdown-Notiz zur vertiefenden Lektüre."
         ],
         "best_practices": (
-            "Halte dein lokales Vault gut strukturiert. Da Archon OS direkt auf das Dateisystem zugreift, sind Änderungen, "
-            "die du in Obsidian tippst, sofort auch für alle Agenten sichtbar."
+            "Achte darauf, dass neue Dokumente durch Wikilinks ([[Dokumentname]]) mit bestehenden Konzepten verknüpft werden. "
+            "Je dichter das Netzwerk vernetzt ist, desto intelligenter kombinieren die Agenten Querverweise."
         ),
-        "starter_prompt": "Welche Dokumente wurden zuletzt in der Wissensbibliothek des Obsidian-Vaults erfasst?"
+        "starter_prompt": "Zeige mir im Second Brain alle Notizen, die direkt mit dem Thema 'Modulbau' und 'Recht' verknüpft sind."
     },
     {
         "id": "automation",
         "title": "9. Workflow-Engine (n8n Automation Mesh)",
-        "subtitle": "Visuelle Hintergrund-Orchestrierung, Webhooks & deterministische Prozessketten",
+        "subtitle": "Eingebettete Low-Code Automatisierung, Event-Trigger & Cron-Jobs",
         "concept": (
-            "Während Hermes Aufgaben autonom durch freies Denken löst, kümmert sich n8n (Port 5678) um feste, wiederkehrende "
-            "und deterministische Geschäftsprozesse. Es verbindet Archon OS über Webhooks mit Hunderten externer Dienste, "
-            "führt zeitgesteuerte Cron-Jobs aus und automatisiert Routineaufgaben zuverlässig im Hintergrund."
+            "Die Workflow-Engine bindet die vollwertige Low-Code Automatisierungsplattform n8n nahtlos in Archon OS ein. "
+            "Hier erstellst du autonome Hintergrundprozesse: von zeitgesteuerten Cron-Jobs (z. B. morgendlicher News-Scan) "
+            "über Webhook-Trigger (z. B. Rechnungs-Eingang) bis hin zu mehrstufigen Eskalationsketten. Agenten können Workflows "
+            "aktiv auslösen oder als ausführende Knotenpunkte innerhalb von n8n agieren."
         ),
         "elements": [
-            ("Eingebetteter visueller Workflow-Editor", 
-             "Ermöglicht das grafische Verknüpfen von Triggern, Bedingungsknoten, HTTP-Requests und Daten-Transformationen."),
-            ("Archon System-Webhooks", 
-             "Vorkonfigurierte Schnittstellen für Dokumenten-Rendering, CRM-Synchronisierung, periodische Markt-Scans und Telegram-Benachrichtigungen."),
-            ("Button 'Im neuen Tab öffnen' (Oben rechts)", 
-             "Öffnet die native n8n-Benutzeroberfläche im Vollbildmodus für komfortables Editieren komplexer Workflows."),
-            ("Dauerhafte Anmeldung (Session-Persistenz)", 
-             "Durch vorkonfigurierte JWT-Schlüssel bleibt die n8n-Sitzung im Hintergrund über Monate aktiv, ohne ständiges Neuanmelden.")
+            ("Vollwertige n8n Canvas-Oberfläche", 
+             "Direkt im System eingebetteter visueller Workflow-Editor mit hunderten fertigen Schnittstellen-Knoten."),
+            ("Archon-Spezifische Node-Bibliothek", 
+             "Eigene Knoten zur direkten Interaktion mit dem Agenten-Kader, zum Erstellen von Kanban-Tasks und zum Abfragen der Zentralbibliothek."),
+            ("Webhook- & Event-Eingänge", 
+             "Lauscht auf externe Ereignisse aus CRM, E-Mail-Servern, GitHub-Repositories oder Web-Formularen."),
+            ("Execution History & Debugger", 
+             "Lückenlose Nachverfolgung jedes Workflow-Laufs mit Ein- und Ausgabewerten zur sekundenschnellen Fehleranalyse.")
         ],
         "workflow": [
-            "1. Wechsle in die Workflow-Engine und wähle einen bestehenden Flow (z. B. nächtlicher E-Mail-Report) oder erstelle einen neuen.",
-            "2. Verbinde den Webhook-Trigger mit den gewünschten Verarbeitungsschritten.",
-            "3. Aktiviere den Schalter 'Active', damit der Workflow ab sofort vollautomatisch im Hintergrund läuft."
+            "1. Erstelle einen neuen Workflow und platziere einen Trigger-Knoten (z. B. 'Schedule' für tägliche Ausführung).",
+            "2. Verknüpfe den Trigger mit einem 'Archon Agent Node' und wähle die gewünschte Rolle (z. B. Marktanalyst).",
+            "3. Leite das Ergebnis an einen Benachrichtigungs-Knoten (z. B. Telegram Push) oder das Operations-Kanban weiter.",
+            "4. Aktiviere den Workflow per Kippschalter – er läuft ab sofort vollautonom im Docker-Netzwerk."
         ],
         "best_practices": (
-            "Nutze n8n für Prozesse, die exakt nach Schema F ablaufen müssen (z. B. 'Jeden Montag um 8 Uhr Daten sammeln und Bericht ablegen'). "
-            "Nutze Hermes für Aufgaben, die kreative Problemlösung oder dynamische Entscheidungen erfordern."
+            "Nutze n8n für alle deterministischen Routineabläufe (Daten abholen, filtern, transformieren). "
+            "Schalte Agenten nur an den Stellen dazwischen, an denen echte kognitive Bewertung oder Textverständnis erforderlich ist."
         ),
-        "starter_prompt": "Welche Webhooks stehen in n8n für Archon OS bereit und wie kann ein Agent einen Flow auslösen?"
+        "starter_prompt": "Welche n8n-Workflows sind aktuell aktiv und wann lief der letzte automatische Hintergrund-Job?"
     },
     {
         "id": "omniroute",
         "title": "10. LLM Gateway (OmniRoute AI Router)",
-        "subtitle": "Multi-Provider KI-Routing, Kosten- & Latenzoptimierung, Provider-Failover",
+        "subtitle": "Multi-Provider KI-Routing, Kosten-Optimierung & Ausfallsicherheit",
         "concept": (
-            "OmniRoute (Port 20128) entkoppelt Archon OS von einzelnen KI-Anbietern. Als intelligenter Proxy verteilt es Anfragen "
-            "dynamisch auf Anthropic, OpenAI, DeepSeek, Google Gemini, Groq und lokale Modelle. Fällt ein Provider aus oder läuft in ein "
-            "Rate-Limit, schaltet OmniRoute unterbrechungsfrei auf das nächste definierte Modell um."
+            "OmniRoute ist das intelligente Schienennetz für alle kognitiven Abfragen in Archon OS. Statt fest an einen einzigen "
+            "KI-Hersteller gebunden zu sein, entkoppelt OmniRoute die Agenten vollständig von der Modell-Infrastruktur. "
+            "Das Gateway routet jede Anfrage dynamisch nach Kriterien wie Kosten, Geschwindigkeit und Verfügbarkeit – "
+            "inklusive unterbrechungsfreiem automatischem Failover bei Ausfällen eines Anbieters."
         ),
         "elements": [
-            ("Virtuelle Modell-Aliase", 
-             "• auto/best-free: Wählt automatisch das schnellste und stabilste kostenfreie Modell.\n"
-             "• best-reasoning: Routet komplexe Denkaufgaben an Spitzen-Reasoning-Modelle (DeepSeek R1, Claude Sonnet).\n"
-             "• free-forever: Garantiert Null-Kosten-Betrieb über dauerhaft freie Kontingente."),
-            ("Provider-Verbindungsstatus", 
-             "Überwacht kontinuierlich die Antwortzeiten (Latenz) und die Verfügbarkeit aller hinterlegten API-Schlüssel."),
-            ("Token- und Kosten-Telemetrie", 
-             "Protokolliert Ein- und Ausgangs-Tokens jedes Modells und verhindert teure Fehlkonfigurationen."),
-            ("Credential-Health Wächter", 
-             "Prüft im Minutentakt die Gültigkeit von OAuth-Tokens (z. B. Google) und frischt auslaufende Tokens automatisch auf.")
+            ("Multi-Provider Anbindung", 
+             "Zentrale Verwaltung der API-Schlüssel für OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral und lokale LLMs."),
+            ("Intelligente Routing-Profile", 
+             "• auto/best-free: Wählt automatisch das leistungsfähigste kostenlose Modell mit Restkontingent.\n"
+             "• code-heavy: Leitet Programmieraufgaben an spezialisierte Codemodelle weiter.\n"
+             "• creative-reasoning: Nutzt Spitzenmodelle (Claude 3.5 Sonnet / GPT-4o) für strategische Synthesen."),
+            ("Echtzeit-Latenz- & Fehlermonitor", 
+             "Visualisiert Antwortzeiten in Millisekunden und Fehlerraten pro Provider mit automatischem Circuit-Breaker."),
+            ("Kosten- & Budget-Drossel", 
+             "Verhindert überraschende Rechnungen durch harte Obergrenzen pro Modell und Tag.")
         ],
         "workflow": [
-            "1. Definiere in deinen Agenten-Profilen einfach den Alias 'auto/best-free' statt harter Modellnamen.",
-            "2. OmniRoute wählt bei jedem Prompt das aktuell optimal verfügbare Modell aus.",
-            "3. Kontrolliere im OmniRoute-Dashboard die Latenzen und den erfolgreichen Token-Durchsatz."
+            "1. Kontrolliere im OmniRoute-Dashboard die Latenzen und Verfügbarkeiten der konfigurierten Provider.",
+            "2. Passe bei Bedarf die Standard-Route an (z. B. 'auto/best-free' für maximal budgetschonenden Betrieb).",
+            "3. Sollte ein Anbieter (z. B. durch ein Rate-Limit) ausfallen, beobachte, wie OmniRoute transparent auf den Fallback wechselt."
         ],
         "best_practices": (
-            "Nutze für Routine-Agenten immer 'auto/best-free'. Reserviere teure Bezahlmodelle gezielt für Robert (CEO) "
-            "oder komplexe Code-Refactorings."
+            "Lasse Standard-Aufgaben über kostenlose Routen laufen. Hinterlege immer mindestens einen stabilen Fallback-Provider "
+            "(z. B. Google Gemini Flash oder Groq), damit das Gesamtsystem auch bei API-Aussetzern nicht stoppt."
         ),
-        "starter_prompt": "Welche Sprachmodelle sind in OmniRoute aktuell als aktiv und betriebsbereit gemeldet?"
+        "starter_prompt": "Welcher LLM-Provider bietet aktuell die geringste Latenz und wie viele Anfragen wurden heute über OmniRoute geroutet?"
     },
     {
         "id": "guardian",
-        "title": "11. Token Guard & Budgetwächter (Guardian)",
-        "subtitle": "Kostenkontrolle, Schleifenschutz, Budget-Schranken & Modul-Zustände",
+        "title": "11. Token Guard (Guardian & Budgetwächter)",
+        "subtitle": "Kosten-Leitplanken, Raten-Limits, Endlosschleifenschutz & Safety Controls",
         "concept": (
-            "Der Guardian ist der Sicherheits- und Finanzwächter deines Agenten-Betriebssystems. Er stellt sicher, dass kein Agent "
-            "durch Programmierfehler in Endlosschleifen gerät oder das definierte Monatsbudget unbemerkt leersaugt. Bei Erreichen "
-            "kritischer Limits greift der Wächter automatisch ein und blockiert weitere Anfragen."
+            "Der Guardian ist der Sicherheitschef und Budgetwächter des Betriebssystems. Autonome Agenten bergen "
+            "ohne strenge Leitplanken das Risiko von Endlosschleifen oder unkontrolliertem Token-Verbrauch. "
+            "Der Guardian überwacht jede Transaktion in Echtzeit, erzwingt Budgetgrenzen und schaltet Prozesse "
+            "bei Fehlverhalten hart ab, bevor finanzielle Schäden entstehen können."
         ),
         "elements": [
-            ("Zentrale Verbrauchs-Kacheln", 
-             "• Gesamte Tokens: Bisher verbrauchte Token-Menge (z. B. 1.034.982 Tokens über 6.892 Calls).\n"
-             "• Kosten (USD): Gesamtausgaben (z. B. $39.86) im Vergleich zum Tages-Budget ($2.00).\n"
-             "• Aktive Plugins: Anzahl scharfgeschalteter Sicherheitsmodule (z. B. 34 geladene Tools).\n"
-             "• Top-Verursacher: Der Agent mit dem höchsten Verbrauch (z. B. root mit 702k Tokens)."),
-            ("Token- & Kostenverlauf (Interaktiver Chart)", 
-             "Visualisiert Verbrauchsspitzen und Ausgaben pro Tag. Erlaubt Filterung nach 24 Stunden, 7 Tagen, 30 Tagen oder Gesamtlaufzeit."),
-            ("Verbrauch pro Agenten-Profil (Tabelle links)", 
-             "Exakte Aufschlüsselung der Anrufe und Tokenmengen für jeden einzelnen Agenten (root, micha, telegram_bot etc.)."),
-            ("Schutz-Schranken & Budgets (Rechtes Panel)", 
-             "• Max Kontext: Schneidet Prompts bei Erreichen der Obergrenze (z. B. 32.000 Tokens) sicher ab.\n"
-             "• Max Chat-Historie: Begrenzt den Verlauf auf die letzten N Nachrichten (Standard: 20).\n"
-             "• Tages-Budget & Task-Limit: Blockiert Anfragen bei Überschreitung (Standard: $2.00 / Tag, max. $0.50 pro Task).\n"
-             "• Max Steps / Task: Schleifenkiller – stoppt Agenten nach maximal 15 Schritten.\n"
-             "• Session Timeout: Maximale Ausführungsdauer (60 Sekunden).")
+            ("Budget-Obergrenzen (Hard- & Soft-Limits)", 
+             "Definiere maximale Tages-, Wochen- und Monatsbudgets in USD. Bei Erreichen des Soft-Limits erfolgen Warnungen; "
+             "das Hard-Limit sperrt weitere API-Aufrufe verlässlich ab."),
+            ("Loop-Killer & Rekursionsschutz", 
+             "Erkennt, wenn ein Agent in eine Endlosschleife gerät (z. B. wiederholte identische Tool-Aufrufe ohne Fortschritt), "
+             "stoppt den Prozess nach 15 Schritten automatisch und setzt den Task auf 'Blockiert'."),
+            ("Prompt Injection Scanner", 
+             "Untersucht eingehende externe Texte (z. B. Mails oder Webseiten) auf manipulative Steuerbefehle und markiert verdächtige Inhalte."),
+            ("Globaler Notfall-Kill-Switch", 
+             "Roter Not-Aus-Schalter in der Kopfzeile: Stoppt alle aktuell laufenden Agenten-Prozesse augenblicklich mit einem Klick.")
         ],
         "workflow": [
-            "1. Überprüfe in der Verlaufskurve, an welchen Tagen Verbrauchsspitzen aufgetreten sind.",
-            "2. Identifiziere in der Tabelle den Agenten mit dem höchsten Token-Anteil.",
-            "3. Passe bei Bedarf im rechten Panel das Tagesbudget oder das Step-Limit an und speichere die Schranken."
+            "1. Überprüfe die Auslastungsanzeige des heutigen Tagesbudgets.",
+            "2. Konfiguriere die Alarmschwellen für automatische Benachrichtigungen via Telegram.",
+            "3. Sollte der Schleifenkiller ausgelöst werden, prüfe im Vorfall-Logbuch, welcher Agent den Stopp verursacht hat."
         ],
         "best_practices": (
-            "Belasse das Step-Limit bei maximal 15 bis 20 Schritten. Sollte ein Agent für eine Aufgabe mehr Schritte benötigen, "
-            "ist es fast immer sinnvoller, die Aufgabe in zwei kleinere Teilaufgaben zu zerlegen."
+            "Setze das Tageslimit zu Beginn konservativ (z. B. $3.00 bis $5.00). Du kannst das Limit bei Großprojekten "
+            "jederzeit mit einem Klick anheben, bist aber dauerhaft vor versehentlichen Ausreißern geschützt."
         ),
-        "starter_prompt": "Wie hoch sind die aufgelaufenen Kosten im Guardian heute und welcher Agent hat die meisten Tokens verbraucht?"
+        "starter_prompt": "Wie hoch ist der aktuelle Stand des Tagesbudgets im Token Guard und gab es heute ausgelöste Schutzabschaltungen?"
     },
     {
         "id": "plugins",
-        "title": "12. Erweiterungen & Modul-Zentrale (Plugins)",
-        "subtitle": "Übersicht und Steuerung aller 34 modularen System- und Schutz-Erweiterungen",
+        "title": "12. Erweiterungen (Plugin- & MCP-Zentrale)",
+        "subtitle": "Model Context Protocol Treiber, Tool-Berechtigungen & Schnittstellen",
         "concept": (
-            "Archon OS basiert auf einer strikt modularen Plugin-Architektur. In dieser Zentrale steuerst du alle 34 installierten "
-            "Erweiterungen. Sie reichen von Sicherheitsfiltern gegen Prompt-Injections über automatische Halluzinationsprüfungen "
-            "bis hin zu E-Mail-Wächtern und Werkzeug-Treibern für Hermes."
+            "Die Plugin-Zentrale verwaltet die Werkzeugkiste deines Systems nach dem modernen Model Context Protocol (MCP) Standard. "
+            "MCP fungiert als universeller Treiber-Standard: Hier bindest du externe Software, Datenbanken, lokale Dateisystem-Werkzeuge "
+            "oder Web-Scraper modular an. Agenten erhalten nur Zugriff auf genau die Tools, die du für ihre jeweilige Rolle freigeschaltet hast."
         ),
         "elements": [
-            ("Plugin-Status-Kacheln", 
-             "Zeigt den Betriebszustand jedes Moduls (Aktiviert / Deaktiviert / Standby) inklusive Version und Latenz an."),
-            ("Sicherheits- & Guard-Plugins", 
-             "Module wie Injektions-Erkennung, E-Mail-Guard (Prüfung eingehender Mails auf bösartige Instruktionen) "
-             "und Output-Validierung (Verhinderung von Halluzinationen)."),
-            ("Funktions- & Integrations-Plugins", 
-             "Module für JEV-Routing, automatisierte Obsidian-Vault-Synchronisation und MCP-Tool-Treiber."),
-            ("Konfigurations-Modal", 
-             "Klick auf ein Plugin öffnet dessen Parameter, Schwellenwerte und Sensitivitätsstufen.")
+            ("Installierte MCP-Treiber", 
+             "Kacheln für angebundene Werkzeuge wie Filesystem-Tools, Web-Search (Brave/Google), Telegram-Bot, E-Mail-Guard und ChromaDB."),
+            ("Aktivierungs- & Sicherheits-Kippschalter", 
+             "Jedes Tool kann einzeln aktiviert, pausiert oder auf den reinen Lese-Modus beschränkt werden."),
+            ("Berechtigungs-Matrix (Scopes)", 
+             "Festlegung, welche Fachabteilung (z. B. nur IT oder nur Recht) ein bestimmtes Plugin nutzen darf."),
+            ("Plugin-Status & Latenzüberwachung", 
+             "Zeigt an, ob die Verbindung zum lokalen oder externen MCP-Server nominal besteht.")
         ],
         "workflow": [
-            "1. Durchsuche die Plugin-Liste nach der gewünschten Erweiterung (z. B. Email Guard).",
-            "2. Schalte das Modul per Toggle-Switch aktiv oder passe die Sensitivität (niedrig/mittel/strikt) an.",
-            "3. Kontrolliere im Log-Stream, ob das Modul Ereignisse registriert und filtert."
+            "1. Sichte im Plugin-Manager die verfügbaren und installierten MCP-Treiber.",
+            "2. Aktiviere ein neues Werkzeug (z. B. 'Web-Research') per Kippschalter.",
+            "3. Öffne die Konfiguration, trage bei Bedarf Umgebungsvariablen oder API-Schlüssel ein und teste die Verbindung.",
+            "4. Weise das Tool im Agenten-Kader gezielt den Rollen zu, die es produktiv benötigen."
         ],
         "best_practices": (
-            "Halte Sicherheits-Plugins wie den Email Guard und die Injektions-Erkennung immer aktiv, besonders wenn dein System "
-            "externe E-Mails oder offene Telegram-Nachrichten empfängt."
+            "Schränke Schreib-Werkzeuge (z. B. E-Mail-Versand oder Datei-Löschung) immer strikt ein und kopple sie "
+            "im Zweifel stets an das Human-in-the-Loop Freigabeverfahren im Eingang."
         ),
-        "starter_prompt": "Welche Sicherheits-Plugins sind derzeit aktiv und wie ist der Schwellenwert für die Injektionserkennung eingestellt?"
+        "starter_prompt": "Welche MCP-Plugins sind aktuell aktiv und welche Rollen haben Berechtigung für Web-Search-Tools?"
     },
     {
         "id": "research",
-        "title": "13. Research Lab (Deep Search & Recherche)",
-        "subtitle": "Multi-Engine Evidenz-Triangulation, Quellenabgleich & strukturierte Dossiers",
+        "title": "13. Research Lab (Deep Search & Wissensbeschaffung)",
+        "subtitle": "Evidenzbasierte Recherche, Quellen-Triangulation & Synthese-Berichte",
         "concept": (
-            "Das Research Lab ist das Forschungs- und Analysezentrum deines Systems. Wenn komplexe Markt-, Rechts- oder "
-            "Technologiefragen fundiert geklärt werden müssen, führen spezialisierte Research-Agenten hier mehrstufige Tiefenrecherchen durch. "
-            "Dabei werden Quellen verglichen, Widersprüche aufgedeckt und strukturierte Dossiers erarbeitet."
+            "Das Research Lab ist das wissenschaftliche Forschungszentrum deines Unternehmens. Wenn komplexe Fragen auftauchen, "
+            "die nicht allein aus dem internen Wissensbestand beantwortet werden können, wird das Research Lab aktiv. "
+            "Es steuert mehrstufige Suchprozesse, vergleicht divergierende Quellen (Triangulation), filtert Desinformation heraus "
+            "und destilliert die Ergebnisse in saubere Berichte mit vollständigem Quellennachweis."
         ),
         "elements": [
             ("Recherche-Auftragsmaske", 
-             "Eingabefeld für die Forschungsfrage, Zielvorgaben, auszuschließende Quellen und den gewünschten Detaillierungsgrad."),
-            ("Engine-Auswahl & Triangulation", 
-             "Kombiniert verschiedene Suchquellen (Fachdatenbanken, Web-Search, Bibliotheks-RAG), um einseitige oder veraltete Ergebnisse auszuschließen."),
-            ("Evidenz- & Quellenverzeichnis", 
-             "Listet alle herangezogenen Primärquellen mit Link, Datum und Zuverlässigkeits-Score auf."),
-            ("Dossier-Vorschau & Export", 
-             "Rendert das fertige Recherche-Dokument sofort und ermöglicht die direkte Ablage im Showroom oder im Obsidian-Vault.")
+             "Hier formulierst du die Forschungsfrage, bestimmst die Suchtiefe (Oberflächlich, Standard, Deep Research) und wählst Zieldomänen."),
+            ("Quellen-Monitor & Evidenz-Score", 
+             "Zeigt gescannte Webseiten, PDF-Dokumente und Fachportale inklusive eines Vertrauenswürdigkeits-Index an."),
+            ("Live-Synthese Protokoll", 
+             "Dokumentiert Schritt für Schritt, wie Hypothesen geprüft, Teilergebnisse verifiziert und Gegenevidenzen abgewogen werden."),
+            ("Dossier-Export (Markdown / PDF)", 
+             "Überträgt das fertige Recherche-Dossier mit einem Klick in den Showroom und in die Zentralbibliothek.")
         ],
         "workflow": [
-            "1. Formuliere im Research Lab eine konkrete Frage (z. B. 'Aktuelle Förderprogramme für modulares Bauen in NRW 2026').",
-            "2. Starte die Recherche; das System sammelt Quellen und trianguliert die Ergebnisse.",
-            "3. Prüfe das generierte Dossier und speichere es per Klick direkt in deiner Obsidian-Wissensbibliothek ab."
+            "1. Formuliere eine präzise Recherchefrage (z. B. 'Aktuelle Fördermittel für Modulbauweise in NRW 2026').",
+            "2. Wähle die Suchtiefe 'Deep Research' und starte den Lauf.",
+            "3. Verfolge im Live-Protokoll, wie der Recherche-Agent Quellen filtert und Kernzitate extrahiert.",
+            "4. Lies das fertige Synthese-Dossier gegen und exportiere es in den Obsidian-Vault deines Second Brain."
         ],
         "best_practices": (
-            "Formuliere Recherchefragen möglichst präzise mit Randbedingungen (Jahr, Region, Zielgruppe). Dadurch sinkt der Tokenverbrauch "
-            "und die Qualität der Dossiers steigt dramatisch."
+            "Formuliere Forschungsfragen möglichst spezifisch mit Randbedingungen (z. B. Region, Jahr, Branche). "
+            "Das spart Token-Kosten und liefert hochgradig verwertbare Handlungsempfehlungen."
         ),
-        "starter_prompt": "Starte eine strukturierte Recherche zu aktuellen Markttrends im Bereich Agentic AI und erstelle ein Dossier."
+        "starter_prompt": "Starte einen Research-Lauf zum Thema 'Bauordnung NRW Novelle 2026: Wesentliche Änderungen für Genehmigungsverfahren'."
     },
     {
         "id": "log_stream",
-        "title": "14. Telemetrie & Logs (Live-Stream & Audit)",
-        "subtitle": "2-Spalten Live-Auditor, Container-Logs, Hash-Ketten & Fehlerdiagnose",
+        "title": "14. Telemetrie & Logs (Live-Audit Stream)",
+        "subtitle": "Sekundengenaues Audit, System-Telemetrie & kryptografischer Trace-Feed",
         "concept": (
-            "Die Telemetrie- und Log-Ansicht gewährt dir einen ungeschönten Blick unter die Motorhaube von Archon OS. "
-            "Sie kombiniert Live-Logs aller 11 Docker-Container mit kryptografischen Audit-Hashketten und dedizierten "
-            "Agenten-Traces. Wenn ein Prozess unerwartet stoppt, findest du hier in Sekunden die exakte Ursache."
+            "Telemetrie & Logs ist das unbestechliche Flugschreiber-System von Archon OS. Jede einzelne Aktion – vom kleinsten "
+            "API-Ping über Tool-Ausführungen bis hin zu Benutzerfreigaben – wird hier sekundengenau erfasst und manipulationssicher "
+            "protokolliert. Sollte ein unerwartetes Verhalten auftreten, liefert dieser Stream die vollständige Diagnose-Kette zur schnellen Ursachenanalyse."
         ),
         "elements": [
-            ("Linke Spalte: LOG AUDITOR EXPLORER", 
-             "Listet alle aktiven Signalquellen mit Status-Badges auf. Über 3 Sub-Tabs schaltbar:\n"
-             "• Container (11 Live): hermes, ARCHON-OS, n8n, Pocketbase, omniroute, docker-socket-proxy etc.\n"
-             "• Agenten: Filtert Logs auf spezifische Rollen (z. B. robert, telegram_bot).\n"
-             "• Hash-Audit: Zeigt die kryptografische Hash-Kette aller Transaktionen zur manipulationssicheren Nachverfolgung."),
-            ("Rechte Spalte: Live Log-Stream", 
-             "Formatierter Terminal-Stream mit automatischer Farbkodierung (INFO grün, WARN gelb, ERROR rot, CRITICAL magenta)."),
-            ("Filter- & Pause-Leiste (Oben)", 
-             "Erlaubt Volltextsuche innerhalb der Logs, Filterung nach Mindest-Schweregrad und das Pausieren des Auto-Scrolls bei der Fehlersuche."),
-            ("Echtzeit-Synchronisierung", 
-             "Streamt Logs ohne Seiten-Reload direkt aus den Docker-Sockets.")
+            ("Drei spezialisierte Log-Quellen (Sub-Tabs)", 
+             "• Container-Logs: Physische stdout/stderr Ausgaben der 11 Docker-Container.\n"
+             "• Agenten-Logs: Konsolenausgaben und Denkprozesse der Hermes-Agenten.\n"
+             "• Audit-Trail: Revisionssicherer Hash-Chain Log aller geschäftlichen Freigaben."),
+            ("Such- & Filterleiste", 
+             "Echtzeit-Filterung nach Log-Level (DEBUG, INFO, WARN, ERROR), Container-Namen oder Schlüsselbegriffen."),
+            ("Auto-Scroll & Pausieren", 
+             "Fixiert den Stream bei der Analyse eines Fehlers, ohne den laufenden Datenfluss im Hintergrund zu unterbrechen."),
+            ("Download & Export", 
+             "Exportiert den gefilterten Protokoll-Auszug zur externen Analyse oder Archivierung.")
         ],
         "workflow": [
-            "1. Wähle im linken Explorer den Dienst aus, den du analysieren möchtest (z. B. hermes oder n8n).",
-            "2. Filtere oben nach 'ERROR', um sofort eventuelle Fehlermeldungen oder Timeouts zu isolieren.",
-            "3. Klicke auf 'Pause', um eine verdächtige Code-Zeile in Ruhe zu untersuchen und zu kopieren."
+            "1. Bei Auffälligkeiten in Mission Control wechsle in den Log-Stream.",
+            "2. Filter nach dem Level 'ERROR' oder dem Namen des betroffenen Agenten.",
+            "3. Analysiere den Stacktrace und den vorangegangenen Prompt, um die Fehlerquelle exakt zu lokalisieren.",
+            "4. Nutze die Erkenntnisse, um Prompts oder Tool-Berechtigungen im Kader nachzujustieren."
         ],
         "best_practices": (
-            "Wirf bei unklaren Systemzuständen immer zuerst einen Blick in das hermes-Log. Da Hermes die zentrale Ausführungs-Engine ist, "
-            "siehst du dort sofort, ob ein Tool-Aufruf fehlgeschlagen ist."
+            "Nutze den Audit-Trail für die Compliance-Dokumentation. Dank der kryptografischen Verkettung kannst du jederzeit "
+            "lückenlos nachweisen, wer welche Aktion zu welchem Zeitpunkt freigegeben hat."
         ),
-        "starter_prompt": "Prüfe die letzten 50 Log-Einträge des hermes-Containers auf Fehler oder Warnungen."
+        "starter_prompt": "Zeige mir alle Warnungen und Fehler (WARN, ERROR) im Log-Stream der letzten 2 Stunden."
     }
 ]
 
+# -------------------------------------------------------------
+# 1. SCREENSHOTS PRÜFEN & ZUWEISEN
+# -------------------------------------------------------------
 print("1. Prüfe / Binde Screenshots ein...")
 for v in VIEWS:
-    img_name = f"{v['id']}.png"
-    img_path = os.path.join(IMG_DIR, img_name)
-    v["img_path"] = img_path
-    if os.path.exists(img_path) and os.path.getsize(img_path) > 10000:
-        print(f"  ✓ {v['id']} vorhanden ({round(os.path.getsize(img_path)/1024)} KB)")
+    local_img = os.path.join(IMG_DIR, f"{v['id']}.png")
+    if os.path.exists(local_img):
+        sz_kb = os.path.getsize(local_img) // 1024
+        print(f"  ✓ {v['id']} vorhanden ({sz_kb} KB)")
+        v["img_path"] = local_img
     else:
-        print(f"  ⚠️ Screenshot fehlt oder zu klein: {img_path}")
+        print(f"  ⚠️ {v['id']}.png FEHLT in {IMG_DIR}!")
 
+# -------------------------------------------------------------
+# 2. WORD-DOKUMENT INITIALISIEREN & DESIGN KONFIGURIEREN
+# -------------------------------------------------------------
 print("2. Generiere ausführliches Word-Dokument (ARCHON_OS_SYSTEM_HANDBUCH_2026.docx)...")
 doc = Document()
 
@@ -570,7 +796,7 @@ run_sub.font.color.rgb = COLOR_ACCENT
 
 meta_p = doc.add_paragraph()
 meta_p.paragraph_format.space_after = Pt(24)
-run_meta = meta_p.add_run("Stand: 14. Oktober 2026 | Release: 2.0 Enterprise | 56 Autonome Spezialisten-Rollen")
+run_meta = meta_p.add_run("Stand: 14. Oktober 2026 | Release: 2.0 Enterprise | 54 Autonome Spezialisten-Rollen")
 run_meta.font.name = "Calibri"
 run_meta.font.size = Pt(9.5)
 run_meta.font.color.rgb = COLOR_MUTED
@@ -607,12 +833,12 @@ r_th1.font.size = Pt(10)
 r_th1.font.color.rgb = COLOR_PRIMARY
 p_l.add_run(
     "1. Mission Control (Cockpit & Leitstand)\n"
-    "2. Operations (Kanban & Task-Engine)\n"
+    "2. Operations (Kanban, Orga & Funk)\n"
     "3. Operations (Organisation & Flowchart)\n"
     "4. Eingang & Triage (HITL & Postfach)\n"
-    "5. Agenten-Kader (Profile & Rufnamen)\n"
-    "6. Showroom (Projekt-Explorer & Artefakte)\n"
-    "7. Zentralbibliothek (RAG & Knowledge)"
+    "5. Agenten-Kader (Profile, Routen & Subtabs)\n"
+    "6. Showroom (Projekt-Explorer & Sandbox)\n"
+    "7. Zentralbibliothek (RAG, Erfasser & Vault)"
 ).font.size = Pt(9.5)
 
 p_r = cell_r.paragraphs[0]
@@ -633,7 +859,210 @@ p_r.add_run(
 
 doc.add_page_break()
 
-# --- HAUPTTEILE: DIE 14 ANSICHTEN IM DETAIL ---
+# -------------------------------------------------------------
+# VORWORT 1: AUSFÜHRLICHE EINFÜHRUNG (CA. 1 DIN A4 SEITE)
+# -------------------------------------------------------------
+p_vw1_h = doc.add_paragraph()
+p_vw1_h.paragraph_format.space_before = Pt(16)
+p_vw1_h.paragraph_format.space_after = Pt(4)
+r_vw1_h = p_vw1_h.add_run("1. Vorwort: Was ist Archon OS und wie arbeitet man damit?")
+r_vw1_h.font.name = "Calibri"
+r_vw1_h.font.size = Pt(18)
+r_vw1_h.font.bold = True
+r_vw1_h.font.color.rgb = COLOR_PRIMARY
+
+p_vw1_sub = doc.add_paragraph()
+p_vw1_sub.paragraph_format.space_after = Pt(14)
+r_vw1_sub = p_vw1_sub.add_run("Ein Leitfaden für die autonome Wertschöpfung in vernetzten Organisationen")
+r_vw1_sub.font.name = "Calibri"
+r_vw1_sub.font.size = Pt(11)
+r_vw1_sub.font.italic = True
+r_vw1_sub.font.color.rgb = COLOR_ACCENT
+
+p_vw1_body1 = doc.add_paragraph()
+p_vw1_body1.paragraph_format.space_after = Pt(10)
+p_vw1_body1.paragraph_format.line_spacing = 1.15
+r_vw1_b1 = p_vw1_body1.add_run(
+    "Wer sich mit Archon OS beschäftigt, blickt nicht auf eine simple Chat-Oberfläche oder ein isoliertes Programmier-Tool. "
+    "Archon OS ist ein vollwertiges kognitives Betriebssystem für das moderne Unternehmen. Es verbindet 54 spezialisierte "
+    "Fachagenten, autonome Hintergrunddienste (Daemons), deterministische Workflow-Pipelines und strenge Sicherheits-Gatekeeper "
+    "zu einer integrierten Arbeitsumgebung. Das erklärte Ziel: Wiederkehrende Grundaufgaben des operativen Alltags vollkommen "
+    "selbstständig abzuwickeln, während strategische Großaufträge transparent gesteuert, aufgeteilt und überwacht werden."
+)
+r_vw1_b1.font.name = "Calibri"
+r_vw1_b1.font.size = Pt(10)
+r_vw1_b1.font.color.rgb = COLOR_SECONDARY
+
+# Die vier Säulen als strukturierte Box
+p_s_h = doc.add_paragraph()
+p_s_h.paragraph_format.space_before = Pt(6)
+p_s_h.paragraph_format.space_after = Pt(6)
+r_sh = p_s_h.add_run("Die vier operativen Säulen des Systems im täglichen Einsatz:")
+r_sh.font.name = "Calibri"
+r_sh.font.size = Pt(11)
+r_sh.font.bold = True
+r_sh.font.color.rgb = COLOR_PRIMARY
+
+pillars = [
+    ("1. Das mobile Steuerpult (Telegram / Messenger)", 
+     "Unterwegs agiert dein Smartphone als Funkgerät. Über persönliche Rufnamen (z. B. '/robert', '/anwalt', '/micha') gibst du "
+     "Direktbefehle an einzelne Fachleute oder beauftragst Robert mit umfassenden Projekten. Das System antwortet binnen Sekunden, "
+     "schlägt Zwischenschritte vor und spiegelt alle Dialoge zur revisionssicheren Dokumentation synchron in die Zentrale."),
+    
+    ("2. Der visuelle Leitstand (Web-Browser Cockpit)", 
+     "Am Desktop hast du über 14 spezialisierte Ansichten die volle Kontrolle. Du verfolgst den Lebenszyklus von Aufgaben im "
+     "Kanban-Board, überwachst Kosten und Token-Verbrauch in Echtzeit in Mission Control, sichtet E-Mails im Eingang und gibst "
+     "kritische Aktionen vor ihrer tatsächlichen Ausführung über das Human-in-the-Loop-Verfahren (HITL) frei."),
+    
+    ("3. Das physische Langzeitgedächtnis (Obsidian Vault & Second Brain)", 
+     "Alle Arbeitsergebnisse, Notizen, Gutachten und Protokolle werden nicht in proprietären Cloud-Silos weggesperrt, sondern "
+     "als offene, zukunftssichere Markdown-Dateien direkt auf deiner lokalen Festplatte abgelegt. Du kannst jede Notiz jederzeit "
+     "parallel in der nativen Obsidian-Desktop-App bearbeiten. Ein 80-seitiges PDF-Gutachten wird per Auto-OCR in Sekunden erfasst "
+     "und steht sofort allen 54 Agenten als Vektor-Wissen zur Verfügung."),
+    
+    ("4. Der Maschinenraum (Docker & Daemon-Architektur)", 
+     "Unter der Haube arbeiten elf robuste Container im Verbund: Der Asyncio-Kernel (Port 8420) koordiniert die Prozesse, der Watchdog "
+     "beendet blockierte Tasks, n8n triggert zeitgesteuerte Cron-Workflows, OmniRoute fängt Modell-Ausfälle automatisch per Failover ab, "
+     "und der Guardian stellt sicher, dass kein Budget überschritten wird.")
+]
+
+for title, desc in pillars:
+    p_pil = doc.add_paragraph(style='List Bullet')
+    p_pil.paragraph_format.space_before = Pt(2)
+    p_pil.paragraph_format.space_after = Pt(4)
+    p_pil.paragraph_format.line_spacing = 1.1
+    r_pt = p_pil.add_run(f"{title}: ")
+    r_pt.font.bold = True
+    r_pt.font.size = Pt(9.5)
+    r_pt.font.color.rgb = COLOR_PRIMARY
+    r_pd = p_pil.add_run(desc)
+    r_pd.font.size = Pt(9.5)
+    r_pd.font.color.rgb = COLOR_SECONDARY
+
+p_vw1_body2 = doc.add_paragraph()
+p_vw1_body2.paragraph_format.space_before = Pt(6)
+p_vw1_body2.paragraph_format.space_after = Pt(10)
+p_vw1_body2.paragraph_format.line_spacing = 1.15
+r_vw1_b2 = p_vw1_body2.add_run(
+    "Wie liest man dieses Handbuch?\n"
+    "Jedes der 14 Kapitel widmet sich einer dezidierten Bedienoberfläche. Alle Kapitel folgen einer einheitlichen Struktur: "
+    "Kernkonzept, Steuerelemente im Detail, Schritt-für-Schritt-Workflow, Praxistipp und konkreter Muster-Prompt. "
+    "Komplexe Oberflächen mit mehreren Reitern (wie der Agenten-Kader, Operations oder die Zentralbibliothek) sind in feingliedrige "
+    "Unterkapitel unterteilt. Wer das Zusammenspiel in der Praxis erleben möchte, findet im Anhang fünf detailliert durchgerechnete "
+    "Use Cases von der einfachen Rechtsauskunft bis zur 24/7-Hintergrundüberwachung."
+)
+r_vw1_b2.font.name = "Calibri"
+r_vw1_b2.font.size = Pt(10)
+r_vw1_b2.font.color.rgb = COLOR_SECONDARY
+
+doc.add_page_break()
+
+# -------------------------------------------------------------
+# VORWORT 2: DIE PHILOSOPHISCHE FRAGE (IST DAS EIN OS?)
+# -------------------------------------------------------------
+p_vw2_h = doc.add_paragraph()
+p_vw2_h.paragraph_format.space_before = Pt(16)
+p_vw2_h.paragraph_format.space_after = Pt(4)
+r_vw2_h = p_vw2_h.add_run("2. Vorwort: Die philosophische Frage: Ist das wirklich ein „OS“?")
+r_vw2_h.font.name = "Calibri"
+r_vw2_h.font.size = Pt(18)
+r_vw2_h.font.bold = True
+r_vw2_h.font.color.rgb = COLOR_PRIMARY
+
+p_vw2_sub = doc.add_paragraph()
+p_vw2_sub.paragraph_format.space_after = Pt(14)
+r_vw2_sub = p_vw2_sub.add_run("Vom einfachen Coding-Assistenten zum kybernetischen Unternehmens-Betriebssystem")
+r_vw2_sub.font.name = "Calibri"
+r_vw2_sub.font.size = Pt(11)
+r_vw2_sub.font.italic = True
+r_vw2_sub.font.color.rgb = COLOR_ACCENT
+
+p_vw2_b1 = doc.add_paragraph()
+p_vw2_b1.paragraph_format.space_after = Pt(10)
+p_vw2_b1.paragraph_format.line_spacing = 1.15
+r_vw2_1 = p_vw2_b1.add_run(
+    "Die Zweifel sind verständlich, wenn man bei dem Begriff „OS“ primär an Windows, macOS oder Linux denkt – also an Systeme, "
+    "die Festplattenblöcke verwalten, Peripheriegeräte per USB ansteuern und reine CPU-Threads takten.\n\n"
+    "Gleichzeitig greift die ursprüngliche Bezeichnung „Agent OS for Agentic Coding“ inzwischen viel zu kurz. Das System "
+    "schreibt zwar auch Code (über das Research Lab oder Prompts), aber der funktionale Schwerpunkt hat sich längst verschoben: "
+    "Sie steuern damit ein virtuelles Unternehmen inklusive Rollenverteilung, Organigramm, Dokumentenerfassung, Mail-Triage und Kommunikationskanälen."
+)
+r_vw2_1.font.name = "Calibri"
+r_vw2_1.font.size = Pt(10)
+r_vw2_1.font.color.rgb = COLOR_SECONDARY
+
+# Tabelle: Klassisches OS vs. Archon OS
+tbl_comp = doc.add_table(rows=5, cols=3)
+tbl_comp.alignment = WD_TABLE_ALIGNMENT.CENTER
+headers = ["Klassisches OS (z. B. Linux)", "Archon OS (Ist-Zustand)", "Informatische Einordnung"]
+
+for col_idx, text in enumerate(headers):
+    cell = tbl_comp.cell(0, col_idx)
+    set_cell_background(cell, "1E293B")
+    set_cell_margins(cell, 80, 80, 100, 100)
+    p = cell.paragraphs[0]
+    r = p.add_run(text)
+    r.font.bold = True
+    r.font.size = Pt(9.5)
+    r.font.color.rgb = RGBColor(255, 255, 255)
+
+comp_rows = [
+    ("Prozessmanagement & Scheduler\n(CPU-Zeit zuweisen, Statuszyklen, Task-Killing)",
+     "Daemon & Watchdog (Port 8420): Task-Queue, Status (pending -> in_progress -> completed), Watchdog terminiert hängende Prozesse.",
+     "1:1 OS-Prinzip"),
+    ("Hardware-Abstraktion & Treiber\n(HAL übersetzt Befehle, Treiber steuern Hardware)",
+     "OmniRoute & MCP-Server: OmniRoute abstrahiert LLM-Rechenkerne (OpenAI, Anthropic, Google). MCP-Server fungieren als Treiber für Tools, Mail & Web.",
+     "1:1 OS-Prinzip"),
+    ("Speicher-Hierarchie & Paging\n(L1/L2 Cache, RAM vs. Swap/Disk)",
+     "Transiente RAM-Prompts vs. Persistent Storage: Kontextfenster-Kurzzeitgedächtnis, ausgelagert in SQLite (kanban.db), ChromaDB & Obsidian Vault.",
+     "1:1 OS-Prinzip"),
+    ("IPC & Security\n(Inter-Process-Comms, Ringschutz, User-Rechte)",
+     "Telegram/Kanban-Funkverkehr, Guardian Token Guard, HITL-Gatekeeper: Inter-Agenten-Nachrichten und kryptografisch geschützte Freigaben.",
+     "1:1 OS-Prinzip")
+]
+
+for row_idx, (c1, c2, c3) in enumerate(comp_rows, 1):
+    cell_a = tbl_comp.cell(row_idx, 0)
+    cell_b = tbl_comp.cell(row_idx, 1)
+    cell_c = tbl_comp.cell(row_idx, 2)
+    bg = "F8FAFC" if row_idx % 2 == 1 else "FFFFFF"
+    for cl in (cell_a, cell_b, cell_c):
+        set_cell_background(cl, bg)
+        set_cell_margins(cl, 60, 60, 90, 90)
+    cell_a.paragraphs[0].add_run(c1).font.size = Pt(9)
+    cell_b.paragraphs[0].add_run(c2).font.size = Pt(9)
+    r_c = cell_c.paragraphs[0].add_run(c3)
+    r_c.font.size = Pt(9)
+    r_c.font.bold = True
+    r_c.font.color.rgb = COLOR_ACCENT
+
+p_vw2_post = doc.add_paragraph()
+p_vw2_post.paragraph_format.space_before = Pt(12)
+p_vw2_post.paragraph_format.space_after = Pt(10)
+p_vw2_post.paragraph_format.line_spacing = 1.15
+r_vw2_post = p_vw2_post.add_run(
+    "Wo Archon über ein klassisches OS hinausgeht:\n"
+    "Ein traditionelles Betriebssystem hat keine Ahnung vom geschäftlichen Sinn der Software, die darauf ausgeführt wird. "
+    "Archon implementiert dagegen eine tiefe organisatorische Semantik:\n"
+    "• Personalakten & Rollenverteilung: Agenten sind keine namenlosen Threads, sondern Spezialisten mit definierten Zuständigkeiten (Recht, Steuern, Vertrieb, CEO).\n"
+    "• Entscheidungshierarchien: Robert fungiert als Executive Decision Architect, der Aufgaben zerlegt, delegiert und überwacht.\n"
+    "• Workflow-Orchestrierung: Aufgaben wandern von der Mail-Inbox über die Guardian-Freigabe ins Kanban-Board.\n\n"
+    "Wie man das System präzise nennen kann:\n"
+    "1. Agentic Enterprise OS (AEOS): Ein Betriebssystem nicht für einen einzelnen Programmierer, sondern für die operative Steuerung eines autonomen digitalen Unternehmens.\n"
+    "2. Autonomous Operations System (AOS): Betont die Abwicklung von Geschäftsprozessen, Hintergrund-Daemons und Multi-Agenten-Koordination.\n"
+    "3. Executive Cybernetic System: In Anlehnung an Stafford Beers Viable System Model (Kybernetik zur Unternehmensführung über vernetzte Steuerkreise).\n\n"
+    "Fazit: Der Begriff OS ist technisch völlig legitim, weil Prozessverwaltung, Hardware-Abstraktion (Modell-Routing), IPC und Speicherhierarchie "
+    "real als Kernel-Dienste laufen. Der Zusatz sollte jedoch nicht mehr „Coding“, sondern „Enterprise“ oder „Operations“ lauten."
+)
+r_vw2_post.font.name = "Calibri"
+r_vw2_post.font.size = Pt(10)
+r_vw2_post.font.color.rgb = COLOR_SECONDARY
+
+doc.add_page_break()
+
+# -------------------------------------------------------------
+# HAUPTTEILE: DIE 14 ANSICHTEN IM DETAIL (MIT SUBSECTIONS)
+# -------------------------------------------------------------
 for idx, v in enumerate(VIEWS, 1):
     # Kapitel-Überschrift
     h = doc.add_paragraph()
@@ -684,7 +1113,7 @@ for idx, v in enumerate(VIEWS, 1):
     p_elem_h = doc.add_paragraph()
     p_elem_h.paragraph_format.space_before = Pt(6)
     p_elem_h.paragraph_format.space_after = Pt(4)
-    r_eh = p_elem_h.add_run("Die wichtigsten Steuerelemente & Bereiche im Detail:")
+    r_eh = p_elem_h.add_run("Die wichtigsten Steuerelemente & Bereiche im Überblick:")
     r_eh.font.name = "Calibri"
     r_eh.font.size = Pt(11)
     r_eh.font.bold = True
@@ -702,6 +1131,70 @@ for idx, v in enumerate(VIEWS, 1):
         r_ed = p_el.add_run(desc)
         r_ed.font.size = Pt(9.5)
         r_ed.font.color.rgb = COLOR_SECONDARY
+
+    # WENN SUBSECTIONS VORHANDEN SIND: RENDERE JEDES SUBKAPITEL IM DETAIL!
+    if "subsections" in v:
+        p_sub_intro = doc.add_paragraph()
+        p_sub_intro.paragraph_format.space_before = Pt(8)
+        p_sub_intro.paragraph_format.space_after = Pt(4)
+        r_si = p_sub_intro.add_run("Detaillierte Analyse der Unterbereiche & Funktionen:")
+        r_si.font.name = "Calibri"
+        r_si.font.size = Pt(12)
+        r_si.font.bold = True
+        r_si.font.color.rgb = COLOR_ACCENT
+
+        for sub_sec in v["subsections"]:
+            p_stitle = doc.add_paragraph()
+            p_stitle.paragraph_format.space_before = Pt(8)
+            p_stitle.paragraph_format.space_after = Pt(2)
+            r_st = p_stitle.add_run(sub_sec["subtitle"])
+            r_st.font.name = "Calibri"
+            r_st.font.size = Pt(11.5)
+            r_st.font.bold = True
+            r_st.font.color.rgb = COLOR_PRIMARY
+
+            p_sconc = doc.add_paragraph()
+            p_sconc.paragraph_format.space_after = Pt(4)
+            p_sconc.paragraph_format.line_spacing = 1.1
+            r_sc = p_sconc.add_run(sub_sec["concept"])
+            r_sc.font.name = "Calibri"
+            r_sc.font.size = Pt(9.5)
+            r_sc.font.color.rgb = COLOR_SECONDARY
+
+            for e_title, e_desc in sub_sec.get("elements", []):
+                p_se = doc.add_paragraph(style='List Bullet')
+                p_se.paragraph_format.space_before = Pt(1)
+                p_se.paragraph_format.space_after = Pt(2)
+                r_set = p_se.add_run(f"• {e_title}: ")
+                r_set.font.bold = True
+                r_set.font.size = Pt(9)
+                r_sed = p_se.add_run(e_desc)
+                r_sed.font.size = Pt(9)
+                r_sed.font.color.rgb = COLOR_SECONDARY
+
+            if "workflow" in sub_sec:
+                p_swf = doc.add_paragraph()
+                p_swf.paragraph_format.space_before = Pt(2)
+                p_swf.paragraph_format.space_after = Pt(2)
+                r_swfl = p_swf.add_run("Arbeitsablauf: ")
+                r_swfl.font.bold = True
+                r_swfl.font.size = Pt(9)
+                r_swfl.font.color.rgb = COLOR_PRIMARY
+                r_swft = p_swf.add_run(" ➔ ".join(sub_sec["workflow"]))
+                r_swft.font.size = Pt(9)
+                r_swft.font.color.rgb = COLOR_SECONDARY
+
+            if "tip" in sub_sec:
+                p_stip = doc.add_paragraph()
+                p_stip.paragraph_format.space_before = Pt(2)
+                p_stip.paragraph_format.space_after = Pt(4)
+                r_stl = p_stip.add_run("Praxistipp: ")
+                r_stl.font.bold = True
+                r_stl.font.size = Pt(9)
+                r_stl.font.color.rgb = COLOR_ACCENT
+                r_stt = p_stip.add_run(sub_sec["tip"])
+                r_stt.font.size = Pt(9)
+                r_stt.font.color.rgb = COLOR_SECONDARY
 
     # 3. Praxis-Workflow Schritt für Schritt
     p_wf_h = doc.add_paragraph()
@@ -788,8 +1281,7 @@ p_app_intro.paragraph_format.line_spacing = 1.15
 r_app_in = p_app_intro.add_run(
     "Die folgenden fünf Anwendungsfälle demonstrieren das Zusammenspiel der Systemmodule in der täglichen Praxis. "
     "Sie sind bewusst nach steigendem Komplexitätsgrad gestaffelt: von der sekundenschnellen Ad-hoc-Auskunft via "
-    "Telegram über den geschützten E-Mail-Freigabeprozess bis hin zur vollautonomen Projektentwicklung und kaskadierenden "
-    "Fehler-Eskalation im 24/7-Betrieb."
+    "Telegram-Rufname über teilautonome Workflows mit Freigabepflicht bis zur vollautonomen 24/7-Hintergrundüberwachung."
 )
 r_app_in.font.name = "Calibri"
 r_app_in.font.size = Pt(10.5)
@@ -840,18 +1332,18 @@ USE_CASES = [
         "level": "Komplexitätsstufe 3: Gehoben (Wissens-Ingestion & OCR)",
         "title": "Wissensaufbau: 80-seitiges PDF-Gutachten per Auto-OCR ins Second Brain & RAG",
         "scenario": (
-            "Du erhältst ein neues technisches Gutachten oder einen Bebauungsplan als 80-seitiges PDF. Du möchtest, dass alle 56 Agenten "
+            "Du erhältst ein neues technisches Gutachten oder einen Bebauungsplan als 80-seitiges PDF. Du möchtest, dass alle 54 Agenten "
             "dieses Spezialwissen sofort beherrschen, ohne dass du ihnen die Fakten jedes Mal manuell in den Prompt kopieren musst."
         ),
         "steps": [
-            "1. Du öffnest die Ansicht 'Second Brain' (C:\\Mein Obsidian) und ziehst das PDF per Drag & Drop in den Bereich 'PDF-Dokumente & Fachbücher erfassen'.",
-            "2. Die integrierte Auto-OCR-Pipeline extrahiert vollautomatisch Fließtexte, Tabellen und Überschriften und übersetzt sie in sauberes Markdown.",
+            "1. Du öffnest die Ansicht 'Zentralbibliothek' (Sub-Tab: Dokumenten-Erfasser) und ziehst das PDF per Drag & Drop in den Upload-Bereich.",
+            "2. Die integrierte Auto-OCR-Pipeline (Docling) extrahiert vollautomatisch Fließtexte, Tabellen und Überschriften und übersetzt sie in sauberes Markdown.",
             "3. Das formatierte Dokument wird direkt im Ordner '02_Wissensbibliothek' deines lokalen Obsidian-Vaults auf der Festplatte abgelegt.",
             "4. Parallel dazu segmentiert der Ingestions-Dienst die Datei in logische Chunks und berechnet Vektor-Embeddings für den RAG-Index der Zentralbibliothek.",
-            "5. Du klickst oben rechts auf 'In Obsidian App öffnen' – deine lokale Obsidian-Desktop-App springt auf und zeigt die formatierte Notiz.",
+            "5. Du wechselst in den Sub-Tab 'Obsidian Vault' – der integrierte Markdown-Viewer zeigt die formatierte Notiz sofort an.",
             "6. Stellt ein Nutzer künftig eine Frage zu diesem Bauprojekt, ruft der zuständige Agent (z. B. Bobby Brown, Bauleitung) die Fakten zielgenau per Vektorsuche ab."
         ],
-        "modules": "Second Brain (Obsidian Vault) ➔ Auto-OCR Pipeline ➔ Markdown-Konverter ➔ Zentralbibliothek (RAG-Embeddings) ➔ Obsidian Desktop App",
+        "modules": "Zentralbibliothek (Dokumenten-Erfasser) ➔ Auto-OCR Pipeline (Docling) ➔ Markdown-Konverter ➔ AnythingLLM (RAG) ➔ Obsidian Vault",
         "command": "Extrahiere die Kernaussagen des neu erfassten Gutachtens in 02_Wissensbibliothek und liste alle relevanten Baugrenzen auf.",
         "tip": "Durch die Ablage im lokalen Obsidian-Vault hast du alle Daten dauerhaft als offenes Markdown auf deiner eigenen Festplatte gesichert."
     },
@@ -870,8 +1362,8 @@ USE_CASES = [
             "   • Teilaufgabe B an Dr. Maximilian von W.: Juristische Prüfung von Bebauungsplan-Vorgaben und Genehmigungspfaden.\n"
             "   • Teilaufgabe C an Bobby Brown (Bauleiter): Analyse modularer Bauweisen und Schnittstellenkalkulation.",
             "3. Im Operations-Board wandern alle drei Teilkarten von 'To-Do' in 'In Bearbeitung'. Das WIP-Limit verhindert Systemüberlastung.",
-            "4. Das Research Lab führt Evidenz-Triangulation durch und speichert Zwischenanalysen in '01_Zwischenberichte'.",
-            "5. Robert führt alle Zulieferungen zusammen, erstellt ein 12-seitiges Gesamtdossier im Showroom ('03_Endprodukte') und schiebt den Task auf 'Review & QA'.",
+            "4. Das Research Lab führt Evidenz-Triangulation durch und speichert Zwischenanalysen im Showroom.",
+            "5. Robert führt alle Zulieferungen zusammen, erstellt ein mehrseitiges Gesamtdossier im Showroom und schiebt den Task auf 'Review & QA'.",
             "6. Du erhältst eine Benachrichtigung auf Telegram, öffnest die Task-Karte und begutachtest das fertige Endprodukt über den Button 'In Obsidian öffnen'."
         ],
         "modules": "Telegram Bot ➔ Robert (CEO) ➔ Operations-Kanban (WIP-Limits) ➔ Research Lab ➔ Fach-Leads ➔ Showroom ➔ Obsidian Vault",
@@ -989,7 +1481,8 @@ for uc in USE_CASES:
 targets = [
     DOCX_PATH,
     os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v2.docx"),
-    os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v3.docx")
+    os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v3.docx"),
+    os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v4.docx")
 ]
 
 saved_files = []
@@ -1002,5 +1495,3 @@ for t in targets:
         print(f"⚠️ Übersprungen (gesperrt oder Schreibfehler): {t} ({e})")
 
 print(f"3. Handbuch-Generierung abgeschlossen. Gespeicherte Versionen: {len(saved_files)}")
-
-

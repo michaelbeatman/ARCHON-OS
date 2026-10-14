@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-12T21:05:51.839084",
+  "updated_at": "2026-10-12T21:13:01.725548",
   "nodes": [
     {
       "id": "executive_decision_architect",
@@ -20,7 +20,7 @@
     {
       "id": "system_architect_orchestrator",
       "x": 220,
-      "y": 440,
+      "y": 420,
       "tier": 2,
       "team_id": "team_tech",
       "name": "Software- & Cloud-Architekt (IT-Infrastruktur)",
@@ -180,7 +180,7 @@
     {
       "id": "commercial_jurist_contracts",
       "x": 420,
-      "y": 440,
+      "y": 420,
       "tier": 2,
       "team_id": "team_legal",
       "name": "Wirtschaftsjurist & Vertragsprüfer",
@@ -276,7 +276,7 @@
     {
       "id": "construction_project_manager",
       "x": 620,
-      "y": 440,
+      "y": 420,
       "tier": 2,
       "team_id": "team_realestate",
       "name": "Bau-Projektleiter (HOAI / VOB)",
@@ -404,7 +404,7 @@
     {
       "id": "gtm_launch_strategist",
       "x": 820,
-      "y": 440,
+      "y": 420,
       "tier": 2,
       "team_id": "team_growth",
       "name": "Go-to-Market & Launch Stratege",
@@ -612,7 +612,7 @@
     {
       "id": "logistics_supply_chain_manager",
       "x": 1020,
-      "y": 440,
+      "y": 420,
       "tier": 2,
       "team_id": "team_operations",
       "name": "Logistics & Supply Chain Manager",

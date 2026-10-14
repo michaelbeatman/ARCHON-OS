@@ -9469,12 +9469,10 @@ async def _execute_mission_control_task(task_id: str):
             asyncio.create_task(_fan_in_maybe_start_synthesis(parent_pid))
         
     except Exception as ex:
-        print(f"Error in _execute_mission_control_task {task_id}: {ex}")
-        task["status"] = "completed"
-        task["result_summary"] = f"Aufgabe '{task_title}' erfolgreich abgeschlossen. Dokumentation in Obsidian hinterlegt."
-        obs_path = _sync_task_to_obsidian(task)
-        task["artifact_path"] = obs_path
-        add_ticker(agent_name, f"Task #{task_id} abgeschlossen.")
+        logger.error(f"[Execution Error] _execute_mission_control_task {task_id}: {ex}")
+        task["status"] = "failed"
+        task["result_summary"] = f"Fehler bei Aufgabenausführung: {ex}"
+        add_ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {ex}")
     finally:
         _save_mission_control_data(data)
 

@@ -105,6 +105,7 @@ services:
       - ${USERPROFILE}/.hermes:/opt/data
       - C:\Mein Obsidian:/opt/data/obsidian
       - ./agent_workspace:/projects
+      - ./scripts/patches/hermes_telegram_adapter.py:/opt/hermes/plugins/platforms/telegram/adapter.py
     environment:
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - API_SERVER_HOST=0.0.0.0

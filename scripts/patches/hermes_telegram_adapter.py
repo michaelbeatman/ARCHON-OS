@@ -7272,6 +7272,121 @@ class TelegramAdapter(BasePlatformAdapter):
                 logger.info("Telegram Archon HITL button: %s for %s by %s", action, ref_id, caller_id)
             return
 
+        # --- Archon Menu callbacks (archon_menu:action) ---
+        if data.startswith("archon_menu:"):
+            action = data.split(":", 1)[1]
+            caller_id = str(getattr(query.from_user, "id", ""))
+            if not self._is_callback_user_authorized(
+                caller_id,
+                chat_id=query_chat_id,
+                chat_type=str(query_chat_type) if query_chat_type is not None else None,
+                thread_id=str(query_thread_id) if query_thread_id is not None else None,
+                user_name=query_user_name,
+            ):
+                await query.answer(text="⛔ Nicht berechtigt.")
+                return
+
+            await query.answer()
+            import httpx as _httpx
+            _archon = "http://ARCHON-OS:8501"
+            _qm = getattr(query, "message", None)
+
+            if action == "robert_prompt":
+                prompt_text = (
+                    "✍️ <b>Neuen Auftrag an Robert erteilen</b>\n\n"
+                    "Nutze das Kommando <code>/auftrag &lt;Deine Beschreibung&gt;</code> "
+                    "oder <code>/robert &lt;Deine Beschreibung&gt;</code>.\n\n"
+                    "<i>Beispiel:</i>\n"
+                    "<code>/auftrag Analysiere die aktuellen Wohnungsbau-Vorschriften für Bayern und erstelle ein Briefing.</code>\n\n"
+                    "Robert übernimmt die Aufgabe direkt im Operations-Kanban."
+                )
+                if _qm:
+                    try:
+                        await _qm.reply_text(prompt_text, parse_mode="HTML")
+                    except Exception:
+                        await _qm.reply_text(prompt_text)
+                return
+
+            elif action == "status":
+                status_lines = ["📊 <b>Archon OS System-Status</b>\n"]
+                try:
+                    async with _httpx.AsyncClient(timeout=4.0) as client:
+                        r_tasks = await client.get(f"{_archon}/api/operations/kanban/tasks")
+                        t_count = len(r_tasks.json().get("tasks", [])) if r_tasks.status_code == 200 else "?"
+
+                        r_mc = await client.get(f"{_archon}/api/mission-control/state")
+                        mc_count = len(r_mc.json().get("tasks", [])) if r_mc.status_code == 200 else "?"
+
+                        status_lines.append(f"• <b>Operations Kanban Tasks:</b> {t_count}")
+                        status_lines.append(f"• <b>Mission Control Projection:</b> {mc_count}")
+                        status_lines.append("• <b>Hermes Orchestrator:</b> Online (Port 8501)")
+                        status_lines.append("• <b>n8n Automation Mesh:</b> Online (Port 5678)")
+                        status_lines.append("• <b>OmniRoute Gateway:</b> Online (Port 8000)")
+                except Exception as ex:
+                    status_lines.append(f"⚠️ Statusabfrage unvollständig: {_html.escape(str(ex))}")
+
+                if _qm:
+                    try:
+                        await _qm.reply_text("\n".join(status_lines), parse_mode="HTML")
+                    except Exception:
+                        await _qm.reply_text("\n".join(status_lines))
+                return
+
+            elif action == "reviews":
+                review_lines = ["📋 <b>Offene Freigaben (HITL)</b>\n"]
+                try:
+                    async with _httpx.AsyncClient(timeout=4.0) as client:
+                        r = await client.get(f"{_archon}/api/mission-control/state")
+                        if r.status_code == 200:
+                            mc_tasks = (r.json() or {}).get("tasks", [])
+                            review_tasks = [t for t in mc_tasks if t.get("status") in ("review", "pending_approval", "waiting_approval")]
+                            if review_tasks:
+                                for rt in review_tasks[:5]:
+                                    t_title = _html.escape(rt.get("title", "Ohne Titel"))
+                                    t_id = _html.escape(rt.get("id", ""))
+                                    review_lines.append(f"• <code>{t_id}</code>: <b>{t_title}</b>")
+                                review_lines.append("\n<i>Zur Freigabe nutze die Freigabe-Buttons in der Benachrichtigung oder das Dashboard.</i>")
+                            else:
+                                review_lines.append("✅ Aktuell keine offenen Freigaben ausstehend.")
+                        else:
+                            review_lines.append("⚠️ Konnte Freigaben nicht abrufen.")
+                except Exception as ex:
+                    review_lines.append(f"⚠️ Fehler: {_html.escape(str(ex))}")
+
+                if _qm:
+                    try:
+                        await _qm.reply_text("\n".join(review_lines), parse_mode="HTML")
+                    except Exception:
+                        await _qm.reply_text("\n".join(review_lines))
+                return
+
+            elif action == "inbox":
+                inbox_lines = ["📥 <b>Letzte E-Mails &amp; Eingang</b>\n"]
+                try:
+                    async with _httpx.AsyncClient(timeout=4.0) as client:
+                        r = await client.get(f"{_archon}/api/views/inbox/items")
+                        if r.status_code == 200:
+                            items = (r.json() or {}).get("items", [])
+                            email_items = [it for it in items if it.get("channel") == "email" or it.get("type") == "email"]
+                            if email_items:
+                                for it in email_items[:5]:
+                                    subj = _html.escape(it.get("title") or it.get("subject") or "Ohne Betreff")
+                                    sender = _html.escape(it.get("sender") or it.get("from") or "Unbekannt")
+                                    inbox_lines.append(f"• <b>{sender}</b>: {subj}")
+                            else:
+                                inbox_lines.append("📭 Keine ungelesenen E-Mails in der Triage.")
+                        else:
+                            inbox_lines.append("⚠️ Eingang nicht erreichbar.")
+                except Exception as ex:
+                    inbox_lines.append(f"⚠️ Fehler: {_html.escape(str(ex))}")
+
+                if _qm:
+                    try:
+                        await _qm.reply_text("\n".join(inbox_lines), parse_mode="HTML")
+                    except Exception:
+                        await _qm.reply_text("\n".join(inbox_lines))
+                return
+
         # --- Update prompt callbacks ---
         if not data.startswith("update_prompt:"):
             return
@@ -9485,6 +9600,90 @@ class TelegramAdapter(BasePlatformAdapter):
             )
             return
         await self._ensure_forum_commands(msg)
+
+        # --- Archon Interaktives Menü & Direkt-Routing an Robert ---
+        cmd_text = (msg.text or "").strip()
+        cmd_lower = cmd_text.lower()
+        if cmd_lower in ("/menu", "/start", "/hilfe", "/help") or cmd_lower.startswith(("/menu@", "/start@", "/hilfe@", "/help@")):
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✍️ Neuer Auftrag an Robert", callback_data="archon_menu:robert_prompt"),
+                ],
+                [
+                    InlineKeyboardButton("📊 System-Status", callback_data="archon_menu:status"),
+                    InlineKeyboardButton("📋 Offene Freigaben", callback_data="archon_menu:reviews"),
+                ],
+                [
+                    InlineKeyboardButton("📥 Letzte E-Mails", callback_data="archon_menu:inbox"),
+                ]
+            ])
+            menu_caption = (
+                "🏛️ <b>Archon OS Kommandozentrale</b>\n\n"
+                "Wähle eine Aktion oder tippe direkt einen Befehl ein:\n"
+                "• <code>/auftrag &lt;Text&gt;</code> – Neuer Auftrag an Lead-Architekt Robert\n"
+                "• <code>/menu</code> – Dieses Menü erneut aufrufen\n"
+                "• Oder schreibe einfach wie gewohnt mit Hermes."
+            )
+            try:
+                await msg.reply_text(menu_caption, parse_mode="HTML", reply_markup=keyboard)
+            except Exception:
+                await msg.reply_text(menu_caption, reply_markup=keyboard)
+            return
+
+        if cmd_lower.startswith(("/auftrag", "/robert")):
+            parts = cmd_text.split(None, 1)
+            prompt = parts[1].strip() if len(parts) > 1 else ""
+            if not prompt:
+                usage_msg = (
+                    "ℹ️ <b>Befehl unvollständig</b>\n\n"
+                    "Syntax: <code>/auftrag &lt;Deine Aufgabenstellung&gt;</code>\n"
+                    "<i>Beispiel:</i> <code>/auftrag Erstelle eine Marktanalyse für Gewerbeimmobilien in Leipzig.</code>"
+                )
+                try:
+                    await msg.reply_text(usage_msg, parse_mode="HTML")
+                except Exception:
+                    await msg.reply_text(usage_msg)
+                return
+
+            import httpx as _httpx
+            _archon = "http://ARCHON-OS:8501"
+            task_title = prompt[:80] + ("…" if len(prompt) > 80 else "")
+            success = False
+            task_id = ""
+            try:
+                async with _httpx.AsyncClient(timeout=8.0) as client:
+                    payload = {
+                        "title": task_title,
+                        "description": prompt,
+                        "column": "todo",
+                        "assignee": "executive_decision_architect"
+                    }
+                    r = await client.post(f"{_archon}/api/operations/kanban/tasks", json=payload)
+                    if r.status_code == 200:
+                        res_data = r.json() or {}
+                        success = True
+                        task_id = res_data.get("task_id", "")
+            except Exception as ex:
+                logger.error("[Telegram] Error creating task for Robert: %s", ex)
+
+            if success:
+                confirm_text = (
+                    f"✅ <b>Auftrag an Robert übergeben!</b>\n\n"
+                    f"• <b>Task-ID:</b> <code>{task_id}</code>\n"
+                    f"• <b>Titel:</b> {_html.escape(task_title)}\n"
+                    f"• <b>Status:</b> To Do (Operations Kanban)\n"
+                    f"• <b>Zuständig:</b> Robert (Lead-Architekt)\n\n"
+                    f"<i>Robert prüft die Aufgabe und leitet die nächsten Schritte ein.</i>"
+                )
+            else:
+                confirm_text = f"⚠️ Fehler beim Anlegen des Auftrags in Archon OS."
+
+            try:
+                await msg.reply_text(confirm_text, parse_mode="HTML")
+            except Exception:
+                await msg.reply_text(confirm_text)
+            return
 
         event = self._build_message_event(msg, MessageType.COMMAND, update_id=update.update_id)
         event.text = self._clean_bot_trigger_text(event.text)

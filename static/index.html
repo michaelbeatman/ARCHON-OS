@@ -426,6 +426,9 @@
         <div id="mission-control-header-bar" class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0 font-sans">
           <div class="flex items-center gap-2">
             <h1 class="text-sm font-semibold tracking-tight text-[var(--foreground)]">Mission Control</h1>
+            <button type="button" onclick="openContextHelp('mission_control')" title="Hilfe zu Mission Control" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+            </button>
             <span class="hidden sm:inline text-[11px] text-[var(--muted-foreground)] ml-1 border-l border-[var(--border)] pl-2">51 Agenten &amp; HITL-Approval-Gates</span>
           </div>
           <div class="flex items-center gap-1.5">
@@ -963,13 +966,38 @@
       </div>
       <!-- VIEW CONTAINER: CRM & LINKEDIN (PORT 3005) -->
       <div id="view-crm" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--page-bg)] overflow-hidden" style="height: 100vh; width: 100%;">
+        <div class="h-10 px-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 shrink-0">
+          <div class="flex items-center space-x-2 font-mono">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span class="font-bold text-white tracking-wide">CRM &amp; Kontakte (Twenty)</span>
+            <button type="button" onclick="openContextHelp('crm')" title="Hilfe zu CRM &amp; Kontakte" class="w-5 h-5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-sky-400 flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+            </button>
+            <span class="text-[10px] text-[var(--muted-foreground)] font-normal font-mono">| Port :3005</span>
+          </div>
+          <div class="flex items-center space-x-3">
+            <a
+              id="crm-external-link"
+              href="http://localhost:3005"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded border border-slate-700 transition-colors text-[11px] font-sans"
+              title="In separatem Tab öffnen"
+            >
+              <span>Im neuen Tab öffnen</span>
+              <svg class="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+              </svg>
+            </a>
+          </div>
+        </div>
         <iframe
           id="crm-workspace-iframe"
           src="http://localhost:3005"
-          style="width: 100%; height: 100vh; border: none;"
+          style="width: 100%; height: calc(100vh - 40px); border: none;"
           allow="microphone; camera; clipboard-read; clipboard-write; display-capture; clipboard-share;"
           sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals allow-downloads allow-top-navigation"
-          class="w-full h-full border-none"
+          class="w-full flex-1 border-none"
         ></iframe>
       </div>
       <!-- VIEW CONTAINER: TEAMBILDUNG (AUTOGEN STUDIO MATCH) -->
@@ -1374,6 +1402,9 @@
           <div class="flex items-center space-x-2 font-mono">
             <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
             <span class="font-bold text-white tracking-wide">n8n Automation Engine</span>
+            <button type="button" onclick="openContextHelp('automation')" title="Hilfe zu n8n Automation" class="w-5 h-5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-sky-400 flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+            </button>
             <span class="text-[10px] text-[var(--muted-foreground)] font-normal font-mono">| Port :5678</span>
           </div>
           <div class="flex items-center space-x-3">
@@ -1402,12 +1433,37 @@
       </div>
       <!-- VIEW CONTAINER: OMNIROUTE GATEWAY -->
       <div id="view-omniroute" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--page-bg)] overflow-hidden" style="height: 100vh; width: 100%;">
+        <div class="h-10 px-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 shrink-0">
+          <div class="flex items-center space-x-2 font-mono">
+            <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+            <span class="font-bold text-white tracking-wide">OmniRoute AI Gateway</span>
+            <button type="button" onclick="openContextHelp('omniroute')" title="Hilfe zu OmniRoute" class="w-5 h-5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-sky-400 flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+            </button>
+            <span class="text-[10px] text-[var(--muted-foreground)] font-normal font-mono">| Multi-Provider &amp; Telemetrie</span>
+          </div>
+          <div class="flex items-center space-x-3">
+            <a
+              id="omniroute-external-link"
+              href="http://localhost:8000"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded border border-slate-700 transition-colors text-[11px] font-sans"
+              title="In separatem Tab öffnen"
+            >
+              <span>Im neuen Tab öffnen</span>
+              <svg class="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+              </svg>
+            </a>
+          </div>
+        </div>
         <iframe
           id="omniroute-iframe"
           src=""
-          style="width: 100%; height: 100vh; border: none;"
+          style="width: 100%; height: calc(100vh - 40px); border: none;"
           allow="microphone; camera; clipboard-read; clipboard-write; display-capture; clipboard-share;"
-          class="w-full h-full border-none"
+          class="w-full flex-1 border-none"
         ></iframe>
       </div>
       <!-- VIEW CONTAINER: AGENTEN-KADER (MODULARES COCKPIT, GENEROESER HEADER & SLIM-KATALOG) -->
@@ -2163,31 +2219,26 @@ print('Ausführung erfolgreich!')</textarea>
       // --- V2 COMPONENT FETCHES ---
       try {
         await Promise.all([
-          fetch('/static/views/system_settings_modal.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/agent_profiles_view.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/master_chat_view.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/operations_view.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/library_view.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/inbox_view.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
-fetch('/static/views/view_showroom.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
-
-          fetch('/static/views/view_guardian.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
-
-          fetch('/static/views/view_plugins.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
-
-          fetch('/static/views/view_research.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
-
-          fetch('/static/views/view_brain.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_design_system.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-design-system-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_app_frame_studio.html?v=202610102045').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; })
-
+          fetch('/static/views/system_settings_modal.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/agent_profiles_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/master_chat_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/operations_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/library_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/inbox_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_showroom.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_guardian.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_plugins.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_research.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_brain.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_design_system.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-design-system-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_app_frame_studio.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; })
         ]);
         // Fix 2026-10-09 (Race Condition): #system-settings-mount entsteht erst durch
         // view_design_system.html. Settings-Modal hier nachziehen, falls der erste
         // Fetch ins Leere lief.
         if (!document.getElementById("system-settings-modal") && document.getElementById("system-settings-mount")) {
           try {
-            const r2 = await fetch('/static/views/system_settings_modal.html?v=202610102045');
+            const r2 = await fetch('/static/views/system_settings_modal.html?v=202610141540');
             const html2 = await r2.text();
             const el2 = document.getElementById('system-settings-mount');
             if (el2) el2.outerHTML = html2;

@@ -10,9 +10,14 @@
               </span>
               <span class="text-xs font-mono text-[var(--muted-foreground)]" id="current-vault-path-label">C:\Mein Obsidian</span>
             </div>
-            <h3 class="text-lg font-bold text-[var(--foreground)] flex items-center gap-2">
-              🧠 Lokale Wissensbibliothek &amp; Obsidian-Architektur (Zero-Latency)
-            </h3>
+            <div class="flex items-center gap-2">
+              <h3 class="text-lg font-bold text-[var(--foreground)] flex items-center gap-2">
+                🧠 Lokale Wissensbibliothek &amp; Obsidian-Architektur (Zero-Latency)
+              </h3>
+              <button type="button" onclick="openContextHelp('brain')" title="Hilfe zu Second Brain &amp; Obsidian" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+                <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
             <p class="text-xs text-[var(--muted-foreground)] leading-relaxed max-w-3xl">
               Füge PDFs, DIN-Normen, B-Pläne oder Fachbücher hinzu. Das System extrahiert Texte, Tabellen und Pläne vollständig lokal per Text-Extraction &amp; OCR, sortiert sie thematisch und speichert sie als saubere Markdown-Dateien in deinem Obsidian Vault (<code class="bg-[var(--secondary)] text-[var(--foreground)] px-1 py-0.5 rounded">02_Wissensbibliothek/</code>).
             </p>

@@ -6432,6 +6432,94 @@ HELP_CONTEXT_DATA = {
         ],
         "starter_prompt": "Wie synchronisiere ich neue Dokumente in den RAG-Index, damit die Agenten das Wissen sofort abrufen können?"
     },
+    "mission_control": {
+        "title": "Mission Control (Cockpit)",
+        "subtitle": "Echtzeit-Monitoring, System-KPIs & HITL-Freigaben",
+        "purpose": "Mission Control dient als übersichtlicher Leitstand zur Überwachung des Gesamtsystems. Hier werden KPIs (Flottenlast, TPM, Latenz) angezeigt und die Aufgaben aus dem Operations-Kanban in 5 Spalten gespiegelt. Operative Änderungen und neue Aufgaben werden direkt im Operations-Kanban oder im Agenten-Kader verwaltet.",
+        "top_actions": [
+            "Überwache die 5 System-Kacheln für Flottenlast, Token/min und Antwortlatenz.",
+            "Sichte anstehende Freigaben in der Review-Spalte und bestätige oder stoppe sie.",
+            "Wechsle für die Neuanlage oder detaillierte Bearbeitung von Aufgaben in das Operations-Kanban."
+        ],
+        "starter_prompt": "Welche Aufgaben stehen aktuell in Mission Control und welche benötigen meine persönliche Freigabe?"
+    },
+    "automation": {
+        "title": "n8n Automation Mesh",
+        "subtitle": "Grafische Workflow-Engine & Webhook-Integration",
+        "purpose": "Hier steuerst und erstellst du autonome Hintergrund-Workflows über n8n (Port 5678). Das System stellt Webhooks für Dokumenten-Rendering, CRM-Synchronisierung, Web-Recherche und Nachrichten-Versand bereit.",
+        "top_actions": [
+            "Erstelle oder passe Workflows mit visuellen Triggern und Knoten an.",
+            "Nutze die 5 integrierten Archon-Webhooks für Datenaustausch und Automationen.",
+            "Klicke auf 'Im neuen Tab öffnen', wenn du den n8n-Workflow-Editor im Vollbildmodus nutzen möchtest."
+        ],
+        "starter_prompt": "Welche Webhooks sind in n8n für Archon OS eingerichtet und wie kann ich einen neuen Workflow starten?"
+    },
+    "omniroute": {
+        "title": "OmniRoute AI Gateway",
+        "subtitle": "Multi-Provider KI-Routing & Token-Telemetrie",
+        "purpose": "OmniRoute fungiert als intelligentes Gateway für alle LLM-Anfragen. Es verteilt Prompts kosten- und latenzoptimiert auf Provider wie Anthropic, OpenAI, DeepSeek, Gemini und lokale Modelle.",
+        "top_actions": [
+            "Prüfe das Routing-Verhalten und die Latenzen der verschiedenen KI-Modelle.",
+            "Konfiguriere API-Schlüssel, Fallback-Strategien und Token-Budgets.",
+            "Nutze virtuelle Modell-Aliase wie 'best-reasoning' oder 'free-forever' in deinen Agenten-Profilen."
+        ],
+        "starter_prompt": "Wie funktioniert das Routing in OmniRoute und welche Modelle sind als Fallback hinterlegt?"
+    },
+    "brain": {
+        "title": "Second Brain & Lokales Obsidian Vault",
+        "subtitle": "Zero-Latency Wissensmanagement & OCR-Archiv",
+        "purpose": "Verbindet Archon OS direkt mit deinem lokalen Obsidian-Vault ('Mein Obsidian'). Dokumente, Notizen und Recherche-Ergebnisse werden hier in sauberer Markdown-Struktur abgelegt und durchsuchbar gemacht.",
+        "top_actions": [
+            "Wähle das aktive Vault aus (lokales Haupt-Vault oder Cloud/OneDrive).",
+            "Lade Dokumente oder Fachbücher hoch, um sie automatisch per OCR zu indizieren.",
+            "Öffne Dokumente direkt mit einem Klick in deiner lokalen Obsidian-Desktop-App."
+        ],
+        "starter_prompt": "Wie sind die Ordner im Obsidian-Vault strukturiert und wo legen Agenten ihre Recherche-Ergebnisse ab?"
+    },
+    "research": {
+        "title": "Research Lab",
+        "subtitle": "Multi-Engine Recherche & Evidenz-Triangulation",
+        "purpose": "Tiefenrecherche über verschiedene Web- und Fachquellen. Agenten sammeln Fakten, vergleichen Quellen und erstellen fundierte Dossiers zur direkten Ablage im Obsidian-Vault.",
+        "top_actions": [
+            "Starte gezielte Marktforschungs- oder Dokumentenrecherchen mit Quellenangaben.",
+            "Wähle die Such-Engine und das zuständige Analyse-Modell.",
+            "Sichte fertige Dossiers und überführe sie in den Showroom oder ins Vault."
+        ],
+        "starter_prompt": "Wie beauftrage ich eine strukturierte Marktanalyse im Research Lab?"
+    },
+    "plugins": {
+        "title": "Erweiterungen & Modul-Zentrale",
+        "subtitle": "Hermes Spezial-Plugins & Funktionserweiterungen",
+        "purpose": "Übersicht und Schalter für alle 34 modularen Erweiterungen wie JEV-Routing, Injektionsschutz, E-Mail-Sync, RAG-Suche und automatische Dokumentenverarbeitung.",
+        "top_actions": [
+            "Aktiviere oder deaktiviere einzelne Module nach Bedarf.",
+            "Passe Parameter und Schwellenwerte für spezifische Plugins an.",
+            "Prüfe den Ladestatus und eventuelle Abhängigkeiten."
+        ],
+        "starter_prompt": "Welche Plugins sind derzeit aktiv und wie schütze ich das System vor Prompt-Injections?"
+    },
+    "guardian": {
+        "title": "Guardian & Token Analytics",
+        "subtitle": "Kostenkontrolle, Schleifenschutz & Wächter",
+        "purpose": "Der Guardian überwacht Token-Verbrauch, API-Kosten und Ausführungszeiten. Er stoppt Endlosschleifen und warnt bei Überschreitung festgelegter Budgets.",
+        "top_actions": [
+            "Analysiere den Token-Verbrauch gefiltert nach Zeitraum (24h, 7 Tage, 30 Tage, Gesamt).",
+            "Überprüfe Kosten pro Agent und Modell.",
+            "Passe Sicherheits-Limits für maximale Token pro Anfrage oder Tag an."
+        ],
+        "starter_prompt": "Welcher Agent hat heute die meisten Tokens verbraucht und wie setze ich ein tägliches Ausgabenlimit?"
+    },
+    "master_chat": {
+        "title": "Master Chat",
+        "subtitle": "Direkte Konversation mit jedem beliebigen Agenten",
+        "purpose": "Ermöglicht den 1:1 Dialog mit jedem Spezialisten aus dem Kader oder mit dem Lead-Orchestrator Robert. Ideal für Ad-hoc-Fragen, Coaching und schnelle Prüfungen.",
+        "top_actions": [
+            "Wähle den gewünschten Agenten aus dem Dropdown im Kopfbereich.",
+            "Nutze Sprachnachrichten oder Text zur schnellen Klärung offener Punkte.",
+            "Übertrage Ergebnisse aus dem Chat direkt in einen neuen Kanban-Task."
+        ],
+        "starter_prompt": "Wie wähle ich den passenden Agenten für ein direktes Beratungsgespräch im Master Chat aus?"
+    },
     "system_settings": {
         "title": "System Control Center (Einstellungen)",
         "subtitle": "Zentrale Konfiguration für Hermes Core, Plugins & Kommunikation",

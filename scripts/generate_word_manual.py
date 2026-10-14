@@ -760,17 +760,247 @@ for idx, v in enumerate(VIEWS, 1):
 
     # Abstand & Seitenumbruch
     doc.add_paragraph().paragraph_format.space_after = Pt(10)
-    if idx < len(VIEWS):
-        doc.add_page_break()
+    doc.add_page_break()
 
-try:
-    doc.save(DOCX_PATH)
-    target_saved = DOCX_PATH
-    print(f"3. Ausführliches Handbuch erfolgreich generiert: {DOCX_PATH}")
-except Exception as e:
-    alt_path = os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v2.docx")
-    doc.save(alt_path)
-    target_saved = alt_path
-    print(f"⚠️ {DOCX_PATH} ist aktuell in Word geöffnet (gesperrt).")
-    print(f"3. Ausführliches Handbuch erfolgreich gespeichert unter: {alt_path}")
+# -------------------------------------------------------------
+# ANHANG: 5 PRAXIS-USE-CASES (VON EINFACH BIS HOCHKOMPLEX)
+# -------------------------------------------------------------
+p_app_h = doc.add_paragraph()
+p_app_h.paragraph_format.space_before = Pt(20)
+p_app_h.paragraph_format.space_after = Pt(4)
+r_app_h = p_app_h.add_run("ANHANG: 5 PRAXIS-USE-CASES")
+r_app_h.font.name = "Calibri"
+r_app_h.font.size = Pt(20)
+r_app_h.font.bold = True
+r_app_h.font.color.rgb = COLOR_PRIMARY
+
+p_app_sub = doc.add_paragraph()
+p_app_sub.paragraph_format.space_after = Pt(16)
+r_app_sub = p_app_sub.add_run("Schritt-für-Schritt Einsatzszenarien für den operativen Unternehmensalltag")
+r_app_sub.font.name = "Calibri"
+r_app_sub.font.size = Pt(12)
+r_app_sub.font.italic = True
+r_app_sub.font.color.rgb = COLOR_ACCENT
+
+p_app_intro = doc.add_paragraph()
+p_app_intro.paragraph_format.space_after = Pt(16)
+p_app_intro.paragraph_format.line_spacing = 1.15
+r_app_in = p_app_intro.add_run(
+    "Die folgenden fünf Anwendungsfälle demonstrieren das Zusammenspiel der Systemmodule in der täglichen Praxis. "
+    "Sie sind bewusst nach steigendem Komplexitätsgrad gestaffelt: von der sekundenschnellen Ad-hoc-Auskunft via "
+    "Telegram über den geschützten E-Mail-Freigabeprozess bis hin zur vollautonomen Projektentwicklung und kaskadierenden "
+    "Fehler-Eskalation im 24/7-Betrieb."
+)
+r_app_in.font.name = "Calibri"
+r_app_in.font.size = Pt(10.5)
+r_app_in.font.color.rgb = COLOR_SECONDARY
+
+USE_CASES = [
+    {
+        "num": "Use Case 1",
+        "level": "Komplexitätsstufe 1: Gering (Ad-hoc Direktdialog)",
+        "title": "Telegram-Direktansprache über persönliche Rufnamen (/anwalt, /robert)",
+        "scenario": (
+            "Du bist unterwegs und benötigst ohne Zeitverzug eine rechtliche Ersteinschätzung, eine Definition oder den aktuellen "
+            "Systemstatus. Du möchtest keinen formalen Task im Kanban anlegen, sondern direkt per Smartphone-Chat eine fundierte Antwort erhalten."
+        ),
+        "steps": [
+            "1. Du öffnest die Telegram-App auf deinem Smartphone und startest den Chat mit deinem Bot (@Beatman_bot).",
+            "2. Du sendest den Befehl mit dem hinterlegten Rufnamen des gewünschten Agenten: '/anwalt Müssen Überstunden laut aktuellem Arbeitsrecht zwingend erfasst werden?'.",
+            "3. Das Telegram-Gateway von Archon OS erkennt das Präfix '/anwalt', schlägt im Agenten-Kader nach und leitet die Nachricht sofort an Dr. Maximilian von W. (Wirtschaftsjurist) weiter.",
+            "4. Der juristische Fach-Agent greift auf sein Rollenprofil und das hinterlegte Modell (OmniRoute auto/best-free) zu, formuliert die Auskunft und sendet sie innerhalb von 3 Sekunden direkt in deinen Telegram-Chat.",
+            "5. Der Dialog wird synchron im Dashboard unter 'Eingang & Triage' (Spalte 3: Telegram Stream) zur lückenlosen Dokumentation gespiegelt."
+        ],
+        "modules": "Telegram Bot (@Beatman_bot) ➔ Rufnamen-Router ➔ Fach-Agent (Hermes) ➔ OmniRoute AI Gateway ➔ Eingang (Triage Stream)",
+        "command": "/anwalt Müssen Überstunden laut aktuellem Arbeitsrecht zwingend erfasst werden?",
+        "tip": "Ideal für schnelle Auskünfte ohne bürokratischen Vorlauf. Der Rufname umgeht jegliche Umwege und spart das manuelle Anlegen von Task-Karten."
+    },
+    {
+        "num": "Use Case 2",
+        "level": "Komplexitätsstufe 2: Mittel (E-Mail Triage & HITL-Freigabe)",
+        "title": "Eingehende Partner-E-Mail: Triage, Antwortentwurf & Human-in-the-Loop Freigabe",
+        "scenario": (
+            "Eine geschäftliche E-Mail mit einer Kooperationsanfrage geht im Firmenpostfach ein. Ein Fachagent soll einen passenden "
+            "Antwortentwurf vorbereiten, der jedoch aus Sicherheitsgründen keinesfalls blind versendet werden darf, sondern deiner Freigabe bedarf."
+        ),
+        "steps": [
+            "1. Das E-Mail-Postfach synchronisiert alle 180 Sekunden über IMAP; die neue Mail erscheint in 'Eingang & Triage' (Spalte 2: E-Mail Postfach).",
+            "2. Das Plugin 'Email Guard' scannt den E-Mail-Text vollautomatisch auf bösartige Prompt-Injections und Phishing-Muster.",
+            "3. Du sichtest die Mail im Eingang und delegierst sie per Klick an Katharina Völker (Lead Go-to-Market).",
+            "4. Die Agentin formuliert unter Einbeziehung von Unternehmensleitlinien aus der Zentralbibliothek einen professionellen Antwortentwurf.",
+            "5. Da der E-Mail-Versand eine externe Schreibaktion darstellt, blockiert der Human-in-the-Loop (HITL) Wächter den Versand: Im Eingang erscheint eine gelb markierte Freigabekarte.",
+            "6. Du liest den Entwurf kurz gegen, nimmst bei Bedarf eine kleine Textanpassung vor und klickst auf 'Freigeben' – erst jetzt geht die E-Mail über SMTP physisch an den Absender raus."
+        ],
+        "modules": "Eingang & Triage (IMAP/SMTP) ➔ Email-Guard Plugin ➔ Hermes Agent ➔ Zentralbibliothek (RAG) ➔ HITL-Approval Gate",
+        "command": "Analysiere die jüngste Kooperations-E-Mail im Eingang und erstelle einen passenden Antwortentwurf für meine Freigabe.",
+        "tip": "Das HITL-Gate schützt dich davor, dass Agenten unkontrolliert oder voreilig E-Mails an echte Kunden oder Partner versenden."
+    },
+    {
+        "num": "Use Case 3",
+        "level": "Komplexitätsstufe 3: Gehoben (Wissens-Ingestion & OCR)",
+        "title": "Wissensaufbau: 80-seitiges PDF-Gutachten per Auto-OCR ins Second Brain & RAG",
+        "scenario": (
+            "Du erhältst ein neues technisches Gutachten oder einen Bebauungsplan als 80-seitiges PDF. Du möchtest, dass alle 56 Agenten "
+            "dieses Spezialwissen sofort beherrschen, ohne dass du ihnen die Fakten jedes Mal manuell in den Prompt kopieren musst."
+        ),
+        "steps": [
+            "1. Du öffnest die Ansicht 'Second Brain' (C:\\Mein Obsidian) und ziehst das PDF per Drag & Drop in den Bereich 'PDF-Dokumente & Fachbücher erfassen'.",
+            "2. Die integrierte Auto-OCR-Pipeline extrahiert vollautomatisch Fließtexte, Tabellen und Überschriften und übersetzt sie in sauberes Markdown.",
+            "3. Das formatierte Dokument wird direkt im Ordner '02_Wissensbibliothek' deines lokalen Obsidian-Vaults auf der Festplatte abgelegt.",
+            "4. Parallel dazu segmentiert der Ingestions-Dienst die Datei in logische Chunks und berechnet Vektor-Embeddings für den RAG-Index der Zentralbibliothek.",
+            "5. Du klickst oben rechts auf 'In Obsidian App öffnen' – deine lokale Obsidian-Desktop-App springt auf und zeigt die formatierte Notiz.",
+            "6. Stellt ein Nutzer künftig eine Frage zu diesem Bauprojekt, ruft der zuständige Agent (z. B. Bobby Brown, Bauleitung) die Fakten zielgenau per Vektorsuche ab."
+        ],
+        "modules": "Second Brain (Obsidian Vault) ➔ Auto-OCR Pipeline ➔ Markdown-Konverter ➔ Zentralbibliothek (RAG-Embeddings) ➔ Obsidian Desktop App",
+        "command": "Extrahiere die Kernaussagen des neu erfassten Gutachtens in 02_Wissensbibliothek und liste alle relevanten Baugrenzen auf.",
+        "tip": "Durch die Ablage im lokalen Obsidian-Vault hast du alle Daten dauerhaft als offenes Markdown auf deiner eigenen Festplatte gesichert."
+    },
+    {
+        "num": "Use Case 4",
+        "level": "Komplexitätsstufe 4: Hoch (Autonome Projekt-Delegation)",
+        "title": "Strategische Projektentwicklung: Delegation durch Robert (CEO), Research Lab & Kanban",
+        "scenario": (
+            "Ein komplexer Großauftrag soll erarbeitet werden: 'Standort- und Baurechtsanalyse Münster für modulares Bauen'. "
+            "Die Aufgabe erfordert Webrecherche, juristische Prüfung und bautechnische Kalkulation."
+        ),
+        "steps": [
+            "1. Du sendest Robert via Telegram den Befehl: '/robert Erstelle eine vollumfängliche Standort- und Baurechtsanalyse Münster für modulares Bauen'.",
+            "2. Robert (Executive Decision Architect) nimmt die Gesamtaufgabe entgegen und zerlegt sie im Operations-Board in 3 Teilaufgaben:\n"
+            "   • Teilaufgabe A an das Research Lab: Recherche von Marktdaten, Mietniveaus und Grundstückspreisen in Münster.\n"
+            "   • Teilaufgabe B an Dr. Maximilian von W.: Juristische Prüfung von Bebauungsplan-Vorgaben und Genehmigungspfaden.\n"
+            "   • Teilaufgabe C an Bobby Brown (Bauleiter): Analyse modularer Bauweisen und Schnittstellenkalkulation.",
+            "3. Im Operations-Board wandern alle drei Teilkarten von 'To-Do' in 'In Bearbeitung'. Das WIP-Limit verhindert Systemüberlastung.",
+            "4. Das Research Lab führt Evidenz-Triangulation durch und speichert Zwischenanalysen in '01_Zwischenberichte'.",
+            "5. Robert führt alle Zulieferungen zusammen, erstellt ein 12-seitiges Gesamtdossier im Showroom ('03_Endprodukte') und schiebt den Task auf 'Review & QA'.",
+            "6. Du erhältst eine Benachrichtigung auf Telegram, öffnest die Task-Karte und begutachtest das fertige Endprodukt über den Button 'In Obsidian öffnen'."
+        ],
+        "modules": "Telegram Bot ➔ Robert (CEO) ➔ Operations-Kanban (WIP-Limits) ➔ Research Lab ➔ Fach-Leads ➔ Showroom ➔ Obsidian Vault",
+        "command": "/robert Erstelle eine strukturierte Standort- und Baurechtsanalyse Münster für modulares Bauen inklusive rechtlicher Prüfung.",
+        "tip": "Robert fungiert als dein digitaler Geschäftsführer: Er entlastet dich vollständig von der manuellen Koordination einzelner Fach-Spezialisten."
+    },
+    {
+        "num": "Use Case 5",
+        "level": "Komplexitätsstufe 5: Sehr hoch (24/7 Automation & Failover)",
+        "title": "Vollautonome Hintergrundüberwachung, OmniRoute-Failover & Notfall-Eskalation",
+        "scenario": (
+            "Archon OS soll rund um die Uhr im Hintergrund arbeiten, Branchenausschreibungen scannen, externe API-Ausfälle selbstständig "
+            "abfangen und im Falle von Endlosschleifen oder Störungen kontrolliert an dich eskalieren."
+        ),
+        "steps": [
+            "1. Die n8n Workflow-Engine triggert jeden Werktag um 06:30 Uhr über einen Cron-Knoten einen autonomen Scan-Workflow.",
+            "2. Ein Recherche-Agent scannt definierte Branchenportale und Portale nach neuen Ausschreibungen im Bereich Modulbau.",
+            "3. Mitten im Suchlauf fällt der primäre LLM-Anbieter aus (Rate-Limit / HTTP 429).",
+            "4. Das OmniRoute Gateway erkennt den Ausfall binnen 180 ms, wechselt unterbrechungsfrei auf das hinterlegte Fallback-Modell und setzt den Lauf fort.",
+            "5. Sollte ein fehlerhafter Tool-Aufruf in eine Endlosschleife geraten, greift nach exakt 15 Schritten der Guardian-Schleifenkiller: Er stoppt den Prozess hart, setzt den Task auf 'Blockiert / Eskalation' und alarmiert Robert.",
+            "6. Robert fasst den Vorfall zusammen und sendet dir eine Notfall-Meldung per Telegram-Push. Im Telemetrie-Log-Stream ist der Vorfall sekundengenau mit kryptografischer Hash-Kette dokumentiert."
+        ],
+        "modules": "n8n Workflow-Engine (Cron) ➔ OmniRoute AI Gateway (Failover) ➔ Guardian (Schleifenschutz) ➔ Operations-Kanban ➔ Telegram-Push ➔ Log-Audit",
+        "command": "Richte in n8n einen täglichen Workflow ein, der um 06:30 Uhr Ausschreibungen scannt und bei Fehlern an Robert eskaliert.",
+        "tip": "Dank OmniRoute-Failover und Guardian-Schleifenschutz läuft dein System auch dann stabil und budgetsicher weiter, wenn externe KI-Server ausfallen."
+    }
+]
+
+for uc in USE_CASES:
+    p_uc_title = doc.add_paragraph()
+    p_uc_title.paragraph_format.space_before = Pt(14)
+    p_uc_title.paragraph_format.space_after = Pt(2)
+    r_uc_t = p_uc_title.add_run(f"{uc['num']}: {uc['title']}")
+    r_uc_t.font.name = "Calibri"
+    r_uc_t.font.size = Pt(14)
+    r_uc_t.font.bold = True
+    r_uc_t.font.color.rgb = COLOR_PRIMARY
+
+    p_uc_lvl = doc.add_paragraph()
+    p_uc_lvl.paragraph_format.space_after = Pt(8)
+    r_uc_l = p_uc_lvl.add_run(f"⚡ {uc['level']}")
+    r_uc_l.font.name = "Calibri"
+    r_uc_l.font.size = Pt(10)
+    r_uc_l.font.bold = True
+    r_uc_l.font.color.rgb = COLOR_ACCENT
+
+    p_scen = doc.add_paragraph()
+    p_scen.paragraph_format.space_before = Pt(2)
+    p_scen.paragraph_format.space_after = Pt(6)
+    p_scen.paragraph_format.line_spacing = 1.15
+    r_scen_lbl = p_scen.add_run("Ausgangslage & Zielsetzung:\n")
+    r_scen_lbl.font.bold = True
+    r_scen_lbl.font.size = Pt(10)
+    r_scen_lbl.font.color.rgb = COLOR_PRIMARY
+    r_scen_t = p_scen.add_run(uc["scenario"])
+    r_scen_t.font.size = Pt(9.5)
+    r_scen_t.font.color.rgb = COLOR_SECONDARY
+
+    p_flow_lbl = doc.add_paragraph()
+    p_flow_lbl.paragraph_format.space_before = Pt(4)
+    p_flow_lbl.paragraph_format.space_after = Pt(4)
+    r_fl = p_flow_lbl.add_run("Ablauf im System (Schritt für Schritt):")
+    r_fl.font.bold = True
+    r_fl.font.size = Pt(10)
+    r_fl.font.color.rgb = COLOR_PRIMARY
+
+    for step in uc["steps"]:
+        p_st = doc.add_paragraph()
+        p_st.paragraph_format.space_before = Pt(1)
+        p_st.paragraph_format.space_after = Pt(3)
+        p_st.paragraph_format.line_spacing = 1.1
+        r_st = p_st.add_run(step)
+        r_st.font.size = Pt(9.5)
+        r_st.font.color.rgb = COLOR_SECONDARY
+
+    p_mod = doc.add_paragraph()
+    p_mod.paragraph_format.space_before = Pt(4)
+    p_mod.paragraph_format.space_after = Pt(4)
+    r_mod_lbl = p_mod.add_run("Beteiligte System-Module: ")
+    r_mod_lbl.font.bold = True
+    r_mod_lbl.font.size = Pt(9.5)
+    r_mod_lbl.font.color.rgb = COLOR_PRIMARY
+    r_mod_t = p_mod.add_run(uc["modules"])
+    r_mod_t.font.size = Pt(9.5)
+    r_mod_t.font.color.rgb = COLOR_ACCENT
+
+    # Box für Befehl & Tipp
+    tbl_uc = doc.add_table(rows=1, cols=1)
+    tbl_uc.alignment = WD_TABLE_ALIGNMENT.CENTER
+    cell_uc = tbl_uc.cell(0, 0)
+    set_cell_background(cell_uc, COLOR_BOX_BG)
+    set_cell_margins(cell_uc, 80, 80, 140, 140)
+    p_box = cell_uc.paragraphs[0]
+    p_box.paragraph_format.space_before = Pt(4)
+    p_box.paragraph_format.space_after = Pt(4)
+    r_cmd_lbl = p_box.add_run("Muster-Befehl / Telegram-Kommando:\n")
+    r_cmd_lbl.font.bold = True
+    r_cmd_lbl.font.size = Pt(9)
+    r_cmd_lbl.font.color.rgb = COLOR_ACCENT
+    r_cmd = p_box.add_run(f'"{uc["command"]}"\n\n')
+    r_cmd.font.italic = True
+    r_cmd.font.size = Pt(9.5)
+    r_cmd.font.color.rgb = COLOR_PRIMARY
+    r_tip_lbl = p_box.add_run("💡 Praxistipp: ")
+    r_tip_lbl.font.bold = True
+    r_tip_lbl.font.size = Pt(9)
+    r_tip_lbl.font.color.rgb = COLOR_ACCENT
+    r_tip = p_box.add_run(uc["tip"])
+    r_tip.font.size = Pt(9)
+    r_tip.font.color.rgb = COLOR_SECONDARY
+
+    doc.add_paragraph().paragraph_format.space_after = Pt(10)
+
+# --- MEHRFACH-SPEICHERUNG (SICHER GEGEN WORD-SPERREN) ---
+targets = [
+    DOCX_PATH,
+    os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v2.docx"),
+    os.path.join(OUTPUT_DIR, "ARCHON_OS_SYSTEM_HANDBUCH_2026_v3.docx")
+]
+
+saved_files = []
+for t in targets:
+    try:
+        doc.save(t)
+        saved_files.append(t)
+        print(f"✓ Erfolgreich gespeichert: {t}")
+    except Exception as e:
+        print(f"⚠️ Übersprungen (gesperrt oder Schreibfehler): {t} ({e})")
+
+print(f"3. Handbuch-Generierung abgeschlossen. Gespeicherte Versionen: {len(saved_files)}")
+
 

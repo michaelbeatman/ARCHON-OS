@@ -9966,6 +9966,37 @@ VORGABEN:
     parent_task["synthesis_draft_path"] = draft_path
     _save_mission_control_data(data)
 
+    # --- SCHRITT 1.5: KRITISCHER REVIEWER prüft Lisas Synthese vor Roberts Entscheidung ---
+    reviewer_prof = next((p for p in profiles if p.get("id") == "gpts_critical_reviewer"), None)
+    reviewer_critique = ""
+    if reviewer_prof:
+        rev_prompt = f"""Fuehre eine schonungslose Qualitaetspruefung der vorliegenden Synthese durch.
+PROJEKT: {parent_title}
+URSPRUENGLICHE ANFORDERUNG: {parent_task.get('capture_input', parent_title)}
+
+SYNTHESE-ENTWURF (von Lisa):
+{synthesis_reply}
+
+AUFGABE:
+1. Pruefe auf unbelegte Behauptungen, Logikbrueche und gravierende Luecken.
+2. Formuliere max. 3 praegnante Kernkritikpunkte (oder bestaetige 'Keine kritischen Maengel festgestellt').
+3. Schliesse mit einem klaren Urteil: EMPFEHLUNG FREIGABE oder EMPFEHLUNG NACHBESSERUNG."""
+        add_ticker("Reviewer", f"Qualitaetspruefung fuer '{parent_title[:30]}...'")
+        try:
+            rev_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id="gpts_critical_reviewer",
+                agent_name="Kritischer Reviewer",
+                prompt=rev_prompt,
+                role="Critical Reviewer & QA",
+                system_prompt=((reviewer_prof or {}).get("system_prompt") or "Du bist der kritische Chef-Reviewer von Archon OS. Pruefe Entwuerfe schonungslos auf Fakten, Logik und Qualitaet."),
+                model=((reviewer_prof or {}).get("model") or "deepseek/deepseek-v4-flash-0731"),
+            )
+            reviewer_critique = (rev_res.get("content", "") or "").strip()
+            if reviewer_critique:
+                logger.info(f"[Cascade-Loop] Reviewer-Kritik erstellt ({len(reviewer_critique)} Zeichen)")
+        except Exception as rev_err:
+            logger.warning(f"[Cascade-Loop] Reviewer-Pruefung fehlgeschlagen: {rev_err}")
+
     # --- SCHRITT 2: ROBERT gibt frei ---
     robert_prompt = f"""Lisa (aggregation_lisa) hat die Teilergebnisse folgenden Projekts zusammengefuegt:
 
@@ -9974,7 +10005,7 @@ ANFORDERUNG: {parent_task.get('capture_input', parent_title)}
 
 LISAS SYNTHESE:
 {synthesis_reply}
-
+""" + (f"""\nUNABHAENGIGE QUALITAETSPRUEFUNG (Kritischer Reviewer):\n{reviewer_critique}\n""" if reviewer_critique else "") + """
 Pruefe Vollstaendigkeit und Plausibilitaet. Antworte MIT GENAU EINEM DER ZWEI
 WOERTER ALS ALLERERSTER ZEILE: FREIGABE oder ABLEHNUNG - danach hoechstens
 ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""

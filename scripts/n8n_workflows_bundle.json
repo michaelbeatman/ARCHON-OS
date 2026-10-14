@@ -1,0 +1,377 @@
+[
+  {
+    "id": "b1c3f1e9b2d84f01",
+    "name": "Archon Article Extractor",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-extract-article",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-extract",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [0, 0],
+        "webhookId": "archon-extract-article"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "e1",
+                "name": "status",
+                "value": "success",
+                "type": "string"
+              },
+              {
+                "id": "e2",
+                "name": "extracted_url",
+                "value": "={{ $json.body.url }}",
+                "type": "string"
+              },
+              {
+                "id": "e3",
+                "name": "format",
+                "value": "={{ $json.body.format || 'markdown' }}",
+                "type": "string"
+              },
+              {
+                "id": "e4",
+                "name": "message",
+                "value": "Webseite fuer Extraktion verarbeitet",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-extract",
+        "name": "Format Extract Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [240, 0]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Format Extract Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f02",
+    "name": "Archon Multi-Channel Dispatcher",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-dispatch-message",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-dispatch",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [0, 0],
+        "webhookId": "archon-dispatch-message"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "d1",
+                "name": "status",
+                "value": "success",
+                "type": "string"
+              },
+              {
+                "id": "d2",
+                "name": "channel",
+                "value": "={{ $json.body.channel }}",
+                "type": "string"
+              },
+              {
+                "id": "d3",
+                "name": "recipient",
+                "value": "={{ $json.body.recipient }}",
+                "type": "string"
+              },
+              {
+                "id": "d4",
+                "name": "dispatched",
+                "value": true,
+                "type": "boolean"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-dispatch",
+        "name": "Format Dispatch Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [240, 0]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Format Dispatch Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f03",
+    "name": "Archon Document Renderer",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-render-document",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-render",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [0, 0],
+        "webhookId": "archon-render-document"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "r1",
+                "name": "status",
+                "value": "success",
+                "type": "string"
+              },
+              {
+                "id": "r2",
+                "name": "document_type",
+                "value": "={{ $json.body.document_type || 'pdf' }}",
+                "type": "string"
+              },
+              {
+                "id": "r3",
+                "name": "title",
+                "value": "={{ $json.body.title || 'Dokument' }}",
+                "type": "string"
+              },
+              {
+                "id": "r4",
+                "name": "rendered",
+                "value": true,
+                "type": "boolean"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-render",
+        "name": "Format Render Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [240, 0]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Format Render Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f04",
+    "name": "Archon Feed & Search Engine",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-search-feed",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-feed",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [0, 0],
+        "webhookId": "archon-search-feed"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "f1",
+                "name": "status",
+                "value": "success",
+                "type": "string"
+              },
+              {
+                "id": "f2",
+                "name": "category",
+                "value": "={{ $json.body.category || 'news' }}",
+                "type": "string"
+              },
+              {
+                "id": "f3",
+                "name": "query",
+                "value": "={{ $json.body.query || '' }}",
+                "type": "string"
+              },
+              {
+                "id": "f4",
+                "name": "results_count",
+                "value": 0,
+                "type": "number"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-feed",
+        "name": "Format Feed Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [240, 0]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Format Feed Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f05",
+    "name": "Archon CRM Sync Pipeline",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-sync-crm",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-crm",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [0, 0],
+        "webhookId": "archon-sync-crm"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "c1",
+                "name": "status",
+                "value": "success",
+                "type": "string"
+              },
+              {
+                "id": "c2",
+                "name": "entity_type",
+                "value": "={{ $json.body.entity_type }}",
+                "type": "string"
+              },
+              {
+                "id": "c3",
+                "name": "identifier",
+                "value": "={{ $json.body.identifier }}",
+                "type": "string"
+              },
+              {
+                "id": "c4",
+                "name": "synced",
+                "value": true,
+                "type": "boolean"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-crm",
+        "name": "Format CRM Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [240, 0]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Format CRM Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  }
+]

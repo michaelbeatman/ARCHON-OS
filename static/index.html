@@ -1667,7 +1667,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/mission_control.js"></script>
   <script src="/static/js/mission_control_cockpit.js?v=202610122345"></script>
   <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610122345"></script>
+  <script src="/static/js/operations_kanban.js?v=202610141355"></script>
   <script src="/static/js/appshell_architect.js?v=202610112400"></script>
   <script src="/static/js/css_live_studio.js?v=202610112415"></script>
   <script src="/static/js/guardian.js?v=202610091700"></script>
@@ -8336,6 +8336,7 @@ ${logExcerpt}
               <option value="ready">Ready</option>
               <option value="in_progress">In Bearbeitung</option>
               <option value="review">Review & QA</option>
+              <option value="blocked">Blockiert</option>
               <option value="done">Abgeschlossen</option>
             </select>
           </div>
@@ -8349,6 +8350,25 @@ ${logExcerpt}
           <div>
             <span class="text-[10px] uppercase font-mono text-muted-custom block mb-1">Modell / Route</span>
             <span id="ops-detail-model-tag" class="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 dark:bg-slate-800 text-muted-custom border border-[var(--border)] block truncate mt-0.5">Auto</span>
+          </div>
+        </div>
+
+        <!-- QUICK ORCHESTRATION ACTIONS -->
+        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)] text-xs font-mono">
+          <div class="flex items-center gap-1.5 text-muted-custom">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span class="font-bold uppercase text-[10px]">Schnellaktionen:</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="opsQuickAction('retry')" class="px-2.5 py-1 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 text-[10.5px] font-bold transition cursor-pointer flex items-center gap-1">
+              <i data-lucide="rotate-cw" class="w-3 h-3"></i> Wiederholen
+            </button>
+            <button type="button" onclick="opsQuickAction('request_changes')" class="px-2.5 py-1 rounded-lg border border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-500/20 text-[10.5px] font-bold transition cursor-pointer flex items-center gap-1">
+              <i data-lucide="corner-up-left" class="w-3 h-3"></i> Nachbesserung
+            </button>
+            <button type="button" onclick="opsQuickAction('archive')" class="px-2.5 py-1 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20 text-[10.5px] font-bold transition cursor-pointer flex items-center gap-1">
+              <i data-lucide="archive" class="w-3 h-3"></i> Archivieren
+            </button>
           </div>
         </div>
 
@@ -8383,8 +8403,11 @@ ${logExcerpt}
           <div id="ops-detail-project-section" class="hidden">
             <div class="mt-3 flex items-center justify-between">
               <span id="ops-detail-project-label" class="text-[11px] font-mono font-bold uppercase tracking-wider text-[#d42a2b]">📁 Projekt (Obsidian)</span>
-              <button id="ops-detail-project-list" type="button" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:border-[#d42a2b] text-[10.5px] font-mono font-semibold transition cursor-pointer">Dateien laden</button>
-              <button id="ops-detail-project-open" type="button" class="px-2.5 py-1 rounded-lg border border-[#d42a2b]/50 bg-[#d42a2b]/10 text-[#d42a2b] hover:bg-[#d42a2b]/20 text-[10.5px] font-mono font-bold transition cursor-pointer">📁 Hauptdokument öffnen</button>
+              <div class="flex items-center gap-1.5">
+                <button id="ops-detail-project-app" type="button" class="px-2.5 py-1 rounded-lg border border-purple-500/50 bg-purple-500/10 text-purple-700 dark:text-purple-400 hover:bg-purple-500/20 text-[10.5px] font-mono font-bold transition cursor-pointer">💜 In Obsidian-App öffnen</button>
+                <button id="ops-detail-project-list" type="button" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:border-[#d42a2b] text-[10.5px] font-mono font-semibold transition cursor-pointer">Dateien laden</button>
+                <button id="ops-detail-project-open" type="button" class="px-2.5 py-1 rounded-lg border border-[#d42a2b]/50 bg-[#d42a2b]/10 text-[#d42a2b] hover:bg-[#d42a2b]/20 text-[10.5px] font-mono font-bold transition cursor-pointer">📁 Hauptdokument öffnen</button>
+              </div>
             </div>
             <div id="ops-detail-project-files" class="hidden mt-1.5 max-h-40 overflow-y-auto p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[11.5px] font-mono space-y-0.5"></div>
             <div id="ops-detail-project-viewer" class="hidden mt-1.5 max-h-64 overflow-auto p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[11.5px] leading-relaxed whitespace-pre-wrap font-mono text-primary-custom"></div>

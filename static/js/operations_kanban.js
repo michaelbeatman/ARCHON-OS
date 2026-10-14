@@ -1950,6 +1950,16 @@
               } finally { projListBtn.disabled = false; projListBtn.textContent = 'Alle Dateien'; }
             };
 
+            const projAppBtn = document.getElementById('ops-detail-project-app');
+            if (projAppBtn) {
+              projAppBtn.onclick = () => {
+                const vaultName = 'Mein Obsidian';
+                const relPath = task.obsidian || '';
+                const cleanRel = relPath.endsWith('.md') ? relPath : (relPath + '/PROJEKT.md');
+                const obsUri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(cleanRel)}`;
+                window.location.href = obsUri;
+              };
+            }
           } else { projSection.classList.add('hidden'); }
         }
         // 2b (12.10.2026): Entscheidungs-Panel — Typ, Status, Kurzfassung, Bericht-Reader
@@ -2241,5 +2251,41 @@
         console.error("Archive error:", err);
       }
     };
+
+    window.opsQuickAction = async function(action) {
+      if (!currentOpsDetailTaskId) return;
+      const tid = currentOpsDetailTaskId;
+      if (action === 'retry') {
+        try {
+          await fetch(`/api/operations/kanban/tasks/${tid}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ author: 'Archon Orchestrator', body: 'Task wurde manuell neu gestartet (Retry).' })
+          });
+        } catch (_) {}
+        await updateCurrentTaskStatus('todo');
+        await openTaskDetailModal(tid);
+        if (typeof showArchonToast === 'function') showArchonToast(`Task ${tid} auf To-Do zurückgesetzt.`, 'success');
+      } else if (action === 'request_changes') {
+        const reason = prompt('Welche Nachbesserungen oder Korrekturen werden benötigt?');
+        if (!reason || !reason.trim()) return;
+        try {
+          await fetch(`/api/operations/kanban/tasks/${tid}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ author: 'Archon Orchestrator', body: `[NACHBESSERUNG ANGEFORDERT]: ${reason.trim()}` })
+          });
+        } catch (_) {}
+        await updateCurrentTaskStatus('todo');
+        await openTaskDetailModal(tid);
+        if (typeof showArchonToast === 'function') showArchonToast(`Nachbesserung angefordert — Task ${tid} auf To-Do gesetzt.`, 'info');
+      } else if (action === 'archive') {
+        if (!confirm(`Task ${tid} wirklich ins Archiv verschieben?`)) return;
+        await updateCurrentTaskStatus('archived');
+        closeTaskDetailModal();
+        if (typeof showArchonToast === 'function') showArchonToast(`Task ${tid} archiviert.`, 'success');
+      }
+    };
+
 
 

@@ -23,7 +23,8 @@ const VIEWS = [
   { id: "omniroute", tab: "omniroute" },
   { id: "guardian", tab: "guardian" },
   { id: "plugins", tab: "plugins" },
-  { id: "research", tab: "research" }
+  { id: "research", tab: "research" },
+  { id: "log_stream", tab: "log-stream" }
 ];
 
 function sleep(ms) {

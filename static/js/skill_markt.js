@@ -1264,47 +1264,6 @@
       const select = document.getElementById("agent-presets-sidebar-select");
       if (select) select.value = "";
     }
-    function switchTeambildungTab(tabName) {
-      const tabs = ['models', 'tools', 'agents', 'teams', 'run'];
-      tabs.forEach(t => {
-        const v = document.getElementById(`tb-view-${t}`);
-        const btn = document.getElementById(`tb-tab-btn-${t}`);
-        if (v) v.classList.toggle('hidden', t !== tabName);
-        if (btn) {
-          if (t === tabName) {
-            btn.classList.add('accent-border', 'accent-color');
-            btn.classList.remove('theme-border', 'text-muted-custom');
-          } else {
-            btn.classList.remove('accent-border', 'accent-color');
-            btn.classList.add('theme-border', 'text-muted-custom');
-          }
-        }
-      });
-    }
-    function addTeambildungModel() {
-      const name = document.getElementById("tb-input-m-name").value;
-      if (!name) return;
-      alert(`Modell ${name} gespeichert!`);
-    }
-    function addTeambildungTool() {
-      const name = document.getElementById("tb-input-t-name").value;
-      if (!name) return;
-      alert(`Tool ${name} gespeichert!`);
-    }
-    function addTeambildungAgent() {
-      const name = document.getElementById("tb-input-a-name").value;
-      if (!name) return;
-      alert(`Agent ${name} erstellt!`);
-    }
-    function addTeambildungTeam() {
-      const name = document.getElementById("tb-input-team-name").value;
-      if (!name) return;
-      alert(`Team ${name} erstellt!`);
-    }
-    function runTeambildungPlayground() {
-      const out = document.getElementById("tb-run-output");
-      if (out) out.classList.remove("hidden");
-    }
     function detectContainerPort(agent) {
       if (!agent) return "8082";
       if (agent.web_ui_port) return String(agent.web_ui_port);

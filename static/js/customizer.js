@@ -645,8 +645,7 @@
       { id: 'omniroute', label: 'OmniRoute', root: '#view-omniroute' },
       { id: 'guardian', label: 'Guardian', root: '#view-guardian' },
       { id: 'log-stream', label: 'Log-Stream', root: '#view-log-stream' },
-      { id: 'design-system', label: 'Design-System', root: '#view-design-system' },
-      { id: 'crm', label: 'CRM', root: '#view-crm' }
+      { id: 'design-system', label: 'Design-System', root: '#view-design-system' }
     ];
     const DESIGN_VIEW_TAB_IDS = DESIGN_VIEW_TABS.map(v => v.id);
     const CARD_SELECTOR_SUFFIX = ' [class*="rounded-2xl"], ' + 'ROOT' + ' [class*="rounded-xl"]';

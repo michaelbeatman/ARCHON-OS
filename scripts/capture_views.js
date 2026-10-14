@@ -12,11 +12,10 @@ if (!fs.existsSync(OUTPUT_DIR)) {
 
 const VIEWS = [
   { id: "mission_control", tab: "mission-control" },
-  { id: "operations", tab: "operations" },
+  { id: "operations", tab: "operations", subtab: "kanban" },
+  { id: "org", tab: "operations", subtab: "org" },
   { id: "inbox", tab: "inbox" },
   { id: "kader", tab: "agent-profiles" },
-  { id: "org", tab: "teambildung" },
-  { id: "crm", tab: "crm" },
   { id: "showroom", tab: "showroom" },
   { id: "library", tab: "library" },
   { id: "brain", tab: "brain" },
@@ -194,19 +193,15 @@ async function main() {
         if (overlay) overlay.remove();
         if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
         
-        if ("${v.tab}" === "crm") {
-          const crmFrame = document.getElementById("crm-workspace-iframe");
-          if (crmFrame && (!crmFrame.src || !crmFrame.src.includes(":3005"))) {
-            crmFrame.src = "http://localhost:3005/crm";
-          }
-        }
-        
         window.setTab("${v.tab}");
+        if ("${v.subtab || ''}" && typeof window.setOperationsTab === 'function') {
+          window.setOperationsTab("${v.subtab}");
+        }
       })()`
     });
 
     // Gib dem DOM, Charts, iframes und Tabellen ausreichend Zeit zum Rendern
-    const waitTime = (v.tab === "automation" || v.tab === "crm" || v.tab === "omniroute") ? 4500 : 2500;
+    const waitTime = (v.tab === "automation" || v.tab === "omniroute") ? 4500 : 2500;
     await sleep(waitTime);
 
     // Optional: Überprüfe, ob view sichtbar ist

@@ -201,27 +201,29 @@ VIEWS = [
     }
 ]
 
-print("1. Erzeuge Screenshots via Chrome...")
+print("1. Prüfe / Binde Screenshots ein...")
 for v in VIEWS:
     img_name = f"{v['id']}.png"
     img_path = os.path.join(IMG_DIR, img_name)
     v["img_path"] = img_path
     
-    url = f"http://localhost:8501/?tab={v['tab']}"
-    cmd = [
-        CHROME_PATH,
-        "--headless",
-        "--disable-gpu",
-        f"--screenshot={img_path}",
-        "--window-size=1600,900",
-        "--virtual-time-budget=2000",
-        url
-    ]
-    try:
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
-        print(f"  ✓ {v['id']}: {os.path.exists(img_path)}")
-    except Exception as e:
-        print(f"  ⚠️ Fehler bei {v['id']}: {e}")
+    if os.path.exists(img_path) and os.path.getsize(img_path) > 10000:
+        print(f"  ✓ {v['id']} vorhanden ({round(os.path.getsize(img_path)/1024)} KB)")
+    else:
+        url = f"http://localhost:8501/?tab={v['tab']}"
+        cmd = [
+            CHROME_PATH,
+            "--headless",
+            "--disable-gpu",
+            f"--screenshot={img_path}",
+            "--window-size=1600,900",
+            url
+        ]
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+            print(f"  ✓ {v['id']} per Fallback generiert: {os.path.exists(img_path)}")
+        except Exception as e:
+            print(f"  ⚠️ Fehler bei {v['id']}: {e}")
 
 print("2. Generiere Word-Dokument (ARCHON_OS_SYSTEM_HANDBUCH_2026.docx)...")
 doc = Document()

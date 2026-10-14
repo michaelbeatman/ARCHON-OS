@@ -1890,7 +1890,8 @@ print('Ausführung erfolgreich!')</textarea>
         ]
       }
     ];
-    let currentTab = "mission-control";
+    const _urlParams = new URLSearchParams(window.location.search);
+    let currentTab = _urlParams.get("tab") || "mission-control";
     let theme = "light";
     let agents = [];
     let roles = [];

@@ -513,42 +513,8 @@ VIEWS = [
         "starter_prompt": "Welche Fachbücher sind aktuell in '02_Wissensbibliothek' erfasst und wie viele Dokumente enthält der RAG-Index?"
     },
     {
-        "id": "brain",
-        "title": "8. Second Brain (Wissens-Galaxie & Notiz-Graph)",
-        "subtitle": "3D-Wissensgraph, semantische Vernetzung & Quartz Notiz-Synthesen",
-        "concept": (
-            "Das Second Brain visualisiert das gesammelte Unternehmenswissen als lebendiges, dreidimensionales "
-            "Netzwerk. Während traditionelle Ordnerstrukturen starr sind, zeigt die Wissens-Galaxie, wie Agenten-Profile, "
-            "Aufgaben, DIN-Normen und Protokolle semantisch miteinander verknüpft sind. Wissenslücken und isolierte "
-            "Informationsinseln werden auf einen Blick erkennbar."
-        ),
-        "elements": [
-            ("3D Force-Directed Graph (Galaxie)", 
-             "Interaktives 3D-Universum deiner Notizen: Knoten repräsentieren Dokumente (farblich codiert nach Typ: "
-             "Personalakten = Gelb, Wissensnotizen = Cyan, Core-System = Blau). Kanten stellen Hyperlinks und semantische Verwandtschaften dar."),
-            ("Graph-Steuerung & Filterleiste", 
-             "Erlaubt das Zoomen, Rotieren und Filtern nach Knotentypen (z. B. nur Agenten oder nur Fachbücher anzeigen). "
-             "Schieberegler für Knotenabstand und Gravitation."),
-            ("Detail-Inspektor (Rechte Sidebar)", 
-             "Klickst du auf einen Knoten, öffnet sich eine Vorschau mit Zusammenfassung, Verknüpfungen und direktem Sprung in die Quelldatei."),
-            ("Quartz- & Synthese-Modus (Sub-Tabs)", 
-             "Ermöglicht das Umschalten auf die 2D-Quartz-Publikationsansicht oder den Synthese-Berichtsgenerator.")
-        ],
-        "workflow": [
-            "1. Navigiere mit der Maus durch die 3D-Galaxie (Linksklick: Rotieren, Rechtsklick: Verschieben, Scrollen: Zoomen).",
-            "2. Klicke auf einen zentralen Knoten (z. B. 'Robert' oder eine DIN-Norm), um dessen Vernetzung zu analysieren.",
-            "3. Nutze die Filterknöpfe oben, um isolierte Cluster ohne Querverweise aufzuspüren.",
-            "4. Öffne im Detail-Inspektor die verknüpfte Markdown-Notiz zur vertiefenden Lektüre."
-        ],
-        "best_practices": (
-            "Achte darauf, dass neue Dokumente durch Wikilinks ([[Dokumentname]]) mit bestehenden Konzepten verknüpft werden. "
-            "Je dichter das Netzwerk vernetzt ist, desto intelligenter kombinieren die Agenten Querverweise."
-        ),
-        "starter_prompt": "Zeige mir im Second Brain alle Notizen, die direkt mit dem Thema 'Modulbau' und 'Recht' verknüpft sind."
-    },
-    {
         "id": "automation",
-        "title": "9. Workflow-Engine (n8n Automation Mesh)",
+        "title": "8. Workflow-Engine (n8n Automation Mesh)",
         "subtitle": "Eingebettete Low-Code Automatisierung, Event-Trigger & Cron-Jobs",
         "concept": (
             "Die Workflow-Engine bindet die vollwertige Low-Code Automatisierungsplattform n8n nahtlos in Archon OS ein. "
@@ -580,7 +546,7 @@ VIEWS = [
     },
     {
         "id": "omniroute",
-        "title": "10. LLM Gateway (OmniRoute AI Router)",
+        "title": "9. LLM Gateway (OmniRoute AI Router)",
         "subtitle": "Multi-Provider KI-Routing, Kosten-Optimierung & Ausfallsicherheit",
         "concept": (
             "OmniRoute ist das intelligente Schienennetz für alle kognitiven Abfragen in Archon OS. Statt fest an einen einzigen "
@@ -613,7 +579,7 @@ VIEWS = [
     },
     {
         "id": "guardian",
-        "title": "11. Token Guard (Guardian & Budgetwächter)",
+        "title": "10. Token Guard (Guardian & Budgetwächter)",
         "subtitle": "Kosten-Leitplanken, Raten-Limits, Endlosschleifenschutz & Safety Controls",
         "concept": (
             "Der Guardian ist der Sicherheitschef und Budgetwächter des Betriebssystems. Autonome Agenten bergen "
@@ -646,7 +612,7 @@ VIEWS = [
     },
     {
         "id": "plugins",
-        "title": "12. Erweiterungen (Plugin- & MCP-Zentrale)",
+        "title": "11. Erweiterungen (Plugin- & MCP-Zentrale)",
         "subtitle": "Model Context Protocol Treiber, Tool-Berechtigungen & Schnittstellen",
         "concept": (
             "Die Plugin-Zentrale verwaltet die Werkzeugkiste deines Systems nach dem modernen Model Context Protocol (MCP) Standard. "
@@ -677,7 +643,7 @@ VIEWS = [
     },
     {
         "id": "research",
-        "title": "13. Research Lab (Deep Search & Wissensbeschaffung)",
+        "title": "12. Research Lab (Deep Search & Wissensbeschaffung)",
         "subtitle": "Evidenzbasierte Recherche, Quellen-Triangulation & Synthese-Berichte",
         "concept": (
             "Das Research Lab ist das wissenschaftliche Forschungszentrum deines Unternehmens. Wenn komplexe Fragen auftauchen, "
@@ -699,7 +665,7 @@ VIEWS = [
             "1. Formuliere eine präzise Recherchefrage (z. B. 'Aktuelle Fördermittel für Modulbauweise in NRW 2026').",
             "2. Wähle die Suchtiefe 'Deep Research' und starte den Lauf.",
             "3. Verfolge im Live-Protokoll, wie der Recherche-Agent Quellen filtert und Kernzitate extrahiert.",
-            "4. Lies das fertige Synthese-Dossier gegen und exportiere es in den Obsidian-Vault deines Second Brain."
+            "4. Lies das fertige Synthese-Dossier gegen und exportiere es in den Obsidian-Vault der Zentralbibliothek."
         ],
         "best_practices": (
             "Formuliere Forschungsfragen möglichst spezifisch mit Randbedingungen (z. B. Region, Jahr, Branche). "
@@ -709,7 +675,7 @@ VIEWS = [
     },
     {
         "id": "log_stream",
-        "title": "14. Telemetrie & Logs (Live-Audit Stream)",
+        "title": "13. Telemetrie & Logs (Live-Audit Stream)",
         "subtitle": "Sekundengenaues Audit, System-Telemetrie & kryptografischer Trace-Feed",
         "concept": (
             "Telemetrie & Logs ist das unbestechliche Flugschreiber-System von Archon OS. Jede einzelne Aktion – vom kleinsten "
@@ -742,7 +708,7 @@ VIEWS = [
     },
     {
         "id": "prompt_studio",
-        "title": "15. Spezial-Feature: Archon Prompt Studio (1.079 Vorlagen & Fabric SOP)",
+        "title": "14. Spezial-Feature: Archon Prompt Studio (1.079 Vorlagen & Fabric SOP)",
         "subtitle": "Enterprise Prompt-Engineering, 255+ Fabric Patterns & 5-Felder-Struktur",
         "concept": (
             "Das Archon Prompt Studio ist ein hochkarätiges Prompt-Engineering-Werkzeug direkt im Herzen des Betriebssystems. "
@@ -780,7 +746,7 @@ VIEWS = [
     },
     {
         "id": "css_studio",
-        "title": "16. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector",
+        "title": "15. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector",
         "subtitle": "Echtzeit-Design-Studio, In-Place DOM-Inspector & Design-Token Management",
         "concept": (
             "Das Visual CSS Live Studio (Tastenkürzel: Alt + S) ist das Design- und Anpassungszentrum von Archon OS. "
@@ -863,9 +829,17 @@ def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
         tcMar.append(node)
     tcPr.append(tcMar)
 
-# --- TITELSEITE ---
+# -# --- TITELSEITE ---
+banner_path = "/app/static/archon_os_logo.png" if os.path.exists("/app/static/archon_os_logo.png") else os.path.join(os.path.dirname(OUTPUT_DIR), "..", "static", "archon_os_logo.png")
+if os.path.exists(banner_path):
+    p_banner = doc.add_paragraph()
+    p_banner.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_banner.paragraph_format.space_before = Pt(6)
+    p_banner.paragraph_format.space_after = Pt(12)
+    doc.add_picture(banner_path, width=Inches(6.8))
+
 title_p = doc.add_paragraph()
-title_p.paragraph_format.space_before = Pt(36)
+title_p.paragraph_format.space_before = Pt(18)
 title_p.paragraph_format.space_after = Pt(4)
 run_title = title_p.add_run("ARCHON AGENTIC OS 2026")
 run_title.font.name = "Calibri"
@@ -874,7 +848,7 @@ run_title.font.bold = True
 run_title.font.color.rgb = COLOR_PRIMARY
 
 sub_p = doc.add_paragraph()
-sub_p.paragraph_format.space_after = Pt(20)
+sub_p.paragraph_format.space_after = Pt(16)
 run_sub = sub_p.add_run("Offizielles System-Handbuch, Modul-Referenz & Praxisführer")
 run_sub.font.name = "Calibri"
 run_sub.font.size = Pt(13)
@@ -882,8 +856,8 @@ run_sub.font.bold = True
 run_sub.font.color.rgb = COLOR_ACCENT
 
 meta_p = doc.add_paragraph()
-meta_p.paragraph_format.space_after = Pt(24)
-run_meta = meta_p.add_run("Stand: 14. Oktober 2026 | Release: 2.0 Enterprise | 54 Autonome Spezialisten-Rollen | 16 Fachmodule")
+meta_p.paragraph_format.space_after = Pt(20)
+run_meta = meta_p.add_run("Stand: 14. Oktober 2026 | Release: 2.0 Enterprise | 54 Autonome Spezialisten-Rollen | 15 Fachmodule")
 run_meta.font.name = "Calibri"
 run_meta.font.size = Pt(9.5)
 run_meta.font.color.rgb = COLOR_MUTED
@@ -893,7 +867,7 @@ intro_p.paragraph_format.space_after = Pt(16)
 intro_p.paragraph_format.line_spacing = 1.15
 intro_run = intro_p.add_run(
     "Dieses System-Handbuch richtet sich an Betreiber, Entscheider und Nutzer des Archon Agentic Operating Systems. "
-    "Es vermittelt ein tiefgehendes Verständnis aller 16 Bedienoberflächen und Spezial-Studios und ihrer technologischen Verzahnung. "
+    "Es vermittelt ein tiefgehendes Verständnis aller 15 Bedienoberflächen und Spezial-Studios und ihrer technologischen Verzahnung. "
     "Ziel dieses Handbuchs ist es, dass jeder Anwender ohne Vorwissen in die Lage versetzt wird, Aufgaben autonom "
     "zu delegieren, Überwachungs- und Freigabeprozesse (HITL) sicher auszuführen und das Zusammenspiel zwischen "
     "Kanban-Board, Obsidian-Wissensbasis, Telegram-Steuerung, Hintergrund-Workflows und Prompt-Studio voll auszuschöpfen."
@@ -914,7 +888,7 @@ set_cell_margins(cell_r, 120, 120, 180, 180)
 
 p_l = cell_l.paragraphs[0]
 p_l.paragraph_format.space_after = Pt(2)
-r_th1 = p_l.add_run("Operative Steuerung & Disposition:\n")
+r_th1 = p_l.add_run("Operative Steuerung & Kognition:\n")
 r_th1.font.bold = True
 r_th1.font.size = Pt(10)
 r_th1.font.color.rgb = COLOR_PRIMARY
@@ -925,8 +899,7 @@ p_l.add_run(
     "4. Eingang & Triage (HITL & Postfach)\n"
     "5. Agenten-Kader (Profile, Routen & Subtabs)\n"
     "6. Showroom (Projekt-Explorer & Sandbox)\n"
-    "7. Zentralbibliothek (RAG, Erfasser & Vault)\n"
-    "8. Second Brain (Obsidian Vault & OCR)"
+    "7. Zentralbibliothek (RAG, Erfasser & Vault)"
 ).font.size = Pt(9.5)
 
 p_r = cell_r.paragraphs[0]
@@ -936,14 +909,14 @@ r_th2.font.bold = True
 r_th2.font.size = Pt(10)
 r_th2.font.color.rgb = COLOR_PRIMARY
 p_r.add_run(
-    "9. Workflow-Engine (n8n Automation)\n"
-    "10. LLM Gateway (OmniRoute AI Router)\n"
-    "11. Token Guard (Guardian & Budgets)\n"
-    "12. Erweiterungen (Plugin-Zentrale)\n"
-    "13. Research Lab (Evidenz-Recherche)\n"
-    "14. Telemetrie & Logs (Live-Audit Stream)\n"
-    "15. Spezial: Prompt Studio (1.079 Vorlagen)\n"
-    "16. Spezial: Visual CSS Live Studio (Alt + S)"
+    "8. Workflow-Engine (n8n Automation Mesh)\n"
+    "9. LLM Gateway (OmniRoute AI Router)\n"
+    "10. Token Guard (Guardian & Budgets)\n"
+    "11. Erweiterungen (Plugin- & MCP-Zentrale)\n"
+    "12. Research Lab (Evidenz-Recherche)\n"
+    "13. Telemetrie & Logs (Live-Audit Stream)\n"
+    "14. Spezial: Archon Prompt Studio (1.079)\n"
+    "15. Spezial: Visual CSS Live Studio (Alt + S)"
 ).font.size = Pt(9.5)
 
 doc.add_page_break()
@@ -999,11 +972,11 @@ pillars = [
      "schlägt Zwischenschritte vor und spiegelt alle Dialoge zur revisionssicheren Dokumentation synchron in die Zentrale."),
     
     ("2. Der visuelle Leitstand (Web-Browser Cockpit)", 
-     "Am Desktop hast du über 16 spezialisierte Ansichten und Studios die volle Kontrolle. Du verfolgst den Lebenszyklus von Aufgaben im "
+     "Am Desktop hast du über 15 spezialisierte Ansichten und Studios die volle Kontrolle. Du verfolgst den Lebenszyklus von Aufgaben im "
      "Kanban-Board, überwachst Kosten und Token-Verbrauch in Echtzeit in Mission Control, sichtet E-Mails im Eingang und gibst "
      "kritische Aktionen vor ihrer tatsächlichen Ausführung über das Human-in-the-Loop-Verfahren (HITL) frei."),
     
-    ("3. Das physische Langzeitgedächtnis (Obsidian Vault & Second Brain)", 
+    ("3. Das physische Langzeitgedächtnis (Obsidian Vault & Zentralbibliothek)", 
      "Alle Arbeitsergebnisse, Notizen, Gutachten und Protokolle werden nicht in proprietären Cloud-Silos weggesperrt, sondern "
      "als offene, zukunftssichere Markdown-Dateien direkt auf deiner lokalen Festplatte abgelegt. Du kannst jede Notiz jederzeit "
      "parallel in der nativen Obsidian-Desktop-App bearbeiten. Ein 80-seitiges PDF-Gutachten wird per Auto-OCR in Sekunden erfasst "
@@ -1034,7 +1007,7 @@ p_vw1_body2.paragraph_format.space_after = Pt(10)
 p_vw1_body2.paragraph_format.line_spacing = 1.15
 r_vw1_b2 = p_vw1_body2.add_run(
     "Wie liest man dieses Handbuch?\n"
-    "Jedes der 16 Kapitel widmet sich einer dezidierten Bedienoberfläche oder einem Spezial-Studio. Alle Kapitel folgen einer einheitlichen Struktur: "
+    "Jedes der 15 Kapitel widmet sich einer dezidierten Bedienoberfläche oder einem Spezial-Studio. Alle Kapitel folgen einer einheitlichen Struktur: "
     "Kernkonzept, Steuerelemente im Detail, Schritt-für-Schritt-Workflow, Praxistipp und konkreter Muster-Prompt. "
     "Komplexe Oberflächen mit mehreren Reitern (wie der Agenten-Kader, Operations oder die Zentralbibliothek) sind in feingliedrige "
     "Unterkapitel unterteilt, jeweils illustriert mit einem hochauflösenden Screenshot des jeweiligen Subtabs. Wer das Zusammenspiel in der "
@@ -1154,7 +1127,7 @@ doc.add_page_break()
 # -------------------------------------------------------------
 for idx, v in enumerate(VIEWS, 1):
     # Kapitel-Überschrift
-    h = doc.add_paragraph()
+    h = doc.add_paragraph(style='Heading 1')
     h.paragraph_format.space_before = Pt(14)
     h.paragraph_format.space_after = Pt(2)
     run_h = h.add_run(v["title"])
@@ -1233,7 +1206,7 @@ for idx, v in enumerate(VIEWS, 1):
         r_si.font.color.rgb = COLOR_ACCENT
 
         for sub_sec in v["subsections"]:
-            p_stitle = doc.add_paragraph()
+            p_stitle = doc.add_paragraph(style='Heading 2')
             p_stitle.paragraph_format.space_before = Pt(10)
             p_stitle.paragraph_format.space_after = Pt(2)
             r_st = p_stitle.add_run(sub_sec["subtitle"])
@@ -1361,7 +1334,7 @@ for idx, v in enumerate(VIEWS, 1):
 # -------------------------------------------------------------
 # ANHANG: 5 PRAXIS-USE-CASES (VON EINFACH BIS HOCHKOMPLEX)
 # -------------------------------------------------------------
-p_app_h = doc.add_paragraph()
+p_app_h = doc.add_paragraph(style='Heading 1')
 p_app_h.paragraph_format.space_before = Pt(20)
 p_app_h.paragraph_format.space_after = Pt(4)
 r_app_h = p_app_h.add_run("ANHANG: 5 PRAXIS-USE-CASES")
@@ -1433,7 +1406,7 @@ USE_CASES = [
     {
         "num": "Use Case 3",
         "level": "Komplexitätsstufe 3: Gehoben (Wissens-Ingestion & OCR)",
-        "title": "Wissensaufbau: 80-seitiges PDF-Gutachten per Auto-OCR ins Second Brain & RAG",
+        "title": "Wissensaufbau: 80-seitiges PDF-Gutachten per Auto-OCR in Zentralbibliothek & Obsidian-Vault",
         "scenario": (
             "Du erhältst ein neues technisches Gutachten oder einen Bebauungsplan als 80-seitiges PDF. Du möchtest, dass alle 54 Agenten "
             "dieses Spezialwissen sofort beherrschen, ohne dass du ihnen die Fakten jedes Mal manuell in den Prompt kopieren musst."
@@ -1496,7 +1469,7 @@ USE_CASES = [
 ]
 
 for uc in USE_CASES:
-    p_uc_title = doc.add_paragraph()
+    p_uc_title = doc.add_paragraph(style='Heading 2')
     p_uc_title.paragraph_format.space_before = Pt(14)
     p_uc_title.paragraph_format.space_after = Pt(2)
     r_uc_t = p_uc_title.add_run(f"{uc['num']}: {uc['title']}")

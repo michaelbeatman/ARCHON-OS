@@ -1,24 +1,81 @@
-/* Archon CSS Live Studio Compiled Overrides */
-
-#inbox-col-intern {
-  padding-left: 10.5px !important;
-  padding-right: 1.5px !important;
-  width: 500px !important;
+/* =========================================================================
+   [ARCHIVED-CUSTOM-STUDIO-CSS] — Ausgeklammert am 2026-10-16
+   Ersetzt durch das 15-Komponenten Design-System in Einstellungen -> Design
+   =========================================================================
+div.flex > div.flex > h3.font-semibold {
+  width: 101px !important;
 }
 
-div#view-inbox > div.flex-1 {
-  padding-left: 1px !important;
-  padding-right: 1px !important;
-  padding-top: 1px !important;
-  padding-bottom: 1px !important;
+div.flex > div.flex > h3.text-xs {
+  width: 262px !important;
 }
 
-#inbox-col-email {
-  padding-left: 1.5px !important;
-  padding-right: 1.5px !important;
-  width: 505px !important;
+#mc-kanban-col-done {
+  border-width: 0px !important;
 }
 
-#inbox-col-telegram {
-  width: 497px !important;
+#mc-kanban-col-blocked {
+  border-width: 0px !important;
 }
+
+#mc-kanban-col-review {
+  border-width: 0px !important;
+}
+
+#mc-kanban-col-inprogress {
+  border-width: 0px !important;
+}
+
+#mc-kanban-col-todo {
+  border-width: 0px !important;
+}
+
+div#ops-kanban-columns-container > div.w-80 > div.flex-1 {
+  border-width: 0px !important;
+}
+
+.ops-col-review {
+  border-width: 0px !important;
+}
+
+.ops-col-todo {
+  border-width: 0px !important;
+}
+
+.ops-col-in_progress {
+  border-width: 0px !important;
+}
+
+.ops-col-blocked {
+  border-width: 0px !important;
+}
+
+.ops-col-done {
+  border-width: 0px !important;
+}
+
+button#ops-subtab-comm > span.ops-tab-label {
+  font-size: 12px !important;
+  font-family: 'Montserrat', sans-serif !important;
+}
+
+button#agent-tab-btn-chat > span.agent-tab-label {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 13px !important;
+}
+
+header#ops-header-bar > div.flex {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 10px !important;
+}
+
+button#ops-subtab-kanban > span.ops-tab-label {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 12px !important;
+}
+
+button#ops-subtab-org > span.ops-tab-label {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 12px !important;
+}
+*/

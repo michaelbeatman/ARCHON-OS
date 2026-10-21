@@ -4,7 +4,7 @@
     // =========================================================================
     // OPERATIONS CONTROL CENTER (KANBAN, ORG-CHART & INTER-AGENT COMM)
     // =========================================================================
-    let currentOpsTab = 'kanban';
+    let currentOpsTab = 'cockpit';
     let opsOrgViewMode = 'flow'; // 'flow' (Ablaufdiagramm) oder 'grid' (Kompakte Karten)
     let opsKanbanData = null;
     let opsOrgData = null;
@@ -29,30 +29,97 @@
     }
 
     function setOperationsTab(subtab) {
+      if (!subtab) subtab = 'cockpit';
+      if (subtab === 'n8n') subtab = 'automation';
       currentOpsTab = subtab;
-      const tabs = ['kanban', 'org', 'comm'];
+      const tabs = ['cockpit', 'kanban', 'org', 'automation', 'comm'];
+      const headerMeta = {
+        cockpit: {
+          title: 'Mission Control · Cockpit',
+          subtitle: 'Echtzeit-Telemetrie, Flottenlast, Token-Sparkline & HITL-Freigaben',
+          img: '/static/img/cadre_icons/overview.png'
+        },
+        kanban: {
+          title: 'Operations · Kanban Board',
+          subtitle: 'Operatives Aufgaben-Management, Sprints, WIP-Limits & Zuweisung',
+          img: '/static/img/cadre_icons/operations.png?v=2'
+        },
+        org: {
+          title: 'Operations · Organisation & Teams',
+          subtitle: 'Interaktives Ablaufdiagramm, Hierarchien & Kader-Struktur',
+          img: '/static/img/cadre_icons/personalakte.png'
+        },
+        automation: {
+          title: 'Operations · n8n Automation',
+          subtitle: 'Workflow-Engine, Webhook-Pipelines & autonome Prozess-Ketten',
+          img: '/static/img/cadre_icons/n8n.png?v=202610171046'
+        },
+        comm: {
+          title: 'Operations · Interne Kommunikation',
+          subtitle: 'Echtzeit-Funkverkehr, Delegationen & Agenten-Nachrichten',
+          img: '/static/img/cadre_icons/chat.png'
+        }
+      };
+
+      // Mittlere Spalte (#mc-catalog-col) nur im Cockpit anzeigen, bei Kanban/Org/Automation/Comm ausblenden
+      const mcCol = document.getElementById('mc-catalog-col');
+      if (mcCol) {
+        if (subtab === 'cockpit') {
+          mcCol.classList.remove('hidden');
+          mcCol.style.display = '';
+        } else {
+          mcCol.classList.add('hidden');
+          mcCol.style.display = 'none';
+        }
+      }
+
+      const meta = headerMeta[subtab] || headerMeta.cockpit;
+      const titleEl = document.getElementById('mc-main-title');
+      const subtitleEl = document.getElementById('mc-main-subtitle');
+      const headerImgEl = document.getElementById('mc-main-header-img');
+      if (titleEl) titleEl.textContent = meta.title;
+      if (subtitleEl) subtitleEl.textContent = meta.subtitle;
+      if (headerImgEl) headerImgEl.src = meta.img;
+
       tabs.forEach(t => {
         const btn = document.getElementById(`ops-subtab-${t}`);
-        const view = document.getElementById(`ops-view-${t}`);
-        const label = btn ? btn.querySelector(".ops-tab-label") : null;
+        const view = (t === 'cockpit')
+          ? document.getElementById('mc-view-cockpit')
+          : document.getElementById(`ops-view-${t}`);
+        const label = btn ? btn.querySelector('.ops-tab-label') : null;
+        const iconWrap = btn ? btn.querySelector('.tile-icon-wrap') : null;
         if (t === subtab) {
           if (btn) {
-            btn.className = "ops-header-tile flex flex-col items-center justify-center min-w-[56px] sm:min-w-[62px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "ops-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
           }
+          if (iconWrap) iconWrap.classList.add('active-tile');
           if (label) {
-            label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold";
+            label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold";
           }
           if (view) view.classList.remove('hidden');
         } else {
           if (btn) {
-            btn.className = "ops-header-tile flex flex-col items-center justify-center min-w-[56px] sm:min-w-[62px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-75 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
           }
+          if (iconWrap) iconWrap.classList.remove('active-tile');
           if (label) {
-            label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium";
+            label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium";
           }
           if (view) view.classList.add('hidden');
         }
       });
+
+      if (subtab === 'automation') {
+        const iframe = document.getElementById('automation-n8n-iframe');
+        const expectedHost = window.location.hostname || 'localhost';
+        const expectedSrc = `http://${expectedHost}:5678`;
+        if (iframe && (!iframe.src || iframe.src === 'about:blank' || !iframe.src.includes(':5678'))) {
+          iframe.src = expectedSrc;
+        }
+      } else if (subtab !== 'cockpit' && !opsKanbanData) {
+        loadOperationsData(false);
+      }
+
       if (subtab === 'org') {
         if (opsOrgViewMode === 'flow') {
           if (!currentHierarchyData || !currentHierarchyData.nodes || currentHierarchyData.nodes.length === 0) {
@@ -1268,23 +1335,26 @@
                                mission_freigabe: 'Mission freigeben', permission_gate: 'Rechte freigeben' };
           const decTyp = decOpen ? (decTypName[t.decision.typ] || 'Entscheidung') : '';
           const projektName = t.obsidian ? String(t.obsidian).split('/').filter(Boolean).pop() : '';
+          const tokenBadge = (t.tokens || t.cost)
+            ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border bg-indigo-500/10 text-indigo-500 border-indigo-500/30" title="Token & Kosten">🪙 ${t.tokens ? (typeof t.tokens === 'number' && t.tokens >= 1000 ? (t.tokens / 1000).toFixed(1) + 'k' : t.tokens) + ' Tok' : ''}${t.tokens && t.cost !== undefined ? ' · ' : ''}${t.cost !== undefined && t.cost !== null ? '$' + Number(t.cost).toFixed(2) : ''}</span>`
+            : '';
           return `
-            <div draggable="true" 
-                 ondragstart="onKanbanDragStart(event, '${t.id}')"
-                 onclick="openTaskDetailModal('${t.id}')"
-                 class="group rounded-xl border ${decOpen ? 'border-[#e8c37a]' : 'border-[var(--border)]'} bg-[var(--card)] hover:border-indigo-500/40 hover:shadow-md transition-all duration-150 cursor-pointer overflow-hidden">
-              ${decOpen ? `<div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-[#fdf3e2] border-b border-[#e8c37a]">
-                <span class="text-[9.5px] font-bold uppercase tracking-wider text-[#8a5d10] truncate">⏳ Offene Entscheidung · ${opsEscapeHtml(decTyp)}</span>
-                <span class="px-1.5 py-0.2 rounded border ${prioClass} text-[9px] shrink-0">${prioText}</span>
-              </div>` : ''}
-              <div class="p-3 space-y-2.5">
-                <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
-                  <div class="flex items-center gap-1 min-w-0 truncate">${statusBadge}${dueBadge}${modelBadge}</div>
-                  <div class="flex items-center gap-1 shrink-0">
-                    ${countBadge}
-                    ${decOpen ? '' : `<span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span>`}
+              <div draggable="true" 
+                   ondragstart="onKanbanDragStart(event, '${t.id}')"
+                   onclick="openTaskDetailModal('${t.id}')"
+                   class="group rounded-xl border ${decOpen ? 'border-[#e8c37a]' : 'border-[var(--border)]'} bg-[var(--card)] hover:border-indigo-500/40 hover:shadow-md transition-all duration-150 cursor-pointer overflow-hidden">
+                ${decOpen ? `<div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-[#fdf3e2] border-b border-[#e8c37a]">
+                  <span class="text-[9.5px] font-bold uppercase tracking-wider text-[#8a5d10] truncate">⏳ Offene Entscheidung · ${opsEscapeHtml(decTyp)}</span>
+                  <span class="px-1.5 py-0.2 rounded border ${prioClass} text-[9px] shrink-0">${prioText}</span>
+                </div>` : ''}
+                <div class="p-3 space-y-2.5">
+                  <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
+                    <div class="flex items-center gap-1 min-w-0 truncate">${statusBadge}${dueBadge}${modelBadge}${tokenBadge}</div>
+                    <div class="flex items-center gap-1 shrink-0">
+                      ${countBadge}
+                      ${decOpen ? '' : `<span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span>`}
+                    </div>
                   </div>
-                </div>
                 <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2">${opsEscapeHtml(t.title)}</h4>
                 ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-relaxed">${opsEscapeHtml(t.body)}</p>` : ''}
                 ${projektName ? `<div class="inline-block max-w-full truncate px-1.5 py-0.5 rounded text-[9.5px] font-mono text-muted-custom bg-[var(--secondary)] border border-[var(--border)]" title="${opsEscapeHtml(t.obsidian)}">📁 ${opsEscapeHtml(projektName)}</div>` : ''}
@@ -1301,13 +1371,17 @@
           `;
         }).join('');
 
+        const colHeaderColor = ((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].header) || col.headerColor);
+        const colTextColor = ((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].text) || col.headerTextColor);
+        const colBg10 = opsHexToRgba(colHeaderColor, 0.10);
+
         return `
-          <div class="w-80 shrink-0 flex flex-col h-full rounded-2xl border border-[var(--border)] bg-[var(--card)]/60 overflow-hidden shadow-2xs" style="background-color: ${opsHexToRgba(((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].header) || col.headerColor), 0.10)};">
+          <div class="w-80 shrink-0 flex flex-col h-full rounded-2xl border overflow-hidden shadow-2xs ops-col-${col.id} os-kanban-col" style="background-color: var(--kanban-${col.id}-bg, ${colBg10}) !important; border: var(--kanban-col-border-width, 1px) solid var(--kanban-${col.id}-border, ${colHeaderColor}) !important;">
             <!-- Header (User-Design 10.10.2026): Palette aus Einstellungen, sonst Posteo-Default) -->
-            <div class="px-3 py-2.5 min-h-[52px] flex items-center justify-between border-b border-[var(--border)] shrink-0" style="background-color: ${((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].header) || col.headerColor)}; color: ${((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].text) || col.headerTextColor)};">
+            <div class="px-3 py-2.5 min-h-[52px] flex items-center justify-between border-b shrink-0" style="background-color: var(--kanban-${col.id}-header, ${colHeaderColor}) !important; color: var(--kanban-${col.id}-text, ${colTextColor}) !important; border-color: var(--kanban-${col.id}-border, ${colHeaderColor}) !important;">
               <div class="flex items-center gap-2 min-w-0">
                 <span class="w-2.5 h-2.5 rounded-full ${col.bg} border ${col.border} shrink-0"></span>
-                <span class="text-xs font-bold font-mono uppercase tracking-wider truncate" style="color: ${((opsKanbanPalette && opsKanbanPalette[col.id] && opsKanbanPalette[col.id].text) || col.headerTextColor)};">${col.label}</span>
+                <span class="text-xs font-bold font-mono uppercase tracking-wider truncate" style="color: var(--kanban-${col.id}-text, ${colTextColor}) !important;">${col.label}</span>
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-[var(--card)] text-muted-custom border border-[var(--border)] shrink-0" ${wipOver ? 'style="color:#C15C53;border-color:#C15C53;" title="WIP-Limit überschritten!"' : (wipLimit > 0 ? `title="WIP-Limit: ${wipLimit}"` : '')}>${countText}</span>
               </div>
               <button onclick="openNewTaskModal('${col.id}')" class="p-1 rounded-lg hover:bg-[var(--card)] text-muted-custom hover:text-indigo-500 transition cursor-pointer shrink-0" title="Aufgabe hier hinzufügen">
@@ -1317,7 +1391,8 @@
             <!-- Drop-Zone / Tasks List -->
             <div ondragover="onKanbanDragOver(event)" 
                  ondrop="onKanbanDrop(event, '${col.id}')" 
-                 class="flex-1 p-2.5 overflow-y-auto space-y-2.5 min-h-[150px] transition-colors">
+                 class="flex-1 p-2.5 overflow-y-auto space-y-2.5 min-h-[150px] transition-colors bg-transparent"
+                 style="background-color: transparent !important;">
               ${tasks.length > 0 ? taskCards : `
                 <div class="h-32 border-2 border-dashed border-[var(--border)]/60 rounded-xl flex flex-col items-center justify-center text-center p-3 text-muted-custom/60 pointer-events-none">
                   <i data-lucide="${col.icon}" class="w-5 h-5 mb-1 opacity-40"></i>

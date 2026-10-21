@@ -1,54 +1,131 @@
-<div id="view-showroom" class="hidden flex-1 w-full min-h-screen flex flex-col p-4 md:p-6 select-none bg-[var(--background)] text-[var(--foreground)]">
-        <!-- Header -->
-        <div class="flex items-center justify-between pb-4 border-b border-[var(--border)] mb-4">
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full inline-block bg-emerald-500"></span>
-              <h1 class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">SHOWROOM (PROJEKT-EXPLORER &amp; ARTEFAKTE)</h1>
-              <button type="button" onclick="openContextHelp('showroom')" title="Hilfe zum Showroom" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
-                <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-              </button>
+<div id="view-showroom" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 overflow-hidden shadcn-view select-none bg-[var(--background)] text-[var(--foreground)]" style="height: 100%; min-height: 0;">
+        
+        <!-- GROSSER ~120px HEADER CARD (Im einheitlichen Stil von Eingang, Kader, Mission Control, Bibliothek) -->
+        <div class="prof-panel-card p-3 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs mb-2 os-island">
+          <div class="flex items-center justify-between gap-4">
+            
+            <!-- Links: Avatar-Plakette & Titel & Suchleiste -->
+            <div class="flex items-center gap-3.5 min-w-0 flex-1">
+              <div id="showroom-main-header-avatar" class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-[var(--border)] shadow-md bg-[var(--secondary)] flex items-center justify-center relative shrink-0 p-2 overflow-hidden">
+                <img id="showroom-main-header-img" src="/static/img/cadre_icons/marketplace.png" alt="Showroom Icon" class="w-full h-full object-contain">
+                <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--card)] flex items-center justify-center" title="Explorer Online"></span>
+              </div>
+
+              <div class="min-w-0 space-y-1.5 flex-1">
+                <div class="flex items-center gap-2">
+                  <h2 id="showroom-main-title" class="text-lg sm:text-xl font-black text-[var(--foreground)] tracking-tight leading-tight truncate">
+                    Showroom · Projekt-Explorer
+                  </h2>
+                  <button type="button" onclick="openContextHelp('showroom')" title="Hilfe zum Showroom" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+                    <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <span id="showroom-total-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
+                    <span id="showroom-projects-count-badge">0 Projekte</span>
+                  </span>
+                </div>
+                
+                <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  <!-- Integriertes Suchfeld -->
+                  <div class="relative w-full max-w-xs sm:max-w-sm">
+                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[var(--muted-foreground)] pointer-events-none"></i>
+                    <input type="text" id="showroom-tree-filter" oninput="filterShowroomTree(this.value)" placeholder="Projekte oder Dateien suchen..." class="w-full text-xs font-mono rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] pl-8 pr-2.5 py-1.5 outline-none focus:border-zinc-500 shadow-2xs">
+                  </div>
+                  <!-- Refresh Button -->
+                  <button type="button" onclick="loadShowroomView(true)" title="Projekt-Explorer aktualisieren" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium flex items-center gap-1.5 transition shadow-2xs cursor-pointer shrink-0">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
+                    <span>Sync</span>
+                  </button>
+                </div>
+              </div>
             </div>
-            <p class="text-xs mt-0.5 font-mono text-[var(--muted-foreground)]">Dateibaumstruktur nach Windows Explorer: Zwischenberichte, Medien &amp; Endprodukte mit Sofort-Vorschau</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button onclick="loadShowroomView(true)" class="px-3 py-1.5 rounded text-xs font-mono font-medium border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--secondary)] flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer">
-              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-              <span>Aktualisieren</span>
-            </button>
+
+            <!-- Rechts: DIE 4 GROSSEN ICON-KACHELN IM KADER-STIL -->
+            <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
+              
+              <!-- 1. Alle / Explorer -->
+              <button 
+                type="button" 
+                id="showroom-tab-btn-all" 
+                onclick="filterShowroomCategory('all')" 
+                class="showroom-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                title="Gesamten Dateibaum anzeigen"
+              >
+                <div class="tile-icon-wrap active-tile w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                  <img src="/static/img/cadre_icons/marketplace.png" alt="Explorer" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                </div>
+                <span class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold">Explorer</span>
+              </button>
+
+              <!-- 2. Zwischenberichte -->
+              <button 
+                type="button" 
+                id="showroom-tab-btn-berichte" 
+                onclick="filterShowroomCategory('zwischenberichte')" 
+                class="showroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                title="01_Zwischenberichte fokussieren"
+              >
+                <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                  <img src="/static/img/cadre_icons/skills.png" alt="Berichte" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                </div>
+                <span class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Berichte</span>
+              </button>
+
+              <!-- 3. Medien -->
+              <button 
+                type="button" 
+                id="showroom-tab-btn-medien" 
+                onclick="filterShowroomCategory('medien')" 
+                class="showroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                title="02_Medien fokussieren"
+              >
+                <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                  <img src="/static/img/cadre_icons/paperclip.png" alt="Medien" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                </div>
+                <span class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Medien</span>
+              </button>
+
+              <!-- 4. Endprodukte -->
+              <button 
+                type="button" 
+                id="showroom-tab-btn-endprodukte" 
+                onclick="filterShowroomCategory('endprodukte')" 
+                class="showroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                title="03_Endprodukte fokussieren"
+              >
+                <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                  <img src="/static/img/cadre_icons/soul.png" alt="Endprodukte" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                </div>
+                <span class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Endprodukte</span>
+              </button>
+
+            </div>
+
           </div>
         </div>
-        <!-- Explorer 2-Spalten-Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 items-stretch" style="min-height: calc(100vh - 180px);">
+
+        <!-- Explorer 2-Spalten-Layout (flex-1 h-full min-h-0) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 min-h-0 items-stretch overflow-hidden">
           
           <!-- Linke Spalte: Windows-Explorer Dateibaum (4 von 12 Spalten) -->
-          <div class="lg:col-span-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 shadow-xs flex flex-col overflow-hidden" style="max-height: calc(100vh - 180px);">
+          <div class="lg:col-span-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-xs flex flex-col overflow-hidden os-island h-full min-h-0">
             <!-- Explorer Sidebar Header -->
-            <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border)] mb-2">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] mb-2 shrink-0">
               <div class="flex items-center gap-2">
                 <i data-lucide="folder-tree" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
                 <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">PROJEKT-ORDNER</h3>
               </div>
-              <span id="showroom-projects-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-[var(--foreground)] border border-[var(--border)]">
-                0 Projekte
-              </span>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Explorer-Struktur</span>
             </div>
-            <!-- Suchfeld Filter -->
-            <div class="relative mb-2">
-              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[var(--muted-foreground)]"></i>
-              <input type="text" id="showroom-tree-filter" oninput="filterShowroomTree(this.value)" placeholder="Projekte oder Dateien suchen..." class="w-full text-xs font-mono rounded border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] pl-8 pr-2.5 py-1.5 outline-none focus:border-zinc-500">
-            </div>
+            
             <!-- Baum-Container mit Scrollbar -->
-            <div id="showroom-tree-container" class="flex-1 overflow-y-auto pr-1 space-y-1 font-mono text-xs select-none custom-scrollbar">
+            <div id="showroom-tree-container" class="flex-1 overflow-y-auto pr-1 space-y-1 font-mono text-xs select-none custom-scrollbar min-h-0">
               <div class="p-4 text-center text-xs text-[var(--muted-foreground)] italic">
                 Lade Projekt-Dateibaum...
               </div>
             </div>
           </div>
           <!-- Rechte Spalte: Datei-Vorschau & Aktionen (8 von 12 Spalten) -->
-          <!-- User-Vorgabe 09.10.2026: Vorschau nutzt die GESAMTE verfügbare Höhe
-               (height statt max-height — die Karte füllt den Bereich bis unten aus). -->
-          <div class="lg:col-span-8 rounded-lg border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs flex flex-col overflow-hidden" style="height: calc(100vh - 180px);">
+          <div class="lg:col-span-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 sm:p-4 shadow-xs flex flex-col overflow-hidden os-island h-full min-h-0">
             <!-- Preview Header & Breadcrumb -->
             <div class="flex flex-wrap items-center justify-between pb-3 border-b border-[var(--border)] gap-2">
               <div class="flex items-center gap-2 min-w-0">

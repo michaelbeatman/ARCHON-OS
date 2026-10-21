@@ -15,27 +15,36 @@
                   </button>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <button type="button" onclick="refreshPaperclipAndProfiles(true)" class="h-8 px-2.5 rounded-lg border border-[var(--border)] hover:border-zinc-400 dark:hover:border-zinc-600 bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer shadow-xs" title="Live-Status der Agenten synchronisieren">
-                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-                    <span>Sync</span>
-                  </button>
                   <button type="button" id="btn-catalog-collapse" onclick="toggleCatalogCollapse()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold cursor-pointer shadow-xs" title="Katalog auf 68px Icon-Rail einklappen">
                     ◀
                   </button>
                 </div>
               </div>
-              <!-- Suchfeld & Domänen-Filter nebeneinander -->
-              <div class="grid grid-cols-2 gap-2">
-                <div class="relative">
-                  <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[var(--muted-foreground)] pointer-events-none"></i>
-                  <input type="text" id="profile-search-input" oninput="toggleClearBtn('profile-search-input'); onProfileSearchOrFilter()" placeholder="Suchen..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl pl-7 pr-6 py-1.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-medium shadow-2xs">
-                  <button id="profile-search-input-clear" onclick="clearSearchInput('profile-search-input', onProfileSearchOrFilter)" class="hidden absolute right-2 top-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-[11px] font-bold cursor-pointer" title="Suche zurücksetzen">✕</button>
+              <!-- Suchfeld & Domäne-Filter übereinander über dem Agentenfilter -->
+              <div class="space-y-1.5 pt-0.5">
+                <!-- 1. Zeile: Suchfeld -->
+                <div class="relative w-full">
+                  <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] pointer-events-none"></i>
+                  <input 
+                    type="text" 
+                    id="profile-search-input" 
+                    oninput="toggleClearBtn('profile-search-input'); onProfileSearchOrFilter()" 
+                    placeholder="Suchen..." 
+                    class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg pl-7 pr-6 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-medium shadow-2xs"
+                  >
+                  <button 
+                    id="profile-search-input-clear" 
+                    onclick="clearSearchInput('profile-search-input', onProfileSearchOrFilter)" 
+                    class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-[11px] font-bold cursor-pointer" 
+                    title="Suche zurücksetzen"
+                  >✕</button>
                 </div>
-                <div class="relative flex items-center">
+                <!-- 2. Zeile: Domänefilter -->
+                <div class="relative w-full">
                   <select 
                     id="profile-category-dropdown" 
                     onchange="filterProfilesByCategory(this.value)" 
-                    class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[11px] font-semibold text-[var(--foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 cursor-pointer shadow-2xs truncate"
+                    class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-[11px] font-semibold text-[var(--foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 cursor-pointer shadow-2xs truncate"
                   >
                     <option value="all">Alle Domänen</option>
                     <option value="1. Strategie, Führung & Lebensplanung">1. Strategie & Führung</option>
@@ -204,25 +213,11 @@
                         1. STRATEGIE, FÜHRUNG &amp; LEBENSPLANUNG
                       </span>
                     </div>
-                    <!-- 4. Zeile: ID Badge & KI-Modell-Wähler (Geklont aus Chat-Tab) -->
+                    <!-- 4. Zeile: ID Badge -->
                     <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
                       <span id="profile-editor-id-tag" class="inline-block px-2 py-0.5 rounded-full text-[9px] font-mono text-[var(--muted-foreground)] bg-[var(--background)] border border-[var(--border)] truncate max-w-full">
                         id: default
                       </span>
-                      <div class="inline-flex items-center gap-1 bg-[var(--secondary)]/60 px-1.5 py-0.5 rounded border border-[var(--border)] text-[9px] font-mono">
-                        <span class="text-[var(--muted-foreground)]">KI-Route:</span>
-                        <select id="agent-header-provider-select" onchange="onAgentHeaderProviderChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1 py-0.5 text-[9px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs">
-                          <option value="openrouter" selected>OpenRouter</option>
-                          <option value="google">Google AI (Gemini)</option>
-                          <option value="omniroute">OmniRoute</option>
-                          <option value="groq">Groq</option>
-                          <option value="openai">OpenAI</option>
-                          <option value="nvidia">NVIDIA NIM</option>
-                        </select>
-                        <select id="agent-header-model-select" onchange="onAgentHeaderModelChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1 py-0.5 text-[9px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs max-w-[150px] truncate">
-                          <option value="auto/best-free">auto/best-free</option>
-                        </select>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -234,10 +229,10 @@
                     type="button" 
                     id="agent-tab-btn-overview" 
                     onclick="switchAgentCadreTab('overview')" 
-                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    class="agent-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
                     title="Übersicht"
                   >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                    <div class="tile-icon-wrap active-tile w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
                       <img src="/static/img/cadre_icons/overview.png" alt="Übersicht" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
                     </div>
                     <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold">Übersicht</span>

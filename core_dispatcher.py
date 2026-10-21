@@ -254,8 +254,25 @@ async def _dispatch_to_omniroute_or_container_exec(
     provider: str = "",
     timeout: int = 15
 ) -> dict:
+    # Pillar 4 & Punkt 4: Aktive Memory-Injection (Erkenntnisse aus agentic_memory.db)
+    memory_context_addon = ""
+    try:
+        from local_memory_bridge import LocalMemoryBridge
+        bridge = LocalMemoryBridge()
+        # Hole die wichtigsten und relevantesten Erkenntnisse für diesen Agenten
+        query_hint = prompt[:100] if prompt else ""
+        learnings = bridge.search_learnings(query_hint, limit=4)
+        if learnings:
+            lines = [f"- [{l.get('category', 'Allgemein')}] {l.get('summary')}" for l in learnings if l.get('summary')]
+            if lines:
+                memory_context_addon = "\n\n### [RELEVANTE ERKENNTNISSE AUS DEINEM LANGZEITGEDÄCHTNIS]:\n" + "\n".join(lines)
+    except Exception as mem_err:
+        pass
+
+    full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{memory_context_addon}".strip()
+
     messages = [
-        {"role": "system", "content": f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip()},
+        {"role": "system", "content": full_system_prompt},
         {"role": "user", "content": prompt}
     ]
 

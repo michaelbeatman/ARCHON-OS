@@ -71,6 +71,7 @@ class WatchdogDaemon:
         self.file_tracker: Dict[str, int] = {}
         self.request_tracker: Dict[str, int] = {}
         self.token_tracker: Dict[str, int] = {}
+        self.last_oracle_run = 0
         self.is_running = True
         logger.info(f"Initialized Watchdog Daemon. Monitoring logs at: {LOG_DIR}")
         logger.info(f"Alarms file: {ALARMS_FILE}")
@@ -247,6 +248,18 @@ class WatchdogDaemon:
                 self.scan_logs_and_metrics()
             except Exception as e:
                 logger.error(f"Exception during watchdog scan: {e}")
+
+            # Oracle News Radar alle 4 Stunden autonom im Hintergrund ausführen
+            if time.time() - self.last_oracle_run > 14400:
+                self.last_oracle_run = time.time()
+                try:
+                    import oracle_news_radar
+                    radar = oracle_news_radar.OracleNewsRadar()
+                    radar.run_radar_cycle()
+                    logger.info("Autonomous Oracle News Radar cycle executed.")
+                except Exception as oe:
+                    logger.warning(f"Oracle News Radar background run failed: {oe}")
+
             time.sleep(CONFIG["CHECK_INTERVAL_SEC"])
 
 

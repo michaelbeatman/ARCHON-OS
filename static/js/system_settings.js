@@ -7,7 +7,7 @@
     async function ensureSettingsModalMounted() {
       if (document.getElementById("system-settings-modal")) return true;
       try {
-        const res = await fetch("/static/views/system_settings_modal.html");
+        const res = await fetch("/static/views/system_settings_modal.html?v=202610171120");
         if (!res.ok) { return false; }
         const html = await res.text();
         let target = document.getElementById("system-settings-mount");
@@ -233,8 +233,8 @@
           setCommSubTab("smtp");
         }
       } else if (targetTab === "design") {
-        if (typeof loadKanbanPaletteSettings === "function") {
-          loadKanbanPaletteSettings();
+        if (typeof window.cdsRenderUI === "function") {
+          window.cdsRenderUI();
         }
       }
       lucide.createIcons();

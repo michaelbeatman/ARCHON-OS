@@ -744,7 +744,7 @@
     "avatar": "/static/avatars/avatar_003.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
-    "status": "standby",
+    "status": "active",
     "is_favorite": false
   },
   {
@@ -1606,7 +1606,7 @@
     "provider": "omniroute",
     "model": "auto/best-free",
     "status": "standby",
-    "is_favorite": false
+    "is_favorite": true
   },
   {
     "id": "ip_patent_analyst",

@@ -257,5 +257,11 @@
       try { await _withTimeout(fetchMissionControlData(false), 12000, "fetchMissionControlData"); }
       catch (e) { console.error("[AppShell] fetchMissionControlData:", e); }
       startMissionControlStopwatches();
-      setInterval(() => fetchMissionControlData(false), 30000);
+      if (!window.__mc_poll_interval) {
+        window.__mc_poll_interval = setInterval(() => {
+          if (document.hidden) return;
+          if (typeof currentTab !== "undefined" && currentTab !== "mission-control") return;
+          fetchMissionControlData(false);
+        }, 30000);
+      }
     };

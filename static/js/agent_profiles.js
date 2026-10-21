@@ -82,22 +82,19 @@
       }
     }
     async function loadHermesProfilesFromServer() {
-      console.log("[DEBUG PROFILES] loadHermesProfilesFromServer START");
       try {
         const res = await fetch("/api/hermes/profiles");
-        console.log("[DEBUG PROFILES] fetch /api/hermes/profiles status:", res.status);
         if (res.ok) {
           hermesProfilesData = await res.json();
           window.hermesProfilesData = hermesProfilesData;
-          console.log("[DEBUG PROFILES] parsed profiles count:", hermesProfilesData.length);
-          renderHermesProfilesList();
         }
       } catch (e) {
         console.error("[DEBUG PROFILES] Error loading hermes profiles:", e);
       }
-      renderHermesProfilesList();
       if (currentSelectedProfileId) {
         selectProfileForEditor(currentSelectedProfileId);
+      } else {
+        renderHermesProfilesList();
       }
     }
     function populateGlobalSkillsDropdown() {
@@ -338,9 +335,14 @@
         const pane = document.getElementById(`agent-pane-${t}`);
         const label = btn ? btn.querySelector(".agent-tab-label") : null;
         
+        const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
+        
         if (t === activeAgentCadreTab) {
           if (btn) {
-            btn.className = "agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "agent-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) {
+            iconWrap.classList.add("active-tile");
           }
           if (label) {
             label.className = "agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold";
@@ -349,6 +351,9 @@
         } else {
           if (btn) {
             btn.className = "agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) {
+            iconWrap.classList.remove("active-tile");
           }
           if (label) {
             label.className = "agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium";
@@ -559,14 +564,14 @@
         catEl.innerText = val;
       }
     }
-    function setAvatarValue(url) {
+    function setAvatarValue(url, skipListRender = false) {
       const input = document.getElementById("prof-edit-avatar");
       const img = document.getElementById("prof-edit-avatar-preview");
       if (input) input.value = url;
       if (img) {
         img.src = withAvatarRevision(url || "/static/avatars/avatar_001.jpg");
       }
-      if (currentSelectedProfileId) {
+      if (currentSelectedProfileId && !skipListRender) {
         const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
         if (prof) {
           prof.avatar = url;
@@ -928,7 +933,28 @@
       if (profileId && !profileId.startsWith("custom_agent_")) {
         try { localStorage.setItem("archon_active_profile_id", profileId); } catch(e){}
       }
-      renderHermesProfilesList();
+      const listContainer = document.getElementById("hermes-profiles-list");
+      const existingNodes = listContainer ? listContainer.querySelectorAll("[data-profile-id]") : [];
+      if (existingNodes.length > 0 && listContainer.querySelector(`[data-profile-id="${CSS.escape(profileId)}"]`)) {
+        existingNodes.forEach(node => {
+          const isSel = node.getAttribute("data-profile-id") === profileId;
+          if (catalogCollapsed) {
+            node.className = `cursor-pointer relative p-1 rounded-2xl flex items-center justify-center transition-all duration-150 ${
+              isSel
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 ring-2 ring-zinc-500 shadow-xs'
+                : 'hover:bg-[var(--secondary)] text-[var(--foreground)]'
+            }`;
+          } else {
+            node.className = `prof-list-item p-2.5 cursor-pointer relative overflow-hidden bg-[var(--card)] border rounded-2xl transition-all duration-150 shadow-2xs ${
+              isSel
+                ? 'selected-item border-zinc-900 dark:border-zinc-100 ring-1 ring-zinc-900/20 dark:ring-zinc-100/20 bg-[var(--secondary)]/40'
+                : 'border-[var(--border)] hover:border-zinc-400 dark:hover:border-zinc-600'
+            }`;
+          }
+        });
+      } else {
+        renderHermesProfilesList();
+      }
       const prof = hermesProfilesData.find(p => p.id === profileId);
       if (!prof) return;
       const personName = prof.person_name || prof.name || "Profil";
@@ -960,7 +986,7 @@
           statusTag.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> Bereit (Standby)`;
         }
       }
-      setAvatarValue(avatarUrl);
+      setAvatarValue(avatarUrl, true);
       // Reiter 1 (Übersicht) befüllen
       const personNameEl = document.getElementById("prof-edit-person-name");
       if (personNameEl) personNameEl.value = prof.person_name || "";

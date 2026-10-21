@@ -99,11 +99,20 @@ async def get_inbox_items():
     Sortiert: Neueste oben.
     """
     try:
-        from views.view_inbox import load_internal_events, load_email_messages, load_telegram_messages
+        from views.view_inbox import load_internal_events, load_email_messages, load_telegram_messages, load_webhook_events
+        wh = load_webhook_events()
+        intern = load_internal_events()
+        emails = load_email_messages()
+        tg = load_telegram_messages()
         return {
-            "internal": load_internal_events(),
-            "emails": load_email_messages(),
-            "telegram": load_telegram_messages()
+            "webhooks": wh,
+            "webhook": wh,
+            "internal": intern,
+            "intern": intern,
+            "emails": emails,
+            "email": emails,
+            "telegram": tg,
+            "messenger": tg
         }
     except Exception as e:
         # Defensiver Fallback falls Import scheitert
@@ -768,30 +777,9 @@ async def save_theme_live_overrides(payload: ThemeOverridesPayload):
         with open(THEME_OVERRIDES_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-        # CSS Regeln direkt in static/custom_studio.css kompilieren
-        try:
-            rules = payload.rules or {}
-            css_lines = ["/* Archon CSS Live Studio Compiled Overrides */\n"]
-            for sel, props in rules.items():
-                if not props:
-                    continue
-                css_lines.append(f"{sel} {{")
-                for p, v in props.items():
-                    if v is not None and v != "":
-                        has_imp = "!important" in str(v)
-                        css_lines.append(f"  {p}: {v}{'' if has_imp else ' !important'};")
-                css_lines.append("}\n")
-            css_content = "\n".join(css_lines)
-            for target_css in ["static/custom_studio.css", "/app/static/custom_studio.css", os.path.join(WORKSPACE_DIR, "static", "custom_studio.css")]:
-                try:
-                    with open(target_css, "w", encoding="utf-8") as f:
-                        f.write(css_content)
-                except Exception:
-                    pass
-        except Exception as err:
-            print(f"Error compiling custom_studio.css in views_core: {err}")
-
-        return {"status": "success", "message": "Theme Overrides erfolgreich gespeichert."}
+        # [ARCHIVED] Überschreiben von static/custom_studio.css deaktiviert zugunsten
+        # der zentralen 15-Bausteine-Engine (/api/design/themes).
+        return {"status": "success", "message": "Theme Overrides archiviert (15-Bausteine-Engine aktiv)."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {str(e)}")
 

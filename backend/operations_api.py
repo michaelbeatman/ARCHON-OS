@@ -21,25 +21,65 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
 
 
+_KANBAN_JOURNAL_INIT = False
+
 def _get_kanban_connection():
+    global _KANBAN_JOURNAL_INIT
     if not os.path.exists(KANBAN_DB_PATH):
         raise HTTPException(status_code=503, detail=f"kanban.db nicht gefunden unter {KANBAN_DB_PATH}")
-    conn = sqlite3.connect(KANBAN_DB_PATH, timeout=5.0)
+    conn = sqlite3.connect(KANBAN_DB_PATH, timeout=10.0)
+    conn.execute("PRAGMA busy_timeout=5000;")
+    if not _KANBAN_JOURNAL_INIT:
+        try:
+            conn.execute("PRAGMA journal_mode=DELETE;")
+        except Exception:
+            pass
+        _KANBAN_JOURNAL_INIT = True
     conn.row_factory = sqlite3.Row
     return conn
 
 
+def _sync_to_memory_bridge(task_id: str, title: Optional[str], assignee: Optional[str], status: str, result: Optional[str] = None):
+    """Synchronisiert Kanban-Aufgaben mit der zentralen agentic_memory.db (tasks-Tabelle)."""
+    try:
+        from local_memory_bridge import LocalMemoryBridge
+        obsidian_rel = None
+        try:
+            meta = _load_kanban_meta()
+            obsidian_rel = ((meta.get("tasks") or {}).get(task_id) or {}).get("obsidian")
+        except Exception:
+            pass
+        LocalMemoryBridge().sync_task(
+            task_id=task_id,
+            title=title or task_id,
+            role=assignee or "unassigned",
+            status=status,
+            result=result,
+            obsidian_note=obsidian_rel
+        )
+    except Exception as e:
+        print(f"[OperationsAPI] MemoryBridge task sync notice: {e}", file=sys.stderr)
+
+
+_PROFILES_MAP_CACHE = {"mtime": 0.0, "data": {}}
+
 def _load_profiles_map() -> Dict[str, Dict]:
-    profiles = {}
     if os.path.exists(PROFILES_FILE):
         try:
+            mtime = os.path.getmtime(PROFILES_FILE)
+            if _PROFILES_MAP_CACHE["data"] and _PROFILES_MAP_CACHE["mtime"] == mtime:
+                return _PROFILES_MAP_CACHE["data"]
+            profiles = {}
             with open(PROFILES_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 for item in data:
                     profiles[item.get("id")] = item
+            _PROFILES_MAP_CACHE["mtime"] = mtime
+            _PROFILES_MAP_CACHE["data"] = profiles
+            return profiles
         except Exception as e:
             print(f"[OperationsAPI] Error loading profiles: {e}", file=sys.stderr)
-    return profiles
+    return _PROFILES_MAP_CACHE["data"]
 
 
 def _get_fallback_avatar(aid: str) -> str:
@@ -87,6 +127,8 @@ def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
     # damit die Card das Entscheidungs-Banner und die Projektzeile zeigen kann
     # (der Detail-Dialog liefert weiterhin den vollen Block).
     task_dict["obsidian"] = tmeta.get("obsidian") or None
+    task_dict["tokens"] = tmeta.get("tokens") or None
+    task_dict["cost"] = tmeta.get("cost") or None
     _dec = tmeta.get("decision") or None
     task_dict["decision"] = ({"typ": _dec.get("typ"),
                               "status": _dec.get("status") or "offen",
@@ -232,6 +274,7 @@ def create_kanban_task(req: TaskCreateRequest):
         """, (task_id, "created", json.dumps({"title": req.title, "assignee": target_assignee, "team": req.team_id, "status": target_status}), now_iso))
         
         conn.commit()
+        _sync_to_memory_bridge(task_id, req.title, target_assignee, target_status)
         
         # Falls Decompose angefordert wurde und Hermes Container läuft:
         if req.decompose:
@@ -239,7 +282,13 @@ def create_kanban_task(req: TaskCreateRequest):
                 subprocess.Popen(["docker", "exec", "hermes", "hermes", "kanban", "decompose", task_id])
             except Exception as e:
                 print(f"[OperationsAPI] Decompose trigger error: {e}", file=sys.stderr)
-                
+        try:
+            import main
+            if hasattr(main, "broadcast_event"):
+                main.broadcast_event("kanban_updated", {"action": "created", "task_id": task_id, "status": target_status})
+        except Exception:
+            pass
+
         return {"status": "success", "task_id": task_id, "title": req.title, "assigned_to": target_assignee, "team": req.team_id}
     finally:
         conn.close()
@@ -253,7 +302,7 @@ def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
         now_iso = datetime.datetime.now().isoformat()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id, status FROM tasks WHERE id = ?", (task_id,))
+        cursor.execute("SELECT id, title, assignee, status FROM tasks WHERE id = ?", (task_id,))
         existing = cursor.fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Task nicht gefunden.")
@@ -277,6 +326,7 @@ def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
         """, (task_id, "status_changed", json.dumps({"from": old_status, "to": new_status}), now_iso))
 
         conn.commit()
+        _sync_to_memory_bridge(task_id, existing["title"], existing["assignee"], new_status, req.result)
 
         # 12.10.2026 (Decision-Service, Richtung Kanban -> Telegram): Wird ein
         # Entscheidungs-Task (Sidecar-Block 'decision') ueber die Oberflaeche
@@ -294,6 +344,13 @@ def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
                         f"(im Kanban verschoben: review \u2192 {new_status})")
             except Exception as _tg_err:
                 print(f"[OperationsAPI] Telegram-Benachrichtigung fehlgeschlagen: {_tg_err}", file=sys.stderr)
+
+        try:
+            import main
+            if hasattr(main, "broadcast_event"):
+                main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": old_status, "to": new_status})
+        except Exception:
+            pass
 
         return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
     finally:
@@ -573,11 +630,22 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
                 if isinstance(tg, dict):
                     dec.setdefault("telegram", {}).update(tg)
                 dec.setdefault("erstellt", datetime.datetime.now().isoformat())
+        # Tokens & Cost (User-Erweiterung Punkt 5)
+        if "tokens" in payload:
+            tmeta["tokens"] = payload["tokens"]
+        if "cost" in payload:
+            tmeta["cost"] = payload["cost"]
         if not tmeta:
             meta["tasks"].pop(task_id, None)
         return dict(meta["tasks"].get(task_id, {}))
 
     _, saved = update_kanban_meta(_apply_task)
+    try:
+        import main
+        if hasattr(main, "broadcast_event"):
+            main.broadcast_event("kanban_updated", {"action": "meta_update", "task_id": task_id})
+    except Exception:
+        pass
     return {"status": "ok", "task": saved}
 
 

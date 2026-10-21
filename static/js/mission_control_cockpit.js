@@ -6,31 +6,61 @@
     let missionControlPollTimer = null;
     async function fetchMissionControlData(force = false) {
       const mcRoot = document.getElementById("view-mission-control");
-      if (!force && mcRoot && mcRoot.classList.contains("hidden")) {
+      if (!force && (document.hidden || (mcRoot && mcRoot.classList.contains("hidden")))) {
         return;
       }
       if (force) {
         showLoadingOverlay("System-Status wird aktualisiert...", "Live-Metriken, Docker-Container & Agenten-Status werden synchronisiert");
       }
       try {
-        const res = await fetch('/api/mission-control/state');
-        if (!res.ok) return;
-        const data = await res.json();
-        missionControlState = data;
-        renderMissionControl(data);
-        await fetchMissionControlKanban();
+        await Promise.all([
+          fetch('/api/mission-control/state').then(async res => {
+            if (!res.ok) return;
+            const data = await res.json();
+            missionControlState = data;
+            renderMissionControl(data);
+          }),
+          fetchMissionControlKanban()
+        ]);
       } catch (e) {
         console.error("Error fetching mission control state:", e);
       } finally {
         if (force) {
-          setTimeout(() => hideLoadingOverlay(), 350);
+          setTimeout(() => hideLoadingOverlay(), 200);
         }
         if (mcRoot && !mcRoot.classList.contains("hidden")) {
           if (missionControlPollTimer) clearTimeout(missionControlPollTimer);
-          missionControlPollTimer = setTimeout(() => fetchMissionControlData(), 4000);
+          missionControlPollTimer = setTimeout(() => fetchMissionControlData(), 15000);
         }
       }
     }
+
+    // Realtime Push Client (Pillar 1 & 3: SSE)
+    (function initMissionControlSSE() {
+      if (window.__mc_sse_connected) return;
+      window.__mc_sse_connected = true;
+      try {
+        const es = new EventSource("/api/v1/events/stream");
+        es.onmessage = function(event) {
+          try {
+            const ev = JSON.parse(event.data);
+            if (ev.type === "kanban_updated" || ev.type === "task_captured") {
+              fetchMissionControlKanban();
+              fetchMissionControlData(false);
+              if (typeof loadOperationsData === "function") loadOperationsData(false);
+            } else if (ev.type === "ticker_update" && ev.data) {
+              const d = ev.data;
+              if (typeof addTickerItemToDom === "function") addTickerItemToDom(d.agent, d.message, d.time);
+            }
+          } catch(err) {}
+        };
+        es.onerror = function() {
+          // Fallback bleibt durch das 15s-Intervall aktiv
+        };
+      } catch (e) {
+        console.warn("[SSE] EventSource nicht verfügbar:", e);
+      }
+    })();
     function renderMissionControl(data) {
       if (!data) return;
       // 1. ZONE 1: 5 KPI Kacheln
@@ -171,16 +201,14 @@
       // 4. ACTIVE PROCESS INSPECTION BAR (Heartbeat, Tool-Parallelität, Kontextfenster-Druck)
       renderMissionControlProcessInspection(data);
       // 5. ZONE 3: Flotten-Kader Box (Aktive oder bereitstehende Agenten)
+      let domChanged = false;
       const cadreList = document.getElementById("mc-cadre-list");
       if (cadreList && Array.isArray(data.cadre)) {
-        if (data.cadre.length === 0) {
-          cadreList.innerHTML = `
+        const nextCadreHtml = data.cadre.length === 0 ? `
             <div class="p-2.5 text-center text-[10.5px] shadcn-muted bg-[var(--secondary)] rounded-lg border border-[var(--border)]">
               Keine aktiven Projekt-Agenten.
             </div>
-          `;
-        } else {
-          cadreList.innerHTML = data.cadre.map(c => {
+          ` : data.cadre.map(c => {
             const isBusy = (c.status || "").toLowerCase() === "beschäftigt";
             return `
               <div class="flex items-center justify-between p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] transition">
@@ -204,25 +232,36 @@
               </div>
             `;
           }).join('');
+        if (cadreList._lastHtml !== nextCadreHtml) {
+          cadreList.innerHTML = nextCadreHtml;
+          cadreList._lastHtml = nextCadreHtml;
+          domChanged = true;
         }
       }
       // 6. ZONE 3: Audit Stream Feed
       const auditFeed = document.getElementById("mc-audit-feed");
       if (auditFeed && Array.isArray(data.audit_logs)) {
-        auditFeed.innerHTML = data.audit_logs.map(log => `
+        const nextAuditHtml = data.audit_logs.map(log => `
           <div class="leading-relaxed border-b border-[var(--border)] pb-1 last:border-b-0">
             <span class="shadcn-muted">[${escapeHtmlMC(log.time || '')}]</span>
             <span class="font-semibold text-[var(--foreground)]">${escapeHtmlMC(log.source || 'System')}:</span>
             <span class="text-[var(--foreground)] opacity-85">${escapeHtmlMC(log.msg || '')}</span>
           </div>
         `).join('');
-      }
-      try {
-        if (window.lucide && typeof lucide.createIcons === 'function') {
-          lucide.createIcons();
+        if (auditFeed._lastHtml !== nextAuditHtml) {
+          auditFeed.innerHTML = nextAuditHtml;
+          auditFeed._lastHtml = nextAuditHtml;
+          domChanged = true;
         }
-      } catch (e) {
-        console.warn("Lucide icons update error:", e);
+      }
+      if (domChanged) {
+        try {
+          if (window.lucide && typeof lucide.createIcons === 'function') {
+            lucide.createIcons();
+          }
+        } catch (e) {
+          console.warn("Lucide icons update error:", e);
+        }
       }
     }
     // KANBAN-ORCHESTRIERUNG (12.10., User-Entscheidung): 5-Spalten-Modell wie
@@ -261,6 +300,12 @@
     }
     function mcKanbanMetaLine(t) {
       const parts = [];
+      if (t.tokens || t.cost) {
+        const tokStr = t.tokens ? (typeof t.tokens === 'number' && t.tokens >= 1000 ? (t.tokens / 1000).toFixed(1) + 'k' : t.tokens) + ' Tok' : '';
+        const costStr = t.cost !== undefined && t.cost !== null ? '$' + Number(t.cost).toFixed(2) : '';
+        const badgeStr = [tokStr, costStr].filter(Boolean).join(' · ');
+        parts.push(`<span class="inline-flex items-center gap-1 font-mono font-semibold px-1 py-0.2 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 text-[9px]">🪙 ${escapeHtmlMC(badgeStr)}</span>`);
+      }
       if (t.due_date) {
         parts.push(`<span class="${mcKanbanOverdue(t.due_date) ? 'text-rose-500 font-bold' : ''}">📅 ${escapeHtmlMC(t.due_date)}</span>`);
       }
@@ -325,6 +370,7 @@
     }
     function renderMissionControlKanban() {
       const cols = (mcKanbanCache && mcKanbanCache.columns) || {};
+      let anyChanged = false;
       MC_KANBAN_COLS.forEach(col => {
         const group = MC_KANBAN_GROUPS[col] || [col];
         const entries = [];
@@ -332,11 +378,20 @@
         const el = document.getElementById('mc-col-' + col);
         const countEl = document.getElementById('mc-count-' + col);
         if (countEl) countEl.innerText = entries.length;
-        if (el) el.innerHTML = entries.length ? entries.map(t => mcKanbanCard(t, col)).join('') : `<div class="p-3 text-center text-[10.5px] shadcn-muted">Keine Aufgaben.</div>`;
+        if (el) {
+          const nextHtml = entries.length ? entries.map(t => mcKanbanCard(t, col)).join('') : `<div class="p-3 text-center text-[10.5px] shadcn-muted">Keine Aufgaben.</div>`;
+          if (el._lastHtml !== nextHtml) {
+            el.innerHTML = nextHtml;
+            el._lastHtml = nextHtml;
+            anyChanged = true;
+          }
+        }
       });
-      try {
-        if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
-      } catch (e) { /* Icons optional */ }
+      if (anyChanged) {
+        try {
+          if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+        } catch (e) { /* Icons optional */ }
+      }
     }
     async function mcKanbanMove(taskId, targetStatus) {
       try {
@@ -492,7 +547,9 @@
     }
     // Live Stoppuhr Update für Spalte 3 (In Arbeit) mit lesbarer Formatierung & Attention-Badge
     function startMissionControlStopwatches() {
-      setInterval(() => {
+      if (window.__mc_stopwatch_interval) return;
+      window.__mc_stopwatch_interval = setInterval(() => {
+        if (document.hidden) return;
         const mcRoot = document.getElementById("view-mission-control");
         if (mcRoot && mcRoot.classList.contains("hidden")) return;
         const sws = document.querySelectorAll('.mc-stopwatch');
@@ -521,12 +578,12 @@
       const sumVal = dataPoints.reduce((a, b) => a + b, 0);
       const avgVal = dataPoints.length > 0 ? (sumVal / dataPoints.length) : 0;
       const width = 300;
-      const height = 50;
+      const height = 64;
       const step = width / Math.max(1, dataPoints.length - 1);
       const points = dataPoints.map((val, idx) => {
         const x = idx * step;
-        // Wenn maxVal == 0, zeichne eine flache Linie genau an der Grundlinie
-        const y = maxVal > 0 ? (height - ((val / maxVal) * (height - 10)) - 4) : (height - 4);
+        // 0-Linie schließt bündig unten ab (kein toter Raum / Platzverschwendung unter 0)
+        const y = maxVal > 0 ? (height - ((val / maxVal) * (height - 4))) : height;
         return { x, y };
       });
       let dLine = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
@@ -697,23 +754,4 @@
     function closeMissionControlArtifactModal() {
       const modal = document.getElementById("mc-artifact-modal");
       if (modal) modal.classList.add("hidden");
-    }
-    // Live Stoppuhr Update für Spalte 3 (In Arbeit)
-    function startMissionControlStopwatches() {
-      setInterval(() => {
-        const mcRoot = document.getElementById("view-mission-control");
-        if (mcRoot && mcRoot.classList.contains("hidden")) return;
-        const sws = document.querySelectorAll('.mc-stopwatch');
-        if (!sws || sws.length === 0) return;
-        const nowSec = Date.now() / 1000;
-        sws.forEach(el => {
-          const start = parseFloat(el.getAttribute('data-start') || '0');
-          if (start > 0) {
-            const diff = Math.max(0, Math.floor(nowSec - start));
-            const mins = String(Math.floor(diff / 60)).padStart(2, '0');
-            const secs = String(diff % 60).padStart(2, '0');
-            el.innerText = `${mins}:${secs}`;
-          }
-        });
-      }, 1000);
-    }
+    }

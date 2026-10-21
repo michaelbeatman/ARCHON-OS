@@ -1,12 +1,15 @@
 <!-- MODAL: SYSTEM SETTINGS CONTROL CENTER -->
   <div id="system-settings-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-    <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 w-[94vw] max-w-6xl h-[92vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+    <div id="system-settings-modal-card" class="os-modal bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 w-[94vw] max-w-6xl h-[92vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden transition-all duration-200">
       <!-- Modal Header -->
       <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
         <h3 class="text-sm font-bold uppercase text-[var(--foreground)] tracking-wider flex items-center gap-2">
           <i data-lucide="settings" class="w-4 h-4 text-black dark:text-white"></i> System Control Center
         </h3>
         <div class="flex items-center gap-2">
+          <button type="button" id="modal-header-dock-btn" onclick="toggleSettingsDockMode()" title="Fenster rechts andocken für freien Live-Blick auf die echte Oberfläche" class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="panel-right" class="w-3.5 h-3.5"></i> Live-Dock
+          </button>
           <button type="button" onclick="openContextHelp('system_settings')" title="Hilfe zu Systemeinstellungen" class="text-[var(--muted-foreground)] hover:text-sky-500 p-1 rounded-lg hover:bg-[var(--secondary)] transition cursor-pointer">
             <i data-lucide="help-circle" class="w-4 h-4"></i>
           </button>
@@ -544,27 +547,512 @@
         <!-- Tab 6: Design & Farben (CRM-Stil, TAG-Manager, Rahmen & CSS-Editor) -->
         <div id="settings-tab-design" class="hidden space-y-4 text-xs">
           
-          <!-- CRM Firmenlogo / Logo Box -->
-          <div class="border border-[var(--border)] rounded-xl p-3.5 bg-[var(--background)] space-y-2.5 shadow-xs">
-            <h4 class="font-bold text-[10.5px] uppercase font-mono tracking-wider text-[var(--foreground)]">CRM FIRMENLOGO (OBEN LINKS)</h4>
-            <div class="flex items-center gap-4">
-              <div class="flex-1 bg-slate-950 p-3 rounded-xl flex items-center justify-center min-h-[50px] border border-[var(--border)]">
-                <img id="crm-modal-logo-preview" src="/static/logo.png" onerror="this.style.display='none'; document.getElementById('crm-modal-logo-fallback').style.display='flex';" class="max-h-8 max-w-[180px] object-contain">
-                <div id="crm-modal-logo-fallback" class="hidden items-center gap-1.5 text-white font-bold text-sm font-sans">
-                  <span class="tracking-wider">ARCHON</span><span class="text-[#EF233C]">CRM</span>
+
+
+          <!-- ========================================================================= -->
+          <!-- NEUES ARCHON 15-BAUSTEINE DESIGN-STUDIO & DUAL-THEME-ENGINE               -->
+          <!-- ========================================================================= -->
+          <div id="archon-15-component-studio" class="space-y-3">
+            <!-- Top Bar: Theme Manager + Light/Dark Switch + Live-Dock (Clean & Simple) -->
+            <div class="border border-[var(--border)] rounded-xl p-3 bg-[var(--background)] space-y-2.5 shadow-xs">
+              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-2.5">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-mono font-bold text-[10px] uppercase">16-Bausteine Engine</span>
+                  <span class="text-xs font-bold text-[var(--foreground)]">Zentrales Komponenten-Design &amp; Dual-Themes (Hell + Dunkel)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" id="cds-inspector-btn" onclick="cdsToggleInspectorMode()" class="px-3 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-mono font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="Klicke ein beliebiges Element im Workspace an, um seinen Baustein sofort im Studio zu bearbeiten">
+                    <i data-lucide="crosshair" class="w-3.5 h-3.5"></i> <span id="cds-inspector-btn-text">🎯 Element anklicken</span>
+                  </button>
+                  <button type="button" id="cds-dock-btn" onclick="toggleSettingsDockMode()" class="px-3 py-1.5 rounded-lg border border-zinc-900 dark:border-zinc-200 bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] font-mono font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                    <i data-lucide="panel-right" class="w-3.5 h-3.5"></i> 🗗 Rechts andocken
+                  </button>
                 </div>
               </div>
-              <div class="flex flex-col gap-2 shrink-0">
-                <label class="cursor-pointer bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-bold px-3.5 py-1.5 rounded-lg text-xs transition shadow-sm text-center">
-                  Bild auswählen...
-                  <input type="file" id="crm-logo-file-input" accept="image/*" class="hidden" onchange="handleCrmLogoUpload(event)">
-                </label>
-                <button type="button" onclick="resetCrmLogo()" class="bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 text-[var(--foreground)] border border-[var(--border)] font-bold px-3.5 py-1 rounded-lg text-xs transition text-center cursor-pointer">
-                  Löschen
-                </button>
+
+              <!-- Row 2: Theme Select, Save As New Theme, Mode Switcher -->
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-2.5 items-center">
+                <!-- Theme Select & Export/Import -->
+                <div class="lg:col-span-5 flex items-center gap-1.5">
+                  <label class="text-[10px] font-mono font-bold uppercase text-[var(--muted-foreground)] shrink-0">Theme:</label>
+                  <select id="cds-theme-select" onchange="cdsSelectTheme(this.value)" class="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-bold text-[var(--foreground)] cursor-pointer"></select>
+                  <button type="button" onclick="cdsExportThemeJson()" title="Theme exportieren" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] cursor-pointer">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <label title="Theme importieren" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] cursor-pointer">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                    <input type="file" accept=".json" class="hidden" onchange="cdsImportThemeJson(this)">
+                  </label>
+                  <button type="button" onclick="cdsDeleteActiveTheme()" title="Theme löschen" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-red-500/10 text-red-500 cursor-pointer">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+
+                <!-- Save as new theme -->
+                <div class="lg:col-span-4 flex items-center gap-1.5">
+                  <input type="text" id="cds-new-theme-name" placeholder="Neuer Theme-Name..." class="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)]">
+                  <button type="button" onclick="cdsSaveAsNewTheme()" class="px-3 py-1.5 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs transition cursor-pointer shrink-0 shadow-xs">
+                    + Speichern
+                  </button>
+                </div>
+
+                <!-- Mode Switcher (Hell / Dunkel) -->
+                <div class="lg:col-span-3 flex items-center gap-1.5">
+                  <button type="button" id="cds-mode-light" onclick="cdsSetMode('light')" class="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border text-xs font-bold transition cursor-pointer">
+                    <span>☀️</span> Hell
+                  </button>
+                  <button type="button" id="cds-mode-dark" onclick="cdsSetMode('dark')" class="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border text-xs font-bold transition cursor-pointer">
+                    <span>🌙</span> Dunkel
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Main Studio Split: Left 15 Components | Right Live Preview + State Switcher + 6 Studio Accordions -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+              <!-- Left Column: The 15 Fixed Component Classes -->
+              <div class="lg:col-span-4 border border-[var(--border)] rounded-xl p-2.5 bg-[var(--background)] space-y-1.5 max-h-[68vh] overflow-y-auto custom-scrollbar">
+                <div class="flex items-center justify-between px-1 pb-1 border-b border-[var(--border)]">
+                  <span class="text-[10px] font-mono font-bold uppercase text-[var(--muted-foreground)]">15 System-Bausteine</span>
+                  <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Overrides</span>
+                </div>
+                <div id="cds-component-list" class="space-y-1"></div>
+              </div>
+
+              <!-- Right Column: Active Component Inspector & Full CSS Studio -->
+              <div class="lg:col-span-8 border border-[var(--border)] rounded-xl p-3 bg-[var(--background)] space-y-3 max-h-[68vh] overflow-y-auto custom-scrollbar relative">
+                
+                <!-- STICKY TOP CONTAINER: Component Header, Live Preview & State Switcher (bleibt immer oben sichtbar beim Scrollen) -->
+                <div class="sticky -top-3 z-20 bg-[var(--background)] pt-1 pb-2 border-b border-[var(--border)] space-y-2.5 shadow-sm backdrop-blur-md">
+                  <!-- Selected Component Info + Where Used + Reset Button -->
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <h5 id="cds-active-comp-title" class="text-sm font-bold text-[var(--foreground)]">04. Insel-Container (Außenkarte)</h5>
+                        <code id="cds-active-comp-selector" class="px-2 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] text-[10px] font-mono text-[var(--muted-foreground)]">.os-island</code>
+                      </div>
+                      <p id="cds-active-comp-desc" class="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">Äußere Haupt-Container für Bereiche, Filterleisten und Sektionen</p>
+                      <!-- Wo wird das angewendet? Kontext-Badge -->
+                      <div class="flex items-center gap-1.5 mt-1">
+                        <span class="text-[9.5px] font-mono uppercase font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.2 rounded shrink-0">Wird angewendet in:</span>
+                        <span id="cds-active-comp-usage" class="text-[10px] font-medium text-[var(--foreground)] truncate">Alle Inhalts-Karten, Filter-Container, Dialoge & Listen</span>
+                      </div>
+                    </div>
+                    <button type="button" onclick="cdsResetCurrentComponent()" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-red-500/10 hover:border-red-500/40 text-xs font-mono text-[var(--muted-foreground)] hover:text-red-500 transition flex items-center gap-1 cursor-pointer shrink-0">
+                      <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Zurücksetzen
+                    </button>
+                  </div>
+
+                  <!-- Live Preview Box (Individuelle Baustein-Vorschau) -->
+                  <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[10px] font-mono font-bold uppercase text-[var(--muted-foreground)] flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Interaktive Baustein-Vorschau (Echtzeit)
+                      </span>
+                      <span class="text-[9.5px] font-mono text-[var(--muted-foreground)]">Maus drüberfahren (:hover) oder klicken</span>
+                    </div>
+                    <div id="cds-live-preview-stage" class="p-2.5 rounded-xl border border-[var(--border)] transition-all flex items-center justify-center min-h-[90px] max-h-[160px] overflow-hidden bg-[var(--card)]/50 shadow-inner"></div>
+                  </div>
+
+                  <!-- State Switcher: Normal | Hover (:hover) | Aktiv (.is-active) -->
+                  <div class="p-1.5 rounded-xl bg-[var(--secondary)]/60 border border-[var(--border)] space-y-1">
+                    <div class="flex items-center justify-between px-1">
+                      <span class="text-[9.5px] font-mono font-bold uppercase text-[var(--foreground)]">Zustands-Editor</span>
+                      <span class="text-[9.5px] font-mono text-[var(--muted-foreground)]">Wähle Zustand für die Regler unten:</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <button type="button" id="cds-state-btn-normal" onclick="cdsSelectState('normal')" class="flex-1 py-1 px-2 rounded-lg border text-xs font-mono font-bold transition cursor-pointer">
+                        Normal
+                      </button>
+                      <button type="button" id="cds-state-btn-hover" onclick="cdsSelectState('hover')" class="flex-1 py-1 px-2 rounded-lg border text-xs font-mono font-bold transition cursor-pointer">
+                        Hover (:hover)
+                      </button>
+                      <button type="button" id="cds-state-btn-active" onclick="cdsSelectState('active')" class="flex-1 py-1 px-2 rounded-lg border text-xs font-mono font-bold transition cursor-pointer">
+                        Aktiv (.is-active)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SPECIAL PANEL FOR #07 KANBAN COLUMNS (Manual 5-Column Color Picker) -->
+                <div id="cds-kanban-columns-special" class="hidden p-3 rounded-xl border-2 border-zinc-900 dark:border-zinc-200 bg-[var(--secondary)]/40 space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h6 class="text-xs font-bold uppercase font-mono text-[var(--foreground)]">🎨 Manuelle Farbsteuerung aller 5 Kanban-Spalten (Mission Control &amp; Operations)</h6>
+                      <p class="text-[10px] text-[var(--muted-foreground)]">Jede der 5 Spalten ist hier einzeln in Hintergrundfarbe, Deckkraft (z.B. 10%), Rahmenfarbe und Header-Farbe steuerbar.</p>
+                    </div>
+                  </div>
+                  <div id="cds-kanban-cols-grid" class="grid grid-cols-1 md:grid-cols-2 gap-2.5"></div>
+                </div>
+
+                <!-- SPECIAL PANEL FOR #16 FIRMENLOGO (EIGENES MODUL) -->
+                <div id="cds-logo-special" class="hidden p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
+                  <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+                    <div>
+                      <h6 class="text-xs font-bold uppercase font-mono text-[var(--foreground)]">🖼️ Firmenlogo Bilddatei &amp; Reset</h6>
+                      <p class="text-[10.5px] text-[var(--muted-foreground)]">Lade hier ein eigenes Logo für Sidebar oben links hoch oder setze es auf das Archon OS Standardlogo zurück.</p>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <label class="cursor-pointer bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-bold px-3.5 py-1.5 rounded-lg text-xs transition shadow-sm text-center flex items-center gap-1.5">
+                      <i data-lucide="image" class="w-3.5 h-3.5"></i> Bild auswählen...
+                      <input type="file" id="crm-logo-file-input" accept="image/*" class="hidden" onchange="handleCrmLogoUpload(event)">
+                    </label>
+                    <button type="button" onclick="resetCrmLogo()" class="bg-[var(--secondary)] hover:bg-red-500/10 hover:border-red-500/40 text-[var(--foreground)] hover:text-red-500 border border-[var(--border)] font-bold px-3.5 py-1.5 rounded-lg text-xs transition text-center cursor-pointer flex items-center gap-1.5">
+                      <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Auf Standard-Logo zurücksetzen
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 6 FULL CSS-STUDIO ACCORDIONS -->
+                <div class="space-y-2">
+                  <!-- 1. TYPOGRAFIE & TEXT -->
+                  <details open class="group border border-[var(--border)] rounded-xl bg-[var(--card)] overflow-hidden">
+                    <summary class="px-3 py-2 bg-[var(--secondary)]/50 cursor-pointer font-mono font-bold text-xs flex items-center justify-between select-none">
+                      <span>1. Typografie, Schriftart &amp; Textfarbe</span>
+                      <span class="text-[10px] text-[var(--muted-foreground)] group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] font-mono">
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Schriftart (Font-Family)</label>
+                        <select id="cds-font-family" onchange="cdsSetProp('font-family', this.value === 'inherit' ? '' : this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <option value="inherit">-- Standard --</option>
+                          <option value="'Inter', sans-serif">Inter (Sans)</option>
+                          <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+                          <option value="'DM Sans', sans-serif">DM Sans</option>
+                          <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
+                          <option value="'Outfit', sans-serif">Outfit</option>
+                          <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                          <option value="'Fira Code', monospace">Fira Code</option>
+                          <option value="system-ui, sans-serif">System UI</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Textfarbe (color)</label>
+                        <div class="flex items-center gap-1">
+                          <input type="color" id="cds-color-picker" oninput="cdsSetProp('color', this.value)" class="w-7 h-7 rounded border border-[var(--border)] cursor-pointer p-0 shrink-0">
+                          <input type="text" id="cds-color-hex" placeholder="z.B. #0f172a" onchange="cdsSetProp('color', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="flex justify-between text-[10px] text-[var(--muted-foreground)] mb-1">
+                          <span>Schriftgröße</span><span id="cds-font-size-val">Standard</span>
+                        </label>
+                        <div class="flex items-center gap-1.5">
+                          <input type="range" id="cds-font-size-range" min="9" max="36" step="0.5" oninput="cdsSetProp('font-size', this.value + 'px')" class="flex-1 cursor-pointer">
+                          <input type="text" id="cds-font-size-input" placeholder="13px" onchange="cdsSetProp('font-size', this.value)" class="w-14 bg-[var(--background)] border border-[var(--border)] rounded px-1.5 py-0.5 text-xs text-center">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Schriftstärke (Weight)</label>
+                        <select id="cds-font-weight" onchange="cdsSetProp('font-weight', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <option value="">-- Standard --</option>
+                          <option value="300">300 (Light)</option>
+                          <option value="400">400 (Normal)</option>
+                          <option value="500">500 (Medium)</option>
+                          <option value="600">600 (Semi-Bold)</option>
+                          <option value="700">700 (Bold)</option>
+                          <option value="800">800 (Extra-Bold)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Zeilenhöhe &amp; Abstand</label>
+                        <div class="grid grid-cols-2 gap-1">
+                          <input type="text" id="cds-line-height" placeholder="Line: 1.4" onchange="cdsSetProp('line-height', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-letter-spacing" placeholder="Track: 0.5px" onchange="cdsSetProp('letter-spacing', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Ausrichtung &amp; Stil</label>
+                        <div class="grid grid-cols-3 gap-1">
+                          <select id="cds-text-align" onchange="cdsSetProp('text-align', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded px-1 py-1 text-[10px]">
+                            <option value="">Align</option>
+                            <option value="left">Links</option>
+                            <option value="center">Mitte</option>
+                            <option value="right">Rechts</option>
+                          </select>
+                          <select id="cds-text-transform" onchange="cdsSetProp('text-transform', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded px-1 py-1 text-[10px]">
+                            <option value="">Case</option>
+                            <option value="uppercase">UPPER</option>
+                            <option value="capitalize">Title</option>
+                            <option value="none">Normal</option>
+                          </select>
+                          <select id="cds-text-decoration" onchange="cdsSetProp('text-decoration', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded px-1 py-1 text-[10px]">
+                            <option value="">Dekor</option>
+                            <option value="none">Keine</option>
+                            <option value="underline">Unterstr.</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <!-- 2. HINTERGRUND, BILD & DECKKRAFT -->
+                  <details open class="group border border-[var(--border)] rounded-xl bg-[var(--card)] overflow-hidden">
+                    <summary class="px-3 py-2 bg-[var(--secondary)]/50 cursor-pointer font-mono font-bold text-xs flex items-center justify-between select-none">
+                      <span>2. Hintergrundfarbe, Verlauf, Bild &amp; Deckkraft</span>
+                      <span class="text-[10px] text-[var(--muted-foreground)] group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] font-mono">
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Hintergrundfarbe (background-color)</label>
+                        <div class="flex items-center gap-1">
+                          <input type="color" id="cds-bg-picker" oninput="cdsSetProp('background-color', this.value)" class="w-7 h-7 rounded border border-[var(--border)] cursor-pointer p-0 shrink-0">
+                          <input type="text" id="cds-bg-hex" placeholder="#ffffff oder rgba(...)" onchange="cdsSetProp('background-color', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Bild / Verlauf (background-image)</label>
+                        <div class="flex items-center gap-1">
+                          <input type="text" id="cds-bg-image" placeholder="url(...) oder linear-gradient(...)" onchange="cdsSetProp('background-image', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <label title="Eigenes Hintergrundbild hochladen" class="px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--background)] cursor-pointer shrink-0">
+                            📁
+                            <input type="file" accept="image/*" class="hidden" onchange="cdsUploadBgImage(this)">
+                          </label>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Bg-Größe &amp; Repeat</label>
+                        <div class="grid grid-cols-2 gap-1">
+                          <select id="cds-bg-size" onchange="cdsSetProp('background-size', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                            <option value="auto">auto</option>
+                            <option value="cover">cover</option>
+                            <option value="contain">contain</option>
+                          </select>
+                          <select id="cds-bg-repeat" onchange="cdsSetProp('background-repeat', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                            <option value="no-repeat">no-repeat</option>
+                            <option value="repeat">repeat</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Deckkraft (opacity 0.0 - 1.0)</label>
+                        <input type="number" id="cds-opacity" min="0" max="1" step="0.05" onchange="cdsSetProp('opacity', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Glas-Effekt / Blur (backdrop-filter)</label>
+                        <div class="flex items-center gap-1.5">
+                          <input type="text" id="cds-backdrop-filter" placeholder="z.B. blur(12px)" onchange="cdsSetProp('backdrop-filter', this.value)" class="flex-1 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <button type="button" onclick="cdsSetProp('backdrop-filter', 'blur(12px)')" class="px-2 py-1 rounded border border-[var(--border)] bg-[var(--secondary)] text-[10px] cursor-pointer">Blur 12px</button>
+                          <button type="button" onclick="cdsSetProp('backdrop-filter', '')" class="px-2 py-1 rounded border border-[var(--border)] bg-[var(--secondary)] text-[10px] cursor-pointer">Aus</button>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <!-- 3. RAHMEN (BORDER) & ECKENRADIUS -->
+                  <details open class="group border border-[var(--border)] rounded-xl bg-[var(--card)] overflow-hidden">
+                    <summary class="px-3 py-2 bg-[var(--secondary)]/50 cursor-pointer font-mono font-bold text-xs flex items-center justify-between select-none">
+                      <span>3. Rahmenbreite, Rahmenfarbe &amp; Eckenradius</span>
+                      <span class="text-[10px] text-[var(--muted-foreground)] group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] font-mono">
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Rahmenfarbe (border-color)</label>
+                        <div class="flex items-center gap-1">
+                          <input type="color" id="cds-border-color-picker" oninput="cdsSetProp('border-color', this.value)" class="w-7 h-7 rounded border border-[var(--border)] cursor-pointer p-0 shrink-0">
+                          <input type="text" id="cds-border-color-hex" placeholder="#cbd5e1" onchange="cdsSetProp('border-color', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="flex justify-between text-[10px] text-[var(--muted-foreground)] mb-1">
+                          <span>Rahmenbreite (border-width)</span><span id="cds-border-width-val">1px</span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                          <input type="range" id="cds-border-width-range" min="0" max="12" step="0.5" oninput="cdsSetProp('border-width', this.value + 'px')" class="flex-1 cursor-pointer">
+                          <select id="cds-border-style" onchange="cdsSetProp('border-style', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded px-1.5 py-0.5 text-xs">
+                            <option value="solid">solid</option>
+                            <option value="dashed">dashed</option>
+                            <option value="dotted">dotted</option>
+                            <option value="double">double</option>
+                            <option value="none">none</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="flex justify-between text-[10px] text-[var(--muted-foreground)] mb-1">
+                          <span>Eckenradius (border-radius)</span><span id="cds-border-radius-val">Standard</span>
+                        </label>
+                        <input type="range" id="cds-border-radius-range" min="0" max="36" step="1" oninput="cdsSetProp('border-radius', this.value + 'px')" class="w-full cursor-pointer">
+                      </div>
+                      <div class="md:col-span-3">
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Einzelne Ecken (Oben-Links, Oben-Rechts, Unten-Rechts, Unten-Links)</label>
+                        <div class="grid grid-cols-4 gap-2">
+                          <input type="text" id="cds-radius-tl" placeholder="TL z.B. 12px" onchange="cdsSetProp('border-top-left-radius', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-radius-tr" placeholder="TR z.B. 12px" onchange="cdsSetProp('border-top-right-radius', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-radius-br" placeholder="BR z.B. 12px" onchange="cdsSetProp('border-bottom-right-radius', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-radius-bl" placeholder="BL z.B. 12px" onchange="cdsSetProp('border-bottom-left-radius', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <!-- 4. ABSTÄNDE & BOX-MODELL (MARGIN, PADDING, GRÖSSE) -->
+                  <details class="group border border-[var(--border)] rounded-xl bg-[var(--card)] overflow-hidden">
+                    <summary class="px-3 py-2 bg-[var(--secondary)]/50 cursor-pointer font-mono font-bold text-xs flex items-center justify-between select-none">
+                      <span>4. Abstände &amp; Box-Modell (Padding, Margin, Breite/Höhe)</span>
+                      <span class="text-[10px] text-[var(--muted-foreground)] group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div class="p-3 space-y-2.5 text-[11px] font-mono">
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Innenabstand (Padding: Oben, Rechts, Unten, Links)</label>
+                        <div class="grid grid-cols-4 gap-2">
+                          <input type="text" id="cds-pt" placeholder="Oben (z.B. 12px)" onchange="cdsSetProp('padding-top', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-pr" placeholder="Rechts (z.B. 16px)" onchange="cdsSetProp('padding-right', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-pb" placeholder="Unten (z.B. 12px)" onchange="cdsSetProp('padding-bottom', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-pl" placeholder="Links (z.B. 16px)" onchange="cdsSetProp('padding-left', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Außenabstand (Margin: Oben, Rechts, Unten, Links)</label>
+                        <div class="grid grid-cols-4 gap-2">
+                          <input type="text" id="cds-mt" placeholder="Oben (z.B. 0px)" onchange="cdsSetProp('margin-top', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-mr" placeholder="Rechts" onchange="cdsSetProp('margin-right', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-mb" placeholder="Unten (z.B. 12px)" onchange="cdsSetProp('margin-bottom', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-ml" placeholder="Links" onchange="cdsSetProp('margin-left', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Dimensionen (Breite, Höhe, Min-Width, Max-Width)</label>
+                        <div class="grid grid-cols-4 gap-2">
+                          <input type="text" id="cds-width" placeholder="Width (z.B. auto)" onchange="cdsSetProp('width', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-height" placeholder="Height (z.B. auto)" onchange="cdsSetProp('height', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-min-width" placeholder="Min-W" onchange="cdsSetProp('min-width', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <input type="text" id="cds-max-width" placeholder="Max-W" onchange="cdsSetProp('max-width', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <!-- 5. LAYOUT, FLEXBOX & INSEL-ABSTAND (GAP) -->
+                  <details class="group border border-[var(--border)] rounded-xl bg-[var(--card)] overflow-hidden">
+                    <summary class="px-3 py-2 bg-[var(--secondary)]/50 cursor-pointer font-mono font-bold text-xs flex items-center justify-between select-none">
+                      <span>5. Layout, Flexbox &amp; Abstand zwischen Inseln/Elementen (Gap)</span>
+                      <span class="text-[10px] text-[var(--muted-foreground)] group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] font-mono">
+                      <div>
+                        <label class="flex justify-between text-[10px] text-[var(--muted-foreground)] mb-1">
+                          <span>Element-/Insel-Abstand (gap)</span><span id="cds-gap-val">Standard</span>
+                        </label>
+                        <div class="flex items-center gap-1.5">
+                          <input type="range" id="cds-gap-range" min="0" max="48" step="2" oninput="cdsSetProp('gap', this.value + 'px')" class="flex-1 cursor-pointer">
+                          <input type="text" id="cds-gap-input" placeholder="16px" onchange="cdsSetProp('gap', this.value)" class="w-14 bg-[var(--background)] border border-[var(--border)] rounded px-1.5 py-0.5 text-xs text-center">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Display &amp; Flex-Direction</label>
+                        <div class="grid grid-cols-2 gap-1">
+                          <select id="cds-display" onchange="cdsSetProp('display', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                            <option value="">Display</option>
+                            <option value="flex">flex</option>
+                            <option value="inline-flex">inline-flex</option>
+                            <option value="grid">grid</option>
+                            <option value="block">block</option>
+                          </select>
+                          <select id="cds-flex-direction" onchange="cdsSetProp('flex-direction', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                            <option value="">Direction</option>
+                            <option value="row">row</option>
+                            <option value="column">column</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Align &amp; Justify</label>
+                        <div class="grid grid-cols-2 gap-1">
+                          <select id="cds-align-items" onchange="cdsSetProp('align-items', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                            <option value="">Align</option>
+                            <option value="center">center</option>
+                            <option value="flex-start">start</option>
+                            <option value="flex-end">end</option>
+                            <option value="stretch">stretch</option>
+                          </select>
+                          <select id="cds-justify-content" onchange="cdsSetProp('justify-content', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                            <option value="">Justify</option>
+                            <option value="flex-start">start</option>
+                            <option value="center">center</option>
+                            <option value="space-between">between</option>
+                            <option value="flex-end">end</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Position</label>
+                        <select id="cds-position" onchange="cdsSetProp('position', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <option value="">-- Standard --</option>
+                          <option value="relative">relative</option>
+                          <option value="sticky">sticky</option>
+                          <option value="fixed">fixed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Overflow</label>
+                        <select id="cds-overflow" onchange="cdsSetProp('overflow', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <option value="">-- Standard --</option>
+                          <option value="hidden">hidden</option>
+                          <option value="auto">auto</option>
+                          <option value="visible">visible</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Z-Index</label>
+                        <input type="text" id="cds-z-index" placeholder="z.B. 10" onchange="cdsSetProp('z-index', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                      </div>
+                    </div>
+                  </details>
+
+                  <!-- 6. SCHATTEN (BOX-SHADOW) & EFFEKTE -->
+                  <details open class="group border border-[var(--border)] rounded-xl bg-[var(--card)] overflow-hidden">
+                    <summary class="px-3 py-2 bg-[var(--secondary)]/50 cursor-pointer font-mono font-bold text-xs flex items-center justify-between select-none">
+                      <span>6. Schatten (Box-Shadow), Fokus-Leuchten &amp; Übergänge</span>
+                      <span class="text-[10px] text-[var(--muted-foreground)] group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] font-mono">
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Schatten-Vorlagen (Presets)</label>
+                        <select id="cds-box-shadow-select" onchange="cdsSetProp('box-shadow', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <option value="">-- Benutzerdefiniert / Standard --</option>
+                          <option value="none">Kein Schatten (none)</option>
+                          <option value="0 1px 2px 0 rgba(15, 23, 42, 0.04)">Subtil XS</option>
+                          <option value="0 2px 8px -2px rgba(15, 23, 42, 0.05)">Sanft Cards (Archon)</option>
+                          <option value="0 4px 12px -2px rgba(15, 23, 42, 0.08)">Medium Schwebend</option>
+                          <option value="0 10px 25px -5px rgba(15, 23, 42, 0.15)">Tiefes Modal XL</option>
+                          <option value="3px 3px 0px #09090b">Brutalist Hard-Edge (Schwarz)</option>
+                          <option value="2px 2px 0px #09090b">Aktiv-Button Hard-Shadow (2px)</option>
+                          <option value="0 0 0 2px rgba(9, 9, 11, 0.12)">Fokus-Ring (2px Outline)</option>
+                        </select>
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Freier CSS Box-Shadow Wert</label>
+                        <input type="text" id="cds-box-shadow-input" placeholder="z.B. 0 4px 12px rgba(0,0,0,0.08)" onchange="cdsSetProp('box-shadow', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Mauszeiger (cursor)</label>
+                        <select id="cds-cursor" onchange="cdsSetProp('cursor', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                          <option value="">-- Standard --</option>
+                          <option value="pointer">pointer (Hand)</option>
+                          <option value="default">default (Pfeil)</option>
+                          <option value="grab">grab</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Übergang (transition)</label>
+                        <input type="text" id="cds-transition" placeholder="all 0.18s ease" onchange="cdsSetProp('transition', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[var(--muted-foreground)] mb-1">Transformation (transform)</label>
+                        <input type="text" id="cds-transform" placeholder="translateY(-1px) scale(1.01)" onchange="cdsSetProp('transform', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs">
+                      </div>
+                    </div>
+                  </details>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- [ARCHIVIERT / AUSGEKLAMMERT] Alte 21 Design-Subtabs (Nicht gelöscht, sicher im Template geparkt) -->
+          <template id="archived-legacy-design-subtabs" class="hidden">
           <!-- Erscheinungsbild / Theme -->
           <div class="space-y-1.5">
             <label class="block text-[10.5px] uppercase font-mono font-bold text-[var(--muted-foreground)]">ERSCHEINUNGSBILD / THEME</label>
@@ -614,9 +1102,12 @@
             <button type="button" onclick="setDesignSubTab('master-chat')" id="subtab-btn-master-chat" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">💬 Master-Chat</button>
             <button type="button" onclick="setDesignSubTab('inbox')" id="subtab-btn-inbox" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">📥 Inbox</button>
             <button type="button" onclick="setDesignSubTab('automation')" id="subtab-btn-automation" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">⚙️ Automation</button>
+            <button type="button" onclick="setDesignSubTab('new-task')" id="subtab-btn-new-task" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">➕ Neue Aufgabe</button>
+            <button type="button" onclick="setDesignSubTab('comm')" id="subtab-btn-comm" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">📡 Interne Kommunikation</button>
             <button type="button" onclick="setDesignSubTab('showroom')" id="subtab-btn-showroom" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🖼️ Showroom</button>
             <button type="button" onclick="setDesignSubTab('library')" id="subtab-btn-library" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">📚 Bibliothek</button>
-            <button type="button" onclick="setDesignSubTab('research')" id="subtab-btn-research" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🔬 Research</button>
+            <button type="button" onclick="setDesignSubTab('ai-mastermind')" id="subtab-btn-ai-mastermind" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🧠 Decision Engine</button>
+            <button type="button" onclick="setDesignSubTab('research')" id="subtab-btn-research" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🔬 Research Lab</button>
             <button type="button" onclick="setDesignSubTab('omniroute')" id="subtab-btn-omniroute" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🌐 OmniRoute</button>
             <button type="button" onclick="setDesignSubTab('guardian')" id="subtab-btn-guardian" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">🛡️ Guardian</button>
             <button type="button" onclick="setDesignSubTab('log-stream')" id="subtab-btn-log-stream" class="design-subtab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition shrink-0">📜 Log-Stream</button>
@@ -1282,8 +1773,11 @@
           <div id="subtab-content-master-chat" class="hidden space-y-3"></div>
           <div id="subtab-content-inbox" class="hidden space-y-3"></div>
           <div id="subtab-content-automation" class="hidden space-y-3"></div>
+          <div id="subtab-content-new-task" class="hidden space-y-3"></div>
+          <div id="subtab-content-comm" class="hidden space-y-3"></div>
           <div id="subtab-content-showroom" class="hidden space-y-3"></div>
           <div id="subtab-content-library" class="hidden space-y-3"></div>
+          <div id="subtab-content-ai-mastermind" class="hidden space-y-3"></div>
           <div id="subtab-content-research" class="hidden space-y-3"></div>
           <div id="subtab-content-omniroute" class="hidden space-y-3"></div>
           <div id="subtab-content-guardian" class="hidden space-y-3"></div>
@@ -1297,10 +1791,13 @@
                 <h4 class="font-bold text-[var(--foreground)] text-xs">💻 Live CSS-Editor</h4>
                 <p class="text-[10.5px] text-[var(--muted-foreground)]">Schreibe benutzerdefinierte CSS-Regeln für beliebige Sektionen oder globale Komponenten.</p>
               </div>
-              <div class="flex items-center gap-1.5 text-[10px] font-mono">
+              <div class="flex items-center gap-1.5 text-[10px] font-mono flex-wrap">
                 <button type="button" onclick="insertCssSnippet('#view-agent-profiles')" class="px-2 py-1 rounded bg-slate-100 dark:bg-neutral-800 border border-[var(--border)] text-[var(--foreground)] hover:border-[#EF233C]">+ Agentenprofile</button>
                 <button type="button" onclick="insertCssSnippet('#view-ai-mastermind')" class="px-2 py-1 rounded bg-slate-100 dark:bg-neutral-800 border border-[var(--border)] text-[var(--foreground)] hover:border-[#EF233C]">+ Mastermind</button>
-                <button type="button" onclick="insertCssSnippet('#view-kanban')" class="px-2 py-1 rounded bg-slate-100 dark:bg-neutral-800 border border-[var(--border)] text-[var(--foreground)] hover:border-[#EF233C]">+ Pipeline</button>
+                <button type="button" onclick="insertCssSnippet('#ops-new-task-modal')" class="px-2 py-1 rounded bg-slate-100 dark:bg-neutral-800 border border-[var(--border)] text-[var(--foreground)] hover:border-[#EF233C]">+ Neue Aufgabe</button>
+                <button type="button" onclick="insertCssSnippet('#ops-view-comm')" class="px-2 py-1 rounded bg-slate-100 dark:bg-neutral-800 border border-[var(--border)] text-[var(--foreground)] hover:border-[#EF233C]">+ Kommunikation</button>
+                <button type="button" onclick="insertCssSnippet('#view-showroom')" class="px-2 py-1 rounded bg-slate-100 dark:bg-neutral-800 border border-[var(--border)] text-[var(--foreground)] hover:border-[#EF233C]">+ Showroom</button>
+                <button type="button" onclick="insertCssSnippet('#view-research')" class="px-2 py-1 rounded bg-slate-100 dark:bg-neutral-800 border border-[var(--border)] text-[var(--foreground)] hover:border-[#EF233C]">+ Research</button>
               </div>
             </div>
             <textarea id="custom-user-css-editor" oninput="liveApplyCustomCSS(this.value)" class="w-full bg-slate-950 text-slate-100 p-3 rounded-xl font-mono text-xs h-48 leading-relaxed focus:outline-none focus:ring-1 focus:ring-[#EF233C] border border-slate-800 resize-none overflow-y-auto" placeholder="/* Schreibe hier eigenes CSS... */
@@ -1315,6 +1812,7 @@
               </button>
             </div>
           </div>
+          </template>
         </div>
         <!-- Consolidated Tab 4: PLUGINS & EXTENSIONS -->
         <div id="settings-tab-plugins" class="hidden space-y-3 text-xs">

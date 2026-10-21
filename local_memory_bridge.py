@@ -41,14 +41,15 @@ class LocalMemoryBridge:
         self._init_db()
 
     def _get_conn(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.execute("PRAGMA journal_mode=DELETE;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn = sqlite3.connect(self.db_path, timeout=10.0)
+        conn.execute("PRAGMA busy_timeout=5000;")
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_db(self):
         with self._get_conn() as conn:
+            # Kein WAL auf Docker Windows Bind-Mounts (/opt/data), da .shm/.wal über 9p/virtiofs bremst
+            conn.execute("PRAGMA journal_mode=DELETE;")
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS user_profile (
                     key TEXT PRIMARY KEY,
@@ -578,3 +579,51 @@ tags: ["learning", "memory", "{agent_id}"]
                 expected_prev = r["hash"]
 
             return {"valid": True, "total_records": len(rows)}
+
+    def sync_task(self, task_id: str, title: str, role: str, status: str, result: Optional[str] = None, obsidian_note: Optional[str] = None) -> dict:
+        """
+        Synchronisiert einen Task-Eintrag zwischen Operations-Kanban (kanban.db)
+        und dem zentralen Agentengedächtnis (agentic_memory.db -> tasks).
+        """
+        now_iso = datetime.datetime.now().isoformat()
+        finished_at = now_iso if str(status).lower() in ("done", "completed", "archived") else None
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, title, role, result, obsidian_note, created_at FROM tasks WHERE id = ?", (task_id,))
+            existing = cur.fetchone()
+            if existing:
+                cur.execute("""
+                    UPDATE tasks
+                    SET title = COALESCE(?, title),
+                        role = COALESCE(?, role),
+                        status = ?,
+                        result = COALESCE(?, result),
+                        obsidian_note = COALESCE(?, obsidian_note),
+                        finished_at = COALESCE(?, finished_at)
+                    WHERE id = ?
+                """, (
+                    title or existing["title"],
+                    role or existing["role"],
+                    status,
+                    result,
+                    obsidian_note,
+                    finished_at,
+                    task_id
+                ))
+            else:
+                cur.execute("""
+                    INSERT INTO tasks (id, title, role, status, result, obsidian_note, created_at, finished_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    task_id,
+                    title or task_id,
+                    role or "unassigned",
+                    status,
+                    result,
+                    obsidian_note,
+                    now_iso,
+                    finished_at
+                ))
+            conn.commit()
+        return {"status": "synced", "task_id": task_id, "task_status": status}
+

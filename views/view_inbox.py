@@ -67,6 +67,29 @@ def get_email_inbox_dir() -> Path:
         return fallback
 
 
+
+def get_webhook_inbox_dir() -> Path:
+    """Ermittelt und initialisiert defensiv das Webhook-Postfach."""
+    candidates = [
+        Path("/opt/data/inbox/webhooks"),
+        Path("./data/inbox/webhooks"),
+        Path("/app/data/inbox/webhooks"),
+        Path(os.environ.get("INBOX_WEBHOOK_DIR", "./data/inbox/webhooks"))
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+
+    primary = candidates[0]
+    try:
+        primary.mkdir(parents=True, exist_ok=True)
+        return primary
+    except Exception:
+        fallback = candidates[1]
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
 def get_telegram_inbox_dir() -> Path:
     """Ermittelt und initialisiert defensiv das Telegram-Postfach."""
     candidates = [
@@ -635,6 +658,143 @@ def load_telegram_messages() -> List[Dict[str, Any]]:
 
     messages.sort(key=lambda x: x.get("mtime", 0), reverse=True)
     return messages
+
+def load_webhook_events() -> List[Dict[str, Any]]:
+    """
+    Liest eingehende Webhooks & API-Events aus get_webhook_inbox_dir().
+    Unterstuetzt .json und .txt Dateien (z.B. von n8n, Stripe, GitHub, generic APIs).
+    Liefert aussagekraeftige Standard-Events falls das Verzeichnis leer ist.
+    """
+    now = datetime.datetime.now()
+    wh_dir = get_webhook_inbox_dir()
+    events: List[Dict[str, Any]] = []
+
+    if wh_dir.exists():
+        for file_path in wh_dir.iterdir():
+            if not file_path.is_file():
+                continue
+            mtime = file_path.stat().st_mtime
+            dt_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+            ext = file_path.suffix.lower()
+
+            if ext == ".json":
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        data = json.load(f)
+
+                    source = str(data.get("source") or data.get("provider") or "API").upper()
+                    event_type = str(data.get("event") or data.get("type") or "WEBHOOK").upper()
+                    title = data.get("title") or f"{source} Event: {event_type}"
+                    sender = data.get("sender") or data.get("origin") or f"Webhook ({source})"
+                    payload_preview = json.dumps(data, indent=2, ensure_ascii=False)
+                    preview = data.get("preview") or data.get("summary") or (payload_preview[:160] + "...")
+
+                    badge = event_type[:8]
+                    badge_color = "#F59E0B"
+                    badge_bg = "#FEF3C7"
+                    if "N8N" in source or "N8N" in event_type:
+                        badge = "N8N"
+                        badge_color = "#EA580C"
+                        badge_bg = "#FFEDD5"
+                    elif "STRIPE" in source or "PAYMENT" in event_type:
+                        badge = "STRIPE"
+                        badge_color = "#6366F1"
+                        badge_bg = "#EEF2FF"
+                    elif "GITHUB" in source or "GIT" in event_type:
+                        badge = "GITHUB"
+                        badge_color = "#10B981"
+                        badge_bg = "#D1FAE5"
+
+                    events.append({
+                        "id": f"wh_{file_path.name}",
+                        "sender": sender,
+                        "badge": badge,
+                        "badge_color": badge_color,
+                        "badge_bg": badge_bg,
+                        "title": title,
+                        "timestamp": dt_str,
+                        "preview": preview,
+                        "content": payload_preview,
+                        "path": str(file_path),
+                        "mtime": mtime,
+                        "source": "webhook"
+                    })
+                except Exception:
+                    continue
+
+            elif ext in [".txt", ".log"]:
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content_str = f.read().strip()
+                    if not content_str:
+                        continue
+                    events.append({
+                        "id": f"wh_{file_path.name}",
+                        "sender": "Webhook Inbound",
+                        "badge": "PAYLOAD",
+                        "badge_color": "#F59E0B",
+                        "badge_bg": "#FEF3C7",
+                        "title": f"Raw Webhook: {file_path.stem}",
+                        "timestamp": dt_str,
+                        "preview": content_str[:160] + ("..." if len(content_str) > 160 else ""),
+                        "content": content_str,
+                        "path": str(file_path),
+                        "mtime": mtime,
+                        "source": "webhook"
+                    })
+                except Exception:
+                    continue
+
+    if not events:
+        events = [
+            {
+                "id": "wh_n8n_lead_sync",
+                "sender": "n8n Automation Node (Port 5678)",
+                "badge": "N8N",
+                "badge_color": "#EA580C",
+                "badge_bg": "#FFEDD5",
+                "title": "n8n Workflow: CRM Lead Enrichment Triggered",
+                "timestamp": now.strftime("%Y-%m-%d %H:%M"),
+                "preview": "Inbound Webhook von /webhook/archon-execution: 1 neuer Lead synchronisiert.",
+                "content": json.dumps({
+                    "event": "crm_lead_enrichment",
+                    "origin": "n8n_workflow_engine",
+                    "payload": {
+                        "source": "Landingpage Formular",
+                        "status": "ready_for_triage",
+                        "contact_id": "CNT-2026-904"
+                    }
+                }, indent=2),
+                "path": "webhook://n8n/crm_lead_enrichment",
+                "mtime": now.timestamp() - 120,
+                "source": "webhook"
+            },
+            {
+                "id": "wh_github_deploy",
+                "sender": "GitHub App Webhook",
+                "badge": "GITHUB",
+                "badge_color": "#10B981",
+                "badge_bg": "#D1FAE5",
+                "title": "GitHub Push Event: main branch updated",
+                "timestamp": (now - datetime.timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M"),
+                "preview": "Commit b89af1e auf branch main von @archon-dev: Update agent manifests.",
+                "content": json.dumps({
+                    "repository": "AgenticOS-2026",
+                    "ref": "refs/heads/main",
+                    "head_commit": {
+                        "id": "b89af1e442d",
+                        "message": "Update agent manifests & layout engine"
+                    }
+                }, indent=2),
+                "path": "webhook://github/push/main",
+                "mtime": (now - datetime.timedelta(minutes=15)).timestamp(),
+                "source": "webhook"
+            }
+        ]
+
+    events.sort(key=lambda x: x.get("mtime", 0), reverse=True)
+    return events
+
 
 
 # =============================================================================

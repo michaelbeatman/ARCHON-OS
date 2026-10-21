@@ -128,11 +128,35 @@ os.makedirs(QUICKCHAT_SESSIONS_DIR, exist_ok=True)
 # In-Memory Ticker
 ticker_entries = []
 
+# =====================================================================
+# REAL-TIME SSE EVENT BROADCASTER (Pillar 1 & 2 / Event-Driven Push)
+# =====================================================================
+_SSE_SUBSCRIBERS: List[asyncio.Queue] = []
+
+def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None):
+    """
+    Sendet ein typisiertes Server-Sent Event an alle verbundenen Web-Clients.
+    Verhindert langsame Polling-Intervalle bei Kanban-Updates, Telegram-Decisions und Task-Fortschritten.
+    """
+    global _SSE_SUBSCRIBERS
+    payload = json.dumps({"type": event_type, "timestamp": time.time(), "data": data or {}})
+    dead_queues = []
+    for q in _SSE_SUBSCRIBERS:
+        try:
+            q.put_nowait(payload)
+        except Exception:
+            dead_queues.append(q)
+    for dq in dead_queues:
+        if dq in _SSE_SUBSCRIBERS:
+            _SSE_SUBSCRIBERS.remove(dq)
+
 def add_ticker(agent_name: str, message: str):
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     ticker_entries.append(f"[{ts}] {agent_name}: {message}")
     if len(ticker_entries) > 20:
         ticker_entries.pop(0)
+    # Event direkt per SSE an alle offenen Clients pushen
+    broadcast_event("ticker_update", {"agent": agent_name, "message": message, "time": ts})
 
 # =====================================================================
 # PERSISTENZ-HELFER (Basic UI Configuration State)
@@ -425,6 +449,113 @@ def api_save_roles(roles: List[Dict]):
     save_roles(roles)
     return {"status": "success"}
 
+# =====================================================================
+# ORACLE NEWS RADAR (Hermes Intelligence Stream & Obsidian Sync)
+# =====================================================================
+
+@app.get("/api/oracle/feed")
+def api_get_oracle_feed(limit: int = 50):
+    try:
+        import oracle_news_radar
+        radar = oracle_news_radar.OracleNewsRadar()
+        return {"status": "success", "feed": radar.get_feed(limit)}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "feed": []}
+
+@app.post("/api/oracle/run")
+def api_run_oracle_cycle():
+    try:
+        import oracle_news_radar
+        radar = oracle_news_radar.OracleNewsRadar()
+        return radar.run_radar_cycle()
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/oracle/triage")
+def api_triage_oracle_signal(payload: Dict[str, Any] = Body(...)):
+    try:
+        import oracle_news_radar
+        radar = oracle_news_radar.OracleNewsRadar()
+        signal_id = payload.get("id") or payload.get("signal_id")
+        if not signal_id:
+            return {"status": "error", "message": "Signal-ID fehlt im Payload"}
+        return radar.triage_to_task(signal_id)
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# =====================================================================
+# APOLLO VOICE AGENT (Hermes Conversational Voice & Execution Bridge)
+# =====================================================================
+
+@app.post("/api/voice/speak")
+async def api_voice_speak(payload: Dict[str, Any] = Body(...)):
+    text = payload.get("text", "")
+    voice = payload.get("voice")
+    if not text:
+        raise HTTPException(status_code=400, detail="Text ist erforderlich")
+    try:
+        from apollo_voice_engine import ApolloVoiceEngine
+        engine = ApolloVoiceEngine()
+        audio_bytes = await engine.synthesize_speech(text, voice)
+        return Response(content=audio_bytes, media_type="audio/mpeg")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/voice/command")
+async def api_voice_command(payload: Dict[str, Any] = Body(...)):
+    transcript = payload.get("transcript", "")
+    if not transcript:
+        raise HTTPException(status_code=400, detail="Transkript ist erforderlich")
+    try:
+        from apollo_voice_engine import ApolloVoiceEngine
+        engine = ApolloVoiceEngine()
+        return await engine.process_voice_command(transcript)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/voice/audio/{filename}")
+def api_get_voice_audio(filename: str):
+    audio_file = os.path.join("data", "audio_cache", filename)
+    if os.path.exists(audio_file):
+        return FileResponse(audio_file, media_type="audio/mpeg")
+    raise HTTPException(status_code=404, detail="Audio-Datei nicht gefunden")
+
+# =====================================================================
+# SEO & EXECUTION AGENT (Programmatic Content & Webhook Pipeline)
+# =====================================================================
+
+@app.post("/api/seo/generate")
+async def api_seo_generate(payload: Dict[str, Any] = Body(...)):
+    topic = payload.get("topic", "")
+    keyword = payload.get("keyword", topic)
+    audience = payload.get("audience", "B2B / Tech")
+    trigger_n8n = payload.get("trigger_n8n", True)
+    if not topic:
+        raise HTTPException(status_code=400, detail="Thema (topic) ist erforderlich")
+    try:
+        from seo_execution_agent import SEOExecutionAgent
+        agent = SEOExecutionAgent()
+        return await agent.execute_content_pipeline(topic, keyword, audience, trigger_n8n)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/seo/articles")
+def api_seo_articles():
+    content_dir = os.path.join(WORKSPACE_DIR, "obsidian_vault", "05_Content")
+    if not os.path.exists(content_dir):
+        content_dir = os.path.join("obsidian_vault", "05_Content")
+    articles = []
+    if os.path.exists(content_dir):
+        for f in os.listdir(content_dir):
+            if f.endswith(".md"):
+                fp = os.path.join(content_dir, f)
+                articles.append({
+                    "filename": f,
+                    "path": fp,
+                    "size_bytes": os.path.getsize(fp),
+                    "modified": datetime.datetime.fromtimestamp(os.path.getmtime(fp)).isoformat()
+                })
+    return {"status": "success", "articles": articles}
 
 THEMES_DIR = os.path.join(WORKSPACE_DIR, "themes")
 os.makedirs(THEMES_DIR, exist_ok=True)
@@ -458,6 +589,63 @@ def api_delete_theme_by_name(theme_name: str):
         os.remove(path)
     return {"status": "success"}
 
+DESIGN_THEMES_TARGETS = [
+    os.path.join("config", "design_themes.json"),
+    "/app/config/design_themes.json",
+    os.path.join("data", "design_themes.json"),
+    "/app/data/design_themes.json"
+]
+
+@app.get("/api/design/themes")
+def api_get_design_themes():
+    for cand in DESIGN_THEMES_TARGETS:
+        if os.path.exists(cand):
+            data = _load_json(cand, {})
+            if data and "themes" in data and len(data["themes"]) > 0:
+                return data
+    return {"active_theme_id": "archon_current", "active_mode": "light", "themes": {}}
+
+@app.post("/api/design/themes")
+def api_save_design_themes(payload: Dict = Body(...)):
+    current = api_get_design_themes()
+    if "active_theme_id" in payload:
+        current["active_theme_id"] = payload["active_theme_id"]
+    if "active_mode" in payload:
+        current["active_mode"] = payload["active_mode"]
+    if "themes" in payload and isinstance(payload["themes"], dict):
+        current["themes"] = payload["themes"]
+    if "theme" in payload and isinstance(payload["theme"], dict):
+        t = payload["theme"]
+        tid = t.get("id") or "custom_" + str(int(time.time()))
+        t["id"] = tid
+        if "themes" not in current or not isinstance(current["themes"], dict):
+            current["themes"] = {}
+        current["themes"][tid] = t
+        if payload.get("set_active", True):
+            current["active_theme_id"] = tid
+    for target in DESIGN_THEMES_TARGETS:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
+            _save_json(target, current)
+        except Exception:
+            pass
+    return {"status": "success", "data": current}
+
+@app.delete("/api/design/themes/{theme_id}")
+def api_delete_design_theme(theme_id: str):
+    current = api_get_design_themes()
+    themes = current.get("themes", {})
+    if theme_id in themes and len(themes) > 1:
+        del themes[theme_id]
+        if current.get("active_theme_id") == theme_id:
+            current["active_theme_id"] = next(iter(themes.keys()), "archon_current")
+        for target in DESIGN_THEMES_TARGETS:
+            try:
+                _save_json(target, current)
+            except Exception:
+                pass
+    return {"status": "success", "data": current}
+
 @app.get("/api/theme")
 def api_get_theme():
     return load_theme()
@@ -474,45 +662,17 @@ def api_get_theme_live_overrides():
 @app.post("/api/theme/live-overrides")
 def api_save_theme_live_overrides(payload: Dict = Body(...)):
     _save_json(THEME_LIVE_FILE, payload)
-    try:
-        rules = payload.get("rules", {})
-        css_lines = ["/* Archon CSS Live Studio Compiled Overrides */\n"]
-        for sel, props in rules.items():
-            if not props:
-                continue
-            css_lines.append(f"{sel} {{")
-            for p, v in props.items():
-                if v:
-                    has_imp = "!important" in str(v)
-                    css_lines.append(f"  {p}: {v}{'' if has_imp else ' !important'};")
-            css_lines.append("}\n")
-        css_content = "\n".join(css_lines)
-        for target_css in ["static/custom_studio.css", os.path.join(WORKSPACE_DIR, "static", "custom_studio.css")]:
-            try:
-                with open(target_css, "w", encoding="utf-8") as f:
-                    f.write(css_content)
-            except Exception:
-                pass
-    except Exception as e:
-        print(f"Error compiling custom_studio.css: {e}")
+    # [ARCHIVED] Überschreiben von static/custom_studio.css deaktiviert zugunsten
+    # der zentralen 15-Bausteine-Engine (/api/design/themes).
     return {"status": "success"}
 
 @app.delete("/api/theme/live-overrides")
 def api_delete_theme_live_overrides():
-    # 10.10.2026: reset_all + frische migration_version, damit die Studio-Init
-    # in JEDEM Browser den Server-Reset erkennt und localStorage NICHT
-    # zurückspeichert (vorher: Branch 2 parste nie den Reset → Resurrection).
     _save_json(THEME_LIVE_FILE, {
         "rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {},
-        "migration_version": "2026_10_10_reset_v3", "reset_all": True,
+        "migration_version": "2026_10_15_reset_v4", "reset_all": True,
         "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     })
-    for target_css in ["static/custom_studio.css", os.path.join(WORKSPACE_DIR, "static", "custom_studio.css")]:
-        try:
-            with open(target_css, "w", encoding="utf-8") as f:
-                f.write("/* Custom Studio CSS Reset */\n")
-        except Exception:
-            pass
     return {"status": "success"}
 
 def detect_container_port(container_identifier: str, inspected_port: int = None) -> int:
@@ -3686,7 +3846,7 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
             with open(yaml_path, "w", encoding="utf-8") as f:
                 yaml.dump(y_payload, f, allow_unicode=True, sort_keys=False)
 
-            # Hermes config.yaml anlegen falls nicht vorhanden
+            # Hermes config.yaml anlegen ODER Modell/Provider aktualisieren
             config_path = os.path.join(target_pdir, "config.yaml")
             if not os.path.exists(config_path):
                 default_cfg = {
@@ -3708,6 +3868,18 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
                 }
                 with open(config_path, "w", encoding="utf-8") as f:
                     yaml.dump(default_cfg, f, allow_unicode=True, sort_keys=False)
+            else:
+                try:
+                    with open(config_path, "r", encoding="utf-8") as f:
+                        existing_cfg = yaml.safe_load(f) or {}
+                    if not isinstance(existing_cfg.get("model"), dict):
+                        existing_cfg["model"] = {}
+                    existing_cfg["model"]["default"] = model_val
+                    existing_cfg["model"]["provider"] = provider_val
+                    with open(config_path, "w", encoding="utf-8") as f:
+                        yaml.dump(existing_cfg, f, allow_unicode=True, sort_keys=False)
+                except Exception as cfg_err:
+                    logger.warning(f"[Profiles] Could not sync config.yaml for {p_id}: {cfg_err}")
 
             # Skills synchronisieren
             skills_sub = os.path.join(target_pdir, "skills")
@@ -3728,6 +3900,43 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
                             logger.warning(f"Error copying skill {sk_id}: {e}")
         except Exception as e:
             logger.error(f"[Profiles] Error writing profile to {p_base}: {e}")
+
+    # Synchronisiere agent_profiles.json für Operations-Kanban & Org-Chart
+    try:
+        ap_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
+        if os.path.exists(ap_file):
+            with open(ap_file, "r", encoding="utf-8") as f:
+                ap_list = json.load(f)
+            if isinstance(ap_list, list):
+                updated_ap = False
+                for item in ap_list:
+                    if isinstance(item, dict) and item.get("id") == p_id:
+                        item["name"] = profile_data.get("name", p_id)
+                        item["person_name"] = person_name
+                        item["category"] = profile_data.get("category", item.get("category", ""))
+                        item["description"] = profile_data.get("description", item.get("description", ""))
+                        item["avatar"] = clean_avatar
+                        item["model"] = model_val
+                        item["provider"] = provider_val
+                        item["status"] = status_val
+                        updated_ap = True
+                        break
+                if not updated_ap:
+                    ap_list.append({
+                        "id": p_id,
+                        "name": profile_data.get("name", p_id),
+                        "person_name": person_name,
+                        "category": profile_data.get("category", ""),
+                        "description": profile_data.get("description", ""),
+                        "avatar": clean_avatar,
+                        "model": model_val,
+                        "provider": provider_val,
+                        "status": status_val
+                    })
+                with open(ap_file, "w", encoding="utf-8") as f:
+                    json.dump(ap_list, f, indent=2, ensure_ascii=False)
+    except Exception as ap_err:
+        logger.warning(f"[Profiles] Could not sync agent_profiles.json for {p_id}: {ap_err}")
 
     # Synchronisiere Avatar in avatars.db für Hermes WebUI
     try:
@@ -3897,7 +4106,7 @@ async def api_system_health():
     async with httpx.AsyncClient(follow_redirects=True) as client:
         t_core = _check_service_health(
             "hermes_core",
-            ["http://hermes:8644", "http://hermes:8642", "http://host.docker.internal:8644"],
+            ["http://hermes:8642", "http://hermes:8644", "http://host.docker.internal:8644"],
             client
         )
         t_omni = _check_service_health(
@@ -4236,6 +4445,35 @@ def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
                         yaml.dump(p_data, f, allow_unicode=True, sort_keys=False)
                 except Exception as py_err:
                     logger.warning(f"Could not update profile.yaml for {profile_id}: {py_err}")
+            cfg_path = os.path.join(p_base, profile_id, "config.yaml")
+            if os.path.exists(cfg_path):
+                try:
+                    with open(cfg_path, "r", encoding="utf-8") as f:
+                        c_data = yaml.safe_load(f) or {}
+                    if not isinstance(c_data.get("model"), dict):
+                        c_data["model"] = {}
+                    c_data["model"]["default"] = mod
+                    c_data["model"]["provider"] = prov
+                    with open(cfg_path, "w", encoding="utf-8") as f:
+                        yaml.dump(c_data, f, allow_unicode=True, sort_keys=False)
+                except Exception as cfg_err:
+                    logger.warning(f"Could not update config.yaml for {profile_id}: {cfg_err}")
+
+        try:
+            ap_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
+            if os.path.exists(ap_file):
+                with open(ap_file, "r", encoding="utf-8") as f:
+                    ap_list = json.load(f)
+                if isinstance(ap_list, list):
+                    for item in ap_list:
+                        if isinstance(item, dict) and item.get("id") == profile_id:
+                            item["model"] = mod
+                            item["provider"] = prov
+                            break
+                    with open(ap_file, "w", encoding="utf-8") as f:
+                        json.dump(ap_list, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
 
         global _HERMES_PROFILES_CACHE
         _HERMES_PROFILES_CACHE = None
@@ -4836,6 +5074,24 @@ async def api_chat_stream(req: ChatStreamRequest):
     delegation_prompt_addon = _get_delegation_prompt_for(agent_id)
     if delegation_prompt_addon:
         system_prompt += delegation_prompt_addon
+
+    # Obsidian Personalakte als Identitäts- und Kompetenzkontext injizieren
+    try:
+        akte_candidates = [
+            os.path.join(OBSIDIAN_VAULT_DIR, "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
+            f"/opt/data/obsidian/00_HR_Agenten/Personalakten/{agent_id}.md",
+            f"C:\\Mein Obsidian\\00_HR_Agenten\\Personalakten\\{agent_id}.md"
+        ]
+        akte_content = None
+        for cand in akte_candidates:
+            if os.path.exists(cand) and os.path.isfile(cand):
+                with open(cand, "r", encoding="utf-8", errors="ignore") as f_akte:
+                    akte_content = f_akte.read().strip()
+                break
+        if akte_content:
+            system_prompt += f"\n\n[OBSIDIAN PERSONALAKTE & STATUS]\n{akte_content}\n"
+    except Exception as akte_err:
+        logger.warning(f"[Chat Stream] Konnte Personalakte für {agent_id} nicht laden: {akte_err}")
     import api_provider
     all_keys = api_provider.collect_keys()
 
@@ -4951,9 +5207,12 @@ async def api_chat_stream(req: ChatStreamRequest):
         return StreamingResponse(mission_event_stream(), media_type="text/event-stream")
 
     # 2. DIREKT-DIALOG: Streaming via ausgewählten Provider (Google, OpenRouter, Groq, OmniRoute etc.)
-    with _get_state_db() as conn:
-        _ensure_session_exists(conn, session_id, agent_id, model, user_msg[:50])
-    _save_message_to_db(session_id, "user", user_msg)
+    try:
+        with _get_state_db() as conn:
+            _ensure_session_exists(conn, session_id, agent_id, model, user_msg[:50])
+        _save_message_to_db(session_id, "user", user_msg)
+    except Exception as db_err:
+        logger.warning(f"[Chat Stream] Session/Message DB init warning: {db_err}")
 
     # Lade letzten Kontext aus DB (bis zu 50 Nachrichten fuer stabilen Sitzungsverlauf)
     recent_messages = []
@@ -4998,12 +5257,47 @@ async def api_chat_stream(req: ChatStreamRequest):
         logger.warning(f"[Chat Stream] Konnte Kontext nicht laden: {e}")
         recent_messages = [{"role": "user", "content": user_msg}]
 
-    payload_messages = [{"role": "system", "content": system_prompt}] + recent_messages
+    # Enterprise Skill Resolver (Dynamische Kontext-Injektion für Session)
+    skills_prompt_block = None
+    freshly_loaded_skills = []
+    direct_skill_notice = None
+    try:
+        from scripts.skill_resolver import resolve_and_prepare_skill_context
+        skills_idx = build_skills_file_index()
+        skills_prompt_block, freshly_loaded_skills, direct_skill_notice = resolve_and_prepare_skill_context(
+            session_id=session_id,
+            user_msg=user_msg,
+            find_skill_file_fn=find_skill_file,
+            skills_index=skills_idx,
+            agent_prof=prof
+        )
+    except Exception as sk_err:
+        logger.error(f"[Chat Stream] Error resolving enterprise skills: {sk_err}")
+
+    if skills_prompt_block:
+        payload_messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": skills_prompt_block}] + recent_messages
+    else:
+        payload_messages = [{"role": "system", "content": system_prompt}] + recent_messages
 
     async def chat_event_stream():
         full_assistant_text = ""
         prompt_tokens = len(user_msg.split()) * 2
         completion_tokens = 0
+
+        # Direkte System-Antwort bei Management-Befehlen (/skill list, /skill clear)
+        if direct_skill_notice:
+            yield f"data: {json.dumps({'type': 'delta', 'delta': direct_skill_notice}, ensure_ascii=False)}\n\n"
+            full_assistant_text = direct_skill_notice
+            _save_message_to_db(session_id, "assistant", full_assistant_text)
+            yield f"data: {json.dumps({'type': 'done', 'session_id': session_id})}\n\n"
+            return
+
+        # Falls in diesem Turn ein neuer Skill geladen wurde, visuelle Bestätigung im Stream ausgeben
+        if freshly_loaded_skills:
+            skill_pills = ", ".join([f"`{s}`" for s in freshly_loaded_skills])
+            pill_text = f"⚙️ *[System: Skill(s) erfolgreich in den Arbeitsspeicher geladen: {skill_pills}]*\n\n"
+            full_assistant_text += pill_text
+            yield f"data: {json.dumps({'type': 'delta', 'delta': pill_text}, ensure_ascii=False)}\n\n"
 
         from backend.agent_router import router_instance
 
@@ -7311,6 +7605,17 @@ KANBAN_CARDS_FILE = os.path.join(DATA_DIR, "kanban_cards.json")
 
 @app.get("/api/kanban")
 def api_get_kanban():
+    kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else "C:\\Users\\micha\\.hermes\\kanban.db"
+    if os.path.exists(kanban_db):
+        try:
+            with sqlite3.connect(kanban_db, timeout=5.0) as kconn:
+                kconn.row_factory = sqlite3.Row
+                rows = kconn.execute(
+                    "SELECT id, title, body as description, assignee, status, priority, created_at FROM tasks WHERE status != 'archived' ORDER BY priority DESC, created_at DESC"
+                ).fetchall()
+                return [dict(r) for r in rows]
+        except Exception:
+            pass
     if os.path.exists(KANBAN_CARDS_FILE):
         try:
             with open(KANBAN_CARDS_FILE, "r", encoding="utf-8") as f:
@@ -8276,7 +8581,6 @@ def save_llm_provider_key(req: LLMProviderSaveKeyRequest):
 @app.api_route("/api/wiki/page", methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"])
 @app.api_route("/api/logs", methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"])
 @app.api_route("/api/health/agent", methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"])
-@app.api_route("/api/system/health", methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"])
 @app.api_route("/static/hermes-webui/api/{path:path}", methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"])
 async def proxy_hermes_api_endpoints(request: Request, path: str = ""):
     """Forward frontend API calls from embedded iFrame to active Hermes backend with full header preservation."""
@@ -9238,8 +9542,49 @@ def _get_live_telemetry_metrics():
     _LIVE_TELEMETRY_CACHE["data"] = res
     return res
 
+@app.get("/api/v1/events/stream")
+async def sse_events_stream():
+    """
+    Server-Sent Events Stream für Realtime Push-Updates (Kanban, Telegram-Decisions, Ticker).
+    Ersetzt clientseitiges aggressives Polling.
+    """
+    queue = asyncio.Queue()
+    _SSE_SUBSCRIBERS.append(queue)
+
+    async def event_generator():
+        try:
+            # Begrüßungs-Ping
+            yield f"data: {json.dumps({'type': 'connected', 'timestamp': time.time()})}\n\n"
+            while True:
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=20.0)
+                    yield f"data: {payload}\n\n"
+                except asyncio.TimeoutError:
+                    # Keepalive Heartbeat alle 20s
+                    yield f": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if queue in _SSE_SUBSCRIBERS:
+                _SSE_SUBSCRIBERS.remove(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+_MC_STATE_CACHE = {"ts": 0.0, "data": None}
+
 @app.get("/api/mission-control/state")
 async def get_mission_control_state():
+    now_mc = time.time()
+    if _MC_STATE_CACHE["data"] is not None and (now_mc - _MC_STATE_CACHE["ts"]) < 3.0:
+        return _MC_STATE_CACHE["data"]
     # SYNC-CALLS IM ASYNC-LOOP = BLOCKIERT BEI LANGSAMKEIT ALLES (gemessen:
     # health parallel 47ms -> 24.571ms). Deshalb aus dem Event-Loop auslagern.
     data = await asyncio.to_thread(_load_mission_control_data)
@@ -9332,7 +9677,7 @@ async def get_mission_control_state():
         live_logs = [
             {"time": now_t, "source": "Kernel", "msg": "Archon OS Daemon nominal - Port 8501 aktiv"},
             {"time": now_t, "source": "Gateway", "msg": f"OmniRoute Routing bereit ({total_profiles} Agentenprofile geladen)"},
-            {"time": now_t, "source": "Memory", "msg": "SQLite WAL-Mode und Projekt-Store synchronisiert"}
+            {"time": now_t, "source": "Memory", "msg": "SQLite und Projekt-Store synchronisiert"}
         ]
         
     # Berechne Tool-Stabilität aus Logs
@@ -9340,7 +9685,7 @@ async def get_mission_control_state():
     sampled_calls = max(25, len(live_logs) * 4)
     error_rate = round((error_count / sampled_calls) * 100, 1)
     
-    return {
+    res_payload = {
         "status": "ok",
         "kpis": {
             "fleet_active": f"{active_count} / {total_profiles} Aktiv",
@@ -9363,6 +9708,9 @@ async def get_mission_control_state():
         "sparkline_data": telemetry["sparkline_data"],
         "audit_logs": live_logs[:25]
     }
+    _MC_STATE_CACHE["ts"] = now_mc
+    _MC_STATE_CACHE["data"] = res_payload
+    return res_payload
 
 class NewTaskCaptureRequest(BaseModel):
     title: str
@@ -9423,6 +9771,8 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
     data["audit_logs"] = data["audit_logs"][:25]
     
     _save_mission_control_data(data)
+    _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
+    broadcast_event("kanban_updated", {"action": "capture", "task_id": task_id, "status": "backlog"})
     return {"status": "ok", "task": new_task}
 
 class TaskMoveRequest(BaseModel):
@@ -10243,6 +10593,8 @@ async def move_mission_control_task(req: TaskMoveRequest):
         
     data["audit_logs"] = data.get("audit_logs", [])[:25]
     _save_mission_control_data(data)
+    _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
+    broadcast_event("kanban_updated", {"action": "move", "task_id": req.task_id, "status": req.target_status})
     return {"status": "ok", "task": task}
 
 @app.get("/api/mission-control/task/{task_id}/artifact")

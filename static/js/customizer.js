@@ -275,7 +275,14 @@
         saveThemeToServer(true);
       }, 500);
     }
+    window.ARCHON_COMPONENT_DESIGN_ACTIVE = true; // Ausgeklammert am 2026-10-16 zugunsten 15-Komponenten-System
     async function loadThemeFromServer() {
+      if (window.ARCHON_COMPONENT_DESIGN_ACTIVE) {
+        if (typeof window.initArchonComponentDesign === "function") {
+          await window.initArchonComponentDesign();
+        }
+        return;
+      }
       try {
         const cached = localStorage.getItem("archon_theme_custom");
         if (cached) {
@@ -607,7 +614,7 @@
     function setDesignSubTab(tabName) {
           currentDesignSubTab = tabName;
           const subTabs = ["global", "tags", "profiles", "personalakte", "mastermind", "pipeline", "dashboard", "palette",
-            "mission-control", "master-chat", "inbox", "automation", "showroom", "library", "research", "omniroute",
+            "mission-control", "master-chat", "inbox", "automation", "new-task", "comm", "showroom", "library", "ai-mastermind", "research", "omniroute",
             "guardian", "log-stream", "design-system", "crm", "customcss"];
       subTabs.forEach(t => {
         const btn = document.getElementById(`subtab-btn-${t}`);
@@ -639,9 +646,12 @@
       { id: 'master-chat', label: 'Master-Chat', root: '#view-master-chat' },
       { id: 'inbox', label: 'Inbox', root: '#view-inbox' },
       { id: 'automation', label: 'Automation', root: '#view-automation' },
-      { id: 'showroom', label: 'Showroom', root: '#view-showroom' },
-      { id: 'library', label: 'Wissensbibliothek', root: '#view-library' },
-      { id: 'research', label: 'Research', root: '#view-research' },
+      { id: 'new-task', label: 'Neue autonome Aufgabe', root: '#ops-new-task-modal' },
+      { id: 'comm', label: 'Operations · Interne Kommunikation', root: '#ops-view-comm' },
+      { id: 'showroom', label: 'Showroom (Projekt-Explorer & Artefakte)', root: '#view-showroom' },
+      { id: 'library', label: 'Zentralbibliothek', root: '#view-library' },
+      { id: 'ai-mastermind', label: 'Decision Engine', root: '#view-ai-mastermind' },
+      { id: 'research', label: 'Research Lab', root: '#view-research' },
       { id: 'omniroute', label: 'OmniRoute', root: '#view-omniroute' },
       { id: 'guardian', label: 'Guardian', root: '#view-guardian' },
       { id: 'log-stream', label: 'Log-Stream', root: '#view-log-stream' },
@@ -674,7 +684,7 @@
       liveApplyCustomCSS(all);
     }
     function _dvCardSel(root) {
-      return root + ' [class*="rounded-2xl"], ' + root + ' [class*="rounded-xl"]';
+      return root + ' [class*="rounded-2xl"], ' + root + ' [class*="rounded-xl"], ' + root + ' [class*="rounded-lg"], ' + root + ' .os-island, ' + root + ' .os-card, ' + root + ' .os-modal';
     }
     function _dvBuildCss(id) {
       const cfg = _dvGetCfg(id);
@@ -829,6 +839,11 @@
       editor.focus();
     }
     function initCustomCSS() {
+      if (window.ARCHON_COMPONENT_DESIGN_ACTIVE) {
+        const oldTag = document.getElementById("archon-custom-user-css");
+        if (oldTag) oldTag.innerHTML = "";
+        return;
+      }
       const savedCss = localStorage.getItem("archon_custom_user_css") || "";
       const editor = document.getElementById("custom-user-css-editor");
       if (editor) editor.value = savedCss;

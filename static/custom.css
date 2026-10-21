@@ -496,7 +496,7 @@ div.grid > div.flex > div.shadcn-card {
 #mission-control-header-bar,
 #inbox-header-bar,
 #ops-header-bar,
-div#view-mission-control > div.flex:first-child,
+#mc-catalog-expanded-header > div.flex,
 div#catalog-expanded-header > div.flex {
   height: 72px !important;
   min-height: 72px !important;
@@ -596,5 +596,185 @@ div.flex > div.flex > span.w-1\.5 {
   display: none !important;
 }
 
+/* ==========================================================================
+   EINGANG / INBOX: Konsistente Spalten-Geometrie & Kader-Kacheln
+   ========================================================================== */
+#inbox-overview-container:not(.hidden) {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0.625rem !important;
+  width: 100% !important;
+  height: 100% !important;
+}
 
+#inbox-overview-container.hidden {
+  display: none !important;
+}
 
+#inbox-split-container:not(.hidden) {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#inbox-split-container.hidden {
+  display: none !important;
+}
+
+#inbox-overview-container > div,
+#inbox-col-webhook,
+#inbox-col-intern,
+#inbox-col-email,
+#inbox-col-messenger {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: auto !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.inbox-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.inbox-header-tile > div.tile-icon-wrap.active-tile {
+  border: 2px solid #121212 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+.dark .inbox-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .inbox-header-tile > div.tile-icon-wrap.active-tile {
+  border-color: #e4e4e7 !important;
+  box-shadow: 0 4px 6px -1px rgba(255,255,255,0.12), 0 2px 4px -2px rgba(255,255,255,0.06) !important;
+}
+
+#inbox-search-input,
+#profile-search-input,
+#prof-edit-person-name,
+#prof-edit-id,
+#prof-edit-name,
+#prof-edit-category,
+#prof-edit-provider,
+#prof-edit-model,
+#prof-edit-desc,
+#prof-projects-list,
+#ops-kanban-search,
+#mc-audit-feed {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#inbox-total-badge {
+  width: 83px !important;
+  height: 17px !important;
+}
+
+#prof-edit-model {
+  width: 247px !important;
+}
+
+/* ==========================================================================
+   AGENTEN-KADER / MISSION CONTROL / EINGANG: AKTIVER TAB MIT RAND & SCHATTEN
+   (wie im linken Navigationsmenü, dynamisch mitwandernd)
+   ========================================================================== */
+.agent-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.agent-header-tile > div.tile-icon-wrap.active-tile,
+.ops-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.ops-header-tile > div.tile-icon-wrap.active-tile,
+.inbox-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.inbox-header-tile > div.tile-icon-wrap.active-tile,
+.library-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.library-header-tile > div.tile-icon-wrap.active-tile,
+.showroom-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.showroom-header-tile > div.tile-icon-wrap.active-tile {
+  border: 2px solid #121212 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+.dark .agent-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .agent-header-tile > div.tile-icon-wrap.active-tile,
+.dark .ops-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .ops-header-tile > div.tile-icon-wrap.active-tile,
+.dark .inbox-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .inbox-header-tile > div.tile-icon-wrap.active-tile,
+.dark .library-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .library-header-tile > div.tile-icon-wrap.active-tile,
+.dark .showroom-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .showroom-header-tile > div.tile-icon-wrap.active-tile {
+  border-color: #e4e4e7 !important;
+  box-shadow: 0 4px 6px -1px rgba(255,255,255,0.12), 0 2px 4px -2px rgba(255,255,255,0.06) !important;
+}
+
+#ops-kanban-archive-btn {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+#ops-kanban-archive-btn > span {
+  box-shadow: none !important;
+}
+
+/* ==========================================================================
+   OPERATIONS KANBAN SPALTEN-HINTERGRÜNDE (10% Intensität wie Mission Control)
+   ========================================================================== */
+div#ops-kanban-columns-container > div.w-80 {
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+div#ops-kanban-columns-container > div.w-80 > div.flex-1 {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+div#ops-kanban-columns-container .ops-col-todo,
+.ops-col-todo {
+  background-color: var(--kanban-todo-bg, rgba(243, 232, 222, 0.10)) !important;
+  border-color: var(--kanban-todo-border, #F3E8DE) !important;
+}
+div#ops-kanban-columns-container .ops-col-in_progress,
+.ops-col-in_progress {
+  background-color: var(--kanban-in_progress-bg, rgba(238, 214, 91, 0.10)) !important;
+  border-color: var(--kanban-in_progress-border, #EED65B) !important;
+}
+div#ops-kanban-columns-container .ops-col-review,
+.ops-col-review {
+  background-color: var(--kanban-review-bg, rgba(124, 169, 130, 0.10)) !important;
+  border-color: var(--kanban-review-border, #7CA982) !important;
+}
+div#ops-kanban-columns-container .ops-col-blocked,
+.ops-col-blocked {
+  background-color: var(--kanban-blocked-bg, rgba(193, 92, 83, 0.10)) !important;
+  border-color: var(--kanban-blocked-border, #C15C53) !important;
+}
+div#ops-kanban-columns-container .ops-col-done,
+.ops-col-done {
+  background-color: var(--kanban-done-bg, rgba(74, 109, 136, 0.10)) !important;
+  border-color: var(--kanban-done-border, #4A6D88) !important;
+}
+
+/* ==========================================================================
+   MISSION CONTROL KANBAN SPALTEN-HINTERGRÜNDE (10% Intensität & 1px Rahmen)
+   ========================================================================== */
+#mc-kanban-col-todo,
+.mc-col-todo {
+  background-color: var(--kanban-todo-bg, rgba(243, 232, 222, 0.10)) !important;
+  border: var(--kanban-col-border-width, 1px) solid var(--kanban-todo-border, #F3E8DE) !important;
+}
+#mc-kanban-col-inprogress,
+.mc-col-in_progress {
+  background-color: var(--kanban-in_progress-bg, rgba(238, 214, 91, 0.10)) !important;
+  border: var(--kanban-col-border-width, 1px) solid var(--kanban-in_progress-border, #EED65B) !important;
+}
+#mc-kanban-col-review,
+.mc-col-review {
+  background-color: var(--kanban-review-bg, rgba(124, 169, 130, 0.10)) !important;
+  border: var(--kanban-col-border-width, 1px) solid var(--kanban-review-border, #7CA982) !important;
+}
+#mc-kanban-col-blocked,
+.mc-col-blocked {
+  background-color: var(--kanban-blocked-bg, rgba(193, 92, 83, 0.10)) !important;
+  border: var(--kanban-col-border-width, 1px) solid var(--kanban-blocked-border, #C15C53) !important;
+}
+#mc-kanban-col-done,
+.mc-col-done {
+  background-color: var(--kanban-done-bg, rgba(74, 109, 136, 0.10)) !important;
+  border: var(--kanban-col-border-width, 1px) solid var(--kanban-done-border, #4A6D88) !important;
+}

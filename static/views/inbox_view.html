@@ -1,241 +1,388 @@
-<div id="view-inbox" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
-        <!-- TOPBAR: EINGANG & INTAKE HEADER (72px) -->
-        <header id="inbox-header-bar" class="h-[72px] px-4 md:px-5 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between shrink-0 font-sans shadow-2xs">
+<div id="view-inbox" class="hidden h-screen p-2 overflow-hidden">
+  <div class="flex gap-2.5 h-full min-h-0 w-full overflow-hidden">
+    
+    <!-- 1. MITTLERE SPALTE: EINGANG & CHRONOLOGISCHER STREAM (260px, wie Agenten-Katalog) -->
+    <div id="inbox-catalog-col" class="w-[260px] min-w-[260px] max-w-[260px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs shrink-0 transition-all duration-200">
+      
+      <!-- EXPANDED HEADER: Exakt 72px Hoehe wie Agenten-Katalog -->
+      <div id="inbox-catalog-expanded-header" class="shrink-0">
+        <div class="h-[72px] flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
           <div class="flex items-center gap-2">
-            <h1 class="text-sm font-semibold tracking-tight text-[var(--foreground)]">Eingang &amp; Intake</h1>
-            <button type="button" onclick="openContextHelp('inbox')" title="Hilfe zu Eingang &amp; Intake" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+            <h3 class="text-[22px] font-semibold tracking-tight text-[var(--foreground)]">Eingang</h3>
+            <button type="button" onclick="openContextHelp('inbox')" title="Hilfe zu Eingang" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
               <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
             </button>
-            <span id="inbox-total-badge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] font-medium border border-[var(--border)]">0 Items</span>
-            <span class="hidden sm:inline text-[11px] text-[var(--muted-foreground)] ml-1 border-l border-[var(--border)] pl-2">Operative Triage: Freigaben, E-Mail-Postfach &amp; Telegram-Stream</span>
           </div>
-          <!-- Suchleiste, Filter-Pills & Aktualisieren -->
-          <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            <!-- Lokales Suchfeld -->
-            <div class="relative min-w-[180px] max-w-[240px]">
-              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-black dark:text-white"></i>
-              <input type="text" id="inbox-search-input" oninput="filterInboxItems(this.value)" placeholder="Einträge filtern..." class="w-full h-8 bg-[var(--background)] border border-[var(--border)] rounded-lg pl-7 pr-2.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 font-mono shadow-2xs">
-            </div>
-            <!-- Agenten-Kader Style Filter-Kacheln (Alle, Intern, E-Mail, Telegram) -->
-            <div class="flex items-center gap-1 shrink-0 overflow-x-auto py-0.5">
-              <!-- 1. Alle -->
-              <button 
-                type="button" 
-                id="inbox-filter-all" 
-                onclick="setInboxCategoryFilter('all')" 
-                class="inbox-header-tile flex flex-col items-center justify-center min-w-[50px] sm:min-w-[56px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                title="Alle Einträge"
-              >
-                <div class="tile-icon-wrap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center mb-0.5">
-                  <img src="/static/img/cadre_icons/overview.png" alt="Alle" class="w-8 h-8 sm:w-9 sm:h-9 object-contain drop-shadow-xs pointer-events-none">
-                </div>
-                <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold">Alle</span>
-              </button>
-              <!-- 2. Intern -->
-              <button 
-                type="button" 
-                id="inbox-filter-intern" 
-                onclick="setInboxCategoryFilter('intern')" 
-                class="inbox-header-tile flex flex-col items-center justify-center min-w-[50px] sm:min-w-[56px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                title="Interne Aufgaben & Freigaben"
-              >
-                <div class="tile-icon-wrap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center mb-0.5">
-                  <img src="/static/img/cadre_icons/skills.png" alt="Intern" class="w-8 h-8 sm:w-9 sm:h-9 object-contain drop-shadow-xs pointer-events-none">
-                </div>
-                <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Intern</span>
-              </button>
-              <!-- 3. E-Mail -->
-              <button 
-                type="button" 
-                id="inbox-filter-email" 
-                onclick="setInboxCategoryFilter('email')" 
-                class="inbox-header-tile flex flex-col items-center justify-center min-w-[50px] sm:min-w-[56px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                title="E-Mail Postfach"
-              >
-                <div class="tile-icon-wrap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center mb-0.5">
-                  <img src="/static/img/cadre_icons/personalakte.png" alt="E-Mail" class="w-8 h-8 sm:w-9 sm:h-9 object-contain drop-shadow-xs pointer-events-none">
-                </div>
-                <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">E-Mail</span>
-              </button>
-              <!-- 4. Telegram -->
-              <button 
-                type="button" 
-                id="inbox-filter-telegram" 
-                onclick="setInboxCategoryFilter('telegram')" 
-                class="inbox-header-tile flex flex-col items-center justify-center min-w-[50px] sm:min-w-[56px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                title="Telegram Stream"
-              >
-                <div class="tile-icon-wrap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center mb-0.5">
-                  <img src="/static/img/cadre_icons/chat.png" alt="Telegram" class="w-8 h-8 sm:w-9 sm:h-9 object-contain drop-shadow-xs pointer-events-none">
-                </div>
-                <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Telegram</span>
-              </button>
-            </div>
-            <!-- Manual IMAP Sync Button mit 2 in sich drehenden Pfeilen (180s Taktung) -->
-            <button onclick="triggerManualEmailSync()" title="E-Mails jetzt via IMAP abrufen (180s Taktung)" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium flex items-center gap-1.5 transition shadow-2xs cursor-pointer">
-              <i id="inbox-imap-spin-icon" data-lucide="rotate-cw" class="w-3.5 h-3.5 text-blue-500"></i>
-              <span class="hidden sm:inline">Sync</span>
+          <div class="flex items-center gap-1.5">
+            <span id="inbox-stream-count-badge" class="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+              0
+            </span>
+            <button type="button" id="btn-inbox-catalog-collapse" onclick="toggleInboxCatalogCollapse()" class="h-8 px-2 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold cursor-pointer shadow-xs" title="Spalte ein-/ausklappen">
+              ◀
             </button>
           </div>
-        </header>
+        </div>
+      </div>
 
-        <!-- Main Content Area for Inbox -->
-        <div class="flex-1 p-3 sm:p-4 overflow-hidden flex flex-col min-h-0">
-          <!-- 1. Übersicht-Modus: 3 Spalten Grid (für 'Alle') -->
-          <div id="inbox-overview-container" class="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 items-stretch min-h-0 overflow-hidden">
+      <!-- COLLAPSED HEADER (Wenn auf 64px eingeklappt) -->
+      <div id="inbox-catalog-collapsed-header" class="hidden flex flex-col items-center gap-2 pb-2 border-b border-[var(--border)] shrink-0 w-full">
+        <button type="button" onclick="toggleInboxCatalogCollapse()" class="w-full py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-xs" title="Spalte ausklappen">
+          ▶
+        </button>
+        <button type="button" onclick="triggerManualEmailSync()" class="p-2 rounded-xl border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center justify-center cursor-pointer shadow-xs" title="Sync">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
+        </button>
+      </div>
+
+      <!-- STREAM LISTE: Zeitlich sortiert (oben neueste, unten aelteste) -->
+      <div id="inbox-stream-list" class="flex-1 overflow-y-auto space-y-2 my-2 pr-1 min-h-0 custom-scrollbar w-full">
+        <!-- Dynamisch befuellt mit Stream-Karten -->
+      </div>
+
+      <!-- FOOTER DER MITTLEREN SPALTE -->
+      <div class="pt-2 shrink-0 border-t border-[var(--border)] space-y-1.5">
+        <div class="p-2.5 rounded-xl space-y-1 bg-[var(--secondary)]/30 border border-[var(--border)]">
+          <div class="flex items-center justify-between text-[10px] font-mono">
+            <span class="text-[var(--muted-foreground)]">Stream Daemon</span>
+            <span class="font-bold text-emerald-500 flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Aktiv
+            </span>
+          </div>
+          <div class="text-[10px] font-mono text-[var(--muted-foreground)] flex items-center justify-between">
+            <span>Taktung</span>
+            <span>180s Auto-Sync</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. RECHTE HAUPT-SPALTE: 4-SPALTEN-UEBERSICHT ODER VOLLBILD-DETAILANSICHT -->
+    <div class="flex-1 h-full min-h-0 flex flex-col gap-2 min-w-0 overflow-hidden">
+      
+      <!-- GROSSER HEADER MIT DEN GROSSEN KADER-ICONS -->
+      <div class="prof-panel-card p-3 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
+        <div class="flex items-center justify-between gap-4">
           
-          <!-- Spalte 1: Intern -->
-          <div id="inbox-col-intern" class="border border-[var(--border)] bg-[var(--card)] rounded-xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
-            <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-[var(--border)] shrink-0">
-              <div class="flex items-center gap-2">
-                <i data-lucide="shield-alert" class="w-4 h-4 text-black dark:text-white"></i>
-                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">INTERN & SYSTEM</h3>
-              </div>
-              <span id="inbox-badge-intern" class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">0</span>
+          <!-- Links: Icon-Plakette & Titel -->
+          <div class="flex items-center gap-3.5 min-w-0 flex-1">
+            <div id="inbox-main-header-avatar" class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-[var(--border)] shadow-md bg-[var(--secondary)] flex items-center justify-center relative shrink-0 p-2 overflow-hidden">
+              <img id="inbox-main-header-img" src="/static/img/cadre_icons/overview.png" alt="Eingang Icon" class="w-full h-full object-contain">
+              <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--card)] flex items-center justify-center" title="Online"></span>
             </div>
-            <div id="inbox-list-intern" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar">
+
+            <div class="min-w-0 space-y-1 flex-1">
+              <div class="flex items-center gap-2">
+                <h2 id="inbox-main-title" class="text-lg sm:text-xl font-black text-[var(--foreground)] tracking-tight leading-tight truncate">
+                  Posteingang &amp; Übersicht
+                </h2>
+                <span id="inbox-total-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+                  0 Items
+                </span>
+              </div>
+              <div id="inbox-main-subtitle" class="text-xs font-bold text-[var(--muted-foreground)] truncate">
+                Operative Triage: Webhooks, Interne Aufgaben, E-Mail &amp; Messenger
+              </div>
+              <!-- Suche & Sync-Button direkt unter dem Untertitel -->
+              <div class="flex items-center gap-2 pt-1 w-full max-w-sm sm:max-w-md">
+                <div class="relative flex-1 min-w-0">
+                  <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] pointer-events-none"></i>
+                  <input 
+                    type="text" 
+                    id="inbox-search-input" 
+                    oninput="toggleClearBtn('inbox-search-input'); filterInboxItems(this.value)" 
+                    placeholder="Nachrichten filtern..." 
+                    class="w-full h-7 bg-[var(--background)] border border-[var(--border)] rounded-lg pl-8 pr-6 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-mono shadow-2xs"
+                  >
+                  <button 
+                    id="inbox-search-input-clear" 
+                    onclick="clearSearchInput('inbox-search-input', () => filterInboxItems(''))" 
+                    class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs font-bold cursor-pointer" 
+                    title="Suche zurücksetzen"
+                  >✕</button>
+                </div>
+                <button 
+                  type="button" 
+                  onclick="triggerManualEmailSync()" 
+                  class="h-7 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium flex items-center gap-1.5 transition shadow-2xs cursor-pointer shrink-0"
+                  title="Streams &amp; Postfächer synchronisieren"
+                >
+                  <i id="inbox-imap-spin-icon" data-lucide="refresh-cw" class="w-3 h-3 text-blue-500"></i>
+                  <span class="text-[11px]">Sync</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rechts: DIE 5 GROSSEN ICON-KACHELN MIT DEN EIGENEN ICONS -->
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
+            
+            <!-- 1. Uebersicht -->
+            <button 
+              type="button" 
+              id="inbox-filter-all" 
+              onclick="setInboxCategoryFilter('all')" 
+              class="inbox-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Uebersicht aller 4 Kanaele"
+            >
+              <div class="tile-icon-wrap active-tile w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                <img src="/static/img/cadre_icons/overview.png" alt="Uebersicht" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold">Uebersicht</span>
+            </button>
+
+            <!-- 2. Webhooks -->
+            <button 
+              type="button" 
+              id="inbox-filter-webhook" 
+              onclick="setInboxCategoryFilter('webhook')" 
+              class="inbox-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Webhooks &amp; APIs"
+            >
+              <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                <img src="/static/img/cadre_icons/inbox_webhooks.png" alt="Webhooks" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Webhooks</span>
+            </button>
+
+            <!-- 3. Intern -->
+            <button 
+              type="button" 
+              id="inbox-filter-intern" 
+              onclick="setInboxCategoryFilter('intern')" 
+              class="inbox-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Interne Aufgaben &amp; Freigaben"
+            >
+              <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                <img src="/static/img/cadre_icons/inbox_intern.png" alt="Intern" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Intern</span>
+            </button>
+
+            <!-- 4. E-Mail -->
+            <button 
+              type="button" 
+              id="inbox-filter-email" 
+              onclick="setInboxCategoryFilter('email')" 
+              class="inbox-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="E-Mail Postfach"
+            >
+              <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                <img src="/static/img/cadre_icons/inbox_email.png" alt="E-Mail" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">E-Mail</span>
+            </button>
+
+            <!-- 5. Messenger -->
+            <button 
+              type="button" 
+              id="inbox-filter-messenger" 
+              onclick="setInboxCategoryFilter('messenger')" 
+              class="inbox-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Messenger Stream (Telegram, WhatsApp &amp; Bots)"
+            >
+              <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
+                <img src="/static/img/cadre_icons/inbox_messenger.png" alt="Messenger" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Messenger</span>
+            </button>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- HAUPTINHALTS-BEREICH -->
+      <div class="flex-1 min-h-0 overflow-hidden relative">
+
+        <!-- 1. UEBERSICHTS-MODUS: DIE 4 VORSCHAU-SPALTEN (EXAKT SYMMETRISCH 4x 25%, KEIN UEBERLAPPEN) -->
+        <div id="inbox-overview-container" class="grid grid-cols-4 gap-2.5 h-full min-h-0 overflow-hidden w-full">
+          
+          <!-- SPALTE 1: WEBHOOKS -->
+          <div id="inbox-col-webhook" class="min-w-0 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="/static/img/cadre_icons/inbox_webhooks.png" alt="Webhooks" class="w-5 h-5 object-contain shrink-0">
+                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">WEBHOOKS</h3>
+              </div>
+              <span id="inbox-badge-webhook" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
+            </div>
+            <div id="inbox-list-webhook" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
+              <div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Webhooks</div>
+            </div>
+          </div>
+
+          <!-- SPALTE 2: INTERN -->
+          <div id="inbox-col-intern" class="min-w-0 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="/static/img/cadre_icons/inbox_intern.png" alt="Intern" class="w-5 h-5 object-contain shrink-0">
+                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">INTERN</h3>
+              </div>
+              <span id="inbox-badge-intern" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
+            </div>
+            <div id="inbox-list-intern" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
               <div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine internen Meldungen</div>
             </div>
           </div>
-          <!-- Spalte 2: E-Mail -->
-          <div id="inbox-col-email" class="border border-[var(--border)] bg-[var(--card)] rounded-xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
-            <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-[var(--border)] shrink-0">
-              <div class="flex items-center gap-2">
-                <i data-lucide="mail" class="w-4 h-4 text-black dark:text-white"></i>
-                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">E-MAIL POSTFACH</h3>
+
+          <!-- SPALTE 3: E-MAIL -->
+          <div id="inbox-col-email" class="min-w-0 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="/static/img/cadre_icons/inbox_email.png" alt="E-Mail" class="w-5 h-5 object-contain shrink-0">
+                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">E-MAIL</h3>
               </div>
-              <span id="inbox-badge-email" class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">0</span>
+              <span id="inbox-badge-email" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
             </div>
-            <div id="inbox-list-email" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar">
+            <div id="inbox-list-email" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
               <div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine neuen E-Mails</div>
             </div>
           </div>
-          <!-- Spalte 3: Telegram -->
-          <div id="inbox-col-telegram" class="border border-[var(--border)] bg-[var(--card)] rounded-xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
-            <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-[var(--border)] shrink-0">
-              <div class="flex items-center gap-2">
-                <i data-lucide="send" class="w-4 h-4 text-black dark:text-white"></i>
-                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">TELEGRAM STREAM</h3>
+
+          <!-- SPALTE 4: MESSENGER -->
+          <div id="inbox-col-messenger" class="min-w-0 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="/static/img/cadre_icons/inbox_messenger.png" alt="Messenger" class="w-5 h-5 object-contain shrink-0">
+                <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">MESSENGER</h3>
               </div>
-              <span id="inbox-badge-telegram" class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">0</span>
+              <span id="inbox-badge-messenger" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
             </div>
-            <div id="inbox-list-telegram" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar">
-              <div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Telegram-Nachrichten</div>
+            <div id="inbox-list-messenger" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
+              <div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Messenger-Nachrichten</div>
             </div>
+            <div id="inbox-list-telegram" class="hidden"></div>
           </div>
+
         </div>
-        <!-- 2. Einzelansichts-Modus (Master-Detail Split für 'email', 'telegram', 'intern') -->
-        <div id="inbox-split-container" class="hidden flex-1 flex flex-col md:flex-row gap-3 items-stretch min-h-0 overflow-hidden">
+
+        <!-- 2. EINZELANSICHTS-MODUS: MASTER-DETAIL SPLIT CONTAINER (FUELLT DEN GESAMTEN RECHTEN PLATZ) -->
+        <div id="inbox-split-container" class="hidden w-full h-full flex flex-col md:flex-row gap-2.5 items-stretch min-h-0 overflow-hidden">
           
-          <!-- Linke Spalte: Nachrichtenliste -->
-          <div class="w-full md:w-5/12 lg:w-4/12 border border-[var(--border)] bg-[var(--card)] rounded-xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
-            <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-[var(--border)] shrink-0">
-              <div class="flex items-center gap-2">
-                <i id="inbox-split-icon" data-lucide="mail" class="w-4 h-4 text-black dark:text-white"></i>
-                <h3 id="inbox-split-title" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">E-MAIL POSTFACH</h3>
+          <!-- Linke Spalte der Einzelansicht: Vollstaendige Nachrichtenliste der gewaehlten Kategorie (~360px) -->
+          <div class="w-full md:w-[340px] lg:w-[380px] border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden shrink-0">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img id="inbox-split-icon-img" src="/static/img/cadre_icons/inbox_email.png" alt="Kategorie" class="w-5 h-5 object-contain shrink-0">
+                <h3 id="inbox-split-title" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">E-MAIL POSTFACH</h3>
               </div>
-              <span id="inbox-split-badge" class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">0</span>
+              <span id="inbox-split-badge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
             </div>
-            <div id="inbox-split-list" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar">
-              <div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Einträge</div>
+            <div id="inbox-split-list" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
+              <div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Eintraege</div>
             </div>
           </div>
-          <!-- Rechte Spalte: Komplettansicht der Nachricht -->
-          <div id="inbox-detail-pane" class="flex-1 border border-[var(--border)] bg-[var(--card)] rounded-xl p-4 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+
+          <!-- Rechte Spalte der Einzelansicht: Detailansicht der ausgewaehlten Nachricht -->
+          <div id="inbox-detail-pane" class="flex-1 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-4 flex flex-col h-full min-h-0 shadow-xs overflow-hidden min-w-0">
             
-            <!-- Placeholder wenn nichts gewählt -->
+            <!-- Platzhalter wenn nichts ausgewaehlt ist -->
             <div id="inbox-detail-empty" class="h-full flex flex-col items-center justify-center text-center p-8 text-[var(--muted-foreground)]">
-              <i data-lucide="mail-open" class="w-12 h-12 mb-3 stroke-[1.25] text-zinc-400"></i>
-              <div class="text-sm font-semibold font-mono text-[var(--foreground)] mb-1">Keine Nachricht ausgewählt</div>
-              <div class="text-xs font-mono max-w-sm">Wähle links eine Nachricht aus der Liste aus, um die vollständige Ansicht zu öffnen.</div>
+              <div class="w-16 h-16 rounded-2xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center mb-3">
+                <i data-lucide="mail-open" class="w-8 h-8 stroke-[1.25] text-[var(--muted-foreground)]"></i>
+              </div>
+              <div class="text-sm font-bold font-mono text-[var(--foreground)] mb-1">Keine Nachricht ausgewaehlt</div>
+              <div class="text-xs font-mono max-w-sm">Waehle links in der Liste eine Nachricht aus, um den vollstaendigen Inhalt und die Aktionen anzuzeigen.</div>
             </div>
-            <!-- Vollansicht Content -->
+
+            <!-- Detailansicht Inhalt -->
             <div id="inbox-detail-content" class="hidden flex flex-col h-full min-h-0">
+              
               <!-- Header -->
               <div class="pb-3 mb-3 border-b border-[var(--border)] shrink-0">
                 <div class="flex items-start justify-between gap-3 mb-2">
                   <div class="min-w-0">
                     <div class="flex items-center gap-2 mb-1">
-                      <span id="inbox-detail-badge" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">EMAIL</span>
+                      <span id="inbox-detail-badge" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">EVENT</span>
                       <span id="inbox-detail-date" class="text-xs font-mono text-[var(--muted-foreground)]"></span>
                     </div>
-                    <h2 id="inbox-detail-title" class="text-sm font-bold font-mono text-[var(--foreground)] break-words"></h2>
+                    <h2 id="inbox-detail-title" class="text-base font-bold font-mono text-[var(--foreground)] break-words"></h2>
                   </div>
-                  <!-- Actions -->
+                  <!-- Aktionen -->
                   <div class="flex items-center gap-1.5 shrink-0">
                     <button id="inbox-detail-copy-btn" onclick="copyInboxDetailText()" title="Text in Zwischenablage kopieren" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs flex items-center justify-center transition cursor-pointer">
                       <i data-lucide="copy" class="w-3.5 h-3.5"></i>
                     </button>
-                    <button id="inbox-detail-analyze-btn" onclick="analyzeInboxDetailInChat()" title="In Master Console analysieren" class="px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold text-white dark:text-zinc-950 flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 transition shadow-xs cursor-pointer">
+                    <button id="inbox-detail-analyze-btn" onclick="analyzeInboxDetailInChat()" title="In Master Console analysieren" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold text-white dark:text-zinc-950 flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 transition shadow-xs cursor-pointer">
                       <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
                       <span class="hidden sm:inline">In Konsole analysieren</span>
                     </button>
                   </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono text-[var(--muted-foreground)] bg-[var(--secondary)]/40 p-2.5 rounded-lg border border-[var(--border)]">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono text-[var(--muted-foreground)] bg-[var(--secondary)]/40 p-2.5 rounded-xl border border-[var(--border)]">
                   <div><strong class="text-[var(--foreground)]">Von:</strong> <span id="inbox-detail-sender"></span></div>
                   <div id="inbox-detail-path-wrap" class="truncate max-w-sm"><strong class="text-[var(--foreground)]">Quelle:</strong> <span id="inbox-detail-path" class="truncate"></span></div>
                 </div>
               </div>
-              <!-- Toggle Plain vs HTML (nur bei E-Mails mit HTML aktiv) -->
+
+              <!-- HTML vs Text Toggle (falls HTML Payload verfuegbar) -->
               <div id="inbox-detail-html-toggle-wrap" class="hidden flex items-center justify-end mb-2 shrink-0">
-                <div class="inline-flex p-0.5 rounded-md border border-[var(--border)] bg-[var(--secondary)] text-[10px] font-mono">
-                  <button id="inbox-btn-view-html" onclick="setInboxDetailBodyMode('html')" class="px-2 py-0.5 rounded font-bold bg-[var(--card)] text-blue-600 dark:text-blue-400 shadow-2xs">HTML</button>
-                  <button id="inbox-btn-view-text" onclick="setInboxDetailBodyMode('text')" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]">Text</button>
+                <div class="inline-flex p-0.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] text-[10px] font-mono">
+                  <button id="inbox-btn-view-html" onclick="setInboxDetailBodyMode('html')" class="px-2.5 py-0.5 rounded font-bold bg-[var(--card)] text-blue-600 dark:text-blue-400 shadow-2xs">HTML</button>
+                  <button id="inbox-btn-view-text" onclick="setInboxDetailBodyMode('text')" class="px-2.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]">Text</button>
                 </div>
               </div>
-              <!-- Body Area -->
-              <div class="flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 custom-scrollbar">
-                <!-- HTML Body Iframe -->
+
+              <!-- Body Bereich -->
+              <div class="flex-1 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--background)] p-3.5 custom-scrollbar">
                 <div id="inbox-detail-body-html" class="hidden w-full h-full min-h-[350px]">
                   <iframe id="inbox-detail-iframe" sandbox="allow-same-origin" class="w-full h-full min-h-[400px] border-none rounded bg-white text-black"></iframe>
                 </div>
-                <!-- Plain Text Body -->
                 <pre id="inbox-detail-body-text" class="select-text font-mono text-xs whitespace-pre-wrap leading-relaxed m-0 text-[var(--foreground)]"></pre>
               </div>
+
             </div>
           </div>
+
         </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Detail Modal fuer Klick auf Karten in der 4-Spalten-Uebersicht -->
+  <div id="inbox-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+    <div class="w-full max-w-2xl rounded-2xl border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)]">
+        <div class="flex items-center gap-2 truncate">
+          <span id="inbox-modal-badge" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)]">EVENT</span>
+          <h3 id="inbox-modal-title" class="text-xs font-bold font-mono uppercase text-[var(--foreground)] truncate">Nachricht</h3>
         </div>
-        <!-- Detail Modal für Inbox Items -->
-        <div id="inbox-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div class="w-full max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
-            <!-- Modal Header -->
-            <div class="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)]">
-              <div class="flex items-center gap-2 truncate">
-                <span id="inbox-modal-badge" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)]">EMAIL</span>
-                <h3 id="inbox-modal-title" class="text-xs font-bold font-mono uppercase text-[var(--foreground)] truncate">Nachricht</h3>
-              </div>
-              <button onclick="closeInboxModal()" class="p-1 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)] transition cursor-pointer">
-                <i data-lucide="x" class="w-4 h-4 text-black dark:text-white"></i>
-              </button>
-            </div>
-            <!-- Subheader Bar: Meta info & Formatierte Ansicht vs. Rohdaten Toggle -->
-            <div class="flex items-center justify-between px-5 py-2.5 border-b border-[var(--border)] bg-[var(--secondary)]/40 text-xs font-mono">
-              <div id="inbox-modal-meta" class="text-[11px] text-[var(--muted-foreground)] truncate max-w-xs sm:max-w-md"></div>
-              <div id="inbox-modal-view-toggle" class="inline-flex p-0.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] text-[10px] shrink-0">
-                <button id="inbox-modal-btn-formatted" onclick="setInboxModalViewMode('formatted')" class="px-2.5 py-1 rounded font-semibold bg-[var(--card)] text-[var(--foreground)] shadow-2xs transition cursor-pointer">Formatierte Ansicht</button>
-                <button id="inbox-modal-btn-raw" onclick="setInboxModalViewMode('raw')" class="px-2.5 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">Rohdaten</button>
-              </div>
-            </div>
-            
-            <!-- Modal Content -->
-            <div class="px-5 py-4 overflow-y-auto flex-1 text-xs space-y-3 custom-scrollbar bg-[var(--card)] min-h-[300px]">
-              <!-- Formatted Container -->
-              <div id="inbox-modal-formatted" class="space-y-3"></div>
-              <!-- Raw Container -->
-              <pre id="inbox-modal-raw" class="hidden p-3.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/50 text-[var(--foreground)] font-mono text-xs whitespace-pre-wrap leading-relaxed m-0 select-text overflow-x-auto"></pre>
-            </div>
-            <!-- Modal Footer -->
-            <div class="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] bg-[var(--secondary)]/50">
-              <button onclick="closeInboxModal()" class="px-3.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-xs font-mono font-medium text-[var(--foreground)] transition cursor-pointer">
-                Schließen
-              </button>
-              <button id="inbox-modal-analyze-btn" class="px-4 py-1.5 rounded-lg text-xs font-mono font-bold text-white dark:text-zinc-950 flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 transition shadow-xs cursor-pointer">
-                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-white dark:text-zinc-950"></i>
-                <span>In Master Console analysieren</span>
-              </button>
-            </div>
-          </div>
+        <button onclick="closeInboxModal()" class="p-1 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)] transition cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4 text-[var(--foreground)]"></i>
+        </button>
+      </div>
+
+      <!-- Subheader Bar: Meta info & Rohdaten-Toggle -->
+      <div class="flex items-center justify-between px-5 py-2.5 border-b border-[var(--border)] bg-[var(--secondary)]/40 text-xs font-mono">
+        <div id="inbox-modal-meta" class="text-[11px] text-[var(--muted-foreground)] truncate max-w-xs sm:max-w-md"></div>
+        <div id="inbox-modal-view-toggle" class="inline-flex p-0.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] text-[10px] shrink-0">
+          <button id="inbox-modal-btn-formatted" onclick="setInboxModalViewMode('formatted')" class="px-2.5 py-1 rounded font-semibold bg-[var(--card)] text-[var(--foreground)] shadow-2xs transition cursor-pointer">Formatierte Ansicht</button>
+          <button id="inbox-modal-btn-raw" onclick="setInboxModalViewMode('raw')" class="px-2.5 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">Rohdaten</button>
         </div>
       </div>
+      
+      <!-- Modal Content -->
+      <div class="px-5 py-4 overflow-y-auto flex-1 text-xs space-y-3 custom-scrollbar bg-[var(--card)] min-h-[300px]">
+        <div id="inbox-modal-formatted" class="space-y-3"></div>
+        <pre id="inbox-modal-raw" class="hidden p-3.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/50 text-[var(--foreground)] font-mono text-xs whitespace-pre-wrap leading-relaxed m-0 select-text overflow-x-auto"></pre>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] bg-[var(--secondary)]/50">
+        <button onclick="closeInboxModal()" class="px-3.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-xs font-mono font-medium text-[var(--foreground)] transition cursor-pointer">
+          Schliessen
+        </button>
+        <button id="inbox-modal-analyze-btn" class="px-4 py-1.5 rounded-lg text-xs font-mono font-bold text-white dark:text-zinc-950 flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 transition shadow-xs cursor-pointer">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <span>In Master Console analysieren</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-12T21:13:01.725548",
+  "updated_at": "2026-10-16T18:05:56.923351",
   "nodes": [
     {
       "id": "executive_decision_architect",
@@ -896,6 +896,86 @@
       "status": "standby",
       "person_name": "TELEGRAM BOT",
       "provider": "omniroute"
+    },
+    {
+      "id": "qa_automation_lead",
+      "x": 220,
+      "y": 1300,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "QA & Test Automation Lead (Playwright/E2E)",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_015.jpg",
+      "model": "omniroute/best-reasoning",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Elena Rostova",
+      "provider": "omniroute"
+    },
+    {
+      "id": "security_pentest_auditor",
+      "x": 220,
+      "y": 1460,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "AppSec & Penetration Testing Auditor",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_042.jpg",
+      "model": "omniroute/best-reasoning",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Viktor Frank",
+      "provider": "omniroute"
+    },
+    {
+      "id": "frontend_design_system_engineer",
+      "x": 220,
+      "y": 1620,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "UI/UX & Frontend Design System Engineer",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_055.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Maya Lin",
+      "provider": "omniroute"
+    },
+    {
+      "id": "api_contract_architect",
+      "x": 220,
+      "y": 1780,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "API & Integration Contract Architect",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_068.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Julian Weimann",
+      "provider": "omniroute"
+    },
+    {
+      "id": "sre_observability_engineer",
+      "x": 220,
+      "y": 1940,
+      "tier": 3,
+      "team_id": "team_tech",
+      "name": "SRE & Observability Systems Engineer",
+      "role": "7. Tech, Software & Data",
+      "category": "7. Tech, Software & Data",
+      "avatar": "/static/avatars/avatar_080.jpg",
+      "model": "auto/best-free",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Timo Berner",
+      "provider": "omniroute"
     }
   ],
   "links": [
@@ -1118,6 +1198,26 @@
     {
       "from": "executive_decision_architect",
       "to": "construction_project_manager"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "qa_automation_lead"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "security_pentest_auditor"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "frontend_design_system_engineer"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "api_contract_architect"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "sre_observability_engineer"
     }
   ],
   "canvas_width": 3200,

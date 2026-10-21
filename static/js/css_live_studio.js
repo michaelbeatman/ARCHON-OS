@@ -48,6 +48,7 @@
     window.onStudioFontFamilySelect = onStudioFontFamilySelect;
     window.applyStudioGlobalFont = applyStudioGlobalFont;
     // Initialize Studio & Load Persistence
+    window.ARCHON_LEGACY_STUDIO_DISABLED = false;
     async function initArchonCssStudio() {
       // 1. Try loading from localStorage first (Niemals automatisch löschen)
       try {

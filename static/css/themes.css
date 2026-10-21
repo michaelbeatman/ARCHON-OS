@@ -1,5 +1,5 @@
-/* === CSS-LIVE-STUDIO: übernommen am 2026-10-10 (181 Deklarationen) — Bereich beginnt === */
-/* Archon CSS Live Studio Compiled Overrides */
+/* === [ARCHIVED-LIVE-STUDIO-RULES] Ausgeklammert am 2026-10-16 (181 Deklarationen) — Bereich beginnt ===
+   Archon CSS Live Studio Compiled Overrides (deaktiviert zugunsten 15-Komponenten-System)
 
 #prof-projects-list {
   border-width: 0px !important;
@@ -154,8 +154,8 @@ div#mission-control-header-bar > div.flex > h1.text-sm {
 }
 
 div.shadcn-card > div.grid > div.rounded-lg {
-  background-color: #ffffff !important;
-  border-width: 0px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
   box-shadow: none !important;
 }
 
@@ -218,7 +218,8 @@ div#ops-kanban-columns-container > div.w-80 {
   flex: 1 1 0% !important;
   width: auto !important;
   min-width: 160px !important;
-  border-width: 0px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
   box-shadow: none !important;
 }
 
@@ -320,10 +321,9 @@ div.prof-panel-card > div.flex > div.prof-box-card {
 }
 
 div#ops-kanban-columns-container > div.w-80 > div.flex-1 {
-  background-color: #ffffff !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
   border-width: 0px !important;
-  border-color: #a6b7d9 !important;
 }
 
 div#ops-kanban-columns-container > div.w-80 > div.p-3\.5 {
@@ -448,7 +448,7 @@ div.flex > div.flex > span.px-1\.5 {
 div.p-3 > div.flex > button.px-2 {
   background-color: #ffffff !important;
 }
-/* === CSS-LIVE-STUDIO: Bereich Ende === */
+=== [ARCHIVED-LIVE-STUDIO-RULES] Bereich Ende === */
 
 /* Theme Tokens CSS-Variablen */
     :root {
@@ -1345,9 +1345,8 @@ div.p-3 > div.flex > button.px-2 {
       object-fit: contain !important;
       display: block !important;
     }
-    /* ========================================================= */
-    /* FESTGESCHRIEBENE ARCHON DESIGN-REGELN (BAKED OVERRIDES)   */
-    /* ========================================================= */
+    /* =========================================================
+       [ARCHIVED-BAKED-OVERRIDES] Ausgeklammert am 2026-10-16
     div#mc-col-inprogress > div.p-3 {
       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
     }
@@ -1373,6 +1372,7 @@ div.p-3 > div.flex > button.px-2 {
     #mc-inspect-slot-c {
       border-color: #dadadd !important;
     }
+    ========================================================= */
     /* Chat Markdown Typography & Formatting */
     .chat-markdown {
       line-height: 1.65;

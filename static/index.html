@@ -11,11 +11,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&family=Julius+Sans+One&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Montserrat:wght@300;400;500;600;700;800&family=Fira+Code:wght@300..700&family=Cinzel:wght@400..900&family=Space+Grotesk:wght@300..700&family=Plus+Jakarta+Sans:wght@300..800&display=swap" rel="stylesheet">
   <!-- Custom Studio CSS Overrides -->
     <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
-  <link rel="stylesheet" href="/static/custom.css?v=20261004_v4">
+  <link rel="stylesheet" href="/static/custom.css?v=202610171001">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
-  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=202610141308">
-  <!-- Tailwind CSS & Lucide Icons CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=202610161325">
+  <!-- Tailwind CSS Local Bundle (Offline-fähig & kein CDN Latenz-Overhead) -->
+  <script src="/static/js/tailwind.cdn.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Chart.js for Guardian Token & Cost Trends -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -69,6 +69,7 @@
     }
   </script>
   <script>
+    /* [ARCHIVED-INLINE-THEME-BOOT] Ausgeklammert zugunsten der 15-Bausteine Design-Engine (component_design_studio.js)
     (function() {
       try {
         const cached = localStorage.getItem("archon_theme_custom");
@@ -95,8 +96,9 @@
         if (s.colorTextLabel) root.style.setProperty('--text-label', s.colorTextLabel);
       } catch(e) {}
     })();
+    */
   </script>
-  <link rel="stylesheet" href="/static/css/themes.css?v=202610121045">
+  <link rel="stylesheet" href="/static/css/themes.css?v=202610161325">
 
   <style id="archon-live-custom-styles"></style>
 </head>
@@ -130,7 +132,7 @@
             <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Mission Control</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">System-Status</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Cockpit, Kanban &amp; Orga</div>
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
@@ -158,7 +160,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-operations" onclick="setTab('operations')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-operations" style="display: none;" onclick="setTab('operations')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
             <i data-lucide="kanban" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Operations</div>
@@ -166,7 +168,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-automation" onclick="setTab('automation')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-automation" style="display: none;" onclick="setTab('automation')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
             <i data-lucide="workflow" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Workflow-Engine</div>
@@ -271,30 +273,33 @@
           1 Vorfall: telegram_bot ge...
         </div>
       </div>
-      <!-- Quick Links (Hermes Dashboard & CRM) -->
-      <div class="space-y-0.5">
+      <!-- Quick Links (Hermes Dashboard & CSS Studio) -->
+      <div class="space-y-1">
         <button id="nav-hermes-dashboard" onclick="setTab('hermes-dashboard')" class="archon-nav-item w-full flex items-center px-2.5 py-1 rounded text-left transition-all duration-150 text-xs font-medium text-muted-custom hover:text-primary-custom hover:bg-[var(--item-hover-bg)]">
           <span class="truncate font-semibold">Hermes Dashboard</span>
           <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
         </button>
-        <button id="nav-design-system" onclick="setTab('design-system')" class="archon-nav-item w-full flex items-center px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 text-xs font-medium text-muted-custom hover:text-primary-custom hover:bg-[var(--item-hover-bg)] mb-1">
-          <span class="truncate font-semibold flex items-center gap-2"><i data-lucide="palette" class="w-4 h-4 text-indigo-500 shrink-0"></i> Design System Lab</span>
-          <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+        <button id="nav-toggle-css-studio" type="button" onclick="toggleCssStudio()" class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 cursor-pointer shadow-2xs">
+          <i data-lucide="palette" class="w-3.5 h-3.5 shrink-0"></i>
+          <span class="truncate font-medium">CSS Live Studio</span>
+          <span class="ml-auto text-[9.5px] font-mono opacity-70 bg-indigo-500/20 px-1 py-0.2 rounded">Alt+S</span>
         </button>
       </div>
       <!-- Status Indicator List & Settings -->
       <div class="pt-1 flex items-end justify-between gap-1 relative">
         <!-- Interactive Health Telemetry Indicator with Popover -->
         <div class="relative">
-          <div 
-            id="system-health-badge"
-            onclick="toggleHealthPopover(event)"
-            class="flex items-center gap-1.5 px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] transition cursor-pointer select-none text-[10px] font-mono text-[var(--foreground)]"
-            title="Klicken für System-Health Telemetrie"
+          <button 
+            type="button" 
+            id="btn-sidebar-sync"
+            onclick="refreshPaperclipAndProfiles(true); fetchSystemHealth(true);" 
+            class="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] hover:border-zinc-400 dark:hover:border-zinc-600 transition cursor-pointer select-none text-xs font-mono font-bold text-[var(--foreground)] shadow-xs"
+            title="Live-Status &amp; Agenten-Kader synchronisieren"
           >
-            <span id="health-status-dot" class="inline-block w-1.5 h-1.5 rounded-full bg-zinc-900 dark:bg-zinc-100"></span>
-            <span id="health-status-label" class="font-semibold">Hermes Health</span>
-          </div>
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Sync</span>
+            <span id="health-status-dot" class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 ml-0.5" title="System Status"></span>
+          </button>
           <!-- Health Detail Popover -->
           <div 
             id="health-telemetry-popover" 
@@ -336,6 +341,9 @@
           </div>
         </div>
         <div class="flex items-center gap-0.5 shrink-0">
+          <button onclick="openCommandPalette()" class="p-1.5 rounded hover:bg-[var(--secondary)] text-black dark:text-white transition cursor-pointer" title="Befehlspalette & Schnellsuche (Strg + K)">
+            <i data-lucide="command" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+          </button>
           <button onclick="openGatewayManagerModal()" class="p-1.5 rounded hover:bg-[var(--secondary)] text-black dark:text-white transition cursor-pointer" title="Gateway Manager (Profile &amp; Gateways verwalten)">
             <i data-lucide="cpu" class="w-3.5 h-3.5 text-black dark:text-white"></i>
           </button>
@@ -416,304 +424,505 @@
       <!-- VIEW CONTAINER: MISSION CONTROL (3-ZONEN-COCKPIT & HITL KANBAN)          -->
       <!-- ========================================================================= -->
       <!-- ========================================================================= -->
-      <div id="view-mission-control" class="hidden flex-1 h-full min-h-0 w-full max-w-full flex flex-col space-y-2 p-2.5 md:p-3 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
-        
-        <!-- COMPACT DASHBOARD HEADER -->
-        <div id="mission-control-header-bar" class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0 font-sans">
-          <div class="flex items-center gap-2">
-            <h1 class="text-sm font-semibold tracking-tight text-[var(--foreground)]">Mission Control</h1>
-            <button type="button" onclick="openContextHelp('mission_control')" title="Hilfe zu Mission Control" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
-              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-            </button>
-            <span class="hidden sm:inline text-[11px] text-[var(--muted-foreground)] ml-1 border-l border-[var(--border)] pl-2">51 Agenten &amp; HITL-Approval-Gates</span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <button onclick="openSystemSettingsModal()" class="shadcn-btn-outline px-2 py-1 flex items-center gap-1 text-[11px] cursor-pointer h-7">
-              <i data-lucide="settings" class="w-3 h-3 text-black dark:text-white"></i>
-              <span>Einstellungen</span>
-            </button>
-            <button onclick="fetchMissionControlData(true)" class="shadcn-btn-primary px-2.5 py-1 flex items-center gap-1 text-[11px] cursor-pointer shadow-xs h-7">
-              <i data-lucide="refresh-cw" class="w-3 h-3 text-white dark:text-zinc-950"></i>
-              <span>Aktualisieren</span>
-            </button>
-          </div>
-        </div>
-        <!-- ZONE 1: 5 COMPACT SHADCN KPI METRIC CARDS -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 shrink-0 font-sans">
+      <div id="view-mission-control" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+        <div class="flex gap-2.5 h-full min-h-0 w-full overflow-hidden">
           
-          <!-- KACHEL 1: FLOTTENLAST -->
-          <div onclick="openKpiDetailModal('fleet')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
-            <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
-              <span>Flottenlast</span>
-              <i data-lucide="users" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-            </div>
-            <div class="flex items-baseline justify-between">
-              <div id="mc-kpi-fleet" class="text-base font-bold tracking-tight text-[var(--foreground)]">0 / 51 Aktiv</div>
-              <span id="mc-sub-fleet" class="text-[10px] text-[var(--muted-foreground)]">51 Profile</span>
-            </div>
-            <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
-              <div id="mc-bar-fleet" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 4%;"></div>
-            </div>
-          </div>
-          <!-- KACHEL 2: DURCHSATZ (TPM) -->
-          <div onclick="openKpiDetailModal('tpm')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
-            <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
-              <span>Durchsatz (TPM)</span>
-              <i data-lucide="activity" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-            </div>
-            <div class="flex items-baseline justify-between">
-              <div id="mc-kpi-tpm" class="text-base font-bold tracking-tight text-[var(--foreground)]">0 Tok/m</div>
-              <span id="mc-sub-tpm" class="text-[10px] text-[var(--muted-foreground)]">Limit 2M</span>
-            </div>
-            <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
-              <div id="mc-bar-tpm" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 0%;"></div>
-            </div>
-          </div>
-          <!-- KACHEL 3: KOSTENWÄCHTER -->
-          <div onclick="openKpiDetailModal('cost')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
-            <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
-              <span>Kostenwächter</span>
-              <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-            </div>
-            <div class="flex items-baseline justify-between">
-              <div id="mc-kpi-cost" class="text-base font-bold tracking-tight text-[var(--foreground)]">$0.00</div>
-              <span id="mc-sub-cost" class="text-[10px] text-[var(--muted-foreground)]">Limit $5.00</span>
-            </div>
-            <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
-              <div id="mc-bar-cost" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 0%;"></div>
-            </div>
-          </div>
-          <!-- KACHEL 4: STABILITÄT -->
-          <div onclick="openKpiDetailModal('stability')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
-            <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
-              <span>Stabilität</span>
-              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-            </div>
-            <div class="flex items-baseline justify-between">
-              <div id="mc-kpi-stability" class="text-base font-bold tracking-tight text-[var(--foreground)]">0.0% Fehler</div>
-              <span id="mc-sub-stability" class="text-[10px] text-[var(--muted-foreground)]">100% nominal</span>
-            </div>
-            <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
-              <div id="mc-bar-stability" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 100%;"></div>
-            </div>
-          </div>
-          <!-- KACHEL 5: GOVERNANCE / APPROVAL GATE -->
-          <div id="mc-kpi-governance-card" onclick="onGovernanceCardClick()" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
-            <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
-              <span id="mc-kpi-governance-label">Approval Gate</span>
-              <i id="mc-kpi-governance-icon" data-lucide="shield" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-            </div>
-            <div class="flex items-baseline justify-between">
-              <div id="mc-kpi-governance-count" class="text-base font-bold tracking-tight text-[var(--foreground)]">0 Ausstehend</div>
-              <span id="mc-kpi-governance-subtext" class="text-[10px] text-[var(--muted-foreground)] truncate">Keine Sperren</span>
-            </div>
-            <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
-              <div id="mc-bar-governance" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 100%;"></div>
-            </div>
-          </div>
-        </div>
-        <!-- ZONE 2 & 3 CONTAINER -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-0.5 flex-1 min-h-0 items-stretch overflow-hidden" style="flex: 1 1 0%; min-height: 0;">
-          
-          <!-- ZONE 2: HITL KANBAN & PROCESS (LINKE SEITE, 7/12 SPALTEN, schmal) -->
-          <div class="lg:col-span-7 flex flex-col space-y-2 min-h-0 h-full overflow-hidden" style="height: 100%; min-height: 0;">
+          <!-- 1. MITTLERE SPALTE: MISSION CONTROL KATALOG (215px, ~18% schmaler) -->
+          <div id="mc-catalog-col" class="w-[215px] min-w-[215px] max-w-[215px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-2.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs shrink-0 transition-all duration-200">
             
-            <!-- KANBAN BOARD CONTAINER -->
-            <div class="shadcn-card p-2.5 flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] shrink-0 font-sans">
-                <div class="flex items-center gap-1.5">
-                  <h2 class="text-xs font-semibold tracking-tight text-[var(--foreground)]">Workflow &amp; Approval Board</h2>
-                  <span class="text-[10px] text-[var(--muted-foreground)] hidden sm:inline">HITL-Freigabe vor Ausführung</span>
+            <!-- EXPANDED HEADER: Exakt 72px Hoehe wie Agenten-Katalog & Eingang -->
+            <div id="mc-catalog-expanded-header" class="shrink-0">
+              <div class="h-[72px] flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <h3 class="text-base font-bold tracking-tight text-[var(--foreground)] truncate">Mission Control</h3>
+                  <button type="button" onclick="openContextHelp('mission_control')" title="Hilfe zu Mission Control" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+                    <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                  </button>
                 </div>
               </div>
-              <!-- 5-Spalten Kanban Grid (Kanban-Wahrheit, wie Operations) -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-0.5 flex-1 min-h-0 items-stretch overflow-hidden mt-1.5" style="flex: 1 1 0%; min-height: 0;">
+            </div>
+
+            <!-- COLLAPSED HEADER (Wenn auf 64px eingeklappt) -->
+            <div id="mc-catalog-collapsed-header" class="hidden flex flex-col items-center gap-2 pb-2 border-b border-[var(--border)] shrink-0 w-full">
+              <button type="button" onclick="toggleMcCatalogCollapse()" class="w-full py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-xs" title="Spalte ausklappen">
+                ▶
+              </button>
+              <button type="button" onclick="fetchMissionControlData(true)" class="p-2 rounded-xl border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center justify-center cursor-pointer shadow-xs" title="Aktualisieren">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
+              </button>
+              <button type="button" onclick="openSystemSettingsModal()" class="p-2 rounded-xl border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center justify-center cursor-pointer shadow-xs" title="Einstellungen">
+                <i data-lucide="settings" class="w-3.5 h-3.5 text-[var(--foreground)]"></i>
+              </button>
+            </div>
+
+            <!-- BODY: HÄLFTIG AKTIVE AGENTEN (50%) & HÄLFTIG AKTIVE AUFGABEN (50%) -->
+            <div id="mc-catalog-body" class="flex-1 flex flex-col min-h-0 py-1.5 overflow-hidden gap-1.5">
+              
+              <!-- OBERE HÄLFTE: AKTIVER AGENTEN-KADER (50%) -->
+              <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[var(--border)] shrink-0">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="users" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                    <h4 class="text-xs font-semibold text-[var(--foreground)]">Aktive Agenten</h4>
+                  </div>
+                  <span class="text-[10px] text-[var(--muted-foreground)] font-mono">51 Profile</span>
+                </div>
+                <div id="mc-cadre-list" class="space-y-1 overflow-y-auto pr-0.5 custom-scrollbar flex-1 min-h-0">
+                  <!-- Dynamisch befüllt -->
+                </div>
+              </div>
+
+              <!-- TEILER -->
+              <div class="border-t border-[var(--border)] shrink-0 opacity-60"></div>
+
+              <!-- UNTERE HÄLFTE: AKTIVE AUFGABEN (50%) -->
+              <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[var(--border)] shrink-0">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="activity" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                    <h4 class="text-xs font-semibold text-[var(--foreground)]">Aktive Aufgaben</h4>
+                  </div>
+                  <span id="mc-active-count" class="text-[10px] px-2 py-0.2 rounded-full font-bold bg-[var(--secondary)] border border-[var(--border)] font-mono">0</span>
+                </div>
+                <div id="mc-active-list" class="space-y-1.5 overflow-y-auto pr-0.5 custom-scrollbar flex-1 min-h-0">
+                  <!-- Dynamisch befüllt -->
+                </div>
+              </div>
+
+            </div>
+
+            <!-- FOOTER STATUS & CONTROLS (Zahnrad, Sync & Pfeil ganz unten) -->
+            <div id="mc-catalog-footer" class="pt-2 shrink-0 border-t border-[var(--border)] space-y-2">
+              <div class="flex items-center justify-between gap-1">
+                <div class="flex items-center gap-1 min-w-0">
+                  <!-- Zahnrad / Einstellungen -->
+                  <button 
+                    type="button" 
+                    onclick="openSystemSettingsModal()" 
+                    class="w-7 h-7 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] flex items-center justify-center transition shadow-2xs cursor-pointer shrink-0" 
+                    title="System-Einstellungen"
+                  >
+                    <i data-lucide="settings" class="w-3.5 h-3.5 text-[var(--foreground)]"></i>
+                  </button>
+                  <!-- Sync Button -->
+                  <button 
+                    type="button" 
+                    onclick="fetchMissionControlData(true); if (typeof loadOperationsData === 'function') loadOperationsData(false);" 
+                    class="h-7 px-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-[11px] font-mono font-medium flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0"
+                    title="Aktualisieren"
+                  >
+                    <i data-lucide="refresh-cw" class="w-3 h-3 text-blue-500"></i>
+                    <span class="text-[10.5px]">Sync</span>
+                  </button>
+                </div>
+                <!-- Pfeil / Collapse Button -->
+                <button 
+                  type="button" 
+                  id="btn-mc-catalog-collapse" 
+                  onclick="toggleMcCatalogCollapse()" 
+                  class="h-7 px-2 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold cursor-pointer shadow-xs shrink-0" 
+                  title="Spalte ein-/ausklappen"
+                >
+                  ◀
+                </button>
+              </div>
+
+              <div class="p-1.5 rounded-xl bg-[var(--secondary)]/30 border border-[var(--border)] flex items-center justify-between text-[9.5px] font-mono">
+                <span class="text-[var(--muted-foreground)]">Watchdog</span>
+                <span class="font-bold text-emerald-500 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Nominal (30s)
+                </span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 2. RECHTE HAUPT-SPALTE: 120px HEADER + SUB-VIEWS (COCKPIT, KANBAN, ORG, AUTOMATION, COMM) -->
+          <div id="mc-main-area" class="flex-1 h-full min-h-0 flex flex-col gap-2 min-w-0 overflow-hidden">
+            
+            <!-- GROSSER 120px HEADER MIT DEN 5 GROSSEN KADER-ICONS (WIE BEI EINGANG & AGENTEN-KADER) -->
+            <div class="prof-panel-card p-3 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
+              <div class="flex items-center justify-between gap-4">
                 
-                <!-- SPALTE 1: TO-DO (reine Betrachtung, Anlage in Operations) -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#F3E8DE;background-color:rgba(243,232,222,0.10)">
-                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#F3E8DE;color:#6b5d4f">
-                    <div class="flex items-center gap-1.5">
-                      <i data-lucide="circle" class="w-3.5 h-3.5"></i>
-                      <span class="font-semibold text-xs">To-Do</span>
-                    </div>
-                    <span id="mc-count-todo" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#6b5d4f">0</span>
+                <!-- Links: Icon-Plakette & Titel -->
+                <div class="flex items-center gap-3.5 min-w-0 flex-1">
+                  <div id="mc-main-header-avatar" class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-[var(--border)] shadow-md bg-[var(--secondary)] flex items-center justify-center relative shrink-0 p-2 overflow-hidden">
+                    <img id="mc-main-header-img" src="/static/img/cadre_icons/overview.png" alt="Mission Control Icon" class="w-full h-full object-contain">
+                    <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--card)] flex items-center justify-center" title="System Online"></span>
                   </div>
-                  <div id="mc-col-todo" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
-                    <!-- Dynamisch gerendert -->
+
+                  <div class="min-w-0 space-y-1 flex-1">
+                    <div class="flex items-center gap-2">
+                      <h2 id="mc-main-title" class="text-lg sm:text-xl font-black text-[var(--foreground)] tracking-tight leading-tight truncate">
+                        Mission Control &amp; Cockpit
+                      </h2>
+                      <span id="mc-total-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
+                        Nominal
+                      </span>
+                    </div>
+                    <div id="mc-main-subtitle" class="text-xs font-bold text-[var(--muted-foreground)] truncate">
+                      Operative Leitstelle: System-Telemetrie, Process Heartbeat, Approval Gate &amp; Live-Audit
+                    </div>
                   </div>
                 </div>
-                <!-- SPALTE 2: IN BEARBEITUNG -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#EED65B;background-color:rgba(238,214,91,0.10)">
-                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#EED65B;color:#6b5c10">
-                    <div class="flex items-center gap-1.5">
-                      <i data-lucide="play" class="w-3.5 h-3.5"></i>
-                      <span class="font-semibold text-xs">In Bearbeitung</span>
+
+                <!-- Rechts: DIE 5 GROSSEN ICON-KACHELN IM KADER-STIL -->
+                <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
+                  
+                  <!-- 1. Cockpit / Uebersicht -->
+                  <button 
+                    type="button" 
+                    id="ops-subtab-cockpit" 
+                    onclick="setOperationsTab('cockpit')" 
+                    class="ops-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Mission Control Cockpit &amp; Telemetrie"
+                  >
+                    <div class="tile-icon-wrap active-tile w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                      <img src="/static/img/cadre_icons/overview.png" alt="Cockpit" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
                     </div>
-                    <span id="mc-count-inprogress" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#6b5c10">0</span>
-                  </div>
-                  <div id="mc-col-inprogress" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
-                    <!-- Dynamisch gerendert -->
-                  </div>
-                </div>
-                <!-- SPALTE 3: REVIEW & QA -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#7CA982;background-color:rgba(124,169,130,0.10)">
-                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#7CA982;color:#2f4a33">
-                    <div class="flex items-center gap-1.5">
-                      <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-                      <span class="font-semibold text-xs">Review &amp; QA</span>
+                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold">Cockpit</span>
+                  </button>
+
+                  <!-- 2. Kanban Board -->
+                  <button 
+                    type="button" 
+                    id="ops-subtab-kanban" 
+                    onclick="setOperationsTab('kanban')" 
+                    class="ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Kanban Board &amp; Aufgabensteuerung"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                      <img src="/static/img/cadre_icons/operations.png?v=2" alt="Kanban" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                      <span id="ops-kanban-badge" class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] bg-red-600 text-white font-mono font-bold leading-none hidden shadow-xs">0</span>
                     </div>
-                    <span id="mc-count-review" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#2f4a33">0</span>
-                  </div>
-                  <div id="mc-col-review" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
-                    <!-- Dynamisch gerendert -->
-                  </div>
-                </div>
-                <!-- SPALTE 4: BLOCKIERT -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#C15C53;background-color:rgba(193,92,83,0.10)">
-                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#C15C53;color:#ffffff">
-                    <div class="flex items-center gap-1.5">
-                      <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
-                      <span class="font-semibold text-xs">Blockiert</span>
+                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Kanban</span>
+                  </button>
+
+                  <!-- 3. Organisation & Teams -->
+                  <button 
+                    type="button" 
+                    id="ops-subtab-org" 
+                    onclick="setOperationsTab('org')" 
+                    class="ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Organisation &amp; Ablaufdiagramm"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                      <img src="/static/img/cadre_icons/personalakte.png" alt="Organisation" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
                     </div>
-                    <span id="mc-count-blocked" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#C15C53">0</span>
-                  </div>
-                  <div id="mc-col-blocked" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
-                    <!-- Dynamisch gerendert -->
-                  </div>
-                </div>
-                <!-- SPALTE 5: ABGESCHLOSSEN -->
-                <div class="bg-[var(--secondary)] rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border-color:#4A6D88;background-color:rgba(74,109,136,0.10)">
-                  <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[52px]" style="background:#4A6D88;color:#ffffff">
-                    <div class="flex items-center gap-1.5">
-                      <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
-                      <span class="font-semibold text-xs">Abgeschlossen</span>
+                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Organisation</span>
+                  </button>
+
+                  <!-- 4. Automation (n8n Workflow Engine) -->
+                  <button 
+                    type="button" 
+                    id="ops-subtab-automation" 
+                    onclick="setOperationsTab('automation')" 
+                    class="ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="n8n Workflow-Engine &amp; Automation"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                      <img src="/static/img/cadre_icons/n8n.png?v=202610171046" alt="n8n" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
                     </div>
-                    <span id="mc-count-done" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#4A6D88">0</span>
-                  </div>
-                  <div id="mc-col-done" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar">
-                    <!-- Dynamisch gerendert -->
-                  </div>
+                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">n8n</span>
+                  </button>
+
+                  <!-- 5. Interne Kommunikation -->
+                  <button 
+                    type="button" 
+                    id="ops-subtab-comm" 
+                    onclick="setOperationsTab('comm')" 
+                    class="ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+                    title="Interne Agenten-Kommunikation"
+                  >
+                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
+                      <img src="/static/img/cadre_icons/chat.png" alt="Kommunikation" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
+                      <span id="ops-comm-badge" class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[var(--card)]"></span>
+                    </div>
+                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Kommunikation</span>
+                  </button>
+
                 </div>
+
               </div>
             </div>
-            <!-- ACTIVE PROCESS INSPECTION BAR -->
-            <div id="mc-active-process-bar" class="w-full shadcn-card px-2 py-1 grid grid-cols-1 md:grid-cols-3 gap-1 items-center font-sans shrink-0">
-              <!-- Slot A: Laufzeit & Heartbeat -->
-              <div id="mc-inspect-slot-a" class="flex flex-col justify-center space-y-0.5 pr-2 border-b md:border-b-0 md:border-r border-[var(--border)] pb-1 md:pb-0">
-                <div class="flex items-center gap-1.5">
-                  <span id="mc-inspect-heartbeat-dot" class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-                  <span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Process Heartbeat</span>
+
+            <!-- SUB-VIEW 1: MISSION CONTROL COCKPIT (STARTSEITE) -->
+            <div id="mc-view-cockpit" class="flex-1 min-h-0 flex flex-col space-y-2 overflow-hidden">
+              
+              <!-- ZONE 1: 5 COMPACT SHADCN KPI METRIC CARDS -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 shrink-0 font-sans">
+                
+                <!-- KACHEL 1: FLOTTENLAST -->
+                <div onclick="openKpiDetailModal('fleet')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                  <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
+                    <span>Flottenlast</span>
+                    <i data-lucide="users" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </div>
+                  <div class="flex items-baseline justify-between">
+                    <div id="mc-kpi-fleet" class="text-base font-bold tracking-tight text-[var(--foreground)]">0 / 51 Aktiv</div>
+                    <span id="mc-sub-fleet" class="text-[10px] text-[var(--muted-foreground)]">51 Profile</span>
+                  </div>
+                  <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
+                    <div id="mc-bar-fleet" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 4%;"></div>
+                  </div>
                 </div>
-                <div id="mc-inspect-slot-a-text" class="text-xs font-semibold text-[var(--foreground)] truncate">
-                  Daemon nominal · Alle Worker auf Standby
+                <!-- KACHEL 2: DURCHSATZ (TPM) -->
+                <div onclick="openKpiDetailModal('tpm')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                  <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
+                    <span>Durchsatz (TPM)</span>
+                    <i data-lucide="activity" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </div>
+                  <div class="flex items-baseline justify-between">
+                    <div id="mc-kpi-tpm" class="text-base font-bold tracking-tight text-[var(--foreground)]">0 Tok/m</div>
+                    <span id="mc-sub-tpm" class="text-[10px] text-[var(--muted-foreground)]">Limit 2M</span>
+                  </div>
+                  <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
+                    <div id="mc-bar-tpm" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 0%;"></div>
+                  </div>
                 </div>
-                <div class="text-[9.5px] text-[var(--muted-foreground)] truncate">Watchdog Timeout: 120s · Auto-Recovery</div>
+                <!-- KACHEL 3: KOSTENWÄCHTER -->
+                <div onclick="openKpiDetailModal('cost')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                  <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
+                    <span>Kostenwächter</span>
+                    <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </div>
+                  <div class="flex items-baseline justify-between">
+                    <div id="mc-kpi-cost" class="text-base font-bold tracking-tight text-[var(--foreground)]">$0.00</div>
+                    <span id="mc-sub-cost" class="text-[10px] text-[var(--muted-foreground)]">Limit $5.00</span>
+                  </div>
+                  <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
+                    <div id="mc-bar-cost" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 0%;"></div>
+                  </div>
+                </div>
+                <!-- KACHEL 4: STABILITÄT -->
+                <div onclick="openKpiDetailModal('stability')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                  <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
+                    <span>Stabilität</span>
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </div>
+                  <div class="flex items-baseline justify-between">
+                    <div id="mc-kpi-stability" class="text-base font-bold tracking-tight text-[var(--foreground)]">0.0% Fehler</div>
+                    <span id="mc-sub-stability" class="text-[10px] text-[var(--muted-foreground)]">100% nominal</span>
+                  </div>
+                  <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
+                    <div id="mc-bar-stability" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 100%;"></div>
+                  </div>
+                </div>
+                <!-- KACHEL 5: GOVERNANCE / APPROVAL GATE -->
+                <div id="mc-kpi-governance-card" onclick="onGovernanceCardClick()" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                  <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
+                    <span id="mc-kpi-governance-label">Approval Gate</span>
+                    <i id="mc-kpi-governance-icon" data-lucide="shield" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </div>
+                  <div class="flex items-baseline justify-between">
+                    <div id="mc-kpi-governance-count" class="text-base font-bold tracking-tight text-[var(--foreground)]">0 Ausstehend</div>
+                    <span id="mc-kpi-governance-subtext" class="text-[10px] text-[var(--muted-foreground)] truncate">Keine Sperren</span>
+                  </div>
+                  <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden">
+                    <div id="mc-bar-governance" class="h-1 rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500" style="width: 100%;"></div>
+                  </div>
+                </div>
               </div>
-              <!-- Slot B: Concurrency Slots -->
-              <div id="mc-inspect-slot-b" class="flex flex-col justify-center space-y-0.5 px-0 md:px-2 border-b md:border-b-0 md:border-r border-[var(--border)] pb-1 md:pb-0">
-                <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Tool Concurrency</span>
-                  <span id="mc-inspect-slots-count" class="text-[10px] text-[var(--muted-foreground)]">0 / 10 Belegt</span>
+
+              <!-- ZONE 2 & 3 CONTAINER -->
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0 items-stretch overflow-hidden" style="flex: 1 1 0%; min-height: 0;">
+                
+                <!-- ZONE 2: HITL KANBAN & PROCESS (LINKE SEITE, 8 SPALTEN) -->
+                <div class="lg:col-span-8 flex flex-col space-y-2 min-h-0 h-full overflow-hidden" style="height: 100%; min-height: 0;">
+                  
+                  <!-- ACTIVE PROCESS INSPECTION BAR (Heartbeat, Parallelität, Kontext) -->
+                  <div id="mc-active-process-bar" class="w-full shadcn-card px-2 py-1 grid grid-cols-1 md:grid-cols-3 gap-1 items-center font-sans shrink-0">
+                    <!-- Slot A: Laufzeit & Heartbeat -->
+                    <div id="mc-inspect-slot-a" class="flex flex-col justify-center space-y-0.5 pr-2 border-b md:border-b-0 md:border-r border-[var(--border)] pb-1 md:pb-0">
+                      <div class="flex items-center gap-1.5">
+                        <span id="mc-inspect-heartbeat-dot" class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Process Heartbeat</span>
+                      </div>
+                      <div id="mc-inspect-slot-a-text" class="text-xs font-semibold text-[var(--foreground)] truncate">
+                        Daemon nominal · Alle Worker auf Standby
+                      </div>
+                      <div class="text-[9.5px] text-[var(--muted-foreground)] truncate">Watchdog Timeout: 120s · Auto-Recovery</div>
+                    </div>
+                    <!-- Slot B: Concurrency Slots -->
+                    <div id="mc-inspect-slot-b" class="flex flex-col justify-center space-y-0.5 px-0 md:px-2 border-b md:border-b-0 md:border-r border-[var(--border)] pb-1 md:pb-0">
+                      <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Tool Concurrency</span>
+                        <span id="mc-inspect-slots-count" class="text-[10px] text-[var(--muted-foreground)]">0 / 10 Belegt</span>
+                      </div>
+                      <div id="mc-inspect-slots-list" class="flex items-center gap-1 overflow-x-auto custom-scrollbar pt-0.5">
+                        <span class="shadcn-badge shadcn-badge-outline text-[8.5px] shrink-0 flex items-center gap-1 py-0 px-1.5">
+                          <i data-lucide="search" class="w-2.5 h-2.5 shadcn-muted"></i> web_search [0/5]
+                        </span>
+                        <span class="shadcn-badge shadcn-badge-outline text-[8.5px] shrink-0 flex items-center gap-1 py-0 px-1.5">
+                          <i data-lucide="code" class="w-2.5 h-2.5 shadcn-muted"></i> code_gen [0/2]
+                        </span>
+                        <span class="shadcn-badge shadcn-badge-outline text-[8.5px] shrink-0 flex items-center gap-1 py-0 px-1.5">
+                          <i data-lucide="book-open" class="w-2.5 h-2.5 shadcn-muted"></i> obsidian [1/3]
+                        </span>
+                      </div>
+                    </div>
+                    <!-- Slot C: Context Saturation -->
+                    <div id="mc-inspect-slot-c" class="flex flex-col justify-center space-y-0.5 pl-0 md:pl-2">
+                      <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Max Kontext-Druck</span>
+                        <span id="mc-inspect-model-label" class="text-[var(--foreground)] font-semibold text-[10.5px]">deepseek-v4-flash: 18k / 128k</span>
+                      </div>
+                      <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden border border-[var(--border)]">
+                        <div id="mc-inspect-context-bar" class="h-1 rounded-full bg-zinc-700 dark:bg-zinc-300 transition-all duration-300" style="width: 14%;"></div>
+                      </div>
+                      <div class="flex items-center justify-between text-[9.5px] text-[var(--muted-foreground)]">
+                        <span id="mc-inspect-model-full" class="truncate max-w-[130px]">deepseek-v4-flash-0731</span>
+                        <span id="mc-inspect-context-buffer">110k Tokens Puffer</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- ROLLING TOKEN-AKTIVITÄTS-BAND -->
+                  <div class="w-full shadcn-card p-2 flex flex-col justify-between h-[88px] shrink-0 overflow-hidden font-sans">
+                    <div class="flex items-center justify-between text-[11px] shrink-0 mb-0.5">
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-semibold text-[var(--foreground)]">Token-Aktivität (15 Min.)</span>
+                      </div>
+                      <div class="flex items-center gap-2.5 text-[10.5px] text-[var(--muted-foreground)]">
+                        <span>Ø: <strong id="mc-sparkline-avg" class="text-[var(--foreground)] font-semibold">0.0k/m</strong></span>
+                        <span>Peak: <strong id="mc-sparkline-peak" class="text-[var(--foreground)] font-semibold">0.0k/m</strong></span>
+                      </div>
+                    </div>
+                    <div class="flex-1 w-full h-[50px]">
+                      <svg id="mc-token-sparkline" class="w-full h-[50px] text-zinc-800 dark:text-zinc-200" preserveAspectRatio="none" viewBox="0 0 300 64">
+                        <defs>
+                          <linearGradient id="sparklineGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="currentColor" stop-opacity="0.22"/>
+                            <stop offset="100%" stop-color="currentColor" stop-opacity="0.02"/>
+                          </linearGradient>
+                        </defs>
+                        <path id="mc-sparkline-area" d="" fill="url(#sparklineGrad)"/>
+                        <path id="mc-sparkline-line" d="" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                  </div>
+
+                  <!-- KANBAN BOARD CONTAINER (MINI-VORSCHAU & FREIGABEN) -->
+                  <div class="shadcn-card p-2.5 flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] mb-1.5 shrink-0 font-sans">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="kanban" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                        <h3 class="text-xs font-semibold text-[var(--foreground)]">Workflow &amp; Approval Board</h3>
+                      </div>
+                      <span class="text-[10px] text-[var(--muted-foreground)]">HITL-Freigabe</span>
+                    </div>
+                    <!-- 5-Spalten Kanban Grid (Kanban-Wahrheit, wie Operations) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-0.5 flex-1 min-h-0 items-stretch overflow-hidden mt-1" style="flex: 1 1 0%; min-height: 0;">
+                      
+                      <!-- SPALTE 1: TO-DO -->
+                      <div id="mc-kanban-col-todo" class="mc-col-todo os-kanban-col rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border: var(--kanban-col-border-width, 1px) solid var(--kanban-todo-border, #F3E8DE) !important; background-color: var(--kanban-todo-bg, rgba(243,232,222,0.10)) !important;">
+                        <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[44px]" style="background: var(--kanban-todo-header, #F3E8DE) !important; color: var(--kanban-todo-text, #6b5d4f) !important;">
+                          <div class="flex items-center gap-1.5">
+                            <i data-lucide="circle" class="w-3.5 h-3.5"></i>
+                            <span class="font-semibold text-xs">To-Do</span>
+                          </div>
+                          <span id="mc-count-todo" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#6b5d4f">0</span>
+                        </div>
+                        <div id="mc-col-todo" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar bg-transparent" style="background-color: transparent !important;">
+                          <!-- Dynamisch gerendert -->
+                        </div>
+                      </div>
+                      <!-- SPALTE 2: IN BEARBEITUNG -->
+                      <div id="mc-kanban-col-inprogress" class="mc-col-in_progress os-kanban-col rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border: var(--kanban-col-border-width, 1px) solid var(--kanban-in_progress-border, #EED65B) !important; background-color: var(--kanban-in_progress-bg, rgba(238,214,91,0.10)) !important;">
+                        <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[44px]" style="background: var(--kanban-in_progress-header, #EED65B) !important; color: var(--kanban-in_progress-text, #6b5c10) !important;">
+                          <div class="flex items-center gap-1.5">
+                            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                            <span class="font-semibold text-xs">In Bearbeitung</span>
+                          </div>
+                          <span id="mc-count-inprogress" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#6b5c10">0</span>
+                        </div>
+                        <div id="mc-col-inprogress" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar bg-transparent" style="background-color: transparent !important;">
+                          <!-- Dynamisch gerendert -->
+                        </div>
+                      </div>
+                      <!-- SPALTE 3: REVIEW & QA -->
+                      <div id="mc-kanban-col-review" class="mc-col-review os-kanban-col rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border: var(--kanban-col-border-width, 1px) solid var(--kanban-review-border, #7CA982) !important; background-color: var(--kanban-review-bg, rgba(124,169,130,0.10)) !important;">
+                        <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[44px]" style="background: var(--kanban-review-header, #7CA982) !important; color: var(--kanban-review-text, #2f4a33) !important;">
+                          <div class="flex items-center gap-1.5">
+                            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                            <span class="font-semibold text-xs">Review &amp; QA</span>
+                          </div>
+                          <span id="mc-count-review" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#2f4a33">0</span>
+                        </div>
+                        <div id="mc-col-review" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar bg-transparent" style="background-color: transparent !important;">
+                          <!-- Dynamisch gerendert -->
+                        </div>
+                      </div>
+                      <!-- SPALTE 4: BLOCKIERT -->
+                      <div id="mc-kanban-col-blocked" class="mc-col-blocked os-kanban-col rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border: var(--kanban-col-border-width, 1px) solid var(--kanban-blocked-border, #C15C53) !important; background-color: var(--kanban-blocked-bg, rgba(193,92,83,0.10)) !important;">
+                        <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[44px]" style="background: var(--kanban-blocked-header, #C15C53) !important; color: var(--kanban-blocked-text, #ffffff) !important;">
+                          <div class="flex items-center gap-1.5">
+                            <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
+                            <span class="font-semibold text-xs">Blockiert</span>
+                          </div>
+                          <span id="mc-count-blocked" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#C15C53">0</span>
+                        </div>
+                        <div id="mc-col-blocked" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar bg-transparent" style="background-color: transparent !important;">
+                          <!-- Dynamisch gerendert -->
+                        </div>
+                      </div>
+                      <!-- SPALTE 5: ABGESCHLOSSEN -->
+                      <div id="mc-kanban-col-done" class="mc-col-done os-kanban-col rounded-lg p-2 flex flex-col h-full min-h-0 overflow-hidden border" style="border: var(--kanban-col-border-width, 1px) solid var(--kanban-done-border, #4A6D88) !important; background-color: var(--kanban-done-bg, rgba(74,109,136,0.10)) !important;">
+                        <div class="flex items-center justify-between px-1.5 mb-1.5 shrink-0 font-sans rounded min-h-[44px]" style="background: var(--kanban-done-header, #4A6D88) !important; color: var(--kanban-done-text, #ffffff) !important;">
+                          <div class="flex items-center gap-1.5">
+                            <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
+                            <span class="font-semibold text-xs">Abgeschlossen</span>
+                          </div>
+                          <span id="mc-count-done" class="text-[10px] px-2 py-0 rounded-full font-bold" style="background:#ffffff;color:#4A6D88">0</span>
+                        </div>
+                        <div id="mc-col-done" class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5 custom-scrollbar bg-transparent" style="background-color: transparent !important;">
+                          <!-- Dynamisch gerendert -->
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div id="mc-inspect-slots-list" class="flex items-center gap-1 overflow-x-auto custom-scrollbar pt-0.5">
-                  <span class="shadcn-badge shadcn-badge-outline text-[8.5px] shrink-0 flex items-center gap-1 py-0 px-1.5">
-                    <i data-lucide="search" class="w-2.5 h-2.5 shadcn-muted"></i> web_search [0/5]
-                  </span>
-                  <span class="shadcn-badge shadcn-badge-outline text-[8.5px] shrink-0 flex items-center gap-1 py-0 px-1.5">
-                    <i data-lucide="code" class="w-2.5 h-2.5 shadcn-muted"></i> code_gen [0/2]
-                  </span>
-                  <span class="shadcn-badge shadcn-badge-outline text-[8.5px] shrink-0 flex items-center gap-1 py-0 px-1.5">
-                    <i data-lucide="book-open" class="w-2.5 h-2.5 shadcn-muted"></i> obsidian [1/3]
-                  </span>
+
+                <!-- ZONE 3: LIVE-AUDIT & TELEMETRIE-STREAM (RECHTE SEITE, 4 SPALTEN, VOLLE HÖHE) -->
+                <div class="lg:col-span-4 flex flex-col min-h-0 h-full overflow-hidden font-sans" style="height: 100%; min-height: 0;">
+                  <div class="shadcn-card p-2.5 flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] mb-1.5 shrink-0">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="terminal" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                        <h3 class="text-xs font-semibold text-[var(--foreground)]">Live-Audit &amp; Telemetrie</h3>
+                      </div>
+                      <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Stream</span>
+                    </div>
+                    <!-- Terminal Feed Container -->
+                    <div 
+                      id="mc-audit-feed" 
+                      class="flex-1 p-2 rounded-lg overflow-y-auto space-y-1 font-mono text-[11px] bg-[var(--secondary)] border border-[var(--border)] custom-scrollbar min-h-0"
+                    >
+                      <!-- Dynamische Logs -->
+                    </div>
+                  </div>
                 </div>
+
               </div>
-              <!-- Slot C: Context Saturation -->
-              <div id="mc-inspect-slot-c" class="flex flex-col justify-center space-y-0.5 pl-0 md:pl-2">
-                <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Max Kontext-Druck</span>
-                  <span id="mc-inspect-model-label" class="text-[var(--foreground)] font-semibold text-[10.5px]">deepseek-v4-flash: 18k / 128k</span>
-                </div>
-                <div class="w-full bg-[var(--secondary)] rounded-full h-1 overflow-hidden border border-[var(--border)]">
-                  <div id="mc-inspect-context-bar" class="h-1 rounded-full bg-zinc-700 dark:bg-zinc-300 transition-all duration-300" style="width: 14%;"></div>
-                </div>
-                <div class="flex items-center justify-between text-[9.5px] text-[var(--muted-foreground)]">
-                  <span id="mc-inspect-model-full" class="truncate max-w-[130px]">deepseek-v4-flash-0731</span>
-                  <span id="mc-inspect-context-buffer">110k Tokens Puffer</span>
-                </div>
-              </div>
+
             </div>
-            <!-- ROLLING TOKEN-AKTIVITÄTS-BAND -->
-            <div class="w-full shadcn-card p-2 flex flex-col justify-between h-[54px] shrink-0 overflow-hidden font-sans">
-              <div class="flex items-center justify-between text-[11px] shrink-0 mb-0.5">
-                <div class="flex items-center gap-1.5">
-                  <span class="font-semibold text-[var(--foreground)]">Token-Aktivität (15 Min.)</span>
-                </div>
-                <div class="flex items-center gap-2.5 text-[10.5px] text-[var(--muted-foreground)]">
-                  <span>Ø: <strong id="mc-sparkline-avg" class="text-[var(--foreground)] font-semibold">0.0k/m</strong></span>
-                  <span>Peak: <strong id="mc-sparkline-peak" class="text-[var(--foreground)] font-semibold">0.0k/m</strong></span>
-                </div>
-              </div>
-              <div class="flex-1 w-full h-[30px]">
-                <svg id="mc-token-sparkline" class="w-full h-[30px] text-zinc-800 dark:text-zinc-200" preserveAspectRatio="none" viewBox="0 0 300 30">
-                  <defs>
-                    <linearGradient id="sparklineGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color="currentColor" stop-opacity="0.18"/>
-                      <stop offset="100%" stop-color="currentColor" stop-opacity="0.01"/>
-                    </linearGradient>
-                  </defs>
-                  <path id="mc-sparkline-area" d="" fill="url(#sparklineGrad)"/>
-                  <path id="mc-sparkline-line" d="" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              </div>
-            </div>
+
+            <!-- SUB-VIEWS 2, 3, 5: OPERATIONS (KANBAN, ORGANISATION, KOMMUNIKATION) -->
+            <div id="view-operations-mount"></div>
+
+            <!-- SUB-VIEW 4: N8N WORKFLOW ENGINE (AUTOMATION) -->
+            <main id="ops-view-automation" class="hidden flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs">
+              <iframe
+                id="automation-n8n-iframe"
+                src=""
+                style="width: 100%; height: 100%; border: none;"
+                allow="microphone; camera; clipboard-read; clipboard-write; display-capture; clipboard-share;"
+                class="w-full h-full flex-1 border-none"
+              ></iframe>
+            </main>
+
           </div>
-          <!-- ZONE 3: AGENTEN-KADER & LIVE-AUDIT FEED (RECHTE SEITE, 5/12 SPALTEN) -->
-          <div class="lg:col-span-5 flex flex-col space-y-2 min-h-0 h-full overflow-hidden font-sans" style="height: 100%; min-height: 0;">
-            
-            <!-- BOX 1: AKTIVER AGENTEN-KADER -->
-            <div class="shadcn-card p-2.5 flex flex-col shrink-0 max-h-[140px] overflow-hidden">
-              <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] mb-1.5 shrink-0">
-                <div class="flex items-center gap-1.5">
-                  <i data-lucide="users" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                  <h3 class="text-xs font-semibold text-[var(--foreground)]">Aktiver Agenten-Kader</h3>
-                </div>
-                <span class="text-[10px] text-[var(--muted-foreground)]">51 Profile</span>
-              </div>
-              <div id="mc-cadre-list" class="space-y-1 overflow-y-auto pr-0.5 custom-scrollbar flex-1 min-h-0">
-                <!-- Dynamisch befüllt -->
-              </div>
-            </div>
-            <!-- BOX 2: AKTIVE AUFGABEN (was gerade läuft) -->
-            <div class="shadcn-card p-2.5 flex flex-col shrink-0 max-h-[190px] overflow-hidden">
-              <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] mb-1.5 shrink-0">
-                <div class="flex items-center gap-1.5">
-                  <i data-lucide="activity" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                  <h3 class="text-xs font-semibold text-[var(--foreground)]">Aktive Aufgaben</h3>
-                </div>
-                <span id="mc-active-count" class="text-[10px] px-2 py-0 rounded-full font-bold bg-[var(--secondary)] border border-[var(--border)]">0</span>
-              </div>
-              <div id="mc-active-list" class="space-y-1 overflow-y-auto pr-0.5 custom-scrollbar flex-1 min-h-0">
-                <!-- Dynamisch befüllt -->
-              </div>
-            </div>
-            <!-- BOX 2: LIVE-AUDIT & TELEMETRIE-STREAM -->
-            <div class="shadcn-card p-2.5 flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] mb-1.5 shrink-0">
-                <div class="flex items-center gap-1.5">
-                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                  <h3 class="text-xs font-semibold text-[var(--foreground)]">Live-Audit &amp; Telemetrie</h3>
-                </div>
-                <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Stream</span>
-              </div>
-              <!-- Terminal Feed Container -->
-              <div 
-                id="mc-audit-feed" 
-                class="flex-1 p-2 rounded-lg overflow-y-auto space-y-1 font-mono text-[11px] bg-[var(--secondary)] border border-[var(--border)] custom-scrollbar min-h-0"
-              >
-                <!-- Dynamische Logs -->
-              </div>
-            </div>
-          </div>
+
         </div>
       </div>
       <!-- MISSION CONTROL ARTEFAKT MODAL (ERGEBNIS-VORSCHAU) -->
@@ -961,10 +1170,6 @@
         ></iframe>
       </div>
 
-      <!-- VIEW CONTAINER: OPERATIONS CONTROL CENTER -->
-      <!-- VIEW: OPERATIONS (Extracted) -->
-      <div id="view-operations-mount"></div>
-
       <!-- VIEW CONTAINER: REAL-TIME DOCKER & AGENT LOG-STREAM (2-COLUMN SPLIT LAYOUT) -->
       <div id="view-log-stream" class="hidden flex-1 w-full h-full flex flex-row bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
         
@@ -1174,41 +1379,6 @@
       <!-- VIEW: VIEW-PLUGINS (Extracted) -->
       <div id="view-plugins-mount"></div>
 
-      <!-- VIEW CONTAINER: N8N AUTOMATISIERUNG -->
-      <div id="view-automation" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--page-bg)] overflow-hidden" style="height: 100vh; width: 100%;">
-        <div class="h-10 px-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 shrink-0">
-          <div class="flex items-center space-x-2 font-mono">
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span class="font-bold text-white tracking-wide">n8n Automation Engine</span>
-            <button type="button" onclick="openContextHelp('automation')" title="Hilfe zu n8n Automation" class="w-5 h-5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-sky-400 flex items-center justify-center transition cursor-pointer">
-              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-            </button>
-            <span class="text-[10px] text-[var(--muted-foreground)] font-normal font-mono">| Port :5678</span>
-          </div>
-          <div class="flex items-center space-x-3">
-            <a
-              id="n8n-external-link"
-              href="http://localhost:5678"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded border border-slate-700 transition-colors text-[11px] font-sans"
-              title="In separatem Tab öffnen"
-            >
-              <span>Im neuen Tab öffnen</span>
-              <svg class="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-              </svg>
-            </a>
-          </div>
-        </div>
-        <iframe
-          id="automation-n8n-iframe"
-          src=""
-          style="width: 100%; height: calc(100vh - 40px); border: none;"
-          allow="microphone; camera; clipboard-read; clipboard-write; display-capture; clipboard-share;"
-          class="w-full flex-1 border-none"
-        ></iframe>
-      </div>
       <!-- VIEW CONTAINER: OMNIROUTE GATEWAY -->
       <div id="view-omniroute" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--page-bg)] overflow-hidden" style="height: 100vh; width: 100%;">
         <div class="h-10 px-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 shrink-0">
@@ -1258,7 +1428,7 @@
           <div class="h-[60%] flex flex-col sm:flex-row gap-3 min-h-0">
             
             <!-- SPALTE LINKS OBEN: METHODIK & FRAMEWORK -->
-            <div class="w-full sm:w-1/2 flex flex-col min-h-0 prof-panel-card p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl">
+            <div class="w-full sm:w-1/2 flex flex-col min-h-0 prof-panel-card p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl os-island">
               <!-- Header -->
               <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] dark:border-neutral-800 shrink-0">
                 <div class="flex items-center gap-1.5">
@@ -1280,7 +1450,7 @@
               </div>
             </div>
             <!-- SPALTE RECHTS OBEN: BOARDROOM-CHAIR & SUB-AGENTS -->
-            <div class="w-full sm:w-1/2 flex flex-col min-h-0 prof-panel-card p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl">
+            <div class="w-full sm:w-1/2 flex flex-col min-h-0 prof-panel-card p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl os-island">
               <!-- Header -->
               <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] dark:border-neutral-800 shrink-0">
                 <div class="flex items-center gap-1.5">
@@ -1320,7 +1490,7 @@
             </div>
           </div>
           <!-- UNTERE REIHE: DEBATTEN-AUFGABENSTELLUNG (40% Höhe) -->
-          <div class="h-[40%] flex flex-col min-h-0 prof-panel-card p-3.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl">
+          <div class="h-[40%] flex flex-col min-h-0 prof-panel-card p-3.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl os-island">
             <!-- Header -->
             <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] dark:border-neutral-800 shrink-0">
               <div class="flex items-center gap-2">
@@ -1364,7 +1534,7 @@
           </div>
         </div>
         <!-- 2. RECHTE SPALTE: LIVE-DEBATTEN-ARENA / TRANSKRIPT (50% Gesamtbreite - Volle Höhe) -->
-        <div class="w-full lg:w-1/2 flex flex-col h-full min-h-0 prof-panel-card p-3.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl">
+        <div class="w-full lg:w-1/2 flex flex-col h-full min-h-0 prof-panel-card p-3.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl os-island">
           <!-- Header -->
           <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] dark:border-neutral-800 shrink-0">
             <div class="flex items-center gap-2">
@@ -1374,7 +1544,7 @@
             <span id="boardroom-transcript-badge" class="text-[10px] font-mono font-bold uppercase tracking-wider prof-label-text">Live Stream</span>
           </div>
           <!-- Scrollbarer Ausgabebereich (Füllt die gesamte Höhe der rechten 40%-Spalte) -->
-          <div id="boardroom-thread" class="flex-1 min-h-0 overflow-y-auto space-y-3 mt-2 pr-1 custom-scrollbar bg-[var(--background)] p-3 rounded-xl border border-[var(--border)]">
+          <div id="boardroom-thread" class="flex-1 min-h-0 overflow-y-auto space-y-3 mt-2 pr-1 custom-scrollbar bg-[var(--background)] p-3 rounded-xl border border-[var(--border)] os-console">
             <div class="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--muted-foreground)]">
               <div class="w-12 h-12 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-xs flex items-center justify-center mb-3">
                 <i data-lucide="message-square" class="w-6 h-6 text-black dark:text-white"></i>
@@ -1486,28 +1656,42 @@ print('Ausführung erfolgreich!')</textarea>
       <div id="view-design-system-mount"></div>
 
   </script>
-  <script src="/static/js/chat_engine.js?v=202610102210"></script>
-  <script src="/static/js/system_settings.js?v=202610102100"></script>
-  <script src="/static/js/agent_profiles.js?v=202610101840"></script>
-  <script src="/static/js/customizer.js?v=202610101615"></script>
+  <script src="/static/js/chat_engine.js?v=202610161540"></script>
+  <script src="/static/js/system_settings.js?v=202610161540"></script>
+  <script src="/static/js/agent_profiles.js?v=202610161540"></script>
+  <script src="/static/js/customizer.js?v=202610171120"></script>
+  <script src="/static/js/component_design_studio.js?v=202610171120"></script>
+  <script src="/static/js/command_palette.js?v=202610161620"></script>
   <script>
-    // Custom CSS (inkl. Ansichts-Blöcken aus dem Design-Reiter) sofort beim
-    // App-Start anwenden — initCustomCSS lief bisher NUR beim Öffnen der Settings.
+    // Coalesce lucide.createIcons() calls within 35ms so multiple synchronous calls only scan the DOM once
+    if (window.lucide && typeof window.lucide.createIcons === "function" && !window.lucide.__coalesced) {
+      const _origCreateIcons = window.lucide.createIcons.bind(window.lucide);
+      let _lucideTimer = null;
+      window.lucide.createIcons = function(opts) {
+        if (opts && opts.nodes) return _origCreateIcons(opts);
+        if (_lucideTimer) clearTimeout(_lucideTimer);
+        _lucideTimer = setTimeout(() => {
+          _lucideTimer = null;
+          _origCreateIcons();
+        }, 35);
+      };
+      window.lucide.__coalesced = true;
+    }
     document.addEventListener('DOMContentLoaded', function () {
       try { if (typeof initCustomCSS === 'function') initCustomCSS(); }
       catch (e) { console.warn('[CustomCSS] Start-Anwendung fehlgeschlagen:', e); }
     });
   </script>
-  <script src="/static/js/mission_control.js"></script>
-  <script src="/static/js/mission_control_cockpit.js?v=202610122345"></script>
-  <script src="/static/js/research_lab.js"></script>
-  <script src="/static/js/operations_kanban.js?v=202610141355"></script>
-  <script src="/static/js/appshell_architect.js?v=202610112400"></script>
-  <script src="/static/js/css_live_studio.js?v=202610112415"></script>
-  <script src="/static/js/guardian.js?v=202610091700"></script>
-  <script src="/static/js/prompt_studio.js"></script>
-  <script src="/static/js/wissensbibliothek.js"></script>
-  <script src="/static/js/skill_markt.js"></script>
+  <script src="/static/js/mission_control.js?v=202610161540"></script>
+  <script src="/static/js/mission_control_cockpit.js?v=202610161540"></script>
+  <script src="/static/js/research_lab.js?v=202610161540"></script>
+  <script src="/static/js/operations_kanban.js?v=202610171047"></script>
+  <script src="/static/js/appshell_architect.js?v=202610161540"></script>
+  <script src="/static/js/css_live_studio.js?v=202610161540"></script>
+  <script src="/static/js/guardian.js?v=202610161540"></script>
+  <script src="/static/js/prompt_studio.js?v=202610161540"></script>
+  <script src="/static/js/wissensbibliothek.js?v=202610161540"></script>
+  <script src="/static/js/skill_markt.js?v=202610161540"></script>
   <script>
     // =========================================================================
     // 🔔 ARCHON OS GLOBAL NOTIFICATION / TOAST SYSTEM
@@ -1995,41 +2179,28 @@ print('Ausführung erfolgreich!')</textarea>
     async function initArchonApp() {
       if (window.__archon_initialized) return;
       window.__archon_initialized = true;
-      // --- V2 COMPONENT FETCHES ---
+      showLoadingOverlay("Archon OS wird initialisiert...", "Kernel-Dienste, Agenten-Flotte & Workspaces werden geladen");
+      // --- V2 COMPONENT FETCHES (Core Active Views First, Legacy Studios Deferred) ---
       try {
         await Promise.all([
-          fetch('/static/views/system_settings_modal.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/agent_profiles_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/master_chat_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/operations_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/library_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/inbox_view.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_showroom.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_guardian.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_plugins.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_research.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_brain.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_design_system.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-design-system-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_app_frame_studio.html?v=202610141540').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; })
+          fetch('/static/views/view_app_frame_studio.html?v=202610161925').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); }),
+          fetch('/static/views/system_settings_modal.html?v=202610171120').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/agent_profiles_view.html?v=202610161835').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/master_chat_view.html?v=202610161358').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/operations_view.html?v=202610171120').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/library_view.html?v=202610171420').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/inbox_view.html?v=202610170046').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_showroom.html?v=202610171355').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_guardian.html?v=202610161358').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_plugins.html?v=202610161358').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_research.html?v=202610171120').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_brain.html?v=202610161358').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; })
         ]);
-        // Fix 2026-10-09 (Race Condition): #system-settings-mount entsteht erst durch
-        // view_design_system.html. Settings-Modal hier nachziehen, falls der erste
-        // Fetch ins Leere lief.
-        if (!document.getElementById("system-settings-modal") && document.getElementById("system-settings-mount")) {
-          try {
-            const r2 = await fetch('/static/views/system_settings_modal.html?v=202610141540');
-            const html2 = await r2.text();
-            const el2 = document.getElementById('system-settings-mount');
-            if (el2) el2.outerHTML = html2;
-          } catch (e2) { console.error("Settings-Modal Nachmontage fehlgeschlagen:", e2); }
-        }
       } catch(err) {
         console.error("V2 Fetch Error: ", err);
       }
       // -----------------------------
 
-      // Zeige initialen Ladebildschirm beim Start
-      showLoadingOverlay("Archon OS wird initialisiert...", "Kernel-Dienste, Agenten-Flotte & Workspaces werden geladen");
       // Wende Initialtheme an und zeige Start-Tab sofort
       const savedTheme = localStorage.getItem("archon_theme_mode") || "light";
       theme = savedTheme;
@@ -2040,22 +2211,25 @@ print('Ausführung erfolgreich!')</textarea>
         document.documentElement.classList.remove("dark");
       }
       updateThemeUI();
+      if (typeof window.initArchonComponentDesign === "function") {
+        window.initArchonComponentDesign();
+      }
       setTab(currentTab || 'mission-control');
-      // Lade Daten asynchron und parallel im Hintergrund
-      Promise.allSettled([
-        loadRolesFromServer(),
-        loadModelsFromServer(),
-        loadAgentsFromServer(),
-        loadKanbanFromServer(),
-        loadHermesProfilesView(),
-        fetchMissionControlData(false)
-      ]).then(() => {
-        updateStats();
-        hideLoadingOverlay();
-      });
+      hideLoadingOverlay();
+
+      // Lade Sekundärdaten nicht-blockierend im Hintergrund
+      setTimeout(() => {
+        Promise.allSettled([
+          loadHermesProfilesView(),
+          loadRolesFromServer(),
+          loadModelsFromServer(),
+          loadAgentsFromServer(),
+          loadKanbanFromServer()
+        ]);
+      }, 120);
       
       // Starte System Time
-      setInterval(updateSystemTime, 1000);
+      setInterval(() => { if (!document.hidden) updateSystemTime(); }, 1000);
       updateSystemTime();
       // Log ticker polling
       startLogPolling();
@@ -2063,9 +2237,9 @@ print('Ausführung erfolgreich!')</textarea>
       // Watchdog Kill-Switch Alarms Polling
       startWatchdogAlarmsPolling();
       
-      // Metriken mit ressourcenschonendem Intervall abfragen
+      // Metriken mit ressourcenschonendem Intervall (10s + Visibility-Check) abfragen
       updateStats();
-      setInterval(updateStats, 4000);
+      setInterval(() => { if (!document.hidden) updateStats(); }, 10000);
       initLogoUpload();
     }
     document.addEventListener('DOMContentLoaded', initArchonApp);
@@ -2144,8 +2318,13 @@ print('Ausführung erfolgreich!')</textarea>
     const CACHE_TTL_MS = 30000; // 30 Sek
     function shouldFetchTab(tId) { const now = Date.now(); if (!_tabCacheTimestamps[tId] || (now - _tabCacheTimestamps[tId] > CACHE_TTL_MS)) { _tabCacheTimestamps[tId] = now; return true; } return false; }
     function setTab(tabId) {
-      if (tabId === "paperclip") {
-        tabId = "operations";
+      let requestedMcSubtab = null;
+      if (tabId === "paperclip" || tabId === "operations") {
+        requestedMcSubtab = "kanban";
+        tabId = "mission-control";
+      } else if (tabId === "automation") {
+        requestedMcSubtab = "automation";
+        tabId = "mission-control";
       }
       currentTab = tabId;
       
@@ -2202,7 +2381,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (selectedView) {
         selectedView.classList.remove("hidden");
         selectedView.style.display = (tabId === "kanban" || tabId === "agent-profiles") ? "block" : "flex";
-        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations") {
+        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom") {
           selectedView.style.height = "100%";
           selectedView.style.flex = "1 1 0%";
           selectedView.style.minHeight = "0";
@@ -2299,26 +2478,17 @@ print('Ausführung erfolgreich!')</textarea>
       allNavBtns.forEach(btn => {
         const arrow = btn.querySelector('.active-arrow');
         const icon = btn.querySelector('svg, i');
+        // Entferne alte Inline-!important-Styles, damit CSS-Klassen (.archon-nav-item.nav-item-active / .os-nav-btn) greifen
+        btn.style.removeProperty("background-color");
+        btn.style.removeProperty("border");
+        btn.style.removeProperty("box-shadow");
+        btn.style.removeProperty("color");
+        btn.style.removeProperty("font-weight");
         if (btn.id === activeNavId) {
-          btn.classList.add("nav-item-active");
-          // User-Design 09.10.2026: aktiver Nav-Button = transparenter Hintergrund,
-          // 2px dunkelgrauer Rand, mittlerer Schatten (optische Absetzung)
-          btn.style.setProperty("background-color", "transparent", "important");
-          btn.style.setProperty("border", "2px solid #3f3f46", "important");
-          btn.style.setProperty("box-shadow", "0 6px 16px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2)", "important");
-          btn.style.setProperty("color", "var(--foreground)", "important");
-          btn.style.setProperty("font-weight", "600", "important");
+          btn.classList.add("nav-item-active", "is-active");
           if (arrow) arrow.classList.remove("hidden");
-          if (icon) {
-            icon.style.setProperty("color", "var(--primary)", "important");
-            icon.style.setProperty("stroke", "var(--primary)", "important");
-          }
         } else {
-          btn.classList.remove("nav-item-active");
-          btn.style.setProperty("background-color", "transparent", "important");
-          btn.style.setProperty("border", "2px solid transparent", "important");
-          btn.style.setProperty("box-shadow", "none", "important");
-          btn.style.setProperty("color", "var(--muted-foreground)", "important");
+          btn.classList.remove("nav-item-active", "is-active");
           if (arrow) arrow.classList.add("hidden");
           if (icon) {
             icon.style.removeProperty("color");
@@ -2437,6 +2607,17 @@ print('Ausführung erfolgreich!')</textarea>
       }
       if (tabId === "mission-control") {
         fetchMissionControlData();
+        if (requestedMcSubtab && typeof setOperationsTab === "function") {
+          setOperationsTab(requestedMcSubtab);
+          if (requestedMcSubtab !== "automation" && typeof loadOperationsData === "function") {
+            loadOperationsData(false);
+          }
+        } else if (typeof setOperationsTab === "function") {
+          setOperationsTab(typeof currentOpsTab !== "undefined" ? currentOpsTab : 'cockpit');
+          if (shouldFetchTab('operations') && typeof loadOperationsData === "function") {
+            loadOperationsData(false);
+          }
+        }
       }
       if (tabId === "brain") {
         setTimeout(() => {
@@ -2517,6 +2698,45 @@ print('Ausführung erfolgreich!')</textarea>
     window._inboxCurrentDetail = null;
     let currentInboxDetailItem = null;
     let inboxDetailBodyMode = 'html'; // 'html' | 'text'
+
+    const INBOX_META = {
+      all: {
+        title: "Posteingang & Ereignis-Stream",
+        subtitle: "Operative Triage: Webhooks, Interne Aufgaben, E-Mail & Messenger",
+        colTitle: "Ereignis-Stream",
+        colSub: "Neueste oben · Alle 4 Kanäle",
+        icon: "/static/img/cadre_icons/overview.png"
+      },
+      webhook: {
+        title: "Webhooks & API Payload Inspektor",
+        subtitle: "Eingehende JSON-Events, n8n-Trigger und System-Webhooks",
+        colTitle: "Webhooks Stream",
+        colSub: "Neueste oben · Inbound Events",
+        icon: "/static/img/cadre_icons/inbox_webhooks.png"
+      },
+      intern: {
+        title: "Interne Meldungen & System-Status",
+        subtitle: "Kernel, Watchdog-Alarme, Approval-Gates & Agenten-Logs",
+        colTitle: "Interne Meldungen",
+        colSub: "Neueste oben · System & Watchdog",
+        icon: "/static/img/cadre_icons/inbox_intern.png"
+      },
+      email: {
+        title: "E-Mail Postfach & Korrespondenz",
+        subtitle: "Eingehende IMAP-Nachrichten mit Plain-/HTML-Vollansicht",
+        colTitle: "E-Mail Postfach",
+        colSub: "Neueste oben · IMAP & CRM",
+        icon: "/static/img/cadre_icons/inbox_email.png"
+      },
+      messenger: {
+        title: "Messenger & Bot Stream",
+        subtitle: "Telegram-Nachrichten, Chat-Bots & interaktive Befehle",
+        colTitle: "Messenger Stream",
+        colSub: "Neueste oben · Bots & Chats",
+        icon: "/static/img/cadre_icons/inbox_messenger.png"
+      }
+    };
+
     async function loadInboxView() {
       if (!window.__inbox_email_sync_interval) {
         window.__inbox_email_sync_interval = setInterval(() => {
@@ -2531,10 +2751,58 @@ print('Ausführung erfolgreich!')</textarea>
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         
+        let webhookItems = data.webhooks || data.webhook || [];
+        if (webhookItems.length === 0) {
+          webhookItems = [
+            {
+              id: "wh_n8n_lead_sync",
+              badge: "N8N",
+              title: "n8n Workflow: CRM Lead Enrichment Triggered",
+              sender: "n8n Automation Node (Port 5678)",
+              preview: "Inbound Webhook von /webhook/archon-execution: 1 neuer Lead synchronisiert.",
+              content: JSON.stringify({
+                event: "crm_lead_enrichment",
+                origin: "n8n_workflow_engine",
+                payload: {
+                  source: "Landingpage Formular",
+                  status: "ready_for_triage",
+                  contact_id: "CNT-2026-904"
+                }
+              }, null, 2),
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              path: "webhook://n8n/crm_lead_enrichment",
+              source: "webhook"
+            },
+            {
+              id: "wh_github_deploy",
+              badge: "GITHUB",
+              title: "GitHub Push Event: main branch updated",
+              sender: "GitHub App Webhook",
+              preview: "Commit b89af1e auf branch main von @archon-dev: Update agent manifests.",
+              content: JSON.stringify({
+                repository: "AgenticOS-2026",
+                ref: "refs/heads/main",
+                head_commit: {
+                  id: "b89af1e442d",
+                  message: "Update agent manifests & layout engine"
+                }
+              }, null, 2),
+              time: new Date(Date.now() - 900000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              path: "webhook://github/push/main",
+              source: "webhook"
+            }
+          ];
+        }
         const internItems = data.internal || data.intern || [];
         const emailItems = data.emails || data.email || [];
-        const telegramItems = data.telegram || [];
+        const messengerItems = data.messenger || data.telegram || [];
         
+        // Ensure every item has a source field
+        webhookItems.forEach(i => i.source = i.source || 'webhook');
+        internItems.forEach(i => i.source = i.source || 'intern');
+        emailItems.forEach(i => i.source = i.source || 'email');
+        messengerItems.forEach(i => i.source = i.source || 'messenger');
+
         // Streng nach mtime absteigend sortieren (neueste zuerst oben)
         const getMtime = (item) => {
           if (item.mtime) return Number(item.mtime) || 0;
@@ -2544,25 +2812,47 @@ print('Ausführung erfolgreich!')</textarea>
           }
           return 0;
         };
+        webhookItems.sort((a, b) => getMtime(b) - getMtime(a));
         internItems.sort((a, b) => getMtime(b) - getMtime(a));
         emailItems.sort((a, b) => getMtime(b) - getMtime(a));
-        telegramItems.sort((a, b) => getMtime(b) - getMtime(a));
+        messengerItems.sort((a, b) => getMtime(b) - getMtime(a));
+
         window._inboxCurrentData = {
+          webhook: webhookItems,
+          webhooks: webhookItems,
           intern: internItems,
           internal: internItems,
           email: emailItems,
           emails: emailItems,
-          telegram: telegramItems
+          messenger: messengerItems,
+          telegram: messengerItems
         };
-        // Badges aktualisieren
+
+        // Badges in Header & Spalten aktualisieren
+        const bWebhook = document.getElementById('inbox-badge-webhook');
+        if (bWebhook) bWebhook.innerText = webhookItems.length;
+        const bWebhookTag = document.getElementById('inbox-badge-webhook-tag');
+        if (bWebhookTag) bWebhookTag.innerText = webhookItems.length;
+
         const bIntern = document.getElementById('inbox-badge-intern');
         if (bIntern) bIntern.innerText = internItems.length;
+        const bInternTag = document.getElementById('inbox-badge-intern-tag');
+        if (bInternTag) bInternTag.innerText = internItems.length;
+
         const bEmail = document.getElementById('inbox-badge-email');
         if (bEmail) bEmail.innerText = emailItems.length;
-        const bTelegram = document.getElementById('inbox-badge-telegram');
-        if (bTelegram) bTelegram.innerText = telegramItems.length;
+        const bEmailTag = document.getElementById('inbox-badge-email-tag');
+        if (bEmailTag) bEmailTag.innerText = emailItems.length;
+
+        const bMessenger = document.getElementById('inbox-badge-messenger');
+        if (bMessenger) bMessenger.innerText = messengerItems.length;
+        const bMessengerTag = document.getElementById('inbox-badge-messenger-tag');
+        if (bMessengerTag) bMessengerTag.innerText = messengerItems.length;
+
+        const totalCount = webhookItems.length + internItems.length + emailItems.length + messengerItems.length;
         const bTotal = document.getElementById('inbox-total-badge');
-        if (bTotal) bTotal.innerText = `${internItems.length + emailItems.length + telegramItems.length} Items`;
+        if (bTotal) bTotal.innerText = `${totalCount} Items`;
+
         // Filter / Modus anwenden
         setInboxCategoryFilter(inboxActiveCategory);
         lucide.createIcons();
@@ -2570,74 +2860,329 @@ print('Ausführung erfolgreich!')</textarea>
         console.error('Fehler beim Laden der Inbox:', err);
       }
     }
+
     window.setInboxCategoryFilter = function(cat) {
+      if (cat === 'overview') cat = 'all';
+      if (cat === 'telegram') cat = 'messenger';
       inboxActiveCategory = cat;
-      ['all', 'intern', 'email', 'telegram'].forEach(c => {
+
+      // 1. Kachel-Highlight updaten (wie im Agenten-Kader)
+      const cats = ['all', 'webhook', 'intern', 'email', 'messenger'];
+      cats.forEach(c => {
         const btn = document.getElementById(`inbox-filter-${c}`);
-        const label = btn ? btn.querySelector(".inbox-tab-label") : null;
-        if (btn) {
-          btn.className = "inbox-header-tile flex flex-col items-center justify-center min-w-[50px] sm:min-w-[56px] py-0.5 px-0.5 bg-transparent border-0 shadow-none cursor-pointer select-none transition-transform hover:scale-105 duration-150 " + (c === cat ? "opacity-100" : "opacity-75 hover:opacity-100");
-          if (label) {
-            label.className = "inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap " + (c === cat ? "text-red-600 font-bold" : "text-black dark:text-zinc-100 font-medium");
-          }
+        if (!btn) return;
+        const isSelected = (c === cat);
+        const iconWrap = btn.querySelector('.tile-icon-wrap');
+        const label = btn.querySelector('.inbox-tab-label');
+
+        if (isSelected) {
+          btn.className = "inbox-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          if (iconWrap) iconWrap.className = "tile-icon-wrap active-tile w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5";
+          if (label) label.className = "inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold";
+        } else {
+          btn.className = "inbox-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          if (iconWrap) iconWrap.className = "tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5";
+          if (label) label.className = "inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium";
         }
       });
+
+      // 2. Metadaten in Header und mittlerer Spalte anpassen
+      const meta = INBOX_META[cat] || INBOX_META.all;
+      const mainTitle = document.getElementById('inbox-main-title');
+      const mainSub = document.getElementById('inbox-main-subtitle');
+      const mainImg = document.getElementById('inbox-main-header-img');
+      if (mainTitle) mainTitle.innerText = meta.title;
+      if (mainSub) mainSub.innerText = meta.subtitle;
+      if (mainImg) mainImg.src = meta.icon;
+
+      const colTitle = document.getElementById('inbox-stream-col-title');
+      const colSub = document.getElementById('inbox-stream-col-subtitle');
+      const colImg = document.getElementById('inbox-stream-col-icon-img');
+      if (colTitle) colTitle.innerText = meta.colTitle;
+      if (colSub) colSub.innerText = meta.colSub;
+      if (colImg) colImg.src = meta.icon;
+
+      // 3. Mittlere Spalte befuellen (Stream)
+      renderStreamColumn(cat);
+
+      // 4. Rechte Hauptspalte steuern (Uebersicht 4 Spalten vs. Einzelansicht Master-Detail Split)
       const overviewContainer = document.getElementById('inbox-overview-container');
       const splitContainer = document.getElementById('inbox-split-container');
+
       if (cat === 'all') {
         if (overviewContainer) overviewContainer.classList.remove('hidden');
         if (splitContainer) splitContainer.classList.add('hidden');
-        renderOverviewInbox();
+        renderOverviewColumns();
       } else {
         if (overviewContainer) overviewContainer.classList.add('hidden');
         if (splitContainer) splitContainer.classList.remove('hidden');
         renderSplitInbox(cat);
       }
+      lucide.createIcons();
     };
+
+    let inboxCatalogCollapsed = false;
+    window.toggleInboxCatalogCollapse = function(forceState) {
+      if (typeof forceState === 'boolean') {
+        inboxCatalogCollapsed = forceState;
+      } else {
+        inboxCatalogCollapsed = !inboxCatalogCollapsed;
+      }
+      const col = document.getElementById("inbox-catalog-col");
+      const expHeader = document.getElementById("inbox-catalog-expanded-header");
+      const colHeader = document.getElementById("inbox-catalog-collapsed-header");
+      const streamList = document.getElementById("inbox-stream-list");
+      const footer = col ? col.querySelector(".pt-2.shrink-0.border-t") : null;
+
+      if (col) {
+        if (inboxCatalogCollapsed) {
+          col.classList.remove("w-[260px]", "min-w-[260px]", "max-w-[260px]", "p-3");
+          col.classList.add("w-[64px]", "min-w-[64px]", "max-w-[64px]", "p-2");
+          if (expHeader) expHeader.classList.add("hidden");
+          if (colHeader) colHeader.classList.remove("hidden");
+          if (streamList) streamList.classList.add("hidden");
+          if (footer) footer.classList.add("hidden");
+        } else {
+          col.classList.remove("w-[64px]", "min-w-[64px]", "max-w-[64px]", "p-2");
+          col.classList.add("w-[260px]", "min-w-[260px]", "max-w-[260px]", "p-3");
+          if (expHeader) expHeader.classList.remove("hidden");
+          if (colHeader) colHeader.classList.add("hidden");
+          if (streamList) streamList.classList.remove("hidden");
+          if (footer) footer.classList.remove("hidden");
+        }
+      }
+      lucide.createIcons();
+    };
+
+    let mcCatalogCollapsed = false;
+    window.toggleMcCatalogCollapse = function(forceState) {
+      if (typeof forceState === 'boolean') {
+        mcCatalogCollapsed = forceState;
+      } else {
+        mcCatalogCollapsed = !mcCatalogCollapsed;
+      }
+      const col = document.getElementById("mc-catalog-col");
+      const expHeader = document.getElementById("mc-catalog-expanded-header");
+      const colHeader = document.getElementById("mc-catalog-collapsed-header");
+      const body = document.getElementById("mc-catalog-body");
+      const footer = col ? col.querySelector(".pt-2.shrink-0.border-t") : null;
+
+      if (col) {
+        if (mcCatalogCollapsed) {
+          col.classList.remove("w-[215px]", "min-w-[215px]", "max-w-[215px]", "p-2.5", "w-[260px]", "min-w-[260px]", "max-w-[260px]", "p-3");
+          col.classList.add("w-[64px]", "min-w-[64px]", "max-w-[64px]", "p-2");
+          if (expHeader) expHeader.classList.add("hidden");
+          if (colHeader) colHeader.classList.remove("hidden");
+          if (body) body.classList.add("hidden");
+          if (footer) footer.classList.add("hidden");
+        } else {
+          col.classList.remove("w-[64px]", "min-w-[64px]", "max-w-[64px]", "p-2", "w-[260px]", "min-w-[260px]", "max-w-[260px]", "p-3");
+          col.classList.add("w-[215px]", "min-w-[215px]", "max-w-[215px]", "p-2.5");
+          if (expHeader) expHeader.classList.remove("hidden");
+          if (colHeader) colHeader.classList.add("hidden");
+          if (body) body.classList.remove("hidden");
+          if (footer) footer.classList.remove("hidden");
+        }
+      }
+      lucide.createIcons();
+    };
+
+    window.renderSplitInbox = function(category) {
+      if (!window._inboxCurrentData) return;
+      const rawItems = window._inboxCurrentData[category] || [];
+      const filtered = inboxSearchQuery ? rawItems.filter(item => {
+        const t = (item.title || '').toLowerCase();
+        const p = (item.preview || item.content || '').toLowerCase();
+        const s = (item.sender || '').toLowerCase();
+        return t.includes(inboxSearchQuery) || p.includes(inboxSearchQuery) || s.includes(inboxSearchQuery);
+      }) : rawItems;
+
+      const titleEl = document.getElementById('inbox-split-title');
+      const iconImgEl = document.getElementById('inbox-split-icon-img');
+      const badgeEl = document.getElementById('inbox-split-badge');
+      const listEl = document.getElementById('inbox-split-list');
+
+      const meta = {
+        webhook: { title: "WEBHOOKS & APIS", icon: "/static/img/cadre_icons/inbox_webhooks.png" },
+        intern: { title: "INTERNE AUFGABEN", icon: "/static/img/cadre_icons/inbox_intern.png" },
+        email: { title: "E-MAIL POSTFACH", icon: "/static/img/cadre_icons/inbox_email.png" },
+        messenger: { title: "MESSENGER STREAM", icon: "/static/img/cadre_icons/inbox_messenger.png" }
+      }[category] || { title: "POSTFACH", icon: "/static/img/cadre_icons/overview.png" };
+
+      if (titleEl) titleEl.innerText = meta.title;
+      if (iconImgEl) iconImgEl.src = meta.icon;
+      if (badgeEl) badgeEl.innerText = filtered.length;
+
+      let selIdx = 0;
+      if (window._inboxCurrentDetail && window._inboxCurrentDetail.type === category) {
+        selIdx = window._inboxCurrentDetail.idx;
+        if (selIdx >= filtered.length) selIdx = 0;
+      }
+
+      if (listEl) {
+        if (filtered.length === 0) {
+          listEl.innerHTML = `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Eintraege in dieser Kategorie</div>`;
+          showInboxDetailEmpty();
+        } else {
+          listEl.innerHTML = filtered.map((it, idx) => {
+            const isSelected = (idx === selIdx);
+            const activeCls = isSelected 
+              ? 'border-zinc-900 dark:border-zinc-100 bg-[var(--secondary)] shadow-xs ring-1 ring-zinc-400 dark:ring-zinc-600' 
+              : 'border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50';
+
+            const safeTitle = it.title || 'Eintrag';
+            const safeSender = it.sender || (category === 'email' ? 'E-Mail Absender' : (category === 'messenger' || category === 'telegram') ? 'Messenger' : category === 'webhook' ? 'Webhook' : 'System');
+            const safeContent = it.preview || it.content || '';
+            let safeMeta = it.timestamp || '';
+            if (!safeMeta && it.time) {
+              const d = new Date(it.time);
+              safeMeta = !isNaN(d.getTime()) ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : it.time;
+            }
+
+            const badgeColors = {
+              webhook: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
+              intern: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+              email: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
+              messenger: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+            }[category] || 'bg-[var(--secondary)] text-[var(--foreground)] border-[var(--border)]';
+
+            return `
+              <div onclick="openInboxDetail('${category}', ${idx})" class="group p-2.5 rounded-xl border ${activeCls} text-[var(--foreground)] transition cursor-pointer select-none">
+                <div class="flex items-start justify-between gap-1.5 mb-1">
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono uppercase tracking-wider border ${badgeColors}">
+                    ${escapeHtml(it.badge || category.toUpperCase())}
+                  </span>
+                  <span class="text-[9.5px] font-mono text-[var(--muted-foreground)] shrink-0">${escapeHtml(safeMeta)}</span>
+                </div>
+                <h4 class="text-xs font-bold font-mono text-[var(--foreground)] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-1 mb-1">
+                  ${escapeHtml(safeTitle)}
+                </h4>
+                <div class="text-[10px] font-mono text-[var(--muted-foreground)] mb-1 flex items-center gap-1.5 truncate">
+                  <i data-lucide="user" class="w-3 h-3 text-[var(--muted-foreground)] shrink-0"></i>
+                  <span class="truncate">${escapeHtml(safeSender)}</span>
+                </div>
+                <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)]">
+                  ${escapeHtml(safeContent)}
+                </p>
+              </div>
+            `;
+          }).join('');
+
+          // Detailansicht fuer ausgewähltes Item laden
+          openInboxDetail(category, selIdx);
+        }
+      }
+      lucide.createIcons();
+    };
+
     window.filterInboxItems = function(query) {
       inboxSearchQuery = (query || '').toLowerCase().trim();
+      renderStreamColumn(inboxActiveCategory);
       if (inboxActiveCategory === 'all') {
-        renderOverviewInbox();
+        renderOverviewColumns();
       } else {
         renderSplitInbox(inboxActiveCategory);
       }
     };
-    function renderInboxCard(item, type, idx, isSplit = false, isSelected = false) {
-      const safeTitle = item.title || 'Eintrag';
-      const safeContent = item.preview || item.content || '';
-      const safeSender = item.sender || (type === 'email' ? 'E-Mail Absender' : type === 'telegram' ? 'Telegram' : 'System');
-      let safeMeta = item.timestamp || '';
-      if (!safeMeta && item.time) {
-        const d = new Date(item.time);
-        safeMeta = !isNaN(d.getTime()) ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : item.time;
+
+    // Render Stream in Mittlerer Spalte
+    function renderStreamColumn(category) {
+      if (!window._inboxCurrentData) return;
+      const listEl = document.getElementById('inbox-stream-list');
+      const countBadge = document.getElementById('inbox-stream-count-badge');
+      if (!listEl) return;
+
+      let items = [];
+      if (category === 'all') {
+        const w = window._inboxCurrentData.webhook || [];
+        const i = window._inboxCurrentData.intern || [];
+        const e = window._inboxCurrentData.email || [];
+        const m = window._inboxCurrentData.messenger || [];
+        items = [...w, ...i, ...e, ...m];
+        items.sort((a, b) => {
+          const ma = a.mtime || 0;
+          const mb = b.mtime || 0;
+          return mb - ma;
+        });
+      } else {
+        items = window._inboxCurrentData[category] || [];
       }
-      
-      const badgeText = item.badge || (type === 'email' ? 'INBOX' : type === 'telegram' ? 'BOT' : 'EVENT');
-      const clickHandler = isSplit ? `openInboxDetail('${type}', ${idx})` : `openInboxModal('${type}', ${idx})`;
-      const activeCls = isSelected ? 'border-zinc-900 dark:border-zinc-100 bg-[var(--secondary)] shadow-xs ring-1 ring-zinc-400 dark:ring-zinc-600' : 'border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50';
-      return `
-        <div onclick="${clickHandler}" class="group p-3 rounded-lg border ${activeCls} text-[var(--foreground)] transition cursor-pointer select-none">
-          <div class="flex items-start justify-between gap-2 mb-1.5">
-            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">
-              ${escapeHtml(badgeText)}
-            </span>
-            <span class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0">${escapeHtml(safeMeta)}</span>
+
+      const filtered = inboxSearchQuery ? items.filter(it => {
+        const t = (it.title || '').toLowerCase();
+        const p = (it.preview || it.content || '').toLowerCase();
+        const s = (it.sender || '').toLowerCase();
+        return t.includes(inboxSearchQuery) || p.includes(inboxSearchQuery) || s.includes(inboxSearchQuery);
+      }) : items;
+
+      if (countBadge) countBadge.innerText = filtered.length;
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Stream-Ereignisse</div>`;
+        return;
+      }
+
+      const selItem = currentInboxDetailItem;
+      listEl.innerHTML = filtered.map((it, idx) => {
+        const isSelected = selItem && (selItem.id ? selItem.id === it.id : (selItem.title === it.title && selItem.time === it.time));
+        const activeCls = isSelected 
+          ? 'border-zinc-900 dark:border-zinc-100 bg-[var(--secondary)] shadow-xs ring-1 ring-zinc-400 dark:ring-zinc-600' 
+          : 'border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50';
+
+        const safeTitle = it.title || 'Eintrag';
+        const safeSender = it.sender || 'Absender';
+        const safeContent = it.preview || it.content || '';
+        let safeMeta = it.timestamp || '';
+        if (!safeMeta && it.time) {
+          const d = new Date(it.time);
+          safeMeta = !isNaN(d.getTime()) ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : it.time;
+        }
+
+        const type = it.source || category;
+        const badgeColors = {
+          webhook: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
+          intern: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+          email: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
+          messenger: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+        }[type] || 'bg-[var(--secondary)] text-[var(--foreground)] border-[var(--border)]';
+
+        return `
+          <div onclick="selectStreamItem('${type}', ${idx})" class="group p-2.5 rounded-xl border ${activeCls} text-[var(--foreground)] transition cursor-pointer select-none">
+            <div class="flex items-start justify-between gap-2 mb-1">
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badgeColors}">
+                ${escapeHtml(it.badge || type.toUpperCase())}
+              </span>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0">${escapeHtml(safeMeta)}</span>
+            </div>
+            <h4 class="text-xs font-bold font-mono text-[var(--foreground)] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-1 mb-1">
+              ${escapeHtml(safeTitle)}
+            </h4>
+            <div class="text-[10px] font-mono text-[var(--muted-foreground)] mb-1 flex items-center gap-1.5 truncate">
+              <i data-lucide="user" class="w-3 h-3 text-[var(--muted-foreground)] shrink-0"></i>
+              <span class="truncate">${escapeHtml(safeSender)}</span>
+            </div>
+            <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)]">
+              ${escapeHtml(safeContent)}
+            </p>
           </div>
-          
-          <h4 class="text-xs font-bold font-mono text-[var(--foreground)] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-1 mb-1">
-            ${escapeHtml(safeTitle)}
-          </h4>
-          <div class="text-[10px] font-mono text-[var(--muted-foreground)] mb-1.5 flex items-center gap-1.5">
-            <i data-lucide="user" class="w-3 h-3 text-black dark:text-white shrink-0"></i>
-            <span class="truncate">${escapeHtml(safeSender)}</span>
-          </div>
-          <p class="text-[11px] font-mono line-clamp-2 leading-relaxed p-2 rounded-md border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)]">
-            ${escapeHtml(safeContent)}
-          </p>
-        </div>
-      `;
+        `;
+      }).join('');
+      lucide.createIcons();
     }
-    function renderOverviewInbox() {
+
+    // Beim Klick auf Item im Stream
+    window.selectStreamItem = function(type, idx) {
+      if (inboxActiveCategory === 'all') {
+        // In Übersicht: Schalte auf die entsprechende Einzelansicht um und lade Details
+        setInboxCategoryFilter(type);
+        openInboxDetail(type, idx);
+      } else {
+        openInboxDetail(type, idx);
+      }
+    };
+
+    // Render 4 Spalten im rechten Feld (Uebersichts-Modus)
+    function renderOverviewColumns() {
       if (!window._inboxCurrentData) return;
       const filterItems = (items) => {
         if (!inboxSearchQuery) return items;
@@ -2648,57 +3193,63 @@ print('Ausführung erfolgreich!')</textarea>
           return t.includes(inboxSearchQuery) || p.includes(inboxSearchQuery) || s.includes(inboxSearchQuery);
         });
       };
+
+      const webhookList = document.getElementById('inbox-list-webhook');
       const internList = document.getElementById('inbox-list-intern');
       const emailList = document.getElementById('inbox-list-email');
-      const telegramList = document.getElementById('inbox-list-telegram');
+      const messengerList = document.getElementById('inbox-list-messenger');
+
+      const wItems = filterItems(window._inboxCurrentData.webhook || []);
       const iItems = filterItems(window._inboxCurrentData.intern || []);
       const eItems = filterItems(window._inboxCurrentData.email || []);
-      const tItems = filterItems(window._inboxCurrentData.telegram || []);
+      const mItems = filterItems(window._inboxCurrentData.messenger || []);
+
+      const renderCard = (it, type, idx) => {
+        const safeTitle = it.title || 'Eintrag';
+        const safeContent = it.preview || it.content || '';
+        const safeSender = it.sender || 'Absender';
+        let safeMeta = it.timestamp || '';
+        if (!safeMeta && it.time) {
+          const d = new Date(it.time);
+          safeMeta = !isNaN(d.getTime()) ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : it.time;
+        }
+        return `
+          <div onclick="openInboxModal('${type}', ${idx})" class="group p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50 text-[var(--foreground)] transition cursor-pointer select-none">
+            <div class="flex items-start justify-between gap-1.5 mb-1">
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono uppercase tracking-wider bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">
+                ${escapeHtml(it.badge || type.toUpperCase())}
+              </span>
+              <span class="text-[9.5px] font-mono text-[var(--muted-foreground)] shrink-0">${escapeHtml(safeMeta)}</span>
+            </div>
+            <h4 class="text-xs font-bold font-mono text-[var(--foreground)] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-1 mb-1">
+              ${escapeHtml(safeTitle)}
+            </h4>
+            <div class="text-[10px] font-mono text-[var(--muted-foreground)] mb-1 flex items-center gap-1 truncate">
+              <i data-lucide="user" class="w-3 h-3 text-[var(--muted-foreground)] shrink-0"></i>
+              <span class="truncate">${escapeHtml(safeSender)}</span>
+            </div>
+            <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)]">
+              ${escapeHtml(safeContent)}
+            </p>
+          </div>
+        `;
+      };
+
+      if (webhookList) {
+        webhookList.innerHTML = wItems.length > 0 ? wItems.map((it, idx) => renderCard(it, 'webhook', idx)).join('') : `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Webhooks</div>`;
+      }
       if (internList) {
-        internList.innerHTML = iItems.length > 0 ? iItems.map((it, idx) => renderInboxCard(it, 'intern', idx, false)).join('') : `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine passenden Einträge</div>`;
+        internList.innerHTML = iItems.length > 0 ? iItems.map((it, idx) => renderCard(it, 'intern', idx)).join('') : `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine internen Meldungen</div>`;
       }
       if (emailList) {
-        emailList.innerHTML = eItems.length > 0 ? eItems.map((it, idx) => renderInboxCard(it, 'email', idx, false)).join('') : `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine passenden Einträge</div>`;
+        emailList.innerHTML = eItems.length > 0 ? eItems.map((it, idx) => renderCard(it, 'email', idx)).join('') : `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine neuen E-Mails</div>`;
       }
-      if (telegramList) {
-        telegramList.innerHTML = tItems.length > 0 ? tItems.map((it, idx) => renderInboxCard(it, 'telegram', idx, false)).join('') : `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine passenden Einträge</div>`;
-      }
-      lucide.createIcons();
-    }
-    function renderSplitInbox(category) {
-      if (!window._inboxCurrentData) return;
-      const rawItems = window._inboxCurrentData[category] || [];
-      const filtered = inboxSearchQuery ? rawItems.filter(item => {
-        const t = (item.title || '').toLowerCase();
-        const p = (item.preview || item.content || '').toLowerCase();
-        const s = (item.sender || '').toLowerCase();
-        return t.includes(inboxSearchQuery) || p.includes(inboxSearchQuery) || s.includes(inboxSearchQuery);
-      }) : rawItems;
-      // Header links aktualisieren
-      const titleEl = document.getElementById('inbox-split-title');
-      const iconEl = document.getElementById('inbox-split-icon');
-      const badgeEl = document.getElementById('inbox-split-badge');
-      const listEl = document.getElementById('inbox-split-list');
-      const meta = {
-        email: { title: "E-MAIL POSTFACH", icon: "mail" },
-        telegram: { title: "TELEGRAM STREAM", icon: "send" },
-        intern: { title: "INTERN & SYSTEM", icon: "shield-alert" }
-      }[category] || { title: "POSTFACH", icon: "inbox" };
-      if (titleEl) titleEl.innerText = meta.title;
-      if (iconEl) iconEl.setAttribute('data-lucide', meta.icon);
-      if (badgeEl) badgeEl.innerText = filtered.length;
-      const selIdx = window._inboxCurrentDetail && window._inboxCurrentDetail.type === category ? window._inboxCurrentDetail.idx : 0;
-      if (listEl) {
-        if (filtered.length === 0) {
-          listEl.innerHTML = `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Einträge in dieser Kategorie</div>`;
-          showInboxDetailEmpty();
-        } else {
-          listEl.innerHTML = filtered.map((it, idx) => renderInboxCard(it, category, idx, true, idx === selIdx)).join('');
-          openInboxDetail(category, selIdx < filtered.length ? selIdx : 0);
-        }
+      if (messengerList) {
+        messengerList.innerHTML = mItems.length > 0 ? mItems.map((it, idx) => renderCard(it, 'messenger', idx)).join('') : `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Messenger-Nachrichten</div>`;
       }
       lucide.createIcons();
     }
+
     function showInboxDetailEmpty() {
       const emptyEl = document.getElementById('inbox-detail-empty');
       const contentEl = document.getElementById('inbox-detail-content');
@@ -2706,6 +3257,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (contentEl) contentEl.classList.add('hidden');
       currentInboxDetailItem = null;
     }
+
     async function openInboxDetail(type, idx) {
       if (!window._inboxCurrentData || !window._inboxCurrentData[type]) return;
       const items = window._inboxCurrentData[type];
@@ -2716,33 +3268,43 @@ print('Ausführung erfolgreich!')</textarea>
       }
       window._inboxCurrentDetail = { type, idx };
       currentInboxDetailItem = item;
-      // Split-List Selection Highlight updaten
-      const listEl = document.getElementById('inbox-split-list');
-      if (listEl) {
-        const cards = listEl.children;
+
+      // Stream Selection neu rendern
+      renderStreamColumn(inboxActiveCategory);
+
+      // Split List Selection hervorheben
+      const splitList = document.getElementById('inbox-split-list');
+      if (splitList && inboxActiveCategory === type) {
+        const cards = splitList.children;
         for (let i = 0; i < cards.length; i++) {
           if (i === idx) {
-            cards[i].className = "group p-3 rounded-lg border border-zinc-900 dark:border-zinc-100 bg-[var(--secondary)] shadow-xs ring-1 ring-zinc-400 dark:ring-zinc-600 text-[var(--foreground)] transition cursor-pointer select-none";
+            cards[i].classList.remove('border-[var(--border)]', 'bg-[var(--card)]');
+            cards[i].classList.add('border-zinc-900', 'dark:border-zinc-100', 'bg-[var(--secondary)]', 'shadow-xs', 'ring-1', 'ring-zinc-400', 'dark:ring-zinc-600');
           } else {
-            cards[i].className = "group p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50 text-[var(--foreground)] transition cursor-pointer select-none";
+            cards[i].classList.remove('border-zinc-900', 'dark:border-zinc-100', 'bg-[var(--secondary)]', 'shadow-xs', 'ring-1', 'ring-zinc-400', 'dark:ring-zinc-600');
+            cards[i].classList.add('border-[var(--border)]', 'bg-[var(--card)]');
           }
         }
       }
+
       // Pane Elemente
       const emptyEl = document.getElementById('inbox-detail-empty');
       const contentEl = document.getElementById('inbox-detail-content');
       if (emptyEl) emptyEl.classList.add('hidden');
       if (contentEl) contentEl.classList.remove('hidden');
+
       const badgeEl = document.getElementById('inbox-detail-badge');
       const dateEl = document.getElementById('inbox-detail-date');
       const titleEl = document.getElementById('inbox-detail-title');
       const senderEl = document.getElementById('inbox-detail-sender');
       const pathEl = document.getElementById('inbox-detail-path');
-      if (badgeEl) badgeEl.innerText = type.toUpperCase();
+
+      if (badgeEl) badgeEl.innerText = (item.badge || type).toUpperCase();
       if (dateEl) dateEl.innerText = item.time || item.timestamp || '';
       if (titleEl) titleEl.innerText = item.title || 'Ohne Betreff';
-      if (senderEl) senderEl.innerText = item.sender || (type === 'email' ? 'E-Mail Absender' : type === 'telegram' ? 'Telegram' : 'System');
+      if (senderEl) senderEl.innerText = item.sender || (type === 'email' ? 'E-Mail Absender' : (type === 'messenger' || type === 'telegram') ? 'Messenger' : type === 'webhook' ? 'Webhook Inbound' : 'System');
       if (pathEl) pathEl.innerText = item.path || 'In-Memory / Live-Stream';
+
       // Volltext falls externer Pfad
       let fullText = item.content || item.preview || '';
       if (item.path && !item._fullLoaded) {
@@ -2758,11 +3320,13 @@ print('Ausführung erfolgreich!')</textarea>
           console.warn('Volltext-Ladefehler:', e);
         }
       }
+
       // HTML Support
       const hasHtml = Boolean(item.html);
       const toggleWrap = document.getElementById('inbox-detail-html-toggle-wrap');
       const iframeEl = document.getElementById('inbox-detail-iframe');
       const bodyTextEl = document.getElementById('inbox-detail-body-text');
+
       if (toggleWrap) {
         toggleWrap.classList.toggle('hidden', !hasHtml);
       }
@@ -2773,17 +3337,13 @@ print('Ausführung erfolgreich!')</textarea>
         let parsed = null;
         try {
           const trimmed = (fullText || '').trim();
-          if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
             parsed = JSON.parse(trimmed);
           }
         } catch (e) {}
+
         if (parsed && typeof parsed === 'object') {
-          const bodyContent = parsed.body || parsed.content || parsed.text || '';
-          if (window.marked && typeof marked.parse === 'function') {
-            bodyTextEl.innerHTML = `<div class="prose dark:prose-invert max-w-none text-xs sm:text-sm font-sans leading-relaxed text-[var(--foreground)]">${marked.parse(bodyContent)}</div>`;
-          } else {
-            bodyTextEl.innerText = bodyContent;
-          }
+          bodyTextEl.innerText = JSON.stringify(parsed, null, 2);
         } else if (window.marked && typeof marked.parse === 'function' && (fullText.includes('#') || fullText.includes('**') || (item.path && item.path.endsWith('.md')))) {
           bodyTextEl.innerHTML = `<div class="prose dark:prose-invert max-w-none text-xs sm:text-sm font-sans leading-relaxed text-[var(--foreground)]">${marked.parse(fullText)}</div>`;
         } else {
@@ -2793,6 +3353,7 @@ print('Ausführung erfolgreich!')</textarea>
       setInboxDetailBodyMode(hasHtml ? 'html' : 'text');
       lucide.createIcons();
     }
+
     function setInboxDetailBodyMode(mode) {
       inboxDetailBodyMode = mode;
       const htmlWrap = document.getElementById('inbox-detail-body-html');
@@ -2802,15 +3363,16 @@ print('Ausführung erfolgreich!')</textarea>
       if (mode === 'html' && currentInboxDetailItem && currentInboxDetailItem.html) {
         if (htmlWrap) htmlWrap.classList.remove('hidden');
         if (textWrap) textWrap.classList.add('hidden');
-        if (btnHtml) btnHtml.className = "px-2 py-0.5 rounded font-bold bg-[var(--card)] text-blue-600 dark:text-blue-400 shadow-2xs";
-        if (btnText) btnText.className = "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
+        if (btnHtml) btnHtml.className = "px-2.5 py-0.5 rounded font-bold bg-[var(--card)] text-blue-600 dark:text-blue-400 shadow-2xs";
+        if (btnText) btnText.className = "px-2.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
       } else {
         if (htmlWrap) htmlWrap.classList.add('hidden');
         if (textWrap) textWrap.classList.remove('hidden');
-        if (btnHtml) btnHtml.className = "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
-        if (btnText) btnText.className = "px-2 py-0.5 rounded font-bold bg-[var(--card)] text-[var(--foreground)] shadow-2xs";
+        if (btnHtml) btnHtml.className = "px-2.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
+        if (btnText) btnText.className = "px-2.5 py-0.5 rounded font-bold bg-[var(--card)] text-[var(--foreground)] shadow-2xs";
       }
     }
+
     function copyInboxDetailText() {
       if (!currentInboxDetailItem) return;
       const text = currentInboxDetailItem.content || currentInboxDetailItem.preview || currentInboxDetailItem.title || '';
@@ -2826,6 +3388,7 @@ print('Ausführung erfolgreich!')</textarea>
         }
       });
     }
+
     function analyzeInboxDetailInChat() {
       if (!currentInboxDetailItem) return;
       const type = (window._inboxCurrentDetail?.type || 'INBOX').toUpperCase();
@@ -2835,6 +3398,7 @@ print('Ausführung erfolgreich!')</textarea>
         content: currentInboxDetailItem.content || currentInboxDetailItem.preview || ''
       });
     }
+
     let currentInboxModalRawContent = "";
     let currentInboxModalMode = "formatted";
     function setInboxModalViewMode(mode) {
@@ -2979,8 +3543,8 @@ print('Ausführung erfolgreich!')</textarea>
               </div>
             `;
           }
-        } else if (type.toLowerCase() === 'telegram' || (item.source && item.source.toLowerCase() === 'telegram')) {
-          const sender = item.sender || 'Telegram User';
+        } else if (type.toLowerCase() === 'telegram' || type.toLowerCase() === 'messenger' || (item.source && (item.source.toLowerCase() === 'telegram' || item.source.toLowerCase() === 'messenger'))) {
+          const sender = item.sender || 'Messenger User';
           const date = item.timestamp || item.time || '';
           cleanContentForChat = `Telegram von ${sender} (${date}):\n${fullContent}`;
           let bodyHtml = '';
@@ -3045,31 +3609,66 @@ print('Ausführung erfolgreich!')</textarea>
     // -------------------------------------------------------------------------
     // VIEW 2: ZENTRALBIBLIOTHEK (view_library) CONTROLLER
     // -------------------------------------------------------------------------
+    let currentLibraryTab = 'rag';
     function switchLibrarySubTab(tab) {
+      currentLibraryTab = tab;
       const ragPane = document.getElementById('library-subtab-rag');
       const erfasserPane = document.getElementById('library-subtab-erfasser');
       const vaultPane = document.getElementById('library-subtab-vault');
-      const btnRag = document.getElementById('library-tab-btn-rag');
-      const btnErfasser = document.getElementById('library-tab-btn-erfasser');
-      const btnVault = document.getElementById('library-tab-btn-vault');
+
+      const headerMeta = {
+        rag: {
+          title: 'Zentralbibliothek · RAG Index',
+          subtitle: 'AnythingLLM Neural Search, Vector Embeddings & Wissensabfragen',
+          img: '/static/img/cadre_icons/library_rag.png'
+        },
+        erfasser: {
+          title: 'Zentralbibliothek · Dokumenten-Erfasser',
+          subtitle: 'PDF-Upload, automatisches OCR, Markdown-Synthese & Indizierung',
+          img: '/static/img/cadre_icons/library_erfasser.png'
+        },
+        vault: {
+          title: 'Zentralbibliothek · Obsidian Vault',
+          subtitle: 'Direkter Dateibaum-Browser, Notiz-Inspektion & Markdown-Editor',
+          img: '/static/img/cadre_icons/library_vault.png'
+        }
+      };
+
+      const meta = headerMeta[tab] || headerMeta.rag;
+      const titleEl = document.getElementById('library-main-title');
+      const subtitleEl = document.getElementById('library-main-subtitle');
+      const headerImgEl = document.getElementById('library-main-header-img');
+      if (titleEl) titleEl.textContent = meta.title;
+      if (subtitleEl) subtitleEl.textContent = meta.subtitle;
+      if (headerImgEl) headerImgEl.src = meta.img;
+
       if (ragPane) ragPane.classList.add('hidden');
       if (erfasserPane) erfasserPane.classList.add('hidden');
       if (vaultPane) vaultPane.classList.add('hidden');
+
       ['rag', 'erfasser', 'vault'].forEach(t => {
         const btn = document.getElementById(`library-tab-btn-${t}`);
         const label = btn ? btn.querySelector(".library-tab-label") : null;
+        const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
         if (btn) {
           if (t === tab) {
-            btn.className = "library-header-tile flex flex-col items-center justify-center min-w-[56px] sm:min-w-[62px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
-            if (label) label.className = "library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold";
+            btn.className = "library-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            if (iconWrap) iconWrap.classList.add('active-tile');
+            if (label) label.className = "library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold";
           } else {
-            btn.className = "library-header-tile flex flex-col items-center justify-center min-w-[56px] sm:min-w-[62px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-75 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
-            if (label) label.className = "library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium";
+            btn.className = "library-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            if (iconWrap) iconWrap.classList.remove('active-tile');
+            if (label) label.className = "library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium";
           }
         }
       });
+
       if (tab === 'rag') {
         if (ragPane) ragPane.classList.remove('hidden');
+        const iframe = document.getElementById('anythingllm-iframe');
+        if (iframe && (!iframe.src || iframe.src === 'about:blank')) {
+          iframe.src = 'http://localhost:3001';
+        }
       } else if (tab === 'erfasser') {
         if (erfasserPane) erfasserPane.classList.remove('hidden');
         if (typeof loadLibraryBooksList === 'function') {
@@ -3081,6 +3680,39 @@ print('Ausführung erfolgreich!')</textarea>
       }
       lucide.createIcons();
     }
+
+    let libraryCatalogCollapsed = false;
+    window.toggleLibraryCatalogCollapse = function(forceState) {
+      if (typeof forceState === 'boolean') {
+        libraryCatalogCollapsed = forceState;
+      } else {
+        libraryCatalogCollapsed = !libraryCatalogCollapsed;
+      }
+      const col = document.getElementById("library-catalog-col");
+      const expHeader = document.getElementById("library-catalog-expanded-header");
+      const colHeader = document.getElementById("library-catalog-collapsed-header");
+      const body = document.getElementById("library-catalog-body");
+      const footer = col ? col.querySelector("#library-catalog-footer") : null;
+
+      if (col) {
+        if (libraryCatalogCollapsed) {
+          col.classList.remove("w-[215px]", "min-w-[215px]", "max-w-[215px]", "p-2.5");
+          col.classList.add("w-[64px]", "min-w-[64px]", "max-w-[64px]", "p-2");
+          if (expHeader) expHeader.classList.add("hidden");
+          if (colHeader) colHeader.classList.remove("hidden");
+          if (body) body.classList.add("hidden");
+          if (footer) footer.classList.add("hidden");
+        } else {
+          col.classList.remove("w-[64px]", "min-w-[64px]", "max-w-[64px]", "p-2");
+          col.classList.add("w-[215px]", "min-w-[215px]", "max-w-[215px]", "p-2.5");
+          if (expHeader) expHeader.classList.remove("hidden");
+          if (colHeader) colHeader.classList.add("hidden");
+          if (body) body.classList.remove("hidden");
+          if (footer) footer.classList.remove("hidden");
+        }
+      }
+      lucide.createIcons();
+    };
     async function loadLibraryView() {
       // AnythingLLM Iframe initialisieren
       const iframe = document.getElementById('anythingllm-iframe');
@@ -3524,6 +4156,67 @@ print('Ausführung erfolgreich!')</textarea>
       // Beim Suchen automatisch gefundene Ordner aufklappen
       filtered.forEach(p => showroomOpenFolders.add(`proj_${p.id}`));
       renderShowroomTree(filtered);
+    }
+    let currentShowroomCategory = 'all';
+    function filterShowroomCategory(cat) {
+      currentShowroomCategory = cat || 'all';
+      const headerMeta = {
+        all: {
+          title: 'Showroom · Projekt-Explorer',
+          subtitle: 'Dateibaumstruktur nach Windows Explorer: Zwischenberichte, Medien & Endprodukte',
+          img: '/static/img/cadre_icons/marketplace.png'
+        },
+        zwischenberichte: {
+          title: 'Showroom · Zwischenberichte (01)',
+          subtitle: 'Laufende Arbeitsberichte, Zwischenanalysen und Research-Notizen',
+          img: '/static/img/cadre_icons/skills.png'
+        },
+        medien: {
+          title: 'Showroom · Medien & Assets (02)',
+          subtitle: 'Diagramme, Screenshots, Visualisierungen, Audio- & Video-Dateien',
+          img: '/static/img/cadre_icons/paperclip.png'
+        },
+        endprodukte: {
+          title: 'Showroom · Finale Endprodukte (03)',
+          subtitle: 'Fertiggestellte Dokumente, Berichte, Exports und Artefakte',
+          img: '/static/img/cadre_icons/soul.png'
+        }
+      };
+
+      const meta = headerMeta[cat] || headerMeta.all;
+      const titleEl = document.getElementById('showroom-main-title');
+      const headerImgEl = document.getElementById('showroom-main-header-img');
+      if (titleEl) titleEl.textContent = meta.title;
+      if (headerImgEl) headerImgEl.src = meta.img;
+
+      ['all', 'berichte', 'medien', 'endprodukte'].forEach(t => {
+        const btn = document.getElementById(`showroom-tab-btn-${t}`);
+        const label = btn ? btn.querySelector(".showroom-tab-label") : null;
+        const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
+        const isMatch = (cat === 'all' && t === 'all') || 
+                        (cat === 'zwischenberichte' && t === 'berichte') || 
+                        (cat === 'medien' && t === 'medien') || 
+                        (cat === 'endprodukte' && t === 'endprodukte');
+        if (btn) {
+          if (isMatch) {
+            btn.className = "showroom-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            if (iconWrap) iconWrap.classList.add('active-tile');
+            if (label) label.className = "showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold";
+          } else {
+            btn.className = "showroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            if (iconWrap) iconWrap.classList.remove('active-tile');
+            if (label) label.className = "showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium";
+          }
+        }
+      });
+
+      if (cat !== 'all') {
+        showroomProjectsTree.forEach(p => {
+          showroomOpenFolders.add(`proj_${p.id}`);
+          showroomOpenFolders.add(`sec_${p.id}_${cat}`);
+        });
+      }
+      renderShowroomTree(showroomProjectsTree);
     }
     function getFileLucideIcon(ext) {
       const e = (ext || "").toLowerCase();
@@ -4665,7 +5358,9 @@ print('Ausführung erfolgreich!')</textarea>
     function startWatchdogAlarmsPolling() {
       pollWatchdogAlarms();
       if (watchdogPollInterval) clearInterval(watchdogPollInterval);
-      watchdogPollInterval = setInterval(pollWatchdogAlarms, 4000);
+      watchdogPollInterval = setInterval(() => {
+        if (!document.hidden) pollWatchdogAlarms();
+      }, 10000);
     }
     async function pollWatchdogAlarms() {
       try {
@@ -6310,7 +7005,9 @@ ${logExcerpt}
     function startSystemHealthPolling() {
       fetchSystemHealth();
       if (systemHealthInterval) clearInterval(systemHealthInterval);
-      systemHealthInterval = setInterval(fetchSystemHealth, 15000);
+      systemHealthInterval = setInterval(() => {
+        if (!document.hidden) fetchSystemHealth();
+      }, 20000);
     }
     async function triggerHermesCoreRestart() {
       const confirmed = confirm(
@@ -7984,22 +8681,22 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <div id="ops-new-task-modal" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeNewTaskModal()"></div>
-    <div class="relative w-[940px] max-w-[95vw] max-h-[92vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans">
+    <div class="relative w-[940px] max-w-[95vw] max-h-[92vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal">
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
             <i data-lucide="plus-circle" class="w-5 h-5"></i>
           </div>
           <div>
-            <h2 class="text-base font-bold text-primary-custom tracking-tight font-mono">Neue autonome Aufgabe</h2>
-            <p class="text-xs text-muted-custom font-mono">Hermes Kanban &amp; OmniRoute Orchestrierung</p>
+            <h2 class="text-base font-bold text-[var(--foreground)] tracking-tight font-mono">Neue autonome Aufgabe</h2>
+            <p class="text-xs text-[var(--muted-foreground)] font-mono">Hermes Kanban &amp; OmniRoute Orchestrierung</p>
           </div>
         </div>
         <div class="flex items-center gap-1.5">
-          <button type="button" onclick="openContextHelp('new_task')" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-muted-custom hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer" title="Kontext-Hilfe öffnen">
+          <button type="button" onclick="openContextHelp('new_task')" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--muted-foreground)] hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer" title="Kontext-Hilfe öffnen">
             <i data-lucide="help-circle" class="w-4 h-4"></i>
           </button>
-          <button onclick="closeNewTaskModal()" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-muted-custom hover:text-primary-custom transition cursor-pointer" title="Schließen">
+          <button onclick="closeNewTaskModal()" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer" title="Schließen">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
@@ -8007,13 +8704,13 @@ ${logExcerpt}
       
       <form id="ops-new-task-form" onsubmit="submitNewTask(event)" class="overflow-y-auto flex-1 p-6 space-y-4.5">
         <div>
-          <label class="block text-xs font-mono font-bold uppercase text-muted-custom mb-1.5">Titel der Aufgabe *</label>
-          <input type="text" id="ops-task-title" required placeholder="z. B. Konkurrenzanalyse M&amp;A für Q4 erstellen" class="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--border)] bg-[var(--background)] text-primary-custom focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans shadow-2xs" />
+          <label class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1.5">Titel der Aufgabe *</label>
+          <input type="text" id="ops-task-title" required placeholder="z. B. Konkurrenzanalyse M&amp;A für Q4 erstellen" class="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans shadow-2xs" />
         </div>
         
         <div>
           <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
-            <label class="block text-xs font-mono font-bold uppercase text-muted-custom">Beschreibung / Prompt / Ziel</label>
+            <label class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)]">Beschreibung / Prompt / Ziel</label>
             <div class="flex items-center gap-1.5 flex-wrap">
               <!-- Hidden File Input -->
               <input type="file" id="ops-task-file-input" onchange="handleOpsTaskFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
@@ -8031,7 +8728,7 @@ ${logExcerpt}
               </button>
 
               <!-- Prompt Studio Button -->
-              <button type="button" onclick="openSurePromptsModal('ops-task')" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-indigo-600 hover:text-white text-muted-custom text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="Archon Prompt Studio (1.079 Vorlagen: Enterprise &amp; Fabric SOP)">
+              <button type="button" onclick="openSurePromptsModal('ops-task')" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-indigo-600 hover:text-white text-[var(--muted-foreground)] text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="Archon Prompt Studio (1.079 Vorlagen: Enterprise &amp; Fabric SOP)">
                 <i data-lucide="layers" class="w-3.5 h-3.5"></i>
                 <span>Prompt Studio (1.079)</span>
               </button>
@@ -8057,13 +8754,13 @@ ${logExcerpt}
             </button>
           </div>
 
-          <textarea id="ops-task-body" rows="6" onpaste="handleOpsTaskInputPaste(event)" placeholder="Detaillierte Aufgabenstellung, Kriterien oder Kontext für den Agenten..." class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[var(--border)] bg-[var(--background)] text-primary-custom focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans leading-relaxed custom-scrollbar shadow-2xs"></textarea>
+          <textarea id="ops-task-body" rows="6" onpaste="handleOpsTaskInputPaste(event)" placeholder="Detaillierte Aufgabenstellung, Kriterien oder Kontext für den Agenten..." class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans leading-relaxed custom-scrollbar shadow-2xs"></textarea>
         </div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-mono font-bold uppercase text-muted-custom mb-1">Start-Spalte</label>
-            <select id="ops-task-column" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-primary-custom focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+            <label class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Start-Spalte</label>
+            <select id="ops-task-column" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
               <option value="todo" selected>To-Do</option>
               <option value="in_progress">In Bearbeitung</option>
               <option value="review">Review &amp; QA</option>
@@ -8072,8 +8769,8 @@ ${logExcerpt}
             </select>
           </div>
           <div>
-            <label class="block text-xs font-mono font-bold uppercase text-muted-custom mb-1">Priorität</label>
-            <select id="ops-task-priority" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-primary-custom focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+            <label class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Priorität</label>
+            <select id="ops-task-priority" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
               <option value="0">P3 - Normal (0)</option>
               <option value="1">P2 - Hoch (1)</option>
               <option value="2">P1 - Dringend (2)</option>
@@ -8084,8 +8781,8 @@ ${logExcerpt}
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-mono font-bold uppercase text-muted-custom mb-1">Ziel-Team / Fachabteilung</label>
-            <select id="ops-task-team" onchange="onOpsTaskTeamChange(this.value)" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-primary-custom focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans">
+            <label class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Ziel-Team / Fachabteilung</label>
+            <select id="ops-task-team" onchange="onOpsTaskTeamChange(this.value)" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans">
               <option value="">(Alle Teams / Kein spezifisches Team)</option>
               <option value="team_strategy">1. Geschäftsführung, Strategie &amp; M&amp;A</option>
               <option value="team_tech">2. Software, Cloud &amp; System-Architektur</option>
@@ -8096,8 +8793,8 @@ ${logExcerpt}
             </select>
           </div>
           <div>
-            <label class="block text-xs font-mono font-bold uppercase text-muted-custom mb-1">Zugewiesener Agent</label>
-            <select id="ops-task-assignee" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-primary-custom focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans">
+            <label class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Zugewiesener Agent</label>
+            <select id="ops-task-assignee" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans">
               <option value="">(Nicht zugewiesen / Auto-Dispatch an Lead)</option>
             </select>
           </div>
@@ -8105,8 +8802,8 @@ ${logExcerpt}
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           <div>
-            <label class="block text-xs font-mono font-bold uppercase text-muted-custom mb-1">Modell-Route</label>
-            <select id="ops-task-model" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-primary-custom focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+            <label class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Modell-Route</label>
+            <select id="ops-task-model" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
               <option value="">OmniRoute Default (Auto)</option>
               <option value="deepseek/deepseek-chat">DeepSeek Chat (V3)</option>
               <option value="anthropic/claude-3-5-sonnet">Claude 3.5 Sonnet</option>
@@ -8117,14 +8814,14 @@ ${logExcerpt}
           <div class="p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 flex items-start gap-3">
             <input type="checkbox" id="ops-task-decompose" class="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer shrink-0" />
             <div class="text-xs">
-              <label for="ops-task-decompose" class="font-bold text-primary-custom cursor-pointer">Autonome Ziel-Dekomposition durch Chairman</label>
-              <p class="text-muted-custom text-[11px] mt-0.5">Hermes zerlegt das Ziel selbstständig in Subtasks und weist diese den Fachbereichen zu.</p>
+              <label for="ops-task-decompose" class="font-bold text-[var(--foreground)] cursor-pointer">Autonome Ziel-Dekomposition durch Chairman</label>
+              <p class="text-[var(--muted-foreground)] text-[11px] mt-0.5">Hermes zerlegt das Ziel selbstständig in Subtasks und weist diese den Fachbereichen zu.</p>
             </div>
           </div>
         </div>
 
         <div class="pt-3 border-t border-[var(--border)] flex justify-end gap-3">
-          <button type="button" onclick="closeNewTaskModal()" class="px-4 py-2 rounded-xl border border-[var(--border)] text-xs text-muted-custom hover:text-primary-custom transition cursor-pointer">
+          <button type="button" onclick="closeNewTaskModal()" class="px-4 py-2 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">
             Abbrechen
           </button>
           <button type="submit" id="ops-task-submit-btn" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition cursor-pointer shadow-md flex items-center gap-2">
@@ -8141,13 +8838,13 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <div id="ops-detail-modal" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeTaskDetailModal()"></div>
-    <div class="relative w-[760px] max-w-[95vw] max-h-[90vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans">
+    <div class="relative w-[760px] max-w-[95vw] max-h-[90vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal">
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]">
         <div class="flex items-center gap-3">
           <span id="ops-detail-badge-id" class="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">t-000000</span>
-          <h2 id="ops-detail-title" class="text-base font-bold text-primary-custom tracking-tight line-clamp-1">Task Details</h2>
+          <h2 id="ops-detail-title" class="text-base font-bold text-[var(--foreground)] tracking-tight line-clamp-1">Task Details</h2>
         </div>
-        <button onclick="closeTaskDetailModal()" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-muted-custom hover:text-primary-custom transition cursor-pointer">
+        <button onclick="closeTaskDetailModal()" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -8156,8 +8853,8 @@ ${logExcerpt}
         <!-- META BAR -->
         <div class="grid grid-cols-3 gap-3 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-xs">
           <div>
-            <span class="text-[10px] uppercase font-mono text-muted-custom block mb-1">Status</span>
-            <select id="ops-detail-status-select" onchange="updateCurrentTaskStatus(this.value)" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--card)] text-xs font-mono font-bold text-primary-custom focus:outline-none">
+            <span class="text-[10px] uppercase font-mono text-[var(--muted-foreground)] block mb-1">Status</span>
+            <select id="ops-detail-status-select" onchange="updateCurrentTaskStatus(this.value)" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--card)] text-xs font-mono font-bold text-[var(--foreground)] focus:outline-none">
               <option value="triage">Triage</option>
               <option value="todo">To-Do</option>
               <option value="ready">Ready</option>
@@ -8647,8 +9344,20 @@ ${logExcerpt}
       } catch (e) {}
     });
   }
-  const mo = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(sweep, 150); });
-  mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+  const mo = new MutationObserver((mutations) => {
+    let relevant = false;
+    for (let i = 0; i < mutations.length; i++) {
+      const t = mutations[i].target;
+      if (t && t.nodeType === 1 && t.id !== "system-time" && !t.classList?.contains("mc-stopwatch")) {
+        relevant = true;
+        break;
+      }
+    }
+    if (!relevant) return;
+    clearTimeout(timer);
+    timer = setTimeout(sweep, 300);
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
 
   // DELEGIERTER Klick: jeder .archon-filelink im GANZEN System
   document.addEventListener("click", (e) => {

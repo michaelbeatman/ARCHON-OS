@@ -78,6 +78,8 @@ LinkedIn-backup/
 test_logs.txt
 test_output.html
 *.png
+!static/img/**
+!assets/**
 run_pw*.js
 test_browser*.js
 test_dom.js

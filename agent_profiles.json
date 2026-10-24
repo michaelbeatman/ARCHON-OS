@@ -319,7 +319,8 @@
     ],
     "avatar": "/static/avatars/hermes_default_avatar.png",
     "provider": "omniroute",
-    "model": "auto/best-free",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": true
   },
@@ -642,7 +643,8 @@
     ],
     "avatar": "/static/avatars/custom_micha.png",
     "provider": "openrouter",
-    "model": "google/gemini-1.5-pro",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": true
   },
@@ -705,6 +707,7 @@
     "avatar": "/static/avatars/avatar_037.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -744,6 +747,7 @@
     "avatar": "/static/avatars/avatar_003.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -791,6 +795,7 @@
     "avatar": "/static/avatars/avatar_131.jpg?v=20260913_rev4",
     "provider": "openrouter",
     "model": "google/gemini-3.1-flash-image",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": true
   },
@@ -855,7 +860,8 @@
     ],
     "avatar": "/static/avatars/custom_executive_decision_architect.png",
     "provider": "openrouter",
-    "model": "mistralai/mistral-large-4-0",
+    "model": "z-ai/glm-5.3-flash",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": true
   },
@@ -894,6 +900,7 @@
     "avatar": "/static/avatars/avatar_001.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -940,6 +947,7 @@
     "avatar": "/static/avatars/avatar_009.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -975,6 +983,7 @@
     "avatar": "/static/avatars/avatar_106.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -1010,6 +1019,7 @@
     "avatar": "/static/avatars/avatar_150.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -1045,6 +1055,7 @@
     "avatar": "/static/avatars/avatar_104.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -1091,6 +1102,7 @@
     "avatar": "/static/avatars/avatar_021.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1122,6 +1134,7 @@
     "avatar": "/static/avatars/avatar_006.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1168,6 +1181,7 @@
     "avatar": "/static/avatars/avatar_163.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1227,8 +1241,9 @@
     "avatar": "/static/avatars/avatar_076.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
-    "is_favorite": true
+    "is_favorite": false
   },
   {
     "id": "ecommerce_shopify_lead",
@@ -1268,6 +1283,7 @@
     "avatar": "/static/avatars/avatar_007.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1312,6 +1328,7 @@
     "avatar": "/static/avatars/avatar_045.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1358,6 +1375,7 @@
     "avatar": "/static/avatars/avatar_013.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1406,6 +1424,7 @@
     "avatar": "/static/avatars/avatar_083.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1453,6 +1472,7 @@
     "avatar": "/static/avatars/avatar_137.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1499,6 +1519,7 @@
     "avatar": "/static/avatars/avatar_070.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1546,6 +1567,7 @@
     "avatar": "/static/avatars/avatar_023.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1605,6 +1627,7 @@
     "avatar": "/static/avatars/custom_labor_law_hr_governance.png",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": true
   },
@@ -1648,6 +1671,7 @@
     "avatar": "/static/avatars/avatar_018.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1692,6 +1716,7 @@
     "avatar": "/static/avatars/avatar_127.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1737,6 +1762,7 @@
     "avatar": "/static/avatars/avatar_024.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1795,6 +1821,7 @@
     "avatar": "/static/avatars/avatar_011.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -1856,6 +1883,7 @@
     "avatar": "/static/avatars/avatar_094.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -1916,6 +1944,7 @@
     "avatar": "/static/avatars/custom_construction_project_manager.png",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -1960,6 +1989,7 @@
     "avatar": "/static/avatars/avatar_105.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2003,6 +2033,7 @@
     "avatar": "/static/avatars/avatar_119.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2046,6 +2077,7 @@
     "avatar": "/static/avatars/avatar_130.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2104,6 +2136,7 @@
     "avatar": "/static/avatars/custom_realestate_concept_strategist.png",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -2147,6 +2180,7 @@
     "avatar": "/static/avatars/avatar_050.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2193,6 +2227,7 @@
     "avatar": "/static/avatars/avatar_068.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2237,6 +2272,7 @@
     "avatar": "/static/avatars/avatar_074.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2282,6 +2318,7 @@
     "avatar": "/static/avatars/avatar_039.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2327,6 +2364,7 @@
     "avatar": "/static/avatars/avatar_108.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -2372,6 +2410,7 @@
     "avatar": "/static/avatars/avatar_044.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2432,6 +2471,7 @@
     "avatar": "/static/avatars/avatar_080.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2476,6 +2516,7 @@
     "avatar": "/static/avatars/avatar_082.jpg?v=20260913_rev4",
     "provider": "openrouter",
     "model": "bytedance/seedance-2.5",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -2507,6 +2548,7 @@
     "avatar": "/static/avatars/avatar_006.jpg",
     "provider": "openrouter",
     "model": "xiaomi/mimo-v2.6-flash",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -2551,6 +2593,7 @@
     "avatar": "/static/avatars/avatar_028.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2598,6 +2641,7 @@
     "avatar": "/static/avatars/avatar_012.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2643,6 +2687,7 @@
     "avatar": "/static/avatars/avatar_008.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2704,6 +2749,7 @@
     "avatar": "/static/avatars/avatar_046.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2723,6 +2769,7 @@
     "avatar": "/static/avatars/avatar_004.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2767,6 +2814,7 @@
     "avatar": "/static/avatars/avatar_030.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2829,6 +2877,7 @@
     "avatar": "/static/avatars/custom_competitive_intelligence_scout.png",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": true
   },
@@ -2874,6 +2923,7 @@
     "avatar": "/static/avatars/avatar_034.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -2933,6 +2983,7 @@
     "avatar": "/static/avatars/custom_telegram_bot.png",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   },
@@ -2980,6 +3031,7 @@
     "avatar": "/static/avatars/avatar_027.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -3032,8 +3084,9 @@
     "avatar": "/static/avatars/custom_devops_cloud_sec_specialist.png",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
-    "is_favorite": true
+    "is_favorite": false
   },
   {
     "id": "enterprise_solutions_architect",
@@ -3082,6 +3135,7 @@
     "avatar": "/static/avatars/avatar_002.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -3149,6 +3203,7 @@
     "avatar": "/static/avatars/avatar_040.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -3205,6 +3260,7 @@
     "avatar": "/static/avatars/avatar_174.jpg",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "standby",
     "is_favorite": false
   },
@@ -3276,6 +3332,7 @@
     "avatar": "/static/avatars/avatar_020.jpg?v=20260913_rev4",
     "provider": "omniroute",
     "model": "auto/best-free",
+    "reasoning_level": "high",
     "status": "active",
     "is_favorite": false
   }

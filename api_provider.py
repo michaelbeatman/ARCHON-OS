@@ -263,7 +263,7 @@ def provider_api_url(pid: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 def read_active_config() -> Dict[str, Any]:
-    """Liest model.* + api_block aus der Hermes config.yaml (regex, robust)."""
+    """Liest model.* + api_block aus der Hermes config.yaml (YAML + indent-sicheres Fallback)."""
     info: Dict[str, Any] = {
         "model": None, "provider": None, "base_url": None, "api_mode": None,
         "path": CONFIG_PATH,
@@ -276,16 +276,38 @@ def read_active_config() -> Dict[str, Any]:
     except Exception:
         return info
 
-    # model-block: model: {default, provider, base_url, api_mode}
+    # 1. Primärer YAML-Parser (verhindert Fehl-Treffer in späteren Blöcken wie plugins.entries)
+    try:
+        import yaml
+        parsed = yaml.safe_load(content) or {}
+        if isinstance(parsed, dict):
+            m_obj = parsed.get("model")
+            if isinstance(m_obj, dict):
+                info["model"] = m_obj.get("default") or m_obj.get("name")
+                info["provider"] = m_obj.get("provider")
+                info["base_url"] = m_obj.get("base_url")
+                info["api_mode"] = m_obj.get("api_mode")
+            elif isinstance(m_obj, str) and m_obj.strip():
+                info["model"] = m_obj.strip()
+            for topkey in ("provider", "base_url"):
+                if not info.get(topkey) and isinstance(parsed.get(topkey), str):
+                    info[topkey] = parsed.get(topkey)
+            if info.get("model"):
+                return info
+    except Exception:
+        pass
+
+    # 2. Indent-sicherer Regex-Fallback (stoppt beim nächsten Top-Level-Key ohne Einrückung)
     m = re.search(r"^model:\s*$", content, re.MULTILINE)
     if m:
         block = content[m.end():]
-        block = block.split("\n\n")[0]
         for line in block.splitlines():
-            l = line.strip()
-            if not l or l.startswith("#"):
+            if not line.strip() or line.strip().startswith("#"):
                 continue
-            km = re.match(r"^(\w+)\s*:\s*(.*)$", l)
+            if not line.startswith((" ", "\t")):
+                break
+            l = line.strip()
+            km = re.match(r"^([\w-]+)\s*:\s*(.*)$", l)
             if km:
                 k, v = km.group(1), km.group(2).strip().strip(chr(39) + chr(34)).strip()
                 if not v:
@@ -294,9 +316,6 @@ def read_active_config() -> Dict[str, Any]:
                     info["model"] = v
                 elif k in ("provider", "base_url", "api_mode"):
                     info[k] = v
-            else:
-                # model: <model> (inline) — Fallback
-                info["model"] = l
     # top-level Fallbacks (wenn model-Block fehlt)
     if info["model"] is None:
         tvm = _yaml_top_val(content, "model")

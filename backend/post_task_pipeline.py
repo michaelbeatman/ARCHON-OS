@@ -72,16 +72,20 @@ def get_smtp_config() -> Dict[str, Any]:
     ]
     for db in db_candidates:
         if db.exists():
+            conn = None
             try:
-                conn = sqlite3.connect(str(db))
+                conn = sqlite3.connect(str(db), timeout=10.0)
+                conn.execute("PRAGMA busy_timeout=5000;")
                 cur = conn.cursor()
                 cur.execute("SELECT value FROM kv_store WHERE key = 'smtp_config'")
                 row = cur.fetchone()
-                conn.close()
                 if row and row[0]:
                     return json.loads(row[0])
             except Exception:
                 pass
+            finally:
+                if conn:
+                    conn.close()
     return {
         "enabled": False,
         "auto_send": False,
@@ -104,16 +108,20 @@ def save_smtp_config(cfg: Dict[str, Any]) -> bool:
     ]
     saved = False
     for db in db_candidates:
+        conn = None
         try:
             db.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(str(db))
+            conn = sqlite3.connect(str(db), timeout=10.0)
+            conn.execute("PRAGMA busy_timeout=5000;")
             conn.execute("CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("INSERT OR REPLACE INTO kv_store (key, value, updated_at) VALUES ('smtp_config', ?, CURRENT_TIMESTAMP)", (val,))
             conn.commit()
-            conn.close()
             saved = True
         except Exception as e:
             print(f"[PostTaskPipeline] Fehler beim Speichern der SMTP-Config in {db}: {e}")
+        finally:
+            if conn:
+                conn.close()
     return saved
 
 
@@ -407,7 +415,13 @@ Verknüpftes Projekt:
             db_path=str(HERMES_DIR / "agentic_memory.db"),
             vault_path=str(VAULT_DIR)
         )
-        res = bridge.record_learning(
+        # Autonomes Fact-Harvesting & Deduplikation aktivieren
+        corpus_to_scan = f"{raw_title}\n{summary}\n{detailed_note}"
+        try:
+            bridge.harvest_facts_and_preferences(corpus_to_scan, agent_id=agent_id)
+        except Exception:
+            pass
+        res = bridge.deduplicate_and_record_learning(
             agent_id=agent_id,
             category="Projekt-Execution",
             summary=lesson_summary,
@@ -417,16 +431,20 @@ Verknüpftes Projekt:
         # Auch in lokaler DB spiegeln
         local_db = BASE_DIR / "data" / "agentic_memory.db"
         if local_db.exists():
+            conn = None
             try:
-                conn = sqlite3.connect(str(local_db))
+                conn = sqlite3.connect(str(local_db), timeout=10.0)
+                conn.execute("PRAGMA busy_timeout=5000;")
                 conn.execute("""
                     INSERT INTO learnings (agent_id, category, summary, obsidian_link)
                     VALUES (?, ?, ?, ?)
                 """, (agent_id, "Projekt-Execution", lesson_summary, res.get("obsidian_link")))
                 conn.commit()
-                conn.close()
             except Exception:
                 pass
+            finally:
+                if conn:
+                    conn.close()
 
         print(f"[PostTaskPipeline] Learning erfasst: {res.get('obsidian_link')}")
         return res

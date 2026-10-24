@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-16T18:05:56.923351",
+  "updated_at": "2026-10-23T10:49:51.692280",
   "nodes": [
     {
       "id": "executive_decision_architect",
@@ -11,7 +11,7 @@
       "role": "1. Strategie, Führung & Lebensplanung",
       "category": "1. Strategie, Führung & Lebensplanung",
       "avatar": "/static/avatars/custom_executive_decision_architect.png",
-      "model": "mistralai/mistral-large-4-0",
+      "model": "z-ai/glm-5.3-flash",
       "active_tasks": 0,
       "status": "active",
       "person_name": "Robert",
@@ -755,7 +755,7 @@
     },
     {
       "id": "micha",
-      "x": 380,
+      "x": 660,
       "y": 20,
       "tier": 1,
       "team_id": "team_strategy",
@@ -763,7 +763,7 @@
       "role": "1. Strategie, Führung & Lebensplanung",
       "category": "1. Strategie, Führung & Lebensplanung",
       "avatar": "/static/avatars/custom_micha.png",
-      "model": "google/gemini-1.5-pro",
+      "model": "deepseek/deepseek-v4.1-flash-1017",
       "active_tasks": 0,
       "status": "active",
       "person_name": "Michael Keller",
@@ -779,7 +779,7 @@
       "role": "Hermes Orchestrator (Root)",
       "category": "1. Strategie, Führung & Lebensplanung",
       "avatar": "/static/avatars/hermes_default_avatar.png",
-      "model": "auto/best-free",
+      "model": "deepseek/deepseek-v4.1-flash-1017",
       "active_tasks": 0,
       "status": "active",
       "person_name": "Default",
@@ -883,7 +883,7 @@
     },
     {
       "id": "telegram_bot",
-      "x": 200,
+      "x": 340,
       "y": 20,
       "tier": 1,
       "team_id": "team_growth",

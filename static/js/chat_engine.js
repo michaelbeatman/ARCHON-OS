@@ -9,7 +9,8 @@
     let currentMasterChatMode = "direct"; // 'direct' | 'mission'
     let currentMasterChatProvider = "openrouter";
     let currentMasterChatModel = "meta-llama/llama-3.3-70b-instruct";
-    let currentMasterChatAttachment = null;
+    let currentMasterChatAttachments = [];
+    window.currentMasterChatAttachments = currentMasterChatAttachments;
     let isMasterChatDictating = false;
     let masterChatDictationRecognition = null;
     let isMasterChatGenerating = false;
@@ -235,10 +236,22 @@
       }
       const costEl = document.getElementById("master-chat-model-cost");
       if (costEl && currentMasterChatModel) {
-        if (currentMasterChatProvider === "openrouter" && masterChatModelPrices[currentMasterChatModel]) {
-          const p = masterChatModelPrices[currentMasterChatModel];
-          costEl.innerHTML = `Input: <span class="text-emerald-400">$${(p.prompt_1m||0).toFixed(2)}/1M</span> | Output: <span class="text-amber-400">$${(p.completion_1m||0).toFixed(2)}/1M</span>`;
+        let info = null;
+        if (typeof findModelPriceInfo === "function") {
+          info = findModelPriceInfo(currentMasterChatModel);
+        } else if (masterChatModelPrices && masterChatModelPrices[currentMasterChatModel]) {
+          info = { p: masterChatModelPrices[currentMasterChatModel], approx: false };
+        }
+        if (info && info.p) {
+          const pre = info.approx ? "≈ " : "";
+          const fmtPrice = typeof formatPricePer1M === "function" ? formatPricePer1M : (v => (v || 0).toFixed(2));
+          const inP = fmtPrice(info.p.prompt_1m);
+          const outP = fmtPrice(info.p.completion_1m);
+          costEl.innerHTML = `${pre}Input: <span class="text-emerald-400">$${inP}</span> | Output: <span class="text-amber-400">$${outP}</span> /1M`;
           costEl.classList.remove("hidden");
+          costEl.title = info.approx
+            ? `Preis des passenden Modells (${info.matched}) — Input: $${inP} / Output: $${outP} pro 1M Tokens`
+            : `Input: $${inP} / Output: $${outP} pro 1 Million Tokens (live von OpenRouter)`;
         } else {
           costEl.classList.add("hidden");
         }
@@ -382,12 +395,24 @@
           body: JSON.stringify({ title: newTitle.trim() })
         });
         if (res.ok) {
+          const finalTitle = newTitle.trim();
           if (typeof loadMasterChatSessions === "function") {
             await loadMasterChatSessions();
-          await loadMasterChatPrices();
+            await loadMasterChatPrices();
           }
-          if (typeof updateAgentChatSessionsDropdown === "function") {
+          if (typeof loadAgentTabChatSessions === "function") {
+            await loadAgentTabChatSessions();
+          } else if (typeof updateAgentChatSessionsDropdown === "function") {
             await updateAgentChatSessionsDropdown();
+          }
+          // Auch das lokale Select-Element im Agentenkader direkt aktualisieren
+          const agentSelect = document.getElementById("agent-chat-session-select");
+          if (agentSelect && agentSelect.value === sessionId) {
+            const opt = agentSelect.options[agentSelect.selectedIndex];
+            if (opt) {
+              const msgsPart = opt.text.includes("(") ? ` (${opt.text.split("(").slice(1).join("(")}` : "";
+              opt.text = `${finalTitle}${msgsPart}`;
+            }
           }
         } else {
           const err = await res.json().catch(() => ({}));
@@ -891,44 +916,82 @@
       }
     }
     // 10. Quick Chat Datei-Anhang Handling & Screen Capture
-    function setMasterChatAttachmentFile(file) {
-      if (!file) return;
-      currentMasterChatAttachment = {
-        file: file,
-        name: file.name || "screenshot.png",
-        size: (file.size / 1024).toFixed(1) + " KB",
-        type: file.type || "image/png"
-      };
-      const bar = document.getElementById("master-chat-attachment-bar");
-      const nameEl = document.getElementById("master-chat-attachment-name");
-      const sizeEl = document.getElementById("master-chat-attachment-size");
-      if (bar && nameEl) {
-        nameEl.innerText = currentMasterChatAttachment.name;
-        if (sizeEl) sizeEl.innerText = `(${currentMasterChatAttachment.size})`;
-        bar.classList.remove("hidden");
-        if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+    function addMasterChatAttachmentFiles(files) {
+      if (!files || !files.length) return;
+      const fileList = Array.from(files);
+      const remaining = 5 - currentMasterChatAttachments.length;
+      if (remaining <= 0) {
+        alert("Maximal 5 Anhänge gleichzeitig erlaubt.");
+        return;
       }
+      const toAdd = fileList.slice(0, remaining);
+      if (fileList.length > remaining) {
+        alert(`Nur ${remaining} weitere Datei(en) hinzugefügt (Limit: 5).`);
+      }
+      toAdd.forEach(file => {
+        currentMasterChatAttachments.push({
+          file: file,
+          name: file.name || "datei",
+          size: (file.size / 1024).toFixed(1) + " KB",
+          type: file.type || "application/octet-stream"
+        });
+      });
+      renderMasterChatAttachments();
+    }
+    function renderMasterChatAttachments() {
+      const bar = document.getElementById("master-chat-attachment-bar");
+      if (!bar) return;
+      if (!currentMasterChatAttachments.length) {
+        bar.classList.add("hidden");
+        bar.innerHTML = "";
+        return;
+      }
+      bar.classList.remove("hidden");
+      bar.innerHTML = `
+        <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          <span class="text-[10px] font-mono text-[var(--muted-foreground)] uppercase font-bold shrink-0">Anhänge (${currentMasterChatAttachments.length}/5):</span>
+          ${currentMasterChatAttachments.map((att, idx) => `
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--card)] border border-[var(--border)] text-[10.5px] font-mono text-[var(--foreground)] shadow-2xs">
+              <i data-lucide="file" class="w-3 h-3 text-emerald-500 shrink-0"></i>
+              <span class="truncate max-w-[130px] font-medium" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</span>
+              <span class="text-[9px] text-[var(--muted-foreground)] font-normal">${att.size}</span>
+              <button type="button" onclick="removeMasterChatAttachment(${idx})" class="text-[var(--muted-foreground)] hover:text-red-500 transition p-0.5 cursor-pointer" title="Entfernen">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+        <button type="button" onclick="removeMasterChatAttachment()" class="text-[10px] font-mono text-[var(--muted-foreground)] hover:text-red-500 transition px-1.5 py-0.5 rounded cursor-pointer shrink-0" title="Alle Anhänge entfernen">
+          Alle löschen
+        </button>
+      `;
+      if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
     }
     function handleMasterChatFileSelected(event) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      setMasterChatAttachmentFile(file);
+      const files = event.target.files;
+      if (!files || !files.length) return;
+      addMasterChatAttachmentFiles(files);
     }
     function handleMasterChatInputPaste(event) {
       const items = (event.clipboardData || window.clipboardData)?.items;
       if (!items) return;
+      const foundFiles = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        if (item.kind === 'file' && item.type.startsWith('image/')) {
+        if (item.kind === 'file') {
           const blob = item.getAsFile();
           if (blob) {
-            event.preventDefault();
             const ts = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
-            const file = new File([blob], `pasted_image_${ts}.png`, { type: blob.type || "image/png" });
-            setMasterChatAttachmentFile(file);
-            return;
+            const isImg = item.type.startsWith('image/');
+            const ext = isImg ? "png" : "bin";
+            const file = new File([blob], `pasted_${ts}_${i}.${ext}`, { type: blob.type || (isImg ? "image/png" : "application/octet-stream") });
+            foundFiles.push(file);
           }
         }
+      }
+      if (foundFiles.length > 0) {
+        event.preventDefault();
+        addMasterChatAttachmentFiles(foundFiles);
       }
     }
     async function captureScreenForMasterChat() {
@@ -956,7 +1019,7 @@
           if (!blob) return;
           const ts = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
           const file = new File([blob], `screen_capture_${ts}.png`, { type: "image/png" });
-          setMasterChatAttachmentFile(file);
+          addMasterChatAttachmentFiles([file]);
         }, "image/png");
       } catch (err) {
         if (err.name !== "NotAllowedError") {
@@ -964,12 +1027,15 @@
         }
       }
     }
-    function removeMasterChatAttachment() {
-      currentMasterChatAttachment = null;
+    function removeMasterChatAttachment(idx) {
+      if (typeof idx === "number") {
+        currentMasterChatAttachments.splice(idx, 1);
+      } else {
+        currentMasterChatAttachments = [];
+      }
       const fileInput = document.getElementById("master-chat-file-input");
       if (fileInput) fileInput.value = "";
-      const bar = document.getElementById("master-chat-attachment-bar");
-      if (bar) bar.classList.add("hidden");
+      renderMasterChatAttachments();
     }
 
 
@@ -988,3 +1054,11 @@
         inputEl.focus();
       }
     };
+
+    function onMasterChatReasoningChange(val) {
+      if (currentMasterChatProfileId && Array.isArray(masterChatProfiles)) {
+        const prof = masterChatProfiles.find(p => p.id === currentMasterChatProfileId);
+        if (prof) prof.reasoning_level = val;
+      }
+    }
+    window.onMasterChatReasoningChange = onMasterChatReasoningChange;

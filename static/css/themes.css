@@ -214,6 +214,7 @@ div#view-showroom > div.grid > div.rounded-lg {
   box-shadow: none !important;
 }
 
+div#ops-kanban-columns-container > .os-kanban-col,
 div#ops-kanban-columns-container > div.w-80 {
   flex: 1 1 0% !important;
   width: auto !important;
@@ -320,12 +321,14 @@ div.prof-panel-card > div.flex > div.prof-box-card {
   background-color: #ffffff !important;
 }
 
+div#ops-kanban-columns-container > .os-kanban-col > div.flex-1,
 div#ops-kanban-columns-container > div.w-80 > div.flex-1 {
   background-color: transparent !important;
   box-shadow: none !important;
   border-width: 0px !important;
 }
 
+div#ops-kanban-columns-container > .os-kanban-col > div:first-child,
 div#ops-kanban-columns-container > div.w-80 > div.p-3\.5 {
   background-color: #4a4a4a !important;
   color: #ffffff !important;
@@ -1475,4 +1478,98 @@ div.p-3 > div.flex > button.px-2 {
       height: 1px;
       background: var(--border);
       margin: 1.25rem 0;
+    }
+
+    /* ==========================================================================
+       UNIVERSELLE MULDE (INNER SHADOW) FÜR ALLE TEXT- & AUSWAHLFELDER
+       Gilt für alle Eingabefelder (Text, Zahl, Suche, Zeit etc.) sowie Pulldowns/Selects
+       ========================================================================== */
+    input[type="text"],
+    input[type="number"],
+    input[type="password"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="date"],
+    input[type="time"],
+    input[type="datetime-local"],
+    input:not([type]),
+    textarea:not(#master-chat-input):not(#agent-tab-chat-input),
+    select,
+    .shadcn-input,
+    [contenteditable="true"],
+    #master-chat-input-card,
+    #agent-tab-input-card,
+    #chat-input-container {
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.10), inset 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .dark input[type="text"],
+    .dark input[type="number"],
+    .dark input[type="password"],
+    .dark input[type="search"],
+    .dark input[type="email"],
+    .dark input[type="url"],
+    .dark input[type="tel"],
+    .dark input[type="date"],
+    .dark input[type="time"],
+    .dark input[type="datetime-local"],
+    .dark input:not([type]),
+    .dark textarea:not(#master-chat-input):not(#agent-tab-chat-input),
+    .dark select,
+    .dark .shadcn-input,
+    .dark [contenteditable="true"],
+    .dark #master-chat-input-card,
+    .dark #agent-tab-input-card,
+    .dark #chat-input-container {
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35), inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    /* Fokus-Zustand: Mulde bleibt erhalten + Akzent-Fokusring */
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    input[type="password"]:focus,
+    input[type="search"]:focus,
+    input[type="email"]:focus,
+    input[type="url"]:focus,
+    input[type="tel"]:focus,
+    input[type="date"]:focus,
+    input[type="time"]:focus,
+    input[type="datetime-local"]:focus,
+    input:not([type]):focus,
+    textarea:not(#master-chat-input):not(#agent-tab-chat-input):focus,
+    select:focus,
+    .shadcn-input:focus,
+    [contenteditable="true"]:focus,
+    #master-chat-input-card:focus-within,
+    #agent-tab-input-card:focus-within,
+    #chat-input-container:focus-within {
+      outline: none !important;
+      border-color: var(--primary, #6366f1) !important;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12), 0 0 0 1.5px var(--primary, #6366f1) !important;
+    }
+
+    .dark input[type="text"]:focus,
+    .dark input[type="number"]:focus,
+    .dark input[type="password"]:focus,
+    .dark input[type="search"]:focus,
+    .dark input[type="email"]:focus,
+    .dark input[type="url"]:focus,
+    .dark input[type="tel"]:focus,
+    .dark input[type="date"]:focus,
+    .dark input[type="time"]:focus,
+    .dark input[type="datetime-local"]:focus,
+    .dark input:not([type]):focus,
+    .dark textarea:not(#master-chat-input):not(#agent-tab-chat-input):focus,
+    .dark select:focus,
+    .dark .shadcn-input:focus,
+    .dark [contenteditable="true"]:focus,
+    .dark #master-chat-input-card:focus-within,
+    .dark #agent-tab-input-card:focus-within,
+    .dark #chat-input-container:focus-within {
+      outline: none !important;
+      border-color: var(--primary, #6366f1) !important;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 1.5px var(--primary, #6366f1) !important;
     }

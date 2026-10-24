@@ -36,6 +36,31 @@
       await refreshResearchHistory();
       await loadResearchAgentsAndModels();
     }
+    
+    function onResearchAgentChanged(agentVal) {
+      if (!agentVal) return;
+      const profiles = window.hermesProfilesData || [];
+      const found = profiles.find(p => p.id === agentVal || p.name === agentVal || p.person_name === agentVal);
+      if (found && found.model) {
+        const modelSelect = document.getElementById("research-model-select");
+        if (modelSelect) {
+          let exists = Array.from(modelSelect.options).some(o => o.value === found.model);
+          if (!exists) {
+            const opt = document.createElement("option");
+            opt.value = found.model;
+            opt.textContent = typeof window.formatModelOptionWithPrice === "function"
+              ? window.formatModelOptionWithPrice(found.model, found.model)
+              : found.model;
+            modelSelect.appendChild(opt);
+          }
+          modelSelect.value = found.model;
+          onResearchModelChanged(found.model);
+        }
+      }
+    }
+    window.onResearchAgentChanged = onResearchAgentChanged;
+    window.onResearchModelChanged = onResearchModelChanged;
+
     function onResearchModelChanged(val) {
       const statModel = document.getElementById("research-stat-model");
       if (statModel) statModel.innerText = val;

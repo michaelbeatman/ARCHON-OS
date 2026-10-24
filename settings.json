@@ -1,0 +1,237 @@
+{
+  "inbox_watcher": {
+    "enabled": true,
+    "watch_folder": "C:\\.Antigravity-projekte\\AgenticOS-2026\\agent_workspace\\test_inbox_watch",
+    "processed_folder": "C:\\.Antigravity-projekte\\AgenticOS-2026\\agent_workspace\\test_inbox_watch\\processed",
+    "interval_seconds": 5,
+    "standup_enabled": true,
+    "standup_time": "08:00"
+  },
+  "concurrency": {
+    "max_concurrent_agents": 5,
+    "queue_timeout_seconds": 60,
+    "auto_deadlock_recovery": true,
+    "stagnation_threshold_seconds": 45
+  },
+  "circuit_breaker": {
+    "loop_detection_enabled": true,
+    "max_identical_turns": 5,
+    "jaccard_similarity_threshold": 0.9,
+    "max_steps_per_task": 60,
+    "budget_downgrade_threshold_pct": 80,
+    "token_clipper_enabled": true
+  },
+  "task_self_healer": {
+    "enabled": true,
+    "auto_git_rollback": true,
+    "max_attempts": 3,
+    "escalation_model": "deepseek/deepseek-chat"
+  },
+  "ephemeral_sandbox": {
+    "enabled": true,
+    "memory_limit_mb": 512,
+    "cpu_limit": 1,
+    "timeout_seconds": 180,
+    "network_enabled": false
+  },
+  "time_travel_snapshots": {
+    "tracing_enabled": true,
+    "auto_pre_write_snapshots": true,
+    "max_snapshots": 50,
+    "max_trace_steps": 100
+  },
+  "consensus_gate": {
+    "enabled": true,
+    "min_priority": 3,
+    "mode": "tri_agent_council",
+    "majority_rule": "two_thirds",
+    "default_model": "deepseek/deepseek-chat"
+  },
+  "war_room": {
+    "enabled": true,
+    "auto_pre_mortem": false,
+    "block_threshold": "HIGH",
+    "default_model": "deepseek/deepseek-chat"
+  },
+  "sla_contracts": {
+    "enabled": true,
+    "min_content_length": 100,
+    "max_turnaround_minutes": 60,
+    "auto_reject_incomplete": true
+  },
+  "fleet_and_hygiene": {
+    "auto_container_restart": true,
+    "secret_masking_enabled": true,
+    "visual_browser_audit": true,
+    "db_backup_keep_days": 7
+  },
+  "memory_consolidation": {
+    "enabled": true,
+    "schedule_time": "03:00",
+    "retention_days": 14,
+    "archive_threshold_similarity": 0.92,
+    "auto_prune_temporary_logs": true,
+    "last_run": "2026-10-24 07:41:00",
+    "last_pruned_records_count": 0
+  },
+  "semantic_cache": {
+    "enabled": true,
+    "similarity_threshold": 0.95,
+    "ttl_hours": 24,
+    "max_entries": 500
+  },
+  "map_reduce": {
+    "enabled": true,
+    "max_parallel_workers": 4,
+    "chunk_timeout_seconds": 30,
+    "auto_fan_out_min_items": 3
+  },
+  "speculative_hedger": {
+    "enabled": true,
+    "hedge_delay_seconds": 2.5,
+    "fallback_model": "deepseek/deepseek-chat",
+    "max_hedged_calls_per_minute": 20
+  },
+  "context_compactor": {
+    "enabled": true,
+    "trigger_token_threshold": 6000,
+    "keep_recent_turns": 20,
+    "target_compression_ratio": 0.3
+  },
+  "write_batcher": {
+    "enabled": true,
+    "batch_size": 25,
+    "flush_interval_seconds": 2,
+    "max_queue_size": 1000
+  },
+  "hybrid_search": {
+    "enabled": true,
+    "rrf_k": 60,
+    "bm25_weight": 0.5,
+    "vector_weight": 0.5,
+    "top_k": 5
+  },
+  "knowledge_graph": {
+    "enabled": true,
+    "auto_extract_triples": true,
+    "max_traversal_hops": 2,
+    "min_confidence": 0.7
+  },
+  "corrective_rag": {
+    "enabled": true,
+    "relevance_threshold": 0.45,
+    "auto_query_rewrite": true,
+    "max_rewrite_attempts": 2,
+    "min_relevance_score": 0.45
+  },
+  "core_memory_tier": {
+    "enabled": true,
+    "max_pinned_blocks": 10,
+    "max_chars_per_block": 800,
+    "auto_inject_into_system_prompt": true
+  },
+  "citation_pinning": {
+    "enabled": true,
+    "require_inline_citations": true,
+    "min_citation_coverage_pct": 60,
+    "auto_append_sources_footer": true
+  },
+  "structured_outputs": {
+    "enabled": true,
+    "auto_repair_json": true,
+    "strict_schema_validation": true,
+    "max_repair_attempts": 2
+  },
+  "durable_checkpointing": {
+    "enabled": true,
+    "checkpoint_every_n_steps": 1,
+    "auto_resume_on_boot": true,
+    "retention_days": 14
+  },
+  "idempotency_guard": {
+    "enabled": true,
+    "ttl_hours": 24,
+    "block_duplicate_side_effects": true
+  },
+  "dry_run_shadow": {
+    "enabled": false,
+    "intercept_write_tools": true,
+    "intercept_external_apis": true,
+    "log_simulated_diffs": true
+  },
+  "dead_letter_queue": {
+    "enabled": true,
+    "max_replay_retries": 3,
+    "backoff_base_seconds": 10,
+    "auto_replay_enabled": true
+  },
+  "pii_scrubber": {
+    "enabled": true,
+    "scrub_emails": true,
+    "scrub_phones": true,
+    "scrub_ibans": true,
+    "auto_rehydrate_response": true
+  },
+  "egress_firewall": {
+    "enabled": true,
+    "default_policy": "allowlist_only",
+    "allowed_domains": [
+      "openrouter.ai",
+      "api.openai.com",
+      "generativelanguage.googleapis.com",
+      "api.anthropic.com",
+      "api.groq.com",
+      "github.com",
+      "localhost",
+      "127.0.0.1"
+    ],
+    "block_raw_ip_egress": true
+  },
+  "agent_rbac_jail": {
+    "enabled": true,
+    "enforce_path_jail": true,
+    "block_dotenv_access": true,
+    "block_system_dirs": true
+  },
+  "output_policy_linter": {
+    "enabled": true,
+    "strip_ai_slop_phrases": true,
+    "block_destructive_commands": true,
+    "auto_clean_output": true
+  },
+  "execution_receipts": {
+    "enabled": true,
+    "hash_algorithm": "sha256",
+    "chain_receipts": true,
+    "include_cost_breakdown": true
+  },
+  "prompt_optimizer": {
+    "enabled": true,
+    "min_failures_to_trigger": 3,
+    "auto_apply_patches": false,
+    "max_rules_appended": 5
+  },
+  "eval_regression_suite": {
+    "enabled": true,
+    "min_pass_rate_pct": 90,
+    "block_deploy_on_regression": true
+  },
+  "bandit_router": {
+    "enabled": true,
+    "exploration_epsilon": 0.15,
+    "latency_weight": 0.4,
+    "success_weight": 0.6
+  },
+  "ephemeral_teams": {
+    "enabled": true,
+    "max_team_size": 4,
+    "auto_dissolve_on_complete": true
+  },
+  "resource_backpressure": {
+    "enabled": true,
+    "max_cpu_pct": 85,
+    "max_ram_pct": 85,
+    "min_free_disk_gb": 2,
+    "throttle_action": "pause_low_priority"
+  }
+}

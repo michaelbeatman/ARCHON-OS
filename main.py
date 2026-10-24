@@ -43,8 +43,9 @@ app.add_middleware(
 @app.middleware("http")
 async def add_no_cache_for_avatars(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith("/static/avatars/"):
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    path = request.url.path
+    if path.startswith("/static/avatars/") or path.startswith("/static/js/") or path == "/" or path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
@@ -985,18 +986,45 @@ class BoardroomRequest(BaseModel):
     chairman_id: Optional[str] = "orchestrator"
     framework: str = "Steffi Kieffer Boardroom"
     slots: Optional[List[BoardroomSlotItem]] = None
+    reasoning_level: Optional[str] = "profile"
 
 def _prepare_boardroom_agents(req: BoardroomRequest):
     roles = load_roles()
     roles_map = {r["id"]: r for r in roles}
+    try:
+        hermes_profiles = api_get_hermes_profiles()
+        for hp in hermes_profiles:
+            pid = hp.get("id")
+            if pid:
+                roles_map[pid] = {
+                    "id": pid,
+                    "name": hp.get("name", pid),
+                    "role": hp.get("role", "Expert"),
+                    "prompt": hp.get("system_prompt") or hp.get("prompt") or "",
+                    "model": hp.get("model") or "deepseek/deepseek-chat",
+                    "provider": hp.get("provider") or "openrouter",
+                    "reasoning_level": hp.get("reasoning_level") or "medium"
+                }
+    except Exception:
+        pass
     
+    override_reasoning = (req.reasoning_level or "profile").strip().lower()
+
+    def _resolve_reasoning(prof_dict: dict) -> str:
+        if override_reasoning and override_reasoning != "profile":
+            return override_reasoning
+        return prof_dict.get("reasoning_level") or "medium"
+
     # Chairman Profil
     chairman_id = req.chairman_id or "orchestrator"
     chairman_prof = roles_map.get(chairman_id, {
         "id": chairman_id,
         "name": "Orchestrator & System-Architekt",
         "role": "Moderator & Chairman",
-        "prompt": "Du bist der Moderator und Chairman des AI Boardrooms."
+        "prompt": "Du bist der Moderator und Chairman des AI Boardrooms.",
+        "model": "deepseek/deepseek-chat",
+        "provider": "openrouter",
+        "reasoning_level": "medium"
     })
     
     chairman_agent = {
@@ -1004,6 +1032,9 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
         "name": chairman_prof.get("name", "Chairman"),
         "role": "Moderator & Chairman",
         "prompt": chairman_prof.get("prompt", ""),
+        "model": chairman_prof.get("model") or "deepseek/deepseek-chat",
+        "provider": chairman_prof.get("provider") or "openrouter",
+        "reasoning_level": _resolve_reasoning(chairman_prof),
         "active": True
     }
     
@@ -1019,16 +1050,23 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
                 "name": prof.get("name", p_id),
                 "role": r_name,
                 "prompt": prof.get("prompt", ""),
+                "model": prof.get("model") or "deepseek/deepseek-chat",
+                "provider": prof.get("provider") or "openrouter",
+                "reasoning_level": _resolve_reasoning(prof),
                 "active": True
             })
     else:
         # Standard-Fallback aus Rollen
         for r in roles[1:4]:
+            prof = roles_map.get(r["id"], r)
             participant_agents.append({
                 "id": r["id"],
-                "name": r["name"],
-                "role": r.get("name", "Experte"),
-                "prompt": r.get("prompt", ""),
+                "name": prof.get("name", r["name"]),
+                "role": prof.get("role", r.get("name", "Experte")),
+                "prompt": prof.get("prompt", r.get("prompt", "")),
+                "model": prof.get("model") or "deepseek/deepseek-chat",
+                "provider": prof.get("provider") or "openrouter",
+                "reasoning_level": _resolve_reasoning(prof),
                 "active": True
             })
             
@@ -1434,6 +1472,36 @@ def api_save_gateway_config_endpoint(payload: Dict = Body(...)):
     _save_gateway_config(cfg)
     return cfg
 
+@app.post("/api/v1/gateway/autostart")
+def api_gateway_autostart(payload: Dict = Body(...)):
+    profile_id = str(payload.get("profile_id", "")).strip()
+    if not profile_id:
+        raise HTTPException(status_code=400, detail="profile_id required")
+    enable = bool(payload.get("autostart", False))
+    cfg = _load_gateway_config()
+    cfg.setdefault("autostart", {})
+    cfg["autostart"][profile_id] = enable
+    _save_gateway_config(cfg)
+    return {"ok": True, "profile_id": profile_id, "autostart": enable}
+
+@app.post("/api/v1/gateway/stop-all")
+async def api_gateway_stop_all():
+    cfg = _load_gateway_config()
+    active_map = cfg.get("active_gateways", {})
+    stopped = []
+    for pid, is_active in list(active_map.items()):
+        if pid == "default" or not is_active:
+            continue
+        cfg["active_gateways"][pid] = False
+        _update_profile_status(pid, "standby")
+        try:
+            _run_docker_exec(["hermes", "--profile", pid, "gateway", "stop"])
+        except Exception:
+            pass
+        stopped.append(pid)
+    _save_gateway_config(cfg)
+    return {"ok": True, "stopped": stopped}
+
 # Background idle-stop task
 _idle_stop_running = False
 
@@ -1492,6 +1560,11 @@ async def _email_imap_background_loop():
 async def _start_gateway_idle_loop():
     asyncio.create_task(_gateway_idle_stop_loop())
     asyncio.create_task(_email_imap_background_loop())
+    try:
+        from backend.inbox_watcher import inbox_watcher_background_loop
+        asyncio.create_task(inbox_watcher_background_loop())
+    except Exception as e:
+        print(f"[Startup] Inbox Watcher init notice: {e}")
 
 # =====================================================================
 # QUICKCHAT — Persistent Per-Profile Sessions
@@ -2921,7 +2994,21 @@ def get_primary_hermes_profiles_dir() -> str:
 
 _HERMES_PROFILES_CACHE = None
 _HERMES_PROFILES_CACHE_TIME = 0.0
+_HERMES_PROFILES_CACHE_MTIME = 0.0
 _HERMES_PROFILES_CACHE_TTL = 300.0
+
+def _compute_profiles_mtime() -> float:
+    max_m = 0.0
+    try:
+        pdir = get_primary_hermes_profiles_dir()
+        if os.path.exists(pdir):
+            max_m = max(max_m, os.path.getmtime(pdir))
+        ap_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
+        if os.path.exists(ap_file):
+            max_m = max(max_m, os.path.getmtime(ap_file))
+    except Exception:
+        pass
+    return max_m
 
 try:
     _init_pfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
@@ -2936,15 +3023,21 @@ except Exception as _e_init:
     logger.warning(f"[Profiles] Fast pre-warm warning: {_e_init}")
 
 def invalidate_hermes_profiles_cache():
-    global _HERMES_PROFILES_CACHE, _HERMES_PROFILES_CACHE_TIME
+    global _HERMES_PROFILES_CACHE, _HERMES_PROFILES_CACHE_TIME, _HERMES_PROFILES_CACHE_MTIME
     _HERMES_PROFILES_CACHE = None
     _HERMES_PROFILES_CACHE_TIME = 0.0
+    _HERMES_PROFILES_CACHE_MTIME = 0.0
 
 @app.get("/api/hermes/profiles")
 def api_get_hermes_profiles():
-    global _HERMES_PROFILES_CACHE, _HERMES_PROFILES_CACHE_TIME
+    global _HERMES_PROFILES_CACHE, _HERMES_PROFILES_CACHE_TIME, _HERMES_PROFILES_CACHE_MTIME
     now = time.time()
-    if _HERMES_PROFILES_CACHE is not None and (now - _HERMES_PROFILES_CACHE_TIME) < _HERMES_PROFILES_CACHE_TTL:
+    cur_mtime = _compute_profiles_mtime()
+    if (
+        _HERMES_PROFILES_CACHE is not None
+        and (now - _HERMES_PROFILES_CACHE_TIME) < _HERMES_PROFILES_CACHE_TTL
+        and (_HERMES_PROFILES_CACHE_MTIME == 0.0 or cur_mtime <= _HERMES_PROFILES_CACHE_MTIME)
+    ):
         return _HERMES_PROFILES_CACHE
 
     HERMES_PROFILES_DIR = get_primary_hermes_profiles_dir()
@@ -3065,6 +3158,7 @@ def api_get_hermes_profiles():
         
         provider = ydata.get("provider") or (cdata.get("model", {}).get("provider") if isinstance(cdata.get("model"), dict) else None) or fallback.get("provider", "omniroute")
         model = ydata.get("model") or (cdata.get("model", {}).get("default") if isinstance(cdata.get("model"), dict) else None) or fallback.get("model", "auto/best-free")
+        reasoning_level = ydata.get("reasoning_level") or (ydata.get("llm", {}).get("reasoning_level") if isinstance(ydata.get("llm"), dict) else None) or fallback.get("reasoning_level", "high")
         status_val = ydata.get("status") or fallback.get("status", "active")
         is_fav = bool(ydata.get("is_favorite") if "is_favorite" in ydata else fallback.get("is_favorite", (p_id in ["default", "micha"])))
         callsign = ydata.get("callsign") or fallback.get("callsign") or ""
@@ -3135,6 +3229,7 @@ def api_get_hermes_profiles():
             "avatar": avatar_val,
             "provider": provider,
             "model": model,
+            "reasoning_level": reasoning_level,
             "status": status_val,
             "is_favorite": is_fav
         })
@@ -3153,12 +3248,19 @@ def api_get_hermes_profiles():
     _HERMES_PROFILES_CACHE = enriched_profiles
     _HERMES_PROFILES_CACHE_TIME = now
 
-    # Hintergrund-Spiegelung nach agent_profiles.json
+    # Hintergrund-Spiegelung nach agent_profiles.json (nur schreiben, wenn sich Inhalt geändert hat)
     try:
         _ssot = os.path.join(_APP_ROOT, "agent_profiles.json")
-        create_rolling_backup(_ssot, max_backups=3)
-        with open(_ssot, "w", encoding="utf-8") as f:
-            json.dump(enriched_profiles, f, indent=2, ensure_ascii=False)
+        new_json_str = json.dumps(enriched_profiles, indent=2, ensure_ascii=False)
+        old_json_str = ""
+        if os.path.exists(_ssot):
+            with open(_ssot, "r", encoding="utf-8") as f_old:
+                old_json_str = f_old.read()
+        if new_json_str != old_json_str:
+            create_rolling_backup(_ssot, max_backups=3)
+            with open(_ssot, "w", encoding="utf-8") as f:
+                f.write(new_json_str)
+        _HERMES_PROFILES_CACHE_MTIME = _compute_profiles_mtime()
     except Exception as e:
         logger.warning(f"[Profiles] Error mirroring to agent_profiles.json: {e}")
 
@@ -3679,6 +3781,44 @@ async def api_decide_decision(body: Dict = Body(...)):
             "kanban_status": ziel, "ergebnis": ergebnis}
 
 
+
+def _sync_org_hierarchy_node(p_id: str, name: Optional[str] = None, person_name: Optional[str] = None,
+                             avatar: Optional[str] = None, provider: Optional[str] = None,
+                             model: Optional[str] = None, reasoning_level: Optional[str] = None):
+    """Synchronisiert Änderungen eines Agenten-Profils direkt in config/org_hierarchy.json und leert den Operations-Cache."""
+    try:
+        org_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "org_hierarchy.json")
+        if os.path.exists(org_file):
+            with open(org_file, "r", encoding="utf-8") as f:
+                org_data = json.load(f)
+            changed = False
+            for node in org_data.get("nodes", []):
+                if isinstance(node, dict) and node.get("id") == p_id:
+                    if name:
+                        node["name"] = name
+                        node["role"] = name
+                    if person_name:
+                        node["person_name"] = person_name
+                    if avatar:
+                        node["avatar"] = avatar
+                    if provider:
+                        node["provider"] = provider
+                    if model:
+                        node["model"] = model
+                    if reasoning_level:
+                        node["reasoning_level"] = reasoning_level
+                    changed = True
+            if changed:
+                with open(org_file, "w", encoding="utf-8") as f:
+                    json.dump(org_data, f, indent=2, ensure_ascii=False)
+        try:
+            import backend.operations_api as _ops_api
+            _ops_api._PROFILES_MAP_CACHE["mtime"] = 0.0
+        except Exception:
+            pass
+    except Exception as e:
+        logger.warning(f"[SSOT] Could not sync org_hierarchy.json for {p_id}: {e}")
+
 @app.post("/api/hermes/profiles")
 def api_save_hermes_profile(profile_data: Dict = Body(...)):
     p_id = profile_data.get("id")
@@ -3721,6 +3861,10 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
     assigned_skills = profile_data.get("skills", [])
     provider_val = profile_data.get("provider", "openrouter")
     model_val = profile_data.get("model", "deepseek/deepseek-v4-flash-0731")
+    reasoning_val = str(profile_data.get("reasoning_level") or "high").strip().lower()
+    if reasoning_val not in ("off", "minimal", "low", "medium", "high", "max"):
+        reasoning_val = "high"
+    profile_data["reasoning_level"] = reasoning_val
     status_val = profile_data.get("status", "active")
     is_fav = bool(profile_data.get("is_favorite", (p_id in ["default", "micha"])))
 
@@ -3841,7 +3985,13 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
                 "status": status_val,
                 "is_favorite": is_fav,
                 "provider": provider_val,
-                "model": model_val
+                "model": model_val,
+                "reasoning_level": reasoning_val,
+                "llm": {
+                    "provider": provider_val,
+                    "model": model_val,
+                    "reasoning_level": reasoning_val
+                }
             }
             with open(yaml_path, "w", encoding="utf-8") as f:
                 yaml.dump(y_payload, f, allow_unicode=True, sort_keys=False)
@@ -3918,6 +4068,7 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
                         item["avatar"] = clean_avatar
                         item["model"] = model_val
                         item["provider"] = provider_val
+                        item["reasoning_level"] = reasoning_val
                         item["status"] = status_val
                         updated_ap = True
                         break
@@ -3964,6 +4115,15 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
     except Exception as e:
         logger.warning(f"[Profiles] Error syncing avatar to avatars.db: {e}")
 
+    _sync_org_hierarchy_node(
+        p_id,
+        name=profile_data.get("name", p_id),
+        person_name=person_name,
+        avatar=clean_avatar,
+        provider=provider_val,
+        model=model_val,
+        reasoning_level=reasoning_val
+    )
     # Cache invalidieren und neu aufbauen
     invalidate_hermes_profiles_cache()
     api_get_hermes_profiles()
@@ -4323,14 +4483,20 @@ def api_hermes_memory_purge(purge_options: Dict = Body(default={})):
 
 STATE_DB_PATH = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
 
+class ClosingConnection(sqlite3.Connection):
+    def __enter__(self):
+        super().__enter__()
+        return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
 def _get_state_db():
     os.makedirs(os.path.dirname(STATE_DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(STATE_DB_PATH, timeout=10.0)
-    # WICHTIG (Fix 09.10.2026): Journal-Modus NICHT mehr erzwingen. Der hermes-Container
-    # betreibt dieselbe state.db im WAL-Modus; ein PRAGMA journal_mode=DELETE scheitert
-    # dann sofort mit "database is locked", solange hermes verbunden ist -> leere
-    # Session-Listen. Stattdessen: in den bestehenden Modus einsteigen + busy_timeout.
-    conn.execute("PRAGMA busy_timeout=10000;")
+    conn = sqlite3.connect(STATE_DB_PATH, timeout=15.0, factory=ClosingConnection)
+    conn.execute("PRAGMA busy_timeout=15000;")
     return conn
 
 def _ensure_session_exists(conn: sqlite3.Connection, session_id: str, profile_id: str, model: str, title: str):
@@ -4387,32 +4553,45 @@ def _save_message_to_db(session_id: str, role: str, content: str, token_count: O
     except Exception as e:
         logger.error(f"[Chat Persistence] Error saving message: {e}")
 
-def _record_session_model_usage(session_id: str, model: str, in_tok: int, out_tok: int, cost_usd: float = 0.0):
+def _record_session_model_usage(session_id: str, model: str, in_tok: int, out_tok: int, cost_usd: float = 0.0, task: str = ""):
     try:
         with _get_state_db() as conn:
             now = time.time()
+            _ensure_session_exists(conn, session_id, "default", model, f"Session {session_id}")
+            task_val = task or ""
             conn.execute("""
                 INSERT INTO session_model_usage (
                     session_id, model, billing_provider, billing_base_url, billing_mode, task,
                     api_call_count, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
                     reasoning_tokens, estimated_cost_usd, actual_cost_usd, first_seen, last_seen
-                ) VALUES (?, ?, 'omniroute', 'http://omniroute:20128/v1', 'proxy', '', 1, ?, ?, 0, 0, 0, ?, ?, ?, ?)
+                ) VALUES (?, ?, 'omniroute', 'http://omniroute:20128/v1', 'proxy', ?, 1, ?, ?, 0, 0, 0, ?, ?, ?, ?)
                 ON CONFLICT(session_id, model, billing_provider, billing_base_url, billing_mode, task) DO UPDATE SET
                     api_call_count = api_call_count + 1,
                     input_tokens = input_tokens + excluded.input_tokens,
                     output_tokens = output_tokens + excluded.output_tokens,
                     estimated_cost_usd = estimated_cost_usd + excluded.estimated_cost_usd,
                     last_seen = excluded.last_seen
-            """, (session_id, model, in_tok, out_tok, cost_usd, cost_usd, now, now))
+            """, (session_id, model, task_val, in_tok, out_tok, cost_usd, cost_usd, now, now))
             conn.execute("""
                 UPDATE sessions 
                 SET input_tokens = input_tokens + ?, output_tokens = output_tokens + ?,
                     estimated_cost_usd = estimated_cost_usd + ?
                 WHERE id = ?
             """, (in_tok, out_tok, cost_usd, session_id))
-            conn.commit()
     except Exception as e:
         logger.error(f"[Chat Persistence] Error recording model usage: {e}")
+
+    global _LIVE_TELEMETRY_CACHE, _MC_STATE_CACHE
+    if "_LIVE_TELEMETRY_CACHE" in globals():
+        _LIVE_TELEMETRY_CACHE["data"] = None
+    if "_MC_STATE_CACHE" in globals():
+        _MC_STATE_CACHE["data"] = None
+
+def record_task_tokens(task_id: str, agent_id: str, model: str, in_tok: int, out_tok: int, cost_usd: float = 0.0):
+    """Zeichnet Token-Nutzung fuer Aufgaben und Hintergrund-Inferenz auf."""
+    s_id = f"task_{task_id}" if not task_id.startswith("task_") else task_id
+    t_key = f"{task_id}_{int(time.time())}"
+    _record_session_model_usage(session_id=s_id, model=model, in_tok=in_tok, out_tok=out_tok, cost_usd=cost_usd, task=t_key)
 
 class ChatStreamRequest(BaseModel):
     agent_id: str
@@ -4421,10 +4600,12 @@ class ChatStreamRequest(BaseModel):
     mode: Optional[str] = "direct"  # "direct" vs "mission"
     model: Optional[str] = None
     provider: Optional[str] = None
+    reasoning_level: Optional[str] = None
 
 class SetProfileModelRequest(BaseModel):
     provider: str
     model: str
+    reasoning_level: Optional[str] = None
 
 @app.post("/api/hermes/profiles/{profile_id}/model")
 def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
@@ -4432,6 +4613,7 @@ def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
         import api_provider
         prov = req.provider.strip().lower()
         mod = req.model.strip()
+        reas = (req.reasoning_level or "").strip().lower()
         res = api_provider.set_profile_model(profile_id, mod, provider=prov)
         for p_base in get_hermes_profiles_base_dirs():
             py_path = os.path.join(p_base, profile_id, "profile.yaml")
@@ -4441,6 +4623,8 @@ def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
                         p_data = yaml.safe_load(f) or {}
                     p_data["provider"] = prov
                     p_data["model"] = mod
+                    if reas:
+                        p_data["reasoning_level"] = reas
                     with open(py_path, "w", encoding="utf-8") as f:
                         yaml.dump(p_data, f, allow_unicode=True, sort_keys=False)
                 except Exception as py_err:
@@ -4469,6 +4653,8 @@ def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
                         if isinstance(item, dict) and item.get("id") == profile_id:
                             item["model"] = mod
                             item["provider"] = prov
+                            if reas:
+                                item["reasoning_level"] = reas
                             break
                     with open(ap_file, "w", encoding="utf-8") as f:
                         json.dump(ap_list, f, indent=2, ensure_ascii=False)
@@ -4590,11 +4776,21 @@ def api_rename_chat_session(session_id: str, req: RenameSessionRequest):
     try:
         with _get_state_db() as conn:
             cur = conn.cursor()
-            cur.execute("UPDATE sessions SET title = ? WHERE id = ?", (new_title, session_id))
+            cur.execute("UPDATE sessions SET title = ?, display_name = ? WHERE id = ?", (new_title, new_title, session_id))
             conn.commit()
             if cur.rowcount == 0:
                 # Fallback: Versuche case-insensitive oder partial ID
-                cur.execute("UPDATE sessions SET title = ? WHERE id LIKE ?", (new_title, f"{session_id}%"))
+                cur.execute("UPDATE sessions SET title = ?, display_name = ? WHERE id LIKE ?", (new_title, new_title, f"{session_id}%"))
+                conn.commit()
+            if cur.rowcount == 0:
+                # Session existiert noch nicht in der DB (z.B. neu initialisierter Chat ohne Vorab-Nachrichten)
+                now = time.time()
+                cur.execute("""
+                    INSERT OR REPLACE INTO sessions (
+                        id, source, display_name, title, model, profile_name, started_at, message_count,
+                        input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd
+                    ) VALUES (?, 'master_chat', ?, ?, '', 'default', ?, 0, 0, 0, 0.0, 0.0)
+                """, (session_id, new_title, new_title, now))
                 conn.commit()
             logger.info(f"[Chat Rename] Session {session_id} umbenannt zu '{new_title}'")
             return {"status": "success", "session_id": session_id, "title": new_title}
@@ -4685,8 +4881,17 @@ Wenn eine Aufgabe an einen anderen Agenten delegiert werden soll, MUSST du dafü
 den folgenden JSON-Block in deine Antwort schreiben (valides JSON, exakte Feldnamen):
 
 ```delegation
-{"ziel_agent": "<agent_id>", "auftrag": "<präzise Aufgabenbeschreibung mit Kontext>", "modell": "<auto/best-reasoning|auto/best-coding|auto/best-free|auto/best-vision>", "prioritaet": "normal|hoch", "parent_project_id": "<nur bei Zerlegung in mehrere Teilauftraege: IMMER dieselbe id fuer alle Bloecke, z.B. projekt-immobilienplattform>"}
+{"ziel_agent": "<agent_id>", "auftrag": "<präzise Aufgabenbeschreibung mit Kontext>", "modell": "<auto/best-reasoning|auto/best-coding|auto/best-free|auto/best-vision>", "prioritaet": "normal|hoch", "reasoning_level": "off|minimal|low|medium|high|max", "parent_project_id": "<nur bei Zerlegung in mehrere Teilauftraege: IMMER dieselbe id fuer alle Bloecke, z.B. projekt-immobilienplattform>"}
 ```
+
+Regeln für reasoning_level:
+- Wähle den Denkgrad angepasst an die Komplexität des Auftrags:
+  * "off": Für einfache Routine-Aufgaben, Formatierungen oder Textablagen (0 Tokens Denkzeit, maximal schnell & billig).
+  * "minimal": Für simple Überprüfungen oder kurze Standardrecherchen (~1k Tokens).
+  * "low": Für Standardarbeiten mit kurzer Plausibilitätsprüfung (~2k Tokens).
+  * "medium": Ausgewogener Standard für normale Fachaufgaben (~4k Tokens).
+  * "high": Für fundierte Code-Architektur, Refactoring oder Finanzmodellierung (~8k Tokens).
+  * "max": Für hochkritische strategische Memos, Rechtsgutachten oder System-Apex-Entscheidungen (~16k Tokens).
 
 Regeln:
 - ziel_agent = exakte Agent-ID, nie der Anzeigename. Mehrere Blöcke für Parallelaufträge erlaubt.
@@ -4734,6 +4939,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
     auftrag = str(payload.get("auftrag") or "").strip()
     modell = str(payload.get("modell") or payload.get("model") or "").strip()
     prioritaet = str(payload.get("prioritaet") or "normal").strip().lower()
+    reasoning_lvl = str(payload.get("reasoning_level") or payload.get("reasoning") or "medium").strip().lower()
 
     allowed, reason = _check_delegation_permission(delegator_id, ziel)
     if not allowed:
@@ -4769,7 +4975,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
         )
         kconn.execute(
             "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
-            (task_id, "created", json.dumps({"title": auftrag[:80], "assignee": ziel, "via": "delegation_engine_v2", "delegator": delegator_id}), now_iso)
+            (task_id, "created", json.dumps({"title": auftrag[:80], "assignee": ziel, "via": "delegation_engine_v2", "delegator": delegator_id, "reasoning_level": reasoning_lvl}), now_iso)
         )
         kconn.commit()
         kconn.close()
@@ -5106,6 +5312,7 @@ async def api_chat_stream(req: ChatStreamRequest):
     if not provider:
         provider = "openrouter" if all_keys.get("OPENROUTER_API_KEY") else "omniroute"
 
+    reasoning_level = (req.reasoning_level or prof.get("reasoning_level") or "medium").strip().lower()
     model = (req.model or prof.get("model") or "").strip()
     if not model or model == "free-forever":
         if provider == "google":
@@ -5227,30 +5434,54 @@ async def api_chat_stream(req: ChatStreamRequest):
             for r in reversed(rows):
                 content_val = r["content"]
                 role_val = r["role"]
-                # Bildanhänge als multimodale Vision-Inhalte formatieren
+                # Dateianhänge (bis zu 5 Dateien: Bilder als multimodale Vision-Inhalte, Text/Code als Prompt-Inhalt)
                 if role_val == "user" and "[Datei angehängt:" in content_val:
-                    match = re.search(r'\[Datei angehängt:\s*([^\]]+)\]', content_val)
-                    if match:
-                        file_path = match.group(1).strip()
-                        if os.path.exists(file_path) and file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
-                            try:
-                                with open(file_path, "rb") as img_f:
-                                    img_b64 = base64.b64encode(img_f.read()).decode("utf-8")
-                                mime = "image/png"
-                                if file_path.lower().endswith(('.jpg', '.jpeg')):
-                                    mime = "image/jpeg"
-                                elif file_path.lower().endswith('.webp'):
-                                    mime = "image/webp"
-                                elif file_path.lower().endswith('.gif'):
-                                    mime = "image/gif"
-                                
-                                clean_text = content_val.replace(match.group(0), "").strip()
-                                content_val = [
-                                    {"type": "text", "text": clean_text or "Siehe angehängtes Bild."},
-                                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}
-                                ]
-                            except Exception as img_err:
-                                logger.warning(f"[Chat Stream] Konnte Bild nicht einbetten: {img_err}")
+                    matches = list(re.finditer(r'\[Datei angehängt:\s*([^\]]+)\]', content_val))
+                    if matches:
+                        clean_text = content_val
+                        for m in matches:
+                            clean_text = clean_text.replace(m.group(0), "")
+                        clean_text = clean_text.strip()
+                        
+                        image_blocks = []
+                        text_attachments = []
+                        for m in matches[:5]:
+                            f_path = m.group(1).strip()
+                            if os.path.exists(f_path):
+                                lower_p = f_path.lower()
+                                if lower_p.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                                    try:
+                                        with open(f_path, "rb") as img_f:
+                                            img_b64 = base64.b64encode(img_f.read()).decode("utf-8")
+                                        mime = "image/png"
+                                        if lower_p.endswith(('.jpg', '.jpeg')):
+                                            mime = "image/jpeg"
+                                        elif lower_p.endswith('.webp'):
+                                            mime = "image/webp"
+                                        elif lower_p.endswith('.gif'):
+                                            mime = "image/gif"
+                                        image_blocks.append({
+                                            "type": "image_url",
+                                            "image_url": {"url": f"data:{mime};base64,{img_b64}"}
+                                        })
+                                    except Exception as img_err:
+                                        logger.warning(f"[Chat Stream] Konnte Bild nicht einbetten: {img_err}")
+                                elif lower_p.endswith(('.txt', '.md', '.json', '.csv', '.py', '.js', '.ts', '.html', '.css', '.yaml', '.yml', '.log')):
+                                    try:
+                                        with open(f_path, "r", encoding="utf-8", errors="ignore") as tf:
+                                            snippet = tf.read(15000)
+                                            b_name = os.path.basename(f_path)
+                                            text_attachments.append(f"\n--- DATEI-INHALT ({b_name}) ---\n{snippet}\n--- ENDE DATEI-INHALT ---")
+                                    except Exception as tf_err:
+                                        logger.warning(f"[Chat Stream] Konnte Textdatei nicht lesen: {tf_err}")
+
+                        if image_blocks:
+                            full_prompt = clean_text
+                            if text_attachments:
+                                full_prompt += "\n" + "\n".join(text_attachments)
+                            content_val = [{"type": "text", "text": full_prompt or "Siehe angehängte Dateien."}] + image_blocks
+                        elif text_attachments:
+                            content_val = (clean_text + "\n" + "\n".join(text_attachments)).strip()
 
                 recent_messages.append({"role": role_val, "content": content_val})
     except Exception as e:
@@ -5307,7 +5538,8 @@ async def api_chat_stream(req: ChatStreamRequest):
                 messages=payload_messages,
                 provider=provider,
                 model=model,
-                api_keys=all_keys
+                api_keys=all_keys,
+                reasoning_level=reasoning_level
             ):
                 if chunk.startswith("ERROR: "):
                     yield f"data: {json.dumps({'type': 'error', 'error': chunk[7:]})}\n\n"
@@ -5501,9 +5733,11 @@ def api_get_guardian_stats(timeframe: str = "all"):
         state_dbs = sorted(glob.glob(os.path.expanduser('~/.hermes/profiles/*/state.db')) + [os.path.expanduser('~/.hermes/state.db')])
     
     for db in state_dbs:
+        con = None
         try:
             prof_name = db.split('/')[-2] if 'profiles' in db else 'root'
-            con = sqlite3.connect(db, timeout=1.0)
+            con = sqlite3.connect(db, timeout=5.0)
+            con.execute("PRAGMA busy_timeout=5000;")
             
             # Hole Einzelzeilen für Zeitfilterung und Tages-Trend
             query = '''
@@ -5580,8 +5814,6 @@ def api_get_guardian_stats(timeframe: str = "all"):
                 models_stats[model_name]["total_tokens"] += tot
                 models_stats[model_name]["cost"] += cost
             
-            con.close()
-            
             if p_calls > 0:
                 grand_total_tokens += p_tokens
                 grand_total_cost += p_cost
@@ -5595,6 +5827,9 @@ def api_get_guardian_stats(timeframe: str = "all"):
                 })
         except Exception as e:
             pass
+        finally:
+            if con:
+                con.close()
             
     profiles_stats.sort(key=lambda x: x["total_tokens"], reverse=True)
     models_list = [{"model": k, "calls": v["calls"], "total_tokens": v["total_tokens"], "cost": round(v["cost"], 4)} for k, v in models_stats.items()]
@@ -5783,26 +6018,72 @@ def api_get_guardian_config():
         "disk-cleanup": "trash-2"
     }
 
+    # Bidirektionale Brücke zwischen Plugin-Registry und nativen Archon-OS-Modulen (settings.json)
+    from backend.autonomy_settings import load_autonomy_settings
+    aut_settings = load_autonomy_settings()
+
+    plugin_autonomy_bridge = {
+        "evey-cost-guard": ("budget_guard", "auto_downgrade_on_limit"),
+        "evey-session-guard": ("durable_execution", "enabled"),
+        "evey-email-guard": ("pii_scrubber", "enabled"),
+        "evey-watchdog": ("resource_backpressure", "enabled"),
+        "evey-cache": ("semantic_cache", "enabled"),
+        "evey-telemetry": ("time_travel", "enabled"),
+        "evey-status": ("execution_receipts", "enabled"),
+        "evey-delegation-score": ("model_benchmarker", "enabled"),
+        "evey-autonomy": ("ephemeral_teams", "enabled"),
+        "evey-council": ("consensus_gate", "enabled"),
+        "evey-reflect": ("self_healing", "enabled"),
+        "evey-learner": ("skill_synthesizer", "enabled"),
+        "evey-identity": ("core_memory", "enabled"),
+        "evey-proactive": ("inbox_watcher", "enabled"),
+        "evey-goals": ("map_reduce", "enabled"),
+        "evey-scheduler": ("dead_letter_queue", "enabled"),
+        "evey-research": ("corrective_rag", "enabled"),
+        "evey-digest": ("inbox_watcher", "standup_enabled"),
+        "evey-sandbox": ("ephemeral_sandbox", "enabled"),
+        "evey-rag": ("hybrid_search", "enabled"),
+        "evey-memory-adaptive": ("citation_pinner", "enabled"),
+        "evey-memory-consolidate": ("memory_consolidation", "enabled"),
+        "evey-validate": ("sla_enforcer", "enabled"),
+        "evey-verification": ("egress_firewall", "enabled"),
+        "evey-delegate-model": ("speculative_hedging", "enabled"),
+    }
+
     if os.path.exists(plugins_dir):
         for p_yaml in sorted(glob.glob(os.path.join(plugins_dir, "*/plugin.yaml"))):
             try:
                 folder_name = os.path.basename(os.path.dirname(p_yaml))
+                if folder_name.startswith("_"):
+                    continue
                 with open(p_yaml, "r", encoding="utf-8") as pf:
                     p_info = yaml.safe_load(pf) or {}
                 p_id = p_info.get("name", folder_name)
+                p_name = p_info.get("display_name") or p_id.replace("evey-", "").replace("-", " ").title()
                 p_desc = p_info.get("description", "")
-                p_cat = category_map.get(p_id, "Weitere Module")
+                p_cat = p_info.get("category") or category_map.get(p_id, "Weitere Module")
                 p_tools = p_info.get("provides_tools", []) or p_info.get("tools", []) or []
                 p_icon = icon_map.get(p_id, p_info.get("icon", "puzzle"))
+
+                if p_id in plugin_autonomy_bridge:
+                    grp, key = plugin_autonomy_bridge[p_id]
+                    is_enabled = bool(aut_settings.get(grp, {}).get(key, True))
+                else:
+                    is_enabled = (p_id in enabled_plugins) or (p_id == "evey-telegram-ux")
+
                 discovered_plugins.append({
                     "id": p_id,
-                    "name": p_id.replace("evey-", "").replace("-", " ").title(),
+                    "name": p_name,
                     "desc": p_desc,
+                    "problem": p_info.get("problem", ""),
+                    "solution": p_info.get("solution", ""),
+                    "tradeoff": p_info.get("tradeoff", ""),
+                    "when_to_disable": p_info.get("when_to_disable", ""),
                     "category": p_cat,
                     "tools": p_tools,
                     "icon": p_icon,
-                    "version": str(p_info.get("version", "1.0.0")),
-                    "enabled": p_id in enabled_plugins
+                    "version": str(p_info.get("version", "2.6.0")),
+                    "enabled": is_enabled
                 })
             except Exception:
                 pass
@@ -5910,9 +6191,42 @@ def api_toggle_guardian_plugin(payload: dict):
         cfg["plugins"]["enabled"] = enabled_list
         with open(config_file, "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg, f, default_flow_style=False)
-            
-        add_ticker("Guardian", f"Plugin '{plugin_id}' {'aktiviert' if enable else 'deaktiviert'}.")
-        return {"status": "success", "plugin_id": plugin_id, "enabled": enable}
+
+        # Synchronisiere Schalter direkt mit backend/autonomy_settings.py (settings.json)
+        plugin_autonomy_bridge = {
+            "evey-cost-guard": ("budget_guard", "auto_downgrade_on_limit"),
+            "evey-session-guard": ("durable_execution", "enabled"),
+            "evey-email-guard": ("pii_scrubber", "enabled"),
+            "evey-watchdog": ("resource_backpressure", "enabled"),
+            "evey-cache": ("semantic_cache", "enabled"),
+            "evey-telemetry": ("time_travel", "enabled"),
+            "evey-status": ("execution_receipts", "enabled"),
+            "evey-delegation-score": ("model_benchmarker", "enabled"),
+            "evey-autonomy": ("ephemeral_teams", "enabled"),
+            "evey-council": ("consensus_gate", "enabled"),
+            "evey-reflect": ("self_healing", "enabled"),
+            "evey-learner": ("skill_synthesizer", "enabled"),
+            "evey-identity": ("core_memory", "enabled"),
+            "evey-proactive": ("inbox_watcher", "enabled"),
+            "evey-goals": ("map_reduce", "enabled"),
+            "evey-scheduler": ("dead_letter_queue", "enabled"),
+            "evey-research": ("corrective_rag", "enabled"),
+            "evey-digest": ("inbox_watcher", "standup_enabled"),
+            "evey-sandbox": ("ephemeral_sandbox", "enabled"),
+            "evey-rag": ("hybrid_search", "enabled"),
+            "evey-memory-adaptive": ("citation_pinner", "enabled"),
+            "evey-memory-consolidate": ("memory_consolidation", "enabled"),
+            "evey-validate": ("sla_enforcer", "enabled"),
+            "evey-verification": ("egress_firewall", "enabled"),
+            "evey-delegate-model": ("speculative_hedging", "enabled"),
+        }
+        if plugin_id in plugin_autonomy_bridge:
+            from backend.autonomy_settings import save_autonomy_settings
+            grp, key = plugin_autonomy_bridge[plugin_id]
+            save_autonomy_settings({grp: {key: bool(enable)}})
+
+        add_ticker("Guardian", f"Modul '{plugin_id}' {'aktiviert' if enable else 'deaktiviert'} (settings.json synchronisiert).")
+        return {"status": "success", "plugin_id": plugin_id, "enabled": bool(enable)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -6217,6 +6531,37 @@ def api_get_plugin_config(plugin_id: str):
         except Exception:
             pass
 
+    # 4. Überlagere mit echten Live-Schwellenwerten aus backend/autonomy_settings.py (settings.json)
+    try:
+        from backend.autonomy_settings import load_autonomy_settings
+        aut = load_autonomy_settings()
+        if plugin_id == "evey-rag":
+            data["top_k_results"] = aut.get("hybrid_search", {}).get("top_k", 5)
+            data["similarity_threshold"] = aut.get("corrective_rag", {}).get("min_relevance_score", 0.45)
+        elif plugin_id == "evey-cache":
+            data["cache_ttl_hours"] = max(1, int(aut.get("semantic_cache", {}).get("ttl_seconds", 86400) // 3600))
+            data["max_cache_entries"] = aut.get("semantic_cache", {}).get("max_entries", 500)
+            data["semantic_match"] = aut.get("semantic_cache", {}).get("enabled", True)
+        elif plugin_id == "evey-sandbox":
+            data["max_exec_seconds"] = aut.get("ephemeral_sandbox", {}).get("timeout_seconds", 30)
+            data["pii_filter"] = aut.get("pii_scrubber", {}).get("enabled", True)
+        elif plugin_id == "evey-council":
+            data["debate_rounds"] = aut.get("consensus_gate", {}).get("council_size", 3)
+        elif plugin_id == "evey-reflect":
+            data["reflect_frequency_tasks"] = aut.get("self_healing", {}).get("max_retries", 2)
+        elif plugin_id == "evey-learner":
+            data["min_quality_score"] = aut.get("sla_enforcer", {}).get("min_quality_score", 0.75)
+            data["auto_index_skills"] = aut.get("skill_synthesizer", {}).get("enabled", True)
+        elif plugin_id == "evey-scheduler":
+            data["worker_concurrency"] = aut.get("concurrency", {}).get("max_concurrent_agents", 4)
+            data["max_retry_attempts"] = aut.get("dead_letter_queue", {}).get("max_replay_attempts", 3)
+        elif plugin_id == "evey-digest":
+            data["daily_digest_time"] = aut.get("inbox_watcher", {}).get("standup_hour", "07:30")
+        elif plugin_id == "evey-status":
+            data["cpu_threshold_percent"] = int(aut.get("resource_backpressure", {}).get("max_cpu_percent", 85))
+    except Exception:
+        pass
+
     return {"status": "success", "plugin_id": plugin_id, "config": data}
 
 @app.post("/api/guardian/plugins/{plugin_id}/config")
@@ -6359,7 +6704,57 @@ def api_save_plugin_config(plugin_id: str, payload: dict):
                 except Exception as ex:
                     print(f"Failed to sync telegram .env: {ex}")
 
-        add_ticker("Guardian", f"Einstellungen für Plugin '{plugin_id}' gespeichert.")
+        # 3. Synchronisiere geänderte Schwellenwerte direkt zurück in backend/autonomy_settings.py (settings.json)
+        try:
+            from backend.autonomy_settings import save_autonomy_settings
+            if plugin_id == "evey-rag":
+                save_autonomy_settings({
+                    "hybrid_search": {"top_k": int(cfg.get("top_k_results", 5))},
+                    "corrective_rag": {"min_relevance_score": float(cfg.get("similarity_threshold", 0.45))}
+                })
+            elif plugin_id == "evey-cache":
+                save_autonomy_settings({
+                    "semantic_cache": {
+                        "ttl_seconds": int(cfg.get("cache_ttl_hours", 24)) * 3600,
+                        "max_entries": int(cfg.get("max_cache_entries", 500)),
+                        "enabled": bool(cfg.get("semantic_match", True))
+                    }
+                })
+            elif plugin_id == "evey-sandbox":
+                save_autonomy_settings({
+                    "ephemeral_sandbox": {"timeout_seconds": int(cfg.get("max_exec_seconds", 30))},
+                    "pii_scrubber": {"enabled": bool(cfg.get("pii_filter", True))}
+                })
+            elif plugin_id == "evey-council":
+                save_autonomy_settings({
+                    "consensus_gate": {"council_size": int(cfg.get("debate_rounds", 3))}
+                })
+            elif plugin_id == "evey-reflect":
+                save_autonomy_settings({
+                    "self_healing": {"max_retries": int(cfg.get("reflect_frequency_tasks", 2))}
+                })
+            elif plugin_id == "evey-learner":
+                save_autonomy_settings({
+                    "sla_enforcer": {"min_quality_score": float(cfg.get("min_quality_score", 0.75))},
+                    "skill_synthesizer": {"enabled": bool(cfg.get("auto_index_skills", True))}
+                })
+            elif plugin_id == "evey-scheduler":
+                save_autonomy_settings({
+                    "concurrency": {"max_concurrent_agents": int(cfg.get("worker_concurrency", 4))},
+                    "dead_letter_queue": {"max_replay_attempts": int(cfg.get("max_retry_attempts", 3))}
+                })
+            elif plugin_id == "evey-digest":
+                save_autonomy_settings({
+                    "inbox_watcher": {"standup_hour": str(cfg.get("daily_digest_time", "07:30"))}
+                })
+            elif plugin_id == "evey-status":
+                save_autonomy_settings({
+                    "resource_backpressure": {"max_cpu_percent": float(cfg.get("cpu_threshold_percent", 85.0))}
+                })
+        except Exception as sync_err:
+            print(f"Warnung bei Autonomy-Settings-Sync ({plugin_id}): {sync_err}")
+
+        add_ticker("Guardian", f"Einstellungen für Modul '{plugin_id}' gespeichert (settings.json synchronisiert).")
         return {"status": "success", "plugin_id": plugin_id, "message": "Gespeichert", "config": cfg}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -6442,29 +6837,154 @@ def api_get_hermes_form_config(path: Optional[str] = None):
     model_obj = parsed.get("model", {}) if isinstance(parsed.get("model"), dict) else {}
     agent_obj = parsed.get("agent", {}) if isinstance(parsed.get("agent"), dict) else {}
     disp_obj = parsed.get("display", {}) if isinstance(parsed.get("display"), dict) else {}
+    dash_obj = parsed.get("dashboard", {}) if isinstance(parsed.get("dashboard"), dict) else {}
+    stream_obj = parsed.get("streaming", {}) if isinstance(parsed.get("streaming"), dict) else {}
     gw_obj = parsed.get("gateway", {}) if isinstance(parsed.get("gateway"), dict) else {}
     plat_obj = parsed.get("platforms", {}) if isinstance(parsed.get("platforms"), dict) else {}
     a2a_obj = plat_obj.get("a2a", {}) if isinstance(plat_obj.get("a2a"), dict) else {}
+    tg_obj = plat_obj.get("telegram", {}) if isinstance(plat_obj.get("telegram"), dict) else {}
+    wh_obj = plat_obj.get("webhook", {}) if isinstance(plat_obj.get("webhook"), dict) else {}
+    api_srv_obj = plat_obj.get("api_server", {}) if isinstance(plat_obj.get("api_server"), dict) else {}
     stt_obj = parsed.get("stt", {}) if isinstance(parsed.get("stt"), dict) else {}
+    stt_groq = stt_obj.get("groq", {}) if isinstance(stt_obj.get("groq"), dict) else {}
+    stt_openai = stt_obj.get("openai", {}) if isinstance(stt_obj.get("openai"), dict) else {}
+    stt_local = stt_obj.get("local", {}) if isinstance(stt_obj.get("local"), dict) else {}
+    voice_obj = parsed.get("voice", {}) if isinstance(parsed.get("voice"), dict) else {}
+    term_obj = parsed.get("terminal", {}) if isinstance(parsed.get("terminal"), dict) else {}
+    code_obj = parsed.get("code_execution", {}) if isinstance(parsed.get("code_execution"), dict) else {}
+    loop_obj = parsed.get("tool_loop_guardrails", {}) if isinstance(parsed.get("tool_loop_guardrails"), dict) else {}
+    warn_after = loop_obj.get("warn_after", {}) if isinstance(loop_obj.get("warn_after"), dict) else {}
+    stop_after = loop_obj.get("hard_stop_after", {}) if isinstance(loop_obj.get("hard_stop_after"), dict) else {}
+    comp_obj = parsed.get("compression", {}) if isinstance(parsed.get("compression"), dict) else {}
+    pcache_obj = parsed.get("prompt_caching", {}) if isinstance(parsed.get("prompt_caching"), dict) else {}
+    mem_obj = parsed.get("memory", {}) if isinstance(parsed.get("memory"), dict) else {}
+    sreset_obj = parsed.get("session_reset", {}) if isinstance(parsed.get("session_reset"), dict) else {}
+    skills_obj = parsed.get("skills", {}) if isinstance(parsed.get("skills"), dict) else {}
+    deleg_obj = parsed.get("delegation", {}) if isinstance(parsed.get("delegation"), dict) else {}
+    moa_obj = parsed.get("moa", {}) if isinstance(parsed.get("moa"), dict) else {}
+    moa_agg = moa_obj.get("aggregator", {}) if isinstance(moa_obj.get("aggregator"), dict) else {}
+    aux_obj = parsed.get("auxiliary", {}) if isinstance(parsed.get("auxiliary"), dict) else {}
+    aux_vis = aux_obj.get("vision", {}) if isinstance(aux_obj.get("vision"), dict) else {}
+    aux_web = aux_obj.get("web_extract", {}) if isinstance(aux_obj.get("web_extract"), dict) else {}
+    brow_obj = parsed.get("browser", {}) if isinstance(parsed.get("browser"), dict) else {}
+    tools_obj = parsed.get("tools", {}) if isinstance(parsed.get("tools"), dict) else {}
+    tsearch_obj = tools_obj.get("tool_search", {}) if isinstance(tools_obj.get("tool_search"), dict) else {}
+    upd_obj = parsed.get("updates", {}) if isinstance(parsed.get("updates"), dict) else {}
 
     settings = {
+        # Sektion 1: Modell & Provider
         "model_default": model_obj.get("default", "z-ai/glm-5.3"),
         "model_provider": model_obj.get("provider", "openrouter"),
         "base_url": model_obj.get("base_url", ""),
+        # Sektion 2: Agenten-Kognition & Limits
         "reasoning_effort": agent_obj.get("reasoning_effort", "medium"),
         "max_context_tokens": agent_obj.get("max_context_tokens", 32000),
         "max_history_messages": agent_obj.get("max_history_messages", 20),
         "task_timeout_seconds": agent_obj.get("task_timeout_seconds", 60),
+        "max_turns": agent_obj.get("max_turns", 60),
+        "verify_on_stop": agent_obj.get("verify_on_stop", False),
+        "verbose": agent_obj.get("verbose", False),
+        # Sektion 3: Anzeige, Streaming & Dashboard
         "language": disp_obj.get("language", "de"),
-        "reasoning_full": disp_obj.get("reasoning_full", True),
+        "reasoning_full": disp_obj.get("reasoning_full", disp_obj.get("show_reasoning", True)),
         "show_cost": disp_obj.get("show_cost", True),
         "timestamps": disp_obj.get("timestamps", True),
         "bell_on_complete": disp_obj.get("bell_on_complete", True),
+        "compact": disp_obj.get("compact", True),
+        "streaming_enabled": disp_obj.get("streaming", stream_obj.get("enabled", True)),
+        "busy_input_mode": disp_obj.get("busy_input_mode", "interrupt"),
+        "interim_assistant_messages": disp_obj.get("interim_assistant_messages", True),
+        "background_process_notifications": disp_obj.get("background_process_notifications", "all"),
+        "tool_progress": disp_obj.get("tool_progress", "all"),
+        "long_running_notifications": disp_obj.get("long_running_notifications", True),
+        "cleanup_progress": disp_obj.get("cleanup_progress", False),
+        "timestamp_format": disp_obj.get("timestamp_format", "%H:%M:%S"),
+        "skin": disp_obj.get("skin", "coffee-shop"),
+        "dashboard_theme": dash_obj.get("theme", disp_obj.get("dashboard_theme", "boring-light")),
+        # Sektion 4: Gateway, Multiplexing & Plattformen
         "multiplex_profiles": gw_obj.get("multiplex_profiles", True),
         "a2a_enabled": a2a_obj.get("enabled", True),
+        "telegram_enabled": tg_obj.get("enabled", True),
+        "webhook_enabled": wh_obj.get("enabled", True),
+        "api_server_enabled": api_srv_obj.get("enabled", False),
+        "group_sessions_per_user": parsed.get("group_sessions_per_user", True),
+        # Sektion 5: Befehls-Allowlist & Code-Execution
+        "command_allowlist": parsed.get("command_allowlist", ["script execution via heredoc", "execute_code"]) if isinstance(parsed.get("command_allowlist"), list) else [],
+        "code_max_tool_calls": code_obj.get("max_tool_calls", 50),
+        "code_timeout": code_obj.get("timeout", 300),
+        # Sektion 6: Terminal-Backend & Container-Grenzwerte
+        "terminal_backend": term_obj.get("backend", "local"),
+        "terminal_cwd": term_obj.get("cwd", "."),
+        "terminal_timeout": term_obj.get("timeout", 180),
+        "terminal_home_mode": term_obj.get("home_mode", "auto"),
+        "terminal_container_cpu": term_obj.get("container_cpu", 1),
+        "terminal_container_memory": term_obj.get("container_memory", 5120),
+        "terminal_container_disk": term_obj.get("container_disk", 51200),
+        "terminal_container_persistent": term_obj.get("container_persistent", True),
+        "terminal_docker_mount_cwd": term_obj.get("docker_mount_cwd_to_workspace", False),
+        "terminal_lifetime_seconds": term_obj.get("lifetime_seconds", 300),
+        # Sektion 7: Native Tool-Loop-Guardrails
+        "loop_warnings_enabled": loop_obj.get("warnings_enabled", True),
+        "loop_hard_stop_enabled": loop_obj.get("hard_stop_enabled", False),
+        "warn_exact_failure": warn_after.get("exact_failure", 2),
+        "warn_same_tool_failure": warn_after.get("same_tool_failure", 3),
+        "warn_idempotent_no_progress": warn_after.get("idempotent_no_progress", 2),
+        "stop_exact_failure": stop_after.get("exact_failure", 5),
+        "stop_same_tool_failure": stop_after.get("same_tool_failure", 8),
+        "stop_idempotent_no_progress": stop_after.get("idempotent_no_progress", 5),
+        # Sektion 8: Kontext-Kompression & Prompt-Caching
+        "compression_enabled": comp_obj.get("enabled", True),
+        "compression_threshold": comp_obj.get("threshold", 0.5),
+        "compression_target_ratio": comp_obj.get("target_ratio", 0.2),
+        "compression_protect_last_n": comp_obj.get("protect_last_n", 20),
+        "compression_protect_first_n": comp_obj.get("protect_first_n", 3),
+        "compression_codex_autoraise": comp_obj.get("codex_gpt55_autoraise", True),
+        "prompt_cache_ttl": pcache_obj.get("cache_ttl", "5m"),
+        # Sektion 9: Hermes Memory, Session-Reset & Skill-Synthese
+        "memory_enabled": mem_obj.get("memory_enabled", True),
+        "user_profile_enabled": mem_obj.get("user_profile_enabled", True),
+        "memory_char_limit": mem_obj.get("memory_char_limit", 2200),
+        "user_char_limit": mem_obj.get("user_char_limit", 1375),
+        "memory_flush_min_turns": mem_obj.get("flush_min_turns", 6),
+        "memory_nudge_interval": mem_obj.get("nudge_interval", 10),
+        "session_reset_mode": sreset_obj.get("mode", "both"),
+        "session_reset_at_hour": sreset_obj.get("at_hour", 4),
+        "session_reset_idle_minutes": sreset_obj.get("idle_minutes", 1440),
+        "skills_creation_nudge_interval": skills_obj.get("creation_nudge_interval", 15),
+        # Sektion 10: Subagenten-Delegation & Mixture-of-Agents (MoA)
+        "delegation_max_iterations": deleg_obj.get("max_iterations", 50),
+        "delegation_max_concurrent_children": deleg_obj.get("max_concurrent_children", 5),
+        "moa_enabled": moa_obj.get("enabled", True),
+        "moa_fanout": moa_obj.get("fanout", "user_turn"),
+        "moa_max_tokens": moa_obj.get("max_tokens", 4096),
+        "moa_degraded_policy": moa_obj.get("degraded_reference_policy", "loud"),
+        "moa_aggregator_provider": moa_agg.get("provider", "custom:omniroute:20128"),
+        "moa_aggregator_model": moa_agg.get("model", "auto/best-free"),
+        # Sektion 11: Hilfsmodelle (Vision & Web-Extract)
+        "aux_vision_provider": aux_vis.get("provider", "custom:Omniroute:20128"),
+        "aux_vision_model": aux_vis.get("model", ""),
+        "aux_web_provider": aux_web.get("provider", "auto"),
+        "aux_web_model": aux_web.get("model", ""),
+        # Sektion 12: Browser-Engine & Dynamische Tool-Suche
+        "browser_inactivity_timeout": brow_obj.get("inactivity_timeout", 120),
+        "browser_cloud_provider": brow_obj.get("cloud_provider", "local"),
+        "browser_use_gateway": brow_obj.get("use_gateway", False),
+        "tool_search_enabled": str(tsearch_obj.get("enabled", "on")),
+        "tool_search_threshold_pct": tsearch_obj.get("threshold_pct", 0),
+        "tool_search_limit": tsearch_obj.get("search_default_limit", 5),
+        "tool_search_listing": str(tsearch_obj.get("listing", "off")),
+        # Sektion 13: Sprachausgabe (Voice / TTS) & Spracherkennung (STT)
+        "stt_enabled": stt_obj.get("enabled", True),
         "stt_provider": stt_obj.get("provider", "groq"),
         "stt_language": stt_obj.get("language", "de"),
-        "command_allowlist": parsed.get("command_allowlist", ["script execution via heredoc", "execute_code"]) if isinstance(parsed.get("command_allowlist"), list) else []
+        "stt_groq_model": stt_groq.get("model", "whisper-large-v3"),
+        "stt_openai_model": stt_openai.get("model", "whisper-1"),
+        "stt_local_model": stt_local.get("model", "base"),
+        "voice_auto_tts": voice_obj.get("auto_tts", False),
+        # Sektion 14: Update-Sicherheit & Konfigurations-Backups
+        "updates_pre_backup": upd_obj.get("pre_update_backup", False),
+        "updates_backup_keep": upd_obj.get("backup_keep", 5),
+        "updates_local_changes": upd_obj.get("non_interactive_local_changes", "stash")
     }
 
     return {
@@ -6498,73 +7018,307 @@ def api_save_hermes_form_config(payload: dict = Body(...)):
         except Exception:
             existing_data = {}
 
-    if not isinstance(existing_data.get("model"), dict):
-        existing_data["model"] = {}
+    def _ensure_dict(parent: dict, key: str) -> dict:
+        if not isinstance(parent.get(key), dict):
+            parent[key] = {}
+        return parent[key]
+
+    # Sektion 1: Modell
+    m_dict = _ensure_dict(existing_data, "model")
     if "model_default" in settings:
-        existing_data["model"]["default"] = str(settings["model_default"]).strip()
+        m_dict["default"] = str(settings["model_default"]).strip()
     if "model_provider" in settings:
-        existing_data["model"]["provider"] = str(settings["model_provider"]).strip()
+        m_dict["provider"] = str(settings["model_provider"]).strip()
     if "base_url" in settings:
         b_url = str(settings["base_url"]).strip()
         if b_url:
-            existing_data["model"]["base_url"] = b_url
-        elif "base_url" in existing_data["model"]:
-            del existing_data["model"]["base_url"]
+            m_dict["base_url"] = b_url
+        elif "base_url" in m_dict:
+            del m_dict["base_url"]
 
-    if not isinstance(existing_data.get("agent"), dict):
-        existing_data["agent"] = {}
+    # Sektion 2: Agent
+    a_dict = _ensure_dict(existing_data, "agent")
     if "reasoning_effort" in settings:
-        existing_data["agent"]["reasoning_effort"] = str(settings["reasoning_effort"]).strip()
-    if "max_context_tokens" in settings:
-        try:
-            existing_data["agent"]["max_context_tokens"] = int(settings["max_context_tokens"])
-        except Exception:
-            pass
-    if "max_history_messages" in settings:
-        try:
-            existing_data["agent"]["max_history_messages"] = int(settings["max_history_messages"])
-        except Exception:
-            pass
-    if "task_timeout_seconds" in settings:
-        try:
-            existing_data["agent"]["task_timeout_seconds"] = int(settings["task_timeout_seconds"])
-        except Exception:
-            pass
+        a_dict["reasoning_effort"] = str(settings["reasoning_effort"]).strip()
+    for int_key in ("max_context_tokens", "max_history_messages", "task_timeout_seconds", "max_turns"):
+        if int_key in settings:
+            try:
+                a_dict[int_key] = int(settings[int_key])
+            except Exception:
+                pass
+    for bool_key in ("verify_on_stop", "verbose"):
+        if bool_key in settings:
+            a_dict[bool_key] = bool(settings[bool_key])
 
-    if not isinstance(existing_data.get("display"), dict):
-        existing_data["display"] = {}
-    if "language" in settings:
-        existing_data["display"]["language"] = str(settings["language"]).strip()
+    # Sektion 3: Display, Streaming & Dashboard
+    d_dict = _ensure_dict(existing_data, "display")
+    for str_key in ("language", "busy_input_mode", "background_process_notifications", "tool_progress", "timestamp_format", "skin"):
+        if str_key in settings:
+            d_dict[str_key] = str(settings[str_key]).strip()
+    for bool_key in ("reasoning_full", "show_cost", "timestamps", "bell_on_complete", "compact", "interim_assistant_messages", "long_running_notifications", "cleanup_progress"):
+        if bool_key in settings:
+            d_dict[bool_key] = bool(settings[bool_key])
     if "reasoning_full" in settings:
-        existing_data["display"]["reasoning_full"] = bool(settings["reasoning_full"])
-    if "show_cost" in settings:
-        existing_data["display"]["show_cost"] = bool(settings["show_cost"])
-    if "timestamps" in settings:
-        existing_data["display"]["timestamps"] = bool(settings["timestamps"])
-    if "bell_on_complete" in settings:
-        existing_data["display"]["bell_on_complete"] = bool(settings["bell_on_complete"])
+        d_dict["show_reasoning"] = bool(settings["reasoning_full"])
+    if "streaming_enabled" in settings:
+        d_dict["streaming"] = bool(settings["streaming_enabled"])
+        _ensure_dict(existing_data, "streaming")["enabled"] = bool(settings["streaming_enabled"])
+    if "dashboard_theme" in settings:
+        d_dict["dashboard_theme"] = str(settings["dashboard_theme"]).strip()
+        _ensure_dict(existing_data, "dashboard")["theme"] = str(settings["dashboard_theme"]).strip()
 
-    if not isinstance(existing_data.get("gateway"), dict):
-        existing_data["gateway"] = {}
+    # Sektion 4: Gateway & Plattformen
+    gw_dict = _ensure_dict(existing_data, "gateway")
     if "multiplex_profiles" in settings:
-        existing_data["gateway"]["multiplex_profiles"] = bool(settings["multiplex_profiles"])
-
-    if not isinstance(existing_data.get("platforms"), dict):
-        existing_data["platforms"] = {}
-    if not isinstance(existing_data["platforms"].get("a2a"), dict):
-        existing_data["platforms"]["a2a"] = {}
+        gw_dict["multiplex_profiles"] = bool(settings["multiplex_profiles"])
+    pl_dict = _ensure_dict(existing_data, "platforms")
     if "a2a_enabled" in settings:
-        existing_data["platforms"]["a2a"]["enabled"] = bool(settings["a2a_enabled"])
+        _ensure_dict(pl_dict, "a2a")["enabled"] = bool(settings["a2a_enabled"])
+    if "telegram_enabled" in settings:
+        _ensure_dict(pl_dict, "telegram")["enabled"] = bool(settings["telegram_enabled"])
+    if "webhook_enabled" in settings:
+        _ensure_dict(pl_dict, "webhook")["enabled"] = bool(settings["webhook_enabled"])
+    if "api_server_enabled" in settings:
+        _ensure_dict(pl_dict, "api_server")["enabled"] = bool(settings["api_server_enabled"])
+    if "group_sessions_per_user" in settings:
+        existing_data["group_sessions_per_user"] = bool(settings["group_sessions_per_user"])
 
-    if not isinstance(existing_data.get("stt"), dict):
-        existing_data["stt"] = {}
-    if "stt_provider" in settings:
-        existing_data["stt"]["provider"] = str(settings["stt_provider"]).strip()
-    if "stt_language" in settings:
-        existing_data["stt"]["language"] = str(settings["stt_language"]).strip()
-
+    # Sektion 5: Allowlist & Code-Execution
     if "command_allowlist" in settings and isinstance(settings["command_allowlist"], list):
         existing_data["command_allowlist"] = settings["command_allowlist"]
+    ce_dict = _ensure_dict(existing_data, "code_execution")
+    if "code_max_tool_calls" in settings:
+        try:
+            ce_dict["max_tool_calls"] = int(settings["code_max_tool_calls"])
+        except Exception:
+            pass
+    if "code_timeout" in settings:
+        try:
+            ce_dict["timeout"] = int(settings["code_timeout"])
+        except Exception:
+            pass
+
+    # Sektion 6: Terminal & Container
+    t_dict = _ensure_dict(existing_data, "terminal")
+    for s_k, y_k in (("terminal_backend", "backend"), ("terminal_cwd", "cwd"), ("terminal_home_mode", "home_mode")):
+        if s_k in settings:
+            t_dict[y_k] = str(settings[s_k]).strip()
+    for s_k, y_k in (("terminal_timeout", "timeout"), ("terminal_container_memory", "container_memory"), ("terminal_container_disk", "container_disk"), ("terminal_lifetime_seconds", "lifetime_seconds")):
+        if s_k in settings:
+            try:
+                t_dict[y_k] = int(settings[s_k])
+            except Exception:
+                pass
+    if "terminal_container_cpu" in settings:
+        try:
+            t_dict["container_cpu"] = float(settings["terminal_container_cpu"])
+        except Exception:
+            pass
+    if "terminal_container_persistent" in settings:
+        t_dict["container_persistent"] = bool(settings["terminal_container_persistent"])
+    if "terminal_docker_mount_cwd" in settings:
+        t_dict["docker_mount_cwd_to_workspace"] = bool(settings["terminal_docker_mount_cwd"])
+
+    # Sektion 7: Tool-Loop-Guardrails
+    lg_dict = _ensure_dict(existing_data, "tool_loop_guardrails")
+    if "loop_warnings_enabled" in settings:
+        lg_dict["warnings_enabled"] = bool(settings["loop_warnings_enabled"])
+    if "loop_hard_stop_enabled" in settings:
+        lg_dict["hard_stop_enabled"] = bool(settings["loop_hard_stop_enabled"])
+    wa_dict = _ensure_dict(lg_dict, "warn_after")
+    for s_k, y_k in (("warn_exact_failure", "exact_failure"), ("warn_same_tool_failure", "same_tool_failure"), ("warn_idempotent_no_progress", "idempotent_no_progress")):
+        if s_k in settings:
+            try:
+                wa_dict[y_k] = int(settings[s_k])
+            except Exception:
+                pass
+    sa_dict = _ensure_dict(lg_dict, "hard_stop_after")
+    for s_k, y_k in (("stop_exact_failure", "exact_failure"), ("stop_same_tool_failure", "same_tool_failure"), ("stop_idempotent_no_progress", "idempotent_no_progress")):
+        if s_k in settings:
+            try:
+                sa_dict[y_k] = int(settings[s_k])
+            except Exception:
+                pass
+
+    # Sektion 8: Kontext-Kompression & Prompt-Caching
+    cp_dict = _ensure_dict(existing_data, "compression")
+    if "compression_enabled" in settings:
+        cp_dict["enabled"] = bool(settings["compression_enabled"])
+    for s_k, y_k in (("compression_threshold", "threshold"), ("compression_target_ratio", "target_ratio")):
+        if s_k in settings:
+            try:
+                cp_dict[y_k] = float(settings[s_k])
+            except Exception:
+                pass
+    for s_k, y_k in (("compression_protect_last_n", "protect_last_n"), ("compression_protect_first_n", "protect_first_n")):
+        if s_k in settings:
+            try:
+                cp_dict[y_k] = int(settings[s_k])
+            except Exception:
+                pass
+    if "compression_codex_autoraise" in settings:
+        cp_dict["codex_gpt55_autoraise"] = bool(settings["compression_codex_autoraise"])
+    if "prompt_cache_ttl" in settings:
+        _ensure_dict(existing_data, "prompt_caching")["cache_ttl"] = str(settings["prompt_cache_ttl"]).strip()
+
+    # Sektion 9: Memory, Session-Reset & Skills
+    mm_dict = _ensure_dict(existing_data, "memory")
+    for s_k in ("memory_enabled", "user_profile_enabled"):
+        if s_k in settings:
+            mm_dict[s_k] = bool(settings[s_k])
+    for s_k, y_k in (("memory_char_limit", "memory_char_limit"), ("user_char_limit", "user_char_limit"), ("memory_flush_min_turns", "flush_min_turns"), ("memory_nudge_interval", "nudge_interval")):
+        if s_k in settings:
+            try:
+                mm_dict[y_k] = int(settings[s_k])
+            except Exception:
+                pass
+    sr_dict = _ensure_dict(existing_data, "session_reset")
+    if "session_reset_mode" in settings:
+        sr_dict["mode"] = str(settings["session_reset_mode"]).strip()
+    for s_k, y_k in (("session_reset_at_hour", "at_hour"), ("session_reset_idle_minutes", "idle_minutes")):
+        if s_k in settings:
+            try:
+                sr_dict[y_k] = int(settings[s_k])
+            except Exception:
+                pass
+    if "skills_creation_nudge_interval" in settings:
+        try:
+            _ensure_dict(existing_data, "skills")["creation_nudge_interval"] = int(settings["skills_creation_nudge_interval"])
+        except Exception:
+            pass
+
+    # Sektion 10: Delegation & MoA
+    dl_dict = _ensure_dict(existing_data, "delegation")
+    for s_k, y_k in (("delegation_max_iterations", "max_iterations"), ("delegation_max_concurrent_children", "max_concurrent_children")):
+        if s_k in settings:
+            try:
+                dl_dict[y_k] = int(settings[s_k])
+            except Exception:
+                pass
+    moa_dict = _ensure_dict(existing_data, "moa")
+    if "moa_enabled" in settings:
+        moa_dict["enabled"] = bool(settings["moa_enabled"])
+    if "moa_fanout" in settings:
+        moa_dict["fanout"] = str(settings["moa_fanout"]).strip()
+    if "moa_max_tokens" in settings:
+        try:
+            moa_dict["max_tokens"] = int(settings["moa_max_tokens"])
+        except Exception:
+            pass
+    if "moa_degraded_policy" in settings:
+        moa_dict["degraded_reference_policy"] = str(settings["moa_degraded_policy"]).strip()
+    moa_agg_dict = _ensure_dict(moa_dict, "aggregator")
+    if "moa_aggregator_provider" in settings:
+        moa_agg_dict["provider"] = str(settings["moa_aggregator_provider"]).strip()
+    if "moa_aggregator_model" in settings:
+        moa_agg_dict["model"] = str(settings["moa_aggregator_model"]).strip()
+
+    # Sektion 11: Auxiliary (Vision & Web)
+    aux_dict = _ensure_dict(existing_data, "auxiliary")
+    vis_dict = _ensure_dict(aux_dict, "vision")
+    if "aux_vision_provider" in settings:
+        vis_dict["provider"] = str(settings["aux_vision_provider"]).strip()
+    if "aux_vision_model" in settings:
+        vis_dict["model"] = str(settings["aux_vision_model"]).strip()
+    web_dict = _ensure_dict(aux_dict, "web_extract")
+    if "aux_web_provider" in settings:
+        web_dict["provider"] = str(settings["aux_web_provider"]).strip()
+    if "aux_web_model" in settings:
+        web_dict["model"] = str(settings["aux_web_model"]).strip()
+
+    # Sektion 12: Browser & Tool-Search
+    br_dict = _ensure_dict(existing_data, "browser")
+    if "browser_inactivity_timeout" in settings:
+        try:
+            br_dict["inactivity_timeout"] = int(settings["browser_inactivity_timeout"])
+        except Exception:
+            pass
+    if "browser_cloud_provider" in settings:
+        br_dict["cloud_provider"] = str(settings["browser_cloud_provider"]).strip()
+    if "browser_use_gateway" in settings:
+        br_dict["use_gateway"] = bool(settings["browser_use_gateway"])
+    ts_dict = _ensure_dict(_ensure_dict(existing_data, "tools"), "tool_search")
+    if "tool_search_enabled" in settings:
+        ts_dict["enabled"] = str(settings["tool_search_enabled"]).strip()
+    if "tool_search_threshold_pct" in settings:
+        try:
+            ts_dict["threshold_pct"] = int(settings["tool_search_threshold_pct"])
+        except Exception:
+            pass
+    if "tool_search_limit" in settings:
+        try:
+            ts_dict["search_default_limit"] = int(settings["tool_search_limit"])
+        except Exception:
+            pass
+    if "tool_search_listing" in settings:
+        ts_dict["listing"] = str(settings["tool_search_listing"]).strip()
+
+    # Sektion 13: STT & Voice
+    stt_dict = _ensure_dict(existing_data, "stt")
+    if "stt_enabled" in settings:
+        stt_dict["enabled"] = bool(settings["stt_enabled"])
+    if "stt_provider" in settings:
+        stt_dict["provider"] = str(settings["stt_provider"]).strip()
+    if "stt_language" in settings:
+        stt_dict["language"] = str(settings["stt_language"]).strip()
+        _ensure_dict(stt_dict, "groq")["language"] = str(settings["stt_language"]).strip()
+    if "stt_groq_model" in settings:
+        _ensure_dict(stt_dict, "groq")["model"] = str(settings["stt_groq_model"]).strip()
+    if "stt_openai_model" in settings:
+        _ensure_dict(stt_dict, "openai")["model"] = str(settings["stt_openai_model"]).strip()
+    if "stt_local_model" in settings:
+        _ensure_dict(stt_dict, "local")["model"] = str(settings["stt_local_model"]).strip()
+    if "voice_auto_tts" in settings:
+        _ensure_dict(existing_data, "voice")["auto_tts"] = bool(settings["voice_auto_tts"])
+
+    # Sektion 14: Updates
+    up_dict = _ensure_dict(existing_data, "updates")
+    if "updates_pre_backup" in settings:
+        up_dict["pre_update_backup"] = bool(settings["updates_pre_backup"])
+    if "updates_backup_keep" in settings:
+        try:
+            up_dict["backup_keep"] = int(settings["updates_backup_keep"])
+        except Exception:
+            pass
+    if "updates_local_changes" in settings:
+        up_dict["non_interactive_local_changes"] = str(settings["updates_local_changes"]).strip()
+
+    # BIDIREKTIONALE SYNCHRONISATION: Hermes (config.yaml) -> Archon Autonomie-Module (settings.json)
+    try:
+        from backend.autonomy_settings import save_autonomy_settings
+        aut_sync = {}
+        if "delegation_max_concurrent_children" in settings or "task_timeout_seconds" in settings:
+            aut_sync["concurrency"] = {}
+            if "delegation_max_concurrent_children" in settings:
+                aut_sync["concurrency"]["max_concurrent_agents"] = int(settings["delegation_max_concurrent_children"])
+            if "task_timeout_seconds" in settings:
+                aut_sync["concurrency"]["queue_timeout_seconds"] = int(settings["task_timeout_seconds"])
+        if "stop_exact_failure" in settings or "max_turns" in settings or "loop_warnings_enabled" in settings:
+            aut_sync["circuit_breaker"] = {}
+            if "loop_warnings_enabled" in settings:
+                aut_sync["circuit_breaker"]["loop_detection_enabled"] = bool(settings["loop_warnings_enabled"])
+            if "stop_exact_failure" in settings:
+                aut_sync["circuit_breaker"]["max_identical_turns"] = int(settings["stop_exact_failure"])
+            if "max_turns" in settings:
+                aut_sync["circuit_breaker"]["max_steps_per_task"] = int(settings["max_turns"])
+        if "terminal_container_cpu" in settings or "terminal_timeout" in settings:
+            aut_sync["ephemeral_sandbox"] = {}
+            if "terminal_container_cpu" in settings:
+                aut_sync["ephemeral_sandbox"]["cpu_limit"] = float(settings["terminal_container_cpu"])
+            if "terminal_timeout" in settings:
+                aut_sync["ephemeral_sandbox"]["timeout_seconds"] = int(settings["terminal_timeout"])
+        if "compression_enabled" in settings or "compression_protect_last_n" in settings:
+            aut_sync["context_compactor"] = {}
+            if "compression_enabled" in settings:
+                aut_sync["context_compactor"]["enabled"] = bool(settings["compression_enabled"])
+            if "compression_protect_last_n" in settings:
+                aut_sync["context_compactor"]["keep_recent_turns"] = int(settings["compression_protect_last_n"])
+        if "moa_enabled" in settings:
+            aut_sync["consensus_gate"] = {"enabled": bool(settings["moa_enabled"])}
+        if aut_sync:
+            save_autonomy_settings(aut_sync)
+    except Exception as e_sync:
+        logger.warning(f"[Hermes -> Archon Sync] {e_sync}")
 
     try:
         if os.path.exists(target_path):
@@ -6572,8 +7326,84 @@ def api_save_hermes_form_config(payload: dict = Body(...)):
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         with open(target_path, "w", encoding="utf-8") as f:
             yaml.dump(existing_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+        # Wenn die globale Basis-Konfiguration (/opt/data/config.yaml) gespeichert wird,
+        # synchronisiere model.default & model.provider auch nach /opt/data/profiles/default/config.yaml
+        if os.path.abspath(target_path) == "/opt/data/config.yaml":
+            def_prof_cfg = "/opt/data/profiles/default/config.yaml"
+            if os.path.exists(def_prof_cfg):
+                try:
+                    with open(def_prof_cfg, "r", encoding="utf-8") as f_dp:
+                        dp_data = yaml.safe_load(f_dp.read()) or {}
+                    if isinstance(dp_data, dict):
+                        dp_m = _ensure_dict(dp_data, "model")
+                        if "model_default" in settings and str(settings["model_default"]).strip():
+                            dp_m["default"] = str(settings["model_default"]).strip()
+                        if "model_provider" in settings and str(settings["model_provider"]).strip():
+                            dp_m["provider"] = str(settings["model_provider"]).strip()
+                        if "base_url" in settings:
+                            b_u = str(settings["base_url"]).strip()
+                            if b_u:
+                                dp_m["base_url"] = b_u
+                            elif "base_url" in dp_m:
+                                del dp_m["base_url"]
+                        with open(def_prof_cfg, "w", encoding="utf-8") as f_dp:
+                            yaml.dump(dp_data, f_dp, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                except Exception as dp_err:
+                    logger.warning(f"[Hermes Settings] Default profile sync warning: {dp_err}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern der Konfiguration: {str(e)}")
+
+    # Wenn target_path zu einem spezifischen Agenten-Profil gehört, synchronisiere profile.yaml, agent_profiles.json & Org-Chart
+    try:
+        prof_dir = os.path.dirname(os.path.abspath(target_path))
+        prof_yaml = os.path.join(prof_dir, "profile.yaml")
+        prof_id = os.path.basename(prof_dir)
+        m_def = str(settings.get("model_default", "")).strip()
+        m_prov = str(settings.get("model_provider", "")).strip()
+        r_eff = str(settings.get("reasoning_effort", "")).strip().lower()
+        if os.path.exists(prof_yaml) and (m_def or m_prov or r_eff):
+            with open(prof_yaml, "r", encoding="utf-8") as fy:
+                pdata = yaml.safe_load(fy) or {}
+            if m_def:
+                pdata["model"] = m_def
+            if m_prov:
+                pdata["provider"] = m_prov
+            if r_eff:
+                pdata["reasoning_level"] = r_eff
+            if not isinstance(pdata.get("llm"), dict):
+                pdata["llm"] = {}
+            if m_def:
+                pdata["llm"]["model"] = m_def
+            if m_prov:
+                pdata["llm"]["provider"] = m_prov
+            if r_eff:
+                pdata["llm"]["reasoning_level"] = r_eff
+            with open(prof_yaml, "w", encoding="utf-8") as fy:
+                yaml.dump(pdata, fy, allow_unicode=True, sort_keys=False)
+            # agent_profiles.json nachziehen
+            ap_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
+            if os.path.exists(ap_file):
+                with open(ap_file, "r", encoding="utf-8") as fap:
+                    ap_list = json.load(fap)
+                if isinstance(ap_list, list):
+                    for item in ap_list:
+                        if isinstance(item, dict) and item.get("id") == prof_id:
+                            if m_def:
+                                item["model"] = m_def
+                            if m_prov:
+                                item["provider"] = m_prov
+                            if r_eff:
+                                item["reasoning_level"] = r_eff
+                            break
+                    with open(ap_file, "w", encoding="utf-8") as fap:
+                        json.dump(ap_list, f, indent=2, ensure_ascii=False) if False else None
+                    with open(ap_file, "w", encoding="utf-8") as fap:
+                        json.dump(ap_list, fap, indent=2, ensure_ascii=False)
+            _sync_org_hierarchy_node(prof_id, provider=m_prov or None, model=m_def or None, reasoning_level=r_eff or None)
+            invalidate_hermes_profiles_cache()
+    except Exception as sync_err:
+        logger.warning(f"[Hermes Settings] Global profile sync warning: {sync_err}")
 
     try:
         add_ticker("Hermes Core", f"Einstellungen gespeichert für: {os.path.basename(target_path)}")
@@ -7581,6 +8411,164 @@ def api_get_research_dossier(filename: str):
 
 _VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
 
+
+
+@app.get("/api/llm-providers/models")
+async def api_get_llm_provider_models(provider: str = Query("openrouter")):
+    p = (provider or "openrouter").lower().strip()
+    catalog = {
+        "openrouter": [
+            "deepseek/deepseek-v4-flash-0731",
+            "deepseek/deepseek-chat",
+            "deepseek/deepseek-r1",
+            "z-ai/glm-5.3",
+            "anthropic/claude-3.7-sonnet",
+            "anthropic/claude-3.5-sonnet",
+            "google/gemini-2.5-pro",
+            "google/gemini-2.5-flash",
+            "google/gemini-2.5-flash-image",
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini",
+            "openai/o3-mini",
+            "meta-llama/llama-3.3-70b-instruct",
+            "qwen/qwen-2.5-coder-32b-instruct"
+        ],
+        "omniroute": [
+            "omniroute/free-forever",
+            "auto/best-free",
+            "auto/best-reasoning",
+            "auto/best-coding",
+            "auto/best-fast",
+            "deepseek/deepseek-v4-flash-0731",
+            "google/gemini-2.5-flash",
+            "anthropic/claude-3.7-sonnet"
+        ],
+        "google": [
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-image",
+            "gemini-2.0-flash"
+        ],
+        "anthropic": [
+            "claude-3-7-sonnet-latest",
+            "claude-3-5-sonnet-latest",
+            "claude-3-5-haiku-latest"
+        ],
+        "openai": [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "o3-mini",
+            "o1"
+        ],
+        "groq": [
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "deepseek-r1-distill-llama-70b"
+        ],
+        "deepseek": [
+            "deepseek-chat",
+            "deepseek-reasoner"
+        ],
+        "ollama": [
+            "llama3.2:latest",
+            "qwen2.5-coder:14b",
+            "deepseek-r1:14b",
+            "hermes3:latest"
+        ]
+    }
+    models = list(catalog.get(p, catalog["openrouter"]))
+    if p == "openrouter" and _OPENROUTER_PRICING_CACHE.get("data"):
+        for mid in _OPENROUTER_PRICING_CACHE["data"].keys():
+            if mid not in models:
+                models.append(mid)
+    return {"status": "success", "provider": p, "models": models}
+
+
+@app.post("/api/theme/upload-background")
+async def api_upload_theme_background(file: UploadFile = File(...)):
+    uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", file.filename or "background.png")
+    fname = f"bg_{int(time.time())}_{safe_name}"
+    dest = os.path.join(uploads_dir, fname)
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+    return {"status": "success", "url": f"/static/uploads/{fname}"}
+
+
+@app.get("/api/vault")
+def api_get_vault_list():
+    files = api_get_vault_files()
+    result = []
+    for item in files:
+        result.append({
+            "name": item.get("name"),
+            "path": item.get("path"),
+            "relative_path": item.get("relative_path"),
+            "type": "Obsidian MD"
+        })
+    return result
+
+
+@app.get("/api/vault/file")
+def api_read_vault_file_direct(path: str = Query(...)):
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return {"status": "success", "path": path, "content": f.read()}
+
+
+@app.post("/api/vault/edit")
+def api_edit_vault_file_direct(payload: Dict = Body(...)):
+    path = payload.get("path", "")
+    content = payload.get("content", "")
+    if not path:
+        raise HTTPException(status_code=400, detail="Pfad fehlt.")
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    _VAULT_FILES_CACHE["ts"] = 0.0
+    return {"status": "success", "path": path}
+
+
+@app.delete("/api/vault")
+def api_delete_vault_file_direct(path: str = Query(...)):
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    os.remove(path)
+    _VAULT_FILES_CACHE["ts"] = 0.0
+    return {"status": "success", "deleted": path}
+
+
+@app.post("/api/sandbox")
+def api_run_python_sandbox(payload: Dict = Body(...)):
+    fname = re.sub(r"[^a-zA-Z0-9._-]", "_", payload.get("file_path", "sandbox_script.py"))
+    if not fname.endswith(".py"):
+        fname += ".py"
+    code_content = payload.get("code_content", "")
+    sb_dir = os.path.join(DATA_DIR, "sandbox")
+    os.makedirs(sb_dir, exist_ok=True)
+    script_path = os.path.join(sb_dir, fname)
+    with open(script_path, "w", encoding="utf-8") as f:
+        f.write(code_content)
+    try:
+        proc = subprocess.run(
+            [sys.executable, script_path],
+            cwd=sb_dir,
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        return {
+            "status": "success",
+            "code": proc.returncode,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr
+        }
+    except Exception as e:
+        return {"status": "error", "code": -1, "stdout": "", "stderr": str(e)}
+
 @app.get("/api/vault/files")
 def api_get_vault_files():
     global _VAULT_FILES_CACHE
@@ -7607,15 +8595,20 @@ KANBAN_CARDS_FILE = os.path.join(DATA_DIR, "kanban_cards.json")
 def api_get_kanban():
     kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else "C:\\Users\\micha\\.hermes\\kanban.db"
     if os.path.exists(kanban_db):
+        kconn = None
         try:
-            with sqlite3.connect(kanban_db, timeout=5.0) as kconn:
-                kconn.row_factory = sqlite3.Row
-                rows = kconn.execute(
-                    "SELECT id, title, body as description, assignee, status, priority, created_at FROM tasks WHERE status != 'archived' ORDER BY priority DESC, created_at DESC"
-                ).fetchall()
-                return [dict(r) for r in rows]
+            kconn = sqlite3.connect(kanban_db, timeout=5.0)
+            kconn.execute("PRAGMA busy_timeout=5000;")
+            kconn.row_factory = sqlite3.Row
+            rows = kconn.execute(
+                "SELECT id, title, body as description, assignee, status, priority, created_at FROM tasks WHERE status != 'archived' ORDER BY priority DESC, created_at DESC"
+            ).fetchall()
+            return [dict(r) for r in rows]
         except Exception:
             pass
+        finally:
+            if kconn:
+                kconn.close()
     if os.path.exists(KANBAN_CARDS_FILE):
         try:
             with open(KANBAN_CARDS_FILE, "r", encoding="utf-8") as f:
@@ -8308,9 +9301,9 @@ def clear_chat_history_api(agent_id: str, session_id: Optional[str] = None):
     return {"status": "error", "message": "Memory bridge unavailable"}
 
 @app.get("/api/proxy")
-def proxy_web_ui(url: str):
-    """Header-stripping proxy to bypass X-Frame-Options & CSP for embedded Web UIs."""
-    import requests, urllib.parse
+async def proxy_web_ui(url: str):
+    """Header-stripping async proxy to bypass X-Frame-Options & CSP for embedded Web UIs."""
+    import urllib.parse
     from fastapi.responses import HTMLResponse, Response
     
     parsed = urllib.parse.urlparse(url)
@@ -8326,11 +9319,12 @@ def proxy_web_ui(url: str):
     elif "127.0.0.1:" in target_url:
         target_url = target_url.replace("127.0.0.1:", "host.docker.internal:")
         
+    client = _get_shared_proxy_client()
     try:
-        resp = requests.get(target_url, headers=req_headers, timeout=10)
+        resp = await client.get(target_url, headers=req_headers, timeout=10.0, follow_redirects=True)
     except Exception:
         try:
-            resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10.0, follow_redirects=True)
         except Exception as e:
             err_html = f"<div style='font-family:sans-serif; padding:20px; color:#ef4444;'><h3>Web UI Proxy Status</h3><p>Konnte <code>{url}</code> nicht laden: {e}</p></div>"
             return HTMLResponse(content=err_html, status_code=502)
@@ -8503,15 +9497,18 @@ def select_llm_provider(req: LLMProviderSelectRequest):
         import api_provider
         pid = req.provider.strip().lower()
         model = req.model.strip() if req.model else None
+        if model and "session-guard" in model:
+            model = None
         
         if pid == "omniroute":
             base_url = req.base_url or "http://omniroute:20128/v1"
-            res = api_provider.set_provider_model(provider="groq", model=model or "evey-session-guard:")
-            api_provider._set_model_block(model or "evey-session-guard:", "groq", base_url)
+            chosen_model = model or "auto/best-coding"
+            res = api_provider.set_provider_model(provider="omniroute", model=chosen_model)
+            api_provider._set_model_block(chosen_model, "omniroute", base_url)
         else:
             res = api_provider.set_provider_model(provider=pid, model=model)
             # Remove base_url when switching away from omniroute
-            api_provider._set_model_block(res.get("model") or "", pid, None)
+            api_provider._set_model_block(res.get("model") or model or "", pid, None)
             
         return {"status": "ok", "result": res, "active": api_provider.read_active_config()}
     except Exception as e:
@@ -8903,11 +9900,13 @@ def api_get_agent_activity(agent_id: str):
 
     # 2. Prüfe conversations in agentic_memory.db
     recent_turns = []
+    conn = None
     try:
         db_path = "/app/data/agentic_memory.db"
         if os.path.exists(db_path):
             import sqlite3
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(db_path, timeout=5.0)
+            conn.execute("PRAGMA busy_timeout=5000;")
             c = conn.cursor()
             rows = c.execute(
                 "SELECT role, content, timestamp FROM conversations WHERE agent_id = ? ORDER BY id DESC LIMIT 5",
@@ -8915,9 +9914,11 @@ def api_get_agent_activity(agent_id: str):
             ).fetchall()
             for r in reversed(rows):
                 recent_turns.append(f"[{r[2]}] {r[0].upper()}: {r[1][:140]}")
-            conn.close()
     except Exception:
         pass
+    finally:
+        if conn:
+            conn.close()
 
     # 3. Fallback / Standard-Heartbeat
     if not log_lines and not recent_turns:
@@ -9158,31 +10159,34 @@ async def get_hud_telemetry():
     agents = load_agents()
     services = load_services()
     
-    fleet_status = []
-    for s in services:
+    async def _probe_service(s: dict) -> dict:
         port = s.get("port")
         is_up = False
         if port:
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.settimeout(0.2)
-                    for host in ["127.0.0.1", "host.docker.internal", "localhost"]:
-                        if sock.connect_ex((host, port)) == 0:
-                            is_up = True
-                            break
-            except Exception:
-                is_up = s.get("active", True)
+            for host in ("127.0.0.1", "host.docker.internal"):
+                try:
+                    _, writer = await asyncio.wait_for(asyncio.open_connection(host, int(port)), timeout=0.15)
+                    writer.close()
+                    try:
+                        await writer.wait_closed()
+                    except Exception:
+                        pass
+                    is_up = True
+                    break
+                except Exception:
+                    continue
         else:
             is_up = s.get("active", True)
-
-        fleet_status.append({
+        return {
             "id": s.get("id"),
             "name": s.get("name"),
             "port": port,
             "role": s.get("role"),
             "status": "online" if is_up else "standby",
             "active": is_up
-        })
+        }
+
+    fleet_status = list(await asyncio.gather(*[_probe_service(s) for s in services]))
 
     vault_notes = 0
     obs_path = os.path.join(WORKSPACE_DIR, "obsidian_vault")
@@ -9297,10 +10301,14 @@ def _load_mission_control_data() -> dict:
             import sqlite3
             for db in ["/opt/data/agentic_memory.db", "./data/agentic_memory.db"]:
                 if os.path.exists(db):
-                    conn = sqlite3.connect(db)
-                    cur = conn.cursor()
-                    cur.execute("SELECT id, title, role, status, created_at FROM tasks ORDER BY created_at DESC LIMIT 20")
-                    for row in cur.fetchall():
+                    conn = sqlite3.connect(db, timeout=5.0)
+                    conn.execute("PRAGMA busy_timeout=5000;")
+                    try:
+                        cur = conn.cursor()
+                        cur_rows = cur.execute("SELECT id, title, role, status, created_at FROM tasks ORDER BY created_at DESC LIMIT 20").fetchall()
+                    finally:
+                        conn.close()
+                    for row in cur_rows:
                         t_id, t_title, t_role, t_status, t_created = row
                         status_raw = (t_status or "").lower()
                         if status_raw in ["waiting_approval", "approval", "gate"]:
@@ -9491,13 +10499,22 @@ def _get_live_telemetry_metrics():
     minute_buckets = [0.0] * 15
     
     for db in state_dbs:
+        con = None
         try:
-            con = sqlite3.connect(db, timeout=1.0)
+            con = sqlite3.connect(db, timeout=5.0)
+            con.execute("PRAGMA busy_timeout=5000;")
             rows = con.execute('''
                 SELECT model, input_tokens, output_tokens, estimated_cost_usd, last_seen 
                 FROM session_model_usage 
-                ORDER BY last_seen DESC LIMIT 50
-            ''').fetchall()
+                WHERE last_seen >= ?
+                ORDER BY last_seen DESC LIMIT 200
+            ''', (today_start_ts,)).fetchall()
+            if not rows:
+                rows = con.execute('''
+                    SELECT model, input_tokens, output_tokens, estimated_cost_usd, last_seen 
+                    FROM session_model_usage 
+                    ORDER BY last_seen DESC LIMIT 50
+                ''').fetchall()
             for r in rows:
                 m, inp, out, cost, lseen = r[0], r[1] or 0, r[2] or 0, r[3] or 0.0, r[4] or 0
                 tot = inp + out
@@ -9512,9 +10529,11 @@ def _get_live_telemetry_metrics():
                     tokens_last_15m += tot
                     bucket_idx = min(14, max(0, int((now_ts - lseen) / 60)))
                     minute_buckets[14 - bucket_idx] += round(tot / 1000.0, 1)
-            con.close()
         except Exception:
             pass
+        finally:
+            if con:
+                con.close()
             
     all_sessions.sort(key=lambda x: x[0], reverse=True)
     if all_sessions:
@@ -9548,7 +10567,7 @@ async def sse_events_stream():
     Server-Sent Events Stream für Realtime Push-Updates (Kanban, Telegram-Decisions, Ticker).
     Ersetzt clientseitiges aggressives Polling.
     """
-    queue = asyncio.Queue()
+    queue = asyncio.Queue(maxsize=100)
     _SSE_SUBSCRIBERS.append(queue)
 
     async def event_generator():
@@ -9589,6 +10608,35 @@ async def get_mission_control_state():
     # health parallel 47ms -> 24.571ms). Deshalb aus dem Event-Loop auslagern.
     data = await asyncio.to_thread(_load_mission_control_data)
     tasks = data.get("tasks", [])
+
+    # 23.10.2026: Live-Synchronisation mit kanban.db (Source of Truth für Tasks)
+    def _fetch_in_progress_from_kanban():
+        try:
+            from backend.operations_api import _get_kanban_connection
+            conn = _get_kanban_connection()
+            try:
+                cur = conn.cursor()
+                rows = cur.execute("SELECT id, title, assignee, status, started_at, model_override FROM tasks WHERE status = 'in_progress'").fetchall()
+                res = []
+                for r in rows:
+                    res.append({
+                        "id": r["id"],
+                        "title": r["title"],
+                        "agent_id": r["assignee"],
+                        "agent_name": r["assignee"],
+                        "model": r["model_override"] or "omniroute/best-coding",
+                        "status": "in_progress",
+                        "started_at": r["started_at"]
+                    })
+                return res
+            finally:
+                conn.close()
+        except Exception:
+            return []
+
+    k_tasks = await asyncio.to_thread(_fetch_in_progress_from_kanban)
+    if k_tasks:
+        tasks = [t for t in tasks if t.get("status") != "in_progress"] + k_tasks
     
     # 1. Profile aus agent_profiles.json laden (51 reale Profile)
     profiles = await asyncio.to_thread(api_get_hermes_profiles) if "api_get_hermes_profiles" in globals() else []
@@ -10796,20 +11844,23 @@ async def get_fabric_pattern_detail(pattern_id: str):
     }
 
 # -------------------------------------------------------------
-# SUREPROMPTS FORMULAR-BAUKASTEN API (324 Enterprise-Templates)
+# ARCHON PROMPT STUDIO FORMULAR-BAUKASTEN API (824 Enterprise-Templates)
 # -------------------------------------------------------------
 
-_SUREPROMPTS_CACHE: Optional[List[Dict[str, Any]]] = None
+_PROMPT_STUDIO_CACHE: Optional[List[Dict[str, Any]]] = None
 
-def _load_sureprompts_catalog() -> List[Dict[str, Any]]:
-    global _SUREPROMPTS_CACHE
-    if _SUREPROMPTS_CACHE is not None:
-        return _SUREPROMPTS_CACHE
+def _load_prompt_studio_catalog() -> List[Dict[str, Any]]:
+    global _PROMPT_STUDIO_CACHE
+    if _PROMPT_STUDIO_CACHE is not None:
+        return _PROMPT_STUDIO_CACHE
 
     paths = [
-        "/app/sureprompts_catalog_de_enhanced.json",
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "sureprompts_catalog_de_enhanced.json"),
-        "./sureprompts_catalog_de_enhanced.json",
+        "/app/prompt_studio_catalog.json",
+        "/app/data/prompt_studio_catalog.json",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompt_studio_catalog.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "prompt_studio_catalog.json"),
+        "./prompt_studio_catalog.json",
+        "./data/prompt_studio_catalog.json",
         "/opt/data/prompt_templates.json"
     ]
     records = []
@@ -10821,15 +11872,18 @@ def _load_sureprompts_catalog() -> List[Dict[str, Any]]:
                 if records:
                     break
             except Exception as e:
-                logger.warning(f"[SurePrompts API] Fehler beim Laden von {p}: {e}")
+                logger.warning(f"[Prompt Studio API] Fehler beim Laden von {p}: {e}")
 
-    _SUREPROMPTS_CACHE = records or []
-    return _SUREPROMPTS_CACHE
+    _PROMPT_STUDIO_CACHE = records or []
+    return _PROMPT_STUDIO_CACHE
+
+# Kompatibilitäts-Alias
+_load_sureprompts_catalog = _load_prompt_studio_catalog
 
 @app.get("/api/templates/catalog")
-async def get_sureprompts_catalog(category: Optional[str] = None, q: Optional[str] = None):
-    """Liefert den gesamten SurePrompts-Katalog (324 Vorlagen) gefiltert nach Kategorie/Suche."""
-    catalog = _load_sureprompts_catalog()
+async def get_prompt_studio_catalog(category: Optional[str] = None, q: Optional[str] = None):
+    """Liefert den gesamten Archon Prompt Studio Katalog (824 Vorlagen) gefiltert nach Kategorie/Suche."""
+    catalog = _load_prompt_studio_catalog()
     categories = sorted(list({t["category"] for t in catalog if "category" in t}))
 
     filtered = catalog
@@ -10850,7 +11904,7 @@ async def get_sureprompts_catalog(category: Optional[str] = None, q: Optional[st
             "name_de": t.get("name_de") or t.get("name"),
             "category": t.get("category"),
             "category_slug": t.get("category_slug"),
-            "tier": t.get("tier", "Free"),
+            "tier": t.get("tier", "Community"),
             "description": t.get("description_de") or t.get("description", ""),
             "description_de": t.get("description_de") or t.get("description", ""),
             "field_count": len(t.get("form_fields", []))
@@ -10869,7 +11923,7 @@ async def get_sureprompts_catalog(category: Optional[str] = None, q: Optional[st
 @app.get("/api/templates/{template_slug}/schema")
 async def get_template_schema(template_slug: str):
     """Gibt das Formular-Schema und den Template-Text für ein einzelnes Template zurück."""
-    catalog = _load_sureprompts_catalog()
+    catalog = _load_prompt_studio_catalog()
     tpl = next((t for t in catalog if t.get("id") == template_slug), None)
     if not tpl:
         raise HTTPException(status_code=404, detail="Template nicht gefunden.")
@@ -10889,7 +11943,7 @@ async def render_template_prompt(template_slug: str, req: TemplateRenderRequest)
     Verhalten A: Leere optionale Variablen und deren Zeilen werden rückstandslos entfernt.
     Inklusive Unterstützung für Advanced Options (Denk-Methodik, Ausgabe-Vorgaben, etc.).
     """
-    catalog = _load_sureprompts_catalog()
+    catalog = _load_prompt_studio_catalog()
     tpl = next((t for t in catalog if t.get("id") == template_slug), None)
     if not tpl:
         raise HTTPException(status_code=404, detail="Template nicht gefunden.")
@@ -11383,13 +12437,27 @@ async def test_agent_profile_governance(agent_id: str):
 # -------------------------------------------------------------
 # OMNIROUTE EMBEDDED REVERSE PROXY (STRIPS X-FRAME-OPTIONS & CSP)
 # -------------------------------------------------------------
+_PROXY_HTTP_CLIENTS: Dict[int, httpx.AsyncClient] = {}
+
+def _get_shared_proxy_client() -> httpx.AsyncClient:
+    loop_id = id(asyncio.get_running_loop())
+    c = _PROXY_HTTP_CLIENTS.get(loop_id)
+    if c is None or c.is_closed:
+        c = httpx.AsyncClient(
+            follow_redirects=False,
+            timeout=60.0,
+            limits=httpx.Limits(max_keepalive_connections=30, max_connections=120)
+        )
+        _PROXY_HTTP_CLIENTS[loop_id] = c
+    return c
+
 async def forward_to_omniroute(request: Request, path: str):
     target_host = "omniroute:20128"
     url = f"http://{target_host}/{path}"
     if request.url.query:
         url += f"?{request.url.query}"
         
-    client = httpx.AsyncClient(follow_redirects=False, timeout=60.0)
+    client = _get_shared_proxy_client()
     try:
         req_headers = dict(request.headers)
         req_headers.pop("host", None)
@@ -11468,8 +12536,6 @@ async def forward_to_omniroute(request: Request, path: str):
             return Response(content=content, status_code=resp.status_code, headers=resp_headers, media_type=resp.headers.get("content-type"))
         except Exception as e2:
             return JSONResponse(status_code=502, content={"error": f"OmniRoute proxy error: {str(e2)}"})
-    finally:
-        await client.aclose()
 
 @app.api_route("/omniroute-proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 async def omniroute_proxy(request: Request, path: str = ""):
@@ -11489,7 +12555,7 @@ async def forward_to_n8n(request: Request, path: str):
     if request.url.query:
         url += f"?{request.url.query}"
         
-    client = httpx.AsyncClient(follow_redirects=False, timeout=60.0)
+    client = _get_shared_proxy_client()
     try:
         req_headers = dict(request.headers)
         req_headers.pop("host", None)
@@ -11595,8 +12661,6 @@ async def forward_to_n8n(request: Request, path: str):
             return Response(content=content, status_code=resp.status_code, headers=resp_headers, media_type=resp.headers.get("content-type"))
         except Exception as e2:
             return JSONResponse(status_code=502, content={"error": f"n8n proxy error: {str(e2)}"})
-    finally:
-        await client.aclose()
 
 @app.api_route("/n8n-proxy", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 @app.api_route("/n8n-proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
@@ -11668,3 +12732,924 @@ def debug_db():
 
 
 
+
+# =====================================================================
+# PROAKTIVER MORGEN-STANDUP & AUTONOMER WECKDIENST (Pillar 1 & 7)
+# =====================================================================
+
+@app.post("/api/system/standup/run")
+async def api_run_morning_standup():
+    """Generiert ein proaktives Morgen-Briefing über Tasks, Flotte, Inbox und Token-Kosten."""
+    from backend.autonomous_standup import generate_morning_standup
+    res = await generate_morning_standup()
+    add_ticker("Morgen-Standup", f"Tages-Briefing für {res.get('date')} erstellt.")
+    broadcast_event("morning_briefing", res)
+    return res
+
+@app.get("/api/system/standup/latest")
+async def api_get_latest_morning_standup():
+    """Liefert das aktuellste Morgen-Briefing aus dem Obsidian Vault."""
+    try:
+        from local_memory_bridge import LocalMemoryBridge
+        bridge = LocalMemoryBridge()
+        out_dir = os.path.join(bridge.vault_path, "01_PROJEKTE", "Daily_Briefings")
+        if os.path.exists(out_dir):
+            files = sorted([f for f in os.listdir(out_dir) if f.startswith("Briefing_") and f.endswith(".md")], reverse=True)
+            if files:
+                with open(os.path.join(out_dir, files[0]), "r", encoding="utf-8") as bf:
+                    return {"status": "success", "filename": files[0], "content": bf.read()}
+    except Exception:
+        pass
+    from backend.autonomous_standup import generate_morning_standup
+    return await generate_morning_standup()
+
+
+# --- NEUE AGENTIC OS MECHANIKEN (BATCH 3: INBOX WATCHER & ROBERT TOOL PERMISSIONS) ---
+
+@app.get("/api/inbox-watcher/config")
+def api_get_inbox_watcher_config():
+    from backend.inbox_watcher import get_inbox_config
+    cfg = get_inbox_config()
+    watch_dir = cfg.get("watch_folder")
+    exists = os.path.exists(watch_dir) if watch_dir else False
+    file_count = len(os.listdir(watch_dir)) if exists else 0
+    return {"status": "success", "config": cfg, "folder_exists": exists, "file_count": file_count}
+
+@app.post("/api/inbox-watcher/config")
+async def api_save_inbox_watcher_config(payload: Dict = Body(...)):
+    from backend.inbox_watcher import save_inbox_config, get_inbox_config
+    current = get_inbox_config()
+    current.update(payload)
+    ok = save_inbox_config(current)
+    return {"status": "success" if ok else "error", "config": current}
+
+@app.post("/api/inbox-watcher/scan-now")
+async def api_scan_inbox_watcher_now():
+    from backend.inbox_watcher import scan_and_process_inbox
+    res = await scan_and_process_inbox()
+    return res
+
+@app.get("/api/tools/proposals")
+def api_list_tool_proposals(status: Optional[str] = None):
+    from backend.tool_permission_manager import tool_permission_manager
+    return {"status": "success", "proposals": tool_permission_manager.list_proposals(status=status)}
+
+@app.post("/api/tools/proposals")
+def api_create_tool_proposal(payload: Dict = Body(...)):
+    from backend.tool_permission_manager import tool_permission_manager
+    return tool_permission_manager.propose_tool_installation(
+        tool_name=payload.get("tool_name", ""),
+        tool_type=payload.get("tool_type", "pip"),
+        reason=payload.get("reason", ""),
+        command=payload.get("command"),
+        requested_by=payload.get("requested_by", "Robert (Lead Orchestrator)")
+    )
+
+@app.post("/api/tools/proposals/{permission_id}/resolve")
+def api_resolve_tool_proposal(permission_id: str, payload: Dict = Body(...)):
+    from backend.tool_permission_manager import tool_permission_manager
+    action = payload.get("action", "grant")
+    return tool_permission_manager.resolve_proposal(permission_id, action=action)
+
+@app.post("/api/memory/harvest")
+def api_harvest_memory(payload: Dict = Body(...)):
+    from local_memory_bridge import LocalMemoryBridge
+    bridge = LocalMemoryBridge()
+    text = payload.get("text", "")
+    agent_id = payload.get("agent_id", "orchestrator")
+    return bridge.harvest_facts_and_preferences(text, agent_id=agent_id)
+
+
+# --- NEUE AGENTIC OS MECHANIKEN (BATCH 4: AUDIT, SNAPSHOTS, CONSENSUS, BUDGET & TELEGRAM) ---
+
+@app.get("/api/snapshots")
+def api_list_snapshots(limit: int = 50):
+    from backend.snapshot_manager import snapshot_manager
+    return {"status": "success", "snapshots": snapshot_manager.list_snapshots(limit=limit)}
+
+@app.post("/api/snapshots/{snapshot_id}/restore")
+def api_restore_snapshot(snapshot_id: str):
+    from backend.snapshot_manager import snapshot_manager
+    return snapshot_manager.restore_snapshot(snapshot_id)
+
+@app.get("/api/audit/logs")
+def api_list_audit_logs(limit: int = 50):
+    from backend.audit_log import chained_audit_log
+    return {"status": "success", "logs": chained_audit_log.list_events(limit=limit)}
+
+@app.get("/api/audit/verify")
+def api_verify_audit_log():
+    from backend.audit_log import chained_audit_log
+    return chained_audit_log.verify_integrity()
+
+@app.post("/api/tasks/review-consensus")
+async def api_review_task_consensus(payload: Dict = Body(...)):
+    from backend.consensus_gate import review_task_output
+    task_id = payload.get("task_id", "task-gen")
+    task_title = payload.get("title", "")
+    task_output = payload.get("output", "")
+    worker = payload.get("worker_agent", "hermes-coder")
+    priority = int(payload.get("priority", 3))
+    return await review_task_output(task_id, task_title, task_output, worker_agent=worker, priority=priority)
+
+@app.post("/api/tasks/{task_id}/budget/check")
+def api_check_task_budget(task_id: str, payload: Dict = Body(...)):
+    from backend.agent_router import check_task_budget
+    return check_task_budget(
+        task_id=task_id,
+        cost_usd=payload.get("cost_usd", 0.0),
+        budget_usd=payload.get("budget_usd", 0.25),
+        task_title=payload.get("title", "")
+    )
+
+
+# --- NEUE AGENTIC OS MECHANIKEN (BATCH 5: RAG-BRIDGE, DEADLOCKS, DIFFS, SKILL-SYNTHESIS, EVENT-MESH) ---
+
+@app.get("/api/rag/query")
+def api_query_rag(q: str = Query(..., description="Suchbegriff für das AnythingLLM Docker-RAG")):
+    from backend.rag_bridge import rag_bridge
+    return rag_bridge.query_vault_rag(q)
+
+@app.post("/api/system/deadlock-check")
+def api_deadlock_check(timeout_seconds: int = 45):
+    from backend.deadlock_supervisor import deadlock_supervisor
+    return deadlock_supervisor.detect_and_resolve_deadlocks(stagnation_threshold_seconds=timeout_seconds)
+
+@app.post("/api/diff/preview")
+def api_diff_preview(payload: Dict = Body(...)):
+    from backend.diff_engine import compute_file_diff
+    return compute_file_diff(
+        file_path=payload.get("file_path", ""),
+        new_content=payload.get("new_content", ""),
+        context_lines=int(payload.get("context_lines", 3))
+    )
+
+@app.get("/api/skills/proposals")
+def api_list_skill_proposals(status: Optional[str] = None):
+    from backend.skill_synthesizer import skill_synthesizer
+    return {"status": "success", "proposals": skill_synthesizer.list_proposals(status=status)}
+
+@app.post("/api/skills/proposals/{proposal_id}/approve")
+def api_approve_skill_proposal(proposal_id: str):
+    from backend.skill_synthesizer import skill_synthesizer
+    return skill_synthesizer.approve_skill(proposal_id)
+
+@app.post("/api/events/inbound/{channel}")
+def api_ingest_inbound_event(channel: str, payload: Dict = Body(...)):
+    from backend.event_mesh import event_mesh
+    return event_mesh.ingest_inbound_event(
+        channel=channel,
+        event_type=payload.get("event_type", "generic_event"),
+        payload=payload
+    )
+
+@app.get("/api/events/history")
+def api_list_event_history(limit: int = 50):
+    from backend.event_mesh import event_mesh
+    return {"status": "success", "events": event_mesh.list_events(limit=limit)}
+
+
+# --- NEUE AGENTIC OS MECHANIKEN (BATCH 6: THROTTLE, BENCHMARK, VISION, HYGIENE, HANDOFF) ---
+
+@app.get("/api/concurrency/status")
+def api_get_concurrency_status():
+    from backend.concurrency_throttle import concurrency_throttle
+    return {"status": "success", "concurrency": concurrency_throttle.get_status()}
+
+@app.post("/api/concurrency/config")
+def api_save_concurrency_config(payload: Dict = Body(...)):
+    from backend.concurrency_throttle import save_concurrency_config, get_concurrency_config
+    cfg = get_concurrency_config()
+    cfg.update(payload)
+    ok = save_concurrency_config(cfg)
+    return {"status": "success" if ok else "error", "concurrency": cfg}
+
+@app.post("/api/router/benchmark")
+async def api_run_model_benchmark(payload: Dict = Body(...)):
+    from backend.model_benchmarker import run_model_benchmark
+    return await run_model_benchmark(
+        prompt=payload.get("prompt", "Erstelle eine strukturierte Zusammenfassung der DSGVO-Kernpflichten."),
+        model_a=payload.get("model_a", "deepseek/deepseek-chat"),
+        model_b=payload.get("model_b", "anthropic/claude-3-5-sonnet"),
+        role=payload.get("role", "Senior Analyst")
+    )
+
+@app.post("/api/vision/analyze")
+def api_analyze_vision(payload: Dict = Body(...)):
+    from backend.vision_pipeline import analyze_image_file
+    return analyze_image_file(
+        image_path=payload.get("image_path", ""),
+        focus_prompt=payload.get("focus_prompt", "Beschreibe den Inhalt dieses Screenshots detailliert.")
+    )
+
+@app.post("/api/vault/generate-index")
+def api_generate_vault_index():
+    from backend.vault_hygiene import generate_vault_index_and_hygiene
+    return generate_vault_index_and_hygiene()
+
+@app.post("/api/handoff/create")
+def api_create_handoff(payload: Dict = Body(...)):
+    from backend.handoff_desk import handoff_desk
+    return handoff_desk.create_handoff(
+        task_id=payload.get("task_id", ""),
+        from_agent=payload.get("from_agent", ""),
+        to_agent=payload.get("to_agent", ""),
+        deliverables=payload.get("deliverables", {}),
+        acceptance_criteria=payload.get("acceptance_criteria", "")
+    )
+
+@app.post("/api/handoff/{handoff_id}/accept")
+def api_accept_handoff(handoff_id: str, payload: Dict = Body(...)):
+    from backend.handoff_desk import handoff_desk
+    return handoff_desk.accept_handoff(
+        handoff_id=handoff_id,
+        receiving_agent=payload.get("receiving_agent", "")
+    )
+
+
+# --- NEUE AGENTIC OS MECHANIKEN (BATCH 7: FLEET SELF-HEALING, DB-BACKUP, SECRET-MASKING, NOTIFICATION-HUB) ---
+
+@app.post("/api/fleet/heal/{service_name}")
+def api_heal_service(service_name: str):
+    from backend.fleet_self_healing import restart_service_container
+    return restart_service_container(service_name)
+
+@app.get("/api/fleet/health-check")
+def api_fleet_health_check():
+    from backend.fleet_self_healing import check_fleet_and_heal
+    return check_fleet_and_heal()
+
+@app.post("/api/system/backup-db")
+def api_backup_databases():
+    from backend.db_backup_manager import db_backup_manager
+    return db_backup_manager.checkpoint_and_backup()
+
+@app.get("/api/system/backup-db/list")
+def api_list_db_backups():
+    from backend.db_backup_manager import db_backup_manager
+    return {"status": "success", "backups": db_backup_manager.list_backups()}
+
+@app.post("/api/security/mask-secrets")
+def api_mask_secrets(payload: Dict = Body(...)):
+    from backend.secret_masker import mask_sensitive_text
+    masked, count = mask_sensitive_text(payload.get("text", ""))
+    return {"status": "success", "masked_text": masked, "redacted_count": count}
+
+@app.post("/api/notifications/dispatch")
+def api_dispatch_notification(payload: Dict = Body(...)):
+    from backend.notification_hub import notification_hub
+    return notification_hub.dispatch_notification(
+        title=payload.get("title", "System-Benachrichtigung"),
+        message=payload.get("message", ""),
+        severity=payload.get("severity", "INFO"),
+        category=payload.get("category", "system")
+    )
+
+@app.get("/api/notifications/recent")
+def api_list_recent_notifications(limit: int = 50):
+    from backend.notification_hub import notification_hub
+    return {"status": "success", "notifications": notification_hub.list_recent(limit=limit)}
+
+
+# --- NEUE AGENTIC OS MECHANIKEN (BATCH 8: COST-ESTIMATOR, DB-OPTIMIZER, HEALTH-SCORE, DOSSIER) ---
+
+@app.post("/api/router/estimate-cost")
+def api_estimate_cost(payload: Dict = Body(...)):
+    from backend.cost_estimator import estimate_prompt_cost
+    return estimate_prompt_cost(
+        prompt=payload.get("prompt", ""),
+        model_name=payload.get("model", "deepseek/deepseek-chat"),
+        expected_output_tokens=int(payload.get("expected_output_tokens", 1000)),
+        task_budget_usd=float(payload.get("task_budget_usd", 0.25))
+    )
+
+@app.post("/api/system/optimize-db")
+def api_optimize_db():
+    from backend.db_optimizer import optimize_all_databases
+    return optimize_all_databases()
+
+@app.get("/api/system/health-score")
+def api_get_health_score():
+    from backend.system_diagnostics import get_system_health_score
+    return get_system_health_score()
+
+@app.post("/api/system/generate-dossier")
+def api_generate_dossier():
+    from backend.system_dossier_generator import generate_system_dossier
+    return generate_system_dossier()
+
+
+# --- NEUE AGENTIC OS MECHANIKEN (BATCH 9: TIME-TRAVEL DEBUGGER, COUNCIL DEBATE, TASK SELF-HEALING & DIR WATCHER) ---
+
+@app.get("/api/traces/{task_id}")
+def api_get_task_trace(task_id: str):
+    from backend.time_travel_debugger import time_travel_debugger
+    return {"status": "success", "task_id": task_id, "trace": time_travel_debugger.get_task_trace(task_id)}
+
+@app.post("/api/traces/{task_id}/fork")
+def api_fork_task_trace(task_id: str, payload: Dict = Body(...)):
+    from backend.time_travel_debugger import time_travel_debugger
+    return time_travel_debugger.fork_execution(
+        task_id=task_id,
+        from_step=int(payload.get("from_step", 1)),
+        new_prompt=payload.get("new_prompt"),
+        new_model=payload.get("new_model")
+    )
+
+@app.post("/api/traces/{task_id}/rollback")
+def api_rollback_task_trace(task_id: str, payload: Dict = Body(...)):
+    from backend.time_travel_debugger import time_travel_debugger
+    return time_travel_debugger.rollback_to_step(
+        task_id=task_id,
+        to_step=int(payload.get("to_step", 0))
+    )
+
+@app.get("/api/router/benchmark/history")
+def api_get_benchmark_history(limit: int = 25):
+    from backend.model_benchmarker import get_benchmark_history
+    return {"status": "success", "benchmarks": get_benchmark_history(limit=limit)}
+
+@app.post("/api/consensus/council-vote")
+async def api_run_council_vote(payload: Dict = Body(...)):
+    from backend.consensus_gate import run_tri_agent_council
+    return await run_tri_agent_council(
+        task_id=payload.get("task_id", "council-task"),
+        task_title=payload.get("title", ""),
+        task_output=payload.get("output", ""),
+        model=payload.get("model")
+    )
+
+@app.get("/api/consensus/history")
+def api_get_consensus_history(limit: int = 25):
+    from backend.consensus_gate import get_consensus_history
+    return {"status": "success", "consensus_history": get_consensus_history(limit=limit)}
+
+@app.post("/api/healing/attempt")
+async def api_attempt_task_healing(payload: Dict = Body(...)):
+    from backend.task_self_healer import task_self_healer
+    return await task_self_healer.attempt_self_healing(
+        task_id=payload.get("task_id", "heal-task"),
+        task_title=payload.get("title", "Autonome Fehlerbehebung"),
+        failed_code=payload.get("failed_code", ""),
+        error_output=payload.get("error_output", ""),
+        worker_agent=payload.get("worker_agent", "hermes-coder"),
+        affected_file=payload.get("affected_file"),
+        attempt=int(payload.get("attempt", 1)),
+        max_attempts=int(payload["max_attempts"]) if "max_attempts" in payload else None,
+        model=payload.get("model")
+    )
+
+@app.get("/api/healing/logs")
+def api_get_healing_logs(limit: int = 25):
+    from backend.task_self_healer import task_self_healer
+    return {"status": "success", "logs": task_self_healer.get_healing_logs(limit=limit)}
+
+@app.post("/api/events/scan-directory")
+def api_scan_inbox_directory(payload: Dict = Body(default={})):
+    from backend.event_mesh import event_mesh
+    return event_mesh.scan_inbox_directory(inbox_dir=payload.get("inbox_dir"))
+
+
+# --- NEUE AGENTIC OS MECHANIKEN (BATCH 10: SANDBOX, MEMORY CONSOLIDATION, VISUAL BROWSER, WAR-ROOM & SLA CONTRACTS) ---
+
+@app.post("/api/sandbox/execute")
+def api_execute_sandbox(payload: Dict = Body(...)):
+    from backend.ephemeral_sandbox import ephemeral_sandbox
+    return ephemeral_sandbox.execute_in_sandbox(
+        code=payload.get("code", ""),
+        language=payload.get("language", "python"),
+        memory_limit_mb=int(payload["memory_limit_mb"]) if "memory_limit_mb" in payload else None,
+        cpu_limit=float(payload["cpu_limit"]) if "cpu_limit" in payload else None,
+        timeout_seconds=int(payload["timeout_seconds"]) if "timeout_seconds" in payload else None,
+        network_enabled=bool(payload["network_enabled"]) if "network_enabled" in payload else None
+    )
+
+@app.get("/api/settings/memory-consolidation")
+def api_get_memory_consolidation_settings():
+    from backend.memory_consolidator import get_consolidation_config
+    return {"status": "success", "config": get_consolidation_config()}
+
+@app.post("/api/settings/memory-consolidation")
+def api_save_memory_consolidation_settings(payload: Dict = Body(...)):
+    from backend.memory_consolidator import get_consolidation_config, save_consolidation_config
+    cfg = get_consolidation_config()
+    cfg.update(payload)
+    ok = save_consolidation_config(cfg)
+    return {"status": "success" if ok else "error", "config": cfg}
+
+@app.post("/api/system/consolidate-memory")
+def api_trigger_memory_consolidation(payload: Dict = Body(default={})):
+    from backend.memory_consolidator import run_sleep_cycle_consolidation
+    force = bool(payload.get("force", True))
+    return run_sleep_cycle_consolidation(force=force)
+
+@app.post("/api/browser/browse-and-capture")
+def api_browse_and_capture(payload: Dict = Body(...)):
+    from backend.visual_web_agent import visual_web_agent
+    return visual_web_agent.browse_and_capture(
+        task_id=payload.get("task_id", f"vis-{datetime.datetime.now().strftime('%H%M%S')}"),
+        target_url=payload.get("url", "https://example.com"),
+        actions=payload.get("actions"),
+        extract_selector=payload.get("extract_selector")
+    )
+
+@app.post("/api/simulation/war-room")
+async def api_run_war_room(payload: Dict = Body(...)):
+    from backend.war_room_simulator import run_war_room_simulation
+    return await run_war_room_simulation(
+        topic=payload.get("topic", "System-Update"),
+        proposal_text=payload.get("proposal", ""),
+        model=payload.get("model")
+    )
+
+@app.get("/api/simulation/war-room/history")
+def api_get_war_room_history(limit: int = 20):
+    from backend.war_room_simulator import get_war_room_history
+    return {"status": "success", "history": get_war_room_history(limit=limit)}
+
+@app.post("/api/contracts/create")
+def api_create_contract(payload: Dict = Body(...)):
+    from backend.sla_contract_enforcer import sla_contract_enforcer
+    return sla_contract_enforcer.create_contract(
+        task_id=payload.get("task_id", "task-sla"),
+        delegator_agent=payload.get("delegator", "agent-lead"),
+        assignee_agent=payload.get("assignee", "agent-worker"),
+        required_keys=payload.get("required_keys"),
+        min_content_length=int(payload["min_content_length"]) if "min_content_length" in payload else None,
+        acceptance_criteria=payload.get("acceptance_criteria"),
+        max_turnaround_minutes=int(payload["max_turnaround_minutes"]) if "max_turnaround_minutes" in payload else None
+    )
+
+@app.post("/api/contracts/validate")
+def api_validate_contract(payload: Dict = Body(...)):
+    from backend.sla_contract_enforcer import sla_contract_enforcer
+    return sla_contract_enforcer.validate_delivery(
+        contract_id=payload.get("contract_id", ""),
+        delivery_payload=payload.get("delivery", {})
+    )
+
+@app.get("/api/contracts/history")
+def api_get_contracts_history(limit: int = 25):
+    from backend.sla_contract_enforcer import sla_contract_enforcer
+    return {"status": "success", "contracts": sla_contract_enforcer.list_contracts(limit=limit)}
+
+
+# --- ZENTRALE KONFIGURATION ALLER 10 AUTONOMIE- & RESILIENZ-GRUPPEN (SETTINGS-PAKET A & B) ---
+
+@app.get("/api/settings/autonomy-modules")
+def api_get_autonomy_modules_settings():
+    from backend.autonomy_settings import load_all_settings
+    return {"status": "success", "settings": load_all_settings()}
+
+@app.post("/api/settings/autonomy-modules")
+def api_save_autonomy_modules_settings(payload: Dict = Body(...)):
+    from backend.autonomy_settings import save_autonomy_settings
+    updated = save_autonomy_settings(payload)
+    # BIDIREKTIONALE SYNCHRONISATION: Archon Autonomie-Module (settings.json) -> Hermes (config.yaml)
+    try:
+        import yaml
+        active_path, _ = _get_hermes_config_paths()
+        if active_path and os.path.exists(active_path):
+            with open(active_path, "r", encoding="utf-8") as f:
+                hdata = yaml.safe_load(f.read()) or {}
+            if not isinstance(hdata, dict):
+                hdata = {}
+            conc = payload.get("concurrency", {})
+            if isinstance(conc, dict):
+                if "max_concurrent_agents" in conc:
+                    hdata.setdefault("delegation", {})["max_concurrent_children"] = int(conc["max_concurrent_agents"])
+                if "queue_timeout_seconds" in conc:
+                    hdata.setdefault("agent", {})["task_timeout_seconds"] = int(conc["queue_timeout_seconds"])
+            cb = payload.get("circuit_breaker", {})
+            if isinstance(cb, dict):
+                tlg = hdata.setdefault("tool_loop_guardrails", {})
+                if "loop_detection_enabled" in cb:
+                    tlg["warnings_enabled"] = bool(cb["loop_detection_enabled"])
+                if "max_identical_turns" in cb:
+                    tlg.setdefault("hard_stop_after", {})["exact_failure"] = int(cb["max_identical_turns"])
+                if "max_steps_per_task" in cb:
+                    hdata.setdefault("agent", {})["max_turns"] = int(cb["max_steps_per_task"])
+            sb = payload.get("ephemeral_sandbox", {})
+            if isinstance(sb, dict):
+                term = hdata.setdefault("terminal", {})
+                if "cpu_limit" in sb:
+                    term["container_cpu"] = float(sb["cpu_limit"])
+                if "timeout_seconds" in sb:
+                    term["timeout"] = int(sb["timeout_seconds"])
+            cc = payload.get("context_compactor", {})
+            if isinstance(cc, dict):
+                comp = hdata.setdefault("compression", {})
+                if "enabled" in cc:
+                    comp["enabled"] = bool(cc["enabled"])
+                if "keep_recent_turns" in cc:
+                    comp["protect_last_n"] = int(cc["keep_recent_turns"])
+            cg = payload.get("consensus_gate", {})
+            if isinstance(cg, dict) and "enabled" in cg:
+                hdata.setdefault("moa", {})["enabled"] = bool(cg["enabled"])
+            with open(active_path, "w", encoding="utf-8") as f:
+                yaml.dump(hdata, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    except Exception as e_sync:
+        logger.warning(f"[Archon -> Hermes Sync] {e_sync}")
+    return {"status": "success", "settings": updated}
+
+
+# --- TEIL 2 / PAKET 1 (FEATURES 1–5): PERFORMANCE CORE, SKALIERUNG & TOKEN-EFFIZIENZ ---
+
+# Feature 1: Semantisches Prompt- & Response-Caching
+@app.post("/api/cache/semantic-lookup")
+def api_semantic_cache_lookup(payload: Dict = Body(...)):
+    from backend.semantic_cache import semantic_cache_manager
+    return semantic_cache_manager.lookup(
+        prompt=payload.get("prompt", ""),
+        model=payload.get("model", "any"),
+        threshold_override=payload.get("similarity_threshold")
+    )
+
+@app.post("/api/cache/semantic-store")
+def api_semantic_cache_store(payload: Dict = Body(...)):
+    from backend.semantic_cache import semantic_cache_manager
+    return semantic_cache_manager.store(
+        prompt=payload.get("prompt", ""),
+        response=payload.get("response", ""),
+        model=payload.get("model", "any")
+    )
+
+@app.get("/api/cache/semantic-stats")
+def api_semantic_cache_stats():
+    from backend.semantic_cache import semantic_cache_manager
+    return semantic_cache_manager.get_stats()
+
+@app.delete("/api/cache/semantic-clear")
+def api_semantic_cache_clear():
+    from backend.semantic_cache import semantic_cache_manager
+    return semantic_cache_manager.clear()
+
+
+# Feature 2: Paralleles Map-Reduce Sub-Tasking (Fan-Out / Fan-In)
+@app.post("/api/execution/map-reduce")
+async def api_execute_map_reduce(payload: Dict = Body(...)):
+    from backend.map_reduce_executor import map_reduce_executor
+    return await map_reduce_executor.execute_map_reduce(
+        task_title=payload.get("task_title", "Map-Reduce Batch"),
+        items=payload.get("items", []),
+        instruction=payload.get("instruction", "Analysiere und extrahiere Kernergebnisse"),
+        max_workers_override=payload.get("max_parallel_workers")
+    )
+
+@app.get("/api/execution/map-reduce/history")
+def api_map_reduce_history(limit: int = 20):
+    from backend.map_reduce_executor import map_reduce_executor
+    return {"status": "success", "jobs": map_reduce_executor.get_history(limit=limit)}
+
+
+# Feature 3: Speculative Fast-Routing & Latenz-Hedging
+@app.post("/api/router/hedged-completion")
+async def api_hedged_completion(payload: Dict = Body(...)):
+    from backend.speculative_hedger import speculative_hedger
+    return await speculative_hedger.execute_hedged_call(
+        prompt=payload.get("prompt", "Test-Anfrage"),
+        primary_model=payload.get("primary_model", "openai/gpt-4o"),
+        fallback_model_override=payload.get("fallback_model"),
+        hedge_delay_override=payload.get("hedge_delay_seconds"),
+        simulate_primary_latency_sec=payload.get("simulate_primary_latency_sec"),
+        simulate_fallback_latency_sec=float(payload.get("simulate_fallback_latency_sec", 0.05))
+    )
+
+@app.get("/api/router/hedged-stats")
+def api_hedged_stats():
+    from backend.speculative_hedger import speculative_hedger
+    return speculative_hedger.get_stats()
+
+
+# Feature 4: Dynamisches Context-Compaction & Hierarchisches Summarizing
+@app.post("/api/memory/compact-context")
+def api_compact_context(payload: Dict = Body(...)):
+    from backend.context_compactor import context_compactor
+    return context_compactor.compact_messages(
+        messages=payload.get("messages", []),
+        force=bool(payload.get("force", False)),
+        keep_recent_override=payload.get("keep_recent_turns")
+    )
+
+
+# Feature 5: SQLite Connection-Pool & Async Write-Batching
+@app.post("/api/system/write-batcher/enqueue")
+def api_write_batcher_enqueue(payload: Dict = Body(...)):
+    from backend.async_write_batcher import async_write_batcher
+    return async_write_batcher.enqueue(
+        event_type=payload.get("event_type", "telemetry"),
+        source_module=payload.get("source_module", "router"),
+        payload=payload.get("payload", {})
+    )
+
+@app.post("/api/system/write-batcher/flush")
+def api_write_batcher_flush():
+    from backend.async_write_batcher import async_write_batcher
+    return async_write_batcher.flush()
+
+@app.get("/api/system/write-batcher/stats")
+def api_write_batcher_stats():
+    from backend.async_write_batcher import async_write_batcher
+    return async_write_batcher.get_stats()
+
+
+# --- TEIL 2 / PAKET 2 (FEATURES 6–10): MODERNE GEDÄCHTNIS- & RAG-ARCHITEKTUR (GRAPH & HYBRID MEMORY) ---
+
+# Feature 6: Hybrid-Search (BM25 SQLite FTS5 + Vektor-RAG + Reciprocal Rank Fusion)
+@app.post("/api/memory/hybrid-index")
+def api_hybrid_index_doc(payload: Dict = Body(...)):
+    from backend.hybrid_search_engine import hybrid_search_engine
+    return hybrid_search_engine.index_document(
+        doc_id=payload.get("doc_id", "DOC-1"),
+        title=payload.get("title", "Unbenanntes Dokument"),
+        content=payload.get("content", ""),
+        source=payload.get("source", "system_docs")
+    )
+
+@app.post("/api/memory/hybrid-search")
+def api_hybrid_search(payload: Dict = Body(...)):
+    from backend.hybrid_search_engine import hybrid_search_engine
+    return hybrid_search_engine.search(
+        query=payload.get("query", ""),
+        top_k_override=payload.get("top_k"),
+        rrf_k_override=payload.get("rrf_k")
+    )
+
+
+# Feature 7: Lokaler Knowledge-Graph (Entitäten- & Beziehungs-Tripel)
+@app.post("/api/memory/knowledge-graph/triple")
+def api_kg_add_triple(payload: Dict = Body(...)):
+    from backend.knowledge_graph_store import knowledge_graph_store
+    return knowledge_graph_store.add_triple(
+        subject=payload.get("subject", ""),
+        predicate=payload.get("predicate", "RELATED_TO"),
+        obj=payload.get("object", ""),
+        confidence=float(payload.get("confidence", 0.90)),
+        source=payload.get("source", "manual")
+    )
+
+@app.post("/api/memory/knowledge-graph/ingest")
+def api_kg_ingest_text(payload: Dict = Body(...)):
+    from backend.knowledge_graph_store import knowledge_graph_store
+    return knowledge_graph_store.ingest_text(
+        text=payload.get("text", ""),
+        source=payload.get("source", "auto_extractor")
+    )
+
+@app.get("/api/memory/knowledge-graph/subgraph")
+def api_kg_subgraph(entity: str, hops: Optional[int] = None):
+    from backend.knowledge_graph_store import knowledge_graph_store
+    return knowledge_graph_store.query_subgraph(entity=entity, hops_override=hops)
+
+
+# Feature 8: Agentic Corrective RAG (CRAG)
+@app.post("/api/memory/crag-retrieve")
+def api_crag_retrieve(payload: Dict = Body(...)):
+    from backend.corrective_rag import corrective_rag_engine
+    return corrective_rag_engine.retrieve_and_verify(
+        query=payload.get("query", ""),
+        threshold_override=payload.get("relevance_threshold")
+    )
+
+
+# Feature 9: 2-Stufen Core-Memory nach MemGPT/Letta-Vorbild (Pinned Working Memory)
+@app.get("/api/memory/core-blocks")
+def api_get_core_memory_blocks():
+    from backend.core_memory_manager import core_memory_manager
+    return core_memory_manager.list_blocks()
+
+@app.post("/api/memory/core-blocks")
+def api_upsert_core_memory_block(payload: Dict = Body(...)):
+    from backend.core_memory_manager import core_memory_manager
+    return core_memory_manager.upsert_block(
+        block_key=payload.get("block_key", "custom_block"),
+        content=payload.get("content", ""),
+        block_title=payload.get("block_title", ""),
+        mode=payload.get("mode", "replace")
+    )
+
+
+# Feature 10: Automatisches Citation- & Quellen-Pinning
+@app.post("/api/memory/pin-citations")
+def api_pin_citations(payload: Dict = Body(...)):
+    from backend.citation_pinner import citation_pinner
+    return citation_pinner.pin_citations(
+        response_text=payload.get("response_text", ""),
+        sources=payload.get("sources", [])
+    )
+
+
+# --- TEIL 2 / PAKET 3 (FEATURES 11–15): ZUVERLÄSSIGE AUSFÜHRUNG & DETERMINISMUS (DURABLE EXECUTION) ---
+
+# Feature 11: Structured Outputs & JSON-Schema-Garantie
+@app.post("/api/execution/structured-output")
+def api_structured_output_validate(payload: Dict = Body(...)):
+    from backend.structured_output_enforcer import structured_output_enforcer
+    return structured_output_enforcer.validate_and_enforce(
+        raw_output=payload.get("raw_output", ""),
+        schema=payload.get("schema")
+    )
+
+
+# Feature 12: Durable Execution Checkpointing (Pause / Resume)
+@app.post("/api/execution/checkpoints/save")
+def api_save_durable_checkpoint(payload: Dict = Body(...)):
+    from backend.durable_checkpoint_manager import durable_checkpoint_manager
+    return durable_checkpoint_manager.save_checkpoint(
+        workflow_id=payload.get("workflow_id", "wf-default"),
+        task_title=payload.get("task_title", "Workflow"),
+        current_step_index=int(payload.get("current_step_index", 1)),
+        total_steps=int(payload.get("total_steps", 5)),
+        state_payload=payload.get("state", {}),
+        completed_steps=payload.get("completed_steps", []),
+        status=payload.get("status", "in_progress")
+    )
+
+@app.get("/api/execution/checkpoints/resume/{workflow_id}")
+def api_resume_durable_checkpoint(workflow_id: str):
+    from backend.durable_checkpoint_manager import durable_checkpoint_manager
+    return durable_checkpoint_manager.resume_checkpoint(workflow_id=workflow_id)
+
+@app.get("/api/execution/checkpoints/list")
+def api_list_durable_checkpoints(status: Optional[str] = None):
+    from backend.durable_checkpoint_manager import durable_checkpoint_manager
+    return {"status": "success", "checkpoints": durable_checkpoint_manager.list_checkpoints(status_filter=status)}
+
+
+# Feature 13: Idempotency-Keys & Tool-Call-Deduplizierung
+@app.post("/api/execution/idempotency/check")
+def api_idempotency_check(payload: Dict = Body(...)):
+    from backend.idempotency_guard import idempotency_guard
+    return idempotency_guard.check_or_register(
+        tool_name=payload.get("tool_name", "send_email"),
+        params=payload.get("params", {}),
+        explicit_key=payload.get("idempotency_key"),
+        execution_result=payload.get("execution_result")
+    )
+
+
+# Feature 14: Dry-Run / Shadow-Mode für Agenten-Aufträge
+@app.post("/api/execution/dry-run")
+def api_dry_run_simulate(payload: Dict = Body(...)):
+    from backend.dry_run_simulator import dry_run_simulator
+    return dry_run_simulator.simulate_task_plan(
+        task_title=payload.get("task_title", "Shadow Simulation"),
+        proposed_actions=payload.get("proposed_actions", [])
+    )
+
+
+# Feature 15: Dead-Letter-Queue (DLQ) mit Auto-Replay-Manager
+@app.post("/api/execution/dlq/enqueue")
+def api_dlq_enqueue(payload: Dict = Body(...)):
+    from backend.dead_letter_queue import dead_letter_queue_manager
+    return dead_letter_queue_manager.enqueue_failed_job(
+        job_type=payload.get("job_type", "webhook_delivery"),
+        source_module=payload.get("source_module", "router"),
+        payload=payload.get("payload", {}),
+        error_message=payload.get("error_message", "Unbekannter Fehler")
+    )
+
+@app.post("/api/execution/dlq/replay")
+def api_dlq_replay(payload: Dict = Body(...)):
+    from backend.dead_letter_queue import dead_letter_queue_manager
+    return dead_letter_queue_manager.replay_job(
+        dlq_id=payload.get("dlq_id", ""),
+        simulate_success=bool(payload.get("simulate_success", True))
+    )
+
+@app.get("/api/execution/dlq/list")
+def api_dlq_list(status: Optional[str] = None):
+    from backend.dead_letter_queue import dead_letter_queue_manager
+    return dead_letter_queue_manager.list_dlq(status_filter=status)
+
+
+# --- TEIL 2 / PAKET 4 (FEATURES 16–20): SICHERHEIT, DATENSCHUTZ & ENTERPRISE-GOVERNANCE (GUARDRAILS) ---
+
+# Feature 16: Bidirektionaler PII-Scrubber & Re-Hydration (DSGVO)
+@app.post("/api/security/pii-scrub")
+def api_pii_scrub(payload: Dict = Body(...)):
+    from backend.pii_scrubber import pii_scrubber
+    return pii_scrubber.scrub_text(
+        text=payload.get("text", ""),
+        session_id=payload.get("session_id", "")
+    )
+
+@app.post("/api/security/pii-rehydrate")
+def api_pii_rehydrate(payload: Dict = Body(...)):
+    from backend.pii_scrubber import pii_scrubber
+    return pii_scrubber.rehydrate_text(
+        response_text=payload.get("response_text", ""),
+        session_id=payload.get("session_id", ""),
+        custom_vault=payload.get("vault_map")
+    )
+
+
+# Feature 17: Egress-Firewall & Domain-Allowlisting
+@app.post("/api/security/egress-check")
+def api_egress_firewall_check(payload: Dict = Body(...)):
+    from backend.egress_firewall import egress_firewall
+    return egress_firewall.check_url(
+        target_url=payload.get("url", ""),
+        agent_id=payload.get("agent_id", "agent-worker")
+    )
+
+@app.get("/api/security/egress-logs")
+def api_egress_firewall_logs(limit: int = 25):
+    from backend.egress_firewall import egress_firewall
+    return {"status": "success", "logs": egress_firewall.get_logs(limit=limit)}
+
+
+# Feature 18: Granulare Agenten-RBAC & Datei-Scope-Jails
+@app.post("/api/security/rbac-check")
+def api_rbac_jail_check(payload: Dict = Body(...)):
+    from backend.agent_rbac_jail import agent_rbac_jail
+    return agent_rbac_jail.check_access(
+        role=payload.get("role", "researcher"),
+        tool_name=payload.get("tool_name", "read_file"),
+        target_path=payload.get("target_path", "")
+    )
+
+
+# Feature 19: Deterministischer Output-Linter & Policy-Checker
+@app.post("/api/security/lint-output")
+def api_lint_agent_output(payload: Dict = Body(...)):
+    from backend.output_policy_linter import output_policy_linter
+    return output_policy_linter.lint_and_clean(
+        output_text=payload.get("output_text", "")
+    )
+
+
+# Feature 20: Manipulationssichere Kosten- & Entscheidungs-Quittungen (Execution Receipts)
+@app.post("/api/security/receipts/issue")
+def api_issue_execution_receipt(payload: Dict = Body(...)):
+    from backend.execution_receipt_ledger import execution_receipt_ledger
+    return execution_receipt_ledger.issue_receipt(
+        task_id=payload.get("task_id", "task-01"),
+        agent_role=payload.get("agent_role", "backend_architect"),
+        model_used=payload.get("model_used", "deepseek/deepseek-chat"),
+        prompt_tokens=int(payload.get("prompt_tokens", 500)),
+        completion_tokens=int(payload.get("completion_tokens", 250)),
+        cost_usd=float(payload.get("cost_usd", 0.0012)),
+        tools_invoked=payload.get("tools_invoked", [])
+    )
+
+@app.get("/api/security/receipts/verify")
+def api_verify_execution_receipts():
+    from backend.execution_receipt_ledger import execution_receipt_ledger
+    return execution_receipt_ledger.verify_chain_integrity()
+
+
+# --- TEIL 2 / PAKET 5 (FEATURES 21–25): SELBST-OPTIMIERUNG, EVALUATION & SCHWARM-INTELLIGENZ (NEXT-GEN) ---
+
+# Feature 21: Automatischer Prompt-Optimizer (DSPy / TextGrad-Prinzip)
+@app.post("/api/evolution/optimize-prompt")
+def api_optimize_role_prompt(payload: Dict = Body(...)):
+    from backend.prompt_optimizer import prompt_optimizer
+    return prompt_optimizer.optimize_role_prompt(
+        agent_role=payload.get("agent_role", "backend_architect"),
+        current_prompt=payload.get("current_prompt", "Du bist ein präziser System-Agent."),
+        recent_failures=payload.get("recent_failures", [])
+    )
+
+
+# Feature 22: Gold-Standard Regression-Test-Suite (Eval-Dataset Runner)
+@app.post("/api/evolution/eval-suite/run")
+def api_run_eval_regression_suite(payload: Dict = Body(default={})):
+    from backend.eval_regression_runner import eval_regression_runner
+    return eval_regression_runner.run_suite(
+        candidate_label=payload.get("candidate_label", "v2026.10-release"),
+        simulated_outputs=payload.get("simulated_outputs")
+    )
+
+
+# Feature 23: Dynamisches Modell-Routing nach Echtzeit-Telemetrie (Bandit-Router)
+@app.post("/api/router/bandit-outcome")
+def api_bandit_record_outcome(payload: Dict = Body(...)):
+    from backend.bandit_model_router import bandit_model_router
+    return bandit_model_router.record_outcome(
+        model_id=payload.get("model_id", "deepseek/deepseek-chat"),
+        success=bool(payload.get("success", True)),
+        latency_ms=float(payload.get("latency_ms", 500.0))
+    )
+
+@app.get("/api/router/bandit-select")
+def api_bandit_select_best():
+    from backend.bandit_model_router import bandit_model_router
+    return bandit_model_router.select_best_model()
+
+
+# Feature 24: Dynamisches Ephemeral-Team-Spawning (Ad-hoc Task-Force)
+@app.post("/api/swarm/spawn-ephemeral-team")
+def api_spawn_ephemeral_team(payload: Dict = Body(...)):
+    from backend.ephemeral_team_spawner import ephemeral_team_spawner
+    return ephemeral_team_spawner.spawn_task_force(
+        mission_title=payload.get("mission_title", "Spezial-Auftrag"),
+        mission_brief=payload.get("mission_brief", "")
+    )
+
+
+# Feature 25: Live-Ressourcen-Protector (Host CPU/RAM/Disk-Backpressure)
+@app.get("/api/system/resource-backpressure")
+def api_check_resource_backpressure(simulate_overload: bool = False):
+    from backend.resource_backpressure import resource_backpressure_protector
+    return resource_backpressure_protector.check_health_and_backpressure(simulate_overload=simulate_overload)

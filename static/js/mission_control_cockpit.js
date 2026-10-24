@@ -101,7 +101,8 @@
       if (barTpm) {
         const curVal = (kpis && kpis.tpm_current != null) ? kpis.tpm_current : 0;
         const limVal = (kpis && kpis.tpm_limit) || 2000000;
-        const tpmPct = Math.min(100, Math.max(0, (curVal / limVal) * 100));
+        const rawPct = (curVal / limVal) * 100;
+        const tpmPct = curVal > 0 ? Math.min(100, Math.max(4, rawPct)) : 0;
         barTpm.style.width = `${tpmPct}%`;
         if (curVal > 1700000) {
           barTpm.className = "h-1 rounded-full bg-rose-500 transition-all duration-500";
@@ -211,7 +212,7 @@
           ` : data.cadre.map(c => {
             const isBusy = (c.status || "").toLowerCase() === "beschäftigt";
             return `
-              <div class="flex items-center justify-between p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] transition">
+              <div onclick="openAgentChatFromMissionControl('${escapeHtmlMC(c.id || c.name || '')}')" title="Chat mit ${escapeHtmlMC(c.name)} im Agentenkader öffnen" class="flex items-center justify-between p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] transition cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 shadow-2xs">
                 <div class="flex items-center gap-2 min-w-0">
                   <img src="${c.avatar}" class="w-6 h-6 rounded-full object-cover border border-[var(--border)] shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
                   <div class="min-w-0">
@@ -224,7 +225,7 @@
                 </div>
                 <div class="shrink-0 ml-1.5">
                   ${isBusy ? `
-                    <span class="shadcn-badge shadcn-badge-outline text-[9px] py-0 px-1 font-mono">Aktiv</span>
+                    <span class="shadcn-badge shadcn-badge-outline text-[9px] py-0 px-1 font-mono">Aktiv</span> <button type="button" onclick="event.stopPropagation(); resetStuckAgentTasks('${escapeHtmlMC(c.id || c.name || '')}')" title="Hängende Aufgabe dieses Agenten zurücksetzen (Reset auf To-Do)" class="px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 text-[9px] font-mono font-bold cursor-pointer transition">↺ Reset</button>
                   ` : `
                     <span class="shadcn-badge shadcn-badge-secondary text-[9px] py-0 px-1 font-mono">Bereit</span>
                   `}
@@ -375,8 +376,8 @@
         const group = MC_KANBAN_GROUPS[col] || [col];
         const entries = [];
         group.forEach(s => (cols[s] || []).forEach(t => entries.push(t)));
-        const el = document.getElementById('mc-col-' + col);
-        const countEl = document.getElementById('mc-count-' + col);
+        const el = document.getElementById('mc-col-' + col) || (col === 'in_progress' ? document.getElementById('mc-col-inprogress') : null);
+        const countEl = document.getElementById('mc-count-' + col) || (col === 'in_progress' ? document.getElementById('mc-count-inprogress') : null);
         if (countEl) countEl.innerText = entries.length;
         if (el) {
           const nextHtml = entries.length ? entries.map(t => mcKanbanCard(t, col)).join('') : `<div class="p-3 text-center text-[10.5px] shadcn-muted">Keine Aufgaben.</div>`;
@@ -444,12 +445,15 @@
       const prog = cols.in_progress || [];
       const listEl = document.getElementById('mc-cadre-list');
       if (!listEl) return;
-      // Glitch-Fix: Kanban leer -> Flotten-Stand (mc-state) stehen lassen.
-      // Sonst flackert die Liste alle 4 s zwischen Kader und Leermeldung,
-      // obwohl Profile aktiv sind.
-      if (!prog.length) return;
+      if (!prog.length) {
+        if (missionControlState && Array.isArray(missionControlState.cadre) && missionControlState.cadre.length) {
+          return;
+        }
+        listEl.innerHTML = `<div class="p-2.5 text-center text-[10.5px] shadcn-muted bg-[var(--secondary)] rounded-lg border border-[var(--border)]">Keine aktiven Aufgaben &mdash; Flotte im Bereitschaftsmodus.</div>`;
+        return;
+      }
       listEl.innerHTML = prog.map(t => `
-        <div class="flex items-center justify-between p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+        <div onclick="openAgentChatFromMissionControl('${escapeHtmlMC(t.assignee || t.assignee_id || t.assignee_name || '')}')" title="Chat mit ${escapeHtmlMC(t.assignee_name || 'Agent')} im Agentenkader öffnen" class="flex items-center justify-between p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] transition cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 shadow-2xs">
           <div class="flex items-center gap-2 min-w-0">
             <img src="${escapeHtmlMC(t.assignee_avatar || '/static/avatars/avatar_001.jpg')}" class="w-6 h-6 rounded-full object-cover border border-[var(--border)] shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
             <div class="min-w-0">
@@ -457,7 +461,7 @@
               <div class="text-[9.5px] shadcn-muted truncate">${escapeHtmlMC(t.title || '')}</div>
             </div>
           </div>
-          <span class="shadcn-badge shadcn-badge-outline text-[9px] py-0 px-1 font-mono shrink-0 ml-1.5">Aktiv</span>
+          <div class="shrink-0 ml-1.5 flex items-center gap-1"><span class="shadcn-badge shadcn-badge-outline text-[9px] py-0 px-1 font-mono">Aktiv</span><button type="button" onclick="event.stopPropagation(); resetStuckAgentTasks('${escapeHtmlMC(t.assignee || '')}', '${escapeHtmlMC(t.id || '')}')" title="Hängende Aufgabe zurücksetzen (Reset auf To-Do)" class="px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 text-[9px] font-mono font-bold cursor-pointer transition">↺ Reset</button></div>
         </div>`).join('');
     }
     function renderMissionControlProcessInspection(data) {
@@ -729,6 +733,19 @@
       const listEl = document.getElementById('mc-active-list');
       const countEl = document.getElementById('mc-active-count');
       if (countEl) countEl.innerText = prog.length;
+      
+      // Synchronisiere Flottenlast KPI Card oben mit der echten Kanban-Wahrheit
+      const fleetEl = document.getElementById("mc-kpi-fleet");
+      const barFleet = document.getElementById("mc-bar-fleet");
+      if (fleetEl) {
+        const total = (missionControlState && missionControlState.kpis && missionControlState.kpis.total_profiles) || 51;
+        fleetEl.innerText = `${prog.length} / ${total} Aktiv`;
+        if (barFleet) {
+          const fleetPct = Math.min(100, Math.max(4, Math.round((prog.length / total) * 100)));
+          barFleet.style.width = `${fleetPct}%`;
+        }
+      }
+
       if (!listEl) return;
       if (!prog.length) {
         listEl.innerHTML = `<div class="p-2.5 text-center text-[10.5px] shadcn-muted bg-[var(--secondary)] rounded-lg border border-[var(--border)]">Gerade läuft nichts — alle Worker auf Standby.</div>`;
@@ -742,7 +759,7 @@
         }
         const diff = Math.max(0, Date.now() / 1000 - st);
         return `
-        <div class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+        <div onclick="openAgentChatFromMissionControl('${escapeHtmlMC(t.assignee || t.assignee_id || t.assignee_name || '')}')" title="Chat mit ${escapeHtmlMC(t.assignee_name || 'Agent')} im Agentenkader öffnen" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] transition cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 shadow-2xs">
           <div class="text-[11.5px] font-semibold truncate text-[var(--foreground)] leading-tight">${escapeHtmlMC(t.title || '')}</div>
           <div class="mt-0.5 flex items-center justify-between gap-1 text-[9.5px] shadcn-muted">
             <span class="truncate">👤 ${escapeHtmlMC(t.assignee_name || 'Agent')}</span>
@@ -754,4 +771,43 @@
     function closeMissionControlArtifactModal() {
       const modal = document.getElementById("mc-artifact-modal");
       if (modal) modal.classList.add("hidden");
-    }
+    }
+
+    function openAgentChatFromMissionControl(identifier) {
+      if (!identifier) return;
+      let targetId = identifier;
+      const cleanIdent = String(identifier).trim().toLowerCase();
+      if (Array.isArray(window.hermesProfilesData)) {
+        const found = window.hermesProfilesData.find(p => 
+          (p.id && p.id.toLowerCase() === cleanIdent) ||
+          (p.name && p.name.toLowerCase() === cleanIdent) ||
+          (p.person_name && p.person_name.toLowerCase() === cleanIdent) ||
+          (p.callsign && p.callsign.toLowerCase() === cleanIdent)
+        );
+        if (found) targetId = found.id;
+      }
+      if (typeof setTab === 'function') setTab('agent-profiles');
+      if (typeof selectProfileForEditor === 'function') selectProfileForEditor(targetId);
+      if (typeof switchAgentCadreTab === 'function') switchAgentCadreTab('chat');
+    }
+    window.openAgentChatFromMissionControl = openAgentChatFromMissionControl;
+
+    async function resetStuckAgentTasks(assignee, taskId = '') {
+      try {
+        const res = await fetch('/api/operations/kanban/reset-zombies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignee, task_id: taskId, target_status: 'todo' })
+        });
+        const data = await res.json();
+        if (typeof showNotification === 'function') {
+          if (res.ok) showNotification('Zombie-Reset', `${data.reset_count || 0} Aufgabe(n) auf To-Do zurückgesetzt.`, 'success');
+          else showNotification('Fehler', 'Aufgabe konnte nicht zurückgesetzt werden.', 'error');
+        }
+      } catch (err) {
+        if (typeof showNotification === 'function') showNotification('Fehler', String(err), 'error');
+      } finally {
+        await fetchMissionControlKanban();
+      }
+    }
+    window.resetStuckAgentTasks = resetStuckAgentTasks;

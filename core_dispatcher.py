@@ -2,6 +2,7 @@ import os
 import json
 import httpx
 import asyncio
+import sqlite3
 
 # --- External Agent URLs ---
 # Defaulting to docker network hostnames, but can be overridden by env vars
@@ -224,6 +225,102 @@ def parse_omniroute_response(resp_text: str) -> str:
 MAX_CONCURRENT_AGENT_TASKS = int(os.getenv("MAX_CONCURRENT_AGENT_TASKS", "5"))
 _TASK_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_AGENT_TASKS)
 
+_DISPATCHER_HTTP_CLIENTS = {}
+
+def _get_dispatcher_http_client() -> httpx.AsyncClient:
+    loop_id = id(asyncio.get_running_loop())
+    c = _DISPATCHER_HTTP_CLIENTS.get(loop_id)
+    if c is None or c.is_closed:
+        c = httpx.AsyncClient(
+            timeout=30.0,
+            limits=httpx.Limits(max_keepalive_connections=25, max_connections=100)
+        )
+        _DISPATCHER_HTTP_CLIENTS[loop_id] = c
+    return c
+
+class _DispClosingConn(sqlite3.Connection):
+    def __enter__(self):
+        super().__enter__()
+        return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
+def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, task_id: str = ""):
+    try:
+        import sqlite3, os, time, sys
+        db_path = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
+        if not os.path.exists(os.path.dirname(db_path)):
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            
+        with sqlite3.connect(db_path, timeout=15.0, factory=_DispClosingConn) as conn:
+            conn.execute("PRAGMA busy_timeout=15000;")
+            now = time.time()
+            eff_task = task_id or f"agent_{agent_id}"
+            s_id = f"task_{eff_task}" if not str(eff_task).startswith("task_") else str(eff_task)
+            t_key = f"{eff_task}_{int(now)}"
+            cost_usd = round((in_tok * 0.00000015) + (out_tok * 0.00000030), 6)
+            
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM sessions WHERE id = ?", (s_id,))
+            if not cur.fetchone():
+                unique_title = f"Task {eff_task[:25]} [{time.time_ns() % 1000000000}]"
+                try:
+                    cur.execute("""
+                        INSERT OR IGNORE INTO sessions (
+                            id, source, display_name, title, model, profile_name, started_at, message_count,
+                            input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd
+                        ) VALUES (?, 'agent_task', ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+                    """, (s_id, unique_title, unique_title, model, agent_id, now, in_tok, out_tok, cost_usd, cost_usd))
+                except Exception:
+                    pass
+            
+            conn.execute("""
+                INSERT INTO session_model_usage (
+                    session_id, model, billing_provider, billing_base_url, billing_mode, task,
+                    api_call_count, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+                    reasoning_tokens, estimated_cost_usd, actual_cost_usd, first_seen, last_seen
+                ) VALUES (?, ?, 'omniroute', 'http://omniroute:20128/v1', 'proxy', ?, 1, ?, ?, 0, 0, 0, ?, ?, ?, ?)
+                ON CONFLICT(session_id, model, billing_provider, billing_base_url, billing_mode, task) DO UPDATE SET
+                    api_call_count = api_call_count + 1,
+                    input_tokens = input_tokens + excluded.input_tokens,
+                    output_tokens = output_tokens + excluded.output_tokens,
+                    estimated_cost_usd = estimated_cost_usd + excluded.estimated_cost_usd,
+                    last_seen = excluded.last_seen
+            """, (s_id, model, t_key, in_tok, out_tok, cost_usd, cost_usd, now, now))
+            
+            conn.execute("""
+                UPDATE sessions 
+                SET input_tokens = input_tokens + ?, output_tokens = output_tokens + ?,
+                    estimated_cost_usd = estimated_cost_usd + ?
+                WHERE id = ?
+            """, (in_tok, out_tok, cost_usd, s_id))
+            
+        if "main" in sys.modules:
+            m = sys.modules["main"]
+            if hasattr(m, "_LIVE_TELEMETRY_CACHE"):
+                m._LIVE_TELEMETRY_CACHE["data"] = None
+            if hasattr(m, "_MC_STATE_CACHE"):
+                m._MC_STATE_CACHE["data"] = None
+    except Exception as e:
+        print(f"[DISPATCHER] Token telemetry write error: {e}", file=sys.stderr)
+
+def _extract_tokens_usage(resp_text: str, prompt_str: str, reply_str: str):
+    inp, out = max(50, len(prompt_str.split()) * 2), max(20, len(reply_str.split()) * 2)
+    try:
+        import json
+        d = json.loads(resp_text) if isinstance(resp_text, str) else resp_text
+        if isinstance(d, dict):
+            u = d.get("usage", {})
+            if isinstance(u, dict):
+                inp = u.get("prompt_tokens") or u.get("input_tokens") or inp
+                out = u.get("completion_tokens") or u.get("output_tokens") or out
+    except Exception:
+        pass
+    return int(inp), int(out)
+
 async def dispatch_to_omniroute_or_container(
     agent_id: str, 
     agent_name: str, 
@@ -232,7 +329,9 @@ async def dispatch_to_omniroute_or_container(
     system_prompt: str = "",
     model: str = "deepseek/deepseek-chat",
     provider: str = "",
-    timeout: int = 15
+    timeout: int = 15,
+    reasoning_level: str = "medium",
+    task_id: str = ""
 ) -> dict:
     """
     Zentraler Dispatcher: Nutzt dynamisch den im Profil konfigurierten Provider & das Sprachmodell.
@@ -241,7 +340,7 @@ async def dispatch_to_omniroute_or_container(
     """
     async with _TASK_SEMAPHORE:
         return await _dispatch_to_omniroute_or_container_exec(
-            agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout
+            agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id
         )
 
 async def _dispatch_to_omniroute_or_container_exec(
@@ -252,7 +351,9 @@ async def _dispatch_to_omniroute_or_container_exec(
     system_prompt: str = "",
     model: str = "deepseek/deepseek-chat",
     provider: str = "",
-    timeout: int = 15
+    timeout: int = 15,
+    reasoning_level: str = "medium",
+    task_id: str = ""
 ) -> dict:
     # Pillar 4 & Punkt 4: Aktive Memory-Injection (Erkenntnisse aus agentic_memory.db)
     memory_context_addon = ""
@@ -300,7 +401,8 @@ async def _dispatch_to_omniroute_or_container_exec(
     if prov_lower == "groq" and groq_api_key:
         try:
             g_model = selected_model if ("llama" in selected_model or "gemma" in selected_model or "mixtral" in selected_model) else "llama-3.3-70b-versatile"
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            client = _get_dispatcher_http_client()
+            if True:
                 resp = await client.post(
                     "https://api.groq.com/openai/v1/chat/completions",
                     headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
@@ -309,7 +411,9 @@ async def _dispatch_to_omniroute_or_container_exec(
                 if resp.status_code == 200:
                     content = parse_omniroute_response(resp.text)
                     if content and len(content.strip()) > 5:
-                        return {"status": "success", "content": content}
+                        i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                        _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
+                        return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": g_model}
         except Exception as e:
             print(f"[DISPATCHER] Groq direct call failed: {e}")
 
@@ -317,7 +421,8 @@ async def _dispatch_to_omniroute_or_container_exec(
     if prov_lower == "openai" and openai_api_key:
         try:
             o_model = selected_model if "gpt" in selected_model else "gpt-4o-mini"
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            client = _get_dispatcher_http_client()
+            if True:
                 resp = await client.post(
                     "https://api.openai.com/v1/chat/completions",
                     headers={"Authorization": f"Bearer {openai_api_key}", "Content-Type": "application/json"},
@@ -326,7 +431,9 @@ async def _dispatch_to_omniroute_or_container_exec(
                 if resp.status_code == 200:
                     content = parse_omniroute_response(resp.text)
                     if content and len(content.strip()) > 5:
-                        return {"status": "success", "content": content}
+                        i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                        _log_dispatcher_usage(agent_id, o_model, i_tok, o_tok, task_id)
+                        return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": o_model}
         except Exception as e:
             print(f"[DISPATCHER] OpenAI direct call failed: {e}")
 
@@ -334,7 +441,8 @@ async def _dispatch_to_omniroute_or_container_exec(
     if prov_lower == "anthropic" and anthropic_api_key:
         try:
             a_model = selected_model if "claude" in selected_model else "claude-3-5-sonnet-20241022"
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            client = _get_dispatcher_http_client()
+            if True:
                 resp = await client.post(
                     "https://api.anthropic.com/v1/messages",
                     headers={
@@ -353,14 +461,30 @@ async def _dispatch_to_omniroute_or_container_exec(
                     data = resp.json()
                     content = "".join([c.get("text", "") for c in data.get("content", [])])
                     if content:
-                        return {"status": "success", "content": content}
+                        i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                        _log_dispatcher_usage(agent_id, a_model, i_tok, o_tok, task_id)
+                        return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": a_model}
         except Exception as e:
             print(f"[DISPATCHER] Anthropic direct call failed: {e}")
 
     # 4. OpenRouter Gateway (Universal für DeepSeek, Claude, Llama, Qwen, Gemini etc.)
     if openrouter_api_key:
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            or_payload = {
+                "model": selected_model,
+                "messages": messages,
+                "max_tokens": 1500,
+                "temperature": 0.4
+            }
+            r_lvl = (reasoning_level or "medium").strip().lower()
+            effort_map = {"minimal": "low", "low": "low", "medium": "medium", "high": "high", "max": "high"}
+            if r_lvl == "off":
+                or_payload["reasoning"] = {"exclude": True}
+            elif r_lvl in effort_map:
+                or_payload["reasoning"] = {"effort": effort_map[r_lvl]}
+
+            client = _get_dispatcher_http_client()
+            if True:
                 resp = await client.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={
@@ -369,17 +493,14 @@ async def _dispatch_to_omniroute_or_container_exec(
                         "HTTP-Referer": "http://localhost:8501",
                         "X-Title": "ArchonOS"
                     },
-                    json={
-                        "model": selected_model,
-                        "messages": messages,
-                        "max_tokens": 1500,
-                        "temperature": 0.4
-                    }
+                    json=or_payload
                 )
                 if resp.status_code == 200:
                     content = parse_omniroute_response(resp.text)
                     if content and len(content.strip()) > 5:
-                        return {"status": "success", "content": content}
+                        i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                        _log_dispatcher_usage(agent_id, selected_model, i_tok, o_tok, task_id)
+                        return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": selected_model}
         except Exception as e:
             print(f"[DISPATCHER] OpenRouter call failed with model {selected_model}: {e}")
 
@@ -405,7 +526,9 @@ async def _dispatch_to_omniroute_or_container_exec(
                     if resp.status_code == 200:
                         content = parse_omniroute_response(resp.text)
                         if content and len(content.strip()) > 5:
-                            return {"status": "success", "content": content}
+                            i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                            _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
+                            return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": g_model}
             except Exception as e:
                 continue
 
@@ -465,7 +588,9 @@ async def dispatch_to_external_agent(
     role: str = "Custom",
     system_prompt: str = "",
     model: str = "free-forever",
-    timeout: int = 30
+    timeout: int = 30,
+    provider: str = "",
+    reasoning_level: str = "medium"
 ) -> dict:
     """
     Haupt-Dispatcher: Routet Anfragen primär an den Container und fällt nahtlos auf OmniRoute (Port 20128) zurück.
@@ -491,7 +616,9 @@ async def dispatch_to_external_agent(
         role=role,
         system_prompt=system_prompt,
         model=model,
-        timeout=timeout
+        provider=provider,
+        timeout=timeout,
+        reasoning_level=reasoning_level
     )
 
 CATEGORIZED_FRAMEWORKS = {
@@ -1083,8 +1210,10 @@ async def stream_boardroom_debate(
         prompt=chairman_init_prompt,
         role=chairman.get("role", "Orchestrator"),
         system_prompt=chairman_sys_prompt,
-        model=chairman.get("model", "free-forever"),
-        timeout=timeout
+        model=chairman.get("model", "deepseek/deepseek-chat"),
+        timeout=timeout,
+        provider=chairman.get("provider", ""),
+        reasoning_level=chairman.get("reasoning_level", "medium")
     )
     
     init_text = res_init.get("content", f"Problemeinrahmung für '{task}' gestartet.")
@@ -1127,8 +1256,10 @@ async def stream_boardroom_debate(
                     prompt=prompt,
                     role=ag.get("role", "Expert"),
                     system_prompt=sys_prompt,
-                    model=ag.get("model", "free-forever"),
-                    timeout=timeout
+                    model=ag.get("model", "deepseek/deepseek-chat"),
+                    timeout=timeout,
+                    provider=ag.get("provider", ""),
+                    reasoning_level=ag.get("reasoning_level", "medium")
                 )
                 return {
                     "type": "agent_response",
@@ -1166,8 +1297,10 @@ async def stream_boardroom_debate(
                     prompt=agent_prompt,
                     role=agent.get("role", "Expert"),
                     system_prompt=agent_sys_prompt,
-                    model=agent.get("model", "free-forever"),
-                    timeout=timeout
+                    model=agent.get("model", "deepseek/deepseek-chat"),
+                    timeout=timeout,
+                    provider=agent.get("provider", ""),
+                    reasoning_level=agent.get("reasoning_level", "medium")
                 )
                 
                 resp_content = res.get("content", "Keine Antwort.")
@@ -1228,8 +1361,10 @@ async def stream_boardroom_debate(
         prompt=synthesis_prompt,
         role=chairman.get("role", "Orchestrator"),
         system_prompt=chairman_sys_prompt,
-        model=chairman.get("model", "free-forever"),
-        timeout=timeout
+        model=chairman.get("model", "deepseek/deepseek-chat"),
+        timeout=timeout,
+        provider=chairman.get("provider", ""),
+        reasoning_level=chairman.get("reasoning_level", "medium")
     )
     
     synthesis_text = res_synth.get("content", "Synthese konnte nicht erstellt werden.")
@@ -1286,3 +1421,100 @@ async def run_boardroom_debate(
             
     task_res["events"] = events
     return task_res
+
+async def execute_with_self_correction(
+    agent_id: str,
+    agent_name: str,
+    task_description: str,
+    execution_fn,
+    initial_args: dict,
+    max_retries: int = 3,
+    role: str = "Developer",
+    model: str = "deepseek/deepseek-chat"
+) -> dict:
+    """
+    Pillar 2 / Self-Correction & Reflection Loop:
+    Führt Tool-Aufrufe oder Skripte aus. Bei Fehlern (Exit-Code != 0, Exception)
+    wird der Fehlertext an den Agenten zurückgespeist, damit dieser die Parameter/den Code
+    analysiert, korrigiert und bis zu 3-mal selbstständig neu versucht.
+    """
+    attempt = 1
+    current_args = dict(initial_args)
+    correction_history = []
+    
+    while attempt <= max_retries:
+        try:
+            if asyncio.iscoroutinefunction(execution_fn):
+                res = await execution_fn(current_args)
+            else:
+                res = await asyncio.to_thread(execution_fn, current_args)
+            
+            is_error = False
+            err_msg = ""
+            if isinstance(res, dict):
+                if res.get("status") in ("error", "failed") or (res.get("code") is not None and res.get("code") != 0):
+                    is_error = True
+                    err_msg = str(res.get("stderr") or res.get("message") or res.get("content") or "Unbekannter Fehler")
+            
+            if not is_error:
+                return {
+                    "status": "success",
+                    "attempts": attempt,
+                    "result": res,
+                    "corrections": correction_history
+                }
+            
+            if attempt == max_retries:
+                return {
+                    "status": "error",
+                    "attempts": attempt,
+                    "message": f"Selbstkorrektur nach {max_retries} Versuchen fehlgeschlagen: {err_msg}",
+                    "corrections": correction_history,
+                    "last_result": res
+                }
+                
+            reflection_prompt = (
+                f"[SELBSTKORREKTUR-REFLEXION - VERSUCH {attempt}/{max_retries}]\n"
+                f"Aufgabe: {task_description}\n"
+                f"Bisherige Parameter/Code:\n{json.dumps(current_args, ensure_ascii=False, indent=2)}\n\n"
+                f"FEHLER-AUSGABE:\n{err_msg[:1200]}\n\n"
+                f"Instruktion: Analysiere den Fehler präzise. Liefere als Antwort ein valides JSON-Objekt "
+                f"mit den korrigierten Parametern/Feldern, um diesen Fehler zu beheben."
+            )
+            
+            llm_res = await dispatch_to_omniroute_or_container(
+                agent_id=agent_id,
+                agent_name=agent_name,
+                prompt=reflection_prompt,
+                role=role,
+                system_prompt="Du bist ein Experte für Fehleranalyse und autonome Selbstkorrektur. Antworte ausschließlich mit JSON.",
+                model=model
+            )
+            
+            content = llm_res.get("content", "")
+            try:
+                clean_json = content
+                if "```json" in clean_json:
+                    clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean_json:
+                    clean_json = clean_json.split("```")[1].split("```")[0].strip()
+                parsed = json.loads(clean_json)
+                if isinstance(parsed, dict):
+                    correction_history.append({"attempt": attempt, "error": err_msg, "correction": parsed})
+                    current_args.update(parsed)
+            except Exception:
+                correction_history.append({"attempt": attempt, "error": err_msg, "raw_response": content[:300]})
+                
+        except Exception as exc:
+            if attempt == max_retries:
+                return {
+                    "status": "error",
+                    "attempts": attempt,
+                    "message": f"Unerwarteter Ausführungsfehler: {str(exc)}",
+                    "corrections": correction_history
+                }
+            correction_history.append({"attempt": attempt, "exception": str(exc)})
+            
+        attempt += 1
+
+    return {"status": "error", "attempts": attempt, "corrections": correction_history}

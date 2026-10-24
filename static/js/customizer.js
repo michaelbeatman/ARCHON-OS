@@ -822,12 +822,22 @@
       }
       styleTag.innerHTML = cssText;
     }
-    function saveCustomCSSToStorage() {
+    async function saveCustomCSSToStorage() {
       const editor = document.getElementById("custom-user-css-editor");
       if (!editor) return;
       const cssText = editor.value;
       localStorage.setItem("archon_custom_user_css", cssText);
       liveApplyCustomCSS(cssText);
+      // Serverseitig spiegeln für identisches Design auf allen Endgeräten / IPs
+      try {
+        await fetch("/api/theme/live-overrides", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rawCss: cssText, rules: {}, textOverrides: {}, htmlOverrides: {} })
+        });
+      } catch (e) {
+        console.warn("[CustomCSS] Server sync notice:", e);
+      }
       alert("✅ Custom CSS erfolgreich gespeichert und angewendet!");
     }
     function insertCssSnippet(selector) {
@@ -838,15 +848,23 @@
       liveApplyCustomCSS(editor.value);
       editor.focus();
     }
-    function initCustomCSS() {
-      if (window.ARCHON_COMPONENT_DESIGN_ACTIVE) {
-        const oldTag = document.getElementById("archon-custom-user-css");
-        if (oldTag) oldTag.innerHTML = "";
-        return;
+    async function initCustomCSS() {
+      let savedCss = localStorage.getItem("archon_custom_user_css") || "";
+      // Falls auf diesem Origin noch kein CSS im localStorage: Server-Stand abrufen
+      if (!savedCss) {
+        try {
+          const res = await fetch("/api/theme/live-overrides");
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.rawCss) {
+              savedCss = data.rawCss;
+              try { localStorage.setItem("archon_custom_user_css", savedCss); } catch(e) {}
+            }
+          }
+        } catch(e) {}
       }
-      const savedCss = localStorage.getItem("archon_custom_user_css") || "";
       const editor = document.getElementById("custom-user-css-editor");
-      if (editor) editor.value = savedCss;
+      if (editor && savedCss) editor.value = savedCss;
       if (savedCss) liveApplyCustomCSS(savedCss);
     }
     function handleCrmLogoUpload(event) {
@@ -856,22 +874,11 @@
       reader.onload = (e) => {
         const dataUrl = e.target.result;
         applyCustomizerSetting('logoUrl', dataUrl, true);
-        const prev = document.getElementById("crm-modal-logo-preview");
-        if (prev) {
-          prev.src = dataUrl;
-          prev.style.display = "block";
-          const fallback = document.getElementById("crm-modal-logo-fallback");
-          if (fallback) fallback.style.display = "none";
-        }
       };
       reader.readAsDataURL(file);
     }
     function resetCrmLogo() {
       applyCustomizerSetting('logoUrl', "", true);
-      const prev = document.getElementById("crm-modal-logo-preview");
-      if (prev) {
-        prev.src = "/static/logo.png";
-      }
     }
     function resetTheme() {
       if (confirm("Möchten Sie alle Designanpassungen zurücksetzen?")) {

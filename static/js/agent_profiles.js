@@ -215,6 +215,7 @@
       }
     }
     const refreshPaperclipAndProfiles = refreshProfiles;
+    window.refreshPaperclipAndProfiles = refreshProfiles;
     let activeProfileTabFilter = 'active';
     function setProfileTabFilter(tabName) {
       activeProfileTabFilter = tabName || 'active';
@@ -1013,6 +1014,14 @@
         providerSelect.value = initialProv;
       }
       onProfileProviderChange(initialProv, prof.model);
+      const reasoningSelect = document.getElementById("prof-edit-reasoning");
+      if (reasoningSelect) {
+        reasoningSelect.value = prof.reasoning_level || "medium";
+      }
+      const chatReasoningSelect = document.getElementById("agent-tab-reasoning-select");
+      if (chatReasoningSelect) {
+        chatReasoningSelect.value = prof.reasoning_level || "medium";
+      }
       if (typeof populateAgentTabModelSelect === "function") {
         populateAgentTabModelSelect();
       }
@@ -1118,6 +1127,7 @@
           method: "DELETE"
         });
         if (res.ok) {
+          let delData = null; try { delData = await res.clone().json(); } catch(e) {} if (delData && delData.status === "pending_owner_approval" && delData.gate_id) { if (confirm(`🔐 Sicherheits-Gate (${delData.gate_id}):\n${delData.message || "Profil-Löschung erfordert Owner-Bestätigung."}\n\nMöchtest du die Löschung direkt hier im Browser freigeben?`)) { await fetch(`/api/permission-gates/${encodeURIComponent(delData.gate_id)}/decide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "approve" }) }); } else { showArchonToast("🔐 " + (delData.message || "Warte auf Telegram-Bestätigung."), "info"); return; } }
           showArchonToast(`Profil '${name}' erfolgreich gelöscht!`, "success");
           await loadHermesProfilesFromServer();
           if (hermesProfilesData.length > 0) {
@@ -1319,7 +1329,7 @@
     // INLINE PERSISTENTER TAB-CHAT LOGIK (REITER 3 - SYNCHRONISIERT MIT MASTER-KONSOLE)
     // =========================================================================
     let currentAgentTabSessionId = null;
-    let currentAgentTabAttachment = null;
+    let currentAgentTabAttachments = [];
     let isAgentTabGenerating = false;
     let isAgentTabDictating = false;
     let agentTabDictationRecognition = null;
@@ -1449,14 +1459,17 @@
       }
       renderAgentTabEmptyWelcome();
     }
-    function renameCurrentAgentTabSession() {
+    async function renameCurrentAgentTabSession() {
       const select = document.getElementById("agent-chat-session-select");
       if (!select || !select.value) return;
       const sId = select.value;
       const opt = select.options[select.selectedIndex];
       const currentTitle = opt ? opt.text.split(" (")[0] : "";
       if (typeof promptRenameSession === "function") {
-        promptRenameSession(sId, currentTitle);
+        await promptRenameSession(sId, currentTitle);
+        if (typeof loadAgentTabChatSessions === "function") {
+          await loadAgentTabChatSessions(currentSelectedProfileId);
+        }
       }
     }
     async function loadAgentTabChatMessages(sessionId) {
@@ -1605,8 +1618,8 @@
       const inputEl = document.getElementById("agent-tab-chat-input");
       if (!inputEl) return;
       const text = inputEl.value.trim();
-      const attachment = currentAgentTabAttachment;
-      if (!text && !attachment) return;
+      const hasAttachments = currentAgentTabAttachments.length > 0;
+      if (!text && !hasAttachments) return;
       if (isAgentTabDictating) {
         toggleAgentTabDictation();
       }
@@ -1618,19 +1631,21 @@
         currentAgentTabSessionId = `mc_${nowStr}_${agentId}`;
       }
       let attachmentNotice = "";
-      if (attachment && attachment.file) {
+      if (hasAttachments) {
         const statusSpan = document.getElementById("agent-tab-chat-status");
-        if (statusSpan) statusSpan.textContent = `Lade '${attachment.name}' hoch...`;
+        if (statusSpan) statusSpan.textContent = `Lade ${currentAgentTabAttachments.length} Datei(en) hoch...`;
         try {
-          const formData = new FormData();
-          formData.append("file", attachment.file);
-          const uploadRes = await fetch("/api/chat/upload", {
-            method: "POST",
-            body: formData
-          });
-          if (uploadRes.ok) {
-            const uploadData = await uploadRes.json();
-            attachmentNotice = `\n[Datei angehängt: ${uploadData.path || uploadData.filename}]`;
+          for (const att of currentAgentTabAttachments) {
+            const formData = new FormData();
+            formData.append("file", att.file);
+            const uploadRes = await fetch("/api/chat/upload", {
+              method: "POST",
+              body: formData
+            });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              attachmentNotice += `\n[Datei angehängt: ${uploadData.path || uploadData.filename}]`;
+            }
           }
         } catch (err) {
           console.warn("[AgentTabChat Upload] Fehler:", err);
@@ -1692,13 +1707,18 @@
       const speakerBtn = assistantBubble.querySelector(".speaker-btn");
       let fullText = "";
       try {
+        const reasoningLvl = document.getElementById("agent-tab-reasoning-select")?.value || 
+                             document.getElementById("prof-edit-reasoning")?.value || 
+                             (prof && prof.reasoning_level) || 
+                             "medium";
         const payload = {
           agent_id: agentId,
           message: fullUserMessage,
           session_id: currentAgentTabSessionId,
           mode: currentAgentTabMode,
           provider: currentAgentTabProvider || (prof && prof.provider) || "openrouter",
-          model: currentAgentTabModel || (prof && prof.model) || "auto/best-coding"
+          model: currentAgentTabModel || (prof && prof.model) || "auto/best-coding",
+          reasoning_level: reasoningLvl
         };
         const res = await fetch("/api/chat/stream", {
           method: "POST",
@@ -1783,42 +1803,86 @@
         if (inputEl) inputEl.focus();
       }
     }
-    function setAgentTabAttachmentFile(file) {
-      if (!file) return;
-      currentAgentTabAttachment = {
-        file: file,
-        name: file.name || "screenshot.png",
-        size: (file.size / 1024).toFixed(1) + " KB",
-        type: file.type || "image/png"
-      };
+    function addAgentTabAttachmentFiles(files) {
+      if (!files || !files.length) return;
+      const fileList = Array.from(files);
+      const remaining = 5 - currentAgentTabAttachments.length;
+      if (remaining <= 0) {
+        if (typeof showActionFeedbackToast === "function") {
+          showActionFeedbackToast("⚠️ Maximal 5 Anhänge erlaubt.");
+        } else {
+          alert("Maximal 5 Anhänge gleichzeitig erlaubt.");
+        }
+        return;
+      }
+      const toAdd = fileList.slice(0, remaining);
+      if (fileList.length > remaining && typeof showActionFeedbackToast === "function") {
+        showActionFeedbackToast(`⚠️ Nur ${remaining} Datei(en) hinzugefügt (Limit: 5).`);
+      }
+      toAdd.forEach(file => {
+        currentAgentTabAttachments.push({
+          file: file,
+          name: file.name || "datei",
+          size: (file.size / 1024).toFixed(1) + " KB",
+          type: file.type || "application/octet-stream"
+        });
+      });
+      renderAgentTabAttachments();
+    }
+    function renderAgentTabAttachments() {
       const bar = document.getElementById("agent-tab-attachment-bar");
-      const nameEl = document.getElementById("agent-tab-attachment-name");
-      const sizeEl = document.getElementById("agent-tab-attachment-size");
-      if (nameEl) nameEl.textContent = currentAgentTabAttachment.name;
-      if (sizeEl) sizeEl.textContent = `(${currentAgentTabAttachment.size})`;
-      if (bar) bar.classList.remove("hidden");
+      if (!bar) return;
+      if (!currentAgentTabAttachments.length) {
+        bar.classList.add("hidden");
+        bar.innerHTML = "";
+        return;
+      }
+      bar.classList.remove("hidden");
+      bar.innerHTML = `
+        <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          <span class="text-[10px] font-mono text-[var(--muted-foreground)] uppercase font-bold shrink-0">Anhänge (${currentAgentTabAttachments.length}/5):</span>
+          ${currentAgentTabAttachments.map((att, idx) => `
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--card)] border border-[var(--border)] text-[10.5px] font-mono text-[var(--foreground)] shadow-2xs">
+              <i data-lucide="file" class="w-3 h-3 text-emerald-500 shrink-0"></i>
+              <span class="truncate max-w-[130px] font-medium" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</span>
+              <span class="text-[9px] text-[var(--muted-foreground)] font-normal">${att.size}</span>
+              <button type="button" onclick="removeAgentTabAttachment(${idx})" class="text-[var(--muted-foreground)] hover:text-red-500 transition p-0.5 cursor-pointer" title="Entfernen">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+        <button type="button" onclick="removeAgentTabAttachment()" class="text-[10px] font-mono text-[var(--muted-foreground)] hover:text-red-500 transition px-1.5 py-0.5 rounded cursor-pointer shrink-0" title="Alle Anhänge entfernen">
+          Alle löschen
+        </button>
+      `;
       if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
     }
     function handleAgentTabFileSelected(event) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      setAgentTabAttachmentFile(file);
+      const files = event.target.files;
+      if (!files || !files.length) return;
+      addAgentTabAttachmentFiles(files);
     }
     function handleAgentTabInputPaste(event) {
       const items = (event.clipboardData || window.clipboardData)?.items;
       if (!items) return;
+      const foundFiles = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        if (item.kind === 'file' && item.type.startsWith('image/')) {
+        if (item.kind === 'file') {
           const blob = item.getAsFile();
           if (blob) {
-            event.preventDefault();
             const ts = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
-            const file = new File([blob], `pasted_image_${ts}.png`, { type: blob.type || "image/png" });
-            setAgentTabAttachmentFile(file);
-            return;
+            const isImg = item.type.startsWith('image/');
+            const ext = isImg ? "png" : "bin";
+            const file = new File([blob], `pasted_${ts}_${i}.${ext}`, { type: blob.type || (isImg ? "image/png" : "application/octet-stream") });
+            foundFiles.push(file);
           }
         }
+      }
+      if (foundFiles.length > 0) {
+        event.preventDefault();
+        addAgentTabAttachmentFiles(foundFiles);
       }
     }
     async function captureScreenForAgentChat() {
@@ -1846,7 +1910,7 @@
           if (!blob) return;
           const ts = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
           const file = new File([blob], `screen_capture_${ts}.png`, { type: "image/png" });
-          setAgentTabAttachmentFile(file);
+          addAgentTabAttachmentFiles([file]);
         }, "image/png");
       } catch (err) {
         if (err.name !== "NotAllowedError") {
@@ -1854,12 +1918,15 @@
         }
       }
     }
-    function removeAgentTabAttachment() {
-      currentAgentTabAttachment = null;
-      const bar = document.getElementById("agent-tab-attachment-bar");
-      if (bar) bar.classList.add("hidden");
+    function removeAgentTabAttachment(idx) {
+      if (typeof idx === "number") {
+        currentAgentTabAttachments.splice(idx, 1);
+      } else {
+        currentAgentTabAttachments = [];
+      }
       const fileInput = document.getElementById("agent-tab-file-input");
       if (fileInput) fileInput.value = "";
+      renderAgentTabAttachments();
     }
     function toggleAgentTabDictation() {
       const btn = document.getElementById("agent-tab-mic-btn");
@@ -1942,45 +2009,102 @@
         console.warn("Tokenpreise konnten nicht geladen werden:", e);
       }
     }
+    function formatPricePer1M(usd) {
+      if (usd === undefined || usd === null || isNaN(usd)) return "0.00";
+      const num = Number(usd);
+      if (num === 0) return "0.00";
+      if (num >= 10) return num.toFixed(2);
+      if (num >= 1) return num.toFixed(2);
+      if (num >= 0.1) return num.toFixed(3);
+      return num.toFixed(4);
+    }
+    window.formatPricePer1M = formatPricePer1M;
+
     function updateAgentTabModelCost() {
       const el = document.getElementById("agent-tab-model-cost");
       if (!el) return;
       const modelSelect = document.getElementById("agent-tab-model-select");
       const model = (modelSelect && modelSelect.value) || currentAgentTabModel;
       const info = findModelPriceInfo(model);
-      if (info) {
+      if (info && info.p) {
         const pre = info.approx ? "≈ " : "";
-        el.innerHTML = `${pre}In: <span class="text-emerald-500">$${(info.p.prompt_1m || 0).toFixed(2)}</span> | Out: <span class="text-amber-500">$${(info.p.completion_1m || 0).toFixed(2)}</span> /1M Tok`;
+        const inP = formatPricePer1M(info.p.prompt_1m);
+        const outP = formatPricePer1M(info.p.completion_1m);
+        el.innerHTML = `${pre}In: <span class="text-emerald-500">$${inP}</span> | Out: <span class="text-amber-500">$${outP}</span> /1M Tok`;
         el.classList.remove("hidden");
         el.title = info.approx
-          ? `Preis des nächstpassenden OpenRouter-Modells (${info.matched}) — Input: $${(info.p.prompt_1m || 0).toFixed(2)} / Output: $${(info.p.completion_1m || 0).toFixed(2)} pro 1M Tokens`
-          : `Input: $${(info.p.prompt_1m || 0).toFixed(2)} / Output: $${(info.p.completion_1m || 0).toFixed(2)} pro 1 Million Tokens (live von OpenRouter)`;
+          ? `Preis des passenden Modells (${info.matched}) — Input: $${inP} / Output: $${outP} pro 1M Tokens`
+          : `Input: $${inP} / Output: $${outP} pro 1 Million Tokens (live von OpenRouter)`;
       } else {
         el.classList.add("hidden");
       }
     }
     function findModelPriceInfo(model) {
       if (!model || !Object.keys(agentTabModelPrices).length) return null;
+      // 1. Exakter Match
       const exact = agentTabModelPrices[model];
-      if (exact) return { p: exact, approx: false };
-      // Fuzzy-Fallback: OmniRoute nutzt eigene IDs (z.B. deepseek-ai/DeepSeek-V4-Pro).
-      // Nächstpassendes OpenRouter-Modell finden (Vendor-Prefix + Qualifier ignorieren).
-      const parts = model.split("/");
-      const core = (parts.length > 1 ? parts.slice(1).join("/") : model).toLowerCase().replace(/[^a-z0-9]/g, "");
-      const trimmed = core.replace(/(pro|max|flash|latest|mini|omni|prime|preview|exp|instruct|it|chat|free)+$/, "");
-      if (trimmed.length < 4) return null;
-      let bestKey = null, bestScore = Infinity;
+      if (exact) return { p: exact, approx: false, matched: model };
+
+      const lowModel = model.toLowerCase();
+      // 2. Case-Insensitive Match
       for (const k of Object.keys(agentTabModelPrices)) {
-        const nk = k.split("/").pop().toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (!nk || nk.length < 4) continue;
-        if (nk.startsWith(trimmed) || trimmed.startsWith(nk)) {
-          const score = Math.abs(nk.length - trimmed.length);
-          if (score < bestScore) { bestScore = score; bestKey = k; }
+        if (k.toLowerCase() === lowModel) {
+          return { p: agentTabModelPrices[k], approx: false, matched: k };
         }
       }
-      if (!bestKey) return null;
-      return { p: agentTabModelPrices[bestKey], approx: true, matched: bestKey };
+
+      // 3. Match ohne Vendor-Präfix
+      const modelBase = lowModel.includes("/") ? lowModel.split("/").pop() : lowModel;
+      for (const k of Object.keys(agentTabModelPrices)) {
+        const kBase = k.toLowerCase().split("/").pop();
+        if (kBase === modelBase) {
+          return { p: agentTabModelPrices[k], approx: false, matched: k };
+        }
+      }
+
+      // 4. Intelligenter Substring- / Slug-Match unter Beibehaltung der Modell-Klasse (Flash, Pro, Mini, etc.)
+      const tiers = ["flash", "pro", "mini", "sonnet", "opus", "haiku", "max", "nano", "small", "medium", "large"];
+      const activeTiers = tiers.filter(t => lowModel.includes(t));
+
+      let bestKey = null;
+      let bestScore = -1;
+
+      const cleanModel = modelBase.replace(/[^a-z0-9]/g, "");
+
+      for (const k of Object.keys(agentTabModelPrices)) {
+        const lowK = k.toLowerCase();
+        // Falls das Suchmodell eine Tier-Kennung hat (z.B. Flash), MUSS der Kandidat dieselbe Kennung haben!
+        if (activeTiers.length > 0) {
+          const hasAllTiers = activeTiers.every(t => lowK.includes(t));
+          if (!hasAllTiers) continue;
+        }
+
+        const kBase = lowK.split("/").pop();
+        const cleanK = kBase.replace(/[^a-z0-9]/g, "");
+
+        let score = 0;
+        if (cleanK === cleanModel) score += 100;
+        else if (cleanK.includes(cleanModel) || cleanModel.includes(cleanK)) score += 50;
+
+        // Vendor-Bonus wenn übereinstimmend
+        if (lowModel.includes("/") && lowK.includes("/")) {
+          const v1 = lowModel.split("/")[0].replace(/[^a-z0-9]/g, "");
+          const v2 = lowK.split("/")[0].replace(/[^a-z0-9]/g, "");
+          if (v1 === v2) score += 30;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestKey = k;
+        }
+      }
+
+      if (bestKey && bestScore > 0) {
+        return { p: agentTabModelPrices[bestKey], approx: true, matched: bestKey };
+      }
+      return null;
     }
+    window.findModelPriceInfo = findModelPriceInfo;
     window.updateAgentTabModelCost = updateAgentTabModelCost;
     async function onAgentHeaderProviderChange(prov) {
       const tabProvSelect = document.getElementById("agent-tab-provider-select");
@@ -2219,22 +2343,37 @@
     async function applyProfileModelSelection() {
       const providerSelect = document.getElementById("prof-edit-provider");
       const modelSelect = document.getElementById("prof-edit-model");
+      const reasoningSelect = document.getElementById("prof-edit-reasoning");
       const label = document.getElementById("prof-active-model-label");
       if (!modelSelect || !providerSelect) return;
       const provider = providerSelect.value;
       const model = modelSelect.value;
+      const reasoning_level = reasoningSelect ? reasoningSelect.value : "medium";
       if (!provider || !model) return;
-      if (label) label.innerText = `aktiv: ${model} (${provider})`;
+      if (label) label.innerText = `aktiv: ${model} (${provider}) · 🧠 ${reasoning_level}`;
       const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
       if (prof) {
         prof.provider = provider;
         prof.model = model;
+        prof.reasoning_level = reasoning_level;
+      }
+      // Falls der Chat-Tab für diesen Agenten geöffnet ist, synchronisiere auch die Chat-Auswahl
+      const tabProv = document.getElementById("agent-tab-provider-select");
+      const tabMod = document.getElementById("agent-tab-model-select");
+      const tabReas = document.getElementById("agent-tab-reasoning-select");
+      if (tabProv && tabProv.value !== provider) tabProv.value = provider;
+      if (tabMod) tabMod.value = model;
+      if (tabReas) tabReas.value = reasoning_level;
+      currentAgentTabProvider = provider;
+      currentAgentTabModel = model;
+      if (typeof updateAgentTabModelCost === "function") {
+        updateAgentTabModelCost();
       }
       try {
         const res = await fetch(`/api/hermes/profiles/${encodeURIComponent(currentSelectedProfileId)}/model`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, model })
+          body: JSON.stringify({ provider, model, reasoning_level })
         });
         const data = await res.json();
         if (data.status === "ok") {
@@ -2610,6 +2749,8 @@
         const provider = providerSelect?.value || (prof?.provider || "openrouter");
         const modelSelect = document.getElementById("prof-edit-model");
         const model = modelSelect?.value || (prof?.model || "deepseek/deepseek-v4-flash-0731");
+        const reasoningSelect = document.getElementById("prof-edit-reasoning");
+        const reasoning_level = reasoningSelect?.value || (prof?.reasoning_level || "high");
         const callsign = (document.getElementById("prof-edit-callsign")?.value || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
         const payload = {
           id,
@@ -2624,6 +2765,7 @@
           system_prompt: prompt || prof?.prompt || prof?.system_prompt || "",
           provider,
           model,
+          reasoning_level,
           skills: activeSkills,
           tools: activeTools
         };
@@ -2651,7 +2793,7 @@
         // Owner-Bestaetigung per Telegram - NICHTS wird gespeichert.
         let _gateData = null;
         try { _gateData = await res.clone().json(); } catch(e) {}
-        if (_gateData && _gateData.status === "pending_owner_approval") {
+        if (_gateData && _gateData.status === "pending_owner_approval" && _gateData.gate_id && confirm(`🔐 Sicherheits-Gate (${_gateData.gate_id}):\n${_gateData.message || "Neue Tool-Rechte erfordern Owner-Bestätigung."}\n\nMöchtest du diese Rechte-Erweiterung direkt hier im Browser freigeben?`)) { await fetch(`/api/permission-gates/${encodeURIComponent(_gateData.gate_id)}/decide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "approve" }) }); showArchonToast("✅ Rechte-Gate direkt freigegeben & Profil gespeichert!", "success"); } else if (_gateData && _gateData.status === "pending_owner_approval") {
           showArchonToast("🔐 " + (_gateData.message || "Warte auf deine Telegram-Bestätigung."), "info");
           if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHtml; if (window.lucide) lucide.createIcons(); }
           return;
@@ -2680,6 +2822,23 @@
         selectProfileForEditor(id);
         if (typeof loadMasterChatProfiles === "function") {
           await loadMasterChatProfiles();
+        }
+        // Synchronisiere auch das geladene Organigramm im Speicher
+        if (typeof currentHierarchyData !== "undefined" && currentHierarchyData && Array.isArray(currentHierarchyData.nodes)) {
+          const orgNode = currentHierarchyData.nodes.find(n => n.id === id || n.id === old_id);
+          if (orgNode) {
+            orgNode.id = id;
+            orgNode.name = finalRoleName;
+            orgNode.role = finalRoleName;
+            orgNode.person_name = finalPersonName;
+            orgNode.avatar = avatar;
+            orgNode.provider = provider;
+            orgNode.model = model;
+            orgNode.reasoning_level = reasoning_level;
+            if (typeof renderOpsOrgFlowchart === "function") {
+              try { renderOpsOrgFlowchart(); } catch(e) {}
+            }
+          }
         }
         if (btn) {
           btn.innerHTML = `<span class="text-emerald-400 font-bold">✓ Gespeichert!</span>`;
@@ -2743,3 +2902,26 @@ window.onProfileProviderChange = typeof onProfileProviderChange !== 'undefined' 
 window.filterProfilesByCategory = typeof filterProfilesByCategory !== 'undefined' ? filterProfilesByCategory : null;
 window.handleAvatarFileSelected = typeof handleAvatarFileSelected !== 'undefined' ? handleAvatarFileSelected : null;
 window.loadAgentTabChatMessages = typeof loadAgentTabChatMessages !== 'undefined' ? loadAgentTabChatMessages : null;
+window.switchAgentCadreTab = typeof switchAgentCadreTab !== 'undefined' ? switchAgentCadreTab : null;
+window.selectProfileForEditor = typeof selectProfileForEditor !== 'undefined' ? selectProfileForEditor : null;
+window.applyProfileModelSelection = typeof applyProfileModelSelection !== 'undefined' ? applyProfileModelSelection : null;
+window.renameCurrentAgentTabSession = typeof renameCurrentAgentTabSession !== 'undefined' ? renameCurrentAgentTabSession : null;
+window.loadAgentTabChatSessions = typeof loadAgentTabChatSessions !== 'undefined' ? loadAgentTabChatSessions : null;
+window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'undefined' ? loadAgentTabChatSessions : null;
+
+    function onAgentTabReasoningChange(val) {
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (prof) prof.reasoning_level = val;
+      const reasoningSelect = document.getElementById("prof-edit-reasoning");
+      if (reasoningSelect) reasoningSelect.value = val;
+      if (currentSelectedProfileId) {
+        const provider = currentAgentTabProvider || (prof && prof.provider) || "openrouter";
+        const model = currentAgentTabModel || (prof && prof.model) || "auto/best-coding";
+        fetch(`/api/hermes/profiles/${encodeURIComponent(currentSelectedProfileId)}/model`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, model, reasoning_level: val })
+        }).catch(e => console.warn("[Reasoning] Auto-save error:", e));
+      }
+    }
+    window.onAgentTabReasoningChange = onAgentTabReasoningChange;

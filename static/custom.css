@@ -253,36 +253,106 @@ button[kind="secondaryFormSubmit"]:hover,
 }
 
 /* --------------------------------------------------------------------------
-   7. FORMULAR-ELEMENTE & EINGABEFELDER
+   7. FORMULAR-ELEMENTE & EINGABEFELDER (MULDE / INNER SHADOW)
    -------------------------------------------------------------------------- */
 input[type="text"],
 input[type="number"],
 input[type="password"],
+input[type="search"],
+input[type="email"],
+input[type="url"],
+input[type="tel"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input:not([type]),
 textarea,
+select,
+.shadcn-input,
 [data-baseweb="input"],
 [data-baseweb="textarea"],
 [data-baseweb="select"] > div,
 .stTextInput > div > div > input,
-.stTextArea textarea {
+.stTextArea textarea,
+.stSelectbox select,
+#master-chat-input-card,
+#agent-tab-input-card,
+[contenteditable="true"] {
   background-color: var(--bg-surface) !important;
   border: 1px solid var(--border-default) !important;
   border-radius: 6px !important;
   color: var(--text-main) !important;
   font-size: 13px !important;
-  box-shadow: none !important;
-  transition: border-color 0.15s ease;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.10), inset 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dark input[type="text"],
+.dark input[type="number"],
+.dark input[type="password"],
+.dark input[type="search"],
+.dark input[type="email"],
+.dark input[type="url"],
+.dark input[type="tel"],
+.dark input[type="date"],
+.dark input[type="time"],
+.dark input[type="datetime-local"],
+.dark input:not([type]),
+.dark textarea,
+.dark select,
+.dark .shadcn-input,
+.dark [data-baseweb="input"],
+.dark [data-baseweb="textarea"],
+.dark [data-baseweb="select"] > div,
+.dark .stTextInput > div > div > input,
+.dark .stTextArea textarea,
+.dark .stSelectbox select,
+.dark #master-chat-input-card,
+.dark #agent-tab-input-card,
+.dark [contenteditable="true"] {
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35), inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
 }
 
 input:focus,
 textarea:focus,
+select:focus,
+.shadcn-input:focus,
 [data-baseweb="input"]:focus-within,
 [data-baseweb="textarea"]:focus-within,
 [data-baseweb="select"]:focus-within,
 .stTextInput > div > div > input:focus,
-.stTextArea textarea:focus {
+.stTextArea textarea:focus,
+.stSelectbox select:focus,
+#master-chat-input-card:focus-within,
+#agent-tab-input-card:focus-within,
+[contenteditable="true"]:focus {
   border-color: var(--primary) !important;
   outline: none !important;
-  box-shadow: 0 0 0 1px var(--primary) !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12), 0 0 0 1.5px var(--primary) !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus,
+.dark .shadcn-input:focus,
+.dark [data-baseweb="input"]:focus-within,
+.dark [data-baseweb="textarea"]:focus-within,
+.dark [data-baseweb="select"]:focus-within,
+.dark .stTextInput > div > div > input:focus,
+.dark .stTextArea textarea:focus,
+.dark .stSelectbox select:focus,
+.dark #master-chat-input-card:focus-within,
+.dark #agent-tab-input-card:focus-within,
+.dark [contenteditable="true"]:focus {
+  border-color: var(--primary) !important;
+  outline: none !important;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 1.5px var(--primary) !important;
+}
+
+/* Transparente Embedded-Textareas innerhalb von Input-Cards erben die Mulde der Card */
+#master-chat-input,
+#agent-tab-chat-input {
+  box-shadow: none !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -395,7 +465,12 @@ code, pre, .stCodeBlock {
   background-color: var(--bg-surface) !important;
   border: 1px solid var(--border-default) !important;
   border-radius: 6px !important;
-  box-shadow: none !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.10), inset 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+}
+
+.dark #master-chat-profile-select,
+.dark #master-chat-model-select {
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35), inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
 }
 
 .card,
@@ -714,11 +789,13 @@ div.flex > div.flex > span.w-1\.5 {
 /* ==========================================================================
    OPERATIONS KANBAN SPALTEN-HINTERGRÜNDE (10% Intensität wie Mission Control)
    ========================================================================== */
+div#ops-kanban-columns-container > .os-kanban-col,
 div#ops-kanban-columns-container > div.w-80 {
   border-width: 1px !important;
   border-style: solid !important;
 }
 
+div#ops-kanban-columns-container > .os-kanban-col > div.flex-1,
 div#ops-kanban-columns-container > div.w-80 > div.flex-1 {
   background-color: transparent !important;
   box-shadow: none !important;

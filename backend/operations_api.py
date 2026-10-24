@@ -4,6 +4,7 @@ Provides Kanban (Hermes kanban.db), Org-Chart, and Inter-Agent Communication Fee
 """
 
 import os
+import asyncio
 import sys
 import json
 import re
@@ -31,7 +32,26 @@ def _get_kanban_connection():
     conn.execute("PRAGMA busy_timeout=5000;")
     if not _KANBAN_JOURNAL_INIT:
         try:
-            conn.execute("PRAGMA journal_mode=DELETE;")
+            if str(KANBAN_DB_PATH).replace("\\", "/").startswith("/opt/data"):
+                conn.execute("PRAGMA journal_mode=DELETE;")
+            else:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA synchronous=NORMAL;")
+            # Auto-Crash-Recovery (Pillar 2): Tasks die länger als 6 Stunden (21600s) in 'in_progress' hängen, auf 'todo' zurücksetzen
+            import time as _time
+            cutoff_ts = _time.time() - 21600
+            cutoff_iso = datetime.datetime.fromtimestamp(cutoff_ts).isoformat()
+            conn.execute("""
+                UPDATE tasks
+                SET status = 'todo', started_at = NULL
+                WHERE status = 'in_progress'
+                  AND (
+                    (CAST(started_at AS REAL) > 0 AND CAST(started_at AS REAL) < ?)
+                    OR (started_at IS NOT NULL AND started_at < ?)
+                    OR (started_at IS NULL AND created_at < ?)
+                  )
+            """, (cutoff_ts, cutoff_iso, cutoff_iso))
+            conn.commit()
         except Exception:
             pass
         _KANBAN_JOURNAL_INIT = True
@@ -294,9 +314,93 @@ def create_kanban_task(req: TaskCreateRequest):
         conn.close()
 
 
+async def _execute_kanban_task_async(task_id: str):
+    """Führt eine Kanban-Aufgabe autonom über core_dispatcher oder dag_scheduler aus."""
+    import core_dispatcher
+    conn = _get_kanban_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, title, body, assignee, status, model_override FROM tasks WHERE id = ?", (task_id,))
+        row = cur.fetchone()
+        if not row:
+            return
+        t_dict = dict(row)
+    finally:
+        conn.close()
+
+    # Fall 1: Ist es ein DAG Epic?
+    if t_dict["id"].startswith("dag-") and not any(t_dict["id"].endswith(f"-{s}") for s in ["1", "2", "3", "4", "syn"]):
+        try:
+            from backend.dag_scheduler import dag_scheduler_instance
+            await dag_scheduler_instance.execute_dag(task_id)
+            return
+        except Exception as e:
+            print(f"[OperationsAPI] DAG Execution error for {task_id}: {e}", file=sys.stderr)
+
+    # Fall 2: Einzelaufgabe
+    assignee = t_dict.get("assignee") or "hermes-researcher"
+    title = t_dict.get("title") or "Aufgabe"
+    body = t_dict.get("body") or title
+    model = t_dict.get("model_override") or "deepseek/deepseek-chat"
+
+    profiles = _load_profiles_map()
+    prof = profiles.get(assignee, {})
+    agent_name = prof.get("name") or assignee
+    role = prof.get("category") or prof.get("role") or "Fach-Spezialist"
+    system_prompt = prof.get("prompt") or prof.get("system_prompt") or f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
+
+    try:
+        res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            agent_id=assignee,
+            agent_name=agent_name,
+            prompt=f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte.",
+            role=role,
+            system_prompt=system_prompt,
+            model=model,
+            task_id=task_id
+        )
+        reply = res.get("content", "").strip() or f"Aufgabe '{title}' erfolgreich von {agent_name} abgeschlossen."
+        now_iso = datetime.datetime.now().isoformat()
+        
+        c = _get_kanban_connection()
+        try:
+            c.execute("UPDATE tasks SET status = 'review', completed_at = ?, result = ? WHERE id = ?", (now_iso, reply, task_id))
+            c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)", 
+                      (task_id, json.dumps({"status": "review", "summary": reply[:200]}), now_iso))
+            c.commit()
+            _sync_to_memory_bridge(task_id, title, assignee, "review", reply)
+        finally:
+            c.close()
+            
+        try:
+            import main
+            if hasattr(main, "broadcast_event"):
+                main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": "review"})
+                main.broadcast_event("ticker_update", {"agent": agent_name, "message": f"Aufgabe '{title[:30]}...' fertiggestellt & zur Prüfung abgelegt.", "time": datetime.datetime.now().strftime("%H:%M:%S")})
+        except Exception:
+            pass
+            
+    except Exception as ex:
+        print(f"[OperationsAPI] Execution failed for {task_id}: {ex}", file=sys.stderr)
+        now_iso = datetime.datetime.now().isoformat()
+        c = _get_kanban_connection()
+        try:
+            c.execute("UPDATE tasks SET status = 'blocked', result = ? WHERE id = ?", (f"Fehler bei Ausführung: {ex}", task_id))
+            c.commit()
+            _sync_to_memory_bridge(task_id, title, assignee, "blocked", f"Fehler: {ex}")
+        finally:
+            c.close()
+        try:
+            import main
+            if hasattr(main, "broadcast_event"):
+                main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": "blocked"})
+        except Exception:
+            pass
+
+
 @router.patch("/kanban/tasks/{task_id}/status")
-def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
-    """Verschiebt eine Aufgabe in eine neue Spalte / Status."""
+async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
+    """Verschiebt eine Aufgabe in eine neue Spalte / Status und startet ggf. Ausführung."""
     conn = _get_kanban_connection()
     try:
         now_iso = datetime.datetime.now().isoformat()
@@ -311,14 +415,16 @@ def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
         new_status = req.status.lower()
 
         completed_at = now_iso if new_status == "done" else None
+        started_at = now_iso if new_status == "in_progress" else None
 
         cursor.execute("""
             UPDATE tasks
             SET status = ?,
+                started_at = COALESCE(?, started_at),
                 completed_at = COALESCE(?, completed_at),
                 result = COALESCE(?, result)
             WHERE id = ?
-        """, (new_status, completed_at, req.result, task_id))
+        """, (new_status, started_at, completed_at, req.result, task_id))
 
         cursor.execute("""
             INSERT INTO task_events (task_id, kind, payload, created_at)
@@ -327,6 +433,10 @@ def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
 
         conn.commit()
         _sync_to_memory_bridge(task_id, existing["title"], existing["assignee"], new_status, req.result)
+
+        # Autonome LLM-Ausführung starten, wenn Task auf 'in_progress' gesetzt wurde
+        if new_status == "in_progress" and old_status != "in_progress":
+            asyncio.create_task(_execute_kanban_task_async(task_id))
 
         # 12.10.2026 (Decision-Service, Richtung Kanban -> Telegram): Wird ein
         # Entscheidungs-Task (Sidecar-Block 'decision') ueber die Oberflaeche
@@ -353,6 +463,51 @@ def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
             pass
 
         return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
+    finally:
+        conn.close()
+
+
+@router.post("/kanban/reset-zombies")
+def reset_zombie_kanban_tasks(payload: dict = Body(default={})):
+    """Setzt hängengebliebene 'in_progress' Tasks (optional gefiltert nach assignee oder Alter) auf 'todo' zurück."""
+    conn = _get_kanban_connection()
+    try:
+        assignee = (payload.get("assignee") or "").strip()
+        task_id = (payload.get("task_id") or "").strip()
+        target_status = (payload.get("target_status") or "todo").strip().lower()
+        if target_status not in ("todo", "blocked", "review", "done"):
+            target_status = "todo"
+        now_iso = datetime.datetime.now().isoformat()
+        cursor = conn.cursor()
+
+        if task_id:
+            cursor.execute("SELECT id, title, assignee FROM tasks WHERE id = ? AND status = 'in_progress'", (task_id,))
+        elif assignee:
+            cursor.execute("SELECT id, title, assignee FROM tasks WHERE status = 'in_progress' AND LOWER(assignee) = LOWER(?)", (assignee,))
+        else:
+            cursor.execute("SELECT id, title, assignee FROM tasks WHERE status = 'in_progress'")
+
+        rows = cursor.fetchall()
+        reset_ids = []
+        for r in rows:
+            tid = r["id"]
+            cursor.execute("UPDATE tasks SET status = ?, started_at = NULL WHERE id = ?", (target_status, tid))
+            cursor.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+                (tid, "zombie_reset", json.dumps({"from": "in_progress", "to": target_status, "by": "user_or_watchdog"}), now_iso)
+            )
+            _sync_to_memory_bridge(tid, r["title"], r["assignee"], target_status)
+            reset_ids.append(tid)
+
+        conn.commit()
+        try:
+            import main
+            if hasattr(main, "broadcast_event") and reset_ids:
+                main.broadcast_event("kanban_updated", {"action": "zombie_reset", "task_ids": reset_ids, "to": target_status})
+        except Exception:
+            pass
+
+        return {"status": "ok", "reset_count": len(reset_ids), "task_ids": reset_ids, "target_status": target_status}
     finally:
         conn.close()
 
@@ -1201,6 +1356,27 @@ def save_org_hierarchy(req: OrgHierarchySaveRequest):
         }
         with open(ORG_HIERARCHY_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
+        # Synchronisiere geänderte Knoten-Metadaten (Model, Provider, Name, Avatar) zurück in agent_profiles.json
+        try:
+            if os.path.exists(PROFILES_FILE):
+                with open(PROFILES_FILE, "r", encoding="utf-8") as pf:
+                    plist = json.load(pf)
+                nodes_by_id = {n.get("id"): n for n in (req.nodes or []) if isinstance(n, dict) and n.get("id")}
+                changed_any = False
+                for p in plist:
+                    pid = p.get("id")
+                    if pid in nodes_by_id:
+                        nd = nodes_by_id[pid]
+                        for k in ("name", "person_name", "model", "provider", "avatar", "reasoning_level"):
+                            if nd.get(k) and nd.get(k) != p.get(k):
+                                p[k] = nd[k]
+                                changed_any = True
+                if changed_any:
+                    with open(PROFILES_FILE, "w", encoding="utf-8") as pf:
+                        json.dump(plist, pf, indent=2, ensure_ascii=False)
+                    _PROFILES_MAP_CACHE["mtime"] = 0.0
+        except Exception as sync_e:
+            print(f"[OperationsAPI] Profile sync notice: {sync_e}", file=sys.stderr)
         return {"status": "success", "message": "Organigramm-Hierarchie gespeichert."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {str(e)}")
@@ -1282,3 +1458,68 @@ def verify_audit_log_chain():
     }
 
 
+
+# =========================================================================
+# 6. ADVANCED AGENTIC MECHANICS: DAG-SCHEDULER & WORKFLOW CHECKPOINTS
+# =========================================================================
+
+class DecomposeTaskRequest(BaseModel):
+    title: str
+    body: Optional[str] = ""
+    assignee: Optional[str] = "orchestrator"
+
+@router.post("/kanban/dag/decompose")
+async def api_dag_decompose_task(req: DecomposeTaskRequest):
+    """Zerlegt eine komplexe Aufgabe in einen Directed Acyclic Graph (DAG) mit parallelen Teilaufgaben."""
+    from backend.dag_scheduler import dag_scheduler_instance
+    return await dag_scheduler_instance.decompose_task(req.title, req.body or "", req.assignee or "orchestrator")
+
+@router.post("/kanban/dag/execute/{parent_id}")
+async def api_dag_execute_task(parent_id: str):
+    """Führt einen zerlegten DAG aus: Parallele Vorstufen -> abhängige Stufen -> Abschluss-Synthese."""
+    from backend.dag_scheduler import dag_scheduler_instance
+    return await dag_scheduler_instance.execute_dag(parent_id)
+
+class WorkflowCheckpointCreateRequest(BaseModel):
+    checkpoint_id: str
+    workflow_id: str
+    agent_id: str
+    current_step: int
+    total_steps: int
+    state_data: Dict[str, Any]
+    status: Optional[str] = "running"
+    pause_reason: Optional[str] = None
+
+@router.post("/workflows/checkpoints")
+def api_create_workflow_checkpoint(req: WorkflowCheckpointCreateRequest):
+    """Speichert einen atomaren Workflow-Snapshot für unterbrechbare Langzeitprozesse."""
+    from local_memory_bridge import LocalMemoryBridge
+    bridge = LocalMemoryBridge()
+    bridge.save_workflow_checkpoint(
+        req.checkpoint_id, req.workflow_id, req.agent_id,
+        req.current_step, req.total_steps, req.state_data,
+        req.status or "running", req.pause_reason
+    )
+    return {"status": "success", "checkpoint_id": req.checkpoint_id}
+
+@router.get("/workflows/checkpoints")
+def api_list_workflow_checkpoints(status: Optional[str] = None):
+    """Liefert aktive oder pausierte Workflow-Snapshots."""
+    from local_memory_bridge import LocalMemoryBridge
+    bridge = LocalMemoryBridge()
+    return {"status": "success", "checkpoints": bridge.list_workflow_checkpoints(status=status)}
+
+@router.post("/workflows/checkpoints/{checkpoint_id}/resume")
+def api_resume_workflow_checkpoint(checkpoint_id: str):
+    """Reaktiviert einen pausierten Workflow-Snapshot für die Weiterführung ab Schritt N."""
+    from local_memory_bridge import LocalMemoryBridge
+    bridge = LocalMemoryBridge()
+    cp = bridge.get_workflow_checkpoint(checkpoint_id)
+    if not cp:
+        raise HTTPException(status_code=404, detail="Checkpoint nicht gefunden.")
+    bridge.save_workflow_checkpoint(
+        checkpoint_id, cp["workflow_id"], cp["agent_id"],
+        cp["current_step"], cp["total_steps"], cp.get("state", {}),
+        status="resumed", pause_reason=None
+    )
+    return {"status": "success", "message": f"Workflow {cp['workflow_id']} ab Schritt {cp['current_step']} reaktiviert.", "checkpoint": cp}

@@ -21,6 +21,7 @@
       <!-- Tab Navigation (Konsolidierte Bereiche) -->
       <div class="flex border-b border-[var(--border)] mt-3 overflow-x-auto gap-1 relative" style="z-index: 1;">
         <button onclick="setSettingsTab('kernel')" id="btn-tab-kernel" class="py-2 px-3 text-xs font-bold border border-b-0 rounded-t-md transition-all cursor-pointer relative" style="bottom: -1px; border-color: var(--border); background-color: var(--card); color: var(--foreground); z-index: 2; border-bottom: 1.5px solid var(--card);">HERMES CORE</button>
+        <button onclick="setSettingsTab('autonomy')" id="btn-tab-autonomy" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">AUTONOMIE &amp; MODULE (36)</button>
         <button onclick="setSettingsTab('services')" id="btn-tab-services" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">CONTAINER &amp; DIENSTE</button>
         <button onclick="setSettingsTab('routing')" id="btn-tab-routing" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">PROVIDER &amp; GATEWAY</button>
         <button onclick="setSettingsTab('frameworks')" id="btn-tab-frameworks" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">METHODIKEN</button>
@@ -184,10 +185,10 @@
           </div>
 
           <!-- Section 1: Standard-Modell & Routing -->
-          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+          <div id="hermes-sec-1" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
             <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
               <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
-                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-500"></i> 1. Standard-Modell &amp; Provider-Routing
+                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-500"></i> 1. Standard-Modell &amp; Provider-Routing (model)
               </h5>
               <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Zentrales AI-Gehirn für autonome Aufträge</span>
             </div>
@@ -203,6 +204,7 @@
                   <button type="button" onclick="setHermesQuickModel('google/gemini-2.5-flash', 'openrouter')" class="px-2 py-0.5 rounded bg-[var(--secondary)] hover:bg-indigo-500/10 hover:text-indigo-500 border border-[var(--border)] text-[10px] font-mono transition cursor-pointer">Gemini 2.5 Flash</button>
                   <button type="button" onclick="setHermesQuickModel('anthropic/claude-3.5-sonnet', 'openrouter')" class="px-2 py-0.5 rounded bg-[var(--secondary)] hover:bg-indigo-500/10 hover:text-indigo-500 border border-[var(--border)] text-[10px] font-mono transition cursor-pointer">Claude 3.5 Sonnet</button>
                   <button type="button" onclick="setHermesQuickModel('meta-llama/llama-3.3-70b-instruct', 'openrouter')" class="px-2 py-0.5 rounded bg-[var(--secondary)] hover:bg-indigo-500/10 hover:text-indigo-500 border border-[var(--border)] text-[10px] font-mono transition cursor-pointer">Llama 3.3 70B</button>
+                  <button type="button" onclick="setHermesQuickModel('auto/best-coding', 'omniroute')" class="px-2 py-0.5 rounded bg-[var(--secondary)] hover:bg-indigo-500/10 hover:text-indigo-500 border border-[var(--border)] text-[10px] font-mono transition cursor-pointer">OmniRoute Best-Coding</button>
                 </div>
               </div>
 
@@ -223,162 +225,225 @@
             </div>
           </div>
 
-          <!-- Section 2: Agenten-Ausführung & Thinking -->
-          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+          <!-- Section 2: Agenten-Ausführung, Thinking & Runden-Limits -->
+          <div id="hermes-sec-2" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
             <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
               <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
-                <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-500"></i> 2. Agenten-Ausführung &amp; Thinking (Reasoning)
+                <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-500"></i> 2. Agenten-Ausführung, Thinking &amp; Runden-Limits (agent)
               </h5>
-              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Ressourcen &amp; Denkzeit je Iteration</span>
+              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[9.5px] font-mono font-bold">⇄ Sync mit Archon Concurrency &amp; Circuit-Breaker</span>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
               <div>
                 <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Reasoning Effort</label>
                 <select id="hermes-cfg-reasoning-effort" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--foreground)] font-mono focus:outline-none cursor-pointer">
-                  <option value="low">Niedrig (Schnell &amp; Sparsam)</option>
-                  <option value="medium">Mittel (Ausgewogen)</option>
-                  <option value="high">Hoch (Tiefe Reflexion &amp; CoT)</option>
+                  <option value="none">None / Off (0 Tokens)</option>
+                  <option value="off">Aus (Kein Reasoning)</option>
+                  <option value="minimal">Minimal (~1k Tokens)</option>
+                  <option value="low">Niedrig (~2k Tokens)</option>
+                  <option value="medium">Mittel (~4k Tokens)</option>
+                  <option value="high">Hoch (~8k Tokens)</option>
+                  <option value="max">Maximum (~16k Tokens)</option>
                 </select>
-                <span class="text-[10px] text-[var(--muted-foreground)]">Denktiefe für schwierige Tasks</span>
               </div>
 
               <div>
                 <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Max Context Tokens</label>
                 <input type="number" id="hermes-cfg-max-context-tokens" min="4000" max="256000" step="1000" value="32000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--foreground)] font-mono focus:outline-none">
-                <span class="text-[10px] text-[var(--muted-foreground)]">Token-Limit im Arbeitskontext</span>
               </div>
 
               <div>
                 <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Max History Messages</label>
-                <input type="number" id="hermes-cfg-max-history" min="5" max="100" step="1" value="20" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--foreground)] font-mono focus:outline-none">
-                <span class="text-[10px] text-[var(--muted-foreground)]">Nachrichten im Dialoggedächtnis</span>
+                <input type="number" id="hermes-cfg-max-history" min="5" max="200" step="1" value="20" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--foreground)] font-mono focus:outline-none">
               </div>
 
               <div>
-                <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Task Timeout (Sekunden)</label>
+                <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Task Timeout (Sek.) ⇄</label>
                 <input type="number" id="hermes-cfg-task-timeout" min="10" max="600" step="5" value="60" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--foreground)] font-mono focus:outline-none">
-                <span class="text-[10px] text-[var(--muted-foreground)]">Watchdog-Limit vor Abbruch</span>
               </div>
-            </div>
-          </div>
 
-          <!-- Section 3: Anzeige & UI-Verhalten -->
-          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
-            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
-              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
-                <i data-lucide="layout" class="w-3.5 h-3.5 text-emerald-500"></i> 3. Anzeige &amp; Benutzeroberfläche (Display)
-              </h5>
-              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Visuelle Transparenz und Rückmeldungen</span>
+              <div>
+                <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Max Turns (Züge) ⇄</label>
+                <input type="number" id="hermes-cfg-max-turns" min="5" max="200" step="5" value="60" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--foreground)] font-mono focus:outline-none">
+              </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-              <!-- Sprache -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
                 <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Systemsprache</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Ausgabesprache für Systemmeldungen und Prompts</span>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Abschluss-Verifikation erzwingen (verify_on_stop)</span>
+                  <span class="text-[10.5px] text-[var(--muted-foreground)]">Prüft vor Beendigung eines Tasks automatisch, ob alle Ziele erfüllt wurden</span>
                 </div>
-                <select id="hermes-cfg-language" class="bg-[var(--background)] border border-[var(--border)] rounded-md px-2.5 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none cursor-pointer">
+                <input type="checkbox" id="hermes-cfg-verify-on-stop" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <div>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Ausführliche Debug-Ausgabe (verbose)</span>
+                  <span class="text-[10.5px] text-[var(--muted-foreground)]">Gibt interne Tool-Argumente und System-Traces im Stream aus</span>
+                </div>
+                <input type="checkbox" id="hermes-cfg-verbose" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+            </div>
+          </div>
+
+          <!-- Section 3: Anzeige, Streaming & Dashboard-Verhalten -->
+          <div id="hermes-sec-3" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="layout" class="w-3.5 h-3.5 text-emerald-500"></i> 3. Anzeige, Streaming &amp; Benutzeroberfläche (display &amp; streaming)
+              </h5>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Visuelle Transparenz, Stream-Modus &amp; Benachrichtigungen</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Systemsprache</label>
+                <select id="hermes-cfg-language" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono">
                   <option value="de">Deutsch (de)</option>
                   <option value="en">English (en)</option>
                 </select>
               </div>
-
-              <!-- Vollständiges Reasoning anzeigen -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Vollständiges Reasoning (CoT) einblenden</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Gedankenschritte des Agenten im Stream anzeigen</span>
-                </div>
-                <input type="checkbox" id="hermes-cfg-reasoning-full" class="w-4 h-4 rounded border-[var(--border)] text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-              </div>
-
-              <!-- Kosten & Tokens anzeigen -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Token- &amp; Kostenschätzung einblenden</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Berechnete Kosten je Prompt im Ticker &amp; Task anzeigen</span>
-                </div>
-                <input type="checkbox" id="hermes-cfg-show-cost" class="w-4 h-4 rounded border-[var(--border)] text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-              </div>
-
-              <!-- Zeitstempel anzeigen -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Zeitstempel in Logs &amp; Stream</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Exakte Uhrzeiten für jeden Verarbeitungsschritt</span>
-                </div>
-                <input type="checkbox" id="hermes-cfg-timestamps" class="w-4 h-4 rounded border-[var(--border)] text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-              </div>
-
-              <!-- Akustisches Signal -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] md:col-span-2">
-                <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Signalton bei Aufgaben-Abschluss</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Spielt einen kurzen Benachrichtigungston bei Fertigstellung autonomer Aufträge</span>
-                </div>
-                <input type="checkbox" id="hermes-cfg-bell-complete" class="w-4 h-4 rounded border-[var(--border)] text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-              </div>
-            </div>
-          </div>
-
-          <!-- Section 4: Gateway & Protokolle -->
-          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
-            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
-              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
-                <i data-lucide="network" class="w-3.5 h-3.5 text-sky-500"></i> 4. Gateway &amp; Multiplexing
-              </h5>
-              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Inter-Agent Routing &amp; Audio-Anbindung</span>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-              <!-- Profil-Multiplexing -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Profil-Multiplexing aktivieren</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Ermöglicht paralleles Routing mehrerer Agenten-Profile</span>
-                </div>
-                <input type="checkbox" id="hermes-cfg-multiplex-profiles" class="w-4 h-4 rounded border-[var(--border)] text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-              </div>
-
-              <!-- Agent-to-Agent (A2A) -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Agent-to-Agent Protokoll (A2A)</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Direkte Rollenübergabe &amp; autonome Delegation</span>
-                </div>
-                <input type="checkbox" id="hermes-cfg-a2a-enabled" class="w-4 h-4 rounded border-[var(--border)] text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-              </div>
-
-              <!-- STT Provider -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Speech-to-Text (Audio)</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Transkription für Spracheingaben &amp; Sprachnachrichten</span>
-                </div>
-                <select id="hermes-cfg-stt-provider" class="bg-[var(--background)] border border-[var(--border)] rounded-md px-2.5 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none cursor-pointer">
-                  <option value="groq">Groq Whisper (Schnell)</option>
-                  <option value="none">Deaktiviert</option>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Bei laufendem Task (busy_input_mode)</label>
+                <select id="hermes-cfg-busy-input-mode" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono">
+                  <option value="interrupt">Interrupt (Sofort dazwischenfunken)</option>
+                  <option value="queue">Queue (Hinten einreihen)</option>
                 </select>
               </div>
-
-              <!-- STT Sprache -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                <div>
-                  <span class="font-bold text-xs text-[var(--foreground)] block">Audio-Sprache</span>
-                  <span class="text-[11px] text-[var(--muted-foreground)]">Standardsprache für Audio-Transkription</span>
-                </div>
-                <input type="text" id="hermes-cfg-stt-language" value="de" placeholder="de" class="w-20 bg-[var(--background)] border border-[var(--border)] rounded-md px-2.5 py-1 text-xs text-[var(--foreground)] font-mono text-center focus:outline-none">
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Tool-Fortschritt (tool_progress)</label>
+                <select id="hermes-cfg-tool-progress" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono">
+                  <option value="all">Alle Schritte anzeigen (all)</option>
+                  <option value="summary">Nur Zusammenfassung (summary)</option>
+                  <option value="off">Ausgeblendet (off)</option>
+                </select>
               </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Hintergrund-Meldungen</label>
+                <select id="hermes-cfg-bg-notifications" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono">
+                  <option value="all">Alle Prozesse (all)</option>
+                  <option value="errors">Nur bei Fehlern (errors)</option>
+                  <option value="none">Stumm (none)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Zeitstempel-Format</label>
+                <input type="text" id="hermes-cfg-timestamp-format" value="%H:%M:%S" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">CLI Skin</label>
+                <input type="text" id="hermes-cfg-skin" value="coffee-shop" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Hermes Dashboard Theme</label>
+                <input type="text" id="hermes-cfg-dashboard-theme" value="boring-light" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">CoT-Reasoning einblenden</span>
+                <input type="checkbox" id="hermes-cfg-reasoning-full" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Token- &amp; Kosten-Anzeige</span>
+                <input type="checkbox" id="hermes-cfg-show-cost" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Zeitstempel im Stream</span>
+                <input type="checkbox" id="hermes-cfg-timestamps" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Signalton bei Abschluss</span>
+                <input type="checkbox" id="hermes-cfg-bell-complete" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Echtzeit-Token-Streaming</span>
+                <input type="checkbox" id="hermes-cfg-streaming" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Kompakt-Ansicht (compact)</span>
+                <input type="checkbox" id="hermes-cfg-compact" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Zwischenmeldungen (interim)</span>
+                <input type="checkbox" id="hermes-cfg-interim-msg" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Langläufer-Warnung</span>
+                <input type="checkbox" id="hermes-cfg-long-running-notif" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Fortschritt nach Lauf ausblenden</span>
+                <input type="checkbox" id="hermes-cfg-cleanup-progress" class="w-4 h-4 rounded text-indigo-600">
+              </label>
             </div>
           </div>
 
-          <!-- Section 5: Befehls- & Tool-Sicherheit (Command Allowlist) -->
-          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3 shadow-xs">
+          <!-- Section 4: Gateway, Multiplexing & Plattform-Kanäle -->
+          <div id="hermes-sec-4" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
             <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
               <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
-                <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-500"></i> 5. Befehls- &amp; Tool-Sicherheit (Allowlist)
+                <i data-lucide="network" class="w-3.5 h-3.5 text-sky-500"></i> 4. Gateway, Multiplexing &amp; Plattform-Kanäle (gateway &amp; platforms)
+              </h5>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Multi-Profil-Routing &amp; externe Schnittstellen</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <div>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Profil-Multiplexing</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">Mehrere Agenten-Profile parallel routen</span>
+                </div>
+                <input type="checkbox" id="hermes-cfg-multiplex-profiles" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <div>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Agent-to-Agent (A2A)</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">Direkte Delegation zwischen Rollen</span>
+                </div>
+                <input type="checkbox" id="hermes-cfg-a2a-enabled" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <div>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Telegram-Plattform aktiv</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">Mobiler Bot-Kanal in Hermes</span>
+                </div>
+                <input type="checkbox" id="hermes-cfg-telegram-enabled" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <div>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Webhook-Ingest aktiv</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">Externe Trigger über HTTP-Webhook</span>
+                </div>
+                <input type="checkbox" id="hermes-cfg-webhook-enabled" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <div>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Dedizierter API-Server</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">OpenAI-kompatibler Hermes-Endpunkt</span>
+                </div>
+                <input type="checkbox" id="hermes-cfg-api-server-enabled" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <div>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Sitzungen pro Nutzer bündeln</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">group_sessions_per_user</span>
+                </div>
+                <input type="checkbox" id="hermes-cfg-group-sessions" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+            </div>
+          </div>
+
+          <!-- Section 5: Befehls-Allowlist & Code-Execution -->
+          <div id="hermes-sec-5" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-500"></i> 5. Befehls-Allowlist &amp; Code-Execution Limits (command_allowlist &amp; code_execution)
               </h5>
               <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Zero-Trust Ausführungsberechtigungen</span>
             </div>
@@ -397,14 +462,463 @@
                 <span class="text-xs font-mono font-medium text-[var(--foreground)]">terminal_bash</span>
               </label>
             </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Max. Tool-Calls pro Code-Lauf (max_tool_calls)</label>
+                <input type="number" id="hermes-cfg-code-max-calls" min="5" max="500" value="50" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Code-Execution Timeout (Sekunden)</label>
+                <input type="number" id="hermes-cfg-code-timeout" min="10" max="1800" value="300" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+            </div>
           </div>
 
-          <!-- Bottom Action Bar -->
+          <!-- Section 6: Terminal-Backend & Container-Grenzwerte -->
+          <div id="hermes-sec-6" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="terminal" class="w-3.5 h-3.5 text-cyan-500"></i> 6. Terminal-Backend &amp; Container-Ressourcen (terminal)
+              </h5>
+              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[9.5px] font-mono font-bold">⇄ Sync mit Archon Docker-Sandbox</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Terminal-Backend</label>
+                <select id="hermes-cfg-term-backend" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+                  <option value="local">Lokal im Container (local)</option>
+                  <option value="docker">Isolierter Sub-Container (docker)</option>
+                  <option value="ssh">Remote SSH-Host (ssh)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Home-Modus (home_mode)</label>
+                <select id="hermes-cfg-term-homemode" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+                  <option value="auto">Automatisch (auto)</option>
+                  <option value="isolated">Isoliertes Home (isolated)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Arbeitsverzeichnis (cwd)</label>
+                <input type="text" id="hermes-cfg-term-cwd" value="." class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Befehls-Timeout (Sek.) ⇄</label>
+                <input type="number" id="hermes-cfg-term-timeout" min="10" max="1800" value="180" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Container CPU-Kerne ⇄</label>
+                <input type="number" id="hermes-cfg-term-cpu" step="0.5" min="0.5" max="16" value="1" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Container RAM (MB)</label>
+                <input type="number" id="hermes-cfg-term-ram" step="256" min="256" max="65536" value="5120" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Container Disk (MB)</label>
+                <input type="number" id="hermes-cfg-term-disk" step="1024" min="1024" max="512000" value="51200" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Container-Lebensdauer (Sek.)</label>
+                <input type="number" id="hermes-cfg-term-lifetime" min="30" max="86400" value="300" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-mono">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Persistenter Container-Zustand (container_persistent)</span>
+                <input type="checkbox" id="hermes-cfg-term-persistent" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">CWD in Docker-Workspace mounten</span>
+                <input type="checkbox" id="hermes-cfg-term-mount-cwd" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+            </div>
+          </div>
+
+          <!-- Section 7: Native Tool-Loop-Guardrails -->
+          <div id="hermes-sec-7" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-rose-500"></i> 7. Native Tool-Loop-Guardrails (tool_loop_guardrails)
+              </h5>
+              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[9.5px] font-mono font-bold">⇄ Sync mit Archon Loop-Killer</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Schleifen-Warnungen an Agent injizieren (warnings_enabled) ⇄</span>
+                <input type="checkbox" id="hermes-cfg-loop-warn-enabled" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Harter Zwangsabbruch bei Endlosschleife (hard_stop_enabled)</span>
+                <input type="checkbox" id="hermes-cfg-loop-stop-enabled" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
+              <div>
+                <label class="block text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Warn: Exakter Fehler</label>
+                <input type="number" id="hermes-cfg-warn-exact" min="1" max="20" value="2" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Warn: Gleiches Tool</label>
+                <input type="number" id="hermes-cfg-warn-same" min="1" max="20" value="3" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Warn: Kein Fortschritt</label>
+                <input type="number" id="hermes-cfg-warn-noprog" min="1" max="20" value="2" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[9.5px] font-mono uppercase text-rose-500 font-bold mb-1">Stop: Exakter Fehler ⇄</label>
+                <input type="number" id="hermes-cfg-stop-exact" min="2" max="30" value="5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[9.5px] font-mono uppercase text-rose-500 font-bold mb-1">Stop: Gleiches Tool</label>
+                <input type="number" id="hermes-cfg-stop-same" min="2" max="30" value="8" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[9.5px] font-mono uppercase text-rose-500 font-bold mb-1">Stop: Kein Fortschritt</label>
+                <input type="number" id="hermes-cfg-stop-noprog" min="2" max="30" value="5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 8: Kontext-Kompression & Prompt-Caching -->
+          <div id="hermes-sec-8" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="Minimize-2" class="w-3.5 h-3.5 text-emerald-500"></i> 8. Kontext-Kompression &amp; Prompt-Caching (compression &amp; prompt_caching)
+              </h5>
+              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[9.5px] font-mono font-bold">⇄ Sync mit Archon Context-Compactor</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Automatische Kontext-Kompression aktiv ⇄</span>
+                <input type="checkbox" id="hermes-cfg-comp-enabled" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono text-[var(--foreground)]">Kontextfenster für GPT-5.4/Codex automatisch anheben</span>
+                <input type="checkbox" id="hermes-cfg-comp-autoraise" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Auslöse-Quote (0.1–0.9)</label>
+                <input type="number" id="hermes-cfg-comp-threshold" step="0.05" min="0.1" max="0.95" value="0.5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Ziel-Quote (target_ratio)</label>
+                <input type="number" id="hermes-cfg-comp-ratio" step="0.05" min="0.05" max="0.8" value="0.2" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Schütze letzte N Turns ⇄</label>
+                <input type="number" id="hermes-cfg-comp-last-n" min="1" max="100" value="20" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Schütze erste N Turns</label>
+                <input type="number" id="hermes-cfg-comp-first-n" min="1" max="20" value="3" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Provider Prompt-Cache TTL</label>
+                <select id="hermes-cfg-prompt-cache-ttl" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="5m">5 Minuten (5m – Standard)</option>
+                  <option value="1h">1 Stunde (1h – Extended)</option>
+                  <option value="off">Deaktiviert (off)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 9: Hermes Gedächtnis, Session-Reset & Skill-Synthese -->
+          <div id="hermes-sec-9" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="database" class="w-3.5 h-3.5 text-purple-500"></i> 9. Hermes Gedächtnis, Session-Reset &amp; Skill-Synthese (memory, session_reset, skills)
+              </h5>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Langzeit-Notizen, Sitzungs-Rotation &amp; Skill-Vorschläge</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Hermes Langzeitgedächtnis (MEMORY.md) aktiv</span>
+                <input type="checkbox" id="hermes-cfg-mem-enabled" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Nutzerprofil-Gedächtnis (USER.md) aktiv</span>
+                <input type="checkbox" id="hermes-cfg-user-prof-enabled" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Memory-Limit (Zeichen)</label>
+                <input type="number" id="hermes-cfg-mem-char-limit" min="500" max="20000" step="100" value="2200" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">User-Limit (Zeichen)</label>
+                <input type="number" id="hermes-cfg-user-char-limit" min="500" max="20000" step="100" value="1375" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Flush ab N Turns</label>
+                <input type="number" id="hermes-cfg-mem-flush-turns" min="1" max="50" value="6" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Memory-Nudge (Turns)</label>
+                <input type="number" id="hermes-cfg-mem-nudge" min="1" max="100" value="10" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1 border-t border-[var(--border)]/60">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Session-Reset Modus</label>
+                <select id="hermes-cfg-sreset-mode" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="both">Täglich &amp; Inaktivität (both)</option>
+                  <option value="daily">Nur zur festen Uhrzeit (daily)</option>
+                  <option value="idle">Nur nach Inaktivität (idle)</option>
+                  <option value="off">Kein Auto-Reset (off)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Reset-Stunde (0–23 Uhr)</label>
+                <input type="number" id="hermes-cfg-sreset-hour" min="0" max="23" value="4" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Idle-Reset (Minuten)</label>
+                <input type="number" id="hermes-cfg-sreset-idle" min="15" max="10080" step="15" value="1440" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Skill-Erstellungs-Nudge</label>
+                <input type="number" id="hermes-cfg-skill-nudge" min="3" max="100" value="15" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 10: Subagenten-Delegation & Mixture-of-Agents (MoA) -->
+          <div id="hermes-sec-10" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="users" class="w-3.5 h-3.5 text-indigo-500"></i> 10. Subagenten-Delegation &amp; Mixture-of-Agents (delegation &amp; moa)
+              </h5>
+              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[9.5px] font-mono font-bold">⇄ Sync mit Archon Concurrency &amp; Konsens-Gate</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Max. parallele Subagenten ⇄</label>
+                <input type="number" id="hermes-cfg-deleg-children" min="1" max="16" value="5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Max. Iterationen pro Subagent</label>
+                <input type="number" id="hermes-cfg-deleg-iterations" min="5" max="200" value="50" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Mixture-of-Agents (MoA) aktiv ⇄</span>
+                <input type="checkbox" id="hermes-cfg-moa-enabled" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">MoA Fanout-Modus</label>
+                <select id="hermes-cfg-moa-fanout" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="user_turn">Nur bei Nutzerfrage (user_turn)</option>
+                  <option value="always">Bei jedem Schritt (always)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">MoA Max. Tokens</label>
+                <input type="number" id="hermes-cfg-moa-tokens" step="512" min="512" max="32768" value="4096" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Bei Teil-Ausfall (degraded)</label>
+                <select id="hermes-cfg-moa-degraded" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="loud">Warnung anzeigen (loud)</option>
+                  <option value="silent">Stumm fortfahren (silent)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Aggregator-Provider</label>
+                <input type="text" id="hermes-cfg-moa-agg-prov" value="custom:omniroute:20128" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Aggregator-Modell</label>
+                <input type="text" id="hermes-cfg-moa-agg-model" value="auto/best-free" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 11: Hilfsmodelle für Vision & Web-Extraktion (auxiliary) -->
+          <div id="hermes-sec-11" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="eye" class="w-3.5 h-3.5 text-sky-500"></i> 11. Hilfsmodelle für Bildanalyse &amp; Web-Extraktion (auxiliary)
+              </h5>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Spezialisierte Co-Prozessoren für Screenshots &amp; HTML-Parsing</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Vision-Provider</label>
+                <input type="text" id="hermes-cfg-aux-vis-prov" value="custom:Omniroute:20128" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Vision-Modell (leer = Auto)</label>
+                <input type="text" id="hermes-cfg-aux-vis-model" placeholder="auto/best-vision" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Web-Extract Provider</label>
+                <input type="text" id="hermes-cfg-aux-web-prov" value="auto" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Web-Extract Modell (leer = Auto)</label>
+                <input type="text" id="hermes-cfg-aux-web-model" placeholder="auto/fast" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 12: Browser-Engine & Dynamische Tool-Suche -->
+          <div id="hermes-sec-12" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="globe" class="w-3.5 h-3.5 text-amber-500"></i> 12. Browser-Engine &amp; Dynamische Tool-Suche (browser &amp; tools.tool_search)
+              </h5>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Browser-Session-Management &amp; Lazy Tool-Loading</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Browser Idle-Limit (s)</label>
+                <input type="number" id="hermes-cfg-brow-timeout" min="15" max="1800" value="120" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Browser-Provider</label>
+                <select id="hermes-cfg-brow-provider" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="local">Lokal (Chromium)</option>
+                  <option value="browserbase">Browserbase (Cloud)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Tool-Search Modus</label>
+                <select id="hermes-cfg-tsearch-enabled" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="on">Aktiv (on)</option>
+                  <option value="off">Aus – Alle Tools laden (off)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Tool-Search Limit</label>
+                <input type="number" id="hermes-cfg-tsearch-limit" min="1" max="30" value="5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Schwelle (%)</label>
+                <input type="number" id="hermes-cfg-tsearch-pct" min="0" max="100" value="0" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Tool-Listing</label>
+                <select id="hermes-cfg-tsearch-listing" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="off">Kompakt (off)</option>
+                  <option value="on">Vollständig listen (on)</option>
+                </select>
+              </div>
+            </div>
+
+            <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+              <span class="text-xs font-mono text-[var(--foreground)]">Browser-Traffic über Hermes-Gateway tunneln (use_gateway)</span>
+              <input type="checkbox" id="hermes-cfg-brow-gateway" class="w-4 h-4 rounded text-indigo-600">
+            </label>
+          </div>
+
+          <!-- Section 13: Sprachausgabe (Voice / TTS) & Spracherkennung (STT) -->
+          <div id="hermes-sec-13" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="mic" class="w-3.5 h-3.5 text-emerald-500"></i> 13. Spracherkennung (STT) &amp; Sprachausgabe (Voice / TTS)
+              </h5>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Audio-Transkription &amp; automatische Vorlesefunktion</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Speech-to-Text (STT) aktiviert</span>
+                <input type="checkbox" id="hermes-cfg-stt-enabled" checked class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Antworten automatisch vorlesen (voice.auto_tts)</span>
+                <input type="checkbox" id="hermes-cfg-voice-tts" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">STT Provider</label>
+                <select id="hermes-cfg-stt-provider" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="groq">Groq Whisper (Schnell)</option>
+                  <option value="openai">OpenAI Whisper</option>
+                  <option value="local">Lokales Whisper</option>
+                  <option value="none">Deaktiviert</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Audio-Sprache</label>
+                <input type="text" id="hermes-cfg-stt-language" value="de" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Groq Modell</label>
+                <input type="text" id="hermes-cfg-stt-groq-model" value="whisper-large-v3" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">OpenAI Modell</label>
+                <input type="text" id="hermes-cfg-stt-openai-model" value="whisper-1" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Lokales Modell</label>
+                <input type="text" id="hermes-cfg-stt-local-model" value="base" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 14: Update-Sicherheit & Konfigurations-Backups -->
+          <div id="hermes-sec-14" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                <i data-lucide="archive" class="w-3.5 h-3.5 text-indigo-500"></i> 14. Update-Sicherheit &amp; Konfigurations-Backups (updates)
+              </h5>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Rollierende Sicherungen bei System-Updates</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                <span class="text-xs font-mono font-bold text-[var(--foreground)]">Backup vor jedem Update (pre_update_backup)</span>
+                <input type="checkbox" id="hermes-cfg-upd-backup" class="w-4 h-4 rounded text-indigo-600">
+              </label>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Anzahl aufbewahrter Backups</label>
+                <input type="number" id="hermes-cfg-upd-keep" min="1" max="30" value="5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Lokale Git-Änderungen bei Update</label>
+                <select id="hermes-cfg-upd-changes" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                  <option value="stash">Zwischenspeichern (stash)</option>
+                  <option value="commit">Automatisch committen (commit)</option>
+                  <option value="abort">Update abbrechen (abort)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Bar (Hermes Core) -->
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-xs">
             <div class="flex items-center gap-2">
               <span class="text-xs text-[var(--muted-foreground)]" id="hermes-form-status-msg">Änderungen werden direkt in das Profil übernommen.</span>
             </div>
             <div class="flex items-center gap-2">
+              <button type="button" onclick="setSettingsTab('autonomy')" class="shadcn-btn-outline px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 cursor-pointer text-indigo-600 dark:text-indigo-400 border-indigo-500/30">
+                <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Zu Autonomie &amp; Module (36)
+              </button>
               <button type="button" onclick="loadHermesFormSettings()" class="shadcn-btn-outline px-4 py-2 text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-black dark:text-white"></i> Zurücksetzen
               </button>
@@ -428,6 +942,1129 @@
               <span class="text-[11px] text-[var(--muted-foreground)] italic">Hinweis: Die Bearbeitung erfolgt primär über die obigen Eingabefelder und Schalter.</span>
             </div>
           </details>
+        </div>
+
+        <!-- Tab 1b: Autonomie, Resilienz & Enterprise-Module (Alle 36 Module aus Teil 1 & Teil 2) -->
+        <div id="settings-tab-autonomy" class="hidden space-y-4 text-xs p-1">
+          <!-- Header Banner -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                <i data-lucide="sliders" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs uppercase font-mono tracking-wider text-[var(--foreground)]">Autonomie-, Resilienz- &amp; Enterprise-Module (36 Subsysteme)</h4>
+                <p class="text-[11px] text-[var(--muted-foreground)]">36 Module gegliedert in 8 Bereiche: Modul 1 (Sleep-Cycle), Module 2–6 (Kernel &amp; Resilienz), Module 7–11 (Governance &amp; Flotte) und Module 12–36 (Performance, Gedächtnis, Durable Execution, Security &amp; Schwarm-Intelligenz).</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" onclick="loadAutonomyModulesSettings(); loadMemoryConsolidationSettings();" class="shadcn-btn-outline px-3 py-1.5 text-xs flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Neu laden
+              </button>
+              <button type="button" onclick="saveAutonomyModulesSettings(true); saveMemoryConsolidationSettings();" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i> Alle 36 Module speichern
+              </button>
+            </div>
+          </div>
+
+          <!-- Bereich 1: Nächtliche Gedächtnis-Konsolidierung & Sleep-Cycle Wartung (Modul 1) -->
+          <div id="section-memory-consolidation" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="moon" class="w-4 h-4 text-indigo-500"></i>
+                <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">
+                  Bereich 1: Nächtliche Gedächtnis-Konsolidierung &amp; Sleep-Cycle Wartung (Modul 1)
+                </h5>
+              </div>
+              <span id="memory-consolidation-last-run-badge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 font-semibold">Kein Durchlauf vermerkt</span>
+            </div>
+            <p class="text-[11px] text-[var(--muted-foreground)] leading-snug">
+              Konsolidiert temporäre Traces, bereinigt alte Heartbeat-Audit-Logs und komprimiert das Langzeitgedächtnis während inaktiver Ruhephasen.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <!-- Aktivierungs-Toggle -->
+              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+                <div>
+                  <span class="font-bold text-xs text-[var(--foreground)] block">Modul 1: Sleep-Cycle aktiv</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">Automatische Ausführung</span>
+                </div>
+                <input type="checkbox" id="cfg-memory-consolidation-enabled" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+              </div>
+
+              <!-- Uhrzeit -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+                <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Ausführungszeit</label>
+                <input type="time" id="cfg-memory-consolidation-time" value="03:00" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2.5 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none cursor-pointer">
+                <span class="text-[10px] text-[var(--muted-foreground)]">Täglicher Ruhe-Zeitpunkt</span>
+              </div>
+
+              <!-- Retention in Tagen -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+                <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Aufbewahrungs-Frist</label>
+                <div class="flex items-center gap-1.5">
+                  <input type="number" id="cfg-memory-consolidation-retention" min="1" max="365" step="1" value="14" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2.5 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none">
+                  <span class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0">Tage</span>
+                </div>
+                <span class="text-[10px] text-[var(--muted-foreground)]">Logs älter als n Tage löschen</span>
+              </div>
+
+              <!-- Ähnlichkeitsschwelle -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+                <label class="block text-[10.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Pruning-Schwelle</label>
+                <select id="cfg-memory-consolidation-similarity" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none cursor-pointer">
+                  <option value="0.95">0.95 (Sehr konservativ)</option>
+                  <option value="0.92" selected>0.92 (Ausgewogen / Standard)</option>
+                  <option value="0.88">0.88 (Aggressive Bereinigung)</option>
+                </select>
+                <span class="text-[10px] text-[var(--muted-foreground)]">Deduplizierungs-Filter</span>
+              </div>
+            </div>
+
+            <!-- Manuelle Auslösung Bar -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-[var(--border)]/60 text-xs">
+              <label class="flex items-center gap-2 cursor-pointer text-muted-custom">
+                <input type="checkbox" id="cfg-memory-consolidation-prune-logs" checked class="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500">
+                <span class="text-[11px]">Unkritische Heartbeat-Logs &amp; alte Traces sofort freigeben</span>
+              </label>
+              <button type="button" onclick="triggerManualMemoryConsolidation()" id="btn-manual-consolidation" class="shadcn-btn-outline px-3 py-1.5 text-xs flex items-center gap-1.5 font-bold cursor-pointer text-indigo-600 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Jetzt manuell konsolidieren
+              </button>
+            </div>
+          </div>
+
+          <!-- Bereich 2: Kernel, Resilienz, Sandbox & Debugger (Paket A — Module 2 bis 6) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-4 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="sliders" class="w-4 h-4 text-emerald-500"></i>
+                <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">
+                  Bereich 2: Kernel-, Resilienz-, Sandbox- &amp; Debugger-Steuerung (Paket A — Module 2 bis 6)
+                </h5>
+              </div>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Schwellenwerte &amp; Hauptschalter</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <!-- Modul 2: Concurrency & Deadlock-Supervisor -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 2: Concurrency &amp; Deadlock-Wächter</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="aut-deadlock-enabled" checked class="rounded text-indigo-600">
+                    <span>Auto-Recovery</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max Worker</label>
+                    <input type="number" id="aut-conc-max-agents" min="1" max="16" value="4" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Queue-Limit (s)</label>
+                    <input type="number" id="aut-conc-queue-timeout" min="10" max="600" value="60" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Stagnation (s)</label>
+                    <input type="number" id="aut-deadlock-stagnation" min="15" max="600" value="45" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 3: Circuit Breaker, Loop-Killer & Token-Clipper -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 3: Loop-Killer &amp; Circuit-Breaker</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-cb-loop-enabled" checked class="rounded text-indigo-600">
+                      <span>Loop-Guard</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-cb-clipper-enabled" checked class="rounded text-indigo-600">
+                      <span>Clipper</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max Identisch</label>
+                    <input type="number" id="aut-cb-identical-turns" min="2" max="10" value="3" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Jaccard-Limit</label>
+                    <input type="number" id="aut-cb-jaccard" step="0.02" min="0.70" max="0.99" value="0.90" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max Schritte</label>
+                    <input type="number" id="aut-cb-max-steps" min="5" max="100" value="15" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 4: Autonome Task-Selbstheilung & Git-Rollback -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 4: Autonome Task-Selbstheilung &amp; Git-Rollback</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-healer-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-healer-git-rollback" checked class="rounded text-indigo-600">
+                      <span>Git-Rollback</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max Reparaturversuche</label>
+                    <input type="number" id="aut-healer-max-attempts" min="1" max="10" value="3" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Reparatur-Modell</label>
+                    <input type="text" id="aut-healer-model" value="deepseek/deepseek-chat" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 5: Ephemeral Docker Sandbox -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 5: Ephemeral Docker Sandbox</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-sandbox-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-sandbox-network" class="rounded text-indigo-600">
+                      <span>Netzwerk</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">RAM (MB)</label>
+                    <input type="number" id="aut-sandbox-ram" min="128" max="4096" step="128" value="512" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">CPU-Kerne</label>
+                    <input type="number" id="aut-sandbox-cpu" min="0.5" max="8.0" step="0.5" value="1.0" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Timeout (s)</label>
+                    <input type="number" id="aut-sandbox-timeout" min="5" max="300" value="30" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 6: Replay, Time-Travel Debugger & Pre-Write Snapshots -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5 md:col-span-2">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 6: Time-Travel Debugger &amp; Pre-Write Snapshots</span>
+                  <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-tt-tracing-enabled" checked class="rounded text-indigo-600">
+                      <span>Step-Tracing aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-tt-snapshots-enabled" checked class="rounded text-indigo-600">
+                      <span>Auto Gzip-Snapshots vor Schreibzugriffen</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. gespeicherte Datei-Snapshots (Ringpuffer)</label>
+                    <input type="number" id="aut-tt-max-snapshots" min="10" max="500" value="50" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. aufgezeichnete Trace-Schritte pro Task</label>
+                    <input type="number" id="aut-tt-max-steps" min="10" max="1000" value="100" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bereich 3: Governance, Schiedsgericht, War-Room, SLAs & Flotten-Hygiene (Paket B — Module 7 bis 11) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-4 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="shield" class="w-4 h-4 text-amber-500"></i>
+                <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">
+                  Bereich 3: Governance, Schiedsgericht, War-Room, SLAs &amp; Flotten-Hygiene (Paket B — Module 7 bis 11)
+                </h5>
+              </div>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Zero-Trust &amp; Hintergrund-Automatisierung</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <!-- Modul 7: Konsens-Gate & Tri-Agent Schiedsgericht -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 7: Konsens-Gate &amp; Tri-Agent Schiedsgericht</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="aut-cons-enabled" checked class="rounded text-indigo-600">
+                    <span>Gate aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Ab Priorität</label>
+                    <select id="aut-cons-min-prio" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-1.5 py-1 text-xs font-mono">
+                      <option value="1">P1 (Alle)</option>
+                      <option value="2">P2 (Wichtig)</option>
+                      <option value="3" selected>P3 (Kritisch)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Modus</label>
+                    <select id="aut-cons-mode" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-1.5 py-1 text-xs font-mono">
+                      <option value="dual_gate">Dual-Critic</option>
+                      <option value="tri_agent_council" selected>3er-Rat</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Mehrheit</label>
+                    <select id="aut-cons-majority" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-1.5 py-1 text-xs font-mono">
+                      <option value="two_thirds" selected>2/3 Mehrheit</option>
+                      <option value="unanimous">Einstimmig (3/3)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 8: Virtueller War-Room & Pre-Mortem Simulation -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 8: War-Room &amp; Pre-Mortem Risiko-Simulation</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-war-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-war-auto" class="rounded text-indigo-600">
+                      <span>Auto vor P3</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Blockade ab Risiko</label>
+                    <select id="aut-war-threshold" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                      <option value="MEDIUM">MEDIUM</option>
+                      <option value="HIGH" selected>HIGH</option>
+                      <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Simulations-Modell</label>
+                    <input type="text" id="aut-war-model" value="deepseek/deepseek-chat" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 9: SLA-Verträge & Handoff-Desk -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 9: SLA-Verträge &amp; Inter-Agent Handoff-Desk</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-sla-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-sla-autoreject" checked class="rounded text-indigo-600">
+                      <span>Auto-Reject</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Min. Lieferlänge (Zeichen)</label>
+                    <input type="number" id="aut-sla-min-len" min="10" max="5000" value="100" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Turnaround (Min.)</label>
+                    <input type="number" id="aut-sla-turnaround" min="5" max="1440" value="60" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 10: Inbox-Watcher & Proaktives Morgen-Standup -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 10: Inbox-Watcher &amp; Proaktives Morgen-Standup</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-inbox-enabled" checked class="rounded text-indigo-600">
+                      <span>Watcher</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-standup-enabled" checked class="rounded text-indigo-600">
+                      <span>Standup</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Scan-Intervall (Sek.)</label>
+                    <input type="number" id="aut-inbox-interval" min="2" max="300" value="5" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Standup-Uhrzeit</label>
+                    <input type="time" id="aut-standup-time" value="08:00" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 11: Fleet Self-Healing, DB-Backups, Secret-Masking & Visueller Browser -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5 md:col-span-2">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5 flex-wrap gap-2">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 11: Flotten-Selbstheilung, DB-Backups, Secret-Masker &amp; Browser-Audit</span>
+                  <div class="flex items-center gap-3 flex-wrap">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-fleet-autorestart" checked class="rounded text-indigo-600">
+                      <span>Auto-Container-Restart</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-fleet-secret-mask" checked class="rounded text-indigo-600">
+                      <span>Secret-Schwärzung</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="aut-fleet-browser-audit" checked class="rounded text-indigo-600">
+                      <span>Browser Screenshot-Audit</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between gap-3 pt-1">
+                  <div class="flex items-center gap-2">
+                    <label class="text-[10px] font-mono text-[var(--muted-foreground)]">SQLite-Backup Aufbewahrung (Tage):</label>
+                    <input type="number" id="aut-fleet-backup-days" min="1" max="90" value="7" class="w-20 bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <button type="button" onclick="saveAutonomyModulesSettings(true)" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Module 2 bis 11 sichern
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bereich 4: Performance-Core, Durchsatz-Skalierung & Token-Effizienz (Paket 1 — Module 12 bis 16) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-4 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="zap" class="w-4 h-4 text-emerald-500"></i>
+                <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">
+                  Bereich 4: Performance-Core, Durchsatz-Skalierung &amp; Token-Effizienz (Paket 1 — Module 12 bis 16)
+                </h5>
+              </div>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Semantic-Cache, Map-Reduce, Hedging &amp; Batch-I/O</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <!-- Modul 12: Semantisches Prompt- & Response-Caching -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 12: Semantischer Prompt- &amp; Response-Cache</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="perf-semcache-enabled" checked class="rounded text-indigo-600">
+                    <span>Cache aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Cosine-Schwelle</label>
+                    <input type="number" id="perf-semcache-similarity" min="0.70" max="1.00" step="0.01" value="0.95" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">TTL (Stunden)</label>
+                    <input type="number" id="perf-semcache-ttl" min="1" max="720" value="24" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Einträge</label>
+                    <input type="number" id="perf-semcache-max" min="50" max="10000" value="500" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 13: Paralleles Map-Reduce Sub-Tasking -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 13: Paralleles Map-Reduce (Fan-Out / Fan-In)</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="perf-mapreduce-enabled" checked class="rounded text-indigo-600">
+                    <span>Fan-Out aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Worker</label>
+                    <input type="number" id="perf-mapreduce-workers" min="1" max="16" value="4" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Chunk-Timeout (s)</label>
+                    <input type="number" id="perf-mapreduce-timeout" min="5" max="300" value="30" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Ab Elementen</label>
+                    <input type="number" id="perf-mapreduce-min-items" min="2" max="20" value="3" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 14: Speculative Fast-Routing & Latenz-Hedging -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 14: Speculative Fast-Routing &amp; Latenz-Hedging</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="perf-hedge-enabled" checked class="rounded text-indigo-600">
+                    <span>Hedging aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Hedge-Verzögerung (Sek.)</label>
+                    <input type="number" id="perf-hedge-delay" min="0.5" max="30.0" step="0.5" value="2.5" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Schnelles Fallback-Modell</label>
+                    <input type="text" id="perf-hedge-model" value="deepseek/deepseek-chat" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 15: Dynamisches Context-Compaction -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 15: Dynamisches Context-Compaction &amp; Truncation</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="perf-compact-enabled" checked class="rounded text-indigo-600">
+                    <span>Compactor aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Trigger ab Tokens</label>
+                    <input type="number" id="perf-compact-threshold" min="1000" max="64000" step="500" value="6000" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Original behaltene Turns</label>
+                    <input type="number" id="perf-compact-keep" min="1" max="20" value="4" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 16: SQLite Connection-Pool & Async Write-Batching -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5 md:col-span-2">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 16: SQLite WAL Connection-Pool &amp; Async Write-Batching</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="perf-batch-enabled" checked class="rounded text-indigo-600">
+                    <span>RAM Write-Batching aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Batch-Größe (Events pro Commit)</label>
+                    <input type="number" id="perf-batch-size" min="5" max="500" value="25" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Flush-Intervall (Sek.)</label>
+                    <input type="number" id="perf-batch-interval" min="0.5" max="60.0" step="0.5" value="2.0" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div class="flex justify-end">
+                    <button type="button" onclick="saveAutonomyModulesSettings(true)" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                      <i data-lucide="check" class="w-3.5 h-3.5"></i> Module 12 bis 16 sichern
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bereich 5: Moderne Gedächtnis- & RAG-Architektur (Paket 2 — Module 17 bis 21) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-4 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="database" class="w-4 h-4 text-purple-500"></i>
+                <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">
+                  Bereich 5: Moderne Gedächtnis- &amp; RAG-Architektur (Paket 2 — Module 17 bis 21)
+                </h5>
+              </div>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Hybrid-FTS5, Knowledge-Graph, CRAG, Core-Memory &amp; Citations</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <!-- Modul 17: Hybrid-Search (BM25 + Vektor + RRF) -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 17: Hybrid-Search (BM25 FTS5 + Vektor RRF)</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="mem2-hybrid-enabled" checked class="rounded text-indigo-600">
+                    <span>RRF-Fusion aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">RRF-Konstante (k)</label>
+                    <input type="number" id="mem2-hybrid-rrfk" min="10" max="200" value="60" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">BM25-Gewicht</label>
+                    <input type="number" id="mem2-hybrid-bm25w" min="0.0" max="1.0" step="0.1" value="0.5" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Top-K Treffer</label>
+                    <input type="number" id="mem2-hybrid-topk" min="1" max="25" value="5" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 18: Lokaler Knowledge-Graph -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 18: Lokaler Knowledge-Graph (Tripel-Store)</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-kg-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-kg-autoextract" checked class="rounded text-indigo-600">
+                      <span>Auto-Tripel</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Graph-Hops</label>
+                    <input type="number" id="mem2-kg-hops" min="1" max="5" value="2" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Min. Konfidenz</label>
+                    <input type="number" id="mem2-kg-conf" min="0.1" max="1.0" step="0.05" value="0.70" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 19: Agentic Corrective RAG (CRAG) -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 19: Agentic Corrective RAG (CRAG)</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-crag-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-crag-rewrite" checked class="rounded text-indigo-600">
+                      <span>Auto-Rewrite</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Min. Relevanz-Score</label>
+                    <input type="number" id="mem2-crag-threshold" min="0.10" max="0.95" step="0.05" value="0.45" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Rewrite-Versuche</label>
+                    <input type="number" id="mem2-crag-attempts" min="0" max="5" value="2" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 20: 2-Stufen Core-Memory (MemGPT / Letta Working Memory) -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 20: 2-Stufen Core-Memory (MemGPT Pinned Blocks)</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-core-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-core-inject" checked class="rounded text-indigo-600">
+                      <span>Prompt-Inject</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Pinned-Blöcke</label>
+                    <input type="number" id="mem2-core-maxblocks" min="1" max="30" value="10" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Zeichen pro Block</label>
+                    <input type="number" id="mem2-core-maxchars" min="100" max="5000" step="100" value="800" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 21: Automatisches Citation- & Quellen-Pinning -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5 md:col-span-2">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5 flex-wrap gap-2">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 21: Automatisches Citation- &amp; Quellen-Pinning (Anti-Halluzination)</span>
+                  <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-cit-enabled" checked class="rounded text-indigo-600">
+                      <span>Pinning aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-cit-inline" checked class="rounded text-indigo-600">
+                      <span>Inline [Quelle: ID]</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="mem2-cit-footer" checked class="rounded text-indigo-600">
+                      <span>Quellen-Footer anhängen</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between gap-3 pt-1">
+                  <div class="flex items-center gap-2">
+                    <label class="text-[10px] font-mono text-[var(--muted-foreground)]">Min. Beleg-Abdeckungsquote (%):</label>
+                    <input type="number" id="mem2-cit-coverage" min="10" max="100" value="60" class="w-20 bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <button type="button" onclick="saveAutonomyModulesSettings(true)" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Module 17 bis 21 sichern
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bereich 6: Zuverlässige Ausführung & Determinismus / Durable Execution (Paket 3 — Module 22 bis 26) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-4 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-sky-500"></i>
+                <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">
+                  Bereich 6: Zuverlässige Ausführung &amp; Determinismus (Paket 3 — Module 22 bis 26)
+                </h5>
+              </div>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">JSON-Grammar, Checkpoints, Idempotency, Dry-Run &amp; DLQ</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <!-- Modul 22: Structured Outputs & JSON-Schema-Garantie -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 22: Structured Outputs &amp; JSON-Schema-Garantie</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="dur3-json-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="dur3-json-repair" checked class="rounded text-indigo-600">
+                      <span>Auto-Repair</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Strikte Schema-Prüfung</label>
+                    <select id="dur3-json-strict" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                      <option value="true" selected>Ja (Default-Fill &amp; Cast)</option>
+                      <option value="false">Nein (Nur Syntax)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Repair-Versuche</label>
+                    <input type="number" id="dur3-json-attempts" min="1" max="5" value="2" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 23: Durable Execution Checkpointing -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 23: Durable Workflow Checkpointing</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="dur3-cp-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="dur3-cp-autoresume" checked class="rounded text-indigo-600">
+                      <span>Auto-Resume</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Checkpoint alle N Schritte</label>
+                    <input type="number" id="dur3-cp-steps" min="1" max="20" value="1" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Aufbewahrung (Tage)</label>
+                    <input type="number" id="dur3-cp-retention" min="1" max="90" value="14" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 24: Idempotency-Keys & Tool-Call-Deduplizierung -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 24: Idempotency-Guard (Deduplizierung)</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="dur3-idem-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="dur3-idem-block" checked class="rounded text-indigo-600">
+                      <span>Duplikate blockieren</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Sperrfrist für identische Tool-Calls (Stunden)</label>
+                  <input type="number" id="dur3-idem-ttl" min="1" max="720" value="24" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                </div>
+              </div>
+
+              <!-- Modul 25: Dry-Run / Shadow-Mode -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 25: Dry-Run / Shadow-Mode</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="dur3-shadow-enabled" class="rounded text-indigo-600">
+                    <span>Globaler Shadow-Mode</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="dur3-shadow-writes" checked class="rounded text-indigo-600">
+                    <span>Schreib-Tools abfangen</span>
+                  </label>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="dur3-shadow-apis" checked class="rounded text-indigo-600">
+                    <span>Externe APIs abfangen</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Modul 26: Dead-Letter-Queue (DLQ) mit Auto-Replay -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5 md:col-span-2">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5 flex-wrap gap-2">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 26: Dead-Letter-Queue (DLQ) &amp; Auto-Replay-Manager</span>
+                  <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="dur3-dlq-enabled" checked class="rounded text-indigo-600">
+                      <span>DLQ aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="dur3-dlq-autoreplay" checked class="rounded text-indigo-600">
+                      <span>Auto-Replay mit Backoff</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Replay-Versuche</label>
+                    <input type="number" id="dur3-dlq-retries" min="1" max="20" value="3" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Basis-Backoff (Sek.)</label>
+                    <input type="number" id="dur3-dlq-backoff" min="2" max="600" value="10" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div class="flex justify-end">
+                    <button type="button" onclick="saveAutonomyModulesSettings(true)" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                      <i data-lucide="check" class="w-3.5 h-3.5"></i> Module 22 bis 26 sichern
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bereich 7: Sicherheit, Datenschutz & Enterprise-Governance (Paket 4 — Module 27 bis 31) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-4 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="lock" class="w-4 h-4 text-rose-500"></i>
+                <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">
+                  Bereich 7: Sicherheit, Datenschutz &amp; Enterprise-Governance (Paket 4 — Module 27 bis 31)
+                </h5>
+              </div>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">PII-Scrubber, Egress-Firewall, RBAC-Jails, Linter &amp; Receipts</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <!-- Modul 27: Bidirektionaler PII-Scrubber (DSGVO) -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 27: Bidirektionaler PII-Scrubber (DSGVO)</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-pii-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-pii-rehydrate" checked class="rounded text-indigo-600">
+                      <span>Re-Hydrate</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 pt-1">
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-pii-emails" checked class="rounded text-indigo-600">
+                    <span>E-Mails</span>
+                  </label>
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-pii-phones" checked class="rounded text-indigo-600">
+                    <span>Telefon</span>
+                  </label>
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-pii-ibans" checked class="rounded text-indigo-600">
+                    <span>IBANs</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Modul 28: Egress-Firewall & Domain-Allowlisting -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 28: Ausgehende Netzwerk-Allowlist (Egress-Firewall)</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-egress-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-egress-blockip" checked class="rounded text-indigo-600">
+                      <span>Raw-IPs sperren</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Erlaubte Ziel-Domains (kommagetrennt)</label>
+                  <input type="text" id="sec4-egress-domains" value="openrouter.ai, api.openai.com, generativelanguage.googleapis.com, api.anthropic.com, api.groq.com, github.com, localhost, 127.0.0.1" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                </div>
+              </div>
+
+              <!-- Modul 29: Granulare Agenten-RBAC & Datei-Scope-Jails -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 29: Granulare Agenten-RBAC &amp; Datei-Scope-Jails</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-rbac-enabled" checked class="rounded text-indigo-600">
+                    <span>RBAC aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-3 gap-2 pt-1">
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-rbac-jail" checked class="rounded text-indigo-600">
+                    <span>Path-Jail</span>
+                  </label>
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-rbac-dotenv" checked class="rounded text-indigo-600">
+                    <span>.env Sperre</span>
+                  </label>
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-rbac-sysdirs" checked class="rounded text-indigo-600">
+                    <span>System-Dirs</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Modul 30: Deterministischer Output-Linter & Policy-Checker -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 30: Deterministischer Output-Linter &amp; Policy-Checker</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-lint-enabled" checked class="rounded text-indigo-600">
+                    <span>Linter aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-3 gap-2 pt-1">
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-lint-slop" checked class="rounded text-indigo-600">
+                    <span>Anti-AI-Slop</span>
+                  </label>
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-lint-destr" checked class="rounded text-indigo-600">
+                    <span>Shell-Blocker</span>
+                  </label>
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="sec4-lint-autoclean" checked class="rounded text-indigo-600">
+                    <span>Auto-Clean</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Modul 31: Manipulationssichere Execution Receipts -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5 md:col-span-2">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5 flex-wrap gap-2">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 31: Manipulationssichere Execution Receipts (SHA-256 Hash-Kette)</span>
+                  <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-rcpt-enabled" checked class="rounded text-indigo-600">
+                      <span>Quittungen aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-rcpt-chain" checked class="rounded text-indigo-600">
+                      <span>SHA-256 Hash-Verkettung</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-rcpt-cost" checked class="rounded text-indigo-600">
+                      <span>USD-Kostenaufschlüsselung</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="flex justify-end pt-1">
+                  <button type="button" onclick="saveAutonomyModulesSettings(true)" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Module 27 bis 31 sichern
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bereich 8: Selbst-Optimierung, Evaluation & Schwarm-Intelligenz (Paket 5 — Module 32 bis 36) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-4 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="sparkles" class="w-4 h-4 text-teal-500"></i>
+                <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">
+                  Bereich 8: Selbst-Optimierung, Evaluation &amp; Schwarm-Intelligenz (Paket 5 — Module 32 bis 36)
+                </h5>
+              </div>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">TextGrad, Gold-Evals, Bandit-Router, Squads &amp; Backpressure</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <!-- Modul 32: Automatischer Prompt-Optimizer (DSPy / TextGrad) -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 32: Autonome Prompt-Selbstoptimierung (DSPy / TextGrad)</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="evo5-popt-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="evo5-popt-autoapply" class="rounded text-indigo-600">
+                      <span>Auto-Apply</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Ab Fehleranzahl</label>
+                    <input type="number" id="evo5-popt-minfail" min="1" max="20" value="3" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. neue Regeln</label>
+                    <input type="number" id="evo5-popt-maxrules" min="1" max="15" value="5" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 33: Gold-Standard Regression-Test-Suite -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 33: Gold-Standard Eval-Regression-Suite</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="evo5-eval-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="evo5-eval-block" checked class="rounded text-indigo-600">
+                      <span>Block bei Regression</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Mindest-Bestehensquote für Release (%)</label>
+                  <input type="number" id="evo5-eval-passrate" min="50" max="100" value="90" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                </div>
+              </div>
+
+              <!-- Modul 34: Multi-Armed Bandit Modell-Router -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 34: Adaptiver Multi-Armed-Bandit Modell-Router</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="evo5-bandit-enabled" checked class="rounded text-indigo-600">
+                    <span>Bandit aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Exploration (ε)</label>
+                    <input type="number" id="evo5-bandit-eps" min="0.0" max="0.5" step="0.05" value="0.15" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Erfolgs-Gewicht</label>
+                    <input type="number" id="evo5-bandit-succw" min="0.1" max="0.9" step="0.1" value="0.6" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Latenz-Gewicht</label>
+                    <input type="number" id="evo5-bandit-latw" min="0.1" max="0.9" step="0.1" value="0.4" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modul 35: Dynamisches Ephemeral-Team-Spawning -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 35: Ephemeral Task-Force Spawner</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="evo5-team-enabled" checked class="rounded text-indigo-600">
+                      <span>Aktiv</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="evo5-team-dissolve" checked class="rounded text-indigo-600">
+                      <span>Auto-Dissolve</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. Spezialisten pro Ad-hoc Task-Force</label>
+                  <input type="number" id="evo5-team-maxsize" min="2" max="10" value="4" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                </div>
+              </div>
+
+              <!-- Modul 36: Live-Ressourcen-Protector (Backpressure) -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5 md:col-span-2">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5 flex-wrap gap-2">
+                  <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 36: Live-Ressourcen-Protector (Host CPU-, RAM- &amp; Disk-Backpressure)</span>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono">
+                    <input type="checkbox" id="evo5-bp-enabled" checked class="rounded text-indigo-600">
+                    <span>Backpressure-Wächter aktiv</span>
+                  </label>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. CPU-Last (%)</label>
+                    <input type="number" id="evo5-bp-cpu" min="50" max="99" value="85" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Max. RAM-Belegung (%)</label>
+                    <input type="number" id="evo5-bp-ram" min="50" max="99" value="85" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)]">Min. freier Disk-Speicher (GB)</label>
+                    <input type="number" id="evo5-bp-disk" min="0.5" max="100.0" step="0.5" value="2.0" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div class="flex justify-end">
+                    <button type="button" onclick="saveAutonomyModulesSettings(true)" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                      <i data-lucide="check" class="w-3.5 h-3.5"></i> Alle 36 State-of-the-Art Module sichern
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Tab 2: Container & Docker-Dienste (Eigenständiger Menüpunkt) -->

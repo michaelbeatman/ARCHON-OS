@@ -464,64 +464,17 @@
         alert("Bitte wählen Sie zuerst ein gültiges Preset aus.");
         return;
       }
-      
-      document.getElementById("preset-modal-title").innerText = "Preset bearbeiten";
-      document.getElementById("preset-modal-id").value = agent.id;
-      document.getElementById("preset-modal-name").value = agent.name;
-      document.getElementById("preset-modal-model").value = agent.model;
-      document.getElementById("preset-modal-prompt").value = agent.prompt;
-      document.getElementById("preset-modal-active").checked = agent.active || false;
-      
-      document.getElementById("preset-modal").classList.remove("hidden");
+      if (typeof switchView === "function") switchView("agent-profiles");
+      if (typeof selectAgentProfile === "function") selectAgentProfile(agent.id);
     }
     function openCreatePresetModal() {
-      document.getElementById("preset-modal-title").innerText = "Neue Vorlage erstellen";
-      document.getElementById("preset-modal-id").value = "new";
-      document.getElementById("preset-modal-name").value = "Neue Vorlage";
-      document.getElementById("preset-modal-model").value = "free-forever";
-      document.getElementById("preset-modal-prompt").value = "";
-      document.getElementById("preset-modal-active").checked = true;
-      
-      document.getElementById("preset-modal").classList.remove("hidden");
+      if (typeof switchView === "function") switchView("agent-profiles");
+      if (typeof createNewAgentProfile === "function") createNewAgentProfile();
     }
-    function closePresetModal() {
-      document.getElementById("preset-modal").classList.add("hidden");
-    }
+    function closePresetModal() {}
     async function submitPresetModal() {
-      const id = document.getElementById("preset-modal-id").value;
-      const name = document.getElementById("preset-modal-name").value.trim();
-      const model = document.getElementById("preset-modal-model").value.trim();
-      const prompt = document.getElementById("preset-modal-prompt").value.trim();
-      const active = document.getElementById("preset-modal-active").checked;
-      
-      if (!name) {
-        alert("Der Name darf nicht leer sein.");
-        return;
-      }
-      
-      if (id === "new") {
-        const newId = `A-0${agents.length + 1}`;
-        agents.push({
-          id: newId,
-          name,
-          model,
-          prompt,
-          active
-        });
-        selectedPresetId = newId;
-      } else {
-        const agent = agents.find(a => a.id === id);
-        if (agent) {
-          agent.name = name;
-          agent.model = model;
-          agent.prompt = prompt;
-          agent.active = active;
-        }
-      }
-      
       await saveAgentsToServer();
       await loadAgentsFromServer();
-      closePresetModal();
     }
     // --- AGENTS MANAGEMENT & DAW SIDEBAR CONTROL ---
     let selectedSidebarPresetId = "";
@@ -603,11 +556,11 @@
       }
     }
     async function restartAgent(name) {
-      await fetch("/api/outreach", {
+      await fetch("/api/operations/kanban/reset-zombies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform: "System", target: name, message: "Agent manually restarted." })
-      });
+        body: JSON.stringify({ agent_id: name })
+      }).catch(() => {});
       alert(`${name} wurde neu gestartet.`);
     }
     function updateAgentField(id, field, value) {
@@ -985,7 +938,7 @@
         const response = await fetch("/api/boardroom/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ task, rounds, chairman_id: chairmanId, framework: frameworkVal, slots })
+          body: JSON.stringify({ task, rounds, chairman_id: chairmanId, framework: frameworkVal, slots, reasoning_level: (document.getElementById("boardroom-reasoning-select") && document.getElementById("boardroom-reasoning-select").value) || "profile" })
         });
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
@@ -1375,19 +1328,10 @@
       }
     }
     function openCreateAgentModal() {
-      populateCreateAgentTemplatesAndContainers();
-      
-      const cSelect = document.getElementById("new-agent-id");
-      if (cSelect && cSelect.options.length > 0) {
-        cSelect.selectedIndex = 0;
-        handleDockerContainerSelectChange(cSelect.value);
-      }
-      
-      document.getElementById("create-agent-modal").classList.remove("hidden");
+      if (typeof switchView === "function") switchView("agent-profiles");
+      if (typeof createNewAgentProfile === "function") createNewAgentProfile();
     }
-    function closeCreateAgentModal() {
-      document.getElementById("create-agent-modal").classList.add("hidden");
-    }
+    function closeCreateAgentModal() {}
     async function submitCreateAgent() {
       const id = document.getElementById("new-agent-id").value.trim();
       const name = document.getElementById("new-agent-name").value.trim();

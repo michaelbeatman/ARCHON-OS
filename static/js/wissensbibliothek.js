@@ -765,7 +765,7 @@
                       Standard-Modell
                     </label>
                     <div class="flex items-center gap-1.5">
-                      <select id="model-select-${p.id}" class="flex-1 bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs truncate">
+                      <select id="model-select-${p.id}" onchange="if(${isActive ? 'true' : 'false'}) activateLlmProvider('${p.id}')" class="flex-1 bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs truncate">
                         <option value="${escapeHtml(p.default_model || '')}">${escapeHtml(p.default_model || 'Modelle laden...')}</option>
                       </select>
                       <button type="button" onclick="fetchSettingsProviderModelsList('${p.id}')" class="p-1 rounded bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 border border-[var(--border)] transition cursor-pointer shrink-0" title="Modelle aktualisieren">
@@ -778,9 +778,9 @@
               <div class="pt-2 border-t border-[var(--border)] flex items-center justify-between">
                 <span class="text-[10px] font-mono text-[var(--muted-foreground)] truncate max-w-[140px]">${p.api || 'Native SDK'}</span>
                 ${isActive ? `
-                  <span class="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Aktiviert
-                  </span>
+                  <button type="button" onclick="activateLlmProvider('${p.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 flex items-center gap-1 transition cursor-pointer" title="Ausgewähltes Standard-Modell übernehmen">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Aktiv (Modell übernehmen)
+                  </button>
                 ` : `
                   <button type="button" onclick="activateLlmProvider('${p.id}')" class="px-3 py-1 rounded-lg text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 transition cursor-pointer shadow-2xs">
                     Aktivieren
@@ -825,8 +825,12 @@
         const data = await res.json();
         if (data.status === "ok") {
           loadLLMProvidersSettings();
+          if (typeof loadHermesFormSettings === "function") loadHermesFormSettings();
           if (typeof loadMasterChatModels === "function") loadMasterChatModels();
           if (typeof populateAgentTabModels === "function") populateAgentTabModels();
+          if (typeof showNotification === "function") {
+            showNotification("Provider & Modell", `Standard-Modell '${model || providerId}' aktiviert und mit Hermes Core synchronisiert.`, "success");
+          }
         } else {
           alert("Fehler beim Aktivieren: " + (data.message || "Unbekannt"));
         }
@@ -1092,15 +1096,29 @@
       } catch (e) {
         console.error("Error saving settings:", e);
       }
+      if (typeof window.saveHermesFormSettings === "function") {
+        await window.saveHermesFormSettings(false);
+      }
+      if (typeof window.saveAutonomyModulesSettings === "function") {
+        await window.saveAutonomyModulesSettings(false);
+      }
+      if (typeof window.saveMemoryConsolidationSettings === "function") {
+        await window.saveMemoryConsolidationSettings();
+      }
       await saveThemeToServer(true);
       await saveAgentsToServer();
       renderAgentsSidebar();
       renderAgentRegistryTable();
       renderSidebarPresetsSelect();
       renderMasterChatAgentTabs();
+      if (typeof loadMasterChatModels === "function") loadMasterChatModels();
       closeSystemSettingsModal();
       
-      alert("Systemkonfiguration und Designeinstellungen erfolgreich gespeichert!");
+      if (typeof showNotification === "function") {
+        showNotification("System Control Center", "Alle Einstellungen (inkl. Standard-Sprachmodell, Hermes Core & Autonomie-Module) erfolgreich gespeichert!", "success");
+      } else {
+        alert("Systemkonfiguration und Designeinstellungen erfolgreich gespeichert!");
+      }
     }
     // --- JEV FAST-ROUTING HELPER FUNCTIONS ---
     function onJevToggleChanged(checked) {

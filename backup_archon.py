@@ -128,6 +128,46 @@ def main():
             except Exception as e:
                 print(f"  ! {name}: NAS-Kopie fehlgeschlagen ({e})")
 
+    # 2. Config-Dateien & Profile sichern (Pillar 4 / SSOT)
+    config_items = [
+        ("agent_profiles.json", os.path.join(PROJECT, "agent_profiles.json")),
+        ("org_hierarchy.json", os.path.join(PROJECT, "config", "org_hierarchy.json")),
+        ("config.yaml", os.path.join(PROJECT, "config.yaml")),
+        ("theme_custom.json", os.path.join(PROJECT, "data", "theme_custom.json")),
+        ("cost-budget.json", os.path.join(HOME, ".hermes", "cost-budget.json")),
+    ]
+    cfg_dir_local = os.path.join(run_dir_local, "config")
+    os.makedirs(cfg_dir_local, exist_ok=True)
+    for cname, cpath in config_items:
+        if os.path.exists(cpath):
+            try:
+                shutil.copy2(cpath, os.path.join(cfg_dir_local, cname))
+                print(f"  + [Config] {cname}: gesichert")
+                if not args.no_nas:
+                    cfg_dir_nas = os.path.join(NAS_BACKUP_DIR, f"archon_{stamp}", "config")
+                    os.makedirs(cfg_dir_nas, exist_ok=True)
+                    shutil.copy2(cpath, os.path.join(cfg_dir_nas, cname))
+            except Exception as ce:
+                print(f"  ! [Config] {cname}: Fehler ({ce})")
+
+    # 3. Agenten-Profile Ordner (SOUL.md & profile.yaml)
+    profiles_dirs = [
+        os.path.join(PROJECT, "profiles"),
+        os.path.join(HOME, ".hermes", "profiles")
+    ]
+    prof_dst_local = os.path.join(run_dir_local, "profiles")
+    for pdir in profiles_dirs:
+        if os.path.exists(pdir):
+            try:
+                shutil.copytree(pdir, prof_dst_local, dirs_exist_ok=True)
+                print(f"  + [Profile] {pdir}: gesichert")
+                if not args.no_nas:
+                    prof_dst_nas = os.path.join(NAS_BACKUP_DIR, f"archon_{stamp}", "profiles")
+                    shutil.copytree(pdir, prof_dst_nas, dirs_exist_ok=True)
+                break
+            except Exception as pe:
+                print(f"  ! [Profile] {pdir}: Fehler ({pe})")
+
     removed_local = prune_old_backups(LOCAL_BACKUP_DIR, args.local_days)
     if not args.no_nas:
         removed_nas = prune_old_backups(NAS_BACKUP_DIR, args.nas_days)

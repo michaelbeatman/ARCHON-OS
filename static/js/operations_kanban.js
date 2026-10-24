@@ -821,8 +821,17 @@
       const editProviderEl = document.getElementById('ond-edit-provider');
       if (editProviderEl) editProviderEl.value = currentProvider;
 
+      if (typeof window.onOndEditProviderChange === 'function') {
+        window.onOndEditProviderChange(currentProvider, currentModel);
+      }
+
       const editModelEl = document.getElementById('ond-edit-model');
       if (editModelEl) editModelEl.value = currentModel;
+
+      const editReasoningEl = document.getElementById('ond-edit-reasoning');
+      if (editReasoningEl) {
+        editReasoningEl.value = node.reasoning_level || prof?.reasoning_level || 'high';
+      }
 
       const editTeamEl = document.getElementById('ond-edit-team');
       if (editTeamEl) editTeamEl.value = node.team_id || 'team_strategy';
@@ -1033,6 +1042,7 @@
         const roleName = (document.getElementById('ond-edit-name')?.value || '').trim();
         const provider = document.getElementById('ond-edit-provider')?.value || 'omniroute';
         const model = (document.getElementById('ond-edit-model')?.value || 'auto/best-free').trim();
+        const reasoningLevel = document.getElementById('ond-edit-reasoning')?.value || 'high';
         const teamId = document.getElementById('ond-edit-team')?.value || 'team_strategy';
         const tier = parseInt(document.getElementById('ond-edit-tier')?.value, 10) || 3;
         let parentId = (document.getElementById('ond-edit-parent')?.value || '').trim();
@@ -1050,6 +1060,7 @@
           node.role = roleName || node.role;
           node.provider = provider;
           node.model = model;
+          node.reasoning_level = reasoningLevel;
           node.team_id = teamId;
           node.tier = tier;
         }
@@ -1085,6 +1096,7 @@
           prof.name = roleName || prof.name;
           prof.provider = provider;
           prof.model = model;
+          prof.reasoning_level = reasoningLevel;
 
           const payload = {
             id: currentOrgDetailNodeId,
@@ -1098,6 +1110,7 @@
             system_prompt: prof.prompt || prof.system_prompt || "",
             provider: provider,
             model: model,
+            reasoning_level: reasoningLevel,
             skills: prof.skills || [],
             tools: prof.tools || (typeof DEFAULT_HERMES_TOOLS !== 'undefined' ? DEFAULT_HERMES_TOOLS : [])
           };
@@ -1113,8 +1126,17 @@
           }
         }
 
-        // 5. Flowchart neu rendern
+        // 5. Flowchart & globale Views (Agentenkader + Master Chat) synchronisieren
         renderOpsOrgFlowchart();
+        if (typeof window.renderHermesProfilesList === 'function') {
+          window.renderHermesProfilesList();
+        }
+        if (typeof window.currentSelectedProfileId !== 'undefined' && window.currentSelectedProfileId === currentOrgDetailNodeId && typeof window.selectProfileForEditor === 'function') {
+          window.selectProfileForEditor(currentOrgDetailNodeId);
+        }
+        if (typeof window.loadMasterChatProfiles === 'function') {
+          window.loadMasterChatProfiles();
+        }
         if (typeof showArchonToast === 'function') {
           showArchonToast('Agenten-Eigenschaften & Hierarchie erfolgreich gespeichert!', 'success');
         }
@@ -1163,6 +1185,9 @@
         opt.textContent = `★ ${team.lead.name} (Department Lead)`;
         opt.selected = true;
         grp.appendChild(opt);
+        if (typeof onOpsTaskAssigneeChanged === 'function') {
+          onOpsTaskAssigneeChanged(team.lead.id);
+        }
       }
       (team.members || []).forEach(m => {
         const opt = document.createElement('option');
@@ -1356,15 +1381,15 @@
                     </div>
                   </div>
                 <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2">${opsEscapeHtml(t.title)}</h4>
-                ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-relaxed">${opsEscapeHtml(t.body)}</p>` : ''}
-                ${projektName ? `<div class="inline-block max-w-full truncate px-1.5 py-0.5 rounded text-[9.5px] font-mono text-muted-custom bg-[var(--secondary)] border border-[var(--border)]" title="${opsEscapeHtml(t.obsidian)}">📁 ${opsEscapeHtml(projektName)}</div>` : ''}
+                ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-tight">${opsEscapeHtml(t.body)}</p>` : ''}
+                ${projektName ? `<div class="inline-block max-w-full truncate px-1.5 py-0.5 rounded text-[9px] font-mono text-muted-custom bg-[var(--secondary)] border border-[var(--border)]" title="${opsEscapeHtml(t.obsidian)}">📁 ${opsEscapeHtml(projektName)}</div>` : ''}
                 <div class="pt-1 flex items-center justify-between border-t border-[var(--border)]/50 text-[10px]">
                   <div class="flex items-center gap-1.5 min-w-0">
-                    <img src="${avatar}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)]" />
+                    <img src="${avatar}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)]" style="width:28px;height:28px;min-width:28px;max-width:28px;min-height:28px;max-height:28px;" />
                     <span class="truncate text-muted-custom font-medium">${opsEscapeHtml(assigneeName)}</span>
                   </div>
                   ${tagPills}
-                  <i data-lucide="chevron-right" class="w-3 h-3 text-muted-custom/40 group-hover:text-indigo-500 transition-colors"></i>
+                  <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-muted-custom/40 group-hover:text-indigo-500 transition-colors"></i>
                 </div>
               </div>
             </div>
@@ -1376,13 +1401,13 @@
         const colBg10 = opsHexToRgba(colHeaderColor, 0.10);
 
         return `
-          <div class="w-80 shrink-0 flex flex-col h-full rounded-2xl border overflow-hidden shadow-2xs ops-col-${col.id} os-kanban-col" style="background-color: var(--kanban-${col.id}-bg, ${colBg10}) !important; border: var(--kanban-col-border-width, 1px) solid var(--kanban-${col.id}-border, ${colHeaderColor}) !important;">
+          <div class="flex-1 min-w-[180px] max-w-[340px] flex flex-col h-full rounded-xl sm:rounded-2xl border overflow-hidden shadow-2xs ops-col-${col.id} os-kanban-col" style="background-color: var(--kanban-${col.id}-bg, ${colBg10}) !important; border: var(--kanban-col-border-width, 1px) solid var(--kanban-${col.id}-border, ${colHeaderColor}) !important;">
             <!-- Header (User-Design 10.10.2026): Palette aus Einstellungen, sonst Posteo-Default) -->
-            <div class="px-3 py-2.5 min-h-[52px] flex items-center justify-between border-b shrink-0" style="background-color: var(--kanban-${col.id}-header, ${colHeaderColor}) !important; color: var(--kanban-${col.id}-text, ${colTextColor}) !important; border-color: var(--kanban-${col.id}-border, ${colHeaderColor}) !important;">
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="w-2.5 h-2.5 rounded-full ${col.bg} border ${col.border} shrink-0"></span>
-                <span class="text-xs font-bold font-mono uppercase tracking-wider truncate" style="color: var(--kanban-${col.id}-text, ${colTextColor}) !important;">${col.label}</span>
-                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-[var(--card)] text-muted-custom border border-[var(--border)] shrink-0" ${wipOver ? 'style="color:#C15C53;border-color:#C15C53;" title="WIP-Limit überschritten!"' : (wipLimit > 0 ? `title="WIP-Limit: ${wipLimit}"` : '')}>${countText}</span>
+            <div class="px-2.5 py-1.5 min-h-[40px] flex items-center justify-between border-b shrink-0" style="background-color: var(--kanban-${col.id}-header, ${colHeaderColor}) !important; color: var(--kanban-${col.id}-text, ${colTextColor}) !important; border-color: var(--kanban-${col.id}-border, ${colHeaderColor}) !important;">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="w-2 h-2 rounded-full ${col.bg} border ${col.border} shrink-0"></span>
+                <span class="text-[11px] font-bold font-mono uppercase tracking-tight truncate" style="color: var(--kanban-${col.id}-text, ${colTextColor}) !important;">${col.label}</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[9.5px] font-mono font-bold bg-[var(--card)] text-muted-custom border border-[var(--border)] shrink-0" ${wipOver ? 'style="color:#C15C53;border-color:#C15C53;" title="WIP-Limit überschritten!"' : (wipLimit > 0 ? `title="WIP-Limit: ${wipLimit}"` : '')}>${countText}</span>
               </div>
               <button onclick="openNewTaskModal('${col.id}')" class="p-1 rounded-lg hover:bg-[var(--card)] text-muted-custom hover:text-indigo-500 transition cursor-pointer shrink-0" title="Aufgabe hier hinzufügen">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
@@ -1391,7 +1416,7 @@
             <!-- Drop-Zone / Tasks List -->
             <div ondragover="onKanbanDragOver(event)" 
                  ondrop="onKanbanDrop(event, '${col.id}')" 
-                 class="flex-1 p-2.5 overflow-y-auto space-y-2.5 min-h-[150px] transition-colors bg-transparent"
+                 class="flex-1 p-2 overflow-y-auto space-y-2 min-h-[150px] transition-colors bg-transparent"
                  style="background-color: transparent !important;">
               ${tasks.length > 0 ? taskCards : `
                 <div class="h-32 border-2 border-dashed border-[var(--border)]/60 rounded-xl flex flex-col items-center justify-center text-center p-3 text-muted-custom/60 pointer-events-none">
@@ -1694,6 +1719,80 @@
       }
     }
 
+    async function populateOpsTaskModelDropdown(preferredModel) {
+      const select = document.getElementById('ops-task-model');
+      if (!select) return;
+      const currentVal = preferredModel || select.value || '';
+      try {
+        let models = [];
+        if (typeof window.loadLlmModelsForProvider === 'function') {
+          models = await window.loadLlmModelsForProvider('openrouter');
+        } else {
+          const res = await fetch('/api/llm-providers/models?provider=openrouter');
+          if (res.ok) {
+            const d = await res.json();
+            models = d.models || [];
+          }
+        }
+        select.innerHTML = '<option value="">OmniRoute Default (Auto)</option>';
+        if (Array.isArray(models) && models.length > 0) {
+          models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            if (m === currentVal) opt.selected = true;
+            select.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        console.warn('[OpsTask] Modelle konnten nicht dynamisch geladen werden:', err);
+      }
+    }
+    window.populateOpsTaskModelDropdown = populateOpsTaskModelDropdown;
+
+    function onOpsTaskAssigneeChanged(assigneeId) {
+      if (!assigneeId) return;
+      let agentModel = '';
+      if (Array.isArray(window.hermesProfilesData)) {
+        const prof = window.hermesProfilesData.find(p => p.id === assigneeId);
+        if (prof && prof.model) agentModel = prof.model;
+      }
+      if (!agentModel && typeof opsOrgData !== 'undefined' && opsOrgData && opsOrgData.teams) {
+        for (const t of opsOrgData.teams) {
+          if (t.lead && t.lead.id === assigneeId && t.lead.model) {
+            agentModel = t.lead.model;
+            break;
+          }
+          const m = (t.members || []).find(mem => mem.id === assigneeId);
+          if (m && m.model) {
+            agentModel = m.model;
+            break;
+          }
+        }
+      }
+      if (agentModel) {
+        const modelSelect = document.getElementById('ops-task-model');
+        if (modelSelect) {
+          let found = false;
+          for (let i = 0; i < modelSelect.options.length; i++) {
+            if (modelSelect.options[i].value === agentModel) {
+              modelSelect.selectedIndex = i;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            const opt = document.createElement('option');
+            opt.value = agentModel;
+            opt.textContent = `${agentModel} (Agenten-Standard)`;
+            opt.selected = true;
+            modelSelect.appendChild(opt);
+          }
+        }
+      }
+    }
+    window.onOpsTaskAssigneeChanged = onOpsTaskAssigneeChanged;
+
     function openNewTaskModal(defaultColumn, defaultAssignee, defaultTeam) {
       const modal = document.getElementById('ops-new-task-modal');
       if (!modal) return;
@@ -1712,6 +1811,10 @@
         const assignSelect = document.getElementById('ops-task-assignee');
         if (assignSelect) assignSelect.value = defaultAssignee;
       }
+      populateOpsTaskModelDropdown().then(() => {
+        const effectiveAssignee = defaultAssignee || document.getElementById('ops-task-assignee')?.value;
+        if (effectiveAssignee) onOpsTaskAssigneeChanged(effectiveAssignee);
+      });
       modal.classList.remove('hidden');
       if (window.lucide) lucide.createIcons();
       setTimeout(() => document.getElementById('ops-task-title')?.focus(), 50);
@@ -1895,6 +1998,7 @@
             team_id: teamId,
             assignee,
             model_override: model,
+            reasoning_override: document.getElementById('ops-task-reasoning')?.value || null,
             decompose
           })
         });
@@ -2364,3 +2468,34 @@
 
 
 
+
+    function onOndEditProviderChange(provider, currentModel = '') {
+      const presetEl = document.getElementById('ond-edit-model-preset');
+      if (!presetEl) return;
+      const p = (provider || 'openrouter').toLowerCase();
+      let list = [];
+      if (typeof PROVIDER_MODELS_CATALOG !== 'undefined' && PROVIDER_MODELS_CATALOG[p]) {
+        list = PROVIDER_MODELS_CATALOG[p].map(m => typeof m === 'string' ? { id: m, label: m } : m);
+      } else {
+        list = [
+          { id: 'deepseek/deepseek-v4-flash-0731', label: 'DeepSeek V4 Flash' },
+          { id: 'deepseek/deepseek-chat', label: 'DeepSeek V3' },
+          { id: 'anthropic/claude-3.7-sonnet', label: 'Claude 3.7 Sonnet' },
+          { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+          { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+          { id: 'openai/gpt-4o', label: 'GPT-4o' },
+          { id: 'openai/o3-mini', label: 'o3-mini' }
+        ];
+      }
+      presetEl.innerHTML = '<option value="">Modell wählen...</option>';
+      list.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = (typeof window.formatModelOptionWithPrice === 'function')
+          ? window.formatModelOptionWithPrice(item.id, item.label || item.id)
+          : (item.label || item.id);
+        if (currentModel && item.id === currentModel) opt.selected = true;
+        presetEl.appendChild(opt);
+      });
+    }
+    window.onOndEditProviderChange = onOndEditProviderChange;

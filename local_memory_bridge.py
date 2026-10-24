@@ -48,8 +48,12 @@ class LocalMemoryBridge:
 
     def _init_db(self):
         with self._get_conn() as conn:
-            # Kein WAL auf Docker Windows Bind-Mounts (/opt/data), da .shm/.wal über 9p/virtiofs bremst
-            conn.execute("PRAGMA journal_mode=DELETE;")
+            # Kein WAL auf Docker Windows Bind-Mounts (/opt/data), auf Host-SSD jedoch WAL für parallele Zugriffe
+            if str(self.db_path).replace("\\", "/").startswith("/opt/data"):
+                conn.execute("PRAGMA journal_mode=DELETE;")
+            else:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA synchronous=NORMAL;")
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS user_profile (
                     key TEXT PRIMARY KEY,
@@ -93,6 +97,20 @@ class LocalMemoryBridge:
                 );
 
                 -- Pillar 6: Manipulationssicheres Audit-Log mit kryptografischer Hash-Kette
+                                -- Pillar 4: Unterbrechbare Langzeit-Workflows mit State-Snapshotting
+                CREATE TABLE IF NOT EXISTS workflow_checkpoints (
+                    checkpoint_id TEXT PRIMARY KEY,
+                    workflow_id TEXT NOT NULL,
+                    agent_id TEXT NOT NULL,
+                    current_step INTEGER NOT NULL,
+                    total_steps INTEGER NOT NULL,
+                    state_json TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    pause_reason TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS audit_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     agent_id TEXT NOT NULL,
@@ -627,3 +645,139 @@ tags: ["learning", "memory", "{agent_id}"]
             conn.commit()
         return {"status": "synced", "task_id": task_id, "task_status": status}
 
+
+
+    def deduplicate_and_record_learning(self, agent_id: str, category: str, summary: str, detailed_note: str = None, similarity_threshold: float = 0.85) -> Dict[str, Any]:
+        """
+        Pillar 4: Semantic Memory Deduplication
+        Prüft vor dem Speichern, ob eine inhaltlich identische Lektion bereits existiert.
+        Aktualisiert bestehende Lektionen statt Duplikate anzuhäufen.
+        """
+        import re
+        def _get_words(t):
+            return set(re.findall(r'\w+', str(t).lower()))
+
+        new_words = _get_words(summary)
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, summary, obsidian_link FROM learnings ORDER BY id DESC LIMIT 50")
+            existing = cur.fetchall()
+            for row in existing:
+                ex_words = _get_words(row["summary"])
+                if new_words and ex_words:
+                    overlap = len(new_words & ex_words) / len(new_words | ex_words)
+                    if overlap >= similarity_threshold:
+                        # Duplikat gefunden -> Timestamp auffrischen und zurückgeben
+                        conn.execute("UPDATE learnings SET created_at = CURRENT_TIMESTAMP WHERE id = ?", (row["id"],))
+                        conn.commit()
+                        return {
+                            "status": "deduplicated",
+                            "message": f"Aehnliche Lerneinheit (ID {row['id']}, Uebereinstimmung {overlap*100:.0f}%) existiert bereits.",
+                            "learning_id": row["id"],
+                            "existing_summary": row["summary"]
+                        }
+
+        # Kein Duplikat gefunden -> regulär speichern
+        res = self.record_learning(agent_id, category, summary, detailed_note)
+        res["status"] = "created"
+        return res
+
+    def harvest_facts_and_preferences(self, text_corpus: str, agent_id: str = "orchestrator") -> Dict[str, Any]:
+        """
+        Pillar 4: Autonomes Fact-Harvesting & Memory Enrichment
+        Extrahiert Fakten, Benutzerpräferenzen und Systemkonfigurationen
+        aus Konversationen und aktualisiert user_profile und learnings automatisch.
+        """
+        import re
+        extracted_facts = {}
+        extracted_learnings = []
+
+        # 1. Bekannte Schlüssel-Muster für Benutzer-Präferenzen
+        patterns = [
+            (r"(?:bevorzuge|nutze am liebsten|nutze bitte immer|standard[ -]?modell ist)\s+([a-zA-Z0-9_\-\./]+)", "preferred_model"),
+            (r"(?:datenbank|db)[ -]modus\s+ist\s+([a-zA-Z0-9_\-]+)", "database_mode"),
+            (r"(?:arbeite auf|betriebssystem ist|os ist)\s+([a-zA-Z0-9_\- ]+)", "os_environment"),
+            (r"(?:stil|tonfall|kommunikation soll)\s+([a-zA-Z0-9_\- ,]+)\s+sein", "communication_style"),
+            (r"(?:aktives projekt|fokus-projekt ist)\s+([a-zA-Z0-9_\- ]+)", "active_project")
+        ]
+
+        lower_text = text_corpus.lower()
+        for pat, key in patterns:
+            match = re.search(pat, lower_text)
+            if match:
+                val = match.group(1).strip()
+                extracted_facts[key] = val
+                self.set_user_fact(key, val)
+
+        # 2. Extrahierte Beschlüsse als dedizierte Learnings erfassen
+        decision_matches = re.findall(r"(?:beschluss|entscheidung|regel|architektur-entscheidung):\s*([^\n\.]+)", text_corpus, re.IGNORECASE)
+        for dec in decision_matches:
+            dec_clean = dec.strip()
+            if len(dec_clean) > 10:
+                rec = self.deduplicate_and_record_learning(
+                    agent_id=agent_id,
+                    category="System-Beschluss",
+                    summary=f"Beschluss: {dec_clean[:80]}",
+                    detailed_note=f"Automatisch extrahierter Beschluss aus Unterhaltung:\n{dec_clean}"
+                )
+                extracted_learnings.append(rec)
+
+        return {
+            "status": "success",
+            "facts_updated": extracted_facts,
+            "learnings_captured": len(extracted_learnings),
+            "learnings": extracted_learnings
+        }
+
+    def save_workflow_checkpoint(self, checkpoint_id: str, workflow_id: str, agent_id: str, current_step: int, total_steps: int, state_data: dict, status: str = "running", pause_reason: str = None) -> bool:
+        with self._get_conn() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO workflow_checkpoints (checkpoint_id, workflow_id, agent_id, current_step, total_steps, state_json, status, pause_reason, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (checkpoint_id, workflow_id, agent_id, current_step, total_steps, json.dumps(state_data, ensure_ascii=False), status, pause_reason))
+            conn.commit()
+            return True
+
+    def get_workflow_checkpoint(self, checkpoint_id: str) -> Optional[dict]:
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM workflow_checkpoints WHERE checkpoint_id = ?", (checkpoint_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            try:
+                d["state"] = json.loads(d["state_json"])
+            except Exception:
+                d["state"] = {}
+            return d
+
+    def list_workflow_checkpoints(self, status: str = None, limit: int = 50) -> list:
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            if status:
+                cur.execute("SELECT * FROM workflow_checkpoints WHERE status = ? ORDER BY updated_at DESC LIMIT ?", (status, limit))
+            else:
+                cur.execute("SELECT * FROM workflow_checkpoints ORDER BY updated_at DESC LIMIT ?", (limit,))
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                try:
+                    r["state"] = json.loads(r["state_json"])
+                except Exception:
+                    r["state"] = {}
+            return rows
+
+
+# Singleton Bridge-Instanz und Modul-Export-Helper
+memory_bridge = LocalMemoryBridge()
+
+def save_workflow_checkpoint(checkpoint_id: str, workflow_id: str = '', agent_id: str = '', current_step: int = 0, total_steps: int = 0, state_data: dict = None, status: str = 'running', pause_reason: str = None) -> bool:
+    if state_data is None:
+        state_data = {}
+    return memory_bridge.save_workflow_checkpoint(checkpoint_id, workflow_id, agent_id, current_step, total_steps, state_data, status, pause_reason)
+
+def get_workflow_checkpoint(checkpoint_id: str):
+    return memory_bridge.get_workflow_checkpoint(checkpoint_id)
+
+def list_workflow_checkpoints(status: str = None, limit: int = 50):
+    return memory_bridge.list_workflow_checkpoints(status, limit)

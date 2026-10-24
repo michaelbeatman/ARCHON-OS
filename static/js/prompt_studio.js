@@ -373,7 +373,7 @@
       }
     }
     // =========================================================================
-    // SUREPROMPTS FORMULAR-BAUKASTEN & STUDIO (324 TEMPLATES)
+    // ARCHON PROMPT STUDIO (824 ENTERPRISE TEMPLATES + 255 FABRIC SOPS = 1.079)
     // =========================================================================
     let currentSurePromptsCatalog = [];
     let selectedSurePromptId = null;
@@ -383,7 +383,7 @@
     let surePromptsFormValues = {};
     function getFavoriteSurePromptIds() {
       try {
-        const stored = localStorage.getItem("archon_fav_sureprompts");
+        const stored = localStorage.getItem("archon_fav_prompts") || localStorage.getItem("archon_fav_sureprompts");
         return stored ? JSON.parse(stored) : [];
       } catch (e) {
         return [];
@@ -400,7 +400,7 @@
       } else {
         favs.push(id);
       }
-      localStorage.setItem("archon_fav_sureprompts", JSON.stringify(favs));
+      localStorage.setItem("archon_fav_prompts", JSON.stringify(favs)); localStorage.setItem("archon_fav_sureprompts", JSON.stringify(favs));
       updateSurePromptsFavoriteBadges();
       updateSurePromptDetailFavIcon();
       renderSurePromptsCards(document.getElementById("sp-search-input")?.value || "");
@@ -440,6 +440,11 @@
       const modal = document.getElementById("sureprompts-modal");
       if (modal) modal.classList.add("hidden");
     }
+    // Aliases fuer Archon Prompt Studio
+    window.openPromptStudioModal = openSurePromptsModal;
+    window.closePromptStudioModal = closeSurePromptsModal;
+    window.openSurePromptsModal = openSurePromptsModal;
+    window.closeSurePromptsModal = closeSurePromptsModal;
     async function loadSurePromptsCatalog() {
       const loading = document.getElementById("sp-list-loading");
       const wrapper = document.getElementById("sp-cards-wrapper");
@@ -1246,8 +1251,8 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
       const inputEl = document.getElementById("master-chat-input");
       if (!inputEl) return;
       const text = inputEl.value.trim();
-      const attachment = currentMasterChatAttachment;
-      if (!text && !attachment) return;
+      const hasAttachments = (typeof currentMasterChatAttachments !== 'undefined' && currentMasterChatAttachments.length > 0);
+      if (!text && !hasAttachments) return;
       // Falls Diktat noch läuft, stoppen
       if (isMasterChatDictating) {
         toggleMasterChatDictation();
@@ -1257,25 +1262,27 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
       if (!currentMasterChatSessionId) {
         createNewMasterChatSession();
       }
-      // Datei-Upload im Hintergrund ausführen, wenn Anhang vorhanden
+      // Datei-Upload im Hintergrund ausführen (bis zu 5 Anhänge)
       let attachmentNotice = "";
-      if (attachment && attachment.file) {
+      if (hasAttachments) {
         const indicator = document.getElementById("master-chat-upload-indicator");
-        if (indicator) indicator.textContent = `⏳ Lade '${attachment.name}' hoch...`;
+        if (indicator) indicator.textContent = `⏳ Lade ${currentMasterChatAttachments.length} Datei(en) hoch...`;
         try {
-          const formData = new FormData();
-          formData.append("file", attachment.file);
-          const uploadRes = await fetch("/api/chat/upload", {
-            method: "POST",
-            body: formData
-          });
-          if (uploadRes.ok) {
-            const uploadData = await uploadRes.json();
-            attachmentNotice = `\n[Datei angehängt: ${uploadData.path || uploadData.filename}]`;
-            if (indicator) {
-              indicator.textContent = `✓ '${attachment.name}' bereitgestellt`;
-              setTimeout(() => { if (indicator.textContent.includes(attachment.name)) indicator.textContent = ""; }, 5000);
+          for (const att of currentMasterChatAttachments) {
+            const formData = new FormData();
+            formData.append("file", att.file);
+            const uploadRes = await fetch("/api/chat/upload", {
+              method: "POST",
+              body: formData
+            });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              attachmentNotice += `\n[Datei angehängt: ${uploadData.path || uploadData.filename}]`;
             }
+          }
+          if (indicator) {
+            indicator.textContent = `✓ ${currentMasterChatAttachments.length} Datei(en) bereitgestellt`;
+            setTimeout(() => { if (indicator) indicator.textContent = ""; }, 4000);
           }
         } catch (err) {
           console.warn("[MasterChat Upload] Fehler:", err);
@@ -1348,7 +1355,8 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
           session_id: currentMasterChatSessionId,
           mode: currentMasterChatMode,
           provider: currentMasterChatProvider || "openrouter",
-          model: currentMasterChatModel
+          model: currentMasterChatModel,
+          reasoning_level: window.currentMasterChatReasoning || "high"
         };
         const res = await fetch("/api/chat/stream", {
           method: "POST",

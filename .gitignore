@@ -73,6 +73,8 @@ build/
 _modifizierter Muell*
 backups/
 LinkedIn-backup/
+.hermes/
+_archive_legacy/
 
 # Test Artifacts & Screenshots
 test_logs.txt
@@ -99,7 +101,9 @@ scratch/
 quartz_app/
 *.db-shm
 
-# OS specific
+# OS & Office specific
 .DS_Store
 Thumbs.db
+~$*
+**/~$*
 

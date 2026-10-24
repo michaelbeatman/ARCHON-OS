@@ -49,24 +49,15 @@
           <div id="master-chat-native-container" class="flex-1 flex flex-col overflow-hidden p-3 sm:p-4 bg-[var(--background)]">
             <div id="master-chat-messages" class="flex-1 overflow-y-auto space-y-3.5 pr-2 font-sans custom-scrollbar"></div>
             
-            <!-- Quick Chat Attachment Preview Bar -->
-            <div id="master-chat-attachment-bar" class="px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg mb-2 flex items-center justify-between text-xs hidden">
-              <div class="flex items-center gap-2 text-[var(--foreground)] font-mono text-[11px] truncate">
-                <i data-lucide="paperclip" class="w-3.5 h-3.5 text-black dark:text-white shrink-0"></i>
-                <span class="text-[var(--muted-foreground)] font-medium">Anhang:</span>
-                <span id="master-chat-attachment-name" class="truncate font-semibold text-[var(--foreground)]">datei.txt</span>
-                <span id="master-chat-attachment-size" class="text-[10px] text-[var(--muted-foreground)] font-normal"></span>
-              </div>
-              <button type="button" onclick="removeMasterChatAttachment()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-1 cursor-pointer" title="Anhang entfernen">
-                <i data-lucide="x" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-              </button>
+            <!-- Quick Chat Attachment Preview Bar (bis zu 5 Dateien) -->
+            <div id="master-chat-attachment-bar" class="px-2.5 py-1.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg mb-2 flex flex-wrap items-center justify-between gap-1.5 text-xs hidden">
             </div>
             <!-- Input Bar mit Auto-Resize, Quick Chat Attachment, STT Audio Recorder -->
             <div id="master-chat-input-wrapper" class="border-t border-[var(--border)] pt-3 mt-1 shrink-0 bg-[var(--background)]">
               <div id="master-chat-input-card" class="border border-[var(--border)] rounded-xl p-2 bg-[var(--card)] shadow-xs focus-within:border-zinc-500 transition">
                 <div class="flex items-end gap-2">
                   <!-- Hidden File Input -->
-                  <input type="file" id="master-chat-file-input" onchange="handleMasterChatFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
+                  <input type="file" id="master-chat-file-input" multiple onchange="handleMasterChatFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
                   
                   <!-- Attachment Button -->
                   <button 
@@ -98,13 +89,13 @@
                   >
                     <i data-lucide="mic" class="w-4 h-4 text-black dark:text-white"></i>
                   </button>
-                  <!-- Archon Prompt Studio Button (579+ Vorlagen: Enterprise & Fabric SOP) -->
+                  <!-- Archon Prompt Studio Button (1.079 Vorlagen: Enterprise & Fabric SOP) -->
                   <button 
                     type="button" 
                     id="master-chat-sureprompts-btn"
                     onclick="openSurePromptsModal('master')" 
                     class="p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer" 
-                    title="Archon Prompt Studio (579+ Vorlagen: Enterprise-Baukasten &amp; Fabric SOP-Muster)"
+                    title="Archon Prompt Studio (1.079 Vorlagen: Enterprise &amp; Fabric SOP)"
                   >
                     <i data-lucide="layers" class="w-4 h-4 text-black dark:text-white"></i>
                   </button>
@@ -173,11 +164,22 @@
                 <span id="master-chat-upload-indicator" class="text-[var(--foreground)] font-semibold truncate max-w-[240px]"></span>
                 <!-- Right: Status -->
                   <div class="flex items-center gap-2">
-                    <button id="master-chat-jev-badge" onclick="toggleJevFromMasterChat()" class="flex items-center gap-1.5 px-2 py-0.5 rounded border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] font-mono text-[10px] font-semibold cursor-pointer transition-all" title="Decision & Reasoning Engine umschalten">
-                      <i data-lucide="brain-circuit" class="w-3 h-3 text-[var(--foreground)] shrink-0"></i>
-                      <span>Reasoning:</span>
-                      <span id="master-chat-jev-state">OFF</span>
-                    </button>
+                    <div class="flex items-center gap-1">
+                      <span class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide">🧠 Reasoning:</span>
+                      <select 
+                        id="master-chat-reasoning-select" 
+                        onchange="onMasterChatReasoningChange(this.value)"
+                        class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono font-medium text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 cursor-pointer"
+                        title="Denkzeit & Reasoning-Budget steuern"
+                      >
+                        <option value="off">Aus (0 Tok)</option>
+                        <option value="minimal">Minimal (~1k)</option>
+                        <option value="low">Niedrig (~2k)</option>
+                        <option value="medium" selected>Mittel (~4k)</option>
+                        <option value="high">Hoch (~8k)</option>
+                        <option value="max">Maximal (~16k)</option>
+                      </select>
+                    </div>
                     <span class="text-[var(--border)]">|</span>
                     <div class="flex items-center gap-1.5">
                       <span id="master-chat-current-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Online</span>

@@ -368,7 +368,7 @@
                           <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold">Modell-Router / LLM-Provider</label>
                           <span id="prof-active-model-label" class="text-[9px] font-mono text-[var(--muted-foreground)]">aktiv: -</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                           <select id="prof-edit-provider" onchange="onProfileProviderChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono">
                             <option value="openrouter" selected>OpenRouter (Universal Gateway)</option>
                             <option value="google">Google AI (Gemini API)</option>
@@ -378,12 +378,20 @@
                             <option value="nvidia">NVIDIA NIM</option>
                           </select>
                           <div class="flex items-center gap-1">
-                            <input type="text" id="prof-edit-model" list="prof-edit-model-datalist" placeholder="Modell suchen oder manuell eingeben..." class="flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none shadow-2xs" />
+                            <input type="text" id="prof-edit-model" list="prof-edit-model-datalist" onchange="applyProfileModelSelection()" placeholder="Modell suchen..." class="flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none shadow-2xs" />
                             <datalist id="prof-edit-model-datalist"></datalist>
                             <button type="button" onclick="applyProfileModelSelection()" class="py-1 px-2.5 rounded-lg text-xs font-bold font-mono transition cursor-pointer shadow-xs bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]" title="Modell aktiv zuweisen">
                               ✓
                             </button>
                           </div>
+                          <select id="prof-edit-reasoning" onchange="applyProfileModelSelection()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono" title="Reasoning-Intensität / Thinking Budget">
+                            <option value="off">🧠 Aus (0 Tok)</option>
+                            <option value="minimal">🧠 Minimal (~1k)</option>
+                            <option value="low">🧠 Niedrig (~2k)</option>
+                            <option value="medium" selected>🧠 Mittel (~4k)</option>
+                            <option value="high">🧠 Hoch (~8k)</option>
+                            <option value="max">🧠 Maximal (~16k)</option>
+                          </select>
                         </div>
                         <!-- Schnellauswahl entfernt (User-Wunsch 09.10.2026: überflüssige Modell-Presets) -->
                       </div>
@@ -538,23 +546,14 @@
                   <div id="agent-tab-chat-messages" class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-[var(--background)] border border-[var(--border)] rounded-xl my-2">
                     <!-- Nachrichtenverlauf -->
                   </div>
-                  <!-- Attachment Preview Bar (wenn Datei ausgewählt ist) -->
-                  <div id="agent-tab-attachment-bar" class="px-3 py-1.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg mb-1 flex items-center justify-between text-xs hidden">
-                    <div class="flex items-center gap-2 text-[var(--foreground)] font-mono text-[11px] truncate">
-                      <i data-lucide="paperclip" class="w-3.5 h-3.5 text-black dark:text-white shrink-0"></i>
-                      <span class="text-[var(--muted-foreground)] font-medium">Anhang:</span>
-                      <span id="agent-tab-attachment-name" class="truncate font-semibold text-[var(--foreground)]">datei.txt</span>
-                      <span id="agent-tab-attachment-size" class="text-[10px] text-[var(--muted-foreground)] font-normal"></span>
-                    </div>
-                    <button type="button" onclick="removeAgentTabAttachment()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-1 cursor-pointer" title="Anhang entfernen">
-                      <i data-lucide="x" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                    </button>
+                  <!-- Attachment Preview Bar (bis zu 5 Dateien) -->
+                  <div id="agent-tab-attachment-bar" class="px-2.5 py-1.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg mb-1 flex flex-wrap items-center justify-between gap-1.5 text-xs hidden">
                   </div>
                   <!-- Prompt Eingabe & Toolbar (Feature-Parität mit Master-Konsole) -->
                   <div class="shrink-0 pt-1">
                     <div id="agent-tab-input-card" class="border border-[var(--border)] rounded-xl p-2.5 bg-[var(--background)] shadow-xs focus-within:border-zinc-500 transition flex flex-col gap-2">
                       <!-- Hidden File Input -->
-                      <input type="file" id="agent-tab-file-input" onchange="handleAgentTabFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
+                      <input type="file" id="agent-tab-file-input" multiple onchange="handleAgentTabFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
                       
                       <!-- 1. Textarea mit voller Breite (w-full) und dynamischem Auto-Resize -->
                       <textarea 
@@ -600,13 +599,13 @@
                           >
                             <i data-lucide="mic" class="w-3.5 h-3.5 text-black dark:text-white"></i>
                           </button>
-                          <!-- Archon Prompt Studio Button (579+ Vorlagen) -->
+                          <!-- Archon Prompt Studio Button (1.079 Vorlagen) -->
                           <button 
                             type="button" 
                             id="agent-tab-sureprompts-btn"
                             onclick="openSurePromptsModal('agent-tab')" 
                             class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
-                            title="Archon Prompt Studio (579+ Vorlagen: Enterprise-Baukasten &amp; Fabric SOP-Muster)"
+                            title="Archon Prompt Studio (1.079 Vorlagen: Enterprise &amp; Fabric SOP)"
                           >
                             <i data-lucide="layers" class="w-3.5 h-3.5 text-black dark:text-white"></i>
                           </button>
@@ -657,11 +656,17 @@
                       </div>
                         <span class="text-[var(--border)]">|</span>
                         <!-- JEV Einstellung Button/Badge -->
-                        <button id="agent-tab-jev-badge" type="button" onclick="toggleJevFromMasterChat()" class="flex items-center gap-1.5 px-2 py-0.5 rounded border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] font-mono text-[10px] font-semibold cursor-pointer transition-all" title="PreDecision Fast-Routing &amp; Tool-Pruning umschalten (Klick öffnet oder schaltet)">
-                          <i data-lucide="zap" class="w-3 h-3 text-black dark:text-white shrink-0"></i>
-                          <span>Reasoning:</span>
-                          <span id="agent-tab-jev-state">OFF</span>
-                        </button>
+                        <div class="flex items-center gap-1">
+                          <span class="font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide">🧠 Reasoning:</span>
+                          <select id="agent-tab-reasoning-select" onchange="onAgentTabReasoningChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1.5 py-0.5 text-[11px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs" title="Denkzeit & Reasoning-Budget steuern">
+                            <option value="off">Aus (0 Tok)</option>
+                            <option value="minimal">Minimal (~1k)</option>
+                            <option value="low">Niedrig (~2k)</option>
+                            <option value="medium" selected>Mittel (~4k)</option>
+                            <option value="high">Hoch (~8k)</option>
+                            <option value="max">Maximal (~16k)</option>
+                          </select>
+                        </div>
                         <span class="text-[var(--border)]">|</span>
                         <!-- Flat-Version Direkt / Mission Switch -->
                         <div 
@@ -984,4 +989,169 @@
             </div>
           </div>
         </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: AVATAR-BIBLIOTHEK (174 PORTRÄTS FARBLICH SORTIERT)                  -->
+        <!-- ========================================================================= -->
+        <div id="avatar-picker-modal" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 w-full max-w-6xl h-[88vh] max-h-[88vh] flex flex-col shadow-2xl space-y-3.5">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-3 shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-xs"></span>
+                <h3 class="text-base font-bold uppercase tracking-wider font-mono truncate text-[var(--foreground)]">
+                  Avatar-Bibliothek (174 Porträts)
+                </h3>
+              </div>
+              <button type="button" onclick="closeAvatarLibraryModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer p-1.5 rounded-lg transition">
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
+            <!-- Info & Quick Action Bar -->
+            <div class="flex items-center justify-between text-xs text-[var(--muted-foreground)] shrink-0 pb-1">
+              <span>Klicke auf ein Porträt, um es für das aktuelle Profil zu übernehmen:</span>
+              <button type="button" onclick="handleDiceClick(null); closeAvatarLibraryModal();" class="px-3 py-1.5 rounded-xl bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shadow-xs text-xs font-bold font-mono transition flex items-center gap-1.5 cursor-pointer">
+                🎲 Zufällig wählen
+              </button>
+            </div>
+            <!-- Color Filter Tabs Bar -->
+            <div id="avatar-color-filters" class="flex items-center gap-2 overflow-x-auto pb-1.5 shrink-0 text-xs font-mono">
+            </div>
+            <!-- Avatar Grid (Scrollable) -->
+            <div id="avatar-library-grid" class="flex-1 overflow-y-auto p-4 rounded-xl bg-[var(--background)] border border-[var(--border)] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 content-start custom-scrollbar">
+              <!-- Dynamisch generiert -->
+            </div>
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-between border-t border-[var(--border)] pt-2.5 shrink-0">
+              <span id="avatar-library-count-text" class="text-[11px] font-mono text-[var(--muted-foreground)]">174 Porträts verfügbar – farblich sortiert</span>
+              <button type="button" onclick="closeAvatarLibraryModal()" class="px-4 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-xs font-bold text-[var(--foreground)] transition cursor-pointer shadow-xs">
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: SKILL-EDITOR (INSPEKTION & BEARBEITUNG)                             -->
+        <!-- ========================================================================= -->
+        <div id="skill-editor-modal" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-5 w-full max-w-4xl h-[92vh] max-h-[92vh] flex flex-col shadow-2xl space-y-3.5">
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5 shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block shadow-xs"></span>
+                <h3 id="skill-modal-title" class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">
+                  Skill-Spezifikation bearbeiten
+                </h3>
+              </div>
+              <button type="button" onclick="closeSkillDetailModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer p-1 rounded-lg transition">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="space-y-3 flex-1 min-h-0 flex flex-col overflow-hidden pr-1">
+              <input type="hidden" id="skill-edit-id" value="">
+              <div class="grid grid-cols-2 gap-2.5 shrink-0">
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-0.5 font-bold">Skill-Name</label>
+                  <input type="text" id="skill-edit-name" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-bold focus:outline-none shadow-xs">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-0.5 font-bold">Kategorie</label>
+                  <input type="text" id="skill-edit-category" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:outline-none shadow-xs">
+                </div>
+              </div>
+              <div class="shrink-0">
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-0.5 font-bold">Tags / Schlagwörter (kommagetrennt)</label>
+                <input type="text" id="skill-edit-tags" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono focus:outline-none shadow-xs" placeholder="Architektur, Coding, Review">
+              </div>
+              <div class="shrink-0">
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-0.5 font-bold">Kurzbeschreibung</label>
+                <input type="text" id="skill-edit-desc" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:outline-none shadow-xs">
+              </div>
+              <div class="space-y-1 flex-1 min-h-0 flex flex-col">
+                <div class="flex items-center justify-between shrink-0">
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Vollständige Spezifikation / SKILL.md Prompt</label>
+                  <span class="text-[9px] font-mono text-[var(--muted-foreground)]">Markdown / Instruktionen</span>
+                </div>
+                <textarea id="skill-edit-content" class="w-full flex-1 min-h-[200px] bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 text-xs text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-xs"></textarea>
+              </div>
+            </div>
+            <div class="flex items-center justify-between border-t border-[var(--border)] pt-3 shrink-0">
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="closeSkillDetailModal()" class="px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-bold text-[var(--foreground)] hover:bg-[var(--secondary)] transition cursor-pointer">
+                  Abbrechen
+                </button>
+                <button type="button" id="skill-modal-reset-btn" onclick="resetSkillDetailsToOriginal()" class="px-3.5 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                  <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Auf Original zurücksetzen
+                </button>
+              </div>
+              <button type="button" onclick="saveSkillDetailsFromModal()" class="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i> Skill speichern
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: TOOL-EINSTELLUNGEN & PARAMETER                                     -->
+        <!-- ========================================================================= -->
+        <div id="tool-config-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+          <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4 max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-xs"></span>
+                <h3 id="tool-modal-title" class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">Tool-Einstellungen</h3>
+              </div>
+              <button type="button" onclick="closeToolConfigModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold text-base cursor-pointer">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar text-xs">
+              <input type="hidden" id="tool-modal-tool-id">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1">Tool-Name &amp; Identifikator</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <input type="text" id="tool-modal-name" readonly class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] font-semibold focus:outline-none">
+                  <input type="text" id="tool-modal-id-display" readonly class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] font-mono text-[11px] focus:outline-none">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1">Funktionsbeschreibung</label>
+                <input type="text" id="tool-modal-desc" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] focus:outline-none">
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1">Ausführungsmodus</label>
+                  <select id="tool-modal-mode" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] focus:outline-none cursor-pointer">
+                    <option value="sandbox">Isolierte Sandbox (Container)</option>
+                    <option value="direct">Direkter System-Zugriff (Host)</option>
+                    <option value="remote_mcp">Remote MCP Protocol</option>
+                    <option value="read_only">Read-Only Modus</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1">Timeout (Sekunden)</label>
+                  <input type="number" id="tool-modal-timeout" value="60" min="5" max="600" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] focus:outline-none">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1">Erweiterte Parameter / Konfiguration (JSON)</label>
+                <textarea id="tool-modal-config" class="w-full h-24 bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 font-mono text-[11px] text-[var(--foreground)] leading-relaxed focus:outline-none resize-none overflow-y-auto shadow-xs" placeholder="{&quot;enabled&quot;: true}"></textarea>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                <div>
+                  <span class="font-bold text-[var(--foreground)] block text-xs">Aktivitäts-Status für dieses Profil</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)] block">Dem aktuellen Agenten zur Verfügung stellen</span>
+                </div>
+                <input type="checkbox" id="tool-modal-active-toggle" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+              </div>
+            </div>
+            <div class="pt-2 border-t border-[var(--border)] flex items-center justify-between shrink-0">
+              <button type="button" onclick="closeToolConfigModal()" class="px-4 py-1.5 rounded-xl border border-[var(--border)] text-xs font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">
+                Abbrechen
+              </button>
+              <button type="button" onclick="saveToolConfigFromModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-1.5 rounded-xl text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="check" class="w-3.5 h-3.5"></i> Einstellungen übernehmen
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>

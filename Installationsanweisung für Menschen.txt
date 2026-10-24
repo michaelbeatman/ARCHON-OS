@@ -1,0 +1,19 @@
+Installationshinweise Archon OS — Iteration 0.3
+
+1. Dateien auf den Homeserver kopieren (z. B. via SCP, SFTP, USB oder Netzwerkfreigabe Y:\_ARCHON Backups\Archon v0.3).
+
+2. Beliebigen Agenten (Antigravity, Codex, Claude Code etc.) auf dem Homeserver aktivieren mit folgendem kurzen Prompt:
+
+"Hier liegt die AgenticOS-2026_Homeserver_Deploy_v0.3.zip. Bitte entpacke das Archiv, lies das darin enthaltene SERVER_HANDOVER.md und richte Archon OS (Iteration 0.3) komplett eigenständig ein."
+
+Damit weiß der dortige Agent sofort Bescheid, richtet das virtuelle Environment ein, prüft die Datenbank und nimmt den Server in Betrieb.
+
+Enthalten in Iteration 0.3:
+- Alle 36 Enterprise Backend-Module (Concurrency Throttle, Circuit Breaker, Consensus Gate, Audit Log, Memory Consolidator etc.)
+- Archon Prompt Studio mit 1.079 Vorlagen (824 Enterprise Templates + 255 Fabric SOPs)
+- Persistente Systemeinstellungen & Modell-Routing (settings.json)
+- Neues Tiefendesign (Formular-Mulde / shadow-inner für alle Eingaben und Auswahlen)
+- Vollständiges System-Handbuch & Glossar 2026 mit Inline-Trade-Off-Matrix
+- Vollständige Git-Historie (AgenticOS-2026_GitBundle_v0.3.bundle)
+
+Viel Erfolg!

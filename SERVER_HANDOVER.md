@@ -1,8 +1,8 @@
-# 🚀 AgenticOS / Archon OS — Server Handover & Deployment Guide
+# 🚀 Archon OS (AgenticOS 2026) — Server Handover & Deployment Guide
 
 > **Zielgruppe:** Antigravity AI-Agent auf dem Homeserver  
 > **Projekt:** Archon OS 2026 / Agentic Operating System  
-> **Stand:** 21. Oktober 2026 (Ready for Server Deployment)
+> **Version / Stand:** Iteration 0.3 — 24. Oktober 2026 (Ready for Server Deployment)
 
 ---
 
@@ -13,36 +13,43 @@ Archon OS 2026 ist ein agentisches Betriebssystem (Agentic OS), basierend auf ei
 2. **Process Model:** Subagenten als isolierte Prozesse mit deklarativen Manifesten und Status-Tracking.
 3. **Device Driver:** MCP-Server Ökosystem für dynamische Tool-Bindings.
 4. **Filesystem & Memory:** SQLite im WAL-Modus (`data/agentic_memory.db`) für non-blocking Writes mit den 5 Standardtabellen (`tasks`, `conversations`, `learnings`, `kv_store`, `user_profile`).
-5. **Hardware Abstraction & Routing:** Multi-Provider AI-Routing (`core_dispatcher.py`).
-6. **Governance & Zero-Trust:** Audit-Logging und RBAC-Rollen (`roles.json`).
-7. **Selbst-Evolution:** Laufzeit-Skill-Management (`.agents/skills/` und `templates/skills/`).
+5. **Hardware Abstraction & Routing:** Multi-Provider AI-Routing (`core_dispatcher.py` & `backend/agent_router.py`).
+6. **Governance & Zero-Trust:** Audit-Logging (`backend/audit_log.py`), RBAC-Jail (`backend/agent_rbac_jail.py`), Egress-Firewall und Consensus-Gates.
+7. **Selbst-Evolution:** Laufzeit-Skill-Management (`.agents/skills/` und `backend/skill_synthesizer.py`).
 
 ### Kernkomponenten & Ports
-- **Archon OS Hauptserver:** FastAPI / Uvicorn auf Port `8420` (`http://localhost:8420` oder Host-IP)
-- **Watchdog Daemon:** `watchdog_daemon.py` zur präemptiven Task-Überwachung
+- **Archon OS Hauptserver:** FastAPI / Uvicorn auf Port `8420` (`http://localhost:8420` oder `http://<HOMESERVER-IP>:8420`)
+- **Watchdog Daemon:** `watchdog_daemon.py` zur präemptiven Task-Überwachung (30s Takt)
 - **Zentraldatenbank:** `data/agentic_memory.db` (SQLite WAL)
+- **Systemkonfiguration:** `settings.json` (SSOT für alle 36 Systemmodule)
 - **Frontend AppShell:** Single-Page-Applikation unter `static/index.html` mit modularen HTML-Views (`static/views/`)
 - **Externe Sidecars (optional):**
   - **AnythingLLM (RAG Index):** Port `3001`
   - **n8n (Workflow Engine):** Port `5678`
   - **PocketBase (CRM / Media):** Port `8090`
-  - **Obsidian Vault:** Wird vom Nutzer separat übertragen
+  - **Obsidian Vault:** Synchronisiertes Verzeichnis des Nutzers
 
 ---
 
-## 2. Letzte Weiterentwicklungen & UI-Status (Wichtig!)
+## 2. Neuerungen & Highlights in Iteration 0.3
 
-Die Benutzeroberfläche wurde vollständig auf das einheitliche **~120px Header-Card Design** (`os-island`) harmonisiert:
-- **Mission Control (Cockpit):** Dashboard mit Operations-Vorschau und 120px Header.
-- **Eingang (Unified Inbox):** 120px Header mit 4 Modul-Kacheln (Intern, E-Mail, Messenger, Webhooks).
-- **Agentenkader:** 120px Header mit Status-Dot, Kacheln für Übersicht, Personalakte, Skills, Soul, Marktplatz.
-- **Zentralbibliothek:** 120px Header mit neu freigestellten, hochauflösenden Icons:
-  - `library_rag.png` (RAG Index)
-  - `library_erfasser.png` (Erfassungsmodul)
-  - `library_vault.png` (Obsidian Vault mit Tresor-Grafik)
-- **Showroom (Projekt-Explorer):** Angepasst auf 120px Header Card mit Explorer-Suche und 4 Fokus-Kacheln (`marketplace.png`, `skills.png`, `paperclip.png`, `soul.png`).
-- **Design Studio & Theme Customizer:** 15 Module im Theme-Editor (`config/design_themes.json`) konfigurierbar.
-- **Asset-Pfade:** Alle Icons liegen in `static/img/cadre_icons/` und sind vollständig getrackt.
+1. **36 Enterprise Backend-Module (`backend/`):**
+   - Vollständige Suite industrieller Schutz- und Optimierungsmodule: Concurrency Throttle, Circuit Breaker, Consensus Gate, Audit Log, Deadlock Supervisor, Egress Firewall, Token Clipper, Memory Consolidator, RAG Bridge, Task Self-Healer und War Room Simulator.
+   - Alle Module werden zentral über `settings.json` und die neue System-Settings API gesteuert.
+
+2. **Archon Prompt Studio (1.079 Vorlagen & SOPs):**
+   - 824 parametrisierte Enterprise-Prompts, vollständig im Clean-Room-Verfahren auf Deutsch re-authored und frei von Fremdmarken oder Fremd-URLs.
+   - 255 kuratierte Fabric SOP-Analysemuster (Daniel Miessler, MIT-Lizenz) nahtlos integriert.
+   - Offizielle Lizenzdokumentation in `THIRD_PARTY_LICENSES.md`.
+
+3. **Persistente Systemeinstellungen:**
+   - Modell-Auswahl (Default Model) und Autonomie-Level werden sofort in `settings.json` gespeichert und überleben Server-Neustarts und Container-Rebuilds.
+
+4. **UI-Design — Taktile Formular-Mulde:**
+   - Alle Eingabefelder, Textareas und Dropdown-Menüs verfügen über einen inneren Schatten (`shadow-inner`) für maximale visuelle Tiefenwirkung und taktile Usability.
+
+5. **Dokumentation & Glossar 2026:**
+   - Umfassendes Word-Handbuch (`docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.docx`) und System-Glossar (`docs/ARCHON_OS_SYSTEM_GLOSSAR_2026.docx`) mit Trade-Off-Matrix (Problem, Lösung, Kosten/Trade-Off) für jedes Modul.
 
 ---
 
@@ -51,85 +58,57 @@ Die Benutzeroberfläche wurde vollständig auf das einheitliche **~120px Header-
 Führe als Antigravity-Agent auf dem Homeserver folgende Schritte aus:
 
 ### Schritt 1: Workspace vorbereiten & entpacken
-Entpacke das übertragene Archiv in das gewünschte Projektverzeichnis (z. B. `/opt/agenticos-2026` oder `~/AgenticOS-2026` oder `D:\AgenticOS-2026`).
+Entpacke das übertragene Archiv `AgenticOS-2026_Homeserver_Deploy_v0.3.zip` in das gewünschte Zielverzeichnis (z. B. `/opt/agenticos-2026` oder `~/AgenticOS-2026` oder `D:\AgenticOS-2026`).
 
 ```bash
 cd AgenticOS-2026
 ls -la
 ```
 
-### Schritt 2: Python Virtual Environment erstellen
-Erstelle eine frische, systemeigene Python-Umgebung (empfohlen: Python 3.11 oder 3.12):
+### Schritt 2: Automatisierte Einrichtung ausführen
 
+**Unter Linux / macOS:**
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate       # Auf Linux/macOS
-# bzw. .venv\Scripts\activate   # Auf Windows
+chmod +x setup_homeserver.sh
+./setup_homeserver.sh
 ```
 
-### Schritt 3: Abhängigkeiten installieren
-Installiere alle Abhängigkeiten über die aktualisierte `requirements.txt`:
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+**Unter Windows (PowerShell als Administrator):**
+```powershell
+.\setup_homeserver.ps1
 ```
 
-### Schritt 4: Umgebungskonfiguration (.env)
-Überprüfe die Datei `.env`. Falls nicht vorhanden, kopiere `.env.example`:
+*Das Skript erstellt automatisch das Virtual Environment `.venv`, installiert alle Pakete aus `requirements.txt`, legt bei Bedarf `.env` an und validiert die Datenbankverbindung.*
 
-```bash
-cp .env.example .env
-```
-
-Passe die Werte an:
+### Schritt 3: Umgebungsvariablen (.env) konfigurieren
+Prüfe die Datei `.env`:
 - `PORT=8420`
-- `HOST=0.0.0.0` (damit das OS im Heimnetz erreichbar ist)
-- API-Keys für LLM-Provider eintragen (OpenAI, Anthropic, Gemini, OmniRoute, Composio, Telegram falls genutzt)
+- `HOST=0.0.0.0` (für Zugriff im Heimnetz)
+- API-Keys eintragen: OpenAI, Anthropic, Gemini, DeepSeek, OmniRoute, Composio, Telegram etc.
 
-### Schritt 5: Obsidian Vault anbinden
-Der Nutzer überträgt seinen Obsidian Vault separat auf den Homeserver.
-- Prüfe in `config/system_settings.json` oder `data/` den Pfad zum Obsidian Vault.
-- Standard-Pfade:
-  - Entweder relativer Ordner `./obsidian_vault`
-  - Oder absoluter Pfad zum synchronisierten Vault des Nutzers.
-- Sobald der Vault liegt, stellt der Dateibaum im Showroom und in der Zentralbibliothek alle Notizen sofort dar.
-
-### Schritt 6: Datenbank & Integrität prüfen
-Prüfe die SQLite-Datenbank:
-
-```bash
-python -c "import sqlite3; con = sqlite3.connect('data/agentic_memory.db'); print('Tables:', [r[0] for r in con.execute('SELECT name FROM sqlite_master WHERE type=\'table\'').fetchall()]); con.close()"
-```
-
-Die Tabellen `tasks`, `conversations`, `learnings`, `kv_store` und `user_profile` sollten vorhanden sein.
-
-### Schritt 7: Server & Watchdog starten
+### Schritt 4: Server starten
 
 **Manueller Teststart:**
 ```bash
+source .venv/bin/activate       # Auf Linux/macOS
+# bzw. .\.venv\Scripts\activate # Auf Windows
+
 python main.py
 ```
-Der Server lauscht standardmäßig auf `http://0.0.0.0:8420`.
+Der Server lauscht auf `http://0.0.0.0:8420`.
 
-**Hintergrund-Betrieb (z. B. via systemd auf Linux):**
-Erstelle zwei Service-Units oder starte im Hintergrund:
-
+**Hintergrund-Betrieb / Daemon:**
 ```bash
-# Server im Hintergrund
+# Archon OS Hauptserver
 nohup python main.py > server.log 2>&1 &
 
-# Watchdog Daemon im Hintergrund
+# Watchdog Daemon (überwacht alle 30s hängende Tasks)
 nohup python watchdog_daemon.py > watchdog.log 2>&1 &
 ```
 
-*(Auf Linux-Homeservern wird eine systemd-Unit für Autostart nach Reboot empfohlen).*
-
 ---
 
-## 4. Verifikations-Checkliste für Antigravity
-
-Nach dem Start auf dem Server prüfe folgende Punkte:
+## 4. Verifikations-Checkliste
 
 1. **HTTP Status 200 auf Haupt-App:**
    ```bash
@@ -139,52 +118,16 @@ Nach dem Start auf dem Server prüfe folgende Punkte:
    ```bash
    curl -s http://localhost:8420/api/system/status
    ```
-3. **Statische Assets & Icons:**
+3. **Archon Prompt Studio (1.079 Vorlagen):**
    ```bash
-   curl -I http://localhost:8420/static/img/cadre_icons/library_rag.png
-   curl -I http://localhost:8420/static/img/cadre_icons/library_vault.png
-   curl -I http://localhost:8420/static/img/cadre_icons/n8n.png
+   curl -s http://localhost:8420/api/templates/catalog | grep -o '"templates":\[[^]]*\]' | head -c 100
    ```
-4. **View Mounts:**
-   Prüfe, ob `/static/views/operations_view.html`, `/static/views/library_view.html`, `/static/views/inbox_view.html` und `/static/views/view_showroom.html` erreichbar sind.
+4. **Settings-Persistenz:**
+   Prüfe, ob `settings.json` im Arbeitsverzeichnis liegt und lesbar ist.
 
 ---
 
-## 5. Dateistruktur & Wichtige Pfade
+## 5. Support & Notizen
 
-```
-AgenticOS-2026/
-├── main.py                     # Kern-Server (FastAPI, Port 8420)
-├── watchdog_daemon.py          # Watchdog-Hintergrundprozess
-├── core_dispatcher.py          # Task- und LLM-Dispatcher
-├── local_memory_bridge.py      # SQLite Memory Manager
-├── apollo_voice_engine.py      # Voice/Audio Pipeline
-├── requirements.txt            # Python-Paketliste
-├── .env                        # Umgebungsvariablen & API-Keys
-├── config/                     # Systemkonfigurationen & Agenten
-│   ├── agents.json             # Agenten-Definitionen
-│   ├── design_themes.json      # CSS Theme & Modul-Styling
-│   └── org_hierarchy.json      # Organigramm-Hierarchie
-├── data/                       # Persistenter Systemstatus
-│   └── agentic_memory.db       # Primäre SQLite-Datenbank (WAL)
-├── static/                     # Frontend
-│   ├── index.html              # AppShell
-│   ├── custom.css              # Globale OS-Styles & Kacheln
-│   ├── custom_studio.css       # Visual Live CSS Studio
-│   ├── views/                  # Modulare View-Templates
-│   │   ├── library_view.html   # Zentralbibliothek (120px Header)
-│   │   ├── inbox_view.html     # Eingang (120px Header)
-│   │   ├── view_showroom.html  # Showroom / Explorer (120px Header)
-│   │   ├── operations_view.html# Kanban & Operations
-│   │   └── ...
-│   └── img/cadre_icons/        # Freigestellte Kader- & Modul-Icons
-└── templates/ & .agents/       # Agenten-Manifeste & Skills
-```
-
----
-
-## 6. Support & Notizen
-
-- **Obsidian Sync:** Der Nutzer synchronisiert seinen Obsidian Vault eigenständig. Falls Pfade abweichen, den Pfad in `config/system_settings.json` oder via System-Einstellungen Modal anpassen.
-- **Git-Historie:** Die lokale Arbeitskopie ist auf Stand `main` committet.
-- Bei Fragen oder Anpassungen kann der Homeserver-Agent direkt auf dieses Dokument aufbauen.
+- **Git-Repository:** Die vollständige Git-Historie bis zum Release-Commit `v0.3` liegt als `AgenticOS-2026_GitBundle_v0.3.bundle` bei. Ein frischer Clone kann jederzeit mit `git clone AgenticOS-2026_GitBundle_v0.3.bundle AgenticOS-2026` erzeugt werden.
+- **Obsidian Sync:** Der Nutzer synchronisiert seinen Obsidian Vault eigenständig. Falls Pfade abweichen, den Pfad in `config/system_settings.json` oder via Einstellungen anpassen.

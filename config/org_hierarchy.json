@@ -976,6 +976,24 @@
       "status": "standby",
       "person_name": "Timo Berner",
       "provider": "omniroute"
+    },
+    {
+      "id": "ai_governance_officer",
+      "name": "AI Governance & Compliance Officer",
+      "group": null,
+      "category": "3. Recht, Steuern & Compliance"
+    },
+    {
+      "id": "finops_cost_optimizer",
+      "name": "FinOps & LLM Cost Optimization Lead",
+      "group": null,
+      "category": "7. Tech, Software & Data"
+    },
+    {
+      "id": "n8n_process_architect",
+      "name": "Autonomous Process & n8n Automation Architect",
+      "group": null,
+      "category": "7. Tech, Software & Data"
     }
   ],
   "links": [
@@ -1218,6 +1236,18 @@
     {
       "from": "system_architect_orchestrator",
       "to": "sre_observability_engineer"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "ai_governance_officer"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "finops_cost_optimizer"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "n8n_process_architect"
     }
   ],
   "canvas_width": 3200,

@@ -930,7 +930,47 @@ Formuliere die Lösung als prägnanten, überzeugenden Wertantrag (Pitch):
 4. COMPETITION (Wettbewerb/Alternativen): Warum ist dieser Ansatz besser als bestehende Alternativen?
 
 AUSGABE-FORMAT:
-Gliedere die Antwort präzise in: [Need] | [Approach] | [Benefit] | [Competition]."""
+Gliedere die Antwort präzise in: [Need] | [Approach] | [Benefit] | [Competition].""",
+
+        "RICE-Priorisierung": """[METHODIK-FRAMEWORK: RICE PRIORISIERUNGS-SCORE]
+Bewerte und ranke Backlog-Items, Features oder Handlungsoptionen quantitativ nach der RICE-Formel:
+RICE Score = (Reach x Impact x Confidence) / Effort
+
+1. REACH (Reichweite): Wie viele Nutzer/Prozesse/Kunden sind pro Quartal betroffen? (Konkrete absolute Zahl).
+2. IMPACT (Auswirkung): Welchen Effekt hat das Item auf den Nutzer/das Ziel?
+   - 3 = Massiv, 2 = Hoch, 1 = Mittel, 0.5 = Gering, 0.25 = Minimal.
+3. CONFIDENCE (Zuversicht): Wie verlässlich sind unsere Daten/Annahmen?
+   - 100% = Hohe Evidenz / Datenbasis, 80% = Mittlere Datenlage, 50% = Schätzung / Bauchgefühl.
+4. EFFORT (Aufwand): Wie viele Personenmonate oder Entwicklungszeitfenster werden benötigt? (1 = 1 Monat / 1 Sprint).
+
+SCORE-BERECHNUNG:
+Berechne für jede Option den numerischen RICE-Score und erstelle eine absteigende Prioritätenliste mit klarer Umsetzungsbegründung.
+
+AUSGABE-FORMAT:
+Tabellarische Matrix: Option | Reach | Impact | Confidence | Effort | RICE Score | Empfehlung""",
+
+        "Make-or-Buy / TCO-Scoring": """[METHODIK-FRAMEWORK: MAKE-OR-BUY & TCO-ANALYSE]
+Führe eine strukturierte Bewertung für Build vs. Buy vs. Partner durch, insbesondere für KI-, Software- und Infrastruktur-Entscheidungen:
+
+1. KERNKOMPETENZ & DIFFERENZIERUNG:
+- Gehört das Modul zur Kern-IP und strategischen Differenzierung (Build) oder ist es Standard-Commodity (Buy)?
+
+2. TOTAL COST OF OWNERSHIP (TCO) ÜBER 36 MONATE:
+- Build: Initiale Entwicklungskosten + laufende Wartung, Security-Patches, Hosting/Hardware, Opportunitätskosten des Dev-Teams.
+- Buy: SaaS-/API-Lizenzkosten, Vendor-Lock-in-Risiko, Integrationsaufwand, Token-Preiserhöhungsrisiko.
+- Partner: Integrations- und Betreuungskosten, Abhängigkeit von Drittdienstleistern.
+
+3. ZEITHORIZONT & TIME-TO-MARKET:
+- Wie viele Wochen/Monate Vorsprung verschafft die Buy-Option gegenüber einer Eigenentwicklung?
+
+4. DATENSCHUTZ, SOUVERÄNITÄT & RUNTIME-KONTROLLE:
+- Verbleiben sensible Kundendaten auf eigener Hardware (On-Prem / Selbst-Hosting) oder fließen Daten an externe US-Cloud-Hyperscaler?
+
+DECISION MATRIX & VERDIKT:
+Fälle ein unmissverständliches Verdikt: Build, Buy oder Partner mit Meilensteinplan für die nächsten 90 Tage.
+
+AUSGABE-FORMAT:
+### Differenzierung & IP | ### TCO-3-Jahres-Vergleich | ### Risiko & Souveränität | ### Klares Verdikt & Roadmap"""
     },
     "5. Kognitive Entzerrung & Kritisches Denken": {
         "Ladder of Inference (Chris Argyris)": """[METHODIK-FRAMEWORK: LADDER OF INFERENCE]
@@ -987,7 +1027,25 @@ Analysiere die Aufgabenstellung konsequent aus 6 klar getrennten Denkperspektive
 6. BLAUER HUT (Prozess): Wie sieht die finale Synthese und der nächste Prozessschritt aus?
 
 AUSGABE-FORMAT:
-Antworte zwingend geordnet nach den 6 Hüten: ⚪ Weiß | 🔴 Rot | 🖤 Schwarz | 🟡 Gelb | 🟢 Grün | 🔵 Blau"""
+Antworte zwingend geordnet nach den 6 Hüten: ⚪ Weiß | 🔴 Rot | 🖤 Schwarz | 🟡 Gelb | 🟢 Grün | 🔵 Blau""",
+
+        "Game-Theoretic Mechanism Design": """[METHODIK-FRAMEWORK: SPIELTHEORIE & MECHANISM DESIGN]
+Analysiere die Situation als spieltheoretisches System aus strategischen Akteuren, Anreizen und Informationsasymmetrien:
+
+1. SPIELER & ZIELE (Akteure):
+- Wer sind die handelnden Parteien (z.B. Käufer, Verkäufer, Wettbewerber, Nutzer, Agenten)? Welche Nutzenfunktionen maximieren sie?
+
+2. ANREIZSTRUKTUREN & FEHLANREIZE (Incentive Alignment):
+- Wo existieren Moral Hazard, Principal-Agent-Konflikte oder adverse Selektion? Welche Handlungen werden belohnt, welche bestraft?
+
+3. GLEICHGEWICHTSANALYSE (Nash-Gleichgewicht):
+- In welchem stabilen Zustand endet das System, wenn jeder Akteur eigennützig und rational seine beste Antwort wählt?
+
+4. MECHANISM DESIGN & AUKTIONSTHEORIE:
+- Wie müssen Regeln, Auszahlungsmatrizen, Verträge oder Bietverfahren (z.B. Vickrey-Auktion, Stufenrabatte, Earn-Outs) gestaltet werden, damit ehrliches Verhalten und Kooperation die dominante Strategie werden?
+
+AUSGABE-FORMAT:
+### Akteure & Nutzenfunktionen | ### Fehlanreize & Asymmetrien | ### Nash-Gleichgewicht | ### Designter Mechanismus (Dominante Strategie)"""
     },
     "6. Systemdenken & Komplexität": {
         "Causal Loop Diagrams (System Dynamics)": """[METHODIK-FRAMEWORK: CAUSAL LOOP DIAGRAMS]

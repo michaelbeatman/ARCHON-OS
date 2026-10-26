@@ -37247,5 +37247,381 @@
       }
     ],
     "archon_prompt_template": "AUFTRAG: CLEANTECH: POWER-TO-GAS (PTG) & SYNTHETISCHES METHAN KONZEPT\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als hochgradig spezialisierter Experte für Technik & Entwicklung innerhalb des Archon OS Mesh.\n\n2. EINGABE-PARAMETER & FORMULAR-VARIABLEN\n- CO2-Quelle (Biogasanlage, Industrieabgas, Direct Air Capture) (Pflicht): {{ co2_source_biogas_direct_air }}\n- Methanierungsverfahren (Thermo-katalytisch Sabatier vs. Biologisch) (Pflicht): {{ methanation_reactor_catalytic_biological }}\n- Einhaltung der DVGW-Gasqualitätsstandards (G 260 / G 262) (Pflicht): {{ gas_grid_specification_dvgw }}\n\n3. METHODISCHE AUSARBEITUNG\nErstellen Sie das Power-to-Gas Methanisierungskonzept:\n## 1. CO2-Bereitstellung und Gasreinigung: {{ co2_source_biogas_direct_air }}\n## 2. Auslegung des Methanierungsreaktors: {{ methanation_reactor_catalytic_biological }}\n## 3. Gasaufbereitung und DVGW-Konformitätsprüfung: {{ gas_grid_specification_dvgw }}\n## 4. Energie- und Exergie-Wirkungsgradanalyse\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT\n- Phrasen-Verbot: Verwenden Sie keinerlei einleitende Begrüßungen (\"Hier ist...\", \"Gerne...\") oder abschließende Höflichkeitsfloskeln.\n- Keine Gegenfragen: Beenden Sie das Dokument unmittelbar nach dem letzten sachlichen Punkt ohne Rückfragen oder Angebote zur Weiterarbeit.\n- Markdown-Struktur: Klare H2- und H3-Gliederung, Bulletpoints für Kernaspekte, Tabellen für Vergleiche.\n- Direkte Scannbarkeit: Präzise, faktenorientierte und unmittelbar einsatzfähige Ausarbeitung."
+  },
+  {
+    "id": "amazon-6-pager-narrative",
+    "name": "Amazon 6-Pager Executive Strategy Narrative",
+    "name_de": "Amazon 6-Pager Executive Strategy Narrative",
+    "category": "Executive & Governance",
+    "category_slug": "executive-governance",
+    "tier": "Community",
+    "description": "Vollständiges Sechs-Seiten-Strategie- und Entscheidungspapier nach dem bewährten Jeff-Bezos-/Amazon-Format.",
+    "description_de": "Vollständiges Sechs-Seiten-Strategie- und Entscheidungspapier nach dem bewährten Jeff-Bezos-/Amazon-Format.",
+    "form_fields": [
+      {
+        "id": "initiative_title",
+        "label": "Titel der Initiative / Strategie",
+        "type": "text",
+        "required": true,
+        "label_de": "Titel der Initiative / Strategie",
+        "placeholder_de": "z. B. Einführung von OmniRoute Enterprise Tier..."
+      },
+      {
+        "id": "strategic_context",
+        "label": "Kontext, Marktumfeld & Problemstellung",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Kontext, Marktumfeld & Problemstellung",
+        "placeholder_de": "z. B. Steigende Tokenkosten bei externen Providern..."
+      },
+      {
+        "id": "guiding_tenets",
+        "label": "Leitprinzipien / Tenets (Nicht verhandelbare Grundsätze)",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Leitprinzipien / Tenets",
+        "placeholder_de": "z. B. Datensouveränität vor Bequemlichkeit..."
+      },
+      {
+        "id": "strategic_approach",
+        "label": "Lösungsansatz & Kernmechanik",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Lösungsansatz & Kernmechanik",
+        "placeholder_de": "z. B. 3-Tier-Routing und Semantic Caching..."
+      },
+      {
+        "id": "financial_roi",
+        "label": "Wirtschaftlichkeit, Ressourcen & ROI",
+        "type": "text",
+        "required": true,
+        "label_de": "Wirtschaftlichkeit & ROI",
+        "placeholder_de": "z. B. 45% Einsparung p.a., Break-even nach 4 Monaten..."
+      },
+      {
+        "id": "risks_mitigations",
+        "label": "Risiken, Trade-offs & Gegenmaßnahmen",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Risiken & Gegenmaßnahmen",
+        "placeholder_de": "z. B. Vendor-Lock-in, Latenzen bei Fallback..."
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: AMAZON 6-PAGER EXECUTIVE NARRATIVE\n\n1. ROLLE & SYSTEM-KONTEXT\nAgieren Sie als Senior VP / Chief of Staff im Archon OS Executive Board. Formulieren Sie ein präzises, argumentationsstarkes 6-Pager-Memorandum nach Amazon-Standard.\n\n2. EINGABE-PARAMETER\n- Initiative: {{ initiative_title }}\n- Strategischer Kontext: {{ strategic_context }}\n- Leitprinzipien (Tenets): {{ guiding_tenets }}\n- Lösungsansatz: {{ strategic_approach }}\n- Wirtschaftlichkeit: {{ financial_roi }}\n- Risiken & Gegenmaßnahmen: {{ risks_mitigations }}\n\n3. NARRATIVE STRUKTUR\nErstellen Sie das Executive Memo in folgender Struktur:\n## 1. Introduction & Executive Summary\n- Kernaussage, Problem und Zielsetzung in 4 prägnanten Absätzen.\n## 2. Strategic Context & Market Reality\n- Vertiefung basierend auf: {{ strategic_context }}.\n## 3. Guiding Principles & Tenets\n- Nicht verhandelbare Grundsätze aus: {{ guiding_tenets }}.\n## 4. Current State, Lessons Learned & The Strategic Gap\n- Was funktioniert heute nicht und warum?\n## 5. Strategic Proposal & Operating Mechanics\n- Detaillierter Umsetzungsplan: {{ strategic_approach }}.\n## 6. Financial Model, Resource Allocation & Business Impact\n- Budget, ROI und Kennzahlen: {{ financial_roi }}.\n## 7. Strategic Risks, Trade-offs & Pre-Mortem Mitigations\n- Risikotabelle und Gegenmaßnahmen basierend auf: {{ risks_mitigations }}.\n## 8. Explicit Recommendation & Board Decision Call\n- Konkreter Beschlussantrag für das Führungsgremium.\n\n4. REGELN: Keine Floskeln, kein Marketing-Slop, faktenbasiert, messbar, tabellarische Vergleiche wo sinnvoll."
+  },
+  {
+    "id": "shareholder-resolution-draft",
+    "name": "Formeller Gesellschafterbeschluss & Umlaufbeschluss",
+    "name_de": "Formeller Gesellschafterbeschluss & Umlaufbeschluss",
+    "category": "Executive & Governance",
+    "category_slug": "executive-governance",
+    "tier": "Community",
+    "description": "Rechtssicherer Entwurf für Gesellschafterbeschlüsse (GmbH / Holding) im Umlaufverfahren nach § 48 Abs. 2 GmbHG.",
+    "description_de": "Rechtssicherer Entwurf für Gesellschafterbeschlüsse (GmbH / Holding) im Umlaufverfahren nach § 48 Abs. 2 GmbHG.",
+    "form_fields": [
+      {
+        "id": "company_name",
+        "label": "Firma der Gesellschaft (inkl. HRB & Sitz)",
+        "type": "text",
+        "required": true,
+        "label_de": "Firma der Gesellschaft",
+        "placeholder_de": "z. B. Muster Holding GmbH, HRB 12345, AG Berlin..."
+      },
+      {
+        "id": "shareholders_list",
+        "label": "Gesellschafter & Geschäftsanteile",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Gesellschafter & Geschäftsanteile",
+        "placeholder_de": "z. B. Gesellschafter A (60%), Gesellschafter B (40%)..."
+      },
+      {
+        "id": "resolution_matter",
+        "label": "Gegenstand der Beschlussfassung",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Gegenstand der Beschlussfassung",
+        "placeholder_de": "z. B. Feststellung des Jahresabschlusses, Gewinnausschüttung..."
+      },
+      {
+        "id": "resolution_text",
+        "label": "Konkrete Beschlussanträge",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Konkrete Beschlussanträge",
+        "placeholder_de": "z. B. Die Gesellschafter beschließen die Ausschüttung von..."
+      },
+      {
+        "id": "execution_deadline",
+        "label": "Rücklauffrist für Stimmabgabe",
+        "type": "text",
+        "required": true,
+        "label_de": "Rücklauffrist",
+        "placeholder_de": "z. B. 15. November 2026, 18:00 Uhr..."
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: FORMELLER GESELLSCHAFTERBESCHLUSS IM UMLAUFVERFAHREN\n\n1. ROLLE & KONTEXT\nAgieren Sie als erfahrener Gesellschaftsjurist (GmbH-Recht) für Gesellschafterbeschlüsse im schriftlichen Umlaufverfahren nach § 48 Abs. 2 GmbHG.\n\n2. EINGABE-PARAMETER\n- Gesellschaft: {{ company_name }}\n- Gesellschafter: {{ shareholders_list }}\n- Beschlussgegenstand: {{ resolution_matter }}\n- Beschlussanträge: {{ resolution_text }}\n- Frist: {{ execution_deadline }}\n\n3. AUSARBEITUNG\nErstellen Sie ein vollständiges, formgerechtes Beschlussdokument:\n- Formeller Briefkopf mit Gesellschaftsdaten\n- Vorbemerkung: Feststellung der Beschlussfähigkeit und Verzicht auf Formerfordernisse der Einberufung\n- Tagesordnungspunkte (TOP 1 bis TOP X)\n- Ausformulierte Beschlusstexte für das Protokoll\n- Stimmabgabe-Tabelle (Ja / Nein / Enthaltung) je Gesellschafter\n- Vollzugs- und Notaranweisungen\n- Unterschriftenblock für alle Gesellschafter mit Datum und Ort."
+  },
+  {
+    "id": "crisis-escalation-response-plan",
+    "name": "Krisen-Eskalationsplan & Notfall-Kommunikationsmatrix",
+    "name_de": "Krisen-Eskalationsplan & Notfall-Kommunikationsmatrix",
+    "category": "Executive & Governance",
+    "category_slug": "executive-governance",
+    "tier": "Community",
+    "description": "Operativer Kriseninterventionsplan für Systemausfälle, Datenschutzvorfälle oder Reputationsrisiken mit Eskalationsstufen (SEV1-SEV4).",
+    "description_de": "Operativer Kriseninterventionsplan für Systemausfälle, Datenschutzvorfälle oder Reputationsrisiken mit Eskalationsstufen (SEV1-SEV4).",
+    "form_fields": [
+      {
+        "id": "incident_type",
+        "label": "Art des Vorfalls (z.B. Data Breach, Serverausfall, Ransomware)",
+        "type": "text",
+        "required": true,
+        "label_de": "Art des Vorfalls",
+        "placeholder_de": "z. B. Ransomware-Befall / DSGVO-Meldepflichtiger Datenabfluss..."
+      },
+      {
+        "id": "severity_level",
+        "label": "Schweregrad (SEV1 Katastrophe bis SEV4 Gering)",
+        "type": "text",
+        "required": true,
+        "label_de": "Schweregrad",
+        "placeholder_de": "z. B. SEV1 (Kritische Kunden-Infrastruktur kompromittiert)..."
+      },
+      {
+        "id": "affected_systems",
+        "label": "Betroffene Systeme & Datenkategorien",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Betroffene Systeme & Daten",
+        "placeholder_de": "z. B. Produktionsdatenbank, E-Mail-Gateway..."
+      },
+      {
+        "id": "crisis_team_leads",
+        "label": "Krisenstab & Rollen (Incident Commander, Legal, Tech, PR)",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Krisenstab & Rollen",
+        "placeholder_de": "z. B. IC: Robert, Legal: Valerie Vance, Tech: Hendrik Sasse..."
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: KRISEN-ESKALATIONSPLAN & NOTFALL-KOMMUNIKATION\n\n1. ROLLE & KONTEXT\nAgieren Sie als Krisen-Eskalations-Manager und Incident Commander nach NIST SP 800-61 und ISO 27035.\n\n2. PARAMETER\n- Vorfall: {{ incident_type }} (Level: {{ severity_level }})\n- Systeme: {{ affected_systems }}\n- Krisenstab: {{ crisis_team_leads }}\n\n3. OPERATIVER MASTERPLAN\nErstellen Sie ein Notfall-Playbook mit:\n## 1. Lagefeststellung & Triage (Minuten 0-15)\n## 2. Eindämmung & Forensische Sicherung (Minuten 15-60)\n## 3. Rechtliche Meldepflichten (72-Stunden-Frist DSGVO Art. 33, BSI, Kunden)\n## 4. Kommunikationsmatrix: Interne Belegschaft, Kunden, Presse & Behörden\n## 5. Rollenverteilung & War-Room-Regeln (Commander-Briefing alle 30 Min.)\n## 6. Wiederherstellungs-Checkliste & Post-Mortem-Framework."
+  },
+  {
+    "id": "rfp-enterprise-tender-spec",
+    "name": "Enterprise RFP Ausschreibungsdokument",
+    "name_de": "Enterprise RFP Ausschreibungsdokument",
+    "category": "Einkauf & Supply Chain",
+    "category_slug": "einkauf-supply-chain",
+    "tier": "Community",
+    "description": "Strukturierte Ausschreibungsunterlage für Software-, Cloud- oder Dienstleistungsbeschaffung inklusive Anforderungskatalog und Bewertungsmatrix.",
+    "description_de": "Strukturierte Ausschreibungsunterlage für Software-, Cloud- oder Dienstleistungsbeschaffung inklusive Anforderungskatalog und Bewertungsmatrix.",
+    "form_fields": [
+      {
+        "id": "tender_subject",
+        "label": "Gegenstand der Ausschreibung",
+        "type": "text",
+        "required": true,
+        "label_de": "Gegenstand der Ausschreibung",
+        "placeholder_de": "z. B. Beschaffung einer Managed Kubernetes Plattform mit GPU-Nodes..."
+      },
+      {
+        "id": "scope_and_volume",
+        "label": "Leistungsumfang & Auftragsvolumen",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Leistungsumfang & Volumen",
+        "placeholder_de": "z. B. 24/7 Betrieb, 8x H100 GPUs, 99.9% SLA..."
+      },
+      {
+        "id": "mandatory_criteria",
+        "label": "Muss-Kriterien (KO-Kriterien)",
+        "type": "multiline",
+        "required": true,
+        "label_de": "KO-Kriterien",
+        "placeholder_de": "z. B. ISO 27001 zertifiziert, Hosting in Deutschland/EU, DSGVO AVV..."
+      },
+      {
+        "id": "evaluation_weights",
+        "label": "Bewertungskriterien & Gewichtung",
+        "type": "text",
+        "required": true,
+        "label_de": "Gewichtung",
+        "placeholder_de": "z. B. Preis 40%, Technische Performance 30%, SLA & Support 20%, Referenzen 10%..."
+      },
+      {
+        "id": "submission_timeline",
+        "label": "Ablauf & Fristen",
+        "type": "text",
+        "required": true,
+        "label_de": "Ablauf & Fristen",
+        "placeholder_de": "z. B. Fragen bis 10. Nov, Abgabe bis 24. Nov 2026..."
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: ENTERPRISE RFP AUSSCHREIBUNGSDOKUMENT\n\n1. ROLLE & KONTEXT\nAgieren Sie als leitender Einkäufer und Procurement Manager für technische Ausschreibungen.\n\n2. PARAMETER\n- Gegenstand: {{ tender_subject }}\n- Umfang: {{ scope_and_volume }}\n- KO-Kriterien: {{ mandatory_criteria }}\n- Gewichtung: {{ evaluation_weights }}\n- Zeitplan: {{ submission_timeline }}\n\n3. DOKUMENTEN-STRUKTUR\nErstellen Sie das vollständige RFP-Dokument:\n## 1. Projektübersicht & Unternehmenskontext\n## 2. Leistungsbeschreibung & Technische Spezifikationen\n## 3. Rechtliche & Compliance-Anforderungen (DSGVO, Geheimhaltung, SLA)\n## 4. KO-Kriterien (Ausschlusskriterien)\n## 5. Angebotsstruktur & Preistabelle (Formatvorgabe für Bieter)\n## 6. Bewertungsmatrix mit Punktesystem (Scoring-Modell)\n## 7. Zeitplan, Bieterfragen-Prozess und Einreichungsmodalitäten."
+  },
+  {
+    "id": "lksg-supplier-audit-compliance",
+    "name": "LkSG Lieferanten-Audit & Sorgfaltspflichten-Prüfung",
+    "name_de": "LkSG Lieferanten-Audit & Sorgfaltspflichten-Prüfung",
+    "category": "Einkauf & Supply Chain",
+    "category_slug": "einkauf-supply-chain",
+    "tier": "Community",
+    "description": "Audit- und Selbstauskunftsbogen zur Überprüfung von Zulieferern nach dem Lieferkettensorgfaltspflichtengesetz.",
+    "description_de": "Audit- und Selbstauskunftsbogen zur Überprüfung von Zulieferern nach dem Lieferkettensorgfaltspflichtengesetz.",
+    "form_fields": [
+      {
+        "id": "supplier_name_sector",
+        "label": "Lieferant, Branche & Herkunftsland",
+        "type": "text",
+        "required": true,
+        "label_de": "Lieferant, Branche & Herkunft",
+        "placeholder_de": "z. B. TechFabrik Ltd., Elektronik & Server-Chassis, Taiwan..."
+      },
+      {
+        "id": "spend_and_tier",
+        "label": "Jahreseinkaufsvolumen & Tier-Stufe (Direkt / Mittelbar)",
+        "type": "text",
+        "required": true,
+        "label_de": "Volumen & Tier-Stufe",
+        "placeholder_de": "z. B. 450.000 € p.a., Tier-1 Direktlieferant..."
+      },
+      {
+        "id": "audit_focus_areas",
+        "label": "Prüfungsschwerpunkte (z.B. Arbeitszeiten, Umwelt, Kinderarbeit)",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Prüfungsschwerpunkte",
+        "placeholder_de": "z. B. Mindestlöhne, Arbeitsschutz, Chemikalienentsorgung, Treibhausgase..."
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: LKSG LIEFERANTEN-AUDIT & RISIKOANALYSE\n\n1. ROLLE & KONTEXT\nAgieren Sie als Supply Chain Compliance Auditor nach dem deutschen Lieferkettensorgfaltspflichtengesetz (LkSG) und der EU CSDDD.\n\n2. PARAMETER\n- Lieferant: {{ supplier_name_sector }}\n- Einkaufsvolumen: {{ spend_and_tier }}\n- Schwerpunkte: {{ audit_focus_areas }}\n\n3. PRÜFPLAN & FRAGEBOGEN\nErstellen Sie:\n## 1. Risikoklassifizierung des Lieferanten (Länder- & Branchenrisiko)\n## 2. Strukturierter Selbstauskunftsbogen mit 15 Pflichtfragen (Menschenrechte, Umwelt, Verhaltenskodex)\n## 3. Nachweispflichtige Zertifikate (ISO 14001, SA8000, EcoVadis)\n## 4. Vor-Ort-Audit-Checkliste für Werksbesuche\n## 5. Eskalations- und Abhilfemaßnahmen (Corrective Action Plan - CAP) bei Verstößen."
+  },
+  {
+    "id": "vendor-price-renegotiation-letter",
+    "name": "Strategisches Lieferanten-Nachverhandlungsschreiben",
+    "name_de": "Strategisches Lieferanten-Nachverhandlungsschreiben",
+    "category": "Einkauf & Supply Chain",
+    "category_slug": "einkauf-supply-chain",
+    "tier": "Community",
+    "description": "Diplomatisches und zugleich durchsetzungsstarkes Anschreiben zur Nachverhandlung bestehender Lieferanten-Konditionen und Preisanpassungen.",
+    "description_de": "Diplomatisches und zugleich durchsetzungsstarkes Anschreiben zur Nachverhandlung bestehender Lieferanten-Konditionen und Preisanpassungen.",
+    "form_fields": [
+      {
+        "id": "supplier_contact",
+        "label": "Lieferantenname & Ansprechpartner",
+        "type": "text",
+        "required": true,
+        "label_de": "Lieferant & Ansprechpartner",
+        "placeholder_de": "z. B. CloudHost GmbH, Herr Thomas Meier (Key Account)..."
+      },
+      {
+        "id": "current_contract_terms",
+        "label": "Bestehende Konditionen & bisheriges Auftragsvolumen",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Bestehende Konditionen",
+        "placeholder_de": "z. B. 120.000 € p.a., Monatsrechnung, Zahlungsziel 14 Tage..."
+      },
+      {
+        "id": "target_improvement",
+        "label": "Ziel der Nachverhandlung (Rabatt, Zahlungsziel, Boni)",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Nachverhandlungsziel",
+        "placeholder_de": "z. B. 12% Rabatt auf Grundpreise, Verlängerung Zahlungsziel auf 60 Tage..."
+      },
+      {
+        "id": "leverage_arguments",
+        "label": "Verhandlungshebel (Mengenwachstum, Benchmark, Marktdruck)",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Verhandlungshebel",
+        "placeholder_de": "z. B. Geplantes Volumen +40% im Folgejahr, Vergleichsangebote liegen vor..."
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: STRATEGISCHES LIEFERANTEN-NACHVERHANDLUNGSSCHREIBEN\n\n1. ROLLE & KONTEXT\nAgieren Sie als Head of Procurement / Chef-Verhandler im Archon OS Mesh nach dem Harvard-Verhandlungskonzept.\n\n2. PARAMETER\n- Lieferant: {{ supplier_contact }}\n- Status Quo: {{ current_contract_terms }}\n- Verhandlungsziel: {{ target_improvement }}\n- Hebel: {{ leverage_arguments }}\n\n3. SCHREIBEN-STRUKTUR\nFormulieren Sie ein hochprofessionelles Verhandlungsschreiben:\n- Betreffzeile: Wertschätzend, partnerschaftlich und unmissverständlich\n- Einleitung: Würdigung der bisherigen Partnerschaft und gemeinsame Erfolge\n- Marktrealität & Sachlicher Druck: Erläuterung der wirtschaftlichen Rahmenbedingungen basierend auf: {{ leverage_arguments }}\n- Konkretes Angebot & Gegenleistung: Was bieten wir (Mengensteigerung, langfristige Bindung) gegen was fordern wir ({{ target_improvement }})\n- Terminvorschlag für das Verhandlungsgespräch mit klarer Agenda."
+  },
+  {
+    "id": "agent-soul-manifest-creator",
+    "name": "Agenten-Personalakte & SOUL.md Manifest Generator",
+    "name_de": "Agenten-Personalakte & SOUL.md Manifest Generator",
+    "category": "KI & Automatisierung",
+    "category_slug": "ki-automatisierung",
+    "tier": "Community",
+    "description": "Erstellt standardisierte, operative Manifeste (SOUL.md) für neue Archon-Agentenprofile inklusive Kompetenzprofil und Guardrails.",
+    "description_de": "Erstellt standardisierte, operative Manifeste (SOUL.md) für neue Archon-Agentenprofile inklusive Kompetenzprofil und Guardrails.",
+    "form_fields": [
+      {
+        "id": "agent_role_name",
+        "label": "Rollenbezeichnung & Codename des Agenten",
+        "type": "text",
+        "required": true,
+        "label_de": "Rollenbezeichnung & Codename",
+        "placeholder_de": "z. B. M&A Deal Screener (deal_screener_pro)..."
+      },
+      {
+        "id": "core_mission",
+        "label": "Hauptmission & primärer Unternehmenszweck",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Hauptmission & Zweck",
+        "placeholder_de": "z. B. Automatisiertes Screening von Unternehmensübernahmen nach EBITDA-Kriterien..."
+      },
+      {
+        "id": "mandatory_skills_tools",
+        "label": "Erforderliche Skills & Tool-Berechtigungen",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Skills & Tools",
+        "placeholder_de": "z. B. skills: [financial-health, ma-playbook], tools: [web_search, filesystem, execute_code]..."
+      },
+      {
+        "id": "guardrails_and_limits",
+        "label": "Sicherheitsbeschränkungen & HITL-Gates",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Guardrails & HITL-Gates",
+        "placeholder_de": "z. B. Keine Verträge eigenständig absenden, Budget-Limit 50 €/Tag..."
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: SOUL.MD AGENTEN-PERSONALAKTE & MANIFEST\n\n1. ROLLE & KONTEXT\nAgieren Sie als System- und Prompt-Architect des Archon OS Kernsystems.\n\n2. PARAMETER\n- Agentenrolle: {{ agent_role_name }}\n- Kernmission: {{ core_mission }}\n- Skills & Tools: {{ mandatory_skills_tools }}\n- Guardrails: {{ guardrails_and_limits }}\n\n3. MANIFEST-AUFBAU (SOUL.MD STANDARD)\nErstellen Sie die vollständige Markdown-Personalakte:\n# SOUL.md: {{ agent_role_name }}\n## 1. Identität, Haltung & Kognitiver Kern\n## 2. Primäre Fähigkeiten & Tool-Einsatzregeln\n## 3. Phrasen- und Slop-Verbot (Anti-AI-Writing)\n## 4. Autonomie-Stufe & Human-in-the-Loop (HITL) Grenzen\n## 5. JSON-Konfigurations-Snippet für agent_profiles.json & roles.json."
+  },
+  {
+    "id": "prompt-injection-guardrail-builder",
+    "name": "Prompt Injection & Jailbreak Defense Guardrail Generator",
+    "name_de": "Prompt Injection & Jailbreak Defense Guardrail Generator",
+    "category": "KI & Automatisierung",
+    "category_slug": "ki-automatisierung",
+    "tier": "Community",
+    "description": "Generiert robuste System-Guardrails und Filterregeln zur Absicherung von LLM-Prompts gegen Adversarial Attacks und Indirect Injections.",
+    "description_de": "Generiert robuste System-Guardrails und Filterregeln zur Absicherung von LLM-Prompts gegen Adversarial Attacks und Indirect Injections.",
+    "form_fields": [
+      {
+        "id": "target_agent_type",
+        "label": "Ziel-Agent oder Einsatzbereich (z.B. Web-Scraper, E-Mail-Bot, Chatbot)",
+        "type": "text",
+        "required": true,
+        "label_de": "Ziel-Agent / Einsatzbereich",
+        "placeholder_de": "z. B. Kundensupport-Chatbot mit externem Internet-Zugriff..."
+      },
+      {
+        "id": "untrusted_input_sources",
+        "label": "Quellen für nicht vertrauenswürdige Eingaben",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Eingabequellen",
+        "placeholder_de": "z. B. Webseiten-HTML, fremde E-Mails, Nutzer-Uploads..."
+      },
+      {
+        "id": "protected_crown_jewels",
+        "label": "Zu schützende Ressourcen (API-Keys, System-Prompt, DB)",
+        "type": "multiline",
+        "required": true,
+        "label_de": "Zu schützende Ressourcen",
+        "placeholder_de": "z. B. Interne API-Keys, Systembefehle, Kundendaten..."
+      }
+    ],
+    "archon_prompt_template": "AUFTRAG: PROMPT INJECTION & JAILBREAK DEFENSE GUARDRAILS\n\n1. ROLLE & KONTEXT\nAgieren Sie als AI Security Engineer nach MITRE ATLAS und OWASP Top 10 for LLM Applications.\n\n2. PARAMETER\n- Ziel-System: {{ target_agent_type }}\n- Untrusted Inputs: {{ untrusted_input_sources }}\n- Schutzziele: {{ protected_crown_jewels }}\n\n3. SICHERHEITS-GUARDRAILS\nErstellen Sie ein mehrschichtiges Abwehrsystem:\n## 1. Input-Sanitization & Delimiter-Design (XML-Boundary Isolation)\n## 2. Hardened System Instruction (Immunity Directive gegen Rollenübernahme)\n## 3. Tool-Call Pre-Execution Validation Rules\n## 4. Output-Filterung & Leakage-Protection (Schutz von {{ protected_crown_jewels }})\n## 5. Notfall-Alarmierung bei erkannten Angriffs-Signaturen."
   }
 ]

@@ -262,6 +262,46 @@ Compress-Archive -Path "c:\.Antigravity-projekte\obsidian\*" -DestinationPath "c
 
 ---
 
+## 7. Internet-Watchdog & Triage-Körbchen
+
+Der Internet-Watchdog überwacht Webquellen, RSS-Feeds und regulatorische Änderungen. Er fungiert als vorgeschaltetes Radar, damit das operative Kanban-Board nicht mit ungefilterten Rohdaten überflutet wird.
+
+### Grundprinzipien
+1. **Kein automatischer Kanban-Müll (`auto_kanban_sync: false`):**
+   - Netzfunde werden im Watchdog-Dashboard gesammelt und vorbewertet.
+   - Erst durch manuelle Triage oder das Sammelkörbchen wird ein Fund zur echten Aufgabe im Kanban-Board (`ready`).
+2. **Einzelfall-Aktionen:**
+   - **📱 Als LinkedIn-Post generieren:** Übergibt den Fund direkt an die Persona `storyteller_ghostwriter`.
+   - **📊 Strategische Analyse für Robert:** Übergibt den Fund an `executive_decision_architect`.
+   - **✍️ Eigenes Prompting:** Öffnet ein Eingabefenster für spezifische Anweisungen.
+3. **Das Sammelkörbchen (Basket):**
+   - Funde lassen sich per Klick (`+ Korb`) in ein Zwischenlager legen.
+   - Sobald die konfigurierte Schwelle (`basket_threshold`, z. B. 3 Funde) erreicht ist, bündelt ein Klick auf *Paket an Ghostwriter senden* oder *Paket an Robert senden* alle markierten Quellen zu einem gemeinsamen Synthese-Task.
+4. **Prio-Keywords (Sofortalarm via Telegram):**
+   - Suchbegriffe wie `KfW`, `Förderstopp`, `BauGB`, `GEG` oder `Groq` lösen beim Auffinden sofort eine priorisierte Push-Nachricht auf Telegram aus.
+   - Der Alarm enthält direkte Aktions-Buttons zur sofortigen Weiterleitung an den passenden Agenten.
+5. **Rollen- & Profilschutz:**
+   - Das Ändern von Watchdog-Zielen, Intervallen, Schwellenwerten und Prio-Keywords ist reserviert für Leitungs-Profile ab Robert aufwärts (`executive_decision_architect`, `micha`, `default`).
+
+---
+
+## 8. Telegram-Dokumenten-Pipeline & HITL-Freigaben
+
+Archon OS liefert fundierte Dossiers und Berichte nicht als unleserlichen Markdown-Fließtext aus, sondern über eine zweistufige Dokumenten-Pipeline.
+
+### Auslieferungsformate
+- **Dossier als HTML:** Enthält typografisch aufbereitete Überschriften, Tabellen und Quellennachweise für die Desktop- und Browseransicht.
+- **Dossier als PDF:** Wird im Container mit ReportLab als sauberes A4-Dokument mit Kopfzeile, Metadaten und strukturierter Gliederung erzeugt.
+- **MIME-Type Übertragung:** Die Telegram-Schnittstelle (`telegram_notify.py`) übermittelt PDFs mit `application/pdf`, wodurch Telegram auf Mobilgeräten den nativen PDF-Betrachter öffnet und Abstürze durch fehlerhafte Text-Header verhindert werden.
+
+### Telegram-Bedienung & Buttons
+Wenn eine Benachrichtigung oder ein Bericht in Telegram eintrifft:
+- **Dokument lesen:** Tippe direkt auf die Datei-Blase (`.pdf` oder `.html`), um den Volltext zu öffnen.
+- **`[ 📋 Details ]`:** Fragt den aktuellen Ausführungsstatus des zugehörigen Kanban-Tasks im Backend ab.
+- **`[ ✅ Erlauben ]` / `[ ❌ Verbieten ]`:** Sendet eine Human-in-the-Loop (HITL) Entscheidung an das System zurück, um blockierte oder sensible Aktionen freizugeben.
+
+---
+
 # Teil 3: Operatives Runbook & Schnellbehebung
 
 ### Schnellbefehle im Fehlerfall

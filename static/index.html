@@ -259,6 +259,14 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
+          <button id="nav-watchdog" onclick="setTab('watchdog')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="radar" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Internet-Watchdog</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Web-Radar &amp; Monitoring</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
         </div>
       </div>
       <!-- VISUELLE TRENNLINIE -->
@@ -425,6 +433,11 @@
         <button id="btn-toggle-css-studio" onclick="toggleCssStudio()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all duration-200 border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 font-mono text-[11px] font-bold cursor-pointer shadow-xs" title="Visual CSS Live Studio & In-Place Inspector öffnen (Alt + S)">
           <i data-lucide="palette" class="w-3.5 h-3.5"></i>
           <span>🎨 CSS LIVE STUDIO</span>
+        </button>
+        <!-- Internet-Watchdog / Radar Toggle (Kognition Säule 4) -->
+        <button id="btn-toggle-watchdog" onclick="setTab('watchdog')" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded border transition-all duration-200 theme-border hover:bg-black/10 text-muted-custom transition-colors" title="Internet-Watchdog &amp; Web-Radar (Kognition Säule 4)">
+          <i data-lucide="radar" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+          <span class="text-[10px] font-medium font-mono">RADAR</span>
         </button>
         <!-- System Settings Toggle -->
         <button onclick="openSystemSettingsModal()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded border transition-all duration-200 theme-border hover:bg-black/10 text-muted-custom transition-colors" title="Systemsteuerung & Koppelung">
@@ -1613,6 +1626,9 @@
       <!-- VIEW: VIEW-RESEARCH (Extracted) -->
       <div id="view-research-mount"></div>
 
+      <!-- VIEW CONTAINER: INTERNET-WATCHDOG (SÄULE 2: KOGNITION & WISSEN) -->
+      <div id="view-watchdog-mount"></div>
+
       <!-- VIEW CONTAINER: KANBAN PIPELINE -->
       <div id="view-kanban" class="hidden space-y-2">
         <div class="flex justify-between items-center px-0.5">
@@ -2239,7 +2255,7 @@ print('Ausführung erfolgreich!')</textarea>
       // --- V2 COMPONENT FETCHES (Core Active Views First, Legacy Studios Deferred) ---
       try {
         await Promise.all([
-          fetch('/static/views/view_app_frame_studio.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); }),
+          fetch('/static/views/view_app_frame_studio.html?v=202610250140').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); }),
           fetch('/static/views/system_settings_modal.html?v=202610241405').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/agent_profiles_view.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/master_chat_view.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
@@ -2250,6 +2266,7 @@ print('Ausführung erfolgreich!')</textarea>
           fetch('/static/views/view_guardian.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/view_plugins.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/view_research.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/watchdog_view.html?v=20261026').then(r => r.text()).then(html => { const el = document.getElementById('view-watchdog-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }),
           fetch('/static/views/view_brain.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; })
         ]);
       } catch(err) {
@@ -2401,6 +2418,7 @@ print('Ausführung erfolgreich!')</textarea>
         "view-omniroute",
         "view-ai-mastermind",
         "view-research",
+        "view-watchdog",
         "view-kanban",
         "view-workspace-gallery",
         "view-brain",
@@ -2437,7 +2455,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (selectedView) {
         selectedView.classList.remove("hidden");
         selectedView.style.display = (tabId === "kanban" || tabId === "agent-profiles") ? "block" : "flex";
-        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom") {
+        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog") {
           selectedView.style.height = "100%";
           selectedView.style.flex = "1 1 0%";
           selectedView.style.minHeight = "0";
@@ -2468,6 +2486,9 @@ print('Ausführung erfolgreich!')</textarea>
         }
       }
       // Log-Stream Polling Start/Stop & Paperclip Iframe
+      if (tabId === "watchdog") {
+        if (typeof initWatchdogView === 'function') initWatchdogView();
+      }
       if (tabId === "operations") {
         setOperationsTab(currentOpsTab || 'kanban');
         if (shouldFetchTab('operations')) loadOperationsData(false);
@@ -2525,6 +2546,7 @@ print('Ausführung erfolgreich!')</textarea>
         "log-stream": "nav-log-stream",
         "hermes-dashboard": "nav-hermes-dashboard",
         "research": "nav-research",
+        "watchdog": "nav-watchdog",
         "kanban": "nav-kanban",
         "workspace-gallery": "nav-workspace-gallery",
         "design-system": "nav-design-system"
@@ -2570,6 +2592,7 @@ print('Ausführung erfolgreich!')</textarea>
         "hermes-dashboard": "Hermes Control Dashboard",
         "crm": "CRM",
         "research": "Research Lab (Wissensbeschaffung)",
+        "watchdog": "Internet-Watchdog (Web-Radar & Monitoring)",
         "kanban": "Pipeline",
         "workspace-gallery": "Workspace Gallery"
       };
@@ -2591,6 +2614,7 @@ print('Ausführung erfolgreich!')</textarea>
         "hermes-dashboard": "layout-dashboard",
         "crm": "briefcase",
         "research": "microscope",
+        "watchdog": "radar",
         "kanban": "git-branch",
         "workspace-gallery": "images"
       };
@@ -3725,8 +3749,10 @@ print('Ausführung erfolgreich!')</textarea>
       if (tab === 'rag') {
         if (ragPane) ragPane.classList.remove('hidden');
         const iframe = document.getElementById('anythingllm-iframe');
-        if (iframe && (!iframe.src || iframe.src === 'about:blank')) {
-          iframe.src = 'http://localhost:3001';
+        const host = window.location.hostname || '127.0.0.1';
+        const targetUrl = `http://${host}:3001`;
+        if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.includes('localhost:3001'))) {
+          iframe.src = targetUrl;
         }
       } else if (tab === 'erfasser') {
         if (erfasserPane) erfasserPane.classList.remove('hidden');
@@ -4667,7 +4693,6 @@ print('Ausführung erfolgreich!')</textarea>
 </head>
 <body>
   ${body.innerHTML}
-<div id="system-settings-mount"></div>
 </body>
 </html>`;
       const blob = new Blob([htmlFull], { type: "text/html;charset=utf-8" });
@@ -10935,6 +10960,7 @@ ${logExcerpt}
 </div>
 
 <div id="system-settings-mount"></div>
+<script src="/static/js/watchdog_controller.js?v=20261026"></script>
 
 <!-- ===== ARCHON systemweites Datei-Preview (klickbare Pfade, 11.10.2026) ===== -->
 <style>

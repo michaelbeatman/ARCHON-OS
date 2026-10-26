@@ -152,10 +152,85 @@ def build_dossier_html(title, body_text, target_dir, base_name, meta_pairs=None)
 
 
 def build_dossier_from_report(title, body_text, target_dir, base_name, ref_id="", quelle=""):
-    """Bequemlichkeits-Wrapper mit Standard-Metazeile (Zeit/Referenz/Quelle)."""
+    """Bequemlichkeits-Wrapper mit Standard-Metazeile (Zeit/Referenz/Quelle).
+    Erzeugt primär ein HTML-Dossier und versucht zusätzlich ein PDF via reportlab zu bauen.
+    """
     meta = [
         ("Erstellt", datetime.datetime.now().strftime("%d.%m.%Y %H:%M")),
         ("Referenz", ref_id),
         ("Quelle", quelle),
     ]
-    return build_dossier_html(title, body_text, target_dir, base_name, meta_pairs=meta)
+    html_path = build_dossier_html(title, body_text, target_dir, base_name, meta_pairs=meta)
+    
+    # Optional PDF-Erzeugung via reportlab
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+
+        pdf_path = os.path.join(target_dir, _safe_name(base_name) + ".pdf")
+        doc = SimpleDocTemplate(
+            pdf_path,
+            pagesize=A4,
+            rightMargin=40,
+            leftMargin=40,
+            topMargin=40,
+            bottomMargin=40
+        )
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'DossierTitle',
+            parent=styles['Heading1'],
+            fontName='Helvetica-Bold',
+            fontSize=16,
+            leading=20,
+            textColor=colors.HexColor('#1e293b')
+        )
+        meta_style = ParagraphStyle(
+            'DossierMeta',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=9,
+            leading=12,
+            textColor=colors.HexColor('#64748b')
+        )
+        body_style = ParagraphStyle(
+            'DossierBody',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=10.5,
+            leading=15,
+            textColor=colors.HexColor('#334155')
+        )
+
+        story = [
+            Paragraph(html.escape(str(title or "Dossier")), title_style),
+            Spacer(1, 4),
+            Paragraph(f"Referenz: {ref_id} • Erstellt: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')} • Quelle: {quelle}", meta_style),
+            Spacer(1, 8),
+            HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceBefore=4, spaceAfter=12)
+        ]
+
+        # Zeilenweise Paragraphen
+        for line in (body_text or "").split("\n"):
+            line = line.strip()
+            if not line:
+                story.append(Spacer(1, 6))
+                continue
+            if line.startswith("# "):
+                story.append(Paragraph(html.escape(line[2:]), styles['Heading2']))
+            elif line.startswith("## ") or line.startswith("### "):
+                story.append(Paragraph(html.escape(line.lstrip('#').strip()), styles['Heading3']))
+            elif line.startswith("- ") or line.startswith("* "):
+                story.append(Paragraph(f"• {html.escape(line[2:])}", body_style))
+            else:
+                story.append(Paragraph(html.escape(line), body_style))
+
+        doc.build(story)
+        logger.info(f"[Dossier] PDF erfolgreich erzeugt: {pdf_path}")
+        return pdf_path  # Wenn PDF erfolgreich, bevorzugen wir das PDF als Auslieferungs-Datei
+    except Exception as e:
+        logger.info(f"[Dossier] PDF-Erzeugung übersprungen/Fallback auf HTML: {e}")
+
+    return html_path

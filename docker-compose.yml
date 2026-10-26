@@ -2,6 +2,7 @@ name: ARCHON-OS
 
 networks:
   agentic_mesh:
+    name: archon-os-dev_agents_net
     external: true
 
 services:
@@ -214,14 +215,14 @@ services:
     networks:
       - agentic_mesh
     ports:
-      - "127.0.0.1:3001:3001"
+      - "0.0.0.0:3001:3001"
     environment:
       - STORAGE_DIR=/app/server/storage
       - SERVER_PORT=3001
       - DISABLE_TELEMETRY=true
     volumes:
       - anythingllm_storage:/app/server/storage
-      - C:\Mein Obsidian:/app/server/storage/obsidian_vault:ro
+      - /mnt/raid/AgenticOS-2026/agent_workspace/obsidian_vault:/app/server/storage/obsidian_vault:ro
 
 
 volumes:

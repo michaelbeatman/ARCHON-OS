@@ -142,15 +142,9 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
 
 
 def send_telegram_document(file_path: str, caption: str = "", filename: str = None,
-                           mime: str = "text/html", reply_markup: dict = None,
+                           mime: str = None, reply_markup: dict = None,
                            parse_mode: str = None) -> bool:
-    """Sendet eine Datei (z.B. das HTML-Dossier eines Zwischenberichts) als
-    Telegram-Dokument an den Owner-Chat. Gibt True bei Erfolg zurueck.
-
-    12.10.2026 (User-Wunsch "2a"): Berichte sollen MIT der Freigabe-Anfrage
-    kommen, damit der Owner sieht, was er freigibt. Bewusst OHNE parse_mode im
-    caption - der Markdown-Entities-400 soll hier gar nicht erst entstehen.
-    """
+    """Sendet eine Datei (z.B. PDF oder HTML) als Dokument an den Owner-Chat."""
     if not telegram_enabled():
         logger.warning("[Telegram] Dokument-Ping übersprungen: Token/Chat-ID nicht konfiguriert.")
         return False
@@ -168,6 +162,16 @@ def send_telegram_document(file_path: str, caption: str = "", filename: str = No
         logger.warning(f"[Telegram] Dokument zu groß ({size} B > {_TELEGRAM_DOC_MAX_BYTES} B) - nicht gesendet.")
         return False
     name = filename or os.path.basename(file_path)
+
+    # Automatische Erkennung des korrekten MIME-Typs
+    if not mime:
+        lower_name = name.lower()
+        if lower_name.endswith(".pdf"):
+            mime = "application/pdf"
+        elif lower_name.endswith(".html") or lower_name.endswith(".htm"):
+            mime = "text/html"
+        else:
+            mime = "application/octet-stream"
     try:
         with open(file_path, "rb") as fh:
             files = {"document": (name, fh, mime)}

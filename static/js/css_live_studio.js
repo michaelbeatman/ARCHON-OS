@@ -1680,7 +1680,7 @@
       handle.addEventListener("pointermove", (e) => {
         if (!isStudioDragging) return;
         e.preventDefault();
-        const studioWidth = studio.offsetWidth || 450;
+        const studioWidth = studio.offsetWidth || 560;
         let newLeft = e.clientX - studioDragShiftX;
         let newTop = e.clientY - studioDragShiftY;
         // Keep inside viewport

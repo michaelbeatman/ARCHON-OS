@@ -117,7 +117,7 @@
               "background-color": "#ffffff",
               "color": "#0f172a",
               "border-color": "#e2e8f0",
-              "gap": "10px",
+              "gap": "4px",
               "font-size": "11px"
             },
             "hover": {},

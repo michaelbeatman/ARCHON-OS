@@ -1,8 +1,8 @@
 {
   "inbox_watcher": {
     "enabled": true,
-    "watch_folder": "C:\\.Antigravity-projekte\\AgenticOS-2026\\agent_workspace\\test_inbox_watch",
-    "processed_folder": "C:\\.Antigravity-projekte\\AgenticOS-2026\\agent_workspace\\test_inbox_watch\\processed",
+    "watch_folder": "/app/agent_workspace/test_inbox_watch",
+    "processed_folder": "/app/agent_workspace/test_inbox_watch/processed",
     "interval_seconds": 5,
     "standup_enabled": true,
     "standup_time": "08:00"
@@ -233,5 +233,360 @@
     "max_ram_pct": 85,
     "min_free_disk_gb": 2,
     "throttle_action": "pause_low_priority"
+  },
+  "internet_watchdog": {
+    "enabled": true,
+    "interval_minutes": 30,
+    "auto_kanban_sync": false,
+    "basket_threshold": 3,
+    "priority_keywords": [
+      "KfW",
+      "Förderstopp",
+      "BauGB",
+      "GEG",
+      "Groq",
+      "Claude 3.7",
+      "Llama 4"
+    ],
+    "basket": [],
+    "channels": {
+      "telegram": true,
+      "kanban": true
+    },
+    "targets": [
+      {
+        "id": "target-bau",
+        "name": "KfW & Baurechts-Änderungen",
+        "category": "Markt & Bau",
+        "type": "search_feed",
+        "query_or_url": "BauGB, GEG, KfW Neubauförderung",
+        "active": false,
+        "last_check": "2026-10-26T05:49:34.355033",
+        "last_status": "OK (2 Einträge)"
+      },
+      {
+        "id": "target-ki",
+        "name": "Model Releases & Frameworks",
+        "category": "Technologie & KI",
+        "type": "rss",
+        "query_or_url": "https://huggingface.co/blog/feed.xml",
+        "active": false,
+        "last_check": "2026-10-26T05:49:34.355033",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "target-diff",
+        "name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "type": "web_diff",
+        "query_or_url": "https://news.ycombinator.com/rss",
+        "active": false,
+        "last_check": "2026-10-26T05:49:34.355033",
+        "last_status": "OK (8 Einträge)"
+      }
+    ],
+    "last_run": "2026-10-26T11:23:41.335458",
+    "recent_findings": [
+      {
+        "id": "20de30f894b29c1f",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Microsoft Decision-1: 9B Qwen Model Launch Explained",
+        "link": "https://shattered.io/microsoft-decision-1-qwen3-5-9b-model-2026/",
+        "published": "Mon, 26 Oct 2026 03:12:05 +0000",
+        "detected_at": "26.10.2026 05:48"
+      },
+      {
+        "id": "a7c1041728e8023b",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "US Wages Share of GDI at 75 Year Low",
+        "link": "https://fred.stlouisfed.org/series/W270RE1A156NBEA",
+        "published": "Mon, 26 Oct 2026 03:51:10 +0000",
+        "detected_at": "26.10.2026 04:48"
+      },
+      {
+        "id": "63af34ec42639c6f",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "PaperPilot – Zero-Cloud, Pure-Rust PDF Engine with WASM and MCP",
+        "link": "https://github.com/KrushnaVardhanReddy/PaperPilot",
+        "published": "Mon, 26 Oct 2026 03:29:05 +0000",
+        "detected_at": "26.10.2026 04:18"
+      },
+      {
+        "id": "467e4b598fc4e1b6",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Behind the scenes at the NeXT Computer office",
+        "link": "https://exhibits.stanford.edu/menuez/browse/next-computer-inc?per_page=96&sort=pub_year_isi+asc%2C+title_sort+asc&view=masonry",
+        "published": "Mon, 26 Oct 2026 03:31:11 +0000",
+        "detected_at": "26.10.2026 04:18"
+      },
+      {
+        "id": "7de31247c3c41bfd",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Brazil elections: Lula secures fourth term after dramatic comeback",
+        "link": "https://www.bbc.com/news/articles/cmvg7p001qj9o",
+        "published": "Mon, 26 Oct 2026 03:04:08 +0000",
+        "detected_at": "26.10.2026 04:18"
+      },
+      {
+        "id": "54f0b7e02f7d313f",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Show HN: TitleArt – Make text like it's 1997",
+        "link": "https://titleart.dvy.io/",
+        "published": "Mon, 26 Oct 2026 03:23:57 +0000",
+        "detected_at": "26.10.2026 03:48"
+      },
+      {
+        "id": "9e630a87e136c1a5",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Show HN: A Truly Modular Keyboard",
+        "link": "https://github.com/notaroomba/keybytes",
+        "published": "Sun, 25 Oct 2026 03:47:56 +0000",
+        "detected_at": "26.10.2026 03:48"
+      },
+      {
+        "id": "78dfc38b8ee16ccb",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Removing Next.js Got My Blog to 100 on Every Lighthouse Category",
+        "link": "https://korindiehacker.bloffy.blog/en/removing-nextjs-got-my-blog-to-100-on-every-lighthouse-category",
+        "published": "Mon, 26 Oct 2026 01:03:39 +0000",
+        "detected_at": "26.10.2026 03:18"
+      },
+      {
+        "id": "c22f6ec0417d174c",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "IBM CEO says open weight models are now irresistibly good and cheap on-prem",
+        "link": "https://www.theregister.com/systems/2026/10/22/ibm-ceo-says-open-weight-models-are-now-irresistibly-good-and-cheap-on-prem/5304640",
+        "published": "Mon, 26 Oct 2026 01:47:46 +0000",
+        "detected_at": "26.10.2026 03:18"
+      },
+      {
+        "id": "9070e0daac655193",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Attention Is Not What You Need",
+        "link": "https://arxiv.org/abs/2512.19428",
+        "published": "Sun, 25 Oct 2026 23:52:05 +0000",
+        "detected_at": "26.10.2026 01:48"
+      },
+      {
+        "id": "bd050ae464438ef6",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Lula wins election after final votes tallied",
+        "link": "https://www.reuters.com/live/brazil-election-live-lula-bolsonaro-face-off-presidential-runoff-2026-10-25/",
+        "published": "Mon, 26 Oct 2026 00:31:07 +0000",
+        "detected_at": "26.10.2026 01:18"
+      },
+      {
+        "id": "ae02e450b1e75ac5",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "F-Zero X on Nintendo 3DS",
+        "link": "https://hypnotize.works/gdx-3ds/postmortem/index.html",
+        "published": "Sun, 25 Oct 2026 23:27:30 +0000",
+        "detected_at": "26.10.2026 00:18"
+      },
+      {
+        "id": "64be71e2bb0f6fdc",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "OpenAI and Anthropic cut their LLM prices by up to 80% within a few months. Why?",
+        "link": "https://minimaxir.com/2026/10/cheap-llms/",
+        "published": "Sun, 25 Oct 2026 21:11:31 +0000",
+        "detected_at": "26.10.2026 00:18"
+      },
+      {
+        "id": "18457b21cfa4b4d0",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Reverse engineering a Beyblade launch tracker",
+        "link": "https://blog.simone.computer/reverse-beyblade-launch-tracker",
+        "published": "Fri, 23 Oct 2026 13:25:12 +0000",
+        "detected_at": "25.10.2026 23:47"
+      },
+      {
+        "id": "6dc6eae88897ac76",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Serbia's Vucic concedes election defeat in historic win for student movement",
+        "link": "https://www.reuters.com/world/europe/serbia-votes-students-seek-unseat-vucic-snap-election-2026-10-25/",
+        "published": "Sun, 25 Oct 2026 21:08:28 +0000",
+        "detected_at": "25.10.2026 23:17"
+      },
+      {
+        "id": "dbf1bfddf4b2f88a",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "The State of Context Engineering",
+        "link": "https://www.dbreunig.com/2026/10/24/the-state-of-context-engineering.html",
+        "published": "Sun, 25 Oct 2026 20:32:31 +0000",
+        "detected_at": "25.10.2026 22:47"
+      },
+      {
+        "id": "7155d77050f4155c",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Overgrown, when plants invade your abandoned tabs",
+        "link": "https://charliegerard.dev/blog/overgrown-extension/",
+        "published": "Thu, 22 Oct 2026 15:52:21 +0000",
+        "detected_at": "25.10.2026 22:17"
+      },
+      {
+        "id": "6de583e11df1523d",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "What goes into making an animated film?",
+        "link": "https://www.disneyanimation.com/process/",
+        "published": "Sun, 25 Oct 2026 20:27:09 +0000",
+        "detected_at": "25.10.2026 21:17"
+      },
+      {
+        "id": "647e2b585e4d2316",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Why I Am a Programmer",
+        "link": "https://www.alfie.wtf/programming/why-i-am-a-programmer.html",
+        "published": "Sun, 25 Oct 2026 19:11:31 +0000",
+        "detected_at": "25.10.2026 20:47"
+      },
+      {
+        "id": "6d9053acb0476fb0",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Gheist campaign plants secret-dumping workflows using stolen GitHub tokens",
+        "link": "https://www.wiz.io/blog/gheist-attempted-scaled-abuse-of-stolen-github-tokens-stumbles",
+        "published": "Sun, 25 Oct 2026 19:10:36 +0000",
+        "detected_at": "25.10.2026 20:47"
+      },
+      {
+        "id": "03f9d073ebe8b853",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Eunice is almost here (William Gibson, Agency)",
+        "link": "https://armincat.com/articles/eunice-is-almost-here",
+        "published": "Sun, 25 Oct 2026 19:40:27 +0000",
+        "detected_at": "25.10.2026 20:17"
+      },
+      {
+        "id": "dd29bb9ecd36224b",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Dijkstra vs. A* vs. Contraction Hierarchies",
+        "link": "https://arcadedb.com/route-planning.html",
+        "published": "Wed, 21 Oct 2026 01:04:30 +0000",
+        "detected_at": "25.10.2026 20:17"
+      },
+      {
+        "id": "64fe9a9c79743f9c",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "JetBrains Thinkrail",
+        "link": "https://github.com/JetBrains/thinkrail",
+        "published": "Sun, 25 Oct 2026 16:27:12 +0000",
+        "detected_at": "25.10.2026 19:47"
+      },
+      {
+        "id": "e0482f11a45164cd",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Dolly Parton's Imagination Library",
+        "link": "https://imaginationlibrary.com/",
+        "published": "Sun, 25 Oct 2026 18:23:54 +0000",
+        "detected_at": "25.10.2026 18:38"
+      },
+      {
+        "id": "5e1d6b7fe8ecb3a6",
+        "target_id": "target-diff",
+        "target_name": "Webseiten- & Portalanalyse",
+        "category": "Web-Diff",
+        "title": "Amazon's \"digital pacifier\" for toddlers",
+        "link": "https://oligarchwatch.substack.com/p/amazons-digital-pacifier-for-toddlers",
+        "published": "Wed, 21 Oct 2026 18:37:48 +0000",
+        "detected_at": "25.10.2026 18:38"
+      },
+      {
+        "id": "1538ee5524747350",
+        "target_id": "target-bau",
+        "target_name": "KfW & Baurechts-Änderungen",
+        "category": "Markt & Bau",
+        "title": "Jahreswechsel: Das bringt 2026 für die Immobilienbranche - Haufe. Intelligenz, die bewegt.",
+        "link": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNSFVYOGk3MEVjVlpUNXYxNkdyT2t3WnFxcnZDYmFjbW5zSU5vdm8tVU1ZU3U3SmpFZ2dWdHZzOU9nVTJ4b3QwYUN0RnYyUVliSXBZNXdWX0Q0RExacDZJdXRUN1ZZNXMtdklXQjhIZ3Y5Uk1Rb3F0bGJocnY5V1lIUG1XX0RZVi1MSGZEcG50Z0FoSmdXcFZoT3ZtYUsyTllRYzRpUXVBZnNZTnJ1Y0l4c3B4MFdsMkhNc1VGLQ?oc=5",
+        "published": "Tue, 23 Dec 2025 08:00:00 GMT",
+        "detected_at": "25.10.2026 19:25"
+      },
+      {
+        "id": "c6d9a500c76092c8",
+        "target_id": "target-bau",
+        "target_name": "KfW & Baurechts-Änderungen",
+        "category": "Markt & Bau",
+        "title": "Bundesrat billigt Bauturbo-Gesetz: Regelungen im Überblick - Haufe. Intelligenz, die bewegt.",
+        "link": "https://news.google.com/rss/articles/CBMivAFBVV95cUxQb3JGTkJuWGpkUUEwR09DQ3NvRXdJMFNKd1NNMHlHS1R2S2tURng1aERVRUpPenZVM2pmdGYyTXNCN3RCOC1ia2ozcEZsOHlJdV9HTEdoNjJDTGJPbGhETGwyYmVjbVB5MW8zbFZ2b1lQTHIwVC13MjgxaGJUN3NOa2dXVTVLeGwtam9aSW9ITkZlOVdHRTNuTXBwV0tIOVVoUUdfeVdXY0FJYzc0Q0wxN3RNUDE5REg3LVhNTQ?oc=5",
+        "published": "Tue, 10 Mar 2020 16:29:44 GMT",
+        "detected_at": "25.10.2026 19:25"
+      },
+      {
+        "id": "ff13ca6bbe0b1c9c",
+        "target_id": "target-ki",
+        "target_name": "Model Releases & Frameworks",
+        "category": "Technologie & KI",
+        "title": "LitPivot: Developing research ideas through dynamic contextualization within the literature landscape",
+        "link": "https://huggingface.co/blog/allenai/litpivot",
+        "published": "Fri, 23 Oct 2026 16:15:50 GMT",
+        "detected_at": "25.10.2026 19:25"
+      },
+      {
+        "id": "3eff2140f6184cef",
+        "target_id": "target-ki",
+        "target_name": "Model Releases & Frameworks",
+        "category": "Technologie & KI",
+        "title": "Does Your Model Run on AWS Trainium? Look It Up",
+        "link": "https://huggingface.co/blog/torch-neuronx-model-support",
+        "published": "Fri, 23 Oct 2026 00:00:00 GMT",
+        "detected_at": "25.10.2026 19:25"
+      },
+      {
+        "id": "ae2eea7176979b4c",
+        "target_id": "target-ki",
+        "target_name": "Model Releases & Frameworks",
+        "category": "Technologie & KI",
+        "title": "Turning Database Grading into RL Rewards: Post-Training Agents with ThinkingBox",
+        "link": "https://huggingface.co/blog/microsoft/thinkingbox-training",
+        "published": "Thu, 22 Oct 2026 22:24:34 GMT",
+        "detected_at": "25.10.2026 19:25"
+      }
+    ]
   }
 }

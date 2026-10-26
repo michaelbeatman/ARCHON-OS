@@ -17,6 +17,18 @@
     },
     "t-b3f578": {
       "obsidian": "01_PROJEKTE/_Archiv_20261010/20261011-projekt-ki-immobilienplattform"
+    },
+    "t-86c9e0": {
+      "decision": {
+        "typ": "delegation_review",
+        "ref_id": "t-86c9e0",
+        "titel": "Test Freigabe Button Telegram",
+        "kurzfassung": "Klicke auf [✅ Erlauben] um zu prüfen ob der Callback funktioniert.",
+        "status": "freigegeben",
+        "erstellt": "2026-10-25T13:16:57.730910",
+        "entschieden_von": "telegram",
+        "entschieden_am": "2026-10-25T13:31:11.089982"
+      }
     }
   },
   "wip": {}

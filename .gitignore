@@ -70,6 +70,9 @@ build/
 *.bak
 *.bak*
 *.backup
+*.zip
+*.tar.gz
+*.bundle
 _modifizierter Muell*
 backups/
 LinkedIn-backup/

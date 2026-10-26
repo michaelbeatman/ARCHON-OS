@@ -1502,6 +1502,152 @@ async def api_gateway_stop_all():
     _save_gateway_config(cfg)
     return {"ok": True, "stopped": stopped}
 
+# =====================================================================
+# INTERNET WATCHDOG (SÄULE 4 DER KOGNITION: AUTONOMER WEB-RADAR)
+# =====================================================================
+
+@app.get("/api/v1/watchdog/config")
+def api_get_watchdog_config():
+    from backend.internet_watchdog import get_watchdog_config
+    return get_watchdog_config()
+
+@app.post("/api/v1/watchdog/config")
+def api_save_watchdog_config(payload: Dict = Body(...)):
+    from backend.internet_watchdog import get_watchdog_config, save_watchdog_config
+    cfg = get_watchdog_config()
+    if "enabled" in payload:
+        cfg["enabled"] = bool(payload["enabled"])
+    if "interval_minutes" in payload:
+        try:
+            cfg["interval_minutes"] = max(5, int(payload["interval_minutes"]))
+        except (ValueError, TypeError):
+            pass
+    if "basket_threshold" in payload:
+        try:
+            cfg["basket_threshold"] = max(1, int(payload["basket_threshold"]))
+        except (ValueError, TypeError):
+            pass
+    if "priority_keywords" in payload and isinstance(payload["priority_keywords"], list):
+        cfg["priority_keywords"] = [str(k).strip() for k in payload["priority_keywords"] if str(k).strip()]
+    if "basket" in payload and isinstance(payload["basket"], list):
+        cfg["basket"] = payload["basket"]
+    if "channels" in payload and isinstance(payload["channels"], dict):
+        cfg.setdefault("channels", {}).update(payload["channels"])
+    if "targets" in payload and isinstance(payload["targets"], list):
+        cfg["targets"] = payload["targets"]
+    save_watchdog_config(cfg)
+    return {"ok": True, "config": cfg}
+
+@app.post("/api/v1/watchdog/dispatch_action")
+async def api_watchdog_dispatch_action(payload: Dict = Body(...)):
+    """Erzeugt eine gezielte Kanban-Aufgabe aus einem oder mehreren Watchdog-Funden.
+    action_type: 'linkedin_post' | 'robert_dossier' | 'bundle_content' | 'custom'
+    """
+    from datetime import datetime
+    import sqlite3
+
+    action_type = payload.get("action_type", "custom")
+    findings = payload.get("findings", [])
+    custom_prompt = payload.get("custom_prompt", "").strip()
+    target_profile = payload.get("target_profile")
+    
+    if not findings:
+        return {"ok": False, "error": "Keine Funde übergeben"}
+
+    now_iso = datetime.now().isoformat()
+    now_display = datetime.now().strftime("%d.%m.%Y %H:%M")
+
+    if action_type == "linkedin_post":
+        f = findings[0]
+        assignee = "storyteller_ghostwriter"
+        title = f"✍️ LinkedIn-Post: {f['title'][:60]}"
+        prompt_instruction = custom_prompt or (
+            "Analysiere diesen Fund, arbeite die Kern-Relevanz für den deutschen Markt heraus "
+            "und formuliere einen ansprechenden LinkedIn-Beitrag (Hook, Story, 3 Takeaways, Call-to-Action)."
+        )
+        body = (
+            f"📱 **LinkedIn-Content Auftrag**\n\n"
+            f"• **Thema:** {f['title']}\n"
+            f"• **Quelle:** {f.get('target_name')} ({f.get('category')})\n"
+            f"• **Link:** {f.get('link')}\n\n"
+            f"**Anweisung:**\n{prompt_instruction}\n\n"
+            f"**Roh-Inhalt:**\n{f.get('snippet', '')}"
+        )
+    elif action_type == "robert_dossier":
+        f = findings[0]
+        assignee = "executive_decision_architect"
+        title = f"📊 Strategie-Dossier: {f['title'][:60]}"
+        prompt_instruction = custom_prompt or (
+            "Prüfe die strategische Tragweite dieser Meldung für unsere Bau- und Projektentwicklungen "
+            "und erstelle eine 1-Seiten-Entscheidungsvorlage mit Handlungsoptionen."
+        )
+        body = (
+            f"🏛️ **Strategische Vorlage für Robert (CEO)**\n\n"
+            f"• **Gegenstand:** {f['title']}\n"
+            f"• **Quelle:** {f.get('target_name')}\n"
+            f"• **Referenz:** {f.get('link')}\n\n"
+            f"**Prüfungsauftrag:**\n{prompt_instruction}\n\n"
+            f"**Fundauszug:**\n{f.get('snippet', '')}"
+        )
+    elif action_type == "bundle_content":
+        assignee = target_profile or "content_repurposing_specialist"
+        title = f"🧺 Trend-Synthese aus {len(findings)} Radar-Funden"
+        items_text = "\n".join([f"- **{it['title']}** ({it.get('category')}): {it.get('link')}\n  {it.get('snippet', '')[:180]}" for it in findings])
+        prompt_instruction = custom_prompt or (
+            f"Erstelle aus diesen {len(findings)} gesammelten Trend-Meldungen eine zusammenfassende Branchen-Synthese "
+            "sowie zwei darauf aufbauende Content-Ideen."
+        )
+        body = (
+            f"🧺 **Sammelkorb-Synthese ({len(findings)} Quellen)**\n\n"
+            f"**Zusammenstellung:**\n{items_text}\n\n"
+            f"**Auftrag:**\n{prompt_instruction}"
+        )
+    else: # custom
+        f = findings[0] if len(findings) == 1 else findings
+        assignee = target_profile or "executive_decision_architect"
+        title = payload.get("title") or (f"Aufgabe: {findings[0]['title'][:60]}" if len(findings) == 1 else f"Sammel-Aufgabe ({len(findings)} Funde)")
+        body = custom_prompt or f"Fund verarbeiten: {findings[0].get('link') if len(findings) == 1 else ''}"
+
+    task_id = f"task-{int(datetime.now().timestamp())}"
+
+    # Eintragen in kanban.db
+    inserted = False
+    for kanban_db in ["/home/micha/.hermes/kanban.db", "/opt/data/kanban.db"]:
+        if os.path.exists(kanban_db):
+            try:
+                with sqlite3.connect(kanban_db, timeout=5.0) as kconn:
+                    kconn.execute("""
+                        INSERT OR IGNORE INTO tasks (id, title, body, assignee, status, priority, created_by, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (task_id, title, body, assignee, "ready", "normal", "watchdog_action", now_iso))
+                    kconn.commit()
+                    inserted = True
+            except Exception as e:
+                print(f"[Watchdog] Action Kanban Insert Fehler: {e}")
+
+    # Fallback MemoryBridge
+    if not inserted:
+        try:
+            from local_memory_bridge import LocalMemoryBridge
+            LocalMemoryBridge().sync_task(task_id=task_id, title=title, role=assignee, status="ready")
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "task_id": task_id,
+        "title": title,
+        "assignee": assignee,
+        "status": "ready"
+    }
+
+@app.post("/api/v1/watchdog/run_now")
+async def api_trigger_watchdog_run():
+    from backend.internet_watchdog import run_watchdog_scan
+    loop = asyncio.get_event_loop()
+    res = await loop.run_in_executor(None, run_watchdog_scan, True)
+    return res
+
 # Background idle-stop task
 _idle_stop_running = False
 
@@ -1565,6 +1711,11 @@ async def _start_gateway_idle_loop():
         asyncio.create_task(inbox_watcher_background_loop())
     except Exception as e:
         print(f"[Startup] Inbox Watcher init notice: {e}")
+    try:
+        from backend.internet_watchdog import internet_watchdog_background_loop
+        asyncio.create_task(internet_watchdog_background_loop())
+    except Exception as e:
+        print(f"[Startup] Internet Watchdog init notice: {e}")
 
 # =====================================================================
 # QUICKCHAT — Persistent Per-Profile Sessions
@@ -4499,6 +4650,16 @@ def _get_state_db():
     conn.execute("PRAGMA busy_timeout=15000;")
     return conn
 
+def _get_profile_state_db(profile_name: str = "telegram_bot"):
+    """Liefert die profil-spezifische SQLite-Datenbank (z. B. für telegram_bot)."""
+    base_dir = os.path.dirname(STATE_DB_PATH)
+    prof_path = os.path.join(base_dir, "profiles", profile_name, "state.db")
+    if os.path.exists(prof_path):
+        conn = sqlite3.connect(prof_path, timeout=15.0, factory=ClosingConnection)
+        conn.execute("PRAGMA busy_timeout=15000;")
+        return conn
+    return None
+
 def _ensure_session_exists(conn: sqlite3.Connection, session_id: str, profile_id: str, model: str, title: str):
     now = time.time()
     cur = conn.cursor()
@@ -4672,9 +4833,33 @@ def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
 @app.get("/api/chat/sessions")
 def api_get_chat_sessions(profile_id: Optional[str] = None):
     """Liefert die Liste aller aktiven/gespeicherten Master-Chat-Sessions mit formatierten Zeitstempeln und Kategorie-Klassifizierung.
-    Unterstützt strikte Filterung nach profile_id für isolierte Agenten-Sessions.
+    Unterstützt strikte Filterung nach profile_id und bindet profil-spezifische Datenbanken (wie telegram_bot) nahtlos ein.
     """
     try:
+        sessions_map = {}
+
+        # 1. Profil-Datenbanken prüfen (insb. telegram_bot)
+        if not profile_id or profile_id.strip() in ("telegram_bot", "all"):
+            try:
+                prof_conn = _get_profile_state_db("telegram_bot")
+                if prof_conn:
+                    with prof_conn as pconn:
+                        pconn.row_factory = sqlite3.Row
+                        prows = pconn.execute("""
+                            SELECT id, title, profile_name, model, started_at, last_activity_at, message_count, estimated_cost_usd, source
+                            FROM sessions 
+                            ORDER BY COALESCE(last_activity_at, started_at) DESC
+                            LIMIT 150
+                        """).fetchall()
+                        for r in prows:
+                            d = dict(r)
+                            d["profile_name"] = d.get("profile_name") or "telegram_bot"
+                            d["source"] = d.get("source") or "telegram"
+                            sessions_map[d["id"]] = d
+            except Exception as e_p:
+                logger.warning(f"[Chat Sessions] Fehler beim Lesen der Profil-DB (telegram_bot): {e_p}")
+
+        # 2. Haupt-Datenbank (Root state.db)
         with _get_state_db() as conn:
             conn.row_factory = sqlite3.Row
             if profile_id and profile_id.strip():
@@ -4691,7 +4876,7 @@ def api_get_chat_sessions(profile_id: Optional[str] = None):
                         ORDER BY COALESCE(last_activity_at, started_at) DESC
                         LIMIT 300
                     """).fetchall()
-                else:
+                elif pid != "telegram_bot":
                     rows = conn.execute("""
                         SELECT id, title, profile_name, model, started_at, last_activity_at, message_count, estimated_cost_usd, source
                         FROM sessions 
@@ -4699,6 +4884,14 @@ def api_get_chat_sessions(profile_id: Optional[str] = None):
                         ORDER BY COALESCE(last_activity_at, started_at) DESC
                         LIMIT 300
                     """, (pid, f"%_{pid}", f"%_{pid}_%")).fetchall()
+                else:
+                    rows = conn.execute("""
+                        SELECT id, title, profile_name, model, started_at, last_activity_at, message_count, estimated_cost_usd, source
+                        FROM sessions 
+                        WHERE profile_name = 'telegram_bot' OR id LIKE '%_telegram_bot%'
+                        ORDER BY COALESCE(last_activity_at, started_at) DESC
+                        LIMIT 100
+                    """).fetchall()
             else:
                 rows = conn.execute("""
                     SELECT id, title, profile_name, model, started_at, last_activity_at, message_count, estimated_cost_usd, source
@@ -4706,50 +4899,62 @@ def api_get_chat_sessions(profile_id: Optional[str] = None):
                     ORDER BY COALESCE(last_activity_at, started_at) DESC
                     LIMIT 300
                 """).fetchall()
-            sessions = []
             for r in rows:
                 d = dict(r)
-                st = d.get("started_at")
-                if isinstance(st, (int, float)) and st > 0:
-                    try:
-                        d["started_at_formatted"] = datetime.datetime.fromtimestamp(st).strftime("%d.%m.%Y, %H:%M")
-                    except Exception:
-                        d["started_at_formatted"] = str(st)
-                else:
-                    d["started_at_formatted"] = str(st) if st else ""
+                if d["id"] not in sessions_map:
+                    sessions_map[d["id"]] = d
 
-                lat = d.get("last_activity_at")
-                if isinstance(lat, (int, float)) and lat > 0:
-                    try:
-                        d["last_activity_at_formatted"] = datetime.datetime.fromtimestamp(lat).strftime("%d.%m.%Y, %H:%M")
-                    except Exception:
-                        d["last_activity_at_formatted"] = str(lat)
-                else:
-                    d["last_activity_at_formatted"] = d.get("started_at_formatted") or ""
+        # Sortiere nach Aktualität
+        sorted_sessions = sorted(
+            sessions_map.values(),
+            key=lambda x: x.get("last_activity_at") or x.get("started_at") or 0,
+            reverse=True
+        )
 
-                source_val = (d.get("source") or "").lower()
-                id_val = (d.get("id") or "").lower()
-                prof_val = (d.get("profile_name") or "").lower()
+        sessions = []
+        for d in sorted_sessions:
+            st = d.get("started_at")
+            if isinstance(st, (int, float)) and st > 0:
+                try:
+                    d["started_at_formatted"] = datetime.datetime.fromtimestamp(st).strftime("%d.%m.%Y, %H:%M")
+                except Exception:
+                    d["started_at_formatted"] = str(st)
+            else:
+                d["started_at_formatted"] = str(st) if st else ""
 
-                # Fallback-Titel fuer Telegram Bot
-                if (source_val == "telegram" or prof_val == "telegram_bot") and (not d.get("title") or d.get("title") in ("New Session", "Chat", "Analyze uploaded image")):
-                    d["title"] = "Telegram Bot (Live-Stream)"
+            lat = d.get("last_activity_at")
+            if isinstance(lat, (int, float)) and lat > 0:
+                try:
+                    d["last_activity_at_formatted"] = datetime.datetime.fromtimestamp(lat).strftime("%d.%m.%Y, %H:%M")
+                except Exception:
+                    d["last_activity_at_formatted"] = str(lat)
+            else:
+                d["last_activity_at_formatted"] = d.get("started_at_formatted") or ""
 
-                # Klassifiziere: 'group' (Paperclip, Multi-Agent, Boardroom) vs. 'agent' (Direkt-Dialoge inkl. Desktop)
-                if source_val in ("paperclip", "boardroom", "multi-agent", "group", "team") or id_val.startswith("paperclip:") or id_val.startswith("group:") or prof_val in ("boardroom", "multi-agent", "team"):
-                    d["chat_type"] = "group"
-                else:
-                    d["chat_type"] = "agent"
-                sessions.append(d)
-            return {"sessions": sessions}
+            source_val = (d.get("source") or "").lower()
+            id_val = (d.get("id") or "").lower()
+            prof_val = (d.get("profile_name") or "").lower()
+
+            # Fallback-Titel fuer Telegram Bot
+            if (source_val == "telegram" or prof_val == "telegram_bot") and (not d.get("title") or d.get("title") in ("New Session", "Chat", "Analyze uploaded image")):
+                d["title"] = "Telegram Bot (Live-Stream)"
+
+            # Klassifiziere: 'group' vs. 'agent'
+            if source_val in ("paperclip", "boardroom", "multi-agent", "group", "team") or id_val.startswith("paperclip:") or id_val.startswith("group:") or prof_val in ("boardroom", "multi-agent", "team"):
+                d["chat_type"] = "group"
+            else:
+                d["chat_type"] = "agent"
+            sessions.append(d)
+        return {"sessions": sessions}
     except Exception as e:
         logger.error(f"[Chat Sessions] Error fetching sessions: {e}")
         return {"sessions": []}
 
 @app.get("/api/chat/sessions/{session_id}/messages")
 def api_get_chat_session_messages(session_id: str):
-    """Liefert den Nachrichtenverlauf einer bestimmten Session."""
+    """Liefert den Nachrichtenverlauf einer bestimmten Session aus Root- oder Profil-DB."""
     try:
+        # 1. Zuerst Root-DB prüfen
         with _get_state_db() as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
@@ -4758,7 +4963,24 @@ def api_get_chat_session_messages(session_id: str):
                 WHERE session_id = ? AND active = 1
                 ORDER BY id ASC
             """, (session_id,)).fetchall()
-            return {"session_id": session_id, "messages": [dict(r) for r in rows]}
+            if rows:
+                return {"session_id": session_id, "messages": [dict(r) for r in rows]}
+
+        # 2. Falls nicht in Root-DB: Profil-DB prüfen (telegram_bot)
+        prof_conn = _get_profile_state_db("telegram_bot")
+        if prof_conn:
+            with prof_conn as pconn:
+                pconn.row_factory = sqlite3.Row
+                prows = pconn.execute("""
+                    SELECT id, role, content, timestamp, token_count
+                    FROM messages
+                    WHERE session_id = ? AND active = 1
+                    ORDER BY id ASC
+                """, (session_id,)).fetchall()
+                if prows:
+                    return {"session_id": session_id, "messages": [dict(r) for r in prows]}
+
+        return {"session_id": session_id, "messages": []}
     except Exception as e:
         logger.error(f"[Chat Messages] Error fetching messages for {session_id}: {e}")
         return {"session_id": session_id, "messages": []}

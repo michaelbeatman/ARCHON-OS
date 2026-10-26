@@ -893,7 +893,7 @@
       "avatar": "/static/avatars/custom_telegram_bot.png",
       "model": "auto/best-free",
       "active_tasks": 0,
-      "status": "standby",
+      "status": "active",
       "person_name": "TELEGRAM BOT",
       "provider": "omniroute"
     },

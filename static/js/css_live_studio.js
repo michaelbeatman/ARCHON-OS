@@ -47,6 +47,10 @@
     window.ensureGoogleFontLoaded = ensureGoogleFontLoaded;
     window.onStudioFontFamilySelect = onStudioFontFamilySelect;
     window.applyStudioGlobalFont = applyStudioGlobalFont;
+    window.saveStudioOverrides = saveStudioOverrides;
+    window.exportStudioCss = exportStudioCss;
+    window.resetAllStudioStyles = resetAllStudioStyles;
+    window.resetSelectedElementStyles = resetSelectedElementStyles;
     // Initialize Studio & Load Persistence
     window.ARCHON_LEGACY_STUDIO_DISABLED = false;
     async function initArchonCssStudio() {
@@ -167,6 +171,13 @@
       if (e.altKey && (e.key === "s" || e.key === "S" || e.code === "KeyS")) {
         e.preventDefault();
         toggleCssStudio();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S" || e.code === "KeyS")) {
+        const studio = document.getElementById("archon-css-studio");
+        if (studio && !studio.classList.contains("hidden")) {
+          e.preventDefault();
+          saveStudioOverrides();
+        }
       }
     });
     // Toggle Studio Open/Closed

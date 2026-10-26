@@ -1755,7 +1755,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/research_lab.js?v=202610222215"></script>
   <script src="/static/js/operations_kanban.js?v=202610222215"></script>
   <script src="/static/js/appshell_architect.js?v=202610222215"></script>
-  <script src="/static/js/css_live_studio.js?v=202610222215"></script>
+  <script src="/static/js/css_live_studio.js?v=202610261908"></script>
   <script src="/static/js/guardian.js?v=202610222215"></script>
   <script src="/static/js/prompt_studio.js?v=202610242200"></script>
   <script src="/static/js/wissensbibliothek.js?v=202610241345"></script>
@@ -2255,7 +2255,7 @@ print('Ausführung erfolgreich!')</textarea>
       // --- V2 COMPONENT FETCHES (Core Active Views First, Legacy Studios Deferred) ---
       try {
         await Promise.all([
-          fetch('/static/views/view_app_frame_studio.html?v=202610250140').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); }),
+          fetch('/static/views/view_app_frame_studio.html?v=202610261908').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); }),
           fetch('/static/views/system_settings_modal.html?v=202610241405').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/agent_profiles_view.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/master_chat_view.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),

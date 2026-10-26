@@ -40,7 +40,7 @@
     <span id="studio-min-badge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700 font-bold">0</span>
   </div>
   <!-- 3. MAIN FLOATING STUDIO WINDOW -->
-  <div id="archon-css-studio" class="fixed top-14 right-6 w-[560px] sm:w-[580px] max-w-[95vw] max-h-[90vh] z-[9999999] hidden flex flex-col bg-zinc-950/95 text-zinc-100 border border-zinc-800 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] backdrop-blur-xl animate-in zoom-in-95 duration-200 select-none overflow-hidden font-sans">
+  <div id="archon-css-studio" class="fixed top-14 right-6 w-[560px] sm:w-[580px] max-w-[95vw] h-[min(84vh,calc(100vh-4.5rem))] max-h-[calc(100vh-4.5rem)] z-[9999999] hidden flex flex-col bg-zinc-950/95 text-zinc-100 border border-zinc-800 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] backdrop-blur-xl animate-in zoom-in-95 duration-200 select-none overflow-hidden font-sans">
     
     <!-- DRAGGABLE HEADER BAR -->
     <div id="studio-drag-header" class="px-3.5 py-2.5 bg-zinc-900/95 border-b border-zinc-800 flex items-center justify-between cursor-grab active:cursor-grabbing shrink-0">
@@ -52,7 +52,11 @@
         </div>
         <span id="studio-active-rules-count" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 font-bold">0 Regeln</span>
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-1.5">
+        <button type="button" id="btn-studio-header-save" onclick="saveStudioOverrides()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="Alle Änderungen (CSS, HTML & Text) dauerhaft speichern (Strg + S)">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+          <span>Speichern</span>
+        </button>
         <button type="button" onclick="minimizeCssStudio()" class="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer" title="Minimieren">
           <i data-lucide="minus" class="w-3.5 h-3.5"></i>
         </button>
@@ -71,8 +75,8 @@
           </select>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
-          <button type="button" onclick="saveThemeProfile()" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] transition shadow-xs flex items-center gap-1 cursor-pointer">
-            <i data-lucide="save" class="w-3 h-3"></i> Speichern
+          <button type="button" onclick="saveThemeProfile()" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] transition shadow-xs flex items-center gap-1 cursor-pointer" title="Als benanntes Theme-Profil speichern">
+            <i data-lucide="save" class="w-3 h-3"></i> Theme Speichern
           </button>
           <button type="button" onclick="deleteThemeProfile()" class="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/80 text-rose-300 font-bold text-[10px] transition shadow-xs cursor-pointer" title="Theme löschen">
             <i data-lucide="trash-2" class="w-3 h-3"></i>
@@ -81,18 +85,22 @@
       </div>
 <!-- TARGET SELECTOR & INSPECTION RIBBON -->
     <div class="px-3.5 py-2.5 bg-zinc-900/90 border-b border-zinc-800 flex flex-col gap-2 shrink-0">
-      <div class="grid grid-cols-3 gap-2">
+      <div class="grid grid-cols-4 gap-2">
         <button type="button" id="btn-studio-pick-element" onclick="toggleStudioInspector()" class="py-1.5 px-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-900 font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-xs">
           <i data-lucide="crosshair" class="w-3.5 h-3.5 text-zinc-900"></i>
           <span id="lbl-studio-pick">🎯 Auswählen</span>
         </button>
         <button type="button" id="btn-studio-gizmo-mode" onclick="toggleStudioGizmo()" class="py-1.5 px-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer border border-zinc-700 shadow-xs">
           <i data-lucide="move" class="w-3.5 h-3.5 text-zinc-300"></i>
-          <span id="lbl-studio-gizmo">✋ Drag & Ecken</span>
+          <span id="lbl-studio-gizmo">✋ Ecken</span>
         </button>
         <button type="button" id="btn-studio-text-mode" onclick="toggleStudioTextMode()" class="py-1.5 px-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer border border-zinc-700 shadow-xs">
           <i data-lucide="type" class="w-3.5 h-3.5 text-zinc-300"></i>
           <span>✏️ Text</span>
+        </button>
+        <button type="button" id="btn-studio-ribbon-save" onclick="saveStudioOverrides()" class="py-1.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-xs" title="Änderungen sofort dauerhaft auf Server speichern (Strg + S)">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+          <span>💾 Speichern</span>
         </button>
       </div>
       <!-- Selector Path Display & Manual Override Input -->
@@ -712,9 +720,14 @@
       <div id="studio-tab-content-code" class="hidden flex flex-col space-y-2">
         <div class="flex items-center justify-between text-[11px] font-mono text-zinc-400">
           <span>Live CSS Stylesheet:</span>
-          <button type="button" onclick="copyStudioCss()" class="text-zinc-200 hover:text-zinc-300 cursor-pointer flex items-center gap-1">
-            <i data-lucide="copy" class="w-3 h-3"></i> Kopieren
-          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="saveStudioOverrides()" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1 cursor-pointer shadow-xs" title="CSS Stylesheet dauerhaft speichern (Strg + S)">
+              <i data-lucide="save" class="w-3 h-3"></i> Speichern
+            </button>
+            <button type="button" onclick="copyStudioCss()" class="text-zinc-200 hover:text-zinc-300 cursor-pointer flex items-center gap-1">
+              <i data-lucide="copy" class="w-3 h-3"></i> Kopieren
+            </button>
+          </div>
         </div>
         <textarea id="studio-raw-css-editor" oninput="onStudioRawCssInput(this.value)" class="w-full h-72 bg-zinc-950 border border-zinc-800 rounded-xl p-3 font-mono text-xs text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-200 resize-y custom-scrollbar" placeholder="/* Schreibe oder paste hier beliebiges CSS. Wird sofort live im DOM angewendet! */"></textarea>
       </div>
@@ -854,7 +867,7 @@
     <!-- ACTION FOOTER BAR -->
     <div class="p-3 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between gap-2 shrink-0">
       <div class="flex items-center gap-1.5">
-        <button type="button" onclick="saveStudioOverrides()" class="px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-white text-zinc-900 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+        <button type="button" id="btn-studio-footer-save" onclick="saveStudioOverrides()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Alle Overrides dauerhaft auf dem Server speichern (Strg + S)">
           <i data-lucide="save" class="w-3.5 h-3.5"></i>
           <span>💾 Speichern</span>
         </button>

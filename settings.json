@@ -283,9 +283,29 @@
         "active": false,
         "last_check": "2026-10-26T05:49:34.355033",
         "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "target-mvphrn7w",
+        "name": "Winfuture",
+        "category": "Technik",
+        "type": "rss",
+        "query_or_url": "https://static.winfuture.de/feeds/WinFuture-News-rss2.0.xml",
+        "active": true,
+        "last_check": "2026-10-26T17:37:51.697190",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "target-mvphseyd",
+        "name": "TED",
+        "category": "Technik",
+        "type": "web_diff",
+        "query_or_url": "https://www.ted.com/",
+        "active": true,
+        "last_check": "2026-10-26T17:37:51.697190",
+        "last_status": "Fehler: not well-formed (invalid token): line 29, column 2"
       }
     ],
-    "last_run": "2026-10-26T11:23:41.335458",
+    "last_run": "2026-10-26T17:37:51.697190",
     "recent_findings": [
       {
         "id": "20de30f894b29c1f",

@@ -1476,7 +1476,7 @@
         <div class="w-84 p-4 rounded-2xl border-2 border-indigo-500/30 bg-[var(--card)] shadow-md flex items-center gap-3.5 relative overflow-hidden group">
           <div class="absolute -right-2 -top-2 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl pointer-events-none"></div>
           <div class="relative shrink-0">
-            <img src="${chairman.avatar}" class="w-13 h-13 rounded-2xl object-cover border border-indigo-500/30 shadow-xs" />
+            <img src="${chairman.avatar}" class="w-13 h-13 rounded-2xl object-cover border border-indigo-500/30 shadow-xs" onerror="this.onerror=null; this.src='/static/avatars/avatar_001.jpg';" />
             <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[var(--card)]"></span>
           </div>
           <div class="min-w-0 flex-1">
@@ -1500,7 +1500,7 @@
         <div class="w-84 p-4 rounded-2xl border-2 border-blue-500/30 bg-[var(--card)] shadow-md flex items-center gap-3.5 relative overflow-hidden group">
           <div class="absolute -right-2 -top-2 w-16 h-16 bg-blue-500/10 rounded-full blur-xl pointer-events-none"></div>
           <div class="relative shrink-0">
-            <img src="${orchestrator.avatar}" class="w-13 h-13 rounded-2xl object-cover border border-blue-500/30 shadow-xs" />
+            <img src="${orchestrator.avatar}" class="w-13 h-13 rounded-2xl object-cover border border-blue-500/30 shadow-xs" onerror="this.onerror=null; this.src='/static/avatars/avatar_001.jpg';" />
             <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[var(--card)]"></span>
           </div>
           <div class="min-w-0 flex-1">
@@ -1534,7 +1534,7 @@
         const membersList = (team.members || []).map(m => `
           <div class="p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:border-indigo-500/30 transition flex items-center justify-between gap-2 text-xs">
             <div class="flex items-center gap-2 min-w-0">
-              <img src="${m.avatar}" class="w-6 h-6 rounded-full object-cover shrink-0 border border-[var(--border)]" />
+              <img src="${m.avatar}" class="w-6 h-6 rounded-full object-cover shrink-0 border border-[var(--border)]" onerror="this.onerror=null; this.src='/static/avatars/avatar_001.jpg';" />
               <div class="min-w-0 leading-tight">
                 <div class="font-semibold text-primary-custom truncate text-[11px]">${opsEscapeHtml(m.name)}</div>
                 <div class="text-[9.5px] text-muted-custom truncate">${opsEscapeHtml(m.role || m.category)}</div>
@@ -1566,7 +1566,7 @@
               <div class="p-3 rounded-xl border-2 border-dashed ${colorClasses} flex items-center justify-between gap-2.5">
                 <div class="flex items-center gap-2.5 min-w-0">
                   <div class="relative shrink-0">
-                    <img src="${lead.avatar}" class="w-9 h-9 rounded-xl object-cover border border-[var(--border)]" />
+                    <img src="${lead.avatar}" class="w-9 h-9 rounded-xl object-cover border border-[var(--border)]" onerror="this.onerror=null; this.src='/static/avatars/avatar_001.jpg';" />
                     <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white dark:border-black"></span>
                   </div>
                   <div class="min-w-0 leading-tight">

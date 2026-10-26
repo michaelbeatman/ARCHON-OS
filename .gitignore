@@ -84,6 +84,7 @@ test_logs.txt
 test_output.html
 *.png
 !static/img/**
+!static/avatars/**
 !assets/**
 run_pw*.js
 test_browser*.js

@@ -1291,7 +1291,7 @@ import threading
 
 def _run_docker_exec(cmd: list) -> tuple[int, str, str]:
     """Run a command inside the hermes container via Docker Unix Socket."""
-    target_containers = ["hermes", "hermes-agent"]
+    target_containers = ["hermes-webui", "hermes", "hermes-agent"]
     try:
         transport = httpx.HTTPTransport(uds="/var/run/docker.sock")
         with httpx.Client(transport=transport, timeout=25.0) as client:

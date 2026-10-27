@@ -347,7 +347,9 @@ def run_watchdog_scan(force: bool = False) -> Dict[str, Any]:
     prio_keywords = [k.strip().lower() for k in cfg.get("priority_keywords", []) if k.strip()]
     if new_findings and prio_keywords:
         for f in new_findings:
-            haystack = f"{f['title']} {f['snippet']}".lower()
+            title_text = f.get('title') or ''
+            snippet_text = f.get('snippet') or f.get('summary') or f.get('diff') or ''
+            haystack = f"{title_text} {snippet_text}".lower()
             matched_kws = [kw for kw in prio_keywords if kw in haystack]
             if matched_kws:
                 f["is_priority"] = True

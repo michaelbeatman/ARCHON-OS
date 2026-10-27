@@ -185,7 +185,7 @@
       let studio = document.getElementById("archon-css-studio");
       if (!studio) {
         try {
-          const r = await fetch("/static/views/view_app_frame_studio.html");
+          const r = await fetch("/static/views/view_app_frame_studio.html?v=" + Date.now());
           const h = await r.text();
           const m = document.getElementById("view-app-frame-studio-mount");
           if (m) m.outerHTML = h;

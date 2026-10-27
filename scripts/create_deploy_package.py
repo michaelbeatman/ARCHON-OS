@@ -16,7 +16,7 @@ import zipfile
 import time
 import argparse
 
-VERSION = "v0.3.1"
+VERSION = "v0.3.2"
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # Target backup directory

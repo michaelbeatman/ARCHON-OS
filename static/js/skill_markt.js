@@ -631,58 +631,836 @@
       });
     }
     const FRAMEWORK_SLOT_DEFAULTS = {
-      "Steffi Kieffer Boardroom": [
-        { role_name: "Skeptiker & Risikoprüfer", default_profile: "devils_advocate" },
-        { role_name: "Innovator & Chancen-Scout", default_profile: "enterprise_architect" },
-        { role_name: "Pragmatiker & Implementierer", default_profile: "senior_coder" }
-      ],
-      "Six Thinking Hats (Edward de Bono)": [
-        { role_name: "⚪ Weißer Hut (Fakten & Daten)", default_profile: "researcher" },
-        { role_name: "🔴 Roter Hut (Gefühle & Intuition)", default_profile: "product_manager" },
-        { role_name: "🖤 Schwarzer Hut (Risiken & Kritik)", default_profile: "devils_advocate" },
-        { role_name: "🟡 Gelber Hut (Chancen & Optimismus)", default_profile: "financial_optimizer" },
-        { role_name: "🟢 Grüner Hut (Kreativität & Ideen)", default_profile: "frontend_architect" }
-      ],
-      "SWOT / TOWS": [
-        { role_name: "Stärken (Interne Ressourcen & Code)", default_profile: "senior_coder" },
-        { role_name: "Schwächen (Tech-Debt & Lücken)", default_profile: "clean_code_expert" },
-        { role_name: "Chancen (Markttrends & Scale)", default_profile: "market_intelligence" },
-        { role_name: "Risiken (Security, Compliance & DSGVO)", default_profile: "security_auditor" }
-      ],
-      "Red Teaming / Adversarial Attack": [
-        { role_name: "Red Team (Angriffsvektoren)", default_profile: "security_auditor" },
-        { role_name: "Blue Team (Härtung & Defensive)", default_profile: "senior_coder" }
-      ],
-      "Design Sprint (GV / Jake Knapp)": [
-        { role_name: "Map & Decide (Product Requirements)", default_profile: "product_manager" },
-        { role_name: "Sketch & Prototype (UX/UI)", default_profile: "frontend_architect" },
-        { role_name: "Tech Builder & Code", default_profile: "senior_coder" },
-        { role_name: "Test & Validation (QA)", default_profile: "qa_test_engineer" }
-      ],
-      "Double Diamond (Design Council)": [
-        { role_name: "Discover (Marktforscher & Discovery)", default_profile: "researcher" },
-        { role_name: "Define (Problem-Spezifikation)", default_profile: "product_manager" },
-        { role_name: "Develop & Deliver (Software Engineer)", default_profile: "senior_coder" }
-      ],
-      "DMAIC (Six Sigma)": [
-        { role_name: "Define & Measure (Performance)", default_profile: "performance_auditor" },
-        { role_name: "Analyze & Improve (Refactoring)", default_profile: "clean_code_expert" },
-        { role_name: "Control & Standards (DevOps)", default_profile: "devops_container" }
-      ],
-      "Theory of Constraints (TOC)": [
-        { role_name: "Engpass-Analyst (Bottlenecks)", default_profile: "performance_auditor" },
-        { role_name: "Durchsatz-Optimierer (Dev)", default_profile: "senior_coder" }
-      ],
-      "Eisenhower-Matrix": [
-        { role_name: "Do First (Sofortige Umsetzung)", default_profile: "senior_coder" },
-        { role_name: "Schedule (Architektur-Planung)", default_profile: "enterprise_architect" },
-        { role_name: "Delegate (Automatisierung)", default_profile: "devops_container" }
-      ],
-      "Pre-Mortem Analyse": [
-        { role_name: "Todesursachen-Analyst (Failure Modes)", default_profile: "devils_advocate" },
-        { role_name: "Präventiv-Schützer (Defense)", default_profile: "security_auditor" }
-      ]
-    };
+    "CLEAR-Model": [
+        {
+            "role_name": "Collaborative Alignment (Team)",
+            "default_profile": "agile_scrum_master"
+        },
+        {
+            "role_name": "Limited & Emotional Scope",
+            "default_profile": "personal_life_strategist"
+        },
+        {
+            "role_name": "Appreciable Milestones",
+            "default_profile": "product_requirements_engineer"
+        },
+        {
+            "role_name": "Refinable Delivery (Tech)",
+            "default_profile": "senior_fullstack_engineer"
+        }
+    ],
+    "CREATE-Framework": [
+        {
+            "role_name": "Cue & Reaction (UX/Funnel)",
+            "default_profile": "gtm_launch_strategist"
+        },
+        {
+            "role_name": "Evaluation & Ability (Offer)",
+            "default_profile": "pricing_discount_governor"
+        },
+        {
+            "role_name": "Timing & Execution (Ops)",
+            "default_profile": "agile_scrum_master"
+        }
+    ],
+    "Design Sprint (GV / Jake Knapp)": [
+        {
+            "role_name": "Map & Decide (Product)",
+            "default_profile": "product_requirements_engineer"
+        },
+        {
+            "role_name": "Sketch & Prototype (UX)",
+            "default_profile": "brand_uiux_director"
+        },
+        {
+            "role_name": "Tech Validation (Fullstack)",
+            "default_profile": "senior_fullstack_engineer"
+        },
+        {
+            "role_name": "Customer Feedback (Retention)",
+            "default_profile": "customer_retention_specialist"
+        }
+    ],
+    "Double Diamond (Design Council)": [
+        {
+            "role_name": "Discover (Research & Market)",
+            "default_profile": "competitive_intelligence_scout"
+        },
+        {
+            "role_name": "Define (Requirements & Spec)",
+            "default_profile": "product_requirements_engineer"
+        },
+        {
+            "role_name": "Develop (System Architecture)",
+            "default_profile": "enterprise_solutions_architect"
+        },
+        {
+            "role_name": "Deliver (Fullstack Engineer)",
+            "default_profile": "senior_fullstack_engineer"
+        }
+    ],
+    "Lean Startup (Eric Ries)": [
+        {
+            "role_name": "Build (MVP Architect)",
+            "default_profile": "enterprise_solutions_architect"
+        },
+        {
+            "role_name": "Measure (Growth & Metrics)",
+            "default_profile": "growth_hacker_lead"
+        },
+        {
+            "role_name": "Learn / Pivot (CEO Strategy)",
+            "default_profile": "executive_decision_architect"
+        }
+    ],
+    "OKRs (Objectives and Key Results)": [
+        {
+            "role_name": "Objective Align (CEO)",
+            "default_profile": "executive_decision_architect"
+        },
+        {
+            "role_name": "Key Results Metrics (FinOps)",
+            "default_profile": "finops_cost_optimizer"
+        },
+        {
+            "role_name": "Sprint Execution (Scrum Master)",
+            "default_profile": "agile_scrum_master"
+        }
+    ],
+    "STEEPLE / PESTEL": [
+        {
+            "role_name": "Social & Cultural (HR / Org)",
+            "default_profile": "labor_law_hr_governance"
+        },
+        {
+            "role_name": "Technological (System Architect)",
+            "default_profile": "system_architect_orchestrator"
+        },
+        {
+            "role_name": "Economic & Market (Finance)",
+            "default_profile": "arbitrage_market_analyst"
+        },
+        {
+            "role_name": "Environmental (ESG Efficiency)",
+            "default_profile": "esg_kfw_efficiency_auditor"
+        },
+        {
+            "role_name": "Political & Legal (Jurist)",
+            "default_profile": "commercial_jurist_contracts"
+        }
+    ],
+    "Steffi Kieffer Boardroom": [
+        {
+            "role_name": "Skeptiker & Risikoprüfer",
+            "default_profile": "red_team_challenger"
+        },
+        {
+            "role_name": "Innovator & Stratege",
+            "default_profile": "executive_decision_architect"
+        },
+        {
+            "role_name": "Pragmatiker & Implementierer",
+            "default_profile": "enterprise_solutions_architect"
+        }
+    ],
+    "5-Why-Methode": [
+        {
+            "role_name": "Symptom & Trigger Analyst",
+            "default_profile": "crisis_escalation_lead"
+        },
+        {
+            "role_name": "Root Cause Technical Auditor",
+            "default_profile": "database_performance_tuner"
+        },
+        {
+            "role_name": "Preventive Solution Engineer",
+            "default_profile": "senior_fullstack_engineer"
+        }
+    ],
+    "Cynefin-Framework (Dave Snowden)": [
+        {
+            "role_name": "Clear / Complicated (Engineering)",
+            "default_profile": "system_architect_orchestrator"
+        },
+        {
+            "role_name": "Complex / Probe (Innovation)",
+            "default_profile": "enterprise_solutions_architect"
+        },
+        {
+            "role_name": "Chaotic / Act (Crisis Lead)",
+            "default_profile": "crisis_escalation_lead"
+        }
+    ],
+    "First Principles Thinking": [
+        {
+            "role_name": "Grundannahmen-Dekonstrukteur",
+            "default_profile": "red_team_challenger"
+        },
+        {
+            "role_name": "Fundamentale Physik & Code",
+            "default_profile": "system_architect_orchestrator"
+        },
+        {
+            "role_name": "Synthese & Re-Design",
+            "default_profile": "executive_decision_architect"
+        }
+    ],
+    "Ishikawa-Diagramm (6M)": [
+        {
+            "role_name": "Mensch & Führung (HR)",
+            "default_profile": "labor_law_hr_governance"
+        },
+        {
+            "role_name": "Maschine & Software (DevOps)",
+            "default_profile": "devops_cloud_sec_specialist"
+        },
+        {
+            "role_name": "Methode & Prozesse (n8n Arch.)",
+            "default_profile": "n8n_process_architect"
+        },
+        {
+            "role_name": "Material & Daten (Database)",
+            "default_profile": "database_performance_tuner"
+        },
+        {
+            "role_name": "Messung & Metriken (FinOps)",
+            "default_profile": "finops_cost_optimizer"
+        },
+        {
+            "role_name": "Mitwelt & Compliance (Auditor)",
+            "default_profile": "compliance_gdpr_auditor"
+        }
+    ],
+    "Porter's Five Forces": [
+        {
+            "role_name": "Branchenwettbewerb (Marktforscher)",
+            "default_profile": "competitive_intelligence_scout"
+        },
+        {
+            "role_name": "Verhandlungsmacht Lieferanten",
+            "default_profile": "vendor_contract_negotiator"
+        },
+        {
+            "role_name": "Verhandlungsmacht Kunden & Churn",
+            "default_profile": "customer_retention_specialist"
+        },
+        {
+            "role_name": "Bedrohung durch Substitute (AI)",
+            "default_profile": "ai_governance_officer"
+        }
+    ],
+    "SWOT-Analyse": [
+        {
+            "role_name": "Stärken (Interne Kernkompetenzen)",
+            "default_profile": "enterprise_solutions_architect"
+        },
+        {
+            "role_name": "Schwächen (Tech-Debt & Bottlenecks)",
+            "default_profile": "database_performance_tuner"
+        },
+        {
+            "role_name": "Chancen (Wachstum & Neue Märkte)",
+            "default_profile": "growth_hacker_lead"
+        },
+        {
+            "role_name": "Risiken (Recht, Governance & IT)",
+            "default_profile": "liability_risk_analyst"
+        }
+    ],
+    "DMAIC (Six Sigma)": [
+        {
+            "role_name": "Define & Measure (Metriken & Daten)",
+            "default_profile": "finops_cost_optimizer"
+        },
+        {
+            "role_name": "Analyze & Root Cause (DB & Perf)",
+            "default_profile": "database_performance_tuner"
+        },
+        {
+            "role_name": "Improve & Automate (n8n Architect)",
+            "default_profile": "n8n_process_architect"
+        },
+        {
+            "role_name": "Control & Security (DevOps Sec)",
+            "default_profile": "devops_cloud_sec_specialist"
+        }
+    ],
+    "PDCA-Zyklus (Demingkreis)": [
+        {
+            "role_name": "Plan (Product Requirements)",
+            "default_profile": "product_requirements_engineer"
+        },
+        {
+            "role_name": "Do (Fullstack Engineering)",
+            "default_profile": "senior_fullstack_engineer"
+        },
+        {
+            "role_name": "Check (Compliance & Quality)",
+            "default_profile": "compliance_gdpr_auditor"
+        },
+        {
+            "role_name": "Act / Scale (DevOps Lead)",
+            "default_profile": "devops_cloud_sec_specialist"
+        }
+    ],
+    "Theory of Constraints (TOC)": [
+        {
+            "role_name": "Engpass-Identifizierer (DB/DBA)",
+            "default_profile": "database_performance_tuner"
+        },
+        {
+            "role_name": "Ausbeutung & Unterordnung (Ops)",
+            "default_profile": "logistics_supply_chain_manager"
+        },
+        {
+            "role_name": "Kapazitätserweiterung (Cloud Arch)",
+            "default_profile": "system_architect_orchestrator"
+        }
+    ],
+    "Eisenhower-Matrix": [
+        {
+            "role_name": "Dringend & Wichtig (Crisis Lead)",
+            "default_profile": "crisis_escalation_lead"
+        },
+        {
+            "role_name": "Wichtig, nicht dringend (Architect)",
+            "default_profile": "enterprise_solutions_architect"
+        },
+        {
+            "role_name": "Delegieren (n8n Automation)",
+            "default_profile": "n8n_process_architect"
+        },
+        {
+            "role_name": "Eliminieren (Kosten & FinOps)",
+            "default_profile": "finops_cost_optimizer"
+        }
+    ],
+    "Kano-Modell": [
+        {
+            "role_name": "Basis-Merkmale (Security & Core)",
+            "default_profile": "devops_cloud_sec_specialist"
+        },
+        {
+            "role_name": "Leistungs-Merkmale (Fullstack)",
+            "default_profile": "senior_fullstack_engineer"
+        },
+        {
+            "role_name": "Begeisterungs-Merkmale (UI/UX)",
+            "default_profile": "brand_uiux_director"
+        }
+    ],
+    "Kotter 8-Stufen-Modell": [
+        {
+            "role_name": "Dringlichkeit & Vision (CEO)",
+            "default_profile": "executive_decision_architect"
+        },
+        {
+            "role_name": "Führungskoalition (CHRO)",
+            "default_profile": "labor_law_hr_governance"
+        },
+        {
+            "role_name": "Kommunikation & Quick Wins",
+            "default_profile": "speechwriter_keynote_designer"
+        },
+        {
+            "role_name": "Verankerung in Kultur (Org)",
+            "default_profile": "agile_scrum_master"
+        }
+    ],
+    "McKinsey 7S": [
+        {
+            "role_name": "Strategy & Shared Values (CEO)",
+            "default_profile": "executive_decision_architect"
+        },
+        {
+            "role_name": "Structure & Systems (Cloud Arch)",
+            "default_profile": "system_architect_orchestrator"
+        },
+        {
+            "role_name": "Staff & Skills (CHRO Governance)",
+            "default_profile": "labor_law_hr_governance"
+        },
+        {
+            "role_name": "Style & Operations (Scrum Master)",
+            "default_profile": "agile_scrum_master"
+        }
+    ],
+    "NABC-Methode": [
+        {
+            "role_name": "Need (Marktbedarf & Schmerzpunkt)",
+            "default_profile": "b2b_outreach_specialist"
+        },
+        {
+            "role_name": "Approach (Technische Lösung)",
+            "default_profile": "enterprise_solutions_architect"
+        },
+        {
+            "role_name": "Benefits per Cost (FinOps Lead)",
+            "default_profile": "finops_cost_optimizer"
+        },
+        {
+            "role_name": "Competition (Markt-Scout)",
+            "default_profile": "competitive_intelligence_scout"
+        }
+    ],
+    "RICE-Priorisierung": [
+        {
+            "role_name": "Reach & Impact (Product Manager)",
+            "default_profile": "product_requirements_engineer"
+        },
+        {
+            "role_name": "Confidence (Data & Research)",
+            "default_profile": "lead_enrichment_analyst"
+        },
+        {
+            "role_name": "Effort Estimation (Fullstack)",
+            "default_profile": "senior_fullstack_engineer"
+        },
+        {
+            "role_name": "Finanzielle Priorität (FinOps)",
+            "default_profile": "finops_cost_optimizer"
+        }
+    ],
+    "Make-or-Buy / TCO-Scoring": [
+        {
+            "role_name": "TCO & Cloud-Kosten (FinOps)",
+            "default_profile": "finops_cost_optimizer"
+        },
+        {
+            "role_name": "Build Machbarkeit (Fullstack)",
+            "default_profile": "senior_fullstack_engineer"
+        },
+        {
+            "role_name": "Vendor & Lizenzprüfung (Einkauf)",
+            "default_profile": "vendor_contract_negotiator"
+        },
+        {
+            "role_name": "Compliance & IP Rights (Jurist)",
+            "default_profile": "commercial_jurist_contracts"
+        }
+    ],
+    "Ladder of Inference (Chris Argyris)": [
+        {
+            "role_name": "Reine Daten & Fakten (Analyst)",
+            "default_profile": "lead_enrichment_analyst"
+        },
+        {
+            "role_name": "Interpretations-Prüfer (Red Team)",
+            "default_profile": "red_team_challenger"
+        },
+        {
+            "role_name": "Handlungs-Validierung (CEO)",
+            "default_profile": "executive_decision_architect"
+        }
+    ],
+    "Pre-Mortem Analyse (Gary Klein)": [
+        {
+            "role_name": "Todesursachen-Analyst (Skeptiker)",
+            "default_profile": "red_team_challenger"
+        },
+        {
+            "role_name": "Haftungs- & Risikoanalyst",
+            "default_profile": "liability_risk_analyst"
+        },
+        {
+            "role_name": "Security & Ausfallschutz (DevOps)",
+            "default_profile": "devops_cloud_sec_specialist"
+        },
+        {
+            "role_name": "Liquiditäts- & Kostenrisiko (FinOps)",
+            "default_profile": "finops_cost_optimizer"
+        }
+    ],
+    "Red Teaming / Adversarial Analysis": [
+        {
+            "role_name": "Red Team (Offensive / Angreifer)",
+            "default_profile": "red_team_challenger"
+        },
+        {
+            "role_name": "Blue Team (Defensive & Hardening)",
+            "default_profile": "devops_cloud_sec_specialist"
+        },
+        {
+            "role_name": "Compliance & AI Safety Gate",
+            "default_profile": "ai_governance_officer"
+        }
+    ],
+    "Six Thinking Hats (Edward de Bono)": [
+        {
+            "role_name": "⚪ Weißer Hut (Daten & Fakten)",
+            "default_profile": "lead_enrichment_analyst"
+        },
+        {
+            "role_name": "🔴 Roter Hut (Nutzer & Emotion)",
+            "default_profile": "customer_retention_specialist"
+        },
+        {
+            "role_name": "🖤 Schwarzer Hut (Risiken & Zweifel)",
+            "default_profile": "red_team_challenger"
+        },
+        {
+            "role_name": "🟡 Gelber Hut (Chancen & Mehrwert)",
+            "default_profile": "growth_hacker_lead"
+        },
+        {
+            "role_name": "🟢 Grüner Hut (Kreative Ideen)",
+            "default_profile": "pitchdeck_offer_designer"
+        },
+        {
+            "role_name": "🔵 Blauer Hut (Prozess & Steuerung)",
+            "default_profile": "executive_decision_architect"
+        }
+    ],
+    "Game-Theoretic Mechanism Design": [
+        {
+            "role_name": "Incentive Alignment (Verhandlung)",
+            "default_profile": "negotiation_master"
+        },
+        {
+            "role_name": "Preis- & Arbitrage-Strategie",
+            "default_profile": "pricing_discount_governor"
+        },
+        {
+            "role_name": "Adversarial Exploitation (Red Team)",
+            "default_profile": "red_team_challenger"
+        }
+    ],
+    "Causal Loop Diagrams (System Dynamics)": [
+        {
+            "role_name": "Verstärkende Schleifen (Growth)",
+            "default_profile": "growth_hacker_lead"
+        },
+        {
+            "role_name": "Balancierende Schleifen (Risk)",
+            "default_profile": "liability_risk_analyst"
+        },
+        {
+            "role_name": "System-Architektur (Orchestrator)",
+            "default_profile": "system_architect_orchestrator"
+        }
+    ],
+    "Iceberg Model (Systems Thinking)": [
+        {
+            "role_name": "Ereignisse (Symptome & Incidents)",
+            "default_profile": "crisis_escalation_lead"
+        },
+        {
+            "role_name": "Muster & Trends (Marktanalyst)",
+            "default_profile": "competitive_intelligence_scout"
+        },
+        {
+            "role_name": "Systemstrukturen (Infrastruktur)",
+            "default_profile": "enterprise_solutions_architect"
+        },
+        {
+            "role_name": "Mentale Modelle (CEO Stratege)",
+            "default_profile": "executive_decision_architect"
+        }
+    ],
+    "Second-Order Thinking (Howard Marks)": [
+        {
+            "role_name": "Primäreffekt (Direkte Auswirkung)",
+            "default_profile": "product_requirements_engineer"
+        },
+        {
+            "role_name": "Sekundäreffekt (Folgekosten/Debt)",
+            "default_profile": "finops_cost_optimizer"
+        },
+        {
+            "role_name": "Tertiäreffekt (Systemreaktion/Markt)",
+            "default_profile": "arbitrage_market_analyst"
+        }
+    ],
+    "Wardley Mapping": [
+        {
+            "role_name": "Genesis / Custom (Innovation)",
+            "default_profile": "enterprise_solutions_architect"
+        },
+        {
+            "role_name": "Product / Rental (Software Eng)",
+            "default_profile": "senior_fullstack_engineer"
+        },
+        {
+            "role_name": "Commodity / Utility (Cloud Ops)",
+            "default_profile": "devops_cloud_sec_specialist"
+        },
+        {
+            "role_name": "Wertstrom & Value Chain (CEO)",
+            "default_profile": "executive_decision_architect"
+        }
+    ],
+    "Antifragilitäts-Analyse (Nassim Taleb)": [
+        {
+            "role_name": "Fragilitäts-Tester (Belastung)",
+            "default_profile": "database_performance_tuner"
+        },
+        {
+            "role_name": "Robustheits-Auditor (Security)",
+            "default_profile": "devops_cloud_sec_specialist"
+        },
+        {
+            "role_name": "Antifragiler Hebel (Growth & AI)",
+            "default_profile": "executive_decision_architect"
+        }
+    ],
+    "FMEA (Failure Mode and Effects Analysis)": [
+        {
+            "role_name": "Fehlerarten (Severity & Impact)",
+            "default_profile": "crisis_escalation_lead"
+        },
+        {
+            "role_name": "Auftretens-Wahrscheinlichkeit",
+            "default_profile": "liability_risk_analyst"
+        },
+        {
+            "role_name": "Entdeckungs-Wahrscheinlichkeit (QA)",
+            "default_profile": "devops_cloud_sec_specialist"
+        },
+        {
+            "role_name": "Präventiv-Architektur (Fullstack)",
+            "default_profile": "senior_fullstack_engineer"
+        }
+    ],
+    "OODA-Loop (John Boyd)": [
+        {
+            "role_name": "Observe (Markt-Radar & Feed)",
+            "default_profile": "competitive_intelligence_scout"
+        },
+        {
+            "role_name": "Orient (Filter & KI-Compliance)",
+            "default_profile": "ai_governance_officer"
+        },
+        {
+            "role_name": "Decide (CEO Leitstelle)",
+            "default_profile": "executive_decision_architect"
+        },
+        {
+            "role_name": "Act (n8n & Automatisierung)",
+            "default_profile": "n8n_process_architect"
+        }
+    ],
+    "Scenario Planning (Shell-Methode)": [
+        {
+            "role_name": "Best-Case / Bull-Market (Growth)",
+            "default_profile": "growth_hacker_lead"
+        },
+        {
+            "role_name": "Worst-Case / Krise (Escalation)",
+            "default_profile": "crisis_escalation_lead"
+        },
+        {
+            "role_name": "Regulatory & Legal Shifts (Jurist)",
+            "default_profile": "commercial_jurist_contracts"
+        },
+        {
+            "role_name": "Finanzielle Stresstests (FinOps)",
+            "default_profile": "finops_cost_optimizer"
+        }
+    ]
+};
+    
+    
+    // --- BOARDROOM ATTACHMENT PIPELINE ---
+    let currentBoardroomAttachments = [];
+
+    function handleBoardroomFileSelected(e) {
+      const files = e.target.files;
+      if (!files || !files.length) return;
+      addBoardroomAttachmentFiles(files);
+      e.target.value = "";
+    }
+
+    function addBoardroomAttachmentFiles(files) {
+      if (!files || !files.length) return;
+      const fileList = Array.from(files);
+      const remaining = 5 - currentBoardroomAttachments.length;
+      if (remaining <= 0) {
+        alert("Maximal 5 Anhänge gleichzeitig erlaubt.");
+        return;
+      }
+      const toAdd = fileList.slice(0, remaining);
+      if (fileList.length > remaining) {
+        alert(`Nur ${remaining} weitere Datei(en) hinzugefügt (Limit: 5).`);
+      }
+      toAdd.forEach(file => {
+        currentBoardroomAttachments.push({
+          file: file,
+          name: file.name || "datei",
+          size: (file.size / 1024).toFixed(1) + " KB",
+          type: file.type || "application/octet-stream"
+        });
+      });
+      renderBoardroomAttachments();
+    }
+
+    function removeBoardroomAttachment(idx) {
+      if (typeof idx === "number") {
+        currentBoardroomAttachments.splice(idx, 1);
+      } else {
+        currentBoardroomAttachments = [];
+      }
+      const fileInput = document.getElementById("boardroom-file-input");
+      if (fileInput) fileInput.value = "";
+      renderBoardroomAttachments();
+    }
+
+    function renderBoardroomAttachments() {
+      const bar = document.getElementById("boardroom-attachment-bar");
+      if (!bar) return;
+      if (!currentBoardroomAttachments.length) {
+        bar.classList.add("hidden");
+        bar.innerHTML = "";
+        return;
+      }
+      bar.classList.remove("hidden");
+      bar.innerHTML = `
+        <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          <span class="text-[9.5px] font-mono text-[var(--muted-foreground)] uppercase font-bold shrink-0">Anhänge (${currentBoardroomAttachments.length}/5):</span>
+          ${currentBoardroomAttachments.map((att, idx) => `
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--card)] border border-[var(--border)] text-[10px] font-mono text-[var(--foreground)] shadow-2xs">
+              <i data-lucide="file" class="w-3 h-3 text-emerald-500 shrink-0"></i>
+              <span class="truncate max-w-[120px] font-medium" title="${att.name}">${att.name}</span>
+              <span class="text-[8.5px] text-[var(--muted-foreground)] font-normal">${att.size}</span>
+              <button type="button" onclick="removeBoardroomAttachment(${idx})" class="text-[var(--muted-foreground)] hover:text-red-500 transition p-0.5 cursor-pointer" title="Entfernen">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+
+    const BOARDROOM_PROVIDERS = [
+      { id: "openrouter", name: "OpenRouter" },
+      { id: "google", name: "Google AI" },
+      { id: "openai", name: "OpenAI" },
+      { id: "groq", name: "Groq" },
+      { id: "omniroute", name: "OmniRoute" },
+      { id: "nvidia", name: "NVIDIA NIM" }
+    ];
+
+    function getBoardroomProviderOptionsHtml(selectedProv) {
+      let html = "";
+      const current = (selectedProv || "openrouter").toLowerCase();
+      BOARDROOM_PROVIDERS.forEach(p => {
+        const isSel = (p.id === current) ? "selected" : "";
+        html += `<option value="${p.id}" ${isSel}>${p.name}</option>`;
+      });
+      return html;
+    }
+
+    async function setupBoardroomSlotModelDropdown(modelSelect, provider, preferredModel) {
+      if (!modelSelect) return;
+      modelSelect.disabled = true;
+      modelSelect.innerHTML = `<option value="">Lade Modelle für ${provider}...</option>`;
+      if (typeof window.loadAgentTabModelPrices === 'function') {
+        await window.loadAgentTabModelPrices();
+      }
+      let models = [];
+      if (typeof window.loadLlmModelsForProvider === 'function') {
+        models = await window.loadLlmModelsForProvider(provider);
+      } else {
+        models = ["deepseek/deepseek-chat", "openai/gpt-4o", "anthropic/claude-3.5-sonnet"];
+      }
+      modelSelect.disabled = false;
+      if (typeof window.populateModelDropdown === 'function') {
+        window.populateModelDropdown(modelSelect, models, preferredModel);
+      } else {
+        modelSelect.innerHTML = "";
+        models.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m;
+          opt.textContent = m;
+          if (m === preferredModel) opt.selected = true;
+          modelSelect.appendChild(opt);
+        });
+      }
+      updateBoardroomSlotCost(modelSelect);
+      saveBoardroomStateToLocalStorage();
+    }
+    window.setupBoardroomSlotModelDropdown = setupBoardroomSlotModelDropdown;
+
+    async function onBoardroomSlotProviderChanged(provSelect) {
+      const row = provSelect.closest('.boardroom-slot-row');
+      if (!row) return;
+      const modelSelect = row.querySelector('.boardroom-slot-model-select');
+      const provider = provSelect.value;
+      await setupBoardroomSlotModelDropdown(modelSelect, provider, null);
+    }
+    window.onBoardroomSlotProviderChanged = onBoardroomSlotProviderChanged;
+
+    function onBoardroomSlotModelChanged(modelSelect) {
+      if (!modelSelect) return;
+      if (modelSelect.value === "__CUSTOM__") {
+        if (typeof window.handleCustomModelOption === 'function') {
+          if (!window.handleCustomModelOption(modelSelect)) {
+            return;
+          }
+        }
+      }
+      updateBoardroomSlotCost(modelSelect);
+      saveBoardroomStateToLocalStorage();
+    }
+    window.onBoardroomSlotModelChanged = onBoardroomSlotModelChanged;
+
+    function updateBoardroomSlotCost(modelSelect) {
+      if (!modelSelect) return;
+      const row = modelSelect.closest('.boardroom-slot-row');
+      if (!row) return;
+      const costEl = row.querySelector('.boardroom-slot-cost');
+      if (!costEl) return;
+      const model = modelSelect.value;
+      let info = null;
+      if (typeof findModelPriceInfo === 'function') {
+        info = findModelPriceInfo(model);
+      }
+      if (info && info.p) {
+        const pre = info.approx ? "≈ " : "";
+        const fmtPrice = typeof formatPricePer1M === "function" ? formatPricePer1M : (v => (v || 0).toFixed(2));
+        const inP = fmtPrice(info.p.prompt_1m);
+        const outP = fmtPrice(info.p.completion_1m);
+        costEl.innerHTML = `${pre}In: <span class="text-emerald-500 font-bold">$${inP}</span> | Out: <span class="text-amber-500 font-bold">$${outP}</span> <span class="text-slate-400 font-normal">/1M Tok</span>`;
+        costEl.classList.remove("hidden");
+        costEl.title = info.approx
+          ? `Preis des passenden Modells (${info.matched}) — Input: $${inP} / Output: $${outP} pro 1M Tokens`
+          : `Input: $${inP} / Output: $${outP} pro 1 Million Tokens`;
+      } else if (model && model !== "__CUSTOM__") {
+        costEl.innerHTML = `In: <span class="text-emerald-500 font-bold">$0.00</span> | Out: <span class="text-amber-500 font-bold">$0.00</span> <span class="text-slate-400 font-normal">/1M Tok</span>`;
+        costEl.classList.remove("hidden");
+      } else {
+        costEl.classList.add("hidden");
+      }
+      saveBoardroomStateToLocalStorage();
+    }
+    window.updateBoardroomSlotCost = updateBoardroomSlotCost;
+
+    const BOARDROOM_DEFAULT_MODELS = [
+      { id: "", name: "⚡ Profil-Standard (Default)" },
+      { id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet (Anthropic)" },
+      { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (Anthropic)" },
+      { id: "openai/gpt-4o", name: "GPT-4o (OpenAI)" },
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini (OpenAI)" },
+      { id: "openai/o3-mini", name: "o3-mini Reasoning (OpenAI)" },
+      { id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash (84% Rabatt)" },
+      { id: "deepseek/deepseek-chat", name: "DeepSeek V3 (DeepSeek Chat)" },
+      { id: "deepseek/deepseek-r1", name: "DeepSeek R1 Reasoning" },
+      { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro (Google)" },
+      { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash (Google)" },
+      { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B (Meta)" },
+      { id: "qwen/qwen-2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B" }
+    ];
+
+    function getBoardroomModelOptionsHtml(selectedModel) {
+      let html = "";
+      BOARDROOM_DEFAULT_MODELS.forEach(m => {
+        const isSel = (m.id === (selectedModel || "")) ? "selected" : "";
+        html += `<option value="${m.id}" ${isSel}>${m.name}</option>`;
+      });
+      return html;
+    }
+
     function getRoleOptionsHtml(selectedProfileId) {
       const sourceList = (typeof hermesProfilesData !== 'undefined' && hermesProfilesData.length > 0)
         ? hermesProfilesData
@@ -709,10 +1487,114 @@
       }
       return html;
     }
-    function renderBoardroomSlots(frameworkName) {
+    
+    // --- BOARDROOM PERSISTENCE & RESET ---
+    function saveBoardroomStateToLocalStorage() {
+      const fwSelect = document.getElementById("boardroom-framework-select");
+      const fwName = fwSelect ? fwSelect.value : "";
+      if (!fwName) return;
+
+      const chairSelect = document.getElementById("boardroom-chairman-select");
+      const chairProv = document.getElementById("boardroom-chair-provider-select");
+      const chairModel = document.getElementById("boardroom-chair-model-select");
+
+      const slotRows = document.querySelectorAll("#boardroom-slots-list .boardroom-slot-row");
+      const slots = Array.from(slotRows).map((el, idx) => {
+        const roleInput = el.querySelector(".boardroom-slot-role-name");
+        const profSelect = el.querySelector(".boardroom-slot-profile-select");
+        const provSelect = el.querySelector(".boardroom-slot-provider-select");
+        const modelSelect = el.querySelector(".boardroom-slot-model-select");
+        return {
+          role_name: roleInput ? roleInput.value : `Slot ${idx + 1}`,
+          profile_id: profSelect ? profSelect.value : "senior_coder",
+          provider: provSelect ? provSelect.value : "openrouter",
+          model_id: modelSelect ? modelSelect.value : "deepseek/deepseek-chat"
+        };
+      });
+
+      const state = {
+        chairman_id: chairSelect ? chairSelect.value : "orchestrator",
+        chairman_provider: chairProv ? chairProv.value : "openrouter",
+        chairman_model: chairModel ? chairModel.value : "deepseek/deepseek-chat",
+        slots: slots
+      };
+
+      try {
+        localStorage.setItem("archon_boardroom_custom_" + fwName, JSON.stringify(state));
+      } catch (e) {}
+    }
+
+    function resetCurrentBoardroomFramework() {
+      const select = document.getElementById("boardroom-framework-select");
+      if (!select) return;
+      const fwName = select.value;
+      try {
+        localStorage.removeItem("archon_boardroom_custom_" + fwName);
+      } catch (e) {}
+
+      // Reset Chairman to factory default
+      const chairSelect = document.getElementById("boardroom-chairman-select");
+      const chairProv = document.getElementById("boardroom-chair-provider-select");
+      const chairModel = document.getElementById("boardroom-chair-model-select");
+      if (chairSelect) {
+        const defaultOpt = Array.from(chairSelect.options).find(o => o.value === "hermes_default" || o.value === "orchestrator");
+        if (defaultOpt) {
+          chairSelect.value = defaultOpt.value;
+        } else if (chairSelect.options.length > 0) {
+          chairSelect.selectedIndex = 0;
+        }
+      }
+      if (chairProv) chairProv.value = "openrouter";
+      if (chairModel) chairModel.value = "deepseek/deepseek-chat";
+      onBoardroomChairmanChange(false);
+
+      renderBoardroomSlots(fwName, true);
+      if (typeof showArchonToast === "function") {
+        showArchonToast(`Framework '${fwName}' auf Ursprung zurückgesetzt.`, "success");
+      }
+    }
+
+    function renderBoardroomSlots(frameworkName, forceDefault = false) {
       const container = document.getElementById("boardroom-slots-list");
       if (!container) return;
       container.innerHTML = "";
+
+      // Ensure price list is loaded so cost pills render with real values
+      if (typeof loadAgentTabModelPrices === 'function') {
+        loadAgentTabModelPrices().then(() => {
+          document.querySelectorAll('#boardroom-slots-list .boardroom-slot-model-select').forEach(sel => {
+            updateBoardroomSlotCost(sel);
+          });
+          updateBoardroomChairmanCost();
+        });
+      }
+
+      // Check if user has a saved custom setup for this framework
+      if (!forceDefault) {
+        try {
+          const savedStr = localStorage.getItem("archon_boardroom_custom_" + frameworkName);
+          if (savedStr) {
+            const savedState = JSON.parse(savedStr);
+            if (savedState && Array.isArray(savedState.slots) && savedState.slots.length > 0) {
+              // Apply saved chairman
+              const chairSelect = document.getElementById("boardroom-chairman-select");
+              const chairProv = document.getElementById("boardroom-chair-provider-select");
+              const chairModel = document.getElementById("boardroom-chair-model-select");
+              if (chairSelect && savedState.chairman_id) chairSelect.value = savedState.chairman_id;
+              if (chairProv && savedState.chairman_provider) chairProv.value = savedState.chairman_provider;
+              const savedChairProv = (chairProv && chairProv.value) || savedState.chairman_provider || "openrouter";
+              setupBoardroomChairmanModelDropdown(savedChairProv, savedState.chairman_model);
+
+              savedState.slots.forEach((s, idx) => {
+                addBoardroomSlotElement(s.role_name, s.profile_id, idx + 1, s.model_id, s.provider);
+              });
+              if (window.lucide) window.lucide.createIcons();
+              return;
+            }
+          }
+        } catch (e) {}
+      }
+
       let slotsDef = null;
       for (const [key, val] of Object.entries(FRAMEWORK_SLOT_DEFAULTS)) {
         if (frameworkName && frameworkName.toLowerCase().includes(key.toLowerCase())) {
@@ -730,7 +1612,7 @@
       slotsDef.forEach((slot, index) => {
         addBoardroomSlotElement(slot.role_name, slot.default_profile, index + 1);
       });
-      lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons();
     }
     function updateBoardroomSlotCard(selectEl) {
       const row = selectEl.closest('.boardroom-slot-row');
@@ -752,13 +1634,104 @@
       if (descEl) descEl.innerText = foundProf ? (foundProf.description || '') : 'Fach-Agent für diese Debatten-Position.';
       if (catEl) catEl.innerText = foundProf ? (foundProf.category || '') : '';
       if (personEl) personEl.innerText = foundProf ? (foundProf.person_name ? foundProf.person_name.split(' ')[0] : '') : '';
+      const provSelect = row.querySelector('.boardroom-slot-provider-select');
+      const modelSelect = row.querySelector('.boardroom-slot-model-select');
+      if (foundProf) {
+        if (provSelect && foundProf.provider) provSelect.value = foundProf.provider;
+        const curProv = provSelect ? provSelect.value : (foundProf.provider || "openrouter");
+        setupBoardroomSlotModelDropdown(modelSelect, curProv, foundProf.model);
+      }
+      saveBoardroomStateToLocalStorage();
     }
-    function onBoardroomChairmanChange() {
+    window.updateBoardroomSlotCard = updateBoardroomSlotCard;
+
+    async function setupBoardroomChairmanModelDropdown(provider, preferredModel) {
+      const modelSelect = document.getElementById("boardroom-chair-model-select");
+      if (!modelSelect) return;
+      modelSelect.disabled = true;
+      modelSelect.innerHTML = `<option value="">Lade Modelle für ${provider}...</option>`;
+      if (typeof window.loadAgentTabModelPrices === 'function') {
+        await window.loadAgentTabModelPrices();
+      }
+      let models = [];
+      if (typeof window.loadLlmModelsForProvider === 'function') {
+        models = await window.loadLlmModelsForProvider(provider);
+      } else {
+        models = ["deepseek/deepseek-chat", "openai/gpt-4o", "anthropic/claude-3.5-sonnet"];
+      }
+      modelSelect.disabled = false;
+      if (typeof window.populateModelDropdown === 'function') {
+        window.populateModelDropdown(modelSelect, models, preferredModel);
+      } else {
+        modelSelect.innerHTML = "";
+        models.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m;
+          opt.textContent = m;
+          if (m === preferredModel) opt.selected = true;
+          modelSelect.appendChild(opt);
+        });
+      }
+      updateBoardroomChairmanCost();
+      saveBoardroomStateToLocalStorage();
+    }
+    window.setupBoardroomChairmanModelDropdown = setupBoardroomChairmanModelDropdown;
+
+    async function onBoardroomChairmanProviderChanged(provSelect) {
+      const provider = provSelect.value;
+      await setupBoardroomChairmanModelDropdown(provider, null);
+    }
+    window.onBoardroomChairmanProviderChanged = onBoardroomChairmanProviderChanged;
+
+    function onBoardroomChairmanModelChanged(modelSelect) {
+      if (!modelSelect) modelSelect = document.getElementById("boardroom-chair-model-select");
+      if (!modelSelect) return;
+      if (modelSelect.value === "__CUSTOM__") {
+        if (typeof window.handleCustomModelOption === 'function') {
+          if (!window.handleCustomModelOption(modelSelect)) {
+            return;
+          }
+        }
+      }
+      updateBoardroomChairmanCost();
+      saveBoardroomStateToLocalStorage();
+    }
+    window.onBoardroomChairmanModelChanged = onBoardroomChairmanModelChanged;
+
+    function updateBoardroomChairmanCost() {
+      const modelSelect = document.getElementById("boardroom-chair-model-select");
+      const costEl = document.getElementById("boardroom-chair-cost");
+      if (!modelSelect || !costEl) return;
+      const model = modelSelect.value;
+      let info = null;
+      if (typeof findModelPriceInfo === 'function') {
+        info = findModelPriceInfo(model);
+      }
+      if (info && info.p) {
+        const pre = info.approx ? "≈ " : "";
+        const fmtPrice = typeof formatPricePer1M === "function" ? formatPricePer1M : (v => (v || 0).toFixed(2));
+        const inP = fmtPrice(info.p.prompt_1m);
+        const outP = fmtPrice(info.p.completion_1m);
+        costEl.innerHTML = `${pre}In: <span class="text-emerald-500 font-bold">$${inP}</span> | Out: <span class="text-amber-500 font-bold">$${outP}</span> <span class="text-slate-400 font-normal">/1M Tok</span>`;
+        costEl.classList.remove("hidden");
+        costEl.title = info.approx
+          ? `Preis des passenden Modells (${info.matched}) — Input: $${inP} / Output: $${outP} pro 1M Tokens`
+          : `Input: $${inP} / Output: $${outP} pro 1 Million Tokens`;
+      } else if (model && model !== "__CUSTOM__") {
+        costEl.innerHTML = `In: <span class="text-emerald-500 font-bold">$0.00</span> | Out: <span class="text-amber-500 font-bold">$0.00</span> <span class="text-slate-400 font-normal">/1M Tok</span>`;
+        costEl.classList.remove("hidden");
+      } else {
+        costEl.classList.add("hidden");
+      }
+    }
+    window.updateBoardroomChairmanCost = updateBoardroomChairmanCost;
+
+    function onBoardroomChairmanChange(keepCustomModel = false) {
       const select = document.getElementById("boardroom-chairman-select");
       const img = document.getElementById("boardroom-chair-avatar");
-      const descEl = document.getElementById("boardroom-chair-desc");
-      const catEl = document.getElementById("boardroom-chair-cat");
       const personEl = document.getElementById("boardroom-chair-person");
+      const provSelect = document.getElementById("boardroom-chair-provider-select");
+      const modelSelect = document.getElementById("boardroom-chair-model-select");
       if (!select) return;
       const profId = select.value;
       
@@ -770,11 +1743,29 @@
         avatarUrl = getProfileAvatarUrl(foundProf || { id: profId });
       }
       if (img) img.src = avatarUrl;
-      if (descEl) descEl.innerText = foundProf ? (foundProf.description || '') : 'Zentrales Master-System für die Leitung und Synthese der Debatte.';
-      if (catEl) catEl.innerText = foundProf ? (foundProf.category || '1. Strategie') : '1. Strategie';
       if (personEl) personEl.innerText = foundProf ? (foundProf.person_name ? foundProf.person_name.split(' ')[0] : 'Michael') : 'Michael';
+
+      if (!keepCustomModel && foundProf) {
+        if (provSelect && foundProf.provider) provSelect.value = foundProf.provider;
+        const curProv = provSelect ? provSelect.value : (foundProf.provider || "openrouter");
+        setupBoardroomChairmanModelDropdown(curProv, foundProf.model);
+      } else {
+        const curProv = provSelect ? provSelect.value : "openrouter";
+        const curModel = modelSelect ? modelSelect.value : null;
+        setupBoardroomChairmanModelDropdown(curProv, curModel);
+      }
     }
-    function addBoardroomSlotElement(roleName, profileId, slotNumber) {
+    window.onBoardroomChairmanChange = onBoardroomChairmanChange;
+
+    function reindexBoardroomSlotBadges() {
+      document.querySelectorAll("#boardroom-slots-list .boardroom-slot-row").forEach((row, i) => {
+        const badge = row.querySelector(".slot-number-badge");
+        if (badge) badge.innerText = `Slot ${i + 1}`;
+      });
+    }
+    window.reindexBoardroomSlotBadges = reindexBoardroomSlotBadges;
+
+    function addBoardroomSlotElement(roleName, profileId, slotNumber, modelId, providerId) {
       const container = document.getElementById("boardroom-slots-list");
       if (!container) return;
       const foundProf = (typeof hermesProfilesData !== 'undefined' && hermesProfilesData && hermesProfilesData.length > 0)
@@ -782,40 +1773,82 @@
         : null;
       
       const actualId = foundProf ? foundProf.id : profileId;
+      const profDefaultModel = (foundProf && foundProf.model) ? foundProf.model : "deepseek/deepseek-chat";
+      const profDefaultProvider = (foundProf && foundProf.provider) ? foundProf.provider : "openrouter";
+      const activeProvider = providerId || profDefaultProvider;
+      const activeModel = modelId || profDefaultModel;
+      const computedSlotNumber = slotNumber || (document.querySelectorAll("#boardroom-slots-list .boardroom-slot-row").length + 1);
+
       let avatarUrl = '/static/avatars/avatar_001.jpg';
       if (typeof getProfileAvatarUrl === 'function') {
         avatarUrl = getProfileAvatarUrl(foundProf || { id: actualId });
       }
       const firstName = foundProf && foundProf.person_name ? foundProf.person_name.split(' ')[0] : '';
       const row = document.createElement("div");
-      row.className = "boardroom-slot-row p-2 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1 text-xs relative group hover:border-[var(--muted-foreground)] transition";
+      row.className = "boardroom-slot-row p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-2 text-xs relative group hover:border-[var(--muted-foreground)] transition shadow-xs";
       row.innerHTML = `
-        <div class="flex items-center justify-between gap-1.5 border-b border-[var(--border)] pb-1">
+        <!-- Zeile Kopf: Slot-Titel & Delete -->
+        <div class="flex items-center justify-between gap-1.5 border-b border-[var(--border)] pb-1.5">
           <div class="flex items-center gap-1.5 flex-1 min-w-0">
-            <span class="w-2 h-2 rounded-full bg-zinc-400 shrink-0"></span>
-            <input type="text" value="${roleName}" class="boardroom-slot-role-name bg-transparent font-bold text-xs prof-title-text border-b border-dashed border-[var(--border)] focus:outline-none focus:border-[var(--foreground)] px-1 py-0.5 flex-1 truncate" placeholder="Slot-Rolle (z.B. Skeptiker)..." title="Rollen-Bezeichnung im Framework anpassen">
+            <span class="slot-number-badge text-[10px] font-mono font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 shrink-0 select-none">Slot ${computedSlotNumber}</span>
+            <input type="text" value="${roleName}" class="boardroom-slot-role-name bg-transparent font-bold text-xs prof-title-text border-b border-dashed border-[var(--border)] focus:outline-none focus:border-[var(--foreground)] px-1 py-0.5 flex-1 truncate" placeholder="Slot-Rolle..." title="Rollen-Bezeichnung im Framework anpassen">
           </div>
-          <button onclick="this.closest('.boardroom-slot-row').remove()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1 rounded-md cursor-pointer transition text-xs" title="Diesen Slot entfernen">
+          <button onclick="this.closest('.boardroom-slot-row').remove(); reindexBoardroomSlotBadges(); saveBoardroomStateToLocalStorage();" class="text-[var(--muted-foreground)] hover:text-rose-500 p-1 rounded-md cursor-pointer transition text-xs" title="Diesen Slot entfernen">
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
         </div>
+
         <div class="flex items-start gap-2.5 pt-0.5">
+          <!-- Avatar links -->
           <div class="flex flex-col items-center shrink-0">
             <img src="${avatarUrl}" alt="Avatar" class="boardroom-slot-avatar w-10 h-10 rounded-xl object-cover border border-[var(--border)] shrink-0 shadow-xs" onerror="this.src='/static/avatars/avatar_001.jpg'">
             <span class="boardroom-slot-person text-[9px] font-bold text-[var(--foreground)] mt-1 max-w-[55px] text-center truncate">${firstName}</span>
           </div>
-          <div class="flex-1 min-w-0">
-            <select onchange="updateBoardroomSlotCard(this)" class="boardroom-slot-profile-select w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs prof-title-text focus:outline-none cursor-pointer truncate font-bold shadow-xs">
-              ${getRoleOptionsHtml(actualId)}
-            </select>
-            <p class="boardroom-slot-desc text-[10.5px] text-[var(--muted-foreground)] mt-0.5 leading-snug line-clamp-2">${foundProf?.description || 'Fach-Agent für diese Debatten-Position.'}</p>
-            <span class="boardroom-slot-cat inline-block text-[9px] font-mono text-[var(--foreground)] bg-[var(--secondary)] px-1.5 py-0.5 rounded mt-0.5 border border-[var(--border)] truncate max-w-[180px]">${foundProf?.category || ''}</span>
+
+          <!-- Rechte 3 Zeilen: Profil, Provider, Modell + Kosten (Exakt wie Chat) -->
+          <div class="flex-1 min-w-0 space-y-1.5">
+            <!-- 1. Zeile: Profil Dropdown -->
+            <div class="flex items-center gap-1.5">
+              <span class="font-mono text-[10px] font-bold text-[var(--muted-foreground)] uppercase shrink-0 w-16">PROFIL:</span>
+              <select onchange="updateBoardroomSlotCard(this); saveBoardroomStateToLocalStorage();" class="boardroom-slot-profile-select flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-md px-2 py-0.5 text-xs prof-title-text focus:outline-none cursor-pointer truncate font-bold shadow-2xs">
+                ${getRoleOptionsHtml(actualId)}
+              </select>
+            </div>
+
+            <!-- 2. Zeile: Provider Dropdown mit Preis-Katalog Button -->
+            <div class="flex items-center gap-1.5">
+              <span class="font-mono text-[10px] font-bold text-[var(--muted-foreground)] uppercase shrink-0 w-16">PROVIDER:</span>
+              <select onchange="onBoardroomSlotProviderChanged(this); saveBoardroomStateToLocalStorage();" class="boardroom-slot-provider-select flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-md px-2 py-0.5 text-[11px] font-mono text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                ${getBoardroomProviderOptionsHtml(activeProvider)}
+              </select>
+              <button type="button" onclick="openPriceCatalogForSlot(this)" class="p-1 rounded-md bg-[var(--secondary)] hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-[var(--border)] cursor-pointer transition shrink-0 flex items-center justify-center shadow-2xs" title="Preise & Modell-Katalog öffnen">
+                <i data-lucide="circle-dollar-sign" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+
+            <!-- 3. Zeile: Sprachmodell Dropdown (wie im Chat) -->
+            <div class="flex items-center gap-1.5">
+              <span class="font-mono text-[10px] font-bold text-[var(--muted-foreground)] uppercase shrink-0 w-16">MODELL:</span>
+              <select onchange="onBoardroomSlotModelChanged(this)" class="boardroom-slot-model-select flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-md px-2 py-0.5 text-[11px] font-mono text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs truncate">
+                <option value="${activeModel}" selected>${activeModel}</option>
+              </select>
+            </div>
+
+            <!-- 4. Zeile: Live-Kosten Pill (rechtsbündig) -->
+            <div class="flex items-center justify-end pt-0.5">
+              <span class="boardroom-slot-cost text-[10px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20 inline-block shadow-2xs">
+                <!-- Live Token Kosten -->
+              </span>
+            </div>
           </div>
         </div>
       `;
       container.appendChild(row);
-      lucide.createIcons();
+      const mSelect = row.querySelector('.boardroom-slot-model-select');
+      setupBoardroomSlotModelDropdown(mSelect, activeProvider, activeModel);
+      if (window.lucide) window.lucide.createIcons();
     }
+    window.addBoardroomSlotElement = addBoardroomSlotElement;
     function addBoardroomCustomSlot() {
       addBoardroomSlotElement("Zusätzlicher Experte", "enterprise_solutions_architect");
     }
@@ -904,6 +1937,348 @@
       }
       onBoardroomChairmanChange();
     }
+    // =========================================================================
+    // BOARDROOM / DECISION ENGINE TAB & HISTORY CONTROLLER
+    // =========================================================================
+    let currentBoardroomTab = 'overview';
+    let cachedBoardroomHistory = [];
+    let currentViewingDebateId = null;
+
+    const BOARDROOM_HEADER_META = {
+      overview: {
+        title: 'AI Mastermind · Übersicht',
+        subtitle: 'Historie, frühere Debatten & strategische Konsens-Ergebnisse',
+        img: '/static/img/cadre_icons/overview.png'
+      },
+      debate: {
+        title: 'Decision Engine · Debatte',
+        subtitle: 'Methodik-Auswahl, Experten-Zuweisung & Aufgabenstellung',
+        img: '/static/img/cadre_icons/operations.png?v=2'
+      },
+      live: {
+        title: 'Decision Engine · Live-Debatte',
+        subtitle: 'Transkription, Runden-Ablauf & finale Konsens-Synthese',
+        img: '/static/img/cadre_icons/chat.png'
+      }
+    };
+
+    function setBoardroomTab(tab) {
+      if (!tab) tab = 'overview';
+      currentBoardroomTab = tab;
+      const tabs = ['overview', 'debate', 'live'];
+
+      const meta = BOARDROOM_HEADER_META[tab] || BOARDROOM_HEADER_META.overview;
+      const titleEl = document.getElementById('boardroom-main-title');
+      const subtitleEl = document.getElementById('boardroom-main-subtitle');
+      const headerImgEl = document.getElementById('boardroom-main-header-img');
+      if (titleEl) titleEl.textContent = meta.title;
+      if (subtitleEl) subtitleEl.textContent = meta.subtitle;
+      if (headerImgEl) headerImgEl.src = meta.img;
+
+      tabs.forEach(t => {
+        const btn = document.getElementById(`boardroom-subtab-${t}`);
+        const view = document.getElementById(`boardroom-view-${t}`);
+        const iconWrap = btn ? btn.querySelector('.tile-icon-wrap') : null;
+        const label = btn ? btn.querySelector('.boardroom-tab-label') : null;
+
+        if (t === tab) {
+          if (btn) {
+            btn.className = "boardroom-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) iconWrap.classList.add('active-tile');
+          if (label) {
+            label.classList.add('font-bold');
+            label.classList.remove('font-medium');
+          }
+          if (view) view.classList.remove('hidden');
+        } else {
+          if (btn) {
+            btn.className = "boardroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) iconWrap.classList.remove('active-tile');
+          if (label) {
+            label.classList.remove('font-bold');
+            label.classList.add('font-medium');
+          }
+          if (view) view.classList.add('hidden');
+        }
+      });
+
+      if (tab === 'overview') {
+        loadBoardroomHistory();
+      } else if (tab === 'debate') {
+        if (!categorizedFrameworksData) loadBoardroomFrameworks();
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    async function loadBoardroomHistory() {
+      try {
+        const res = await fetch("/api/boardroom/history");
+        if (!res.ok) return;
+        const data = await res.json();
+        cachedBoardroomHistory = Array.isArray(data) ? data : [];
+        renderBoardroomHistory(cachedBoardroomHistory);
+
+        const badge = document.getElementById("boardroom-history-count-badge");
+        const totalEl = document.getElementById("boardroom-history-total");
+        if (badge) {
+          badge.innerText = cachedBoardroomHistory.length;
+          badge.classList.toggle("hidden", cachedBoardroomHistory.length === 0);
+        }
+        if (totalEl) {
+          totalEl.innerText = `${cachedBoardroomHistory.length} Einträge`;
+        }
+      } catch (e) {
+        console.error("Error loading boardroom history:", e);
+      }
+    }
+
+    function filterBoardroomHistory() {
+      const searchInput = document.getElementById("boardroom-history-search");
+      const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+      if (!query) {
+        renderBoardroomHistory(cachedBoardroomHistory);
+        return;
+      }
+      const filtered = cachedBoardroomHistory.filter(item => {
+        return (item.task || '').toLowerCase().includes(query) ||
+               (item.framework || '').toLowerCase().includes(query) ||
+               (item.synthesis || '').toLowerCase().includes(query) ||
+               (item.date_display || '').toLowerCase().includes(query);
+      });
+      renderBoardroomHistory(filtered);
+    }
+
+    function renderBoardroomHistory(items) {
+      const container = document.getElementById("boardroom-history-list");
+      if (!container) return;
+      container.innerHTML = "";
+
+      if (!items || items.length === 0) {
+        container.innerHTML = `
+          <div class="h-64 flex flex-col items-center justify-center text-center p-6 text-[var(--muted-foreground)]">
+            <div class="w-12 h-12 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-xs flex items-center justify-center mb-3">
+              <i data-lucide="inbox" class="w-6 h-6"></i>
+            </div>
+            <p class="text-xs font-bold text-[var(--foreground)]">Keine Debatten in der Historie gefunden</p>
+            <p class="text-[11px] text-[var(--muted-foreground)] mt-1 max-w-sm">Starte im Tab "Debatte" eine neue Multi-Agenten-Debatte, um hier Protokolle und Synthesen zu sehen.</p>
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      items.forEach(h => {
+        const card = document.createElement("div");
+        card.className = "p-3.5 bg-[var(--card)] hover:bg-[var(--secondary)]/60 border border-[var(--border)] rounded-xl transition cursor-pointer shadow-xs group";
+        card.onclick = () => openBoardroomDetailModal(h.id);
+
+        const taskText = h.task || 'Strategische Debatte';
+        const synthSnippet = h.synthesis ? (h.synthesis.length > 220 ? h.synthesis.substring(0, 220) + '...' : h.synthesis) : 'Keine Synthese dokumentiert.';
+        const scopeText = `${h.rounds || 2} Runden · ${(h.slots_count || 3) + 1} Experten`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-2 mb-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)] font-bold flex items-center gap-1">
+                <i data-lucide="calendar" class="w-3 h-3 text-indigo-500"></i> ${h.date_display || 'Heute'}
+              </span>
+              <span class="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                ${h.framework || 'Steffi Kieffer Boardroom'}
+              </span>
+              <span class="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                ${scopeText}
+              </span>
+            </div>
+            <button type="button" class="text-xs font-mono font-bold text-indigo-500 group-hover:text-indigo-600 flex items-center gap-1">
+              <span>Details &amp; Ergebnis</span>
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+            </button>
+          </div>
+          <div class="space-y-1.5">
+            <h4 class="text-xs font-bold text-[var(--foreground)] line-clamp-2 leading-snug">
+              ${taskText}
+            </h4>
+            <div class="text-[11px] text-[var(--muted-foreground)] line-clamp-2 font-sans bg-[var(--background)] p-2 rounded-lg border border-[var(--border)] font-normal leading-relaxed">
+              <span class="font-bold text-[var(--foreground)]">Ergebnis:</span> ${synthSnippet}
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function openBoardroomDetailModal(id) {
+      const item = cachedBoardroomHistory.find(h => h.id === id);
+      if (!item) return;
+      currentViewingDebateId = id;
+
+      const metaEl = document.getElementById("boardroom-detail-meta");
+      const taskEl = document.getElementById("boardroom-detail-task");
+      const synthEl = document.getElementById("boardroom-detail-synthesis");
+      const modal = document.getElementById("boardroom-detail-modal");
+
+      if (metaEl) {
+        metaEl.innerText = `${item.date_display || 'Datum unbekannt'} · ${item.framework || 'Framework'} · ${item.rounds || 2} Runden · ${(item.slots_count || 3) + 1} Experten`;
+      }
+      if (taskEl) taskEl.innerText = item.task || '';
+      if (synthEl) synthEl.innerText = item.synthesis || 'Keine finale Synthese vorhanden.';
+      if (modal) modal.classList.remove("hidden");
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function closeBoardroomDetailModal() {
+      const modal = document.getElementById("boardroom-detail-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function openTranscriptFromDetailModal() {
+      closeBoardroomDetailModal();
+      if (!currentViewingDebateId) return;
+      const item = cachedBoardroomHistory.find(h => h.id === currentViewingDebateId);
+      if (!item) return;
+
+      setBoardroomTab('live');
+      renderPastDebateIntoLiveTab(item);
+    }
+
+    function renderPastDebateIntoLiveTab(item) {
+      const threadDiv = document.getElementById("boardroom-thread");
+      if (!threadDiv) return;
+      threadDiv.innerHTML = "";
+
+      const headerBanner = document.createElement("div");
+      headerBanner.className = "rounded-lg p-4 bg-[var(--card)] border border-[var(--border)] text-xs space-y-1 mb-4 font-mono text-[var(--foreground)]";
+      headerBanner.innerHTML = `
+        <div class="flex items-center justify-between text-[var(--foreground)] font-bold uppercase tracking-wider">
+          <span>📋 DEBATTE: ${item.task}</span>
+          <span>${item.date_display || ''}</span>
+        </div>
+        <div class="text-[10px] text-[var(--muted-foreground)]">
+          Framework: ${item.framework || 'Steffi Kieffer Boardroom'} | Runden: ${item.rounds || 2} | Teilnehmer: ${(item.slots_count || 3) + 1}
+        </div>
+      `;
+      threadDiv.appendChild(headerBanner);
+
+      if (item.transcript) {
+        const transcriptCard = document.createElement("div");
+        transcriptCard.className = "rounded-xl p-4 bg-[var(--card)] border border-[var(--border)] text-xs font-mono space-y-2 whitespace-pre-wrap leading-relaxed shadow-xs";
+        transcriptCard.innerText = item.transcript;
+        threadDiv.appendChild(transcriptCard);
+      }
+
+      if (item.synthesis) {
+        const synthCard = document.createElement("div");
+        synthCard.className = "rounded-xl p-5 bg-[var(--card)] border border-amber-500/30 space-y-3 my-4 shadow-md";
+        synthCard.innerHTML = `
+          <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-2">
+              <i data-lucide="award" class="w-4 h-4"></i> FINALE SYNTHESE &amp; ENTSCHEIDUNGSEMPFEHLUNG
+            </h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 font-bold">KONSENS</span>
+          </div>
+          <div class="text-xs leading-relaxed text-[var(--foreground)] whitespace-pre-wrap font-sans font-medium">
+            ${item.synthesis}
+          </div>
+        `;
+        threadDiv.appendChild(synthCard);
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+      threadDiv.scrollTop = 0;
+    }
+
+    function openBoardroomLiveModal(taskName) {
+      const modal = document.getElementById("boardroom-live-dialog-modal");
+      const dialogThread = document.getElementById("boardroom-dialog-thread");
+      const subEl = document.getElementById("boardroom-dialog-subtitle");
+      const statusEl = document.getElementById("boardroom-dialog-status-text");
+
+      if (dialogThread) dialogThread.innerHTML = "";
+      if (subEl && taskName) subEl.innerText = taskName;
+      if (statusEl) statusEl.innerText = "Debatte gestartet...";
+      if (modal) modal.classList.remove("hidden");
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function closeBoardroomLiveModal() {
+      const modal = document.getElementById("boardroom-live-dialog-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function openLiveTabFromModal() {
+      closeBoardroomLiveModal();
+      setBoardroomTab('live');
+    }
+
+    function copyBoardroomTranscript() {
+      const threadDiv = document.getElementById("boardroom-thread");
+      if (!threadDiv) return;
+      const text = threadDiv.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        if (typeof showArchonToast === "function") {
+          showArchonToast("Transkript in Zwischenablage kopiert.", "success");
+        } else {
+          alert("Transkript kopiert!");
+        }
+      }).catch(() => {
+        alert("Konnte Transkript nicht kopieren.");
+      });
+    }
+
+    function downloadBoardroomTranscript() {
+      const threadDiv = document.getElementById("boardroom-thread");
+      if (!threadDiv) return;
+      const text = threadDiv.innerText;
+      const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `boardroom_transkript_${new Date().toISOString().slice(0, 10)}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function appendBothBoardroomThreads(elFactory) {
+      const threadDiv = document.getElementById("boardroom-thread");
+      const dialogThread = document.getElementById("boardroom-dialog-thread");
+      if (threadDiv) {
+        const el1 = elFactory();
+        threadDiv.appendChild(el1);
+        threadDiv.scrollTop = threadDiv.scrollHeight;
+      }
+      if (dialogThread) {
+        const el2 = elFactory();
+        dialogThread.appendChild(el2);
+        dialogThread.scrollTop = dialogThread.scrollHeight;
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    let currentBoardroomAbortController = null;
+
+    function stopBoardroomDebate() {
+      if (currentBoardroomAbortController) {
+        currentBoardroomAbortController.abort();
+        currentBoardroomAbortController = null;
+        if (typeof showArchonToast === "function") {
+          showArchonToast("Debatte abgebrochen.", "info");
+        } else {
+          console.log("Debatte abgebrochen.");
+        }
+      }
+      const startBtn = document.getElementById("boardroom-start-btn");
+      const loadingDiv = document.getElementById("boardroom-loading");
+      if (startBtn) startBtn.disabled = false;
+      if (loadingDiv) loadingDiv.classList.add("hidden");
+    }
+
     async function runBoardroomDebate() {
       const taskInput = document.getElementById("boardroom-task");
       const roundsInput = document.getElementById("boardroom-rounds");
@@ -911,7 +2286,21 @@
       const frameworkSelect = document.getElementById("boardroom-framework-select");
       const startBtn = document.getElementById("boardroom-start-btn");
       const loadingDiv = document.getElementById("boardroom-loading");
-      const task = taskInput ? taskInput.value.trim() : "";
+      let task = taskInput ? taskInput.value.trim() : "";
+      if (currentBoardroomAttachments.length > 0) {
+        for (const att of currentBoardroomAttachments) {
+          if (att.file && att.file.type && (att.file.type.startsWith("text/") || att.name.endsWith(".txt") || att.name.endsWith(".md") || att.name.endsWith(".json") || att.name.endsWith(".csv") || att.name.endsWith(".py") || att.name.endsWith(".js") || att.name.endsWith(".ts"))) {
+            try {
+              const fileContent = await att.file.text();
+              task += `\n\n--- ANGEHÄNGTE DATEI: ${att.name} ---\n${fileContent.substring(0, 15000)}`;
+            } catch (err) {
+              console.warn("Could not read text of attachment", att.name, err);
+            }
+          } else {
+            task += `\n\n[Angehängte Datei: ${att.name} (${att.size})]`;
+          }
+        }
+      }
       const rounds = roundsInput ? parseInt(roundsInput.value) || 2 : 2;
       const chairmanId = chairmanSelect ? chairmanSelect.value : "orchestrator";
       const frameworkVal = frameworkSelect ? frameworkSelect.value : "Steffi Kieffer Boardroom";
@@ -924,21 +2313,58 @@
       const slots = Array.from(slotEls).map((el, idx) => {
         const roleInput = el.querySelector(".boardroom-slot-role-name");
         const profileSelect = el.querySelector(".boardroom-slot-profile-select");
+        const provSelect = el.querySelector(".boardroom-slot-provider-select");
+        const modelSelect = el.querySelector(".boardroom-slot-model-select");
+        const chosenModel = modelSelect ? modelSelect.value.trim() : "";
+        const chosenProv = provSelect ? provSelect.value.trim() : "openrouter";
         return {
           role_name: roleInput ? (roleInput.value.trim() || `Experte ${idx + 1}`) : `Experte ${idx + 1}`,
-          profile_id: profileSelect ? profileSelect.value : "senior_coder"
+          profile_id: profileSelect ? profileSelect.value : "senior_coder",
+          model_id: chosenModel || null,
+          provider: chosenProv || null
         };
       });
+
+      // Open the Live Dialog Modal right upon starting!
+      openBoardroomLiveModal(task);
+
+      // Indicate running status
+      const livePulse = document.getElementById("boardroom-live-pulse-badge");
+      if (livePulse) livePulse.classList.remove("hidden");
+      const statusDot = document.getElementById("boardroom-header-status-dot");
+      if (statusDot) {
+        statusDot.className = "absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-amber-500 border-2 border-[var(--card)] animate-ping";
+        statusDot.title = "Debatte läuft...";
+      }
+      const totalBadge = document.getElementById("boardroom-total-badge");
+      if (totalBadge) {
+        totalBadge.innerText = "Debatte aktiv";
+        totalBadge.className = "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 shrink-0";
+      }
+
       if (startBtn) startBtn.disabled = true;
       if (loadingDiv) {
         loadingDiv.classList.remove("hidden");
         document.getElementById("boardroom-loading-status").innerText = `AI Boardroom Debatte wird mit ${slots.length + 1} Profilen ausgeführt (${frameworkVal}, ${rounds} Runden)...`;
       }
+
+      currentBoardroomAbortController = new AbortController();
+
       try {
         const response = await fetch("/api/boardroom/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ task, rounds, chairman_id: chairmanId, framework: frameworkVal, slots, reasoning_level: (document.getElementById("boardroom-reasoning-select") && document.getElementById("boardroom-reasoning-select").value) || "profile" })
+          signal: currentBoardroomAbortController.signal,
+          body: JSON.stringify({
+            task,
+            rounds,
+            chairman_id: chairmanId,
+            chairman_provider: (document.getElementById("boardroom-chair-provider-select") && document.getElementById("boardroom-chair-provider-select").value) || "openrouter",
+            chairman_model: (document.getElementById("boardroom-chair-model-select") && document.getElementById("boardroom-chair-model-select").value) || null,
+            framework: frameworkVal,
+            slots,
+            reasoning_level: (document.getElementById("boardroom-reasoning-select") && document.getElementById("boardroom-reasoning-select").value) || "profile"
+          })
         });
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
@@ -971,100 +2397,112 @@
               const ev = JSON.parse(jsonStr);
               if (ev.type === "start") {
                 boardMeta = ev;
-                if (threadDiv) {
+                appendBothBoardroomThreads(() => {
                   const headerBanner = document.createElement("div");
-                  headerBanner.className = "rounded-lg p-4 bg-[var(--card)] border border-[var(--border)] text-xs space-y-1 mb-4 font-mono text-[var(--foreground)]";
+                  headerBanner.className = "rounded-lg p-3 bg-[var(--card)] border border-[var(--border)] text-xs space-y-1 mb-3 font-mono text-[var(--foreground)] shadow-xs";
                   headerBanner.innerHTML = `
                     <div class="flex items-center justify-between text-[var(--foreground)] font-bold uppercase tracking-wider">
                       <span>📋 BOARDROOM DEBATTE: ${ev.task}</span>
                       <span>CHAIRMAN: ${ev.chairman ? ev.chairman.name : 'Moderator'}</span>
                     </div>
-                    <div class="text-[10px] text-muted-custom">
+                    <div class="text-[10px] text-[var(--muted-foreground)]">
                       Max Runden: ${ev.max_rounds} | Framework: ${ev.framework || 'Steffi Kieffer Boardroom'} | Live Streaming aktiv
                     </div>
                   `;
-                  threadDiv.appendChild(headerBanner);
-                }
+                  return headerBanner;
+                });
               } else if (ev.type === "round_start") {
-                if (threadDiv && ev.round && ev.round !== currentRound) {
+                if (ev.round && ev.round !== currentRound) {
                   currentRound = ev.round;
-                  const divider = document.createElement("div");
-                  divider.className = "flex items-center gap-3 my-4 animate-fade-in";
-                  divider.innerHTML = `
-                    <div class="flex-1 h-[1px] bg-neutral-800"></div>
-                    <span class="text-[10px] font-mono font-bold tracking-widest uppercase px-3 py-1 rounded bg-neutral-900 border theme-border accent-color">
-                      ⚡ DEBATE ROUND ${currentRound} OF ${boardMeta.max_rounds}
-                    </span>
-                    <div class="flex-1 h-[1px] bg-neutral-800"></div>
-                  `;
-                  threadDiv.appendChild(divider);
-                  threadDiv.scrollTop = threadDiv.scrollHeight;
+                  const statusDialogText = document.getElementById("boardroom-dialog-status-text");
+                  if (statusDialogText) {
+                    statusDialogText.innerText = `Runde ${currentRound} von ${boardMeta.max_rounds} läuft...`;
+                  }
+                  appendBothBoardroomThreads(() => {
+                    const divider = document.createElement("div");
+                    divider.className = "flex items-center gap-3 my-3 animate-fade-in";
+                    divider.innerHTML = `
+                      <div class="flex-1 h-[1px] bg-[var(--border)]"></div>
+                      <span class="text-[10px] font-mono font-bold tracking-widest uppercase px-3 py-1 rounded bg-[var(--secondary)] border border-[var(--border)] text-indigo-500">
+                        ⚡ DEBATTE RUNDE ${currentRound} VON ${boardMeta.max_rounds}
+                      </span>
+                      <div class="flex-1 h-[1px] bg-[var(--border)]"></div>
+                    `;
+                    return divider;
+                  });
                 }
               } else if (ev.type === "consensus_reached") {
-                if (threadDiv) {
+                appendBothBoardroomThreads(() => {
                   const alertBox = document.createElement("div");
-                  alertBox.className = "rounded-md p-3 bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-2 my-2 animate-fade-in";
-                  alertBox.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> <span>${ev.content}</span>`;
-                  threadDiv.appendChild(alertBox);
-                  if (window.lucide) window.lucide.createIcons();
-                  threadDiv.scrollTop = threadDiv.scrollHeight;
-                }
+                  alertBox.className = "rounded-xl p-3 bg-[var(--secondary)] border border-emerald-500/30 text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-2 my-2 animate-fade-in";
+                  alertBox.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i> <span>${ev.content}</span>`;
+                  return alertBox;
+                });
               } else if (ev.type === "final_synthesis") {
-                if (threadDiv) {
+                const statusDialogText = document.getElementById("boardroom-dialog-status-text");
+                if (statusDialogText) {
+                  statusDialogText.innerText = "Finale Synthese & Aktionsplan wird erstellt...";
+                }
+                appendBothBoardroomThreads(() => {
                   const synthCard = document.createElement("div");
-                  synthCard.className = "rounded-xl p-6 bg-[var(--card)] border border-[var(--border)] space-y-4 my-6 shadow-md animate-fade-in";
+                  synthCard.className = "rounded-xl p-5 bg-[var(--card)] border border-amber-500/30 space-y-3 my-4 shadow-md animate-fade-in";
                   synthCard.innerHTML = `
-                    <div class="flex items-center justify-between border-b theme-border pb-3">
-                      <h3 class="text-sm font-bold uppercase tracking-wider accent-color flex items-center gap-2">
-                        <i data-lucide="award" class="w-4 h-4 text-black dark:text-white"></i> FINALE SYNTHESE & AKTIONSPLAN
+                    <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+                      <h3 class="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-2">
+                        <i data-lucide="award" class="w-4 h-4"></i> FINALE SYNTHESE &amp; AKTIONSPLAN
                       </h3>
-                      <span class="text-[10px] font-mono px-2.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 accent-color font-bold">${ev.agent_name} (${ev.role})</span>
+                      <span class="text-[10px] font-mono px-2.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 font-bold">${ev.agent_name} (${ev.role})</span>
                     </div>
-                    <div class="text-xs leading-relaxed text-primary-custom whitespace-pre-wrap font-sans font-medium">
+                    <div class="text-xs leading-relaxed text-[var(--foreground)] whitespace-pre-wrap font-sans font-medium">
                       ${ev.content}
                     </div>
                   `;
-                  threadDiv.appendChild(synthCard);
-                  if (window.lucide) window.lucide.createIcons();
-                  threadDiv.scrollTop = threadDiv.scrollHeight;
-                }
+                  return synthCard;
+                });
               } else if (ev.type === "chairman_init" || ev.type === "agent_response") {
-                if (threadDiv) {
+                const statusDialogText = document.getElementById("boardroom-dialog-status-text");
+                if (statusDialogText) {
+                  statusDialogText.innerText = `${ev.agent_name} (${ev.role}) argumentiert...`;
+                }
+                const isChairman = ev.type === "chairman_init" || ev.agent_id === (boardMeta.chairman ? boardMeta.chairman.id : "");
+                let msgAvatarUrl = '/static/avatars/avatar_001.jpg';
+                if (typeof getProfileAvatarUrl === 'function') {
+                  const foundProf = (typeof hermesProfilesData !== 'undefined' && hermesProfilesData) ? hermesProfilesData.find(p => p.id === ev.agent_id || p.name === ev.agent_name) : null;
+                  msgAvatarUrl = getProfileAvatarUrl(foundProf || { id: ev.agent_id || ev.agent_name });
+                }
+                appendBothBoardroomThreads(() => {
                   const card = document.createElement("div");
-                  const isChairman = ev.type === "chairman_init" || ev.agent_id === (boardMeta.chairman ? boardMeta.chairman.id : "");
-                  card.className = `rounded-xl p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-all space-y-2 my-2 animate-fade-in ${isChairman ? 'ring-1 ring-indigo-500/30' : ''}`;
-                  let msgAvatarUrl = '/static/avatars/avatar_001.jpg';
-                  if (typeof getProfileAvatarUrl === 'function') {
-                    const foundProf = (typeof hermesProfilesData !== 'undefined' && hermesProfilesData) ? hermesProfilesData.find(p => p.id === ev.agent_id || p.name === ev.agent_name) : null;
-                    msgAvatarUrl = getProfileAvatarUrl(foundProf || { id: ev.agent_id || ev.agent_name });
-                  }
+                  card.className = `rounded-xl p-3 bg-[var(--card)] border border-[var(--border)] transition-all space-y-2 my-2 animate-fade-in shadow-xs ${isChairman ? 'ring-1 ring-indigo-500/40' : ''}`;
                   card.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-neutral-800 pb-2">
+                    <div class="flex items-center justify-between border-b border-[var(--border)] pb-1.5">
                       <div class="flex items-center gap-2.5">
-                        <img src="${msgAvatarUrl}" alt="${ev.agent_name || 'Agent'}" class="w-8 h-8 rounded-full object-cover border border-slate-300 dark:border-neutral-700 shadow-xs shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
+                        <img src="${msgAvatarUrl}" alt="${ev.agent_name || 'Agent'}" class="w-8 h-8 rounded-full object-cover border border-[var(--border)] shadow-xs shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
                         <div>
                           <div class="flex items-center gap-2">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200">${ev.agent_name}</span>
-                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700 font-medium">${ev.role}</span>
+                            <span class="text-xs font-bold text-[var(--foreground)]">${ev.agent_name}</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)] font-medium">${ev.role}</span>
                             ${isChairman ? '<span class="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">MODERATOR</span>' : ''}
                           </div>
-                          <div class="text-[9.5px] text-slate-400 dark:text-neutral-500 font-mono mt-0.5">Modell: ${ev.model || 'free-forever'}</div>
+                          <div class="text-[9.5px] text-[var(--muted-foreground)] font-mono mt-0.5">Modell: ${ev.model || 'Standard'}</div>
                         </div>
                       </div>
-                      <span class="text-[10px] font-mono text-slate-400 dark:text-neutral-500">${new Date().toLocaleTimeString()}</span>
+                      <span class="text-[10px] font-mono text-[var(--muted-foreground)]">${new Date().toLocaleTimeString()}</span>
                     </div>
-                    <div class="text-xs leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-sans font-normal pt-1">
+                    <div class="text-xs leading-relaxed text-[var(--foreground)] whitespace-pre-wrap font-sans font-normal pt-1">
                       ${ev.content}
                     </div>
                   `;
-                  threadDiv.appendChild(card);
-                  if (window.lucide) window.lucide.createIcons();
-                  threadDiv.scrollTop = threadDiv.scrollHeight;
-                }
+                  return card;
+                });
               } else if (ev.type === "done") {
+                const statusDialogText = document.getElementById("boardroom-dialog-status-text");
+                if (statusDialogText) {
+                  statusDialogText.innerText = "Debatte erfolgreich abgeschlossen!";
+                }
                 if (document.getElementById("boardroom-loading-status")) {
                   document.getElementById("boardroom-loading-status").innerText = "Debatte erfolgreich abgeschlossen!";
                 }
+                loadBoardroomHistory();
               }
             } catch (err) {
               console.error("Parse SSE chunk error:", err);
@@ -1072,11 +2510,32 @@
           }
         }
       } catch (e) {
-        console.error("Boardroom debate error:", e);
-        alert(`Verbindungsfehler: ${e.message}`);
+        if (e.name === 'AbortError') {
+          console.log("Boardroom stream aborted by user.");
+          if (document.getElementById("boardroom-loading-status")) {
+            document.getElementById("boardroom-loading-status").innerText = "Debatte durch Nutzer gestoppt.";
+          }
+        } else {
+          console.error("Boardroom debate error:", e);
+          alert(`Verbindungsfehler: ${e.message}`);
+        }
       } finally {
+        currentBoardroomAbortController = null;
         if (startBtn) startBtn.disabled = false;
         if (loadingDiv) loadingDiv.classList.add("hidden");
+
+        const livePulse = document.getElementById("boardroom-live-pulse-badge");
+        if (livePulse) livePulse.classList.add("hidden");
+        const statusDot = document.getElementById("boardroom-header-status-dot");
+        if (statusDot) {
+          statusDot.className = "absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--card)] flex items-center justify-center";
+          statusDot.title = "System Bereit";
+        }
+        const totalBadge = document.getElementById("boardroom-total-badge");
+        if (totalBadge) {
+          totalBadge.innerText = "Bereit";
+          totalBadge.className = "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0";
+        }
       }
     }
     function renderBoardroomThread(data) {
@@ -1183,6 +2642,204 @@
         `;
         lucide.createIcons();
       }
+
+    // =========================================================================
+    // OPENROUTER & LLM PREIS-KATALOG MODAL CONTROLLER
+    // =========================================================================
+    let _currentPriceModalTargetEl = null;
+    let _cachedPriceModalList = [];
+
+    async function openPriceCatalogModal(targetSelectEl, initialFilter = "") {
+      _currentPriceModalTargetEl = targetSelectEl;
+      if (typeof window.loadAgentTabModelPrices === 'function') {
+        await window.loadAgentTabModelPrices();
+      }
+      
+      let pricesMap = {};
+      try {
+        const res = await fetch("/api/llm-providers/prices");
+        if (res.ok) {
+          const d = await res.json();
+          if (d && d.prices) pricesMap = d.prices;
+        }
+      } catch (e) {
+        console.warn("Could not fetch latest prices for modal:", e);
+      }
+
+      if (Object.keys(pricesMap).length === 0 && typeof window.findModelPriceInfo === 'function') {
+        // Fallback
+      }
+
+      _cachedPriceModalList = Object.entries(pricesMap).map(([id, info]) => {
+        return {
+          id: id,
+          name: info.name || id,
+          prompt_1m: info.prompt_1m || 0,
+          completion_1m: info.completion_1m || 0,
+          context_length: info.context_length || 0,
+          vendor: id.includes('/') ? id.split('/')[0] : 'other'
+        };
+      });
+
+      const modal = document.getElementById("llm-price-catalog-modal");
+      const searchInput = document.getElementById("llm-price-search");
+      if (searchInput) {
+        searchInput.value = initialFilter || "";
+      }
+      filterPriceModalTable();
+      if (modal) modal.classList.remove("hidden");
+      if (window.lucide) window.lucide.createIcons();
+    }
+    window.openPriceCatalogModal = openPriceCatalogModal;
+
+    function closePriceCatalogModal() {
+      const modal = document.getElementById("llm-price-catalog-modal");
+      if (modal) modal.classList.add("hidden");
+      _currentPriceModalTargetEl = null;
+    }
+    window.closePriceCatalogModal = closePriceCatalogModal;
+
+    function setPriceModalFilter(chip) {
+      const searchInput = document.getElementById("llm-price-search");
+      if (!searchInput) return;
+      if (chip === 'all') searchInput.value = "";
+      else if (chip === 'free') searchInput.value = "free";
+      else if (chip === 'deepseek') searchInput.value = "deepseek";
+      else if (chip === 'openai') searchInput.value = "openai";
+      else if (chip === 'anthropic') searchInput.value = "anthropic";
+      else if (chip === 'google') searchInput.value = "google";
+      else if (chip === 'meta') searchInput.value = "meta-llama";
+      else if (chip === 'cheap') searchInput.value = "cheap";
+      filterPriceModalTable();
+    }
+    window.setPriceModalFilter = setPriceModalFilter;
+
+    function filterPriceModalTable() {
+      const searchInput = document.getElementById("llm-price-search");
+      const query = (searchInput ? searchInput.value : "").toLowerCase().trim();
+      const tbody = document.getElementById("llm-price-table-body");
+      const countEl = document.getElementById("llm-price-modal-count");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      let filtered = _cachedPriceModalList;
+      if (query === "free") {
+        filtered = filtered.filter(m => m.prompt_1m === 0 && m.completion_1m === 0);
+      } else if (query === "cheap") {
+        filtered = filtered.filter(m => m.prompt_1m > 0 && m.prompt_1m <= 0.5);
+      } else if (query) {
+        filtered = filtered.filter(m => 
+          m.id.toLowerCase().includes(query) || 
+          m.name.toLowerCase().includes(query) || 
+          m.vendor.toLowerCase().includes(query)
+        );
+      }
+
+      // Sort by price ascending, 0 prices first
+      filtered.sort((a, b) => {
+        if (a.prompt_1m === 0 && b.prompt_1m > 0) return -1;
+        if (b.prompt_1m === 0 && a.prompt_1m > 0) return 1;
+        return a.prompt_1m - b.prompt_1m;
+      });
+
+      if (countEl) {
+        countEl.innerText = `${filtered.length} von ${_cachedPriceModalList.length} Modellen`;
+      }
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs text-[var(--muted-foreground)]">Keine Modelle für "${query}" gefunden.</td></tr>`;
+        return;
+      }
+
+      const fmt = typeof window.formatPricePer1M === "function" ? window.formatPricePer1M : (v => (v || 0).toFixed(4));
+
+      filtered.slice(0, 150).forEach(m => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-[var(--secondary)]/60 border-b border-[var(--border)] transition text-xs";
+        const ctx = m.context_length ? (m.context_length >= 1000000 ? `${(m.context_length/1000000).toFixed(1)}M` : `${Math.round(m.context_length/1000)}k`) : '—';
+        const isFree = (m.prompt_1m === 0 && m.completion_1m === 0);
+        
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 font-mono">
+            <div class="font-bold text-[var(--foreground)] truncate max-w-[280px]" title="${m.id}">${m.id}</div>
+            <div class="text-[10px] text-[var(--muted-foreground)] truncate max-w-[280px]">${m.name}</div>
+          </td>
+          <td class="py-2.5 px-3 font-mono text-[11px] text-[var(--muted-foreground)]">${ctx}</td>
+          <td class="py-2.5 px-3 font-mono text-right ${isFree ? 'text-emerald-500 font-bold' : 'text-emerald-600 dark:text-emerald-400 font-bold'}">
+            ${isFree ? 'Kostenlos' : '$' + fmt(m.prompt_1m)}
+          </td>
+          <td class="py-2.5 px-3 font-mono text-right ${isFree ? 'text-emerald-500 font-bold' : 'text-amber-500 font-bold'}">
+            ${isFree ? 'Kostenlos' : '$' + fmt(m.completion_1m)}
+          </td>
+          <td class="py-2.5 px-3 text-right">
+            <button type="button" onclick="selectModelFromPriceCatalog('${m.id}')" class="px-2.5 py-1 rounded-md bg-[var(--foreground)] text-[var(--background)] hover:opacity-90 transition font-mono text-[11px] font-bold cursor-pointer shadow-2xs">
+              Wählen
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    window.filterPriceModalTable = filterPriceModalTable;
+
+    function selectModelFromPriceCatalog(modelId) {
+      if (_currentPriceModalTargetEl) {
+        const sel = _currentPriceModalTargetEl;
+        let found = false;
+        for (let i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === modelId) {
+            sel.selectedIndex = i;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          const opt = document.createElement("option");
+          opt.value = modelId;
+          opt.textContent = modelId;
+          sel.appendChild(opt);
+          opt.selected = true;
+        }
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      if (typeof showArchonToast === "function") {
+        showArchonToast(`Modell '${modelId}' übernommen.`, "success");
+      }
+      closePriceCatalogModal();
+    }
+    window.selectModelFromPriceCatalog = selectModelFromPriceCatalog;
+
+    function openPriceCatalogForChairman() {
+      const modelSelect = document.getElementById("boardroom-chair-model-select");
+      const provSelect = document.getElementById("boardroom-chair-provider-select");
+      openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+    }
+    window.openPriceCatalogForChairman = openPriceCatalogForChairman;
+
+    function openPriceCatalogForSlot(btn) {
+      const row = btn.closest('.boardroom-slot-row');
+      if (!row) return;
+      const modelSelect = row.querySelector('.boardroom-slot-model-select');
+      const provSelect = row.querySelector('.boardroom-slot-provider-select');
+      openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+    }
+    window.openPriceCatalogForSlot = openPriceCatalogForSlot;
+
+    function openPriceCatalogForProfileEditor() {
+      const modelSelect = document.getElementById("prof-edit-model");
+      const provSelect = document.getElementById("prof-edit-provider");
+      openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+    }
+    window.openPriceCatalogForProfileEditor = openPriceCatalogForProfileEditor;
+
+    function openPriceCatalogForAgentTab() {
+      const modelSelect = document.getElementById("agent-tab-model-select");
+      const provSelect = document.getElementById("agent-tab-provider-select");
+      openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+    }
+    window.openPriceCatalogForAgentTab = openPriceCatalogForAgentTab;
+
+
     }
     async function handleSidebarPresetSelected(serviceId) {
       if (!serviceId) return;

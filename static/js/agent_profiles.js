@@ -899,6 +899,7 @@
         selectEl.selectedIndex = 0;
       }
     }
+    window.populateModelDropdown = populateModelDropdown;
     function handleCustomModelOption(selectEl) {
       if (!selectEl || selectEl.value !== "__CUSTOM__") return false;
       const custom = prompt("Gib die genaue Modell-ID ein (z. B. google/gemini-2.5-flash-image oder bytedance/seedream-4.5):");
@@ -2009,14 +2010,16 @@
         console.warn("Tokenpreise konnten nicht geladen werden:", e);
       }
     }
+    window.loadAgentTabModelPrices = loadAgentTabModelPrices;
     function formatPricePer1M(usd) {
       if (usd === undefined || usd === null || isNaN(usd)) return "0.00";
       const num = Number(usd);
       if (num === 0) return "0.00";
-      if (num >= 10) return num.toFixed(2);
-      if (num >= 1) return num.toFixed(2);
-      if (num >= 0.1) return num.toFixed(3);
-      return num.toFixed(4);
+      if (num >= 50) return num.toFixed(2);
+      const s4 = num.toFixed(4);
+      if (s4.endsWith("00")) return num.toFixed(2);
+      if (s4.endsWith("0")) return num.toFixed(3);
+      return s4;
     }
     window.formatPricePer1M = formatPricePer1M;
 
@@ -2322,12 +2325,14 @@
     }
     async function onProfileProviderChange(provider, preferredModel) {
       const modelSelect = document.getElementById("prof-edit-model");
+      if (!modelSelect) return;
       if (modelSelect.tagName === "SELECT") {
         modelSelect.disabled = true;
         modelSelect.innerHTML = `<option value="">Lade Modelle für ${provider}...</option>`;
       } else {
         modelSelect.placeholder = `Lade Modelle für ${provider}...`;
       }
+      await loadAgentTabModelPrices();
       const models = await loadLlmModelsForProvider(provider);
       if (modelSelect.tagName === "SELECT") {
         modelSelect.disabled = false;
@@ -2339,7 +2344,50 @@
       if (label && modelSelect.value) {
         label.innerText = `aktiv: ${modelSelect.value}`;
       }
+      updateProfileModelCost();
+      if (!preferredModel && modelSelect.value) {
+        applyProfileModelSelection();
+      }
     }
+
+    function updateProfileModelCost() {
+      const el = document.getElementById("prof-edit-model-cost");
+      if (!el) return;
+      const modelSelect = document.getElementById("prof-edit-model");
+      const model = modelSelect ? modelSelect.value : "";
+      const info = findModelPriceInfo(model);
+      if (info && info.p) {
+        const pre = info.approx ? "≈ " : "";
+        const inP = formatPricePer1M(info.p.prompt_1m);
+        const outP = formatPricePer1M(info.p.completion_1m);
+        el.innerHTML = `${pre}In: <span class="text-emerald-500 font-bold">$${inP}</span> | Out: <span class="text-amber-500 font-bold">$${outP}</span> <span class="text-slate-400 font-normal">/1M Tok</span>`;
+        el.classList.remove("hidden");
+        el.title = info.approx
+          ? `Preis des passenden Modells (${info.matched}) — Input: $${inP} / Output: $${outP} pro 1M Tokens`
+          : `Input: $${inP} / Output: $${outP} pro 1 Million Tokens (live)`;
+      } else if (model) {
+        el.innerHTML = `In: <span class="text-emerald-500 font-bold">$0.00</span> | Out: <span class="text-amber-500 font-bold">$0.00</span> <span class="text-slate-400 font-normal">/1M Tok</span>`;
+        el.classList.remove("hidden");
+      } else {
+        el.classList.add("hidden");
+      }
+    }
+    window.updateProfileModelCost = updateProfileModelCost;
+
+    async function onProfileModelDropdownChange(val) {
+      const selectEl = document.getElementById("prof-edit-model");
+      if (!selectEl) return;
+      if (val === "__CUSTOM__") {
+        if (handleCustomModelOption(selectEl)) {
+          val = selectEl.value;
+        } else {
+          return;
+        }
+      }
+      updateProfileModelCost();
+      await applyProfileModelSelection();
+    }
+    window.onProfileModelDropdownChange = onProfileModelDropdownChange;
     async function applyProfileModelSelection() {
       const providerSelect = document.getElementById("prof-edit-provider");
       const modelSelect = document.getElementById("prof-edit-model");
@@ -2900,6 +2948,8 @@ window.onAgentHeaderModelChange = typeof onAgentHeaderModelChange !== 'undefined
 window.onProfileCategoryChange = typeof onProfileCategoryChange !== 'undefined' ? onProfileCategoryChange : null;
 window.onProfileProviderChange = typeof onProfileProviderChange !== 'undefined' ? onProfileProviderChange : null;
 window.filterProfilesByCategory = typeof filterProfilesByCategory !== 'undefined' ? filterProfilesByCategory : null;
+window.onProfileModelDropdownChange = typeof onProfileModelDropdownChange !== 'undefined' ? onProfileModelDropdownChange : null;
+window.updateProfileModelCost = typeof updateProfileModelCost !== 'undefined' ? updateProfileModelCost : null;
 window.handleAvatarFileSelected = typeof handleAvatarFileSelected !== 'undefined' ? handleAvatarFileSelected : null;
 window.loadAgentTabChatMessages = typeof loadAgentTabChatMessages !== 'undefined' ? loadAgentTabChatMessages : null;
 window.switchAgentCadreTab = typeof switchAgentCadreTab !== 'undefined' ? switchAgentCadreTab : null;

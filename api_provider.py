@@ -190,6 +190,9 @@ def list_provider_models(pid: str) -> List[str]:
     # Bekannte Top-Modelle für Provider (inkl. Bild- und Vision-Modelle)
     popular_extras = {
         "openrouter": [
+            "deepseek/deepseek-v4.1-flash",
+            "deepseek/deepseek-chat",
+            "deepseek/deepseek-r1",
             "google/gemini-2.5-flash-image",
             "google/gemini-3.1-flash-image",
             "google/gemini-3-pro-image",
@@ -201,7 +204,6 @@ def list_provider_models(pid: str) -> List[str]:
             "anthropic/claude-3.5-sonnet",
             "openai/gpt-4o",
             "openai/gpt-4o-mini",
-            "deepseek/deepseek-chat",
             "meta-llama/llama-3.3-70b-instruct"
         ],
         "google": [

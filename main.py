@@ -946,6 +946,79 @@ async def fetch_agent_response_api(agent: Dict, user_prompt: str) -> Dict:
     }
 
 FRAMEWORKS_FILE = os.path.join(WORKSPACE_DIR, "frameworks.json")
+BOARDROOM_HISTORY_FILE = os.path.join(WORKSPACE_DIR, "boardroom_history.json")
+
+def load_boardroom_history():
+    hist = _load_json(BOARDROOM_HISTORY_FILE, None)
+    if hist is None:
+        # Initial starter entries so the overview looks alive immediately
+        hist = [
+            {
+                "id": "deb_sample_001",
+                "timestamp": "2026-10-26T21:30:00",
+                "date_display": "26.10.2026 · 21:30 Uhr",
+                "task": "Sollten wir unsere Microservices-Architektur konsolidieren und kostenfreie OmniRoute-Modelle als zentrales Gateway nutzen?",
+                "framework": "Steffi Kieffer Boardroom",
+                "chairman": "Michael Keller (Orchestrator)",
+                "rounds": 2,
+                "slots_count": 3,
+                "slots": [
+                    {"name": "Skeptiker & Risikoprüfer", "role": "Haftungs- & Risikoanalyse", "model": "deepseek/deepseek-r1"},
+                    {"name": "Innovator & Stratege", "role": "Strategische Entscheidungen", "model": "anthropic/claude-3.7-sonnet"},
+                    {"name": "Pragmatiker & Implementierer", "role": "Enterprise Solutions", "model": "deepseek/deepseek-chat"}
+                ],
+                "transcript": "Michael Keller (Moderator): Debatte eröffnet. Fragestellung: Konsolidierung der Microservices und Nutzung von OmniRoute als zentrales Gateway.\n\nSkeptiker (Haftungs- & Risikoanalyse): Aus Ausfallsicherheits- und SLA-Sicht birgt ein zentrales Gateway ein Single-Point-of-Failure-Risiko, sofern kein lokales Fallback auf Ollama oder direkte API-Keys hinterlegt ist.\n\nInnovator (Strategie): Wirtschaftlich sparen wir dadurch erhebliche Infrastrukturkosten. Die Konsolidierung vereinfacht das Routing und Token-Accounting drastisch.\n\nPragmatiker (Enterprise Solutions): Technisch machbar mittels NGINX-Reverse-Proxy und FastAPI-Failover. Empfehlung: Hybrides Modell mit 2 Fallback-Providern.",
+                "synthesis": "KONSENS & ENTSCHEIDUNGSEMPFEHLUNG:\n1. Konsolidierung wird befürwortet unter der Bedingung eines automatischen Fallback-Routings.\n2. OmniRoute fungiert als primäres Gateway; bei Latenz > 5000ms wird nahtlos auf direkte API-Keys bzw. lokale Modelle (Ollama) umgeschaltet.\n3. Implementierung eines 30-Tage-Pilotbetriebs mit Token-Monitoring.",
+                "vault_file": "boardroom_debatte_sample_001.md"
+            },
+            {
+                "id": "deb_sample_002",
+                "timestamp": "2026-10-25T17:15:00",
+                "date_display": "25.10.2026 · 17:15 Uhr",
+                "task": "Einführung eines autonomen Nacht-Watchdogs für CI/CD-Pipelines und Sicherheits-Patches",
+                "framework": "CLEAR-Model",
+                "chairman": "Michael Keller (Orchestrator)",
+                "rounds": 2,
+                "slots_count": 3,
+                "slots": [
+                    {"name": "Code Security Lead", "role": "Zero-Trust & Pentest", "model": "openai/gpt-4o"},
+                    {"name": "Senior DevOps Engineer", "role": "Docker & Infrastructure", "model": "deepseek/deepseek-chat"},
+                    {"name": "Quality Assurance", "role": "E2E Playwright Suite", "model": "google/gemini-2.5-flash"}
+                ],
+                "transcript": "Michael Keller: Diskussion zur Einführung eines autonomen Nacht-Watchdogs für automatische CI/CD-Patches.\n\nSecurity Lead: Autonome Patches dürfen nur in isolierten Staging-Branches committet werden. Production-Deploys erfordern HITL-Freigabe (Human-in-the-Loop).\n\nDevOps: Wir können nächtliche Cron-Jobs aufsetzen, die automatische PRs erstellen und Test-Suites laufen lassen.\n\nQA: Vollständige Test-Suite muss grün sein, bevor ein PR für den Reviewer markiert wird.",
+                "synthesis": "KONSENS & FAZIT:\n- Autonomer Nacht-Watchdog wird aktiviert, agiert jedoch im Staging-Modus.\n- Keine automatischen Merges in den Main-Branch ohne 2FA-Freigabe des Administrators.\n- Slack/Telegram-Benachrichtigung bei erfolgreichem Testlauf.",
+                "vault_file": "boardroom_debatte_sample_002.md"
+            }
+        ]
+        _save_json(BOARDROOM_HISTORY_FILE, hist)
+    return hist
+
+def save_boardroom_history_item(item: dict):
+    hist = load_boardroom_history()
+    hist.insert(0, item)
+    if len(hist) > 100:
+        hist = hist[:100]
+    _save_json(BOARDROOM_HISTORY_FILE, hist)
+    return hist
+
+@app.get("/api/boardroom/history")
+def api_get_boardroom_history():
+    return load_boardroom_history()
+
+@app.get("/api/boardroom/history/{item_id}")
+def api_get_boardroom_history_item(item_id: str):
+    hist = load_boardroom_history()
+    for item in hist:
+        if item.get("id") == item_id:
+            return item
+    raise HTTPException(status_code=404, detail="Debatte nicht gefunden")
+
+@app.delete("/api/boardroom/history/{item_id}")
+def api_delete_boardroom_history_item(item_id: str):
+    hist = load_boardroom_history()
+    hist = [h for h in hist if h.get("id") != item_id]
+    _save_json(BOARDROOM_HISTORY_FILE, hist)
+    return {"status": "success"}
 
 def load_boardroom_frameworks():
     fw = _load_json(FRAMEWORKS_FILE, None)
@@ -979,11 +1052,15 @@ def api_reset_boardroom_frameworks():
 class BoardroomSlotItem(BaseModel):
     role_name: str
     profile_id: str
+    model_id: Optional[str] = None
+    provider: Optional[str] = None
 
 class BoardroomRequest(BaseModel):
     task: str
     rounds: int = 2
     chairman_id: Optional[str] = "orchestrator"
+    chairman_provider: Optional[str] = "openrouter"
+    chairman_model: Optional[str] = None
     framework: str = "Steffi Kieffer Boardroom"
     slots: Optional[List[BoardroomSlotItem]] = None
     reasoning_level: Optional[str] = "profile"
@@ -1027,13 +1104,16 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
         "reasoning_level": "medium"
     })
     
+    chairman_chosen_model = (req.chairman_model or "").strip() or chairman_prof.get("model") or "deepseek/deepseek-chat"
+    chairman_chosen_provider = (req.chairman_provider or "").strip() or chairman_prof.get("provider") or "openrouter"
+
     chairman_agent = {
         "id": chairman_prof["id"],
         "name": chairman_prof.get("name", "Chairman"),
         "role": "Moderator & Chairman",
         "prompt": chairman_prof.get("prompt", ""),
-        "model": chairman_prof.get("model") or "deepseek/deepseek-chat",
-        "provider": chairman_prof.get("provider") or "openrouter",
+        "model": chairman_chosen_model,
+        "provider": chairman_chosen_provider,
         "reasoning_level": _resolve_reasoning(chairman_prof),
         "active": True
     }
@@ -1045,13 +1125,15 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
             p_id = s.profile_id or "senior_coder"
             r_name = s.role_name or f"Experte {idx+1}"
             prof = roles_map.get(p_id, {})
+            chosen_model = (s.model_id or "").strip() or prof.get("model") or "deepseek/deepseek-chat"
+            chosen_provider = (s.provider or "").strip() or prof.get("provider") or "openrouter"
             participant_agents.append({
                 "id": p_id,
                 "name": prof.get("name", p_id),
                 "role": r_name,
                 "prompt": prof.get("prompt", ""),
-                "model": prof.get("model") or "deepseek/deepseek-chat",
-                "provider": prof.get("provider") or "openrouter",
+                "model": chosen_model,
+                "provider": chosen_provider,
                 "reasoning_level": _resolve_reasoning(prof),
                 "active": True
             })
@@ -1105,6 +1187,30 @@ async def api_run_boardroom(req: BoardroomRequest):
         with open(vault_file, "w", encoding="utf-8") as f:
             f.write(md_content)
         add_ticker("AI Boardroom", f"Protokoll im Vault gespeichert: boardroom_debatte_{ts_str}.md")
+
+        # Speichere strukturierten Eintrag in boardroom_history
+        try:
+            hist_entry = {
+                "id": f"deb_{int(time.time())}",
+                "timestamp": datetime.datetime.now().isoformat(),
+                "date_display": datetime.datetime.now().strftime("%d.%m.%Y · %H:%M Uhr"),
+                "task": req.task,
+                "framework": req.framework,
+                "chairman": chairman_agent.get("name", "Moderator"),
+                "rounds": req.rounds,
+                "slots_count": max(0, len(all_debate_agents) - 1),
+                "slots": [
+                    {"name": a.get("name", ""), "role": a.get("role", ""), "model": a.get("model", "")}
+                    for a in all_debate_agents[1:]
+                ],
+                "transcript": res.get("transcript", ""),
+                "synthesis": res.get("synthesis", ""),
+                "vault_file": f"boardroom_debatte_{ts_str}.md"
+            }
+            save_boardroom_history_item(hist_entry)
+            res["history_id"] = hist_entry["id"]
+        except Exception as e:
+            print(f"Error saving boardroom history item in run: {e}")
     except Exception as e:
         print(f"Error saving obsidian vault note: {e}")
         
@@ -1128,12 +1234,14 @@ async def api_stream_boardroom(req: BoardroomRequest):
             if ev.get("type") == "done":
                 running_transcript = ev.get("transcript", "")
                 synthesis_text = ev.get("synthesis", "")
+                vault_file_name = ""
                 # Save to Obsidian Vault
                 try:
                     vault_dir = OBSIDIAN_VAULT_DIR
                     os.makedirs(vault_dir, exist_ok=True)
                     ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    vault_file = os.path.join(vault_dir, f"boardroom_debatte_{ts_str}.md")
+                    vault_file_name = f"boardroom_debatte_{ts_str}.md"
+                    vault_file = os.path.join(vault_dir, vault_file_name)
                     
                     md_content = f"# AI Boardroom Debatte: {req.task}\n\n"
                     md_content += f"**Datum:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -1145,10 +1253,34 @@ async def api_stream_boardroom(req: BoardroomRequest):
                     
                     with open(vault_file, "w", encoding="utf-8") as f:
                         f.write(md_content)
-                    add_ticker("AI Boardroom", f"Protokoll im Vault gespeichert: boardroom_debatte_{ts_str}.md")
-                    ev["vault_file"] = f"boardroom_debatte_{ts_str}.md"
+                    add_ticker("AI Boardroom", f"Protokoll im Vault gespeichert: {vault_file_name}")
+                    ev["vault_file"] = vault_file_name
                 except Exception as e:
                     print(f"Error saving obsidian vault note: {e}")
+
+                # Save structured debate entry to boardroom history
+                try:
+                    hist_entry = {
+                        "id": f"deb_{int(time.time())}",
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "date_display": datetime.datetime.now().strftime("%d.%m.%Y · %H:%M Uhr"),
+                        "task": req.task,
+                        "framework": req.framework,
+                        "chairman": chairman_agent.get("name", "Moderator"),
+                        "rounds": req.rounds,
+                        "slots_count": max(0, len(all_debate_agents) - 1),
+                        "slots": [
+                            {"name": a.get("name", ""), "role": a.get("role", ""), "model": a.get("model", "")}
+                            for a in all_debate_agents[1:]
+                        ],
+                        "transcript": running_transcript,
+                        "synthesis": synthesis_text,
+                        "vault_file": vault_file_name
+                    }
+                    save_boardroom_history_item(hist_entry)
+                    ev["history_id"] = hist_entry["id"]
+                except Exception as e:
+                    print(f"Error saving boardroom history item: {e}")
 
             payload = json.dumps(ev, ensure_ascii=False)
             yield f"data: {payload}\n\n"
@@ -8640,9 +8772,10 @@ async def api_get_llm_provider_models(provider: str = Query("openrouter")):
     p = (provider or "openrouter").lower().strip()
     catalog = {
         "openrouter": [
-            "deepseek/deepseek-v4-flash-0731",
+            "deepseek/deepseek-v4.1-flash",
             "deepseek/deepseek-chat",
             "deepseek/deepseek-r1",
+            "deepseek/deepseek-v4-flash-0731",
             "z-ai/glm-5.3",
             "anthropic/claude-3.7-sonnet",
             "anthropic/claude-3.5-sonnet",
@@ -8699,8 +8832,9 @@ async def api_get_llm_provider_models(provider: str = Query("openrouter")):
         ]
     }
     models = list(catalog.get(p, catalog["openrouter"]))
-    if p == "openrouter" and _OPENROUTER_PRICING_CACHE.get("data"):
-        for mid in _OPENROUTER_PRICING_CACHE["data"].keys():
+    global _openrouter_price_cache
+    if p == "openrouter" and _openrouter_price_cache:
+        for mid in _openrouter_price_cache.keys():
             if mid not in models:
                 models.append(mid)
     return {"status": "success", "provider": p, "models": models}
@@ -9688,8 +9822,10 @@ def get_llm_prices():
                     prompt_price = float(pricing.get("prompt", 0))
                     completion_price = float(pricing.get("completion", 0))
                     formatted[m["id"]] = {
+                        "name": m.get("name") or m["id"],
                         "prompt_1m": prompt_price * 1000000,
-                        "completion_1m": completion_price * 1000000
+                        "completion_1m": completion_price * 1000000,
+                        "context_length": m.get("context_length", 0)
                     }
                 _openrouter_price_cache = formatted
                 _openrouter_price_timestamp = now

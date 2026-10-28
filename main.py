@@ -671,7 +671,7 @@ def api_save_theme_live_overrides(payload: Dict = Body(...)):
 def api_delete_theme_live_overrides():
     _save_json(THEME_LIVE_FILE, {
         "rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {},
-        "migration_version": "2026_10_15_reset_v4", "reset_all": True,
+        "migration_version": "2026_10_27_baked_1793101139", "reset_all": True,
         "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     })
     return {"status": "success"}
@@ -1049,6 +1049,46 @@ def api_reset_boardroom_frameworks():
     _save_json(FRAMEWORKS_FILE, core_dispatcher.CATEGORIZED_FRAMEWORKS)
     return {"status": "success"}
 
+@app.post("/api/boardroom/parse-attachment")
+async def api_boardroom_parse_attachment(file: UploadFile = File(...)):
+    filename = file.filename or "attachment"
+    content = await file.read()
+    extracted_text = ""
+    lower_name = filename.lower()
+    
+    if lower_name.endswith(".pdf"):
+        try:
+            import pypdf, io
+            reader = pypdf.PdfReader(io.BytesIO(content))
+            pages_text = []
+            for i, page in enumerate(reader.pages[:25]):
+                t = page.extract_text() or ""
+                if t.strip():
+                    pages_text.append(f"--- Seite {i+1} ---\n{t.strip()}")
+            extracted_text = "\n\n".join(pages_text)
+            if not extracted_text.strip():
+                extracted_text = f"[Hinweis: Keine extrahierbare Textebene in PDF '{filename}' gefunden (z.B. gescanntes Dokument ohne OCR).]"
+        except Exception as e:
+            extracted_text = f"[Fehler beim Lesen der PDF-Datei '{filename}': {str(e)}]"
+    else:
+        try:
+            extracted_text = content.decode("utf-8", errors="replace")
+        except Exception as e:
+            extracted_text = f"[Konnte Datei '{filename}' nicht als Text dekodieren: {str(e)}]"
+            
+    max_chars = 30000
+    is_truncated = len(extracted_text) > max_chars
+    final_text = extracted_text[:max_chars]
+    if is_truncated:
+        final_text += f"\n\n[... Inhalt nach {max_chars} Zeichen für Prompt-Budget gekürzt ...]"
+        
+    return {
+        "filename": filename,
+        "size": len(content),
+        "text": final_text,
+        "is_truncated": is_truncated
+    }
+
 class BoardroomSlotItem(BaseModel):
     role_name: str
     profile_id: str
@@ -1217,7 +1257,7 @@ async def api_run_boardroom(req: BoardroomRequest):
     return res
 
 @app.post("/api/boardroom/stream")
-async def api_stream_boardroom(req: BoardroomRequest):
+async def api_stream_boardroom(req: BoardroomRequest, request: Request):
     chairman_agent, all_debate_agents = _prepare_boardroom_agents(req)
     add_ticker("AI Boardroom", f"Live-Debatte gestartet: '{req.task[:40]}...' ({req.framework}) mit {len(all_debate_agents)} Teilnehmern")
 
@@ -1231,6 +1271,9 @@ async def api_stream_boardroom(req: BoardroomRequest):
             active_agents=all_debate_agents,
             framework=req.framework
         ):
+            if await request.is_disconnected():
+                print("[AI Boardroom] Client disconnected. Beende Debatten-Stream vorzeitig.")
+                break
             if ev.get("type") == "done":
                 running_transcript = ev.get("transcript", "")
                 synthesis_text = ev.get("synthesis", "")
@@ -8719,7 +8762,7 @@ def api_run_research_mission(payload: dict):
     if not query:
         raise HTTPException(status_code=400, detail="Query darf nicht leer sein.")
     profile = payload.get("profile", "deep")
-    engines = payload.get("engines", ["duckduckgo", "wikipedia", "arxiv"])
+    engines = payload.get("engines", ["duckduckgo", "grokipedia", "wikipedia", "arxiv"])
     depth = int(payload.get("depth", 3))
     adversarial = bool(payload.get("adversarial", True))
     export_obsidian = bool(payload.get("export_obsidian", True))
@@ -8728,6 +8771,26 @@ def api_run_research_mission(payload: dict):
     settings = _load_json(SETTINGS_FILE, {})
     vault_path = settings.get("memory", {}).get("vault_path", "C:\\Mein Obsidian")
     workspace_dir = settings.get("workspace_dir", "/app/agent_workspace")
+    # Modus "reflect": Reflexionsschleife + Seiten-Scraper (research_engine_v2). Standard: klassische Pipeline.
+    use_reflect = bool(payload.get("reflect")) or payload.get("mode") == "reflect"
+    if use_reflect:
+        import research_engine_v2
+        return research_engine_v2.run_research_mission_reflect(
+            query=query,
+            profile=profile,
+            engines=engines,
+            depth=depth,
+            adversarial=adversarial,
+            export_obsidian=export_obsidian,
+            vault_path=vault_path,
+            workspace_dir=workspace_dir,
+            settings=settings,
+            model=model,
+            agent_role=agent_role,
+            fast_model=payload.get("fast_model") or None,
+            max_rounds=int(payload.get("max_rounds", 3)),
+            max_pages=int(payload.get("max_pages", 4)),
+        )
     res = research_engine.run_research_mission(
         query=query,
         profile=profile,
@@ -8762,6 +8825,43 @@ def api_get_research_dossier(filename: str):
     with open(fpath, "r", encoding="utf-8") as f:
         content = f.read()
     return {"status": "success", "filename": safe_name, "content": content}
+
+# --- SYSTEM UPDATE & RELEASE-LIFECYCLE (MEILENSTEIN 1) ---
+@app.get("/api/v1/system/update/check")
+def api_system_update_check():
+    from backend import system_updater
+    return system_updater.get_update_status()
+
+@app.post("/api/v1/system/update/push")
+def api_system_update_push(payload: dict = Body(default={})):
+    from backend import system_updater
+    msg = payload.get("message")
+    return system_updater.push_changes(commit_message=msg)
+
+@app.post("/api/v1/system/update/apply")
+def api_system_update_apply(payload: dict = Body(default={})):
+    from backend import system_updater
+    make_backup = payload.get("backup", True)
+    return system_updater.apply_update(make_backup=make_backup)
+
+@app.get("/api/v1/system/update/snapshots")
+def api_system_update_snapshots():
+    from backend import system_updater
+    return {"status": "success", "snapshots": system_updater.list_snapshots()}
+
+@app.post("/api/v1/system/update/rollback")
+def api_system_update_rollback(payload: dict = Body(...)):
+    from backend import system_updater
+    snapshot_id = payload.get("snapshot_id", "").strip()
+    if not snapshot_id:
+        raise HTTPException(status_code=400, detail="Snapshot-ID erforderlich.")
+    return system_updater.rollback_snapshot(snapshot_id)
+
+@app.post("/api/v1/system/update/backup")
+def api_system_update_backup(payload: dict = Body(default={})):
+    from backend import system_updater
+    tag = payload.get("tag", "manual").strip() or "manual"
+    return system_updater.create_snapshot(tag=tag)
 
 _VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
 

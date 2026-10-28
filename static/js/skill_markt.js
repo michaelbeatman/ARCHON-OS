@@ -1946,19 +1946,19 @@
 
     const BOARDROOM_HEADER_META = {
       overview: {
-        title: 'AI Mastermind · Übersicht',
+        title: 'Decision Engine · Übersicht',
         subtitle: 'Historie, frühere Debatten & strategische Konsens-Ergebnisse',
         img: '/static/img/cadre_icons/overview.png'
       },
       debate: {
         title: 'Decision Engine · Debatte',
         subtitle: 'Methodik-Auswahl, Experten-Zuweisung & Aufgabenstellung',
-        img: '/static/img/cadre_icons/operations.png?v=2'
+        img: '/static/img/cadre_icons/debate.png'
       },
       live: {
         title: 'Decision Engine · Live-Debatte',
         subtitle: 'Transkription, Runden-Ablauf & finale Konsens-Synthese',
-        img: '/static/img/cadre_icons/chat.png'
+        img: '/static/img/cadre_icons/live.png'
       }
     };
 
@@ -1983,22 +1983,20 @@
 
         if (t === tab) {
           if (btn) {
-            btn.className = "boardroom-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "boardroom-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
           }
           if (iconWrap) iconWrap.classList.add('active-tile');
           if (label) {
-            label.classList.add('font-bold');
-            label.classList.remove('font-medium');
+            label.className = "boardroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
           }
           if (view) view.classList.remove('hidden');
         } else {
           if (btn) {
-            btn.className = "boardroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "boardroom-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
           }
           if (iconWrap) iconWrap.classList.remove('active-tile');
           if (label) {
-            label.classList.remove('font-bold');
-            label.classList.add('font-medium');
+            label.className = "boardroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none";
           }
           if (view) view.classList.add('hidden');
         }
@@ -2136,6 +2134,46 @@
       if (modal) modal.classList.add("hidden");
     }
 
+    function resetBoardroomFrameworkDefaults() {
+      const fwSelect = document.getElementById("boardroom-framework-select");
+      const fw = fwSelect ? fwSelect.value : "Steffi Kieffer Boardroom";
+      try {
+        localStorage.removeItem("archon_boardroom_custom_" + fw);
+      } catch (e) {}
+      renderBoardroomSlots(fw, true);
+      if (typeof showArchonToast === "function") {
+        showArchonToast(`Standard-Slots für "${fw}" wiederhergestellt.`, "success");
+      }
+    }
+    window.resetBoardroomFrameworkDefaults = resetBoardroomFrameworkDefaults;
+
+    function exportCurrentViewingDebate() {
+      if (!currentViewingDebateId) return;
+      const item = cachedBoardroomHistory.find(h => h.id === currentViewingDebateId);
+      if (!item) return;
+
+      let md = `# AI Boardroom Debatte: ${item.task || 'Strategische Debatte'}\n\n`;
+      md += `**Datum:** ${item.date_display || new Date().toLocaleString("de-DE")}\n`;
+      md += `**Framework:** ${item.framework || 'Framework'}\n`;
+      md += `**Runden:** ${item.rounds || 2} | **Teilnehmer:** ${(item.slots_count || 3) + 1}\n\n`;
+      md += `## Diskussionsverlauf\n\n${item.transcript || '(Kein Transkript vorhanden)'}\n\n`;
+      md += `## Finale Synthese & Konsens\n\n${item.synthesis || '(Keine Synthese vorhanden)'}\n`;
+
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `boardroom_${item.id || 'debatte'}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      if (typeof showArchonToast === "function") {
+        showArchonToast("Debatte erfolgreich als Markdown exportiert.", "success");
+      }
+    }
+    window.exportCurrentViewingDebate = exportCurrentViewingDebate;
+
     function openTranscriptFromDetailModal() {
       closeBoardroomDetailModal();
       if (!currentViewingDebateId) return;
@@ -2233,8 +2271,26 @@
     function downloadBoardroomTranscript() {
       const threadDiv = document.getElementById("boardroom-thread");
       if (!threadDiv) return;
-      const text = threadDiv.innerText;
-      const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+
+      // Check if we are viewing a past debate
+      if (currentViewingDebateId) {
+        exportCurrentViewingDebate();
+        return;
+      }
+
+      // If active debate with cached metadata
+      const taskVal = (document.getElementById("boardroom-task") && document.getElementById("boardroom-task").value.trim()) || "AI Boardroom Debatte";
+      const fwVal = (document.getElementById("boardroom-framework-select") && document.getElementById("boardroom-framework-select").value) || "Framework";
+      const roundsVal = (document.getElementById("boardroom-rounds") && document.getElementById("boardroom-rounds").value) || "2";
+
+      let md = `# AI Boardroom Debatte: ${taskVal}\n\n`;
+      md += `**Datum:** ${new Date().toLocaleString("de-DE")}\n`;
+      md += `**Methodik-Framework:** ${fwVal}\n`;
+      md += `**Runden:** ${roundsVal}\n\n`;
+      md += `## Protokoll & Transkript\n\n`;
+      md += threadDiv.innerText;
+
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -2243,6 +2299,9 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      if (typeof showArchonToast === "function") {
+        showArchonToast("Transkript erfolgreich heruntergeladen.", "success");
+      }
     }
 
     function appendBothBoardroomThreads(elFactory) {
@@ -2289,15 +2348,25 @@
       let task = taskInput ? taskInput.value.trim() : "";
       if (currentBoardroomAttachments.length > 0) {
         for (const att of currentBoardroomAttachments) {
-          if (att.file && att.file.type && (att.file.type.startsWith("text/") || att.name.endsWith(".txt") || att.name.endsWith(".md") || att.name.endsWith(".json") || att.name.endsWith(".csv") || att.name.endsWith(".py") || att.name.endsWith(".js") || att.name.endsWith(".ts"))) {
+          if (att.file) {
             try {
-              const fileContent = await att.file.text();
-              task += `\n\n--- ANGEHÄNGTE DATEI: ${att.name} ---\n${fileContent.substring(0, 15000)}`;
+              const formData = new FormData();
+              formData.append("file", att.file);
+              const parseRes = await fetch("/api/boardroom/parse-attachment", {
+                method: "POST",
+                body: formData
+              });
+              if (parseRes.ok) {
+                const parsed = await parseRes.json();
+                task += `\n\n--- ANGEHÄNGTE DATEI: ${att.name} ---\n${parsed.text}`;
+              } else {
+                const fileContent = await att.file.text();
+                task += `\n\n--- ANGEHÄNGTE DATEI: ${att.name} ---\n${fileContent.substring(0, 15000)}`;
+              }
             } catch (err) {
-              console.warn("Could not read text of attachment", att.name, err);
+              console.warn("Could not parse attachment", att.name, err);
+              task += `\n\n[Angehängte Datei: ${att.name} (${att.size})]`;
             }
-          } else {
-            task += `\n\n[Angehängte Datei: ${att.name} (${att.size})]`;
           }
         }
       }

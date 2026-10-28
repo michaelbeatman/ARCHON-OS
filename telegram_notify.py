@@ -39,8 +39,8 @@ _TELEGRAM_DOC_MAX_BYTES = 45 * 1024 * 1024
 
 
 def telegram_enabled() -> bool:
-    """True, wenn Token + Chat-ID konfiguriert sind."""
-    return bool(_TELEGRAM_BOT_TOKEN and _TELEGRAM_CHAT_ID)
+    """Deaktiviert auf Nutzeranweisung (Server bleibt ohne Telegram aktiv)."""
+    return False
 
 
 # --- 2d (12.10.2026, User-Entscheidung): HTML statt Markdown ---------------

@@ -3,6 +3,111 @@
     // ==========================================
     // RESEARCH LAB (SÄULE 2: KOGNITION & WISSEN)
     // ==========================================
+    
+    let currentResearchTab = "labor";
+    const RESEARCH_HEADER_META = {
+      labor: {
+        title: "Research Lab · Labor",
+        subtitle: "Evidenzbasierte Multi-Engine Recherche, Quellen-Triangulation & Dossier-Generierung",
+        img: "/static/img/cadre_icons/research_labor.png"
+      },
+      dossiers: {
+        title: "Research Lab · Dossier-Archiv",
+        subtitle: "Gespeicherte Forschungsberichte, Evidenz-Inspektion & Obsidian-Sync",
+        img: "/static/img/cadre_icons/research_dossiers.png"
+      },
+      quellen: {
+        title: "Research Lab · Quellen & Engines",
+        subtitle: "Multi-Engine Quellen (DuckDuckGo, Wikipedia, ArXiv, Perplexity, SearXNG, Tavily)",
+        img: "/static/img/cadre_icons/research_quellen.png"
+      }
+    };
+
+    function switchResearchSubTab(tab) {
+      if (!tab) tab = "labor";
+      currentResearchTab = tab;
+      const tabs = ["labor", "dossiers", "quellen"];
+
+      const meta = RESEARCH_HEADER_META[tab] || RESEARCH_HEADER_META.labor;
+      const titleEl = document.getElementById("research-main-title");
+      const subtitleEl = document.getElementById("research-main-subtitle");
+      const headerImgEl = document.getElementById("research-main-header-img");
+      if (titleEl) titleEl.textContent = meta.title;
+      if (subtitleEl) subtitleEl.textContent = meta.subtitle;
+      if (headerImgEl) headerImgEl.src = meta.img;
+
+      tabs.forEach(t => {
+        const btn = document.getElementById(`research-subtab-btn-${t}`);
+        const view = document.getElementById(`research-subtab-${t}`);
+        const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
+        const label = btn ? btn.querySelector(".research-tab-label") : null;
+
+        if (t === tab) {
+          if (btn) {
+            btn.className = "research-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) iconWrap.classList.add("active-tile");
+          if (label) {
+            label.className = "research-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
+          }
+          if (view) view.classList.remove("hidden");
+        } else {
+          if (btn) {
+            btn.className = "research-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) iconWrap.classList.remove("active-tile");
+          if (label) {
+            label.className = "research-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none";
+          }
+          if (view) view.classList.add("hidden");
+        }
+      });
+
+      if (tab === "dossiers") {
+        refreshResearchHistory();
+      } else if (tab === "quellen") {
+        refreshResearchProviders();
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+    window.switchResearchSubTab = switchResearchSubTab;
+    function sendDossierToBoardroom(customContent) {
+      const content = customContent || currentResearchDossierMarkdown;
+      if (!content || !content.trim()) {
+        alert("Kein Dossier geladen. Bitte führe erst eine Recherche durch oder wähle ein archiviertes Dossier aus.");
+        return;
+      }
+      
+      // 1. Wechsle zur Decision Engine
+      if (typeof window.setTab === 'function') {
+        window.setTab('ai-mastermind');
+      }
+      if (typeof window.switchMastermindSubTab === 'function') {
+        window.switchMastermindSubTab('debatte');
+      }
+      
+      // 2. Extrahiere Thema & füge Vorlage in das Task-Textfeld ein
+      setTimeout(() => {
+        const taskInput = document.getElementById('boardroom-task');
+        if (taskInput) {
+          const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+          let title = "Recherche-Ergebnis";
+          for (const l of lines) {
+            if (l.startsWith('#')) {
+              title = l.replace(/^#+\s*/, '').trim();
+              break;
+            }
+          }
+          const snippet = content.length > 1800 ? content.substring(0, 1800) + "\n\n[... vollständiges Dossier in Zentralbibliothek/Obsidian hinterlegt]" : content;
+          taskInput.value = `Entscheidungsfrage auf Basis des Research-Dossiers "${title}":\n\n` + snippet;
+          taskInput.focus();
+        }
+      }, 250);
+    }
+    window.sendDossierToBoardroom = sendDossierToBoardroom;
+
+
     let currentResearchProfile = "deep";
     let currentResearchDossierMarkdown = "";
     let researchHistoryList = [];
@@ -193,6 +298,7 @@
       const agentRole = document.getElementById("research-agent-select")?.value || "Lead Research Analyst";
       const model = document.getElementById("research-model-select")?.value || "auto/best-reasoning";
       const depth = parseInt(document.getElementById("research-input-depth")?.value || "3", 10);
+      const reflect = !!document.getElementById("research-check-reflect")?.checked;
       const adversarial = !!document.getElementById("research-check-adversarial")?.checked;
       const exportObsidian = !!document.getElementById("research-check-obsidian")?.checked;
       const btn = document.getElementById("btn-start-research");
@@ -205,7 +311,11 @@
         btn.classList.add("opacity-50", "cursor-not-allowed");
       }
       if (statusBox) statusBox.classList.remove("hidden");
-      if (statusText) statusText.innerText = `Recherchiere über ${engines.join(", ")} mit ${agentRole} (${model})... Triangulation läuft.`;
+      if (statusText) {
+        statusText.innerText = reflect
+          ? `Autonome Tiefen-Recherche mit Reflexionsschleife & Volltext-Scraper über ${engines.join(", ")} mit ${agentRole} (${model})...`
+          : `Recherchiere über ${engines.join(", ")} mit ${agentRole} (${model})... Triangulation läuft.`;
+      }
       if (emptyState) emptyState.classList.add("hidden");
       try {
         const res = await fetch("/api/v1/research/run", {
@@ -216,6 +326,7 @@
             profile: currentResearchProfile,
             engines,
             depth,
+            reflect,
             adversarial,
             export_obsidian: exportObsidian,
             model,
@@ -223,9 +334,9 @@
           })
         });
         const data = await res.json();
-        if (data.status === "success") {
+        if (data.status === "success" || data.status === "no_evidence") {
           renderResearchDossier(data);
-          await refreshResearchHistory();
+          if (data.status === "success") await refreshResearchHistory();
         } else {
           alert("Fehler bei der Recherche: " + (data.detail || data.message || "Unbekannter Fehler"));
         }
@@ -289,7 +400,11 @@
           textView.classList.remove("hidden");
           textView.innerText = data.content;
         }
-        currentResearchDossierMarkdown = data.content;
+                currentResearchDossierMarkdown = data.content;
+        const archiveTitle = document.getElementById("research-archive-active-title");
+        const archiveContent = document.getElementById("research-archive-content-view");
+        if (archiveTitle) archiveTitle.innerText = data.filename || filename;
+        if (archiveContent) archiveContent.innerText = data.content;
         if (triBadge) {
           triBadge.innerText = `DOSSIER: ${data.filename}`;
           triBadge.className = "px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-muted-custom border theme-border";
@@ -323,3 +438,26 @@
         alert("Fehler beim Kopieren: " + err.message);
       });
     }
+    function filterResearchHistoryList(term) {
+      const listEl = document.getElementById("research-history-list");
+      if (!listEl) return;
+      const lower = (term || "").toLowerCase().trim();
+      const filtered = lower
+        ? researchHistoryList.filter(item => (item.title || "").toLowerCase().includes(lower) || (item.filename || "").toLowerCase().includes(lower))
+        : researchHistoryList;
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="text-[11px] text-[var(--muted-foreground)] p-2 text-center italic">Keine passenden Dossiers gefunden.</div>';
+        return;
+      }
+      listEl.innerHTML = filtered.map(item => `
+        <div onclick="loadResearchDossier('${item.filename}')" class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] cursor-pointer transition flex items-center justify-between group shadow-2xs">
+          <div class="min-w-0 flex-1 pr-2">
+            <div class="text-xs font-semibold text-[var(--foreground)] truncate">${item.title}</div>
+            <div class="text-[10px] text-[var(--muted-foreground)] font-mono mt-0.5">${item.modified} · ${(item.size_bytes / 1024).toFixed(1)} KB</div>
+          </div>
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-[var(--muted-foreground)] group-hover:text-red-500 shrink-0"></i>
+        </div>
+      `).join("");
+      if (window.lucide) window.lucide.createIcons();
+    }
+    window.filterResearchHistoryList = filterResearchHistoryList;

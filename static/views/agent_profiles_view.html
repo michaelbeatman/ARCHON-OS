@@ -1,21 +1,219 @@
-<div id="view-agent-profiles" class="hidden h-screen p-2 overflow-hidden">
-        <div class="flex gap-2.5 h-full min-h-0 w-full overflow-hidden">
-          
-          <!-- 1. LINKE SPALTE: AGENTEN-KATALOG (DYNAMISCH 250px ODER 68px RAIL) -->
-          <div id="agent-catalog-col" class="w-[250px] min-w-[250px] max-w-[250px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-3 transition-all duration-200 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
+<div id="view-agent-profiles" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none" style="height: 100vh !important; max-height: 100vh !important;">
+
+  <!-- ========================================================================= -->
+  <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, OVERLAY AVATAR)            -->
+  <!-- ========================================================================= -->
+  <div id="agent-profiles-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-4 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
+
+    <!-- LINKS: MODUL-TITEL ÜBER DEM 250px-KATALOG (REIN TYPOGRAFISCH) -->
+    <div class="w-[250px] min-w-[250px] max-w-[250px] shrink-0 flex items-center pl-5 pr-3 border-r border-[var(--border)] h-full select-none">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0"></span>
+        <h2 class="text-base font-extrabold uppercase tracking-widest text-[var(--foreground)] font-mono truncate">
+          Agentenkader
+        </h2>
+      </div>
+    </div>
+
+    <!-- MITTE: 110px AVATAR (GOLDENER SCHNITT: 68px IM HEADER, 42px OVERLAY) + STAMMDATEN -->
+    <div class="flex items-center gap-3.5 min-w-0 flex-1 pl-3.5 relative overflow-visible">
+      
+      <!-- AVATAR CONTAINER (110x110px, OVERLAY) -->
+      <div class="relative shrink-0 group z-30" style="width: 110px; height: 110px; transform: translateY(27px);">
+        <div 
+          id="prof-avatar-dropzone"
+          onclick="triggerAvatarFileInput()" 
+          ondragover="handleAvatarDragOver(event)"
+          ondragleave="handleAvatarDragLeave(event)"
+          ondrop="handleAvatarDrop(event)"
+          class="w-[110px] h-[110px] rounded-full border-[3px] border-[#878787] shadow-md bg-[var(--secondary)] overflow-hidden cursor-pointer flex items-center justify-center relative hover:ring-2 hover:ring-foreground/20 transition group "
+          title="Klicken zum Auswählen, Bild hierher ziehen oder einfügen (Strg+V)"
+        >
+          <img id="prof-edit-avatar-preview" src="/static/avatars/avatar_001.jpg" alt="Avatar" class="w-full h-full object-cover" onerror="this.src='/static/avatars/avatar_001.jpg'">
+          <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center text-white text-[10px] font-bold font-mono">
+            <i data-lucide="upload" class="w-4 h-4 mb-0.5"></i>
+            <span>Ändern</span>
+          </div>
+        </div>
+        <input type="file" id="prof-avatar-file-input" accept="image/*" class="hidden" onchange="handleAvatarFileSelected(event)">
+        <input type="hidden" id="prof-edit-avatar" value="/static/avatars/avatar_001.jpg">
+        <textarea id="prof-edit-prompt" class="hidden"></textarea>
+
+        <!-- Avatar Library Button -->
+        <button 
+          type="button" 
+          onclick="openAvatarLibraryModal(event)" 
+          class="absolute bottom-0 -left-1 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-md hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition z-40" 
+          title="Avatar-Bibliothek (174 Porträts) öffnen"
+        >
+          <i data-lucide="book-open" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+        </button>
+
+        <!-- Zufalls Avatar Button -->
+        <button 
+          type="button" 
+          onclick="handleDiceClick(event)" 
+          class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-md hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition z-40" 
+          title="Zufälligen Avatar wählen"
+        >
+          <i data-lucide="dices" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+        </button>
+
+        <!-- Standard Avatar Button (Reset) -->
+        <button 
+          type="button" 
+          onclick="resetAvatarToDefault(event)" 
+          class="absolute bottom-0 -right-1 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-md hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition z-40" 
+          title="Standard-Avatar wiederherstellen"
+        >
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+        </button>
+      </div>
+
+      <!-- Agent Stammdaten (Kompakt im 80px Header) -->
+      <div class="min-w-0 space-y-0.5 flex-1 pl-1">
+        <div class="flex items-center gap-2 group cursor-pointer" onclick="focusProfileNameInput()" title="Klicken zum Bearbeiten">
+          <h2 id="profile-editor-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-tight truncate">
+            Alexander Richter
+          </h2>
+          <span id="profile-editor-id-tag" class="px-2 py-0.5 rounded-full text-[9px] font-mono text-[var(--muted-foreground)] bg-[var(--secondary)] border border-[var(--border)] truncate shrink-0">
+            id: default
+          </span>
+        </div>
+        <div id="profile-editor-role" class="text-xs font-semibold text-[var(--muted-foreground)] truncate leading-tight">
+          Executive Decision Architect
+        </div>
+        <div class="pt-0.5">
+          <span id="profile-editor-cat-tag" class="inline-block px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] truncate max-w-full">
+            1. STRATEGIE, FÜHRUNG &amp; LEBENSPLANUNG
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECHTS: DIE 7 SUBTAB-ICONS (64px, MINIMALER ABSTAND, BESCHREIBUNG UNTEN) -->
+    <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 h-full py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
+      <!-- 1. Übersicht -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-overview" 
+        onclick="switchAgentCadreTab('overview')" 
+        class="agent-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Übersicht"
+      >
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/overview.png" alt="Übersicht" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Übersicht</span>
+      </button>
+
+      <!-- 2. Chat -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-chat" 
+        onclick="switchAgentCadreTab('chat')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Direkt-Chat"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/chat.png" alt="Chat" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Chat</span>
+      </button>
+
+      <!-- 3. Fähigkeiten -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-skills" 
+        onclick="switchAgentCadreTab('skills')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Fähigkeiten & Tools"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/skills.png" alt="Fähigkeiten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Fähigkeiten</span>
+      </button>
+
+      <!-- 4. Operations -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-operations" 
+        onclick="switchAgentCadreTab('operations')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Operations & Disposition"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/operations.png?v=3" alt="Operations" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Operations</span>
+      </button>
+
+      <!-- 5. SOUL -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-soul" 
+        onclick="switchAgentCadreTab('soul')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="SOUL Direktiven"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/soul.png" alt="SOUL" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">SOUL</span>
+      </button>
+
+      <!-- 6. Personalakte -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-personalakte" 
+        onclick="switchAgentCadreTab('personalakte')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Personalakte (Dossier & SOP)"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/personalakte.png" alt="Personalakte" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Personalakte</span>
+      </button>
+
+      <!-- 7. Marktplatz -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-marketplace" 
+        onclick="switchAgentCadreTab('marketplace')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Talent-Marktplatz"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/marketplace.png" alt="Marktplatz" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Marktplatz</span>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 2. HAUPT-BEREICH UNTER DEM HEADER: KATALOG (LINKS) & ARBEITSBEREICH (RECHTS)-->
+  <!-- ========================================================================= -->
+  <div class="flex-1 min-h-0 flex gap-2.5 w-full overflow-hidden p-2.5 pt-3" style="height: calc(100vh - 80px); max-height: calc(100vh - 80px);">
+    
+<!-- 1. LINKE SPALTE: AGENTEN-KATALOG (DYNAMISCH 250px ODER 68px RAIL) -->
+          <div id="agent-catalog-col" class="w-[250px] min-w-[250px] max-w-[250px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-3 transition-all duration-200 bg-[var(--card)] rounded-2xl shadow-xs" style="height: 100% !important;">
             
             <!-- EXPANDED HEADER (Wenn nicht eingeklappt) -->
             <div id="catalog-expanded-header" class="space-y-2.5 shrink-0">
-              <div class="h-[72px] flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
-                <div class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full bg-foreground hidden"></span>
-                  <h3 class="text-[22px] font-semibold tracking-tight text-[var(--foreground)]">Agenten-Katalog</h3>
-                  <button type="button" onclick="openContextHelp('kader')" title="Hilfe zum Agenten-Kader" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+              <div class="flex items-center justify-between pb-1 border-b border-[var(--border)]">
+                <div class="flex items-center gap-1.5">
+                  <i data-lucide="users" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i>
+                  <span class="text-xs font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">Katalog</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button type="button" onclick="openContextHelp('kader')" title="Hilfe zum Agenten-Kader" class="w-6 h-6 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
                     <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
                   </button>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <button type="button" id="btn-catalog-collapse" onclick="toggleCatalogCollapse()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold cursor-pointer shadow-xs" title="Katalog auf 68px Icon-Rail einklappen">
+                  <button type="button" id="btn-catalog-collapse" onclick="toggleCatalogCollapse()" class="h-6 px-2 rounded-md border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-[10px] font-mono font-bold cursor-pointer shadow-2xs" title="Katalog auf 68px Icon-Rail einklappen">
                     ◀
                   </button>
                 </div>
@@ -138,200 +336,23 @@
               </div>
             </div>
           </div>
-          <!-- 2. RECHTE HAUPT-SPALTE: AGENTEN-COCKPIT -->
-          <div class="flex-1 h-full min-h-0 flex flex-col gap-2 min-w-0 overflow-hidden">
-            
-            <!-- GROSSER, HOCHWERTIGER AGENTEN-HEADER (MOCKUP-DESIGN) -->
-            <div class="prof-panel-card p-3 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs space-y-2.5">
-              
-              <!-- HAUPTREIHE: Links Avatar & Stammdaten | Rechts die 7 vertikalen Icon-Kacheln -->
-              <div class="flex items-center justify-between gap-4">
-                
-                <!-- Links: Avatar + Stammdaten -->
-                <div class="flex items-center gap-3.5 min-w-0 flex-1">
-                  <!-- Avatar Container mit Bild-Dropzone -->
-                  <div class="relative shrink-0 group">
-                    <div 
-                      id="prof-avatar-dropzone"
-                      onclick="triggerAvatarFileInput()" 
-                      ondragover="handleAvatarDragOver(event)"
-                      ondragleave="handleAvatarDragLeave(event)"
-                      ondrop="handleAvatarDrop(event)"
-                      class="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-[var(--border)] shadow-md bg-[var(--secondary)] overflow-hidden cursor-pointer flex items-center justify-center relative hover:ring-2 hover:ring-foreground/20 transition group"
-                      title="Klicken zum Auswählen, Bild hierher ziehen oder einfügen (Strg+V)"
-                    >
-                      <img id="prof-edit-avatar-preview" src="/static/avatars/avatar_001.jpg" alt="Avatar" class="w-full h-full object-cover" onerror="this.src='/static/avatars/avatar_001.jpg'">
-                      <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center text-white text-[9px] font-bold font-mono">
-                        <i data-lucide="upload" class="w-3.5 h-3.5 mb-0.5"></i>
-                        <span>Ändern</span>
-                      </div>
-                    </div>
-                    <input type="file" id="prof-avatar-file-input" accept="image/*" class="hidden" onchange="handleAvatarFileSelected(event)">
-                    <input type="hidden" id="prof-edit-avatar" value="/static/avatars/avatar_001.jpg">
-                    <textarea id="prof-edit-prompt" class="hidden"></textarea>
-                    <!-- Avatar Library Button -->
-                    <button 
-                      type="button" 
-                      onclick="openAvatarLibraryModal(event)" 
-                      class="absolute -bottom-1 -left-1 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-xs hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition" 
-                      title="Avatar-Bibliothek (174 Porträts) öffnen"
-                    >
-                      <i data-lucide="book-open" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                    </button>
-                    <!-- Zufalls Avatar Button -->
-                    <button 
-                      type="button" 
-                      onclick="handleDiceClick(event)" 
-                      class="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-xs hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition" 
-                      title="Zufälligen Avatar wählen"
-                    >
-                      <i data-lucide="dices" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                    </button>
-                    <!-- Standard Avatar Button (Reset) -->
-                    <button 
-                      type="button" 
-                      onclick="resetAvatarToDefault(event)" 
-                      class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-xs hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition" 
-                      title="Standard-Avatar wiederherstellen"
-                    >
-                      <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-                    </button>
-                  </div>
-                  <!-- Agent Info Text -->
-                  <div class="min-w-0 space-y-1">
-                    <div class="flex items-center group cursor-pointer" onclick="focusProfileNameInput()" title="Klicken zum Bearbeiten">
-                      <h2 id="profile-editor-title" class="text-lg sm:text-xl font-black text-[var(--foreground)] tracking-tight leading-tight truncate">
-                        Alexander Richter
-                      </h2>
-                    </div>
-                    <div id="profile-editor-role" class="text-xs font-bold text-[var(--muted-foreground)] truncate">
-                      Executive Decision Architect
-                    </div>
-                    <!-- 3. Zeile: Kategorie -->
-                    <div class="pt-0.5">
-                      <span id="profile-editor-cat-tag" class="inline-block px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] truncate max-w-full">
-                        1. STRATEGIE, FÜHRUNG &amp; LEBENSPLANUNG
-                      </span>
-                    </div>
-                    <!-- 4. Zeile: ID Badge -->
-                    <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      <span id="profile-editor-id-tag" class="inline-block px-2 py-0.5 rounded-full text-[9px] font-mono text-[var(--muted-foreground)] bg-[var(--background)] border border-[var(--border)] truncate max-w-full">
-                        id: default
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <!-- Rechts: DIE 7 VERTIKALEN ICONS (OHNE RAND, ORIGINAL AUS USER-ICONSET) -->
-                <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
-                  
-                  <!-- 1. Übersicht -->
-                  <button 
-                    type="button" 
-                    id="agent-tab-btn-overview" 
-                    onclick="switchAgentCadreTab('overview')" 
-                    class="agent-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Übersicht"
-                  >
-                    <div class="tile-icon-wrap active-tile w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
-                      <img src="/static/img/cadre_icons/overview.png" alt="Übersicht" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold">Übersicht</span>
-                  </button>
-                  <!-- 2. Chat -->
-                  <button 
-                    type="button" 
-                    id="agent-tab-btn-chat" 
-                    onclick="switchAgentCadreTab('chat')" 
-                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Direkt-Chat"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
-                      <img src="/static/img/cadre_icons/chat.png" alt="Chat" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Chat</span>
-                  </button>
-                  <!-- 3. Fähigkeiten -->
-                  <button 
-                    type="button" 
-                    id="agent-tab-btn-skills" 
-                    onclick="switchAgentCadreTab('skills')" 
-                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Fähigkeiten & Tools"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
-                      <img src="/static/img/cadre_icons/skills.png" alt="Fähigkeiten" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Fähigkeiten</span>
-                  </button>
-                  <!-- 4. Operations -->
-                  <button 
-                    type="button" 
-                    id="agent-tab-btn-operations" 
-                    onclick="switchAgentCadreTab('operations')" 
-                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Operations & Disposition"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
-                      <img src="/static/img/cadre_icons/operations.png?v=2" alt="Operations" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Operations</span>
-                  </button>
-                  <!-- 5. SOUL -->
-                  <button 
-                    type="button" 
-                    id="agent-tab-btn-soul" 
-                    onclick="switchAgentCadreTab('soul')" 
-                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="SOUL Direktiven"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
-                      <img src="/static/img/cadre_icons/soul.png" alt="SOUL" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">SOUL</span>
-                  </button>
-                  <!-- 6. Personalakte -->
-                  <button 
-                    type="button" 
-                    id="agent-tab-btn-personalakte" 
-                    onclick="switchAgentCadreTab('personalakte')" 
-                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Personalakte (Dossier &amp; SOP)"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
-                      <img src="/static/img/cadre_icons/personalakte.png" alt="Personalakte" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Personalakte</span>
-                  </button>
-                  <!-- 7. Marktplatz -->
-                  <button 
-                    type="button" 
-                    id="agent-tab-btn-marketplace" 
-                    onclick="switchAgentCadreTab('marketplace')" 
-                    class="agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Talent-Marktplatz"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5">
-                      <img src="/static/img/cadre_icons/marketplace.png" alt="Marktplatz" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium">Marktplatz</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <!-- HAUPTBEREICH: 7 DYNAMISCHE REITER-PANES -->
+
+    <!-- 2. RECHTE SPALTE: AGENTEN-COCKPIT (7 DYNAMISCHE PANES) -->
+    <div class="flex-1 h-full min-h-0 flex flex-col min-w-0 overflow-hidden relative">
+<!-- HAUPTBEREICH: 7 DYNAMISCHE REITER-PANES -->
             <div class="flex-1 min-h-0 relative overflow-hidden flex flex-col">
               <!-- ========================================================= -->
               <!-- REITER 1: 📊 ÜBERSICHT (360°-DOSSIER) -->
               <!-- ========================================================= -->
-              <div id="agent-pane-overview" class="flex-1 min-h-0 flex flex-col justify-between gap-2 overflow-hidden">
+              <div id="agent-pane-overview" class="flex-1 min-h-0 flex flex-col justify-between overflow-hidden w-full h-full pb-1">
                 
-                <!-- 2 Gleichwertige Spalten -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-2 flex-1 min-h-0 overflow-hidden">
+                <!-- 2 Elastische Spalten: Stammdaten (optimale Formularbreite) + Live-Feed-Log (dynamisch dehnbar) mit klarem Spalt zur Fußleiste -->
+                <div id="prof-main-columns-container" class="flex gap-2.5 flex-1 min-h-0 overflow-hidden w-full mb-3" style="max-height: calc(100% - 78px);">
                   
                   <!-- Linke Spalte: Stammdaten, Modell & Projekt-Historie -->
-                  <div class="prof-panel-card p-3 flex flex-col gap-2 min-h-0 overflow-y-auto custom-scrollbar">
+                  <div id="prof-col-stammdaten" class="w-[500px] xl:w-[520px] 2xl:w-[540px] shrink-0 prof-panel-card p-3 flex flex-col gap-2 h-full min-h-0 overflow-y-auto custom-scrollbar border-0 shadow-xs">
                     
-                    <div class="flex flex-col gap-2 flex-1 min-h-0">
+                    <div class="flex flex-col gap-2 flex-1 min-h-0 pt-11">
                       <!-- Persönlicher Name & Handle -->
                       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
                         <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
@@ -362,14 +383,15 @@
                           </select>
                         </div>
                       </div>
-                      <!-- API & Modell-Router -->
-                      <div class="prof-box-card p-2 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1.5 shadow-xs shrink-0">
+                      <!-- API & Modell-Router: 2x2 Matrix (Gleichverteilt) -->
+                      <div class="prof-box-card p-2 rounded-xl bg-[var(--card)] space-y-1.5 shadow-xs shrink-0 border-0">
                         <div class="flex items-center justify-between">
                           <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold">Modell-Router / LLM-Provider</label>
                           <span id="prof-active-model-label" class="text-[9px] font-mono text-[var(--muted-foreground)]">aktiv: -</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-                          <div class="flex items-center gap-1">
+                        <div class="grid grid-cols-2 gap-2 w-full">
+                          <!-- Zeile 1 Links: Provider & Dollar-Katalog Button -->
+                          <div class="flex items-center gap-1 min-w-0">
                             <select id="prof-edit-provider" onchange="onProfileProviderChange(this.value)" class="flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono">
                               <option value="openrouter" selected>OpenRouter</option>
                               <option value="google">Google AI (Gemini)</option>
@@ -382,29 +404,36 @@
                               <i data-lucide="circle-dollar-sign" class="w-3.5 h-3.5"></i>
                             </button>
                           </div>
-                          <select id="prof-edit-model" onchange="onProfileModelDropdownChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono truncate">
-                            <option value="">Lade Modelle...</option>
-                          </select>
-                          <select id="prof-edit-reasoning" onchange="applyProfileModelSelection()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono" title="Reasoning-Intensität / Thinking Budget">
-                            <option value="off">🧠 Aus (0 Tok)</option>
-                            <option value="minimal">🧠 Minimal (~1k)</option>
-                            <option value="low">🧠 Niedrig (~2k)</option>
-                            <option value="medium" selected>🧠 Mittel (~4k)</option>
-                            <option value="high">🧠 Hoch (~8k)</option>
-                            <option value="max">🧠 Maximal (~16k)</option>
-                          </select>
-                        </div>
-                        <div class="flex items-center justify-end pt-0.5">
-                          <span id="prof-edit-model-cost" class="text-[10px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20 inline-block shadow-2xs hidden"></span>
+                          <!-- Zeile 1 Rechts: Sprachmodell -->
+                          <div class="min-w-0">
+                            <select id="prof-edit-model" onchange="onProfileModelDropdownChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono truncate">
+                              <option value="">Lade Modelle...</option>
+                            </select>
+                          </div>
+                          <!-- Zeile 2 Links: Reasoning -->
+                          <div class="min-w-0">
+                            <select id="prof-edit-reasoning" onchange="applyProfileModelSelection()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono truncate" title="Reasoning-Intensität / Thinking Budget">
+                              <option value="off">🧠 Aus (0 Tok)</option>
+                              <option value="minimal">🧠 Minimal (~1k)</option>
+                              <option value="low">🧠 Niedrig (~2k)</option>
+                              <option value="medium" selected>🧠 Mittel (~4k)</option>
+                              <option value="high">🧠 Hoch (~8k)</option>
+                              <option value="max">🧠 Maximal (~16k)</option>
+                            </select>
+                          </div>
+                          <!-- Zeile 2 Rechts: Costpill -->
+                          <div class="flex items-center min-w-0">
+                            <span id="prof-edit-model-cost" class="w-full text-center text-[10px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-1 rounded-md border border-amber-500/20 shadow-2xs truncate font-medium">In: $0.15 | Out: $0.60 /1M Tok</span>
+                          </div>
                         </div>
                       </div>
                       <!-- Beschreibung & Aufgabenprofil -->
                       <div class="prof-box-card p-2 rounded-xl bg-[var(--card)] space-y-1 shrink-0">
                         <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold">Aufgabenprofil & Beschreibung</label>
-                        <textarea id="prof-edit-desc" class="w-full h-20 bg-[var(--background)] border border-[var(--border)] rounded-lg p-2 text-xs text-[var(--foreground)] leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-2xs" placeholder="Definiere hier die Kernaufgaben und den Fokus des Agenten..."></textarea>
+                        <textarea id="prof-edit-desc" class="w-full h-16 bg-[var(--background)] border border-[var(--border)] rounded-lg p-2 text-xs text-[var(--foreground)] leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-2xs" placeholder="Definiere hier die Kernaufgaben und den Fokus des Agenten..."></textarea>
                       </div>
                       <!-- Projekt-Historie & Beteiligungen (bis zur Unterkante ausfüllend) -->
-                      <div class="prof-box-card p-2 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-[120px] flex flex-col space-y-1">
+                      <div class="prof-box-card p-2 rounded-xl bg-[var(--card)] flex-1 min-h-[90px] flex flex-col space-y-1 border-0">
                         <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
                           <div class="flex items-center gap-1.5">
                             <span class="w-1.5 h-1.5 rounded-full bg-foreground/60 inline-block"></span>
@@ -418,8 +447,8 @@
                       </div>
                     </div>
                   </div>
-                  <!-- Rechte Spalte: Aktivitäts-Log & Live-Feed in voller Höhe -->
-                  <div class="prof-panel-card p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+                  <!-- Rechte Spalte: Aktivitäts-Log & Live-Feed elastisch breiter -->
+                  <div id="prof-col-activity-feed" class="flex-1 min-w-0 prof-panel-card p-3 flex flex-col gap-2 h-full min-h-0 overflow-hidden border-0 shadow-xs">
                     
                     <!-- Aktivitäts-Log (Volle Höhe) -->
                     <div class="prof-box-card p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-0 flex flex-col justify-between space-y-1 shadow-xs">
@@ -436,8 +465,8 @@
                     </div>
                   </div>
                 </div>
-                <!-- Unten: KPI- & STATUS-KACHEL (DURCHGEHEND) -->
-                <div class="prof-panel-card p-2.5 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                <!-- Unten: KPI- & STATUS-KACHEL (ELASTISCH DURCHGEHEND) -->
+                <div id="prof-overview-kpi-footer" class="prof-panel-card p-2.5 shrink-0 w-full bg-[var(--card)] border-0 rounded-xl shadow-xs relative mt-0 top-0">
                   <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                     <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
                       <div class="flex items-center justify-between">
@@ -471,7 +500,7 @@
               <!-- REITER 2: 🛠️ FÄHIGKEITEN (SKILL- & MCP-STUDIO) -->
               <!-- ========================================================= -->
               <div id="agent-pane-skills" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between gap-3 overflow-hidden">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between gap-3 overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
                   
                   <!-- Zugewiesene Skills -->
                   <div class="prof-box-card p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-0 flex flex-col justify-between space-y-2 shadow-xs">
@@ -521,7 +550,7 @@
               <!-- REITER 3: 💬 CHAT (MASTER-CHAT ENGINE & THREAD-MANAGER) -->
               <!-- ========================================================= -->
               <div id="agent-pane-chat" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
                   
                   <!-- Chat Header: Session-Auswahl & Neue Session & Master-Konsole Sprung -->
                   <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0 gap-2">
@@ -698,7 +727,7 @@
               <!-- REITER 4: 🧬 SOUL (INLINE-EDITOR) -->
               <!-- ========================================================= -->
               <div id="agent-pane-soul" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
                   
                   <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
                     <div class="flex items-center gap-2 min-w-0">
@@ -740,7 +769,7 @@
               <!-- REITER 5: 📋 PERSONALAKTE (OBSIDIAN-DOSSIER) -->
               <!-- ========================================================= -->
               <div id="agent-pane-personalakte" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
                   
                   <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
                     <div class="flex items-center gap-2 min-w-0">
@@ -852,7 +881,7 @@
               <!-- REITER 4: ⚡ OPERATIONS (TASK- & TEAM-DISPOSITION) -->
               <!-- ========================================================= -->
               <div id="agent-pane-operations" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
                   
                   <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
                     <div class="flex items-center gap-2">
@@ -902,7 +931,7 @@
               <!-- REITER 7: 🛒 MARKTPLATZ (TALENT- & SKILL-STORE) -->
               <!-- ========================================================= -->
               <div id="agent-pane-marketplace" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xs">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
                   
                   <!-- Tab Header: 2 Tabs (Talent-Marktplatz & Skill-Marktplatz) -->
                   <div class="space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -1000,7 +1029,12 @@
 
         <!-- ========================================================================= -->
         <!-- MODAL: AVATAR-BIBLIOTHEK (174 PORTRÄTS FARBLICH SORTIERT)                  -->
-        <!-- ========================================================================= -->
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 3. MODALS (AVATAR-BIBLIOTHEK, SKILL-EDITOR, TOOL-CONFIG)                  -->
+  <!-- ========================================================================= -->
+<!-- ========================================================================= -->
         <div id="avatar-picker-modal" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 w-full max-w-6xl h-[88vh] max-h-[88vh] flex flex-col shadow-2xl space-y-3.5">
             <!-- Modal Header -->
@@ -1162,4 +1196,3 @@
           </div>
         </div>
 
-      </div>

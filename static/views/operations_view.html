@@ -1,5 +1,5 @@
         <!-- SUB-VIEW 2: KANBAN BOARD (Vollwertiges Operations-Kanban in Mission Control) -->
-        <main id="ops-view-kanban" class="hidden flex-1 w-full p-3 flex flex-col gap-2.5 min-h-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs">
+        <main id="ops-view-kanban" class="hidden flex-1 w-full p-3 flex flex-col gap-2.5 min-h-0 overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
           <!-- BOARD-TOOLBAR: Neue Aufgabe links vom Suchfeld, Filter, WIP, Stats, Sync links vom Archiv -->
           <div id="ops-kanban-toolbar" class="flex items-center gap-2 shrink-0 flex-wrap">
             <button onclick="openNewTaskModal()" class="h-8 px-3 rounded-lg bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] font-semibold transition cursor-pointer text-xs flex items-center gap-1.5 shadow-xs shrink-0">
@@ -64,7 +64,7 @@
         </main>
 
         <!-- SUB-VIEW 3: ORGANISATION & TEAMS (ABLAUFDIAGRAMM & TEAMS) -->
-        <main id="ops-view-org" class="hidden flex-1 w-full flex flex-col min-h-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs overflow-hidden">
+        <main id="ops-view-org" class="hidden flex-1 w-full flex flex-col min-h-0 rounded-2xl border-0 bg-[var(--card)] shadow-xs overflow-hidden">
           <!-- ORG TOOLBAR -->
           <div class="px-4 py-2.5 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between shrink-0 shadow-2xs gap-3">
             <div class="flex items-center gap-2">
@@ -135,7 +135,7 @@
         </main>
 
         <!-- SUB-VIEW 4: INTERNE KOMMUNIKATION -->
-        <main id="ops-view-comm" class="hidden flex-1 w-full flex overflow-hidden min-h-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs os-island">
+        <main id="ops-view-comm" class="hidden flex-1 w-full flex overflow-hidden min-h-0 rounded-2xl border-0 bg-[var(--card)] shadow-xs os-island">
           <!-- LINKS: KANÄLE & FILTER -->
           <aside class="w-72 border-r border-[var(--border)] bg-[var(--card)] flex flex-col shrink-0">
             <div class="p-3 border-b border-[var(--border)]">
@@ -153,6 +153,18 @@
             </div>
             <div id="ops-comm-messages" class="flex-1 p-4 overflow-y-auto space-y-3 os-console">
               <!-- Nachrichtenfeed -->
+            </div>
+            <!-- BROADCAST / FUNKSPRUCH EINGABE -->
+            <div class="p-3 border-t border-[var(--border)] bg-[var(--card)] flex items-center gap-2 shrink-0">
+              <select id="ops-comm-sender" class="h-9 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 shrink-0">
+                <option value="commander">👑 Commander</option>
+                <option value="system_dispatcher">🤖 Dispatcher</option>
+              </select>
+              <input type="text" id="ops-comm-input" placeholder="Funkspruch oder Anweisung senden (Enter)..." class="flex-1 h-9 px-3 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-sans placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeydown="if(event.key==='Enter') sendOperationsBroadcast()" />
+              <button type="button" onclick="sendOperationsBroadcast()" class="h-9 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>Senden</span>
+              </button>
             </div>
           </section>
         </main>

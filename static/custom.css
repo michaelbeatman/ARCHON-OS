@@ -26,7 +26,7 @@
   --success-subtle: #ECFDF5;   /* Erfolgs-Container (Emerald 50) */
 
   /* AppShell Layout Tokens */
-  --appshell-header-height: 56px;
+  --appshell-header-height: 80px;
   --appshell-canvas-padding: 24px;
 
   /* Global Typography Token (Inter / Modern & Clean) */
@@ -584,9 +584,9 @@ div#catalog-expanded-header > div.flex {
 
 /* Sidebar Logo Header & Nav */
 #sidebar-logo-header {
-  height: 72px !important;
-  min-height: 72px !important;
-  max-height: 72px !important;
+  height: 80px !important;
+  min-height: 80px !important;
+  max-height: 80px !important;
   padding: 0 !important;
 }
 
@@ -597,30 +597,69 @@ aside.flex-shrink-0 > nav.flex-1 {
 /* Tasks & Sessions list cards */
 [id^="mc-task-"],
 div#master-chat-sessions-list > div.group {
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.15) !important;
+}
+
+/* Mission Control 80px Continuous Header */
+#mission-control-global-header {
+  height: 80px !important;
+  min-height: 80px !important;
+  max-height: 80px !important;
+  box-sizing: border-box !important;
+  background-color: var(--card) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  z-index: 30 !important;
+  margin: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 24px !important;
+}
+
+#view-mission-control {
+  padding: 0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
+
+.ops-header-tile {
+  height: 72px !important;
 }
 
 /* Agenten-Kader View & Cards */
+#agent-profiles-global-header {
+  height: 80px !important;
+  min-height: 80px !important;
+  max-height: 80px !important;
+  box-sizing: border-box !important;
+  background-color: var(--card) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  z-index: 30 !important;
+  margin: 0 !important;
+}
 #view-agent-profiles {
   padding-top: 0px !important;
   padding-bottom: 0px !important;
 }
 
 #agent-catalog-col {
-  box-shadow: none !important;
-  border-width: 0px !important;
-  padding-top: 0.5px !important;
-}
-
-div.flex > div.flex-1 > div.prof-panel-card {
-  box-shadow: none !important;
-  border-width: 0px !important;
-  padding-top: 0px !important;
-  padding-bottom: 10px !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
 }
 
 #prof-avatar-dropzone {
-  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1) !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.15) !important;
+  border: 3px solid #878787 !important;
+}
+[data-theme="dark"] #prof-avatar-dropzone {
+  border: 3px solid #878787 !important;
 }
 
 /* Agenten-Kader Profile Editor & Catalog (Permanently Baked from CSS Live Studio) */
@@ -650,7 +689,7 @@ div.prof-panel-card > div.flex > div.flex {
 
 div.prof-panel-card > div.grid > div.p-2 {
   border-width: 1px !important;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.15) !important;
   background-color: #ffffff !important;
   border-color: #737373 !important;
 }
@@ -779,7 +818,7 @@ div.flex > div.flex > span.w-1\.5 {
 }
 
 #ops-kanban-archive-btn {
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.15) !important;
 }
 
 #ops-kanban-archive-btn > span {
@@ -854,4 +893,578 @@ div#ops-kanban-columns-container .ops-col-done,
 .mc-col-done {
   background-color: var(--kanban-done-bg, rgba(74, 109, 136, 0.10)) !important;
   border: var(--kanban-col-border-width, 1px) solid var(--kanban-done-border, #4A6D88) !important;
+}
+
+/* ========================================================================= */
+/* PERMANENT BAKED CSS LIVE STUDIO DESIGN (172 PROPERTIES INTEGRATED)       */
+/* ========================================================================= */
+
+#agent-catalog-col {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  border-radius: 0px !important;
+  height: 850px !important;
+  padding-top: 0px !important;
+  border-width: 0px !important;
+  padding-right: 12px !important;
+}
+
+#agent-pane-overview {
+  height: 721px !important;
+}
+
+#agent-profiles-global-header {
+  padding-left: 0px !important;
+  padding-right: 24px !important;
+  border-width: 0px !important;
+}
+
+#btn-catalog-collapse {
+  border-width: 0px !important;
+}
+
+#count-all {
+  font-size: 10px !important;
+}
+
+#hermes-cfg-base-url {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#hermes-cfg-max-context-tokens {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#hermes-cfg-max-history {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#hermes-cfg-max-turns {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#hermes-cfg-model-default {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#hermes-cfg-model-provider {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#hermes-cfg-reasoning-effort {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#hermes-cfg-task-timeout {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#inbox-catalog-col {
+  border-width: 0px !important;
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+}
+
+#inbox-col-email {
+  width: 290px !important;
+}
+
+#inbox-col-intern {
+  width: 294px !important;
+}
+
+#inbox-col-messenger {
+  width: 277px !important;
+}
+
+#library-catalog-col {
+  border-width: 0px !important;
+  padding-top: 0px !important;
+}
+
+#mc-catalog-col {
+  border-width: 0px !important;
+  padding-top: 0px !important;
+}
+
+#mc-inspect-heartbeat-dot {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  background-color: #ffffff !important;
+}
+
+#mc-kanban-col-blocked {
+  border-width: 0px !important;
+}
+
+#mc-kanban-col-done {
+  border-width: 0px !important;
+}
+
+#mc-kanban-col-inprogress {
+  border-width: 0px !important;
+}
+
+#mc-kanban-col-review {
+  border-width: 0px !important;
+}
+
+#mc-kanban-col-todo {
+  border-width: 0px !important;
+}
+
+#mc-kpi-cost {
+  font-size: 9px !important;
+}
+
+#mc-kpi-fleet {
+  font-size: 11px !important;
+  line-height: 20px !important;
+}
+
+#mc-kpi-governance-count {
+  font-size: 8px !important;
+}
+
+#mc-kpi-governance-label {
+  font-size: 10px !important;
+}
+
+#mc-kpi-governance-subtext {
+  font-size: 8px !important;
+}
+
+#mc-kpi-stability {
+  font-size: 8px !important;
+}
+
+#mc-kpi-tpm {
+  font-size: 11px !important;
+}
+
+#mc-sub-cost {
+  font-size: 9px !important;
+}
+
+#mc-sub-stability {
+  font-size: 8px !important;
+}
+
+#ops-detail-result-text {
+  height: 402px !important;
+}
+
+#prof-activity-log-terminal {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+#prof-avatar-dropzone {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+#prof-col-activity-feed {
+  border-width: 0px !important;
+  border: none !important;
+}
+
+#prof-col-stammdaten {
+  border-width: 0px !important;
+  border: none !important;
+}
+
+#prof-edit-model-cost {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+}
+
+#prof-edit-reasoning {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+}
+
+#prof-overview-kpi-footer {
+  border-width: 0px !important;
+  border: none !important;
+}
+
+#profile-editor-cat-tag {
+  display: none !important;
+}
+
+#profile-editor-id-tag {
+  display: none !important;
+}
+
+#profile-editor-role {
+  font-size: 15px !important;
+}
+
+#profile-editor-title {
+  font-size: 27px !important;
+}
+
+#sidebar-logo-img {
+  height: 96px !important;
+  width: 240px !important;
+  border-width: 0px !important;
+  box-shadow: none !important;
+  border-color: #ffffff !important;
+}
+
+#tab-filter-all {
+  border-radius: 5px !important;
+  font-size: 10px !important;
+}
+
+#tab-filter-favorites {
+  border-radius: 5px !important;
+  font-size: 10px !important;
+}
+
+#view-ai-mastermind {
+  padding-top: 0px !important;
+}
+
+#view-inbox {
+  padding-top: 0px !important;
+  padding-left: 0px !important;
+  padding-bottom: 0px !important;
+  padding-right: 0px !important;
+}
+
+#view-library {
+  padding-top: 0px !important;
+}
+
+.ops-col-blocked {
+  border-width: 0px !important;
+}
+
+.ops-col-done {
+  border-width: 0px !important;
+}
+
+.ops-col-in_progress {
+  border-width: 0px !important;
+}
+
+.ops-col-review {
+  border-width: 0px !important;
+}
+
+.ops-col-todo {
+  border-width: 0px !important;
+}
+
+aside.flex-shrink-0 > nav.flex-1 {
+  border-width: 0px !important;
+}
+
+button#agent-tab-btn-chat > span.agent-tab-label {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 13px !important;
+}
+
+button#ops-subtab-comm > span.ops-tab-label {
+  font-size: 12px !important;
+  font-family: 'Montserrat', sans-serif !important;
+}
+
+button#ops-subtab-kanban > span.ops-tab-label {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 12px !important;
+}
+
+button#ops-subtab-org > span.ops-tab-label {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 12px !important;
+}
+
+div#agent-pane-overview > div.grid > div.prof-panel-card {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  height: 754px !important;
+  border-radius: 4px !important;
+  border-width: 0px !important;
+  padding-left: 12px !important;
+}
+
+div#agent-pane-overview > div.prof-panel-card {
+  position: relative !important;
+  top: 0px !important;
+  left: 0px !important;
+  margin-top: 0px !important;
+  border: none !important;
+  border-width: 0px !important;
+}
+
+div#agent-profiles-global-header > div.flex {
+  width: 521px !important;
+}
+
+div#agent-profiles-global-header > div.flex > div.relative {
+  font-size: 13px !important;
+  border-width: 0px !important;
+}
+
+div#agent-profiles-global-header > div.shrink-0 {
+  padding-right: 0px !important;
+  width: 266px !important;
+  min-width: 230px !important;
+  height: 80px !important;
+  border-width: 0px !important;
+  padding-left: 18px !important;
+}
+
+div#catalog-expanded-footer > div.grid > button.py-1\.5 {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div#catalog-expanded-header > div.flex {
+  height: 56px !important;
+}
+
+div#hermes-profiles-list > div.prof-list-item {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div#inbox-catalog-col > div.flex {
+  padding-bottom: 0px !important;
+}
+
+div#inbox-detail-content > div.flex-1 {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+div#inbox-list-email > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div#inbox-list-intern > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div#inbox-list-messenger > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div#inbox-list-webhook > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div#inbox-split-list > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div#inbox-stream-list > div.group {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div#mc-view-cockpit > div.grid > div.shadcn-card {
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+  height: 49px !important;
+}
+
+div#mission-control-header-bar > div.flex > h1.text-sm {
+  font-size: 26px !important;
+}
+
+div#mission-control-header-bar > div.flex > span.hidden {
+  display: none !important;
+}
+
+div#ops-kanban-columns-container > div.w-80 > div.flex-1 {
+  border-width: 0px !important;
+}
+
+div#prof-avatar-dropzone > div.absolute {
+  border-width: 3px !important;
+  border-color: #2e2e2e !important;
+  box-shadow: 0 0 15px rgba(239, 35, 60, 0.4) !important;
+}
+
+div#view-agent-profiles > div.flex-1 {
+  padding-top: 0px !important;
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+  padding-bottom: 0px !important;
+}
+
+div#view-ai-mastermind > div.prof-panel-card {
+  padding-bottom: 0px !important;
+  height: 72px !important;
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+div.border > div.grid > div.p-3 {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div.flex > div.flex > button.p-2 {
+  display: none !important;
+}
+
+div.flex > div.flex > div.w-16 {
+  display: none !important;
+}
+
+div.flex > div.flex > h3.font-semibold {
+  width: 137px !important;
+  height: 37px !important;
+}
+
+div.flex > div.flex > h3.text-xl {
+  font-size: 22px !important;
+}
+
+div.flex > div.flex > h3.text-xs {
+  width: 262px !important;
+}
+
+div.flex > div.flex > span.text-xs {
+  font-size: 16px !important;
+  font-weight: normal !important;
+}
+
+div.flex > div.flex-1 > div.prof-panel-card {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+}
+
+div.grid > div > div.aut-threshold-hint {
+  color: #787878 !important;
+}
+
+div.min-w-0 > div.flex > span.inline-flex {
+  display: none !important;
+}
+
+div.prof-panel-card > div.flex > button.w-8 {
+  background-color: #ffffff !important;
+  border-width: 0px !important;
+  cursor: auto !important;
+  box-shadow: none !important;
+  display: none !important;
+}
+
+div.prof-panel-card > div.flex > div.flex {
+  border-width: 0px !important;
+  opacity: 1 !important;
+  background-color: #ffffff !important;
+}
+
+div.shadcn-card > div.flex > span {
+  font-size: 11px !important;
+}
+
+div.shrink-0 > div.flex > h2.text-base {
+  font-size: 24px !important;
+  line-height: 30px !important;
+  box-shadow: none !important;
+  width: 223px !important;
+  left: 15px !important;
+  top: 0px !important;
+}
+
+div.shrink-0 > div.flex > span.w-2\.5 {
+  display: none !important;
+}
+
+header#ops-header-bar > div.flex {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: 10px !important;
+}
+
+header#ops-header-bar > div.flex > h1.text-sm {
+  font-size: 22px !important;
+}
+
+
+
+/* ========================================================================= */
+/* ELASTISCHE SPALTEN & RAHMENLOSE INSELN (AGENTENKADER)                     */
+/* ========================================================================= */
+div#agent-profiles-global-header > div.shrink-0 {
+  padding-left: 20px !important;
+  padding-right: 0px !important;
+  width: 266px !important;
+  min-width: 230px !important;
+  height: 80px !important;
+  border-width: 0px !important;
+  border: none !important;
+}
+
+#prof-col-stammdaten,
+#prof-col-activity-feed,
+#prof-overview-kpi-footer,
+div#agent-pane-overview .prof-panel-card {
+  border: none !important;
+  border-width: 0px !important;
+}
+
+#prof-col-stammdaten {
+  width: 520px !important;
+  max-width: 540px !important;
+  min-width: 460px !important;
+  flex-shrink: 0 !important;
+}
+
+#prof-col-activity-feed {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  width: auto !important;
+}
+
+#prof-overview-kpi-footer,
+div#agent-pane-overview > div.prof-panel-card {
+  width: 100% !important;
+  position: relative !important;
+  top: 0px !important;
+  left: 0px !important;
+  margin-top: 0px !important;
+  border: none !important;
+  border-width: 0px !important;
+}
+
+
+/* ========================================================================= */
+/* MODELL-ROUTER 2x2 MATRIX & SPALT ZUR FUßLEISTE                            */
+/* ========================================================================= */
+#prof-main-columns-container {
+  max-height: calc(100% - 78px) !important;
+  margin-bottom: 14px !important;
+  overflow: hidden !important;
+}
+
+#prof-overview-kpi-footer {
+  width: 100% !important;
+  position: relative !important;
+  top: 0px !important;
+  left: 0px !important;
+  margin-top: 0px !important;
+  border: none !important;
+  border-width: 0px !important;
+  flex-shrink: 0 !important;
+}
+
+#prof-col-stammdaten .prof-box-card {
+  border: none !important;
+  border-width: 0px !important;
+}
+
+/* ========================================================================= */
+/* SUBTAB PANES 2-7: KLARE FLUCHTLINIE & FREIRAUM UNTER DEM AVATAR           */
+/* ========================================================================= */
+#agent-pane-skills > div.prof-panel-card,
+#agent-pane-chat > div.prof-panel-card,
+#agent-pane-operations > div.prof-panel-card,
+#agent-pane-soul > div.prof-panel-card,
+#agent-pane-personalakte > div.prof-panel-card,
+#agent-pane-marketplace > div.prof-panel-card {
+  padding-top: 48px !important;
+  border: none !important;
+  border-width: 0px !important;
 }

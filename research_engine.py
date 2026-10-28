@@ -56,6 +56,15 @@ PROVIDERS_CONFIG = {
         "description": "Strukturierte Enzyklopädie-Artikel und Begriffserklärungen (DE/EN).",
         "default_enabled": True
     },
+    "grokipedia": {
+        "id": "grokipedia",
+        "name": "Grokipedia",
+        "icon": "\U0001F4D6",
+        "type": "encyclopedia",
+        "requires_key": False,
+        "description": "KI-generierte Enzyklopaedie (xAI). Zusatzquelle, zaehlt nicht als unabhaengige Quelle in der Triangulation.",
+        "default_enabled": True
+    },
     "arxiv": {
         "id": "arxiv",
         "name": "ArXiv",
@@ -120,28 +129,37 @@ def get_available_providers(settings: Optional[Dict[str, Any]] = None) -> List[D
 def search_wikipedia(query: str, lang: str = "de", max_results: int = 3) -> List[Dict[str, Any]]:
     """Fragt die offizielle Wikipedia-API nach Artikeln und Textauszügen ab."""
     results = []
+    headers = {"User-Agent": "ArchonOS-ResearchLab/2.0 (mailto:admin@archon-os.internal)"}
     try:
         encoded_query = urllib.parse.quote(query)
         url = f"https://{lang}.wikipedia.org/w/api.php?action=opensearch&search={encoded_query}&limit={max_results}&namespace=0&format=json"
-        req = urllib.request.Request(url, headers={"User-Agent": "ArchonOS-ResearchLab/1.0"})
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=6) as response:
             data = json.loads(response.read().decode("utf-8"))
-            if len(data) >= 4:
+            if len(data) >= 2:
                 titles = data[1]
-                snippets = data[2]
-                urls = data[3]
-                for i in range(len(titles)):
-                    snippet = snippets[i] if i < len(snippets) else ""
-                    link = urls[i] if i < len(urls) else ""
-                    if snippet and link:
-                        results.append({
-                            "title": titles[i],
-                            "snippet": sanitize_injection_text(snippet),
-                            "url": link,
-                            "source": "Wikipedia",
-                            "domain": f"{lang}.wikipedia.org",
-                            "type": "encyclopedia"
-                        })
+                urls = data[3] if len(data) >= 4 else []
+                for i, title in enumerate(titles):
+                    link = urls[i] if i < len(urls) else f"https://{lang}.wikipedia.org/wiki/{urllib.parse.quote(title)}"
+                    snippet = ""
+                    try:
+                        sum_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(title.replace(' ', '_'))}"
+                        sreq = urllib.request.Request(sum_url, headers=headers)
+                        with urllib.request.urlopen(sreq, timeout=4) as sresp:
+                            sdata = json.loads(sresp.read().decode("utf-8"))
+                            snippet = sdata.get("extract", "")
+                    except Exception:
+                        pass
+                    if not snippet:
+                        snippet = f"Wikipedia-Artikel: {title}"
+                    results.append({
+                        "title": title,
+                        "snippet": sanitize_injection_text(snippet[:500]),
+                        "url": link,
+                        "source": "Wikipedia",
+                        "domain": f"{lang}.wikipedia.org",
+                        "type": "encyclopedia"
+                    })
     except Exception as e:
         print(f"[ResearchEngine] Wikipedia Suche fehlgeschlagen: {e}")
     return results
@@ -310,6 +328,40 @@ def search_tavily(query: str, api_key: str, max_results: int = 5) -> List[Dict[s
     return results
 
 
+def search_grokipedia(query: str, max_results: int = 2) -> List[Dict[str, Any]]:
+    """Grokipedia-Artikel (KI-generiert, xAI).
+
+    robots.txt von grokipedia.com sperrt /api/, daher wird der Typeahead-Endpoint nicht genutzt.
+    Artikel werden per Websuche (site:grokipedia.com) gefunden, die /page/-Seiten selbst sind erlaubt.
+    Markiert mit ai_generated=True: zaehlt nicht als unabhaengige Quelle in der Triangulation.
+    """
+    results: List[Dict[str, Any]] = []
+    try:
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
+        for r in DDGS().text(f"site:grokipedia.com {query}", max_results=max_results * 3):
+            href = r.get("href", "")
+            if "grokipedia.com/page/" not in href:
+                continue
+            title = r.get("title", "").replace(" - Grokipedia", "").replace(" \u2014 Grokipedia", "")
+            results.append({
+                "title": title,
+                "snippet": sanitize_injection_text(r.get("body", "")),
+                "url": href,
+                "source": "Grokipedia",
+                "domain": "grokipedia.com",
+                "type": "encyclopedia",
+                "ai_generated": True,
+            })
+            if len(results) >= max_results:
+                break
+    except Exception as e:
+        print(f"[ResearchEngine] Grokipedia Suche fehlgeschlagen: {e}")
+    return results
+
+
 def query_omniroute_synthesis(
     query: str,
     sources: List[Dict[str, Any]],
@@ -416,7 +468,7 @@ def run_research_mission(
     6. Speicherung in Workspace & Obsidian Vault
     """
     start_time = time.time()
-    active_engines = engines or ["duckduckgo", "wikipedia", "arxiv"]
+    active_engines = engines or ["duckduckgo", "grokipedia", "wikipedia", "arxiv"]
     cfg = settings or {}
     tavily_key = cfg.get("research", {}).get("tavily_api_key") or os.environ.get("TAVILY_API_KEY", "")
     searxng_url = cfg.get("research", {}).get("searxng_url") or "http://localhost:8888"
@@ -429,6 +481,9 @@ def run_research_mission(
         if not wiki_res:
             wiki_res = search_wikipedia(query, lang="en", max_results=depth)
         raw_sources.extend(wiki_res)
+
+    if "grokipedia" in active_engines:
+        raw_sources.extend(search_grokipedia(query, max_results=2))
 
     if "arxiv" in active_engines:
         arxiv_res = search_arxiv(query, max_results=depth)
@@ -467,8 +522,28 @@ def run_research_mission(
         s["is_safe"] = sec_check.get("is_safe", True)
         cleaned_sources.append(s)
 
-    # 3. Triangulations-Score berechnen
-    unique_domains = set(s.get("domain", "") for s in cleaned_sources if s.get("domain"))
+    # 2b. Keine Evidenz: nicht aus dem Modellgedaechtnis antworten
+    if not cleaned_sources:
+        return {
+            "status": "no_evidence",
+            "query": query,
+            "profile": profile,
+            "engines": active_engines,
+            "duration_seconds": round(time.time() - start_time, 2),
+            "total_sources": 0,
+            "unique_domains": 0,
+            "blocked_snippets": blocked_snippets,
+            "sources": [],
+            "dossier_markdown": (
+                f"# Research Dossier: {query}\n\n"
+                "**Keine Quellen gefunden.** Es wurde bewusst keine Synthese aus dem Modellwissen erzeugt. "
+                "Bitte Suchmaschinen pruefen (Drosselung?) oder die Frage anders formulieren.\n"
+            ),
+        }
+
+    # 3. Triangulations-Score berechnen (KI-generierte Quellen wie Grokipedia zaehlen nicht als unabhaengig)
+    unique_domains = set(s.get("domain", "") for s in cleaned_sources
+                         if s.get("domain") and not s.get("ai_generated"))
     if len(unique_domains) >= 3:
         triangulation_verdict = "HOCH (≥3 unabhängige Domains)"
         triangulation_score = 9
@@ -495,6 +570,37 @@ def run_research_mission(
     # Quality Gate Check auf das Synthese-Ergebnis
     val_gate = validate_ai_output(f"Recherche: {query}", synthesis_markdown, min_score=6)
 
+    return build_and_save_dossier(
+        start_time=start_time, query=query, profile=profile, model=model,
+        model_actual=model_actual, agent_actual=agent_actual, active_engines=active_engines,
+        cleaned_sources=cleaned_sources, unique_domains=unique_domains,
+        triangulation_verdict=triangulation_verdict, triangulation_score=triangulation_score,
+        val_gate=val_gate, synthesis_markdown=synthesis_markdown, blocked_snippets=blocked_snippets,
+        vault_path=vault_path, workspace_dir=workspace_dir, export_obsidian=export_obsidian,
+    )
+
+
+def build_and_save_dossier(
+    start_time: float,
+    query: str,
+    profile: str,
+    model: str,
+    model_actual: str,
+    agent_actual: str,
+    active_engines: List[str],
+    cleaned_sources: List[Dict[str, Any]],
+    unique_domains: set,
+    triangulation_verdict: str,
+    triangulation_score: int,
+    val_gate: Dict[str, Any],
+    synthesis_markdown: str,
+    blocked_snippets: int,
+    vault_path: str,
+    workspace_dir: str,
+    export_obsidian: bool,
+    extra_meta: str = "",
+) -> Dict[str, Any]:
+    """Setzt das Dossier zusammen, speichert es im Workspace (und optional im Obsidian Vault)."""
     duration = round(time.time() - start_time, 2)
     timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     slug = re.sub(r"[^a-zA-Z0-9_\-]", "_", query[:40]).strip("_")
@@ -512,7 +618,7 @@ def run_research_mission(
 - **Gefundene Quellen:** {len(cleaned_sources)} (aus {len(unique_domains)} unterschiedlichen Domains)
 - **Triangulation:** {triangulation_verdict} (Score: {triangulation_score}/10)
 - **Quality-Gate Status:** {val_gate.get('recommendation', 'TRUST')} (Verlässlichkeit: {val_gate.get('score', 8)}/10)
-
+{extra_meta}
 ---
 
 {synthesis_markdown}

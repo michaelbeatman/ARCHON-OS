@@ -61,6 +61,7 @@ services:
       - TZ=Europe/Berlin
     volumes:
       - n8n_data:/home/node/.n8n
+      - ./scripts/patches/n8n_auth_service.js:/usr/local/lib/node_modules/n8n/dist/auth/auth.service.js:ro
 
   # -------------------------------------------------------------
   # DOCKER SOCKET PROXY (Safe API Access for Agents / Paperclip)

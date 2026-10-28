@@ -28,9 +28,103 @@
         <button onclick="setSettingsTab('plugins')" id="btn-tab-plugins" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">PLUGINS</button>
         <button onclick="setSettingsTab('comm')" id="btn-tab-comm" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">KOMMUNIKATION</button>
         <button onclick="setSettingsTab('design')" id="btn-tab-design" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">DESIGN</button>
+        <button onclick="setSettingsTab('update')" id="btn-tab-update" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)] flex items-center gap-1.5" style="bottom: -1px; border-color: transparent; background-color: transparent;"><i data-lucide="refresh-cw" class="w-3 h-3"></i> SYSTEM-UPDATE</button>
       </div>
       <!-- Tab Content Area -->
       <div class="flex-1 overflow-y-auto py-4 space-y-4">
+        <!-- Tab: System-Update & Release-Lifecycle (Meilenstein 1) -->
+        <div id="settings-tab-update" class="hidden space-y-4 text-xs p-1">
+          <!-- Header Card -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-emerald-600/10 text-emerald-600 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <i data-lucide="cloud-download" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs uppercase font-mono tracking-wider text-[var(--foreground)]">System-Update &amp; Server-Sync</h4>
+                <p class="text-[11px] text-[var(--muted-foreground)]">Synchronisiere Archon OS zwischen Entwicklungsrechner und Homeserver mit 1 Klick.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="checkSystemUpdateStatus()" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Auf Updates prüfen
+              </button>
+            </div>
+          </div>
+
+          <!-- Update Status Card -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--card)] space-y-3 shadow-xs">
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+              <span class="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Aktueller Versionsstand</span>
+              <span id="update-status-badge" class="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-500/10 text-[var(--foreground)] border border-[var(--border)]">Wird geprüft...</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)]">
+                <div class="text-[10px] font-mono text-[var(--muted-foreground)] uppercase">Aktiver Commit</div>
+                <div id="update-current-commit" class="font-mono font-bold text-xs text-[var(--foreground)] truncate mt-0.5">-</div>
+              </div>
+              <div class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)]">
+                <div class="text-[10px] font-mono text-[var(--muted-foreground)] uppercase">Branch / Remote</div>
+                <div id="update-current-branch" class="font-mono font-bold text-xs text-[var(--foreground)] truncate mt-0.5">main (GitHub)</div>
+              </div>
+              <div class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)]">
+                <div class="text-[10px] font-mono text-[var(--muted-foreground)] uppercase">Lokaler Status</div>
+                <div id="update-dirty-status" class="font-mono font-bold text-xs text-[var(--foreground)] truncate mt-0.5">Sauber</div>
+              </div>
+            </div>
+
+            <div id="update-incoming-box" class="hidden p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="arrow-down-circle" class="w-4 h-4 text-amber-500"></i>
+                  <span id="update-incoming-title" class="font-bold text-xs text-[var(--foreground)]">Neue Commits verfügbar</span>
+                </div>
+                <button type="button" onclick="applySystemUpdate()" id="btn-apply-update" class="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 shadow-sm bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i> Update jetzt installieren &amp; anwenden
+                </button>
+              </div>
+              <div id="update-incoming-list" class="font-mono text-[11px] text-[var(--muted-foreground)] space-y-1 pl-6">
+                <!-- Commits werden hier aufgelistet -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Entwicklungsrechner: Änderungen nach GitHub übertragen (Push) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--card)] space-y-3 shadow-xs">
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+              <div>
+                <span class="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Entwicklungsrechner: Sync zu GitHub (Push)</span>
+                <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Übertrage alle hier entwickelten Neuerungen mit 1 Klick auf dein GitHub-Repository.</p>
+              </div>
+              <span id="push-status-badge" class="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-500/10 text-[var(--foreground)] border border-[var(--border)]">Bereit</span>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <input type="text" id="push-commit-message" placeholder="Optionale Commit-Nachricht (z. B. Neuerungen am Dashboard)..." class="flex-1 bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400">
+              <button type="button" onclick="pushChangesToGitHub()" id="btn-push-github" class="px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 shrink-0">
+                <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> Jetzt zu GitHub pushen
+              </button>
+            </div>
+          </div>
+
+          <!-- Sicherheits-Snapshots (Pre-Update & Rollback) -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--card)] space-y-3 shadow-xs">
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+              <div>
+                <span class="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Sicherheits-Snapshots (SQLite &amp; Configs)</span>
+                <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">Vor jedem Update wird automatisch ein Snapshot aller Datenbanken und Einstellungen angelegt.</p>
+              </div>
+              <button type="button" onclick="createManualSnapshot()" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                <i data-lucide="shield" class="w-3.5 h-3.5"></i> Snapshot jetzt anlegen
+              </button>
+            </div>
+
+            <div id="update-snapshots-list" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+              <div class="text-[11px] text-[var(--muted-foreground)] italic p-2">Lade Snapshots...</div>
+            </div>
+          </div>
+        </div>
         
         <!-- Tab: Provider & Gateway (Multi-Provider Management) -->
         <div id="settings-tab-routing" class="hidden space-y-5 text-xs p-1">

@@ -437,7 +437,7 @@ async def _dispatch_to_omniroute_or_container_exec(
         except Exception as e:
             print(f"[DISPATCHER] OpenAI direct call failed: {e}")
 
-    # 3. Spezifischer Provider: ANTHROPIC
+    # 3. Spezifischer Provider: ANTHROPIC (mit Prompt-Caching für bis zu 90% Kostenreduktion)
     if prov_lower == "anthropic" and anthropic_api_key:
         try:
             a_model = selected_model if "claude" in selected_model else "claude-3-5-sonnet-20241022"
@@ -448,11 +448,18 @@ async def _dispatch_to_omniroute_or_container_exec(
                     headers={
                         "x-api-key": anthropic_api_key,
                         "anthropic-version": "2023-06-01",
+                        "anthropic-beta": "prompt-caching-2024-07-31",
                         "Content-Type": "application/json"
                     },
                     json={
                         "model": a_model,
-                        "system": f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip(),
+                        "system": [
+                            {
+                                "type": "text",
+                                "text": f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip(),
+                                "cache_control": {"type": "ephemeral"}
+                            }
+                        ],
                         "messages": [{"role": "user", "content": prompt}],
                         "max_tokens": 1500
                     }
@@ -1281,7 +1288,7 @@ async def stream_boardroom_debate(
         "agent_id": chairman["id"],
         "agent_name": chairman["name"],
         "role": chairman.get("role", "Orchestrator"),
-        "model": chairman.get("model", "free-forever"),
+        "model": chairman.get("model") or "deepseek/deepseek-chat",
         "content": init_text
     }
 
@@ -1325,7 +1332,7 @@ async def stream_boardroom_debate(
                     "agent_id": ag["id"],
                     "agent_name": ag["name"],
                     "role": ag.get("role", "Expert"),
-                    "model": ag.get("model", "free-forever"),
+                    "model": ag.get("model") or "deepseek/deepseek-chat",
                     "content": res.get("content", "Keine Antwort.")
                 }
 
@@ -1368,7 +1375,7 @@ async def stream_boardroom_debate(
                     "agent_id": agent["id"],
                     "agent_name": agent["name"],
                     "role": agent.get("role", "Expert"),
-                    "model": agent.get("model", "free-forever"),
+                    "model": agent.get("model") or "deepseek/deepseek-chat",
                     "content": resp_content
                 }
                 running_transcript += f"[{agent['name']} ({agent.get('role', 'Expert')}) - Runde {round_num}]:\n{resp_content}\n\n"
@@ -1388,7 +1395,7 @@ async def stream_boardroom_debate(
                 prompt=consensus_prompt,
                 role=chairman.get("role", "Orchestrator"),
                 system_prompt="Prüfe strikt, ob Konsens erreicht wurde.",
-                model=chairman.get("model", "free-forever"),
+                model=chairman.get("model") or "deepseek/deepseek-chat",
                 timeout=15
             )
             
@@ -1432,7 +1439,7 @@ async def stream_boardroom_debate(
         "agent_id": chairman["id"],
         "agent_name": chairman["name"],
         "role": chairman.get("role", "Orchestrator"),
-        "model": chairman.get("model", "free-forever"),
+        "model": chairman.get("model") or "deepseek/deepseek-chat",
         "content": synthesis_text
     }
 

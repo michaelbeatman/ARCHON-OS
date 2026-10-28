@@ -2,6 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Basis-Tools installieren (Git für In-App Update-System, Curl)
+RUN apt-get update && apt-get install -y --no-install-recommends git curl && \
+    rm -rf /var/lib/apt/lists/*
+
 # Non-Root-User und -Gruppe anlegen
 RUN groupadd -g 1000 streamlitgroup && \
     useradd -u 1000 -g streamlitgroup -m -s /bin/bash streamlituser

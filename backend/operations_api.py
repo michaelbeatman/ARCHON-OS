@@ -1095,6 +1095,37 @@ def get_org_chart():
 # 3. INTER-AGENT COMMUNICATION FEED
 # =========================================================================
 
+class CommBroadcastRequest(BaseModel):
+    author: str = "commander"
+    message: str
+    task_id: Optional[str] = None
+    target: Optional[str] = None
+
+
+@router.post("/comm-feed/broadcast")
+def broadcast_comm_message(req: CommBroadcastRequest):
+    """Sendet eine Funkmeldung oder Agenten-Kommunikation in den Feed."""
+    conn = _get_kanban_connection()
+    try:
+        now_iso = datetime.datetime.now().isoformat()
+        cur = conn.cursor()
+        payload = json.dumps({
+            "author": req.author,
+            "message": req.message,
+            "target": req.target or "all",
+            "broadcast": True
+        }, ensure_ascii=False)
+        task_id = req.task_id or "system_broadcast"
+        cur.execute("""
+            INSERT INTO task_events (task_id, kind, payload, created_at)
+            VALUES (?, 'broadcast', ?, ?)
+        """, (task_id, payload, now_iso))
+        conn.commit()
+        return {"status": "success", "created_at": now_iso}
+    finally:
+        conn.close()
+
+
 @router.get("/comm-feed")
 def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] = Query(None)):
     """Liefert den chronologischen internen Kommunikationsfluss aller Agenten."""
@@ -1110,7 +1141,7 @@ def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] =
         cursor.execute("""
             SELECT c.id, c.task_id, c.author, c.body, c.created_at, t.title as task_title, t.assignee
             FROM task_comments c
-            JOIN tasks t ON c.task_id = t.id
+            LEFT JOIN tasks t ON c.task_id = t.id
             ORDER BY c.created_at DESC
             LIMIT ?
         """, (limit,))
@@ -1127,16 +1158,15 @@ def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] =
                 "author_avatar": prof.get("avatar") or _get_fallback_avatar(author_id),
                 "target_id": row.get("assignee"),
                 "task_id": row["task_id"],
-                "task_title": row["task_title"],
+                "task_title": row["task_title"] or "Aufgabe",
                 "message": row["body"]
             })
             
-        # Events (Handoffs & Status Changes)
+        # Events (Handoffs, Status Changes, Broadcasts)
         cursor.execute("""
             SELECT e.id, e.task_id, e.kind, e.payload, e.created_at, t.title as task_title, t.assignee
             FROM task_events e
-            JOIN tasks t ON e.task_id = t.id
-            WHERE e.kind IN ('created', 'status_changed', 'reassigned', 'completed', 'claimed')
+            LEFT JOIN tasks t ON e.task_id = t.id
             ORDER BY e.created_at DESC
             LIMIT ?
         """, (limit,))
@@ -1147,20 +1177,44 @@ def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] =
                 payload_data = json.loads(row["payload"])
             except Exception:
                 pass
-                
-            feed_items.append({
-                "id": f"event_{row['id']}",
-                "type": "event_handoff",
-                "timestamp": row["created_at"],
-                "author_id": "system_dispatcher",
-                "author_name": "Dispatcher / Orchestrator",
-                "author_avatar": "/static/avatars/avatar_020.jpg",
-                "target_id": row.get("assignee"),
-                "task_id": row["task_id"],
-                "task_title": row["task_title"],
-                "kind": row["kind"],
-                "message": f"Status-Update für '{row['task_title']}': {row['kind'].upper()} {json.dumps(payload_data, ensure_ascii=False)}"
-            })
+            
+            kind = row.get("kind") or "event"
+            task_title = row.get("task_title") or ("System-Funkkanal" if row.get("task_id") == "system_broadcast" else (row.get("task_id") or "System"))
+            
+            if kind in ("broadcast", "message"):
+                author_id = payload_data.get("author") or "commander"
+                prof = profiles.get(author_id, {})
+                target_id = payload_data.get("target") or row.get("assignee")
+                author_name = prof.get("name")
+                if not author_name:
+                    author_name = "Commander (Leitstand)" if author_id == "commander" else author_id
+                feed_items.append({
+                    "id": f"event_{row['id']}",
+                    "type": "broadcast_message",
+                    "timestamp": row["created_at"],
+                    "author_id": author_id,
+                    "author_name": author_name,
+                    "author_avatar": prof.get("avatar") or ("/static/avatars/avatar_001.jpg" if author_id == "commander" else _get_fallback_avatar(author_id)),
+                    "target_id": target_id,
+                    "task_id": row["task_id"] if row["task_id"] != "system_broadcast" else None,
+                    "task_title": task_title,
+                    "kind": kind,
+                    "message": payload_data.get("message") or str(payload_data)
+                })
+            else:
+                feed_items.append({
+                    "id": f"event_{row['id']}",
+                    "type": "event_handoff",
+                    "timestamp": row["created_at"],
+                    "author_id": "system_dispatcher",
+                    "author_name": "Dispatcher / Orchestrator",
+                    "author_avatar": "/static/avatars/avatar_020.jpg",
+                    "target_id": row.get("assignee"),
+                    "task_id": row["task_id"],
+                    "task_title": task_title,
+                    "kind": kind,
+                    "message": f"Status-Update für '{task_title}': {kind.upper()} {json.dumps(payload_data, ensure_ascii=False)}"
+                })
             
         conn.close()
     except Exception as e:

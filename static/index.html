@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&family=Julius+Sans+One&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Montserrat:wght@300;400;500;600;700;800&family=Fira+Code:wght@300..700&family=Cinzel:wght@400..900&family=Space+Grotesk:wght@300..700&family=Plus+Jakarta+Sans:wght@300..800&display=swap" rel="stylesheet">
   <!-- Custom Studio CSS Overrides -->
     <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
-  <link rel="stylesheet" href="/static/custom.css?v=202610241410">
+  <link rel="stylesheet" href="/static/custom.css?v=202610271358">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
   <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=202610161325">
   <!-- Tailwind CSS Local Bundle (Offline-fähig & kein CDN Latenz-Overhead) -->
@@ -139,7 +139,7 @@
     })();
     */
   </script>
-  <link rel="stylesheet" href="/static/css/themes.css?v=202610241410">
+  <link rel="stylesheet" href="/static/css/themes.css?v=202610271358">
 
   <style id="archon-live-custom-styles"></style>
 </head>
@@ -151,7 +151,7 @@
   <!-- SIDEBAR -->
   <aside class="flex-shrink-0 flex flex-col border-r h-full overflow-y-auto theme-sidebar transition-colors duration-300 w-[200px]" style="width: var(--sidebar-width, 200px); min-width: var(--sidebar-width, 200px); max-width: var(--sidebar-width, 200px);">
     <!-- Header -->
-    <div id="sidebar-logo-header" class="custom-logo-active flex items-center gap-0 px-0 py-0 border-b theme-border-strong select-none">
+    <div id="sidebar-logo-header" class="custom-logo-active flex items-center gap-0 px-0 py-0 border-b theme-border-strong select-none" style="height: 80px !important; min-height: 80px !important; max-height: 80px !important;">
       <div id="sidebar-logo-wrapper" class="w-full h-full flex items-center justify-center flex-shrink-0 bg-transparent overflow-hidden">
         <img id="sidebar-logo-img" src="/static/archon_os_logo.png?v=20261007" class="has-custom-logo w-full h-full object-contain" alt="Archon OS Logo">
       </div>
@@ -235,35 +235,42 @@
           KOGNITION & WISSEN
         </div>
         <div class="space-y-0.5">
-          <button id="nav-library" onclick="setTab('library')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
-            <i data-lucide="book-open" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Zentralbibliothek</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">RAG, Erfasser & Vault</div>
-            </div>
-            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
-          </button>
-          <button id="nav-ai-mastermind" onclick="setTab('ai-mastermind')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
-            <i data-lucide="brain-circuit" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Decision Engine</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">Meta-Reasoning</div>
-            </div>
-            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
-          </button>
-          <button id="nav-research" onclick="setTab('research')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
-            <i data-lucide="microscope" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Research Lab</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">Deep Search & Wissensbeschaffung</div>
-            </div>
-            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
-          </button>
+          <!-- 1. Internet-Watchdog (Signal- & Web-Radar) -->
           <button id="nav-watchdog" onclick="setTab('watchdog')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
             <i data-lucide="radar" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Internet-Watchdog</div>
               <div class="text-[9.5px] font-mono text-muted-custom truncate">Web-Radar &amp; Monitoring</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+
+          <!-- 2. Research Lab (Deep Search & Recherche) -->
+          <button id="nav-research" onclick="setTab('research')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="microscope" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Research Lab</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Deep Search &amp; Wissensbeschaffung</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+
+          <!-- 3. Zentralbibliothek (RAG & Obsidian Vault) -->
+          <button id="nav-library" onclick="setTab('library')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="book-open" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Zentralbibliothek</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">RAG, Erfasser &amp; Vault</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+
+          <!-- 4. Decision Engine (Meta-Reasoning & Boardroom) -->
+          <button id="nav-ai-mastermind" onclick="setTab('ai-mastermind')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="brain-circuit" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Decision Engine</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Meta-Reasoning &amp; Boardroom</div>
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
@@ -410,7 +417,7 @@
     </div>
   </aside>
   <!-- MAIN WINDOW -->
-  <main class="flex-1 flex flex-col overflow-hidden transition-colors duration-300">
+  <main class="flex-1 flex flex-col h-screen max-h-screen overflow-hidden transition-colors duration-300">
     <!-- Topbar (Dauerhaft ausgeblendet für 100vh Fullscreen) -->
     <div id="main-topbar" class="hidden" style="display: none !important; height: 0 !important; overflow: hidden !important;">
       <div class="flex items-center gap-2">
@@ -478,19 +485,133 @@
       <!-- VIEW CONTAINER: MISSION CONTROL (3-ZONEN-COCKPIT & HITL KANBAN)          -->
       <!-- ========================================================================= -->
       <!-- ========================================================================= -->
-      <div id="view-mission-control" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
-        <div class="flex gap-2.5 h-full min-h-0 w-full overflow-hidden">
-          
-          <!-- 1. MITTLERE SPALTE: MISSION CONTROL KATALOG (215px, ~18% schmaler) -->
-          <div id="mc-catalog-col" class="w-[215px] min-w-[215px] max-w-[215px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-2.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs shrink-0 transition-all duration-200">
+      <div id="view-mission-control" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view" style="height: 100vh !important; max-height: 100vh !important;">
+
+        <!-- ========================================================================= -->
+        <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, DURCHGEHEND)                -->
+        <!-- ========================================================================= -->
+        <div id="mission-control-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
+
+          <!-- LINKSBÜNDIG: ÜBERSCHRIFT DER ANSICHT & STATUS -->
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0 animate-pulse"></span>
+            <h2 id="mc-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
+              Mission Control
+            </h2>
+            <span id="mc-total-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
+              Nominal
+            </span>
+            <span id="mc-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-semibold truncate hidden lg:inline pl-1">
+              · Echtzeit-Telemetrie, Flottenlast, Token-Sparkline &amp; HITL-Freigaben
+            </span>
+          </div>
+
+          <!-- RECHTSBÜNDIG: DIE 5 SUBTAB-ICONS (Cockpit, Kanban, Org, Automation, Comm) -->
+          <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 h-full py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
             
-            <!-- EXPANDED HEADER: Exakt 72px Hoehe wie Agenten-Katalog & Eingang -->
-            <div id="mc-catalog-expanded-header" class="shrink-0">
-              <div class="h-[72px] flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
+            <!-- 1. Cockpit -->
+            <button 
+              type="button" 
+              id="ops-subtab-cockpit" 
+              onclick="setOperationsTab('cockpit')" 
+              class="ops-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Mission Control"
+            >
+              <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+                <img src="/static/img/cadre_icons/overview.png" alt="Mission Control" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Mission Control</span>
+            </button>
+
+            <!-- 2. Kanban -->
+            <button 
+              type="button" 
+              id="ops-subtab-kanban" 
+              onclick="setOperationsTab('kanban')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="KANBAN"
+            >
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/kanban.png?v=3" alt="KANBAN" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+                <span id="ops-kanban-badge" class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] bg-red-600 text-white font-mono font-bold leading-none hidden shadow-xs">0</span>
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">KANBAN</span>
+            </button>
+
+            <!-- 3. Organisation -->
+            <button 
+              type="button" 
+              id="ops-subtab-org" 
+              onclick="setOperationsTab('org')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Organisation"
+            >
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/organisation.png?v=3" alt="Organisation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Organisation</span>
+            </button>
+
+            <!-- 4. Automation (n8n) -->
+            <button 
+              type="button" 
+              id="ops-subtab-automation" 
+              onclick="setOperationsTab('automation')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="n8n-Automation"
+            >
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/n8n.png?v=202610171046" alt="n8n-Automation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">n8n-Automation</span>
+            </button>
+
+            <!-- 5. Kommunikation -->
+            <button 
+              type="button" 
+              id="ops-subtab-comm" 
+              onclick="setOperationsTab('comm')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Kommunikation"
+            >
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/chat.png" alt="Kommunikation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+                <span id="ops-comm-badge" class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[var(--card)]"></span>
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Kommunikation</span>
+            </button>
+
+          </div>
+
+          <!-- Versteckte Kompatibilitätsanker für Skripte -->
+          <div class="hidden" aria-hidden="true">
+            <img id="mc-main-header-img" src="/static/img/cadre_icons/overview.png" alt="">
+            <div id="mc-main-header-avatar"></div>
+          </div>
+
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- 2. HAUPT-BEREICH UNTER DEM HEADER: KATALOG (LINKS) & ARBEITSBEREICH (RECHTS)-->
+        <!-- ========================================================================= -->
+        <div class="flex-1 min-h-0 flex gap-2.5 w-full overflow-hidden p-2.5 pt-3" style="height: calc(100vh - 80px); max-height: calc(100vh - 80px);">
+          
+          <!-- 1. MITTLERE SPALTE: MISSION CONTROL KATALOG (215px) -->
+          <div id="mc-catalog-col" class="w-[215px] min-w-[215px] max-w-[215px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-2.5 bg-[var(--card)] border-0 rounded-2xl shadow-xs shrink-0 transition-all duration-200" style="height: 100% !important;">
+            
+            <!-- EXPANDED HEADER -->
+            <div id="mc-catalog-expanded-header" class="shrink-0 space-y-2">
+              <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
                 <div class="flex items-center gap-1.5 min-w-0">
-                  <h3 class="text-base font-bold tracking-tight text-[var(--foreground)] truncate">Mission Control</h3>
-                  <button type="button" onclick="openContextHelp('mission_control')" title="Hilfe zu Mission Control" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+                  <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i>
+                  <span class="text-xs font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">Katalog</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button type="button" onclick="openContextHelp('mission_control')" title="Hilfe zu Mission Control" class="w-6 h-6 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
                     <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <button type="button" id="btn-mc-catalog-collapse" onclick="toggleMcCatalogCollapse()" class="h-6 px-2 rounded-md border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-[10px] font-mono font-bold cursor-pointer shadow-2xs" title="Spalte ein-/ausklappen">
+                    ◀
                   </button>
                 </div>
               </div>
@@ -545,7 +666,7 @@
 
             </div>
 
-            <!-- FOOTER STATUS & CONTROLS (Zahnrad, Sync & Pfeil ganz unten) -->
+            <!-- FOOTER STATUS & CONTROLS -->
             <div id="mc-catalog-footer" class="pt-2 shrink-0 border-t border-[var(--border)] space-y-2">
               <div class="flex items-center justify-between gap-1">
                 <div class="flex items-center gap-1 min-w-0">
@@ -572,7 +693,7 @@
                 <!-- Pfeil / Collapse Button -->
                 <button 
                   type="button" 
-                  id="btn-mc-catalog-collapse" 
+                  id="btn-mc-catalog-collapse-bottom" 
                   onclick="toggleMcCatalogCollapse()" 
                   class="h-7 px-2 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold cursor-pointer shadow-xs shrink-0" 
                   title="Spalte ein-/ausklappen"
@@ -591,115 +712,9 @@
 
           </div>
 
-          <!-- 2. RECHTE HAUPT-SPALTE: 120px HEADER + SUB-VIEWS (COCKPIT, KANBAN, ORG, AUTOMATION, COMM) -->
-          <div id="mc-main-area" class="flex-1 h-full min-h-0 flex flex-col gap-2 min-w-0 overflow-hidden">
+          <!-- 2. RECHTE HAUPT-SPALTE: SUB-VIEWS (COCKPIT, KANBAN, ORG, AUTOMATION, COMM) -->
+          <div id="mc-main-area" class="flex-1 h-full min-h-0 flex flex-col min-w-0 overflow-hidden" style="height: 100% !important;">
             
-            <!-- GROSSER 120px HEADER MIT DEN 5 GROSSEN KADER-ICONS (WIE BEI EINGANG & AGENTEN-KADER) -->
-            <div class="prof-panel-card p-3 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
-              <div class="flex items-center justify-between gap-4">
-                
-                <!-- Links: Icon-Plakette & Titel -->
-                <div class="flex items-center gap-3.5 min-w-0 flex-1">
-                  <div id="mc-main-header-avatar" class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-[var(--border)] shadow-md bg-[var(--secondary)] flex items-center justify-center relative shrink-0 p-2 overflow-hidden">
-                    <img id="mc-main-header-img" src="/static/img/cadre_icons/overview.png" alt="Mission Control Icon" class="w-full h-full object-contain">
-                    <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--card)] flex items-center justify-center" title="System Online"></span>
-                  </div>
-
-                  <div class="min-w-0 space-y-1 flex-1">
-                    <div class="flex items-center gap-2">
-                      <h2 id="mc-main-title" class="text-lg sm:text-xl font-black text-[var(--foreground)] tracking-tight leading-tight truncate">
-                        Mission Control &amp; Cockpit
-                      </h2>
-                      <span id="mc-total-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
-                        Nominal
-                      </span>
-                    </div>
-                    <div id="mc-main-subtitle" class="text-xs font-bold text-[var(--muted-foreground)] truncate">
-                      Operative Leitstelle: System-Telemetrie, Process Heartbeat, Approval Gate &amp; Live-Audit
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Rechts: DIE 5 GROSSEN ICON-KACHELN IM KADER-STIL -->
-                <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
-                  
-                  <!-- 1. Cockpit / Uebersicht -->
-                  <button 
-                    type="button" 
-                    id="ops-subtab-cockpit" 
-                    onclick="setOperationsTab('cockpit')" 
-                    class="ops-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Mission Control Cockpit &amp; Telemetrie"
-                  >
-                    <div class="tile-icon-wrap active-tile w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
-                      <img src="/static/img/cadre_icons/overview.png" alt="Cockpit" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold">Cockpit</span>
-                  </button>
-
-                  <!-- 2. Kanban Board -->
-                  <button 
-                    type="button" 
-                    id="ops-subtab-kanban" 
-                    onclick="setOperationsTab('kanban')" 
-                    class="ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Kanban Board &amp; Aufgabensteuerung"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
-                      <img src="/static/img/cadre_icons/operations.png?v=2" alt="Kanban" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                      <span id="ops-kanban-badge" class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] bg-red-600 text-white font-mono font-bold leading-none hidden shadow-xs">0</span>
-                    </div>
-                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Kanban</span>
-                  </button>
-
-                  <!-- 3. Organisation & Teams -->
-                  <button 
-                    type="button" 
-                    id="ops-subtab-org" 
-                    onclick="setOperationsTab('org')" 
-                    class="ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Organisation &amp; Ablaufdiagramm"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
-                      <img src="/static/img/cadre_icons/personalakte.png" alt="Organisation" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Organisation</span>
-                  </button>
-
-                  <!-- 4. Automation (n8n Workflow Engine) -->
-                  <button 
-                    type="button" 
-                    id="ops-subtab-automation" 
-                    onclick="setOperationsTab('automation')" 
-                    class="ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="n8n Workflow-Engine &amp; Automation"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
-                      <img src="/static/img/cadre_icons/n8n.png?v=202610171046" alt="n8n" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                    </div>
-                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">n8n</span>
-                  </button>
-
-                  <!-- 5. Interne Kommunikation -->
-                  <button 
-                    type="button" 
-                    id="ops-subtab-comm" 
-                    onclick="setOperationsTab('comm')" 
-                    class="ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-                    title="Interne Agenten-Kommunikation"
-                  >
-                    <div class="tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5 relative">
-                      <img src="/static/img/cadre_icons/chat.png" alt="Kommunikation" class="w-12 h-12 sm:w-[62px] sm:h-[62px] object-contain drop-shadow-xs pointer-events-none">
-                      <span id="ops-comm-badge" class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[var(--card)]"></span>
-                    </div>
-                    <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium">Kommunikation</span>
-                  </button>
-
-                </div>
-
-              </div>
-            </div>
-
             <!-- SUB-VIEW 1: MISSION CONTROL COCKPIT (STARTSEITE) -->
             <div id="mc-view-cockpit" class="flex-1 min-h-0 flex flex-col space-y-2 overflow-hidden">
               
@@ -965,7 +980,7 @@
             <div id="view-operations-mount"></div>
 
             <!-- SUB-VIEW 4: N8N WORKFLOW ENGINE (AUTOMATION) -->
-            <main id="ops-view-automation" class="hidden flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs">
+            <main id="ops-view-automation" class="hidden flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
               <iframe
                 id="automation-n8n-iframe"
                 src=""
@@ -1225,206 +1240,10 @@
       </div>
 
       <!-- VIEW CONTAINER: REAL-TIME DOCKER & AGENT LOG-STREAM (2-COLUMN SPLIT LAYOUT) -->
-      <div id="view-log-stream" class="hidden flex-1 w-full h-full flex flex-row bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
-        
-        <!-- LINKER TEIL: LOG AUDITOR EXPLORER (300px) -->
-        <aside class="w-72 lg:w-80 h-full border-r border-[var(--border)] bg-[var(--card)] flex flex-col shrink-0 overflow-hidden">
-          
-          <!-- Header mit LOG AUDITOR & 10 Live Badge -->
-          <div class="p-3 border-b border-[var(--border)] bg-[var(--card)] shrink-0 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-extrabold uppercase tracking-wider font-mono text-[var(--foreground)] flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-zinc-400"></span> LOG AUDITOR
-              </span>
-              <span id="logstream-source-count-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--secondary)] text-[var(--foreground)] font-bold border border-[var(--border)]">10 Live</span>
-            </div>
-            <!-- Sub-Tab Switcher: [ Container (11) | Agenten (48) | Hash-Audit ] -->
-            <div class="grid grid-cols-3 gap-1 bg-[var(--secondary)] p-1 rounded-xl border border-[var(--border)] text-xs select-none">
-              <button 
-                id="log-subtab-btn-containers" 
-                onclick="setLogStreamSourceMode('containers')" 
-                class="py-1.5 px-1.5 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs text-[11px]"
-              >
-                Container
-              </button>
-              <button 
-                id="log-subtab-btn-profiles" 
-                onclick="setLogStreamSourceMode('profiles')" 
-                class="py-1.5 px-1.5 rounded-lg font-medium transition flex items-center justify-center gap-1 cursor-pointer text-[11px]"
-              >
-                Agenten
-              </button>
-              <button 
-                id="log-subtab-btn-audit" 
-                onclick="setLogStreamSourceMode('audit')" 
-                class="py-1.5 px-1.5 rounded-lg font-medium transition flex items-center justify-center gap-1 cursor-pointer text-[11px] text-emerald-600 dark:text-emerald-400 font-bold"
-              >
-                <i data-lucide="shield-check" class="w-3 h-3"></i> Audit
-              </button>
-            </div>
-          </div>
-          <!-- PANE 1: DOCKER CONTAINER LISTE -->
-          <div id="log-pane-containers" class="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar bg-[var(--background)]">
-            <!-- Suche im Container Pane -->
-            <div class="relative mb-2">
-              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-black dark:text-white"></i>
-              <input 
-                type="text" 
-                id="log-containers-search-input" 
-                placeholder="Container suchen..." 
-                oninput="onLogContainersSearchInput(this.value)" 
-                class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-1 focus:ring-[var(--border)] font-mono transition shadow-2xs"
-              >
-            </div>
-            <!-- Container Items -->
-            <div id="log-containers-list-container" class="space-y-1">
-              <!-- Dynamically populated -->
-            </div>
-          </div>
-          <!-- PANE 2: HERMES PROFILE LISTE (AGENTEN LOGS) -->
-          <div id="log-pane-profiles" class="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar bg-[var(--background)] hidden">
-            <!-- Profil-Suchfeld -->
-            <div class="relative">
-              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-black dark:text-white"></i>
-              <input 
-                type="text" 
-                id="log-profiles-search-input" 
-                placeholder="Agent / Rolle suchen..." 
-                oninput="onLogProfilesSearchInput(this.value)" 
-                class="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-1 focus:ring-[var(--border)] font-mono transition shadow-2xs"
-              >
-            </div>
-            <!-- Profile Cards Container -->
-            <div id="log-profiles-list-container" class="space-y-1">
-              <!-- Dynamically populated from hermesProfilesData -->
-            </div>
-          </div>
-          <!-- Footer mit Watchdog Supervisor Status -->
-          <div class="p-2.5 border-t border-[var(--border)] bg-[var(--card)] shrink-0 flex items-center justify-between text-[11px] font-mono text-[var(--muted-foreground)]">
-            <span class="flex items-center gap-1.5 text-[var(--foreground)] font-medium">
-              <span>Watchdog Supervisor</span>
-            </span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--secondary)] text-[var(--foreground)] font-bold border border-[var(--border)]">
-              Aktiv (60s)
-            </span>
-          </div>
-        </aside>
-        <!-- RECHTER TEIL: LIVE LOG-STREAMING KONSOLE (FLEX-1) -->
-        <section id="logstream-main-console" class="flex-1 h-full flex flex-col bg-[var(--card)] overflow-hidden">
-          
-          <!-- Header Toolbar -->
-          <div class="px-5 py-2.5 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-3 shrink-0">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <span class="w-2.5 h-2.5 rounded-full bg-zinc-400"></span>
-              <h2 id="logstream-active-title" class="text-xs sm:text-sm font-extrabold tracking-tight text-[var(--foreground)] font-mono uppercase truncate">
-                HERMES ID: --
-              </h2>
-            </div>
-            <!-- Filter Controls -->
-            <div class="flex items-center gap-2">
-              <!-- Search input -->
-              <div class="relative">
-                <input 
-                  type="text" 
-                  id="logstream-search-input" 
-                  placeholder="In Logs filtern..." 
-                  oninput="onLogStreamFilterChange()" 
-                  class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1 text-xs text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-1 focus:ring-[var(--border)] font-mono w-40 sm:w-56 transition shadow-2xs"
-                >
-              </div>
-              <!-- Level Buttons: [ ALL | ERR | WARN | LIVE ] -->
-              <div class="flex items-center bg-[var(--secondary)] border border-[var(--border)] rounded-lg p-0.5 text-xs font-mono">
-                <button onclick="setLogStreamLevel('ALL')" id="loglevel-btn-ALL" class="px-2.5 py-0.5 rounded font-bold transition bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] cursor-pointer shadow-xs">ALL</button>
-                <button onclick="setLogStreamLevel('ERROR')" id="loglevel-btn-ERROR" class="px-2.5 py-0.5 rounded text-[var(--muted-foreground)] hover:bg-[var(--card)] transition cursor-pointer font-bold">ERR</button>
-                <button onclick="setLogStreamLevel('WARN')" id="loglevel-btn-WARN" class="px-2.5 py-0.5 rounded text-[var(--muted-foreground)] hover:bg-[var(--card)] transition cursor-pointer font-bold">WARN</button>
-                <button onclick="toggleLogStreamPause()" id="loglevel-btn-LIVE" class="px-2.5 py-0.5 rounded text-[var(--foreground)] font-bold hover:bg-[var(--card)] transition cursor-pointer flex items-center gap-1">
-                  LIVE
-                </button>
-              </div>
-              <!-- Clear Trash Button -->
-              <button 
-                onclick="clearLogStreamConsole()" 
-                class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-xs"
-                title="Logs leeren"
-              >
-                <i data-lucide="trash-2" class="w-3.5 h-3.5 text-black dark:text-white"></i>
-              </button>
-            </div>
-          </div>
-          <!-- Terminal Console Output Viewport -->
-          <div id="logstream-terminal-container" class="flex-1 p-4 overflow-y-auto font-mono text-[11.5px] leading-relaxed custom-scrollbar bg-[var(--card)] select-text">
-            <div id="logstream-terminal-lines" class="space-y-0.5">
-              <div class="text-[var(--muted-foreground)] italic">Verbinde mit Docker & Hermes Log-Stream...</div>
-            </div>
-          </div>
-          <!-- Footer Status Bar -->
-          <div class="px-4 py-2 border-t border-[var(--border)] bg-[var(--card)] flex items-center justify-between text-xs font-mono text-[var(--muted-foreground)] shrink-0">
-            <div class="flex items-center gap-4">
-              <span id="logstream-footer-line-count">200 Zeilen angezeigt</span>
-              <label class="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" id="logstream-autoscroll-checkbox" checked onchange="toggleLogStreamAutoScroll()" class="rounded border-[var(--border)] text-[var(--foreground)] focus:ring-0">
-                <span>Auto-Scroll</span>
-              </label>
-            </div>
-            <div>
-              <button onclick="downloadLogStreamLogs()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-medium transition cursor-pointer flex items-center gap-1">
-                <i data-lucide="download" class="w-3 h-3"></i> Export (.log)
-              </button>
-            </div>
-          </div>
-        </section>
+            <!-- VIEW CONTAINER: LIVE LOG-STREAMING & TELEMETRIE-KONSOLE -->
+      <!-- VIEW: VIEW-LOG-STREAM (Extracted) -->
+      <div id="view-log-stream-mount"></div>
 
-        <!-- RECHTER TEIL 2: KRYPTOGRAFISCHES AUDIT-LOG (HASH-CHAIN TABLE) (Pillar 6) -->
-        <section id="logstream-audit-console" class="hidden flex-1 h-full flex flex-col bg-[var(--card)] overflow-hidden">
-          <div class="px-6 py-3 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between gap-3 shrink-0">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
-                <i data-lucide="shield-check" class="w-4 h-4"></i>
-              </div>
-              <div>
-                <h2 class="text-xs sm:text-sm font-bold uppercase font-mono tracking-wider text-[var(--foreground)] flex items-center gap-2">
-                  <span>Manipulationssicheres Audit-Log</span>
-                  <span id="audit-chain-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/30">
-                    Kette ungeprüft
-                  </span>
-                </h2>
-                <p class="text-[11px] text-[var(--muted-foreground)]">Kryptografisch verkettete SHA-256 Transaktionshistorie (Pillar 6 / Zero-Trust)</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <button onclick="loadAuditLogEntries()" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer">
-                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Aktualisieren
-              </button>
-              <button onclick="verifyAuditLogChain()" id="audit-verify-btn" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs">
-                <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Kette verifizieren
-              </button>
-            </div>
-          </div>
-
-          <!-- Audit Log Table Viewport -->
-          <div class="flex-1 overflow-y-auto p-4 custom-scrollbar bg-[var(--background)]">
-            <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] overflow-hidden shadow-xs">
-              <table class="w-full text-left font-mono text-xs border-collapse">
-                <thead>
-                  <tr class="bg-[var(--secondary)] border-b border-[var(--border)] text-[var(--muted-foreground)] text-[11px]">
-                    <th class="py-2.5 px-3 font-bold"># ID</th>
-                    <th class="py-2.5 px-3 font-bold">Zeitstempel</th>
-                    <th class="py-2.5 px-3 font-bold">Agent / Initiator</th>
-                    <th class="py-2.5 px-3 font-bold">Aktion</th>
-                    <th class="py-2.5 px-3 font-bold">Vorheriger Hash</th>
-                    <th class="py-2.5 px-3 font-bold">SHA-256 Block-Hash</th>
-                  </tr>
-                </thead>
-                <tbody id="audit-log-table-body" class="divide-y divide-[var(--border)] text-[var(--foreground)]">
-                  <tr>
-                    <td colspan="6" class="py-8 text-center text-[var(--muted-foreground)] italic">Lade kryptografische Audit-Einträge...</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-      </div>
       <!-- VIEW CONTAINER: GUARDIAN & ANALYTICS DASHBOARD -->
       <!-- VIEW: VIEW-GUARDIAN (Extracted) -->
       <div id="view-guardian-mount"></div>
@@ -1473,64 +1292,78 @@
       <div id="view-agent-profiles-mount"></div>
 
       <!-- VIEW CONTAINER: AI MASTERMIND (BOARDROOM / DECISION ENGINE) -->
-      <div id="view-ai-mastermind" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 overflow-hidden flex-col shadcn-view" style="height: 100%; min-height: 0;">
+      <div id="view-ai-mastermind" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
         
         <!-- ========================================================================= -->
-        <!-- HEADER-KACHEL (DYNAMISCH JE NACH AKTIVEM SUBTAB: UEBERSICHT / DEBATTE / LIVE) -->
+        <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR DECISION ENGINE         -->
         <!-- ========================================================================= -->
-        <div class="prof-panel-card p-3 mb-2 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs shrink-0 flex items-center justify-between gap-4">
-          <!-- Links: Banner & Titel -->
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="relative shrink-0">
-              <img id="boardroom-main-header-img" src="/static/img/cadre_icons/overview.png" alt="Boardroom" class="w-12 h-12 rounded-xl object-contain border border-[var(--border)] p-1 bg-[var(--secondary)] shadow-xs" onerror="this.src='/static/avatars/avatar_001.jpg'">
-              <div id="boardroom-header-status-dot" class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--card)] flex items-center justify-center" title="System Bereit">
-                <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
-              </div>
+        <header id="boardroom-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+          <!-- Links: Status-Pulse, Titel & Subtitel -->
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <div class="relative shrink-0 flex items-center justify-center">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <img id="boardroom-main-header-img" src="/static/img/cadre_icons/overview.png" alt="Decision Engine" class="hidden">
+              <div id="boardroom-header-status-dot" class="hidden"></div>
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <h2 id="boardroom-main-title" class="text-base font-bold text-[var(--foreground)] tracking-tight truncate">AI Mastermind · Übersicht</h2>
+                <h2 id="boardroom-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">Decision Engine · Übersicht</h2>
                 <span id="boardroom-total-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">Bereit</span>
               </div>
-              <p id="boardroom-main-subtitle" class="text-[11px] text-[var(--muted-foreground)] truncate max-w-md">Historie, frühere Debatten &amp; strategische Konsens-Ergebnisse</p>
+              <p id="boardroom-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">Historie, frühere Debatten &amp; strategische Konsens-Ergebnisse</p>
             </div>
           </div>
 
-          <!-- Rechts: Sub-Tabs & Help -->
-          <div class="flex items-center gap-2 shrink-0">
-            <!-- 3 Subtabs Kacheln (Übersicht, Debatte, Live-Debatte) -->
-            <div class="flex items-center gap-1.5 p-1 bg-[var(--secondary)] border border-[var(--border)] rounded-xl shadow-2xs">
-              <!-- 1. Kachel: Übersicht -->
-              <button type="button" id="boardroom-subtab-overview" onclick="setBoardroomTab('overview')" class="boardroom-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-1 px-1.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" title="Übersicht & Historie">
-                <div class="tile-icon-wrap active-tile w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] shadow-xs mb-0.5">
-                  <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-                </div>
-                <span class="boardroom-tab-label text-[10px] font-mono font-bold text-[var(--foreground)] truncate">Übersicht</span>
-              </button>
+          <!-- Rechts: Subtabs als echte 72px Kacheln (Übersicht, Debatte, Live) & Help -->
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <!-- 1. Kachel: Übersicht -->
+            <button 
+              type="button" 
+              id="boardroom-subtab-overview" 
+              onclick="setBoardroomTab('overview')" 
+              class="boardroom-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+              title="Übersicht &amp; Historie"
+            >
+              <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/overview.png" alt="Übersicht" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="boardroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Übersicht</span>
+            </button>
 
-              <!-- 2. Kachel: Debatte -->
-              <button type="button" id="boardroom-subtab-debate" onclick="setBoardroomTab('debate')" class="boardroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-1 px-1.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" title="Methodik & Debatten-Konfiguration">
-                <div class="tile-icon-wrap w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] shadow-xs mb-0.5">
-                  <i data-lucide="brain" class="w-4 h-4"></i>
-                </div>
-                <span class="boardroom-tab-label text-[10px] font-mono font-medium text-[var(--foreground)] truncate">Debatte</span>
-              </button>
+            <!-- 2. Kachel: Debatte -->
+            <button 
+              type="button" 
+              id="boardroom-subtab-debate" 
+              onclick="setBoardroomTab('debate')" 
+              class="boardroom-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+              title="Methodik &amp; Debatten-Konfiguration"
+            >
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/debate.png" alt="Debatte" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none" onerror="this.onerror=null; this.src='/static/img/cadre_icons/operations.png';">
+              </div>
+              <span class="boardroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Debatte</span>
+            </button>
 
-              <!-- 3. Kachel: Live-Debatte -->
-              <button type="button" id="boardroom-subtab-live" onclick="setBoardroomTab('live')" class="boardroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-1 px-1.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" title="Live Transkription & Arena">
-                <div class="tile-icon-wrap w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] shadow-xs mb-0.5">
-                  <i data-lucide="radio" class="w-4 h-4 text-rose-500"></i>
-                </div>
-                <span class="boardroom-tab-label text-[10px] font-mono font-medium text-[var(--foreground)] truncate">Live</span>
-              </button>
-            </div>
+            <!-- 3. Kachel: Live-Debatte -->
+            <button 
+              type="button" 
+              id="boardroom-subtab-live" 
+              onclick="setBoardroomTab('live')" 
+              class="boardroom-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+              title="Live Transkription &amp; Arena"
+            >
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/live.png" alt="Live" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none" onerror="this.onerror=null; this.src='/static/img/cadre_icons/chat.png';">
+              </div>
+              <span class="boardroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Live</span>
+            </button>
 
             <!-- Hilfe Icon Button -->
-            <button type="button" onclick="openContextHelp('boardroom')" title="Hilfe zum AI Mastermind Boardroom" class="w-8 h-8 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shadow-xs">
+            <button type="button" onclick="openContextHelp('boardroom')" title="Hilfe zum AI Mastermind Boardroom" class="w-8 h-8 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shadow-xs ml-1">
               <i data-lucide="help-circle" class="w-4 h-4"></i>
             </button>
           </div>
-        </div>
+        </header>
 
         <!-- ========================================================================= -->
         <!-- HAUPT-PANELE (TAB-ROUTING) -->
@@ -1889,6 +1722,9 @@
             <div class="p-3.5 border-t border-[var(--border)] bg-[var(--secondary)] flex items-center justify-between shrink-0">
               <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Vollständiger Dialogverlauf archiviert</span>
               <div class="flex items-center gap-2">
+                <button type="button" onclick="exportCurrentViewingDebate()" class="px-3.5 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition" title="Debatte als Markdown herunterladen">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i> Exportieren
+                </button>
                 <button type="button" onclick="openTranscriptFromDetailModal()" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-mono font-bold hover:opacity-90 transition flex items-center gap-1.5 shadow-xs cursor-pointer">
                   <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Vollständiges Transkript ansehen
                 </button>
@@ -2079,12 +1915,12 @@ print('Ausführung erfolgreich!')</textarea>
       <!-- VIEW: VIEW-DESIGN-SYSTEM (Extracted) -->
       <div id="view-design-system-mount"></div>
     </main>
-  <script src="/static/js/chat_engine.js?v=202610222215"></script>
-  <script src="/static/js/system_settings.js?v=202610241405"></script>
+  <script src="/static/js/chat_engine.js?v=202610271358"></script>
+  <script src="/static/js/system_settings.js?v=202610281443"></script>
   <script src="/static/js/agent_profiles.js?v=202610270030"></script>
-  <script src="/static/js/customizer.js?v=202610222215"></script>
-  <script src="/static/js/component_design_studio.js?v=202610222215"></script>
-  <script src="/static/js/command_palette.js?v=202610222215"></script>
+  <script src="/static/js/customizer.js?v=202610271358"></script>
+  <script src="/static/js/component_design_studio.js?v=202610271358"></script>
+  <script src="/static/js/command_palette.js?v=202610271358"></script>
   <script>
     // Coalesce lucide.createIcons() calls within 35ms so multiple synchronous calls only scan the DOM once
     if (window.lucide && typeof window.lucide.createIcons === "function" && !window.lucide.__coalesced) {
@@ -2105,15 +1941,15 @@ print('Ausführung erfolgreich!')</textarea>
       catch (e) { console.warn('[CustomCSS] Start-Anwendung fehlgeschlagen:', e); }
     });
   </script>
-  <script src="/static/js/mission_control_cockpit.js?v=202610222215"></script>
-  <script src="/static/js/research_lab.js?v=202610222215"></script>
-  <script src="/static/js/operations_kanban.js?v=202610222215"></script>
-  <script src="/static/js/appshell_architect.js?v=202610222215"></script>
+  <script src="/static/js/mission_control_cockpit.js?v=202610271358"></script>
+  <script src="/static/js/research_lab.js?v=202610281420"></script>
+  <script src="/static/js/operations_kanban.js?v=202610271856"></script>
+  <script src="/static/js/appshell_architect.js?v=202610271155"></script>
   <script src="/static/js/css_live_studio.js?v=202610261908"></script>
-  <script src="/static/js/guardian.js?v=202610222215"></script>
+  <script src="/static/js/guardian.js?v=202610280630"></script>
   <script src="/static/js/prompt_studio.js?v=202610242200"></script>
   <script src="/static/js/wissensbibliothek.js?v=202610241345"></script>
-  <script src="/static/js/skill_markt.js?v=202610270030"></script>
+  <script src="/static/js/skill_markt.js?v=202610272015"></script>
   <script>
     // =========================================================================
     // 🔔 ARCHON OS GLOBAL NOTIFICATION / TOAST SYSTEM
@@ -2611,17 +2447,18 @@ print('Ausführung erfolgreich!')</textarea>
         await Promise.all([
           fetch('/static/views/view_app_frame_studio.html?v=202610261908').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); }),
           fetch('/static/views/system_settings_modal.html?v=202610241405').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/agent_profiles_view.html?v=202610270030').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/master_chat_view.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/operations_view.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/library_view.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/inbox_view.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_showroom.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_guardian.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_plugins.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_research.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/watchdog_view.html?v=20261026').then(r => r.text()).then(html => { const el = document.getElementById('view-watchdog-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }),
-          fetch('/static/views/view_brain.html?v=202610222215').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; })
+          fetch('/static/views/agent_profiles_view.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/master_chat_view.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/operations_view.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/library_view.html?v=202610280928').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/inbox_view.html?v=202610271946').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_showroom.html?v=202610271952').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/log_stream_view.html?v=202610280635').then(r => r.text()).then(html => { const el = document.getElementById('view-log-stream-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_guardian.html?v=202610280630').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_plugins.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/view_research.html?v=202610272230').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/watchdog_view.html?v=202610272200').then(r => r.text()).then(html => { const el = document.getElementById('view-watchdog-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }),
+          fetch('/static/views/view_brain.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; })
         ]);
       } catch(err) {
         console.error("V2 Fetch Error: ", err);
@@ -2793,7 +2630,7 @@ print('Ausführung erfolgreich!')</textarea>
         viewport.classList.remove("px-2.5", "pt-1.5", "pb-2.5", "space-y-2.5", "p-6", "space-y-6");
         viewport.classList.add("p-0", "flex", "flex-col", "h-full", "min-h-0");
         viewport.style.padding = "0";
-        viewport.style.overflowY = (tabId === "research") ? "auto" : "hidden";
+        viewport.style.overflowY = "hidden";
         viewport.style.height = "100%";
         viewport.style.display = "flex";
         viewport.style.flexDirection = "column";
@@ -2809,17 +2646,11 @@ print('Ausführung erfolgreich!')</textarea>
       if (selectedView) {
         selectedView.classList.remove("hidden");
         selectedView.style.display = (tabId === "kanban" || tabId === "agent-profiles") ? "block" : "flex";
-        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog") {
+        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream") {
           selectedView.style.height = "100%";
           selectedView.style.flex = "1 1 0%";
           selectedView.style.minHeight = "0";
           selectedView.style.overflow = "hidden";
-        } else if (tabId === "research") {
-          selectedView.style.height = "100%";
-          selectedView.style.width = "100%";
-          selectedView.style.flex = "1 1 0%";
-          selectedView.style.minHeight = "0";
-          selectedView.style.overflowY = "auto";
         } else if (tabId === "design-system") {
           selectedView.style.height = "100%";
           selectedView.style.width = "100%";
@@ -2841,6 +2672,7 @@ print('Ausführung erfolgreich!')</textarea>
       }
       // Log-Stream Polling Start/Stop & Paperclip Iframe
       if (tabId === "watchdog") {
+        if (typeof switchWatchdogSubTab === 'function') switchWatchdogSubTab(typeof currentWatchdogTab !== 'undefined' ? currentWatchdogTab : 'radar');
         if (typeof initWatchdogView === 'function') initWatchdogView();
       }
       if (tabId === "operations") {
@@ -2848,11 +2680,13 @@ print('Ausführung erfolgreich!')</textarea>
         if (shouldFetchTab('operations')) loadOperationsData(false);
       }
       if (tabId === "log-stream") {
+        if (typeof setLogStreamSourceMode === 'function') setLogStreamSourceMode(typeof currentLogStreamMode !== 'undefined' ? currentLogStreamMode : 'containers');
         startLogStreamPolling();
       } else {
         stopLogStreamPolling();
       }
       if (tabId === "guardian") {
+        if (typeof setGuardianSubTab === 'function') setGuardianSubTab(typeof guardianCurrentSubTab !== 'undefined' ? guardianCurrentSubTab : 'overview');
         if (shouldFetchTab('guardian')) loadGuardianData();
       }
       if (tabId === "plugins") {
@@ -3009,10 +2843,12 @@ print('Ausführung erfolgreich!')</textarea>
       if (tabId === "kanban") renderKanbanBoard();
       if (tabId === "brain") loadLibraryBooksList();
       if (tabId === "ai-mastermind") {
+        if (typeof setBoardroomTab === "function") setBoardroomTab(typeof currentBoardroomTab !== "undefined" ? currentBoardroomTab : 'overview');
         loadBoardroomFrameworks();
         populateBoardroomChairmanSelect();
       }
       if (tabId === "research") {
+        if (typeof switchResearchSubTab === "function") switchResearchSubTab(typeof currentResearchTab !== "undefined" ? currentResearchTab : 'labor');
         if (typeof loadResearchLab === "function") loadResearchLab();
       }
       if (tabId === "agent-profiles" || tabId === "agents") {
@@ -3129,9 +2965,178 @@ print('Ausführung erfolgreich!')</textarea>
     }
     let inboxActiveCategory = 'all';
     let inboxSearchQuery = '';
+    let inboxActiveColorFilter = null; // null | 'red' | 'orange' | 'yellow' | 'green' | 'blue'
+    let inboxQuickFilterMode = 'all';  // 'all' | 'pinned'
+    let inboxSideListMode = 'board';    // 'board' | 'stream'
     window._inboxCurrentDetail = null;
     let currentInboxDetailItem = null;
     let inboxDetailBodyMode = 'html'; // 'html' | 'text'
+
+    // --- Persistente Farb-Markierungen und Pins (Local Storage) ---
+    function getInboxAnnotations() {
+      try {
+        return JSON.parse(localStorage.getItem('archon_inbox_annotations') || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveInboxAnnotations(annotations) {
+      try {
+        localStorage.setItem('archon_inbox_annotations', JSON.stringify(annotations));
+      } catch (e) {
+        console.warn('Fehler beim Speichern der Inbox-Markierungen:', e);
+      }
+    }
+
+    function getItemKey(item, type) {
+      if (!item) return '';
+      if (item.id) return String(item.id);
+      const title = (item.title || '').trim();
+      const time = (item.time || item.timestamp || '').trim();
+      return `${type || item.source || 'msg'}__${title}__${time}`.replace(/\s+/g, '_');
+    }
+
+    const INBOX_COLORS = {
+      red: { label: 'Rot (Prio 1 / Eskalation)', bg: 'bg-red-500', text: 'text-red-500', border: 'border-red-500', hex: '#ef4444', ring: 'ring-red-500' },
+      orange: { label: 'Orange (In Bearbeitung)', bg: 'bg-amber-500', text: 'text-amber-500', border: 'border-amber-500', hex: '#f59e0b', ring: 'ring-amber-500' },
+      yellow: { label: 'Gelb (Review / Wichtig)', bg: 'bg-yellow-400', text: 'text-yellow-400', border: 'border-yellow-400', hex: '#facc15', ring: 'ring-yellow-400' },
+      green: { label: 'Grün (Erledigt / Freigabe)', bg: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500', hex: '#10b981', ring: 'ring-emerald-500' },
+      blue: { label: 'Blau (Info / Referenz)', bg: 'bg-sky-500', text: 'text-sky-500', border: 'border-sky-500', hex: '#0ea5e9', ring: 'ring-sky-500' }
+    };
+
+    window.toggleItemColor = function(itemKey, color, event) {
+      if (event) event.stopPropagation();
+      const ann = getInboxAnnotations();
+      const cur = ann[itemKey] || {};
+      if (cur.color === color) {
+        delete cur.color;
+      } else {
+        cur.color = color;
+      }
+      ann[itemKey] = cur;
+      saveInboxAnnotations(ann);
+      refreshInboxViewRendering();
+    };
+
+    window.toggleItemPin = function(itemKey, event) {
+      if (event) event.stopPropagation();
+      const ann = getInboxAnnotations();
+      const cur = ann[itemKey] || {};
+      cur.pinned = !cur.pinned;
+      ann[itemKey] = cur;
+      saveInboxAnnotations(ann);
+      refreshInboxViewRendering();
+    };
+
+    window.setInboxQuickFilter = function(mode) {
+      inboxQuickFilterMode = mode;
+      const bAll = document.getElementById('inbox-quick-filter-all');
+      const bPinned = document.getElementById('inbox-quick-filter-pinned');
+      if (mode === 'pinned') {
+        if (bAll) bAll.className = "px-2.5 py-1 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer";
+        if (bPinned) bPinned.className = "px-2.5 py-1 rounded font-bold bg-[var(--card)] text-red-600 dark:text-red-400 shadow-2xs transition cursor-pointer flex items-center gap-1";
+      } else {
+        if (bAll) bAll.className = "px-2.5 py-1 rounded font-bold bg-[var(--card)] text-red-600 dark:text-red-400 shadow-2xs transition cursor-pointer";
+        if (bPinned) bPinned.className = "px-2.5 py-1 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1";
+      }
+      refreshInboxViewRendering();
+    };
+
+    window.toggleInboxColorFilter = function(color) {
+      if (inboxActiveColorFilter === color) {
+        inboxActiveColorFilter = null;
+      } else {
+        inboxActiveColorFilter = color;
+      }
+
+      // Buttons aktualisieren
+      const colors = ['red', 'orange', 'yellow', 'green', 'blue'];
+      colors.forEach(c => {
+        const btn = document.getElementById(`inbox-color-filter-${c}`);
+        if (!btn) return;
+        if (inboxActiveColorFilter === c) {
+          btn.className = `w-5 h-5 rounded-full ${INBOX_COLORS[c].bg} scale-125 transition-transform cursor-pointer border-2 border-[var(--foreground)] ring-2 ${INBOX_COLORS[c].ring} shadow-sm relative`;
+        } else {
+          btn.className = `w-5 h-5 rounded-full ${INBOX_COLORS[c].bg} hover:scale-125 transition-transform cursor-pointer border-2 border-transparent shadow-xs relative opacity-85 hover:opacity-100`;
+        }
+      });
+
+      const clearBtn = document.getElementById('inbox-color-filter-clear');
+      if (clearBtn) {
+        if (inboxActiveColorFilter) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+      }
+
+      const activeColorLabel = document.getElementById('inbox-active-color-label');
+      if (activeColorLabel) {
+        if (inboxActiveColorFilter) {
+          activeColorLabel.innerText = INBOX_COLORS[inboxActiveColorFilter]?.label.split(' ')[0] || inboxActiveColorFilter;
+          activeColorLabel.className = `font-bold ${INBOX_COLORS[inboxActiveColorFilter]?.text || ''}`;
+        } else {
+          activeColorLabel.innerText = 'Alle';
+          activeColorLabel.className = 'font-semibold text-[var(--foreground)]';
+        }
+      }
+
+      refreshInboxViewRendering();
+    };
+
+    window.setInboxSideListMode = function(mode) {
+      inboxSideListMode = mode;
+      const bBoard = document.getElementById('inbox-side-tab-board');
+      const bStream = document.getElementById('inbox-side-tab-stream');
+      const titleEl = document.getElementById('inbox-board-mode-title');
+      const iconEl = document.getElementById('inbox-board-icon');
+
+      if (mode === 'board') {
+        if (bBoard) bBoard.className = "flex-1 py-1 rounded font-bold bg-[var(--card)] text-red-600 dark:text-red-400 shadow-2xs transition text-center cursor-pointer";
+        if (bStream) bStream.className = "flex-1 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition text-center cursor-pointer";
+        if (titleEl) titleEl.innerText = "Schwarzes Brett";
+        if (iconEl) iconEl.innerText = "📌";
+      } else {
+        if (bStream) bStream.className = "flex-1 py-1 rounded font-bold bg-[var(--card)] text-red-600 dark:text-red-400 shadow-2xs transition text-center cursor-pointer";
+        if (bBoard) bBoard.className = "flex-1 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition text-center cursor-pointer";
+        if (titleEl) titleEl.innerText = "Live-Log";
+        if (iconEl) iconEl.innerText = "⚡";
+      }
+      renderStreamColumn(inboxActiveCategory);
+    };
+
+    function refreshInboxViewRendering() {
+      renderStreamColumn(inboxActiveCategory);
+      if (inboxActiveCategory === 'all') {
+        renderOverviewColumns();
+      } else {
+        renderSplitInbox(inboxActiveCategory);
+      }
+      updatePinnedCountPill();
+    }
+
+    function updatePinnedCountPill() {
+      const ann = getInboxAnnotations();
+      let pinnedCount = 0;
+      Object.values(ann).forEach(v => {
+        if (v && (v.pinned || v.color)) pinnedCount++;
+      });
+      const pill = document.getElementById('inbox-pinned-count-pill');
+      if (pill) pill.innerText = pinnedCount;
+    }
+
+    // Farbwähler-HTML-Generator für Kacheln
+    function renderColorPickerDots(itemKey, currentColor) {
+      const colors = ['red', 'orange', 'yellow', 'green', 'blue'];
+      return `
+        <div class="inline-flex items-center gap-1 p-0.5 rounded-full bg-[var(--background)]/80 border border-[var(--border)] shadow-2xs" onclick="event.stopPropagation()">
+          ${colors.map(c => {
+            const isSel = (currentColor === c);
+            const borderCls = isSel ? 'ring-2 ring-zinc-900 dark:ring-white scale-125' : 'hover:scale-125 opacity-70 hover:opacity-100';
+            return `<button type="button" onclick="toggleItemColor('${itemKey}', '${c}', event)" class="w-2.5 h-2.5 rounded-full ${INBOX_COLORS[c].bg} ${borderCls} transition-all cursor-pointer" title="${INBOX_COLORS[c].label}"></button>`;
+          }).join('')}
+          ${currentColor ? `<button type="button" onclick="toggleItemColor('${itemKey}', '${currentColor}', event)" class="text-[9px] text-[var(--muted-foreground)] hover:text-red-500 px-0.5 leading-none cursor-pointer" title="Farbe entfernen">✕</button>` : ''}
+        </div>
+      `;
+    }
 
     const INBOX_META = {
       all: {
@@ -3291,6 +3296,7 @@ print('Ausführung erfolgreich!')</textarea>
         if (bTotal) bTotal.innerText = `${totalCount} Items`;
 
         // Filter / Modus anwenden
+        updatePinnedCountPill();
         setInboxCategoryFilter(inboxActiveCategory);
         lucide.createIcons();
       } catch (err) {
@@ -3313,13 +3319,13 @@ print('Ausführung erfolgreich!')</textarea>
         const label = btn.querySelector('.inbox-tab-label');
 
         if (isSelected) {
-          btn.className = "inbox-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
-          if (iconWrap) iconWrap.className = "tile-icon-wrap active-tile w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5";
-          if (label) label.className = "inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold";
+          btn.className = "inbox-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          if (iconWrap) iconWrap.className = "tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5";
+          if (label) label.className = "inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
         } else {
-          btn.className = "inbox-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
-          if (iconWrap) iconWrap.className = "tile-icon-wrap w-12 h-12 sm:w-[62px] sm:h-[62px] flex items-center justify-center mb-0.5";
-          if (label) label.className = "inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium";
+          btn.className = "inbox-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          if (iconWrap) iconWrap.className = "tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5";
+          if (label) label.className = "inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none";
         }
       });
 
@@ -3427,12 +3433,7 @@ print('Ausführung erfolgreich!')</textarea>
     window.renderSplitInbox = function(category) {
       if (!window._inboxCurrentData) return;
       const rawItems = window._inboxCurrentData[category] || [];
-      const filtered = inboxSearchQuery ? rawItems.filter(item => {
-        const t = (item.title || '').toLowerCase();
-        const p = (item.preview || item.content || '').toLowerCase();
-        const s = (item.sender || '').toLowerCase();
-        return t.includes(inboxSearchQuery) || p.includes(inboxSearchQuery) || s.includes(inboxSearchQuery);
-      }) : rawItems;
+      const filtered = filterInboxItemList(rawItems, category);
 
       const titleEl = document.getElementById('inbox-split-title');
       const iconImgEl = document.getElementById('inbox-split-icon-img');
@@ -3456,6 +3457,8 @@ print('Ausführung erfolgreich!')</textarea>
         if (selIdx >= filtered.length) selIdx = 0;
       }
 
+      const ann = getInboxAnnotations();
+
       if (listEl) {
         if (filtered.length === 0) {
           listEl.innerHTML = `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Eintraege in dieser Kategorie</div>`;
@@ -3463,9 +3466,19 @@ print('Ausführung erfolgreich!')</textarea>
         } else {
           listEl.innerHTML = filtered.map((it, idx) => {
             const isSelected = (idx === selIdx);
+            const itemKey = getItemKey(it, category);
+            const itemAnn = ann[itemKey] || {};
+
+            let colorBorder = '';
+            let colorDot = '';
+            if (itemAnn.color && INBOX_COLORS[itemAnn.color]) {
+              colorBorder = `border-l-4 ${INBOX_COLORS[itemAnn.color].border}`;
+              colorDot = `<span class="w-2 h-2 rounded-full ${INBOX_COLORS[itemAnn.color].bg} shrink-0 shadow-2xs"></span>`;
+            }
+
             const activeCls = isSelected 
-              ? 'border-zinc-900 dark:border-zinc-100 bg-[var(--secondary)] shadow-xs ring-1 ring-zinc-400 dark:ring-zinc-600' 
-              : 'border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50';
+              ? `border-zinc-900 dark:border-zinc-100 bg-[var(--secondary)] shadow-xs ring-1 ring-zinc-400 dark:ring-zinc-600 ${colorBorder}` 
+              : `border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50 ${colorBorder}`;
 
             const safeTitle = it.title || 'Eintrag';
             const safeSender = it.sender || (category === 'email' ? 'E-Mail Absender' : (category === 'messenger' || category === 'telegram') ? 'Messenger' : category === 'webhook' ? 'Webhook' : 'System');
@@ -3484,11 +3497,15 @@ print('Ausführung erfolgreich!')</textarea>
             }[category] || 'bg-[var(--secondary)] text-[var(--foreground)] border-[var(--border)]';
 
             return `
-              <div onclick="openInboxDetail('${category}', ${idx})" class="group p-2.5 rounded-xl border ${activeCls} text-[var(--foreground)] transition cursor-pointer select-none">
+              <div onclick="openInboxDetail('${category}', ${idx})" class="group p-2.5 rounded-xl border ${activeCls} text-[var(--foreground)] transition cursor-pointer select-none relative">
                 <div class="flex items-start justify-between gap-1.5 mb-1">
-                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono uppercase tracking-wider border ${badgeColors}">
-                    ${escapeHtml(it.badge || category.toUpperCase())}
-                  </span>
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    ${colorDot}
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono uppercase tracking-wider border ${badgeColors}">
+                      ${escapeHtml(it.badge || category.toUpperCase())}
+                    </span>
+                    ${itemAnn.pinned ? '<span class="text-[11px]" title="Gepinnt">📌</span>' : ''}
+                  </div>
                   <span class="text-[9.5px] font-mono text-[var(--muted-foreground)] shrink-0">${escapeHtml(safeMeta)}</span>
                 </div>
                 <h4 class="text-xs font-bold font-mono text-[var(--foreground)] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-1 mb-1">
@@ -3498,9 +3515,15 @@ print('Ausführung erfolgreich!')</textarea>
                   <i data-lucide="user" class="w-3 h-3 text-[var(--muted-foreground)] shrink-0"></i>
                   <span class="truncate">${escapeHtml(safeSender)}</span>
                 </div>
-                <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)]">
+                <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)] mb-1.5">
                   ${escapeHtml(safeContent)}
                 </p>
+                <div class="flex items-center justify-between pt-1 border-t border-[var(--border)]/40 text-[10px]">
+                  ${renderColorPickerDots(itemKey, itemAnn.color)}
+                  <button type="button" onclick="toggleItemPin('${itemKey}', event)" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer" title="${itemAnn.pinned ? 'Vom Brett entfernen' : 'Anheften'}">
+                    ${itemAnn.pinned ? '📌' : '📍'}
+                  </button>
+                </div>
               </div>
             `;
           }).join('');
@@ -3514,57 +3537,111 @@ print('Ausführung erfolgreich!')</textarea>
 
     window.filterInboxItems = function(query) {
       inboxSearchQuery = (query || '').toLowerCase().trim();
-      renderStreamColumn(inboxActiveCategory);
-      if (inboxActiveCategory === 'all') {
-        renderOverviewColumns();
-      } else {
-        renderSplitInbox(inboxActiveCategory);
-      }
+      refreshInboxViewRendering();
     };
 
-    // Render Stream in Mittlerer Spalte
+    // Filter-Hilfsfunktion für Suche, Quick-Filter (Pinned) und Farb-Filter
+    function filterInboxItemList(items, categoryType) {
+      if (!items || !Array.isArray(items)) return [];
+      const ann = getInboxAnnotations();
+      return items.filter(it => {
+        const itemKey = getItemKey(it, it.source || categoryType);
+        const itemAnn = ann[itemKey] || {};
+
+        // 1. Quick-Filter (Pinned / Schwarzes Brett)
+        if (inboxQuickFilterMode === 'pinned') {
+          if (!itemAnn.pinned && !itemAnn.color) return false;
+        }
+
+        // 2. Farbfeld-Filter (Rot, Orange, Gelb, Grün, Blau)
+        if (inboxActiveColorFilter) {
+          if (itemAnn.color !== inboxActiveColorFilter) return false;
+        }
+
+        // 3. Textsuche
+        if (inboxSearchQuery) {
+          const t = (it.title || '').toLowerCase();
+          const p = (it.preview || it.content || '').toLowerCase();
+          const s = (it.sender || '').toLowerCase();
+          if (!t.includes(inboxSearchQuery) && !p.includes(inboxSearchQuery) && !s.includes(inboxSearchQuery)) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    // Render Stream bzw. Schwarzes Brett in linker Spalte (260px)
     function renderStreamColumn(category) {
       if (!window._inboxCurrentData) return;
       const listEl = document.getElementById('inbox-stream-list');
       const countBadge = document.getElementById('inbox-stream-count-badge');
       if (!listEl) return;
 
-      let items = [];
-      if (category === 'all') {
-        const w = window._inboxCurrentData.webhook || [];
-        const i = window._inboxCurrentData.intern || [];
-        const e = window._inboxCurrentData.email || [];
-        const m = window._inboxCurrentData.messenger || [];
-        items = [...w, ...i, ...e, ...m];
-        items.sort((a, b) => {
-          const ma = a.mtime || 0;
-          const mb = b.mtime || 0;
-          return mb - ma;
+      const ann = getInboxAnnotations();
+      let allItems = [];
+      const w = window._inboxCurrentData.webhook || [];
+      const i = window._inboxCurrentData.intern || [];
+      const e = window._inboxCurrentData.email || [];
+      const m = window._inboxCurrentData.messenger || [];
+      allItems = [...w, ...i, ...e, ...m];
+
+      allItems.sort((a, b) => {
+        const ma = a.mtime || 0;
+        const mb = b.mtime || 0;
+        return mb - ma;
+      });
+
+      let itemsToDisplay = [];
+      if (inboxSideListMode === 'board') {
+        // Schwarzes Brett: Alle markierten oder gepinnten Elemente kanalübergreifend
+        itemsToDisplay = allItems.filter(it => {
+          const key = getItemKey(it, it.source);
+          const itemAnn = ann[key] || {};
+          return !!(itemAnn.pinned || itemAnn.color);
         });
+
+        // Falls noch gar nichts gepinnt/markiert ist, die 3 neuesten Elemente vorschlagen
+        if (itemsToDisplay.length === 0 && allItems.length > 0) {
+          itemsToDisplay = allItems.slice(0, 4);
+        }
       } else {
-        items = window._inboxCurrentData[category] || [];
+        // Live-Log Modus: Kategorie-spezifisch oder alles
+        itemsToDisplay = (category === 'all') ? allItems : (window._inboxCurrentData[category] || []);
       }
 
-      const filtered = inboxSearchQuery ? items.filter(it => {
-        const t = (it.title || '').toLowerCase();
-        const p = (it.preview || it.content || '').toLowerCase();
-        const s = (it.sender || '').toLowerCase();
-        return t.includes(inboxSearchQuery) || p.includes(inboxSearchQuery) || s.includes(inboxSearchQuery);
-      }) : items;
+      // Filter (Farbe & Suche) anwenden
+      const filtered = filterInboxItemList(itemsToDisplay, category);
 
       if (countBadge) countBadge.innerText = filtered.length;
 
       if (filtered.length === 0) {
-        listEl.innerHTML = `<div class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Stream-Ereignisse</div>`;
+        listEl.innerHTML = `
+          <div class="p-5 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)] space-y-1.5">
+            <p class="font-bold text-[var(--foreground)]">${inboxSideListMode === 'board' ? 'Schwarzes Brett ist leer' : 'Keine Stream-Ereignisse'}</p>
+            <p class="text-[10px] leading-relaxed">Klicke an einer Nachricht auf ein Farbfeld oder 📌, um sie auf das Schwarze Brett zu heften.</p>
+          </div>
+        `;
         return;
       }
 
       const selItem = currentInboxDetailItem;
       listEl.innerHTML = filtered.map((it, idx) => {
+        const type = it.source || category;
+        const itemKey = getItemKey(it, type);
+        const itemAnn = ann[itemKey] || {};
         const isSelected = selItem && (selItem.id ? selItem.id === it.id : (selItem.title === it.title && selItem.time === it.time));
+        
+        let colorBorder = '';
+        let colorDot = '';
+        if (itemAnn.color && INBOX_COLORS[itemAnn.color]) {
+          colorBorder = `border-l-4 ${INBOX_COLORS[itemAnn.color].border}`;
+          colorDot = `<span class="w-2 h-2 rounded-full ${INBOX_COLORS[itemAnn.color].bg} shrink-0 shadow-2xs"></span>`;
+        }
+
         const activeCls = isSelected 
-          ? 'border-zinc-900 dark:border-zinc-100 bg-[var(--secondary)] shadow-xs ring-1 ring-zinc-400 dark:ring-zinc-600' 
-          : 'border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50';
+          ? `border-zinc-900 dark:border-zinc-100 bg-[var(--secondary)] shadow-xs ring-1 ring-zinc-400 dark:ring-zinc-600 ${colorBorder}` 
+          : `border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50 ${colorBorder}`;
 
         const safeTitle = it.title || 'Eintrag';
         const safeSender = it.sender || 'Absender';
@@ -3575,7 +3652,6 @@ print('Ausführung erfolgreich!')</textarea>
           safeMeta = !isNaN(d.getTime()) ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : it.time;
         }
 
-        const type = it.source || category;
         const badgeColors = {
           webhook: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
           intern: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
@@ -3584,12 +3660,16 @@ print('Ausführung erfolgreich!')</textarea>
         }[type] || 'bg-[var(--secondary)] text-[var(--foreground)] border-[var(--border)]';
 
         return `
-          <div onclick="selectStreamItem('${type}', ${idx})" class="group p-2.5 rounded-xl border ${activeCls} text-[var(--foreground)] transition cursor-pointer select-none">
-            <div class="flex items-start justify-between gap-2 mb-1">
-              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badgeColors}">
-                ${escapeHtml(it.badge || type.toUpperCase())}
-              </span>
-              <span class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0">${escapeHtml(safeMeta)}</span>
+          <div onclick="selectStreamItem('${type}', ${idx})" class="group p-2.5 rounded-xl border ${activeCls} text-[var(--foreground)] transition cursor-pointer select-none relative">
+            <div class="flex items-start justify-between gap-1.5 mb-1">
+              <div class="flex items-center gap-1.5 min-w-0">
+                ${colorDot}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono uppercase tracking-wider border ${badgeColors}">
+                  ${escapeHtml(it.badge || type.toUpperCase())}
+                </span>
+                ${itemAnn.pinned ? '<span class="text-[11px]" title="Gepinnt">📌</span>' : ''}
+              </div>
+              <span class="text-[9.5px] font-mono text-[var(--muted-foreground)] shrink-0">${escapeHtml(safeMeta)}</span>
             </div>
             <h4 class="text-xs font-bold font-mono text-[var(--foreground)] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-1 mb-1">
               ${escapeHtml(safeTitle)}
@@ -3598,9 +3678,16 @@ print('Ausführung erfolgreich!')</textarea>
               <i data-lucide="user" class="w-3 h-3 text-[var(--muted-foreground)] shrink-0"></i>
               <span class="truncate">${escapeHtml(safeSender)}</span>
             </div>
-            <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)]">
+            <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)] mb-1.5">
               ${escapeHtml(safeContent)}
             </p>
+            <!-- Farbfelder & Pin Footer in der Kachel -->
+            <div class="flex items-center justify-between pt-1 border-t border-[var(--border)]/40 text-[10px]">
+              ${renderColorPickerDots(itemKey, itemAnn.color)}
+              <button type="button" onclick="toggleItemPin('${itemKey}', event)" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer" title="${itemAnn.pinned ? 'Vom Brett entfernen' : 'Anheften'}">
+                ${itemAnn.pinned ? '📌' : '📍'}
+              </button>
+            </div>
           </div>
         `;
       }).join('');
@@ -3621,27 +3708,22 @@ print('Ausführung erfolgreich!')</textarea>
     // Render 4 Spalten im rechten Feld (Uebersichts-Modus)
     function renderOverviewColumns() {
       if (!window._inboxCurrentData) return;
-      const filterItems = (items) => {
-        if (!inboxSearchQuery) return items;
-        return items.filter(item => {
-          const t = (item.title || '').toLowerCase();
-          const p = (item.preview || item.content || '').toLowerCase();
-          const s = (item.sender || '').toLowerCase();
-          return t.includes(inboxSearchQuery) || p.includes(inboxSearchQuery) || s.includes(inboxSearchQuery);
-        });
-      };
 
       const webhookList = document.getElementById('inbox-list-webhook');
       const internList = document.getElementById('inbox-list-intern');
       const emailList = document.getElementById('inbox-list-email');
       const messengerList = document.getElementById('inbox-list-messenger');
 
-      const wItems = filterItems(window._inboxCurrentData.webhook || []);
-      const iItems = filterItems(window._inboxCurrentData.intern || []);
-      const eItems = filterItems(window._inboxCurrentData.email || []);
-      const mItems = filterItems(window._inboxCurrentData.messenger || []);
+      const wItems = filterInboxItemList(window._inboxCurrentData.webhook || [], 'webhook');
+      const iItems = filterInboxItemList(window._inboxCurrentData.intern || [], 'intern');
+      const eItems = filterInboxItemList(window._inboxCurrentData.email || [], 'email');
+      const mItems = filterInboxItemList(window._inboxCurrentData.messenger || [], 'messenger');
+
+      const ann = getInboxAnnotations();
 
       const renderCard = (it, type, idx) => {
+        const itemKey = getItemKey(it, type);
+        const itemAnn = ann[itemKey] || {};
         const safeTitle = it.title || 'Eintrag';
         const safeContent = it.preview || it.content || '';
         const safeSender = it.sender || 'Absender';
@@ -3650,12 +3732,24 @@ print('Ausführung erfolgreich!')</textarea>
           const d = new Date(it.time);
           safeMeta = !isNaN(d.getTime()) ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : it.time;
         }
+
+        let colorBorder = '';
+        let colorDot = '';
+        if (itemAnn.color && INBOX_COLORS[itemAnn.color]) {
+          colorBorder = `border-l-4 ${INBOX_COLORS[itemAnn.color].border}`;
+          colorDot = `<span class="w-2 h-2 rounded-full ${INBOX_COLORS[itemAnn.color].bg} shrink-0 shadow-2xs"></span>`;
+        }
+
         return `
-          <div onclick="openInboxModal('${type}', ${idx})" class="group p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50 text-[var(--foreground)] transition cursor-pointer select-none">
+          <div onclick="openInboxModal('${type}', ${idx})" class="group p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/50 text-[var(--foreground)] transition cursor-pointer select-none relative ${colorBorder}">
             <div class="flex items-start justify-between gap-1.5 mb-1">
-              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono uppercase tracking-wider bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">
-                ${escapeHtml(it.badge || type.toUpperCase())}
-              </span>
+              <div class="flex items-center gap-1.5 min-w-0">
+                ${colorDot}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono uppercase tracking-wider bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">
+                  ${escapeHtml(it.badge || type.toUpperCase())}
+                </span>
+                ${itemAnn.pinned ? '<span class="text-[11px]" title="Gepinnt">📌</span>' : ''}
+              </div>
               <span class="text-[9.5px] font-mono text-[var(--muted-foreground)] shrink-0">${escapeHtml(safeMeta)}</span>
             </div>
             <h4 class="text-xs font-bold font-mono text-[var(--foreground)] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-1 mb-1">
@@ -3665,9 +3759,15 @@ print('Ausführung erfolgreich!')</textarea>
               <i data-lucide="user" class="w-3 h-3 text-[var(--muted-foreground)] shrink-0"></i>
               <span class="truncate">${escapeHtml(safeSender)}</span>
             </div>
-            <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)]">
+            <p class="text-[10.5px] font-mono line-clamp-2 leading-relaxed p-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 text-[var(--foreground)] mb-1.5">
               ${escapeHtml(safeContent)}
             </p>
+            <div class="flex items-center justify-between pt-1 border-t border-[var(--border)]/40 text-[10px]">
+              ${renderColorPickerDots(itemKey, itemAnn.color)}
+              <button type="button" onclick="toggleItemPin('${itemKey}', event)" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer" title="${itemAnn.pinned ? 'Vom Brett entfernen' : 'Anheften'}">
+                ${itemAnn.pinned ? '📌' : '📍'}
+              </button>
+            </div>
           </div>
         `;
       };
@@ -3758,6 +3858,22 @@ print('Ausführung erfolgreich!')</textarea>
         }
       }
 
+      // Farbwähler & Pin in Detail-Header befüllen
+      const detailColorPicker = document.getElementById('inbox-detail-color-picker');
+      const itemKey = getItemKey(item, type);
+      const ann = getInboxAnnotations();
+      const itemAnn = ann[itemKey] || {};
+
+      if (detailColorPicker) {
+        detailColorPicker.innerHTML = renderColorPickerDots(itemKey, itemAnn.color);
+      }
+
+      const pinBtn = document.getElementById('inbox-detail-pin-btn');
+      if (pinBtn) {
+        pinBtn.title = itemAnn.pinned ? 'Vom Schwarzen Brett entfernen' : 'An Schwarzes Brett heften';
+        pinBtn.innerHTML = itemAnn.pinned ? '<span class="text-sm">📌</span>' : '<span class="text-sm opacity-60">📍</span>';
+      }
+
       // HTML Support
       const hasHtml = Boolean(item.html);
       const toggleWrap = document.getElementById('inbox-detail-html-toggle-wrap');
@@ -3826,6 +3942,32 @@ print('Ausführung erfolgreich!')</textarea>
       });
     }
 
+    window.toggleCurrentInboxDetailPin = function() {
+      if (!currentInboxDetailItem || !window._inboxCurrentDetail) return;
+      const itemKey = getItemKey(currentInboxDetailItem, window._inboxCurrentDetail.type);
+      toggleItemPin(itemKey);
+      openInboxDetail(window._inboxCurrentDetail.type, window._inboxCurrentDetail.idx);
+    };
+
+    window.convertCurrentInboxDetailToTask = function() {
+      if (!currentInboxDetailItem) return;
+      const title = currentInboxDetailItem.title || 'Aufgabe aus Eingang';
+      const body = currentInboxDetailItem.content || currentInboxDetailItem.preview || '';
+      if (typeof openNewTaskModal === 'function') {
+        openNewTaskModal('todo', '', '', `[Eingang] ${title}`, body);
+      } else {
+        alert(`Neue Aufgabe: ${title}\n\n${body.slice(0, 200)}...`);
+      }
+    };
+
+    window.convertModalInboxToTask = function() {
+      if (!currentInboxModalPayload) return;
+      closeInboxModal();
+      if (typeof openNewTaskModal === 'function') {
+        openNewTaskModal('todo', '', '', `[Eingang] ${currentInboxModalPayload.title}`, currentInboxModalPayload.content);
+      }
+    };
+
     function analyzeInboxDetailInChat() {
       if (!currentInboxDetailItem) return;
       const type = (window._inboxCurrentDetail?.type || 'INBOX').toUpperCase();
@@ -3882,6 +4024,22 @@ print('Ausführung erfolgreich!')</textarea>
       if (titleEl) titleEl.innerText = item.title || 'Nachricht';
       const metaEl = document.getElementById('inbox-modal-meta');
       if (metaEl) metaEl.innerText = `${item.time || item.timestamp || ''} · ${item.path || 'In-Memory'}`;
+
+      const modalKey = getItemKey(item, type);
+      const modalAnn = getInboxAnnotations()[modalKey] || {};
+      const modalColorPicker = document.getElementById('inbox-modal-color-picker');
+      if (modalColorPicker) {
+        modalColorPicker.innerHTML = renderColorPickerDots(modalKey, modalAnn.color);
+      }
+      const modalPinBtn = document.getElementById('inbox-modal-pin-btn');
+      if (modalPinBtn) {
+        modalPinBtn.innerHTML = modalAnn.pinned ? '📌' : '📍';
+        modalPinBtn.title = modalAnn.pinned ? 'Vom Schwarzen Brett entfernen' : 'Anheften';
+      }
+      window.toggleModalInboxPin = function() {
+        toggleItemPin(modalKey);
+        openInboxModal(type, idx);
+      };
       // Raw View
       const rawEl = document.getElementById('inbox-modal-raw');
       if (rawEl) rawEl.textContent = fullContent;
@@ -4089,13 +4247,13 @@ print('Ausführung erfolgreich!')</textarea>
         const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
         if (btn) {
           if (t === tab) {
-            btn.className = "library-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "library-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
             if (iconWrap) iconWrap.classList.add('active-tile');
-            if (label) label.className = "library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold";
+            if (label) label.className = "library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
           } else {
-            btn.className = "library-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "library-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
             if (iconWrap) iconWrap.classList.remove('active-tile');
-            if (label) label.className = "library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium";
+            if (label) label.className = "library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none";
           }
         }
       });
@@ -4103,9 +4261,12 @@ print('Ausführung erfolgreich!')</textarea>
       if (tab === 'rag') {
         if (ragPane) ragPane.classList.remove('hidden');
         const iframe = document.getElementById('anythingllm-iframe');
-        const host = window.location.hostname || '127.0.0.1';
+        const rawHost = window.location.hostname;
+        const host = (!rawHost || rawHost === 'localhost') ? '127.0.0.1' : rawHost;
         const targetUrl = `http://${host}:3001`;
-        if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.includes('localhost:3001'))) {
+        const extLink = document.getElementById('library-rag-external-link');
+        if (extLink) extLink.href = targetUrl;
+        if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.includes('localhost:3001') || iframe.src === '')) {
           iframe.src = targetUrl;
         }
       } else if (tab === 'erfasser') {
@@ -4120,43 +4281,29 @@ print('Ausführung erfolgreich!')</textarea>
       lucide.createIcons();
     }
 
-    let libraryCatalogCollapsed = false;
-    window.toggleLibraryCatalogCollapse = function(forceState) {
-      if (typeof forceState === 'boolean') {
-        libraryCatalogCollapsed = forceState;
-      } else {
-        libraryCatalogCollapsed = !libraryCatalogCollapsed;
-      }
-      const col = document.getElementById("library-catalog-col");
-      const expHeader = document.getElementById("library-catalog-expanded-header");
-      const colHeader = document.getElementById("library-catalog-collapsed-header");
-      const body = document.getElementById("library-catalog-body");
-      const footer = col ? col.querySelector("#library-catalog-footer") : null;
+    window.toggleLibraryCatalogCollapse = function() {};
 
-      if (col) {
-        if (libraryCatalogCollapsed) {
-          col.classList.remove("w-[215px]", "min-w-[215px]", "max-w-[215px]", "p-2.5");
-          col.classList.add("w-[64px]", "min-w-[64px]", "max-w-[64px]", "p-2");
-          if (expHeader) expHeader.classList.add("hidden");
-          if (colHeader) colHeader.classList.remove("hidden");
-          if (body) body.classList.add("hidden");
-          if (footer) footer.classList.add("hidden");
-        } else {
-          col.classList.remove("w-[64px]", "min-w-[64px]", "max-w-[64px]", "p-2");
-          col.classList.add("w-[215px]", "min-w-[215px]", "max-w-[215px]", "p-2.5");
-          if (expHeader) expHeader.classList.remove("hidden");
-          if (colHeader) colHeader.classList.add("hidden");
-          if (body) body.classList.remove("hidden");
-          if (footer) footer.classList.remove("hidden");
-        }
-      }
-      lucide.createIcons();
-    };
-    async function loadLibraryView() {
-      // AnythingLLM Iframe initialisieren
+    window.reloadLibraryIframe = function() {
       const iframe = document.getElementById('anythingllm-iframe');
-      if (iframe && (!iframe.src || iframe.src === 'about:blank')) {
-        iframe.src = 'http://localhost:3001';
+      if (iframe) {
+        const rawHost = window.location.hostname;
+        const host = (!rawHost || rawHost === 'localhost') ? '127.0.0.1' : rawHost;
+        iframe.src = `http://${host}:3001?t=` + Date.now();
+      }
+    };
+
+    async function loadLibraryView() {
+      // Zentralbibliothek initialisieren und aktiven Subtab sicherstellen
+      if (typeof switchLibrarySubTab === 'function') {
+        switchLibrarySubTab(currentLibraryTab || 'rag');
+      } else {
+        const iframe = document.getElementById('anythingllm-iframe');
+        const rawHost = window.location.hostname;
+        const host = (!rawHost || rawHost === 'localhost') ? '127.0.0.1' : rawHost;
+        const targetUrl = `http://${host}:3001`;
+        if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.includes('localhost:3001') || iframe.src === '')) {
+          iframe.src = targetUrl;
+        }
       }
       loadVaultTree();
     }
@@ -4601,24 +4748,24 @@ print('Ausführung erfolgreich!')</textarea>
       currentShowroomCategory = cat || 'all';
       const headerMeta = {
         all: {
-          title: 'Showroom · Projekt-Explorer',
+          title: 'Showroom · Explorer',
           subtitle: 'Dateibaumstruktur nach Windows Explorer: Zwischenberichte, Medien & Endprodukte',
-          img: '/static/img/cadre_icons/marketplace.png'
+          img: '/static/img/cadre_icons/explorer.png?v=3'
         },
         zwischenberichte: {
-          title: 'Showroom · Zwischenberichte (01)',
+          title: 'Showroom · Berichte (01)',
           subtitle: 'Laufende Arbeitsberichte, Zwischenanalysen und Research-Notizen',
-          img: '/static/img/cadre_icons/skills.png'
+          img: '/static/img/cadre_icons/berichte.png?v=3'
         },
         medien: {
           title: 'Showroom · Medien & Assets (02)',
           subtitle: 'Diagramme, Screenshots, Visualisierungen, Audio- & Video-Dateien',
-          img: '/static/img/cadre_icons/paperclip.png'
+          img: '/static/img/cadre_icons/medien.png?v=3'
         },
         endprodukte: {
-          title: 'Showroom · Finale Endprodukte (03)',
+          title: 'Showroom · Endprodukte (03)',
           subtitle: 'Fertiggestellte Dokumente, Berichte, Exports und Artefakte',
-          img: '/static/img/cadre_icons/soul.png'
+          img: '/static/img/cadre_icons/endprodukte.png?v=3'
         }
       };
 
@@ -4640,13 +4787,13 @@ print('Ausführung erfolgreich!')</textarea>
                         (cat === 'endprodukte' && t === 'endprodukte');
         if (btn) {
           if (isMatch) {
-            btn.className = "showroom-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
-            if (iconWrap) iconWrap.classList.add('active-tile');
-            if (label) label.className = "showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold";
+            btn.className = "showroom-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            if (iconWrap) iconWrap.className = "tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5";
+            if (label) label.className = "showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
           } else {
-            btn.className = "showroom-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
-            if (iconWrap) iconWrap.classList.remove('active-tile');
-            if (label) label.className = "showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium";
+            btn.className = "showroom-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            if (iconWrap) iconWrap.className = "tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5";
+            if (label) label.className = "showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none";
           }
         }
       });
@@ -5195,36 +5342,70 @@ print('Ausführung erfolgreich!')</textarea>
       }
     }
     async function setLogStreamSourceMode(mode) {
+      if (!mode) mode = "containers";
       currentLogStreamMode = mode;
-      const btnCont = document.getElementById("log-subtab-btn-containers");
-      const btnProf = document.getElementById("log-subtab-btn-profiles");
-      const btnAudit = document.getElementById("log-subtab-btn-audit");
+
+      const tabs = ["containers", "profiles", "audit"];
+      const meta = {
+        containers: {
+          title: "Telemetrie & Logs — Container",
+          subtitle: "Live-Audit & Log-Streaming aller aktiven Docker-Dienste"
+        },
+        profiles: {
+          title: "Telemetrie & Logs — Agenten",
+          subtitle: "Echtzeit-Ausgaben, SOUL-Direktiven & Tool-Calls der Hermes-Agenten"
+        },
+        audit: {
+          title: "Telemetrie & Logs — Audit-Trail",
+          subtitle: "Kryptografisch verkettete SHA-256 Transaktionshistorie (Pillar 6 / Zero-Trust)"
+        }
+      };
+
+      const curMeta = meta[mode] || meta.containers;
+      const titleEl = document.getElementById("logstream-main-title");
+      const subtitleEl = document.getElementById("logstream-main-subtitle");
+      if (titleEl) titleEl.textContent = curMeta.title;
+      if (subtitleEl) subtitleEl.textContent = curMeta.subtitle;
+
+      tabs.forEach(t => {
+        const btn = document.getElementById(`log-subtab-btn-${t}`);
+        const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
+        const label = btn ? btn.querySelector(".logstream-tab-label") : null;
+
+        if (t === mode) {
+          if (btn) {
+            btn.className = "logstream-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) iconWrap.classList.add("active-tile");
+          if (label) {
+            label.className = "logstream-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
+          }
+        } else {
+          if (btn) {
+            btn.className = "logstream-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) iconWrap.classList.remove("active-tile");
+          if (label) {
+            label.className = "logstream-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none";
+          }
+        }
+      });
+
+      const sidebarExp = document.getElementById("logstream-sidebar-explorer");
       const paneCont = document.getElementById("log-pane-containers");
       const paneProf = document.getElementById("log-pane-profiles");
       const consoleLog = document.getElementById("logstream-main-console");
       const consoleAudit = document.getElementById("logstream-audit-console");
       const badge = document.getElementById("logstream-source-count-badge");
-      const activeStyle = "background-color: var(--card) !important; color: var(--foreground) !important; border: 1px solid var(--border) !important; font-weight: bold;";
-      const inactiveStyle = "background-color: transparent !important; color: var(--muted-foreground) !important; border: 1px solid transparent !important; font-weight: 500;";
-
-      if (btnCont) btnCont.style.cssText = inactiveStyle;
-      if (btnProf) btnProf.style.cssText = inactiveStyle;
-      if (btnAudit) btnAudit.style.cssText = inactiveStyle;
 
       if (mode === "audit") {
-        if (btnAudit) {
-          btnAudit.className = "py-1.5 px-1.5 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs text-[11px] text-emerald-600 dark:text-emerald-400";
-          btnAudit.style.cssText = activeStyle;
-        }
+        if (sidebarExp) sidebarExp.classList.add("hidden");
         if (consoleLog) consoleLog.classList.add("hidden");
         if (consoleAudit) consoleAudit.classList.remove("hidden");
         if (badge) badge.innerText = "Hash-Chain";
         loadAuditLogEntries();
       } else if (mode === "containers") {
-        if (btnCont) {
-          btnCont.className = "py-1.5 px-1.5 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs text-[11px]";
-          btnCont.style.cssText = activeStyle;
-        }
+        if (sidebarExp) sidebarExp.classList.remove("hidden");
         if (consoleLog) consoleLog.classList.remove("hidden");
         if (consoleAudit) consoleAudit.classList.add("hidden");
         if (paneCont) paneCont.classList.remove("hidden");
@@ -5233,16 +5414,12 @@ print('Ausführung erfolgreich!')</textarea>
         updateLogStreamHeaderTitle();
         pollLogStream();
       } else {
-        if (btnProf) {
-          btnProf.className = "py-1.5 px-1.5 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs text-[11px]";
-          btnProf.style.cssText = activeStyle;
-        }
+        if (sidebarExp) sidebarExp.classList.remove("hidden");
         if (consoleLog) consoleLog.classList.remove("hidden");
         if (consoleAudit) consoleAudit.classList.add("hidden");
         if (paneProf) paneProf.classList.remove("hidden");
         if (paneCont) paneCont.classList.add("hidden");
-        
-        // Ensure profiles data is loaded if not yet in memory
+
         if (typeof hermesProfilesData === "undefined" || !Array.isArray(hermesProfilesData) || hermesProfilesData.length === 0) {
           if (typeof loadHermesProfilesView === "function") {
             await loadHermesProfilesView();
@@ -5257,7 +5434,9 @@ print('Ausführung erfolgreich!')</textarea>
         }
         pollLogStream();
       }
-      lucide.createIcons();
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
     }
     let logContainersSearchTerm = "";
     function onLogContainersSearchInput(val) {
@@ -11314,7 +11493,7 @@ ${logExcerpt}
 </div>
 
 <div id="system-settings-mount"></div>
-<script src="/static/js/watchdog_controller.js?v=20261026"></script>
+<script src="/static/js/watchdog_controller.js?v=202610272200"></script>
 
 <!-- ===== ARCHON systemweites Datei-Preview (klickbare Pfade, 11.10.2026) ===== -->
 <style>

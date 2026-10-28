@@ -13,6 +13,30 @@
   let activeCategory = 'all';
   let searchQuery = '';
   let selectedFindingId = null;
+  let currentWatchdogTab = 'radar';
+
+  const WATCHDOG_HEADER_META = {
+    radar: {
+      title: "Internet-Watchdog — Radar",
+      subtitle: "Token-freie, autonome Dauerüberwachung für Markt, Bau, KI und Wettbewerbs-Quellen",
+      icon: "/static/img/cadre_icons/watchdog_radar.png"
+    },
+    basket: {
+      title: "Internet-Watchdog — Sammelkorb",
+      subtitle: "Multi-Fund-Bündelung & Content-Synthese für Dossiers und LinkedIn-Posts",
+      icon: "/static/img/cadre_icons/watchdog_basket.png"
+    },
+    sources: {
+      title: "Internet-Watchdog — Quellen & Feeds",
+      subtitle: "Konfiguration aller Google News Queries, RSS-Feeds und Webseiten-Diffs",
+      icon: "/static/img/cadre_icons/watchdog_sources.png"
+    },
+    settings: {
+      title: "Internet-Watchdog — Optionen & Alarm",
+      subtitle: "Taktung, Prioritäts-Keywords & Benachrichtigungen konfigurieren",
+      icon: "/static/img/cadre_icons/watchdog_settings.png"
+    }
+  };
 
   async function fetchWatchdogConfig() {
     try {
@@ -92,6 +116,8 @@
     renderWatchdogSources();
     renderWatchdogFindings();
     renderWatchdogSettingsModal();
+    renderWatchdogBasketFull();
+    renderWatchdogSourcesFull();
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
       window.lucide.createIcons();
@@ -309,6 +335,200 @@
   }
 
   // --- Globale Aktionen ---
+
+  function switchWatchdogSubTab(tab) {
+    if (!tab) tab = "radar";
+    currentWatchdogTab = tab;
+    const tabs = ["radar", "basket", "sources", "settings"];
+
+    const meta = WATCHDOG_HEADER_META[tab] || WATCHDOG_HEADER_META.radar;
+    const titleEl = document.getElementById("watchdog-main-title");
+    const subtitleEl = document.getElementById("watchdog-main-subtitle");
+    const headerImgEl = document.getElementById("watchdog-main-header-img");
+    if (titleEl) titleEl.textContent = meta.title;
+    if (subtitleEl) subtitleEl.textContent = meta.subtitle;
+    if (headerImgEl) headerImgEl.src = meta.icon;
+
+    tabs.forEach(t => {
+      const btn = document.getElementById(`watchdog-subtab-btn-${t}`);
+      const view = document.getElementById(`watchdog-subtab-${t}`);
+      const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
+      const label = btn ? btn.querySelector(".watchdog-tab-label") : null;
+
+      if (t === tab) {
+        if (btn) {
+          btn.className = "watchdog-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+        }
+        if (iconWrap) iconWrap.classList.add("active-tile");
+        if (label) {
+          label.className = "watchdog-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
+        }
+        if (view) view.classList.remove("hidden");
+      } else {
+        if (btn) {
+          btn.className = "watchdog-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+        }
+        if (iconWrap) iconWrap.classList.remove("active-tile");
+        if (label) {
+          label.className = "watchdog-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none";
+        }
+        if (view) view.classList.add("hidden");
+      }
+    });
+
+    if (tab === "basket") {
+      renderWatchdogBasketFull();
+    } else if (tab === "sources") {
+      renderWatchdogSourcesFull();
+    } else if (tab === "settings") {
+      renderWatchdogSettingsModal();
+    } else if (tab === "radar") {
+      renderWatchdogFindings();
+      renderWatchdogSources();
+    }
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }
+
+  function renderWatchdogBasketFull() {
+    const grid = document.getElementById('wd-basket-full-grid');
+    if (!grid || !watchdogConfig) return;
+
+    const basket = watchdogConfig.basket || [];
+    if (basket.length === 0) {
+      grid.innerHTML = `
+        <div class="py-16 text-center text-xs font-mono text-[var(--muted-foreground)] space-y-2">
+          <i data-lucide="shopping-bag" class="w-8 h-8 mx-auto opacity-40"></i>
+          <p>Der Sammelkorb ist leer. Markiere Funde im Radar mit "+ Korb", um sie für eine Bündel-Synthese vorzumerken.</p>
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+      return;
+    }
+
+    grid.innerHTML = basket.map((f, idx) => `
+      <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/20 transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div class="min-w-0 flex-1 space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="text-[9.5px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+              Pos. ${idx + 1}
+            </span>
+            <span class="text-[9.5px] px-2 py-0.5 rounded font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">
+              ${escapeHtml(f.category || 'Radar')}
+            </span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)] truncate">
+              ${escapeHtml(f.target_name || 'Quelle')}
+            </span>
+            <span class="text-[10px] font-mono text-[var(--muted-foreground)] ml-auto shrink-0 hidden sm:inline">
+              ${escapeHtml(f.detected_at || '')}
+            </span>
+          </div>
+
+          <h4 class="text-xs sm:text-sm font-bold text-[var(--foreground)] leading-snug">
+            ${escapeHtml(f.title || 'Fund')}
+          </h4>
+
+          ${f.snippet ? `
+            <p class="text-xs text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">
+              ${escapeHtml(f.snippet)}
+            </p>
+          ` : ''}
+
+          ${f.link ? `
+            <div class="pt-1">
+              <a href="${escapeHtml(f.link)}" target="_blank" rel="noreferrer" class="text-[11px] font-mono text-[var(--foreground)] hover:underline inline-flex items-center gap-1 font-semibold">
+                Originalquelle öffnen ↗
+              </a>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          <button 
+            type="button" 
+            onclick="toggleFindingInBasket('${f.id}'); renderWatchdogBasketFull();" 
+            class="px-2.5 py-1.5 rounded-lg border border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-mono text-xs font-bold transition cursor-pointer flex items-center gap-1"
+            title="Aus Sammelkorb entfernen"
+          >
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span>Entfernen</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function renderWatchdogSourcesFull() {
+    const list = document.getElementById('wd-sources-full-list');
+    if (!list || !watchdogConfig) return;
+
+    const targets = watchdogConfig.targets || [];
+    if (targets.length === 0) {
+      list.innerHTML = `
+        <div class="py-16 text-center text-xs font-mono text-[var(--muted-foreground)] space-y-2">
+          <i data-lucide="radio" class="w-8 h-8 mx-auto opacity-40"></i>
+          <p>Keine Überwachungsquellen konfiguriert. Klicke auf "Neue Quelle", um einen Feed oder Suchbegriff hinzuzufügen.</p>
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+      return;
+    }
+
+    list.innerHTML = targets.map(t => `
+      <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)]/20 transition flex items-center justify-between gap-3 ${t.active ? '' : 'opacity-60'}">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <button 
+            type="button" 
+            onclick="toggleWatchdogTarget('${t.id}'); renderWatchdogSourcesFull();" 
+            class="w-5 h-5 rounded flex items-center justify-center border transition shrink-0 cursor-pointer ${t.active ? 'bg-zinc-900 border-zinc-900 text-white dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900' : 'border-[var(--border)] hover:border-[var(--foreground)]'}"
+            title="${t.active ? 'Deaktivieren' : 'Aktivieren'}"
+          >
+            ${t.active ? '<span class="text-[10px] font-bold">✓</span>' : ''}
+          </button>
+          
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-xs sm:text-sm text-[var(--foreground)] truncate">${escapeHtml(t.name)}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">
+                ${escapeHtml(t.category || 'Allgemein')}
+              </span>
+              <span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/25 shrink-0 hidden sm:inline">
+                ${escapeHtml(t.type || 'search_feed')}
+              </span>
+            </div>
+            <div class="text-[11px] font-mono text-[var(--muted-foreground)] truncate mt-0.5">
+              ${escapeHtml(t.query_or_url)}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="text-[10px] font-mono text-[var(--muted-foreground)] hidden md:inline">
+            ${t.last_status ? escapeHtml(t.last_status) : 'Bereit'}
+          </span>
+          <button 
+            type="button" 
+            onclick="deleteWatchdogTarget('${t.id}'); renderWatchdogSourcesFull();" 
+            class="px-2 py-1 rounded-lg border border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-mono text-xs font-semibold transition cursor-pointer flex items-center gap-1"
+            title="Quelle entfernen"
+          >
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">Löschen</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  window.switchWatchdogSubTab = switchWatchdogSubTab;
+  window.renderWatchdogBasketFull = renderWatchdogBasketFull;
+  window.renderWatchdogSourcesFull = renderWatchdogSourcesFull;
 
   window.initWatchdogView = function() {
     fetchWatchdogConfig();

@@ -192,7 +192,7 @@
       }
 
       activeSettingsTab = targetTab;
-      const tabs = ["kernel", "autonomy", "services", "routing", "frameworks", "plugins", "comm", "design"];
+      const tabs = ["kernel", "autonomy", "services", "routing", "frameworks", "plugins", "comm", "design", "update"];
       tabs.forEach(t => {
         const pane = document.getElementById(`settings-tab-${t}`);
         const btn = document.getElementById(`btn-tab-${t}`);
@@ -216,6 +216,12 @@
         }
       });
 
+      if (targetTab === "update") {
+        if (typeof checkSystemUpdateStatus === "function") {
+          checkSystemUpdateStatus();
+          loadSystemSnapshots();
+        }
+      }
       if (targetTab === "kernel") {
         if (typeof loadHermesFormSettings === "function") {
           loadHermesFormSettings();
@@ -2241,3 +2247,233 @@
     window.enrichAutonomyCardsAndThresholds = enrichAutonomyCardsAndThresholds;
     window.enrichPluginModalWithTradeoffs = enrichPluginModalWithTradeoffs;
     window.buildTradeoffBoxHtml = buildTradeoffBoxHtml;
+
+
+    // =========================================================================
+    // SYSTEM UPDATE & RELEASE-LIFECYCLE (MEILENSTEIN 1)
+    // =========================================================================
+    async function checkSystemUpdateStatus() {
+      const badge = document.getElementById("update-status-badge");
+      const curCommit = document.getElementById("update-current-commit");
+      const branchEl = document.getElementById("update-current-branch");
+      const dirtyEl = document.getElementById("update-dirty-status");
+      const incomingBox = document.getElementById("update-incoming-box");
+      const incomingTitle = document.getElementById("update-incoming-title");
+      const incomingList = document.getElementById("update-incoming-list");
+
+      if (badge) {
+        badge.innerText = "Prüfe GitHub...";
+        badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-500/10 text-[var(--foreground)] border border-[var(--border)]";
+      }
+
+      try {
+        const res = await fetch("/api/v1/system/update/check");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (curCommit) curCommit.innerText = `${data.current_commit || "-"} (${data.last_commit_info || ""})`;
+        if (branchEl) branchEl.innerText = `${data.branch || "main"} · Remote: ${data.remote_commit || "-"}`;
+        if (dirtyEl) {
+          dirtyEl.innerText = data.has_local_changes ? `⚠️ ${data.changed_files_count} modifizierte Dateien` : "✅ Keine lokalen Konflikte";
+          dirtyEl.className = data.has_local_changes ? "font-mono font-bold text-xs text-amber-500 truncate mt-0.5" : "font-mono font-bold text-xs text-emerald-500 truncate mt-0.5";
+        }
+
+        if (data.update_available) {
+          if (badge) {
+            badge.innerText = `${data.commits_behind} Update(s) verfügbar`;
+            badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20";
+          }
+          if (incomingBox) incomingBox.classList.remove("hidden");
+          if (incomingTitle) incomingTitle.innerText = `${data.commits_behind} neue Commits auf origin/main`;
+          if (incomingList) {
+            incomingList.innerHTML = (data.incoming_commits || []).map(c => `<div>• ${escapeHtml(c)}</div>`).join("");
+          }
+        } else {
+          if (badge) {
+            badge.innerText = "Archon OS ist aktuell";
+            badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
+          }
+          if (incomingBox) incomingBox.classList.add("hidden");
+        }
+      } catch (err) {
+        if (badge) {
+          badge.innerText = "Offline / Prüffehler";
+          badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20";
+        }
+        console.warn("[SystemUpdater] Fehler bei checkSystemUpdateStatus:", err);
+      }
+    }
+
+    async function applySystemUpdate() {
+      const btn = document.getElementById("btn-apply-update");
+      if (!confirm("Möchtest du das Update jetzt anwenden?\n\nEs wird vorab automatisch ein Sicherheits-Snapshot aller Datenbanken und Einstellungen erstellt.")) {
+        return;
+      }
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Aktualisiere System...';
+      }
+      try {
+        const res = await fetch("/api/v1/system/update/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ backup: true })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          alert(`Update erfolgreich installiert!\nNeuer Commit: ${data.new_commit}\n\nDie Seite wird nun neu geladen.`);
+          window.location.reload();
+        } else {
+          alert(`Update fehlgeschlagen: ${data.message || "Unbekannter Fehler"}`);
+        }
+      } catch (err) {
+        alert("Netzwerkfehler beim Anwenden des Updates: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i data-lucide="download" class="w-3.5 h-3.5"></i> Update jetzt installieren & anwenden';
+        }
+      }
+    }
+
+    async function createManualSnapshot() {
+      try {
+        const res = await fetch("/api/v1/system/update/backup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tag: "manual" })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          alert(`Sicherheits-Snapshot '${data.snapshot_id}' erfolgreich angelegt!`);
+          await loadSystemSnapshots();
+        } else {
+          alert("Fehler beim Anlegen des Snapshots.");
+        }
+      } catch (err) {
+        alert("Fehler: " + err.message);
+      }
+    }
+
+    async function loadSystemSnapshots() {
+      const listEl = document.getElementById("update-snapshots-list");
+      if (!listEl) return;
+      try {
+        const res = await fetch("/api/v1/system/update/snapshots");
+        const data = await res.json();
+        const items = data.snapshots || [];
+        if (items.length === 0) {
+          listEl.innerHTML = '<div class="text-[11px] text-[var(--muted-foreground)] italic p-2">Noch keine Snapshots vorhanden.</div>';
+          return;
+        }
+        listEl.innerHTML = items.map(s => {
+          const dbs = (s.databases || []).map(d => `${d.name} (${Math.round(d.size_bytes/1024)} KB)`).join(", ");
+          return `
+            <div class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] flex items-center justify-between gap-2">
+              <div>
+                <div class="font-mono font-bold text-xs text-[var(--foreground)] flex items-center gap-2">
+                  <span class="px-1.5 py-0.5 rounded bg-neutral-500/10 text-[10px] uppercase font-bold">${escapeHtml(s.tag || 'snapshot')}</span>
+                  ${escapeHtml(s.snapshot_id || 'ID')}
+                  <span class="text-[10px] font-normal text-[var(--muted-foreground)]">· ${escapeHtml(s.created_at || '')}</span>
+                </div>
+                <div class="text-[10.5px] font-mono text-[var(--muted-foreground)] mt-0.5 truncate max-w-md">
+                  DBs: ${escapeHtml(dbs || 'keine')} · Commit: ${escapeHtml(s.git_commit || '-')}
+                </div>
+              </div>
+              <button type="button" onclick="rollbackSystemSnapshot('${s.snapshot_id}')" class="px-2.5 py-1 rounded text-[11px] font-mono border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer">
+                Rollback
+              </button>
+            </div>
+          `;
+        }).join("");
+      } catch (err) {
+        listEl.innerHTML = `<div class="text-[11px] text-rose-500 p-2">Konnte Snapshots nicht laden: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function rollbackSystemSnapshot(snapshotId) {
+      if (!confirm(`Möchtest du den Zustand aus Snapshot '${snapshotId}' wirklich wiederherstellen?\n\nAlle Datenbanken und Konfigurationsdateien werden auf diesen Stand zurückgesetzt.`)) {
+        return;
+      }
+      try {
+        const res = await fetch("/api/v1/system/update/rollback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ snapshot_id: snapshotId })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          alert(`Rollback erfolgreich!\n${data.message}\n\nDie Seite wird neu geladen.`);
+          window.location.reload();
+        } else {
+          alert(`Rollback fehlgeschlagen: ${data.message || "Unbekannter Fehler"}`);
+        }
+      } catch (err) {
+        alert("Fehler beim Rollback: " + err.message);
+      }
+    }
+
+    window.checkSystemUpdateStatus = checkSystemUpdateStatus;
+    window.applySystemUpdate = applySystemUpdate;
+    window.createManualSnapshot = createManualSnapshot;
+    window.loadSystemSnapshots = loadSystemSnapshots;
+    window.rollbackSystemSnapshot = rollbackSystemSnapshot;
+    async function pushChangesToGitHub() {
+      const btn = document.getElementById("btn-push-github");
+      const badge = document.getElementById("push-status-badge");
+      const msgInput = document.getElementById("push-commit-message");
+      const msg = msgInput ? msgInput.value.trim() : "";
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Übertrage zu GitHub...';
+      }
+      if (badge) {
+        badge.innerText = "Pushe Änderungen...";
+        badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20";
+      }
+
+      try {
+        const res = await fetch("/api/v1/system/update/push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          alert(`Erfolg!\n${data.message}\n\nCommit: ${data.commit}`);
+          if (badge) {
+            badge.innerText = "Erfolgreich übertragen";
+            badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20";
+          }
+          if (msgInput) msgInput.value = "";
+          await checkSystemUpdateStatus();
+        } else if (data.status === "nothing_to_commit") {
+          alert(data.message);
+          if (badge) {
+            badge.innerText = "Alles aktuell";
+            badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20";
+          }
+        } else {
+          alert(`Push fehlgeschlagen: ${data.message || "Unbekannter Fehler"}`);
+          if (badge) {
+            badge.innerText = "Fehler";
+            badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20";
+          }
+        }
+      } catch (err) {
+        alert("Netzwerkfehler beim Pushen: " + err.message);
+        if (badge) {
+          badge.innerText = "Netzwerkfehler";
+          badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20";
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> Jetzt zu GitHub pushen';
+        }
+      }
+    }
+
+    window.pushChangesToGitHub = pushChangesToGitHub;
+    

@@ -1315,9 +1315,9 @@ div.p-3 > div.flex > button.px-2 {
       margin: 0 !important;
     }
     #sidebar-logo-header {
-      height: 72px !important;
-      min-height: 72px !important;
-      max-height: 72px !important;
+      height: 80px !important;
+      min-height: 80px !important;
+      max-height: 80px !important;
       box-sizing: border-box !important;
       gap: 0 !important;
       padding: 0 !important;
@@ -1360,7 +1360,7 @@ div.p-3 > div.flex > button.px-2 {
       box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1) !important;
     }
     #prof-avatar-dropzone {
-      border-color: var(--border) !important;
+      border: 3px solid #878787 !important;
     }
     #pa-new-learning-detail {
       height: 419px !important;

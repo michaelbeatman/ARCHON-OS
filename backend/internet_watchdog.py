@@ -40,7 +40,7 @@ DEFAULT_WATCHDOG_CONFIG: Dict[str, Any] = {
     ],
     "basket": [],
     "channels": {
-        "telegram": True,
+        "telegram": False,
         "kanban": False
     },
     "targets": [

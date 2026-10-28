@@ -35,28 +35,28 @@
       const tabs = ['cockpit', 'kanban', 'org', 'automation', 'comm'];
       const headerMeta = {
         cockpit: {
-          title: 'Mission Control · Cockpit',
+          title: 'Mission Control',
           subtitle: 'Echtzeit-Telemetrie, Flottenlast, Token-Sparkline & HITL-Freigaben',
           img: '/static/img/cadre_icons/overview.png'
         },
         kanban: {
-          title: 'Operations · Kanban Board',
-          subtitle: 'Operatives Aufgaben-Management, Sprints, WIP-Limits & Zuweisung',
-          img: '/static/img/cadre_icons/operations.png?v=2'
+          title: 'KANBAN',
+          subtitle: 'Aufgaben-Management, Sprints, WIP-Limits & Zuweisung',
+          img: '/static/img/cadre_icons/kanban.png?v=3'
         },
         org: {
-          title: 'Operations · Organisation & Teams',
-          subtitle: 'Interaktives Ablaufdiagramm, Hierarchien & Kader-Struktur',
-          img: '/static/img/cadre_icons/personalakte.png'
+          title: 'Organisation',
+          subtitle: 'Ablaufdiagramm, Hierarchien & Kader-Struktur',
+          img: '/static/img/cadre_icons/organisation.png?v=3'
         },
         automation: {
-          title: 'Operations · n8n Automation',
-          subtitle: 'Workflow-Engine, Webhook-Pipelines & autonome Prozess-Ketten',
+          title: 'n8n-Automation',
+          subtitle: 'Workflow-Engine, Webhook-Pipelines & Prozess-Ketten',
           img: '/static/img/cadre_icons/n8n.png?v=202610171046'
         },
         comm: {
-          title: 'Operations · Interne Kommunikation',
-          subtitle: 'Echtzeit-Funkverkehr, Delegationen & Agenten-Nachrichten',
+          title: 'Kommunikation',
+          subtitle: 'Funkverkehr, Delegationen & Agenten-Nachrichten',
           img: '/static/img/cadre_icons/chat.png'
         }
       };
@@ -90,20 +90,20 @@
         const iconWrap = btn ? btn.querySelector('.tile-icon-wrap') : null;
         if (t === subtab) {
           if (btn) {
-            btn.className = "ops-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "ops-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
           }
           if (iconWrap) iconWrap.classList.add('active-tile');
           if (label) {
-            label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-bold";
+            label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
           }
           if (view) view.classList.remove('hidden');
         } else {
           if (btn) {
-            btn.className = "ops-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+            btn.className = "ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
           }
           if (iconWrap) iconWrap.classList.remove('active-tile');
           if (label) {
-            label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium";
+            label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none";
           }
           if (view) view.classList.add('hidden');
         }
@@ -830,7 +830,7 @@
 
       const editReasoningEl = document.getElementById('ond-edit-reasoning');
       if (editReasoningEl) {
-        editReasoningEl.value = node.reasoning_level || prof?.reasoning_level || 'high';
+        editReasoningEl.value = node.reasoning_level || profile?.reasoning_level || 'high';
       }
 
       const editTeamEl = document.getElementById('ond-edit-team');
@@ -1628,6 +1628,25 @@
 
       const items = filterAgentId ? rawItems.filter(i => i.author_id === filterAgentId || i.target_id === filterAgentId) : rawItems;
 
+      // Populate sender dropdown if empty
+      const senderSelect = document.getElementById('ops-comm-sender');
+      if (senderSelect && senderSelect.options.length <= 2 && typeof opsOrgData !== 'undefined' && opsOrgData && opsOrgData.teams) {
+        const curVal = senderSelect.value;
+        const seen = new Set(['commander', 'system_dispatcher']);
+        opsOrgData.teams.forEach(t => {
+          (t.agents || []).forEach(a => {
+            if (!seen.has(a.id)) {
+              seen.add(a.id);
+              const opt = document.createElement('option');
+              opt.value = a.id;
+              opt.textContent = `🤖 ${a.name || a.id}`;
+              senderSelect.appendChild(opt);
+            }
+          });
+        });
+        if (curVal) senderSelect.value = curVal;
+      }
+
       const agentsSet = new Map();
       rawItems.forEach(i => {
         if (i.author_id && !agentsSet.has(i.author_id)) {
@@ -1718,6 +1737,33 @@
         renderOperationsCommFeed(opsCommData, activeCommFilter);
       }
     }
+
+    async function sendOperationsBroadcast() {
+      const input = document.getElementById('ops-comm-input');
+      const senderSel = document.getElementById('ops-comm-sender');
+      if (!input) return;
+      const msg = input.value.trim();
+      if (!msg) return;
+      const author = senderSel ? senderSel.value : 'commander';
+      try {
+        const res = await fetch('/api/operations/comm-feed/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ author: author, message: msg })
+        });
+        if (res.ok) {
+          input.value = '';
+          const commRes = await fetch('/api/operations/comm-feed');
+          if (commRes.ok) {
+            opsCommData = await commRes.json();
+            renderOperationsCommFeed(opsCommData, activeCommFilter);
+          }
+        }
+      } catch (err) {
+        console.error("Fehler beim Senden des Funkspruchs:", err);
+      }
+    }
+    window.sendOperationsBroadcast = sendOperationsBroadcast;
 
     async function populateOpsTaskModelDropdown(preferredModel) {
       const select = document.getElementById('ops-task-model');

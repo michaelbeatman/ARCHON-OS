@@ -2,7 +2,7 @@
     // APPSHELL ARCHITECT & LAYOUT EDITOR CONTROLLER
     // =========================================================================
     let appShellConfig = {
-      headerHeight: 72,
+      headerHeight: 80,
       canvasPadding: 24,
       headerMode: 'full-bleed',
       syncLogo: true
@@ -14,12 +14,20 @@
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed && typeof parsed.headerHeight === "number") {
+            // Auto-upgrade legacy header heights (< 80px) to new unified 80px standard
+            if (parsed.headerHeight < 80) {
+              parsed.headerHeight = 80;
+              try { localStorage.setItem("archon_appshell_config", JSON.stringify({ ...appShellConfig, ...parsed })); } catch(e){}
+            }
             appShellConfig = { ...appShellConfig, ...parsed };
           }
+        } else {
+          try { localStorage.setItem("archon_appshell_config", JSON.stringify(appShellConfig)); } catch(e){}
         }
       } catch (e) {
         console.warn("Could not load appshell config:", e);
       }
+      if (appShellConfig.headerHeight < 80) appShellConfig.headerHeight = 80;
       applyAppShellVisuals(false);
     }
 

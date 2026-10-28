@@ -242,40 +242,75 @@
     }
     let guardianSessionsCache = [];
     let guardianCurrentSubTab = "overview";
+    const GUARDIAN_HEADER_META = {
+      overview: {
+        title: "Token Guard — Übersicht",
+        subtitle: "Kostenkontrolle, Schleifenschutz und Echtzeit-Telemetrie aller Agenten",
+        img: "/static/img/cadre_icons/guardian_overview.png"
+      },
+      sessions: {
+        title: "Token Guard — Session-Verbrauch",
+        subtitle: "Detaillierte Analyse aller Tasks & Dialoge mit Token-Aufschlüsselung (Input, Output, Cache)",
+        img: "/static/img/cadre_icons/guardian_sessions.png"
+      },
+      concurrency: {
+        title: "Token Guard — Task-Drosselung",
+        subtitle: "Globaler Task-Drossler & Hardwareschutz (Asyncio Semaphore zur Lastbegrenzung)",
+        img: "/static/img/cadre_icons/guardian_limits.png"
+      }
+    };
+
     function setGuardianSubTab(tab) {
+      if (!tab) tab = "overview";
       guardianCurrentSubTab = tab;
-      const btnOverview = document.getElementById("guard-subtab-btn-overview");
-      const btnSessions = document.getElementById("guard-subtab-btn-sessions");
-      const btnConcurrency = document.getElementById("guard-subtab-btn-concurrency");
-      const viewOverview = document.getElementById("guard-subview-overview");
-      const viewSessions = document.getElementById("guard-subview-sessions");
-      const viewConcurrency = document.getElementById("guard-subview-concurrency");
+      const tabs = ["overview", "sessions", "concurrency"];
 
-      const activeClass = "py-2.5 px-3.5 border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100 font-mono text-xs font-bold transition flex items-center gap-1.5 cursor-pointer";
-      const inactiveClass = "py-2.5 px-3.5 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-mono text-xs font-medium transition flex items-center gap-1.5 cursor-pointer";
+      const meta = GUARDIAN_HEADER_META[tab] || GUARDIAN_HEADER_META.overview;
+      const titleEl = document.getElementById("guardian-main-title");
+      const subtitleEl = document.getElementById("guardian-main-subtitle");
+      const headerImgEl = document.getElementById("guardian-main-header-img");
+      if (titleEl) titleEl.textContent = meta.title;
+      if (subtitleEl) subtitleEl.textContent = meta.subtitle;
+      if (headerImgEl) headerImgEl.src = meta.img;
 
-      if (btnOverview) btnOverview.className = inactiveClass;
-      if (btnSessions) btnSessions.className = inactiveClass;
-      if (btnConcurrency) btnConcurrency.className = inactiveClass;
+      tabs.forEach(t => {
+        const btn = document.getElementById(`guard-subtab-btn-${t}`);
+        const view = document.getElementById(`guard-subview-${t}`);
+        const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
+        const label = btn ? btn.querySelector(".guardian-tab-label") : null;
 
-      if (viewOverview) viewOverview.classList.add("hidden");
-      if (viewSessions) viewSessions.classList.add("hidden");
-      if (viewConcurrency) viewConcurrency.classList.add("hidden");
+        if (t === tab) {
+          if (btn) {
+            btn.className = "guardian-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) iconWrap.classList.add("active-tile");
+          if (label) {
+            label.className = "guardian-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
+          }
+          if (view) view.classList.remove("hidden");
+        } else {
+          if (btn) {
+            btn.className = "guardian-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) iconWrap.classList.remove("active-tile");
+          if (label) {
+            label.className = "guardian-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none";
+          }
+          if (view) view.classList.add("hidden");
+        }
+      });
 
-      if (tab === "overview") {
-        if (btnOverview) btnOverview.className = activeClass;
-        if (viewOverview) viewOverview.classList.remove("hidden");
-      } else if (tab === "sessions") {
-        if (btnSessions) btnSessions.className = activeClass;
-        if (viewSessions) viewSessions.classList.remove("hidden");
+      if (tab === "sessions") {
         renderGuardianSessions(guardianSessionsCache);
       } else if (tab === "concurrency") {
-        if (btnConcurrency) btnConcurrency.className = activeClass;
-        if (viewConcurrency) viewConcurrency.classList.remove("hidden");
         loadConcurrencySettings();
       }
-      lucide.createIcons();
+
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
     }
+    window.setGuardianSubTab = setGuardianSubTab;
 
 
     function renderGuardianModels(models) {

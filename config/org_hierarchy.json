@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-23T10:49:51.692280",
+  "updated_at": "2026-10-27T18:11:02.289627",
   "nodes": [
     {
       "id": "executive_decision_architect",
@@ -135,7 +135,7 @@
       "y": 980,
       "tier": 3,
       "team_id": "team_tech",
-      "name": "DevOps & IT-Support Specialist",
+      "name": "DevOps & IT-Sicherheits-Auditor",
       "role": "7. Tech, Software & Data",
       "category": "7. Tech, Software & Data",
       "avatar": "/static/avatars/custom_devops_cloud_sec_specialist.png",
@@ -755,7 +755,7 @@
     },
     {
       "id": "micha",
-      "x": 660,
+      "x": 620,
       "y": 20,
       "tier": 1,
       "team_id": "team_strategy",
@@ -981,19 +981,25 @@
       "id": "ai_governance_officer",
       "name": "AI Governance & Compliance Officer",
       "group": null,
-      "category": "3. Recht, Steuern & Compliance"
+      "category": "3. Recht, Steuern & Compliance",
+      "x": 20,
+      "y": 2420
     },
     {
       "id": "finops_cost_optimizer",
       "name": "FinOps & LLM Cost Optimization Lead",
       "group": null,
-      "category": "7. Tech, Software & Data"
+      "category": "7. Tech, Software & Data",
+      "x": 1200,
+      "y": 140
     },
     {
       "id": "n8n_process_architect",
       "name": "Autonomous Process & n8n Automation Architect",
       "group": null,
-      "category": "7. Tech, Software & Data"
+      "category": "7. Tech, Software & Data",
+      "x": 20,
+      "y": 2260
     }
   ],
   "links": [
@@ -1238,16 +1244,16 @@
       "to": "sre_observability_engineer"
     },
     {
-      "from": "commercial_jurist_contracts",
-      "to": "ai_governance_officer"
-    },
-    {
-      "from": "system_architect_orchestrator",
+      "from": "micha",
       "to": "finops_cost_optimizer"
     },
     {
-      "from": "system_architect_orchestrator",
+      "from": "executive_decision_architect",
       "to": "n8n_process_architect"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "ai_governance_officer"
     }
   ],
   "canvas_width": 3200,

@@ -1,66 +1,113 @@
-<div id="view-guardian" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden">
-        <!-- Top Toolbar Header -->
-        <div class="px-6 py-3 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground)]">
-              <i data-lucide="shield-check" class="w-5 h-5"></i>
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <h1 class="text-sm font-extrabold uppercase tracking-wide font-mono text-[var(--foreground)]">Guardian &amp; Token Analytics</h1>
-                <button type="button" onclick="openContextHelp('guardian')" title="Hilfe zu Guardian &amp; Token Analytics" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
-                  <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-                </button>
-                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--secondary)] text-[var(--foreground)] font-bold border border-[var(--border)] flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-pulse"></span> Wächter aktiv
-                </span>
-              </div>
-              <p class="text-[11px] text-[var(--muted-foreground)] font-medium">Kostenkontrolle, Schleifenschutz und 34 steuerbare Plugins für Hermes</p>
-            </div>
-          </div>
-          <!-- Controls: Timeframe Filter + Refresh & Cache Buttons -->
-          <div class="flex items-center gap-2.5">
-            <!-- Timeframe Filter Buttons: [ 24h | 7 Tage | 30 Tage | Gesamt ] -->
-            <div class="flex items-center bg-[var(--secondary)] border border-[var(--border)] rounded-xl p-0.5 text-xs font-mono">
-              <button onclick="setGuardianTimeframe('24h')" id="guard-tf-btn-24h" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer">24h</button>
-              <button onclick="setGuardianTimeframe('7d')" id="guard-tf-btn-7d" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer">7 Tage</button>
-              <button onclick="setGuardianTimeframe('30d')" id="guard-tf-btn-30d" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer">30 Tage</button>
-              <button onclick="setGuardianTimeframe('all')" id="guard-tf-btn-all" class="py-1 px-2.5 rounded-lg bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] shadow-2xs font-bold cursor-pointer">Gesamt</button>
-            </div>
-            <!-- Ungenutzte Zeit / Inaktivitäts-Badge -->
-            <div id="guard-idle-container" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] text-xs font-mono text-[var(--muted-foreground)] shadow-2xs" title="Zeitspanne seit der letzten protokollierten LLM-Aktivität">
-              <span class="w-2 h-2 rounded-full bg-zinc-400"></span>
-              <span class="text-[var(--muted-foreground)]">Ungenutzte Zeit:</span>
-              <span class="font-bold text-[var(--foreground)]" id="guard-idle-badge">--</span>
-              <span class="text-[10px] text-black dark:text-white pl-1 border-l border-[var(--border)]" id="guard-checked-badge">Stand: --:--:--</span>
-            </div>
-            <button onclick="loadGuardianData(true)" id="guard-refresh-btn" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
-              <i data-lucide="refresh-cw" id="guard-refresh-icon" class="w-3.5 h-3.5"></i> Aktualisieren
-            </button>
-            <button onclick="clearGuardianCache()" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)] hover:opacity-80 text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
-              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Cache leeren
-            </button>
+<div id="view-guardian" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+
+  <!-- ========================================================================= -->
+  <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR TOKEN GUARD              -->
+  <!-- ========================================================================= -->
+  <header id="guardian-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+    <!-- Links: Status-Pulse, Titel & Subtitel & Telemetrie-Pills -->
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="relative shrink-0 flex items-center justify-center">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <img id="guardian-main-header-img" src="/static/img/cadre_icons/guardian_overview.png" alt="Token Guard" class="hidden">
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h2 id="guardian-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">
+            Token Guard — Übersicht
+          </h2>
+          <button type="button" onclick="openContextHelp('guardian')" title="Hilfe zu Guardian &amp; Token Analytics" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          </button>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 flex items-center gap-1 shrink-0">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Wächter aktiv
+          </span>
+          <div id="guard-idle-container" class="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-[var(--border)] bg-[var(--secondary)] text-[10.5px] font-mono text-[var(--muted-foreground)] shrink-0" title="Zeitspanne seit der letzten protokollierten LLM-Aktivität">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            <span>Inaktiv:</span>
+            <span class="font-bold text-[var(--foreground)]" id="guard-idle-badge">--</span>
+            <span class="text-[9.5px] text-[var(--muted-foreground)] pl-1 border-l border-[var(--border)]" id="guard-checked-badge">Stand: --:--:--</span>
           </div>
         </div>
-        <!-- Guardian Sub-Tab Bar: [ 1. Übersicht & Dashboard | 2. Session-Detail-Verbrauch ] -->
-        <div class="px-6 border-b border-[var(--border)] bg-[var(--card)] flex items-center gap-2 shrink-0">
-          <button onclick="setGuardianSubTab('overview')" id="guard-subtab-btn-overview" class="py-2.5 px-3.5 border-b-2 border-zinc-900 dark:border-zinc-100 text-[var(--foreground)] font-mono text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
-            <span>Übersicht &amp; Dashboard</span>
-          </button>
-          <button onclick="setGuardianSubTab('sessions')" id="guard-subtab-btn-sessions" class="py-2.5 px-3.5 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-mono text-xs font-medium transition flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
-            <span>Session-Detail-Verbrauch</span>
-            <span id="guard-sessions-badge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">0</span>
-          </button>
-          <button onclick="setGuardianSubTab('concurrency')" id="guard-subtab-btn-concurrency" class="py-2.5 px-3.5 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-mono text-xs font-medium transition flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
-            <span>Ressourcen &amp; Task-Drosselung</span>
-            <span id="guard-concurrency-badge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">5 Max</span>
-          </button>
+        <p id="guardian-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">
+          Kostenkontrolle, Schleifenschutz und Echtzeit-Telemetrie aller Agenten
+        </p>
+      </div>
+    </div>
+
+    <!-- Rechts: Timeframe Filter, Refresh, Cache + 3 Cadre-Subtab-Kacheln -->
+    <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+      
+      <!-- Timeframe Filter Buttons: [ 24h | 7T | 30T | Alle ] -->
+      <div class="flex items-center bg-[var(--secondary)] border border-[var(--border)] rounded-xl p-0.5 text-xs font-mono shrink-0">
+        <button onclick="setGuardianTimeframe('24h')" id="guard-tf-btn-24h" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer text-[11px]">24h</button>
+        <button onclick="setGuardianTimeframe('7d')" id="guard-tf-btn-7d" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer text-[11px]">7T</button>
+        <button onclick="setGuardianTimeframe('30d')" id="guard-tf-btn-30d" class="py-1 px-2.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold cursor-pointer text-[11px]">30T</button>
+        <button onclick="setGuardianTimeframe('all')" id="guard-tf-btn-all" class="py-1 px-2.5 rounded-lg bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] shadow-2xs font-bold cursor-pointer text-[11px]">Alle</button>
+      </div>
+
+      <!-- Quick Actions: Refresh & Cache leeren -->
+      <div class="flex items-center gap-1 shrink-0">
+        <button onclick="loadGuardianData(true)" id="guard-refresh-btn" class="h-8 px-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs" title="Guardian-Telemetrie jetzt aktualisieren">
+          <i data-lucide="refresh-cw" id="guard-refresh-icon" class="w-3.5 h-3.5"></i>
+          <span class="hidden xl:inline">Aktualisieren</span>
+        </button>
+        <button onclick="clearGuardianCache()" class="h-8 px-2.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)] hover:opacity-80 text-[var(--foreground)] font-mono text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs" title="Cache leeren">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span class="hidden xl:inline">Cache</span>
+        </button>
+      </div>
+
+      <!-- Visuelle Trennung -->
+      <div class="h-8 w-px bg-[var(--border)] mx-0.5 shrink-0"></div>
+
+      <!-- 1. Subtab: Übersicht -->
+      <button 
+        type="button" 
+        id="guard-subtab-btn-overview" 
+        onclick="setGuardianSubTab('overview')" 
+        class="guardian-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Übersicht &amp; Dashboard"
+      >
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <img src="/static/img/cadre_icons/guardian_overview.png" alt="Übersicht" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
         </div>
-        <!-- SUB-VIEW 1: OVERVIEW & DASHBOARD -->
-        <div id="guard-subview-overview" class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+        <span class="guardian-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Übersicht</span>
+      </button>
+
+      <!-- 2. Subtab: Sessions -->
+      <button 
+        type="button" 
+        id="guard-subtab-btn-sessions" 
+        onclick="setGuardianSubTab('sessions')" 
+        class="guardian-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Session-Detail-Verbrauch"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <img src="/static/img/cadre_icons/guardian_sessions.png" alt="Sessions" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+          <span id="guard-sessions-badge" class="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] leading-none">0</span>
+        </div>
+        <span class="guardian-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Sessions</span>
+      </button>
+
+      <!-- 3. Subtab: Drosselung -->
+      <button 
+        type="button" 
+        id="guard-subtab-btn-concurrency" 
+        onclick="setGuardianSubTab('concurrency')" 
+        class="guardian-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Ressourcen &amp; Task-Drosselung"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <img src="/static/img/cadre_icons/guardian_limits.png" alt="Drosselung" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+          <span id="guard-concurrency-badge" class="absolute -top-1 -right-1 px-1 py-0.2 rounded-full text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 leading-none">5</span>
+        </div>
+        <span class="guardian-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Drosselung</span>
+      </button>
+
+    </div>
+  </header>
+
+  <div id="guard-subview-overview" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-4 custom-scrollbar">
           
           <!-- KPI Summary Cards (4 Cards) -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -275,7 +322,7 @@
           </div>
         </div>
         <!-- SUB-VIEW 2: INDIVIDUAL SESSIONS DETAIL DRILLDOWN -->
-        <div id="guard-subview-sessions" class="hidden flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+        <div id="guard-subview-sessions" class="hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-4 custom-scrollbar">
           
           <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
             <div class="px-5 py-3.5 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-3">
@@ -342,7 +389,7 @@
         </div>
 
         <!-- SUB-VIEW 3: CONCURRENCY THROTTLE & RESSOURCEN-STEUERUNG (Pillar 2) -->
-        <div id="guard-subview-concurrency" class="hidden flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+        <div id="guard-subview-concurrency" class="hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-4 custom-scrollbar">
           <div class="max-w-4xl mx-auto space-y-6">
             
             <!-- Info Box -->

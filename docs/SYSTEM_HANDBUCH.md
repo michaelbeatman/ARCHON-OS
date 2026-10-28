@@ -302,6 +302,81 @@ Wenn eine Benachrichtigung oder ein Bericht in Telegram eintrifft:
 
 ---
 
+## 9. Release-Lifecycle, Updatesystem & GitHub-Sync
+
+Das Updatesystem (`backend/system_updater.py`) synchronisiert den Code-Stand zwischen Entwicklungsrechner und Produktivserver.
+
+### Architektur des Update-Workflows
+1. **GitHub-Synchronisation (Push):**
+   - In den Einstellungen (Settings > Updates) überträgt die Schaltfläche **„Änderungen zu GitHub pushen“** den aktuellen Entwicklungsstand auf das Remote-Repository.
+   - Der Endpoint `/api/v1/system/update/push` führt `git add -A`, `git commit` und `git push` im Container aus.
+   - Um Timeouts auf Docker-Bind-Mounts (Windows 9P/virtiofs) zu vermeiden, nutzt Git optimierte Parameter (`-c core.checkstat=minimal`, `-c core.trustctime=false`, `-c core.fileMode=false`, `-c core.autocrlf=true`).
+
+2. **Server-Update (Pull):**
+   - Auf dem Produktivserver prüft Archon OS neue Commits (`/api/v1/system/update/check`).
+   - Vor der Installation (`/api/v1/system/update/apply`) sichert das System automatisch SQLite-Datenbanken (`agent_os.db`, `agentic_memory.db`) und Konfigurationsdateien in `data/snapshots/`.
+   - Nach erfolgreichem `git pull` startet der Container den Dienst neu.
+
+3. **Rollback-Schutz:**
+   - Schlägt ein Update oder Migrationstest fehl, stellt die Rollback-Funktion (`/api/v1/system/update/rollback`) den vorherigen Git-Commit und die Datenbank-Snapshots wieder her.
+
+---
+
+## 10. Autonome Tiefenrecherche & Reflexionsschleife v2
+
+Das Research Lab (`backend/research_engine.py`) führt mehrstufige Recherchen durch, wenn einfache Suchanfragen für komplexe Frage- und Marktlagen nicht ausreichen.
+
+### Recherche-Ablauf
+1. **Planung & Query-Generierung:**
+   - Die Anfrage wird in 3 bis 5 gezielte Teilfragen zerlegt.
+   - Ein SSRF-Filter (`_is_safe_url`) blockiert Zugriffe auf interne Netzwerkbereiche (Localhost, RFC 1918 Adressen, Metadaten-Endpunkte).
+
+2. **Evidenz-Sammlung mit Multiprovider-Fallback:**
+   - Primäre Suche über Grokipedia / SearXNG.
+   - Automatischer Fallback auf Jina Reader API bei Rate-Limits oder Timeout.
+   - Parallelisierung von Web-Extraktionen mit Token-Begrenzung pro Dokument.
+
+3. **Reflexionsschleife (Re-Search Loop):**
+   - Nach der ersten Analyse bewertet der Reflexions-Prompter Widersprüche und Lücken.
+   - Bei Informationsdefiziten generiert die Engine autonome Nachfolge-Suchläufe (bis zu 3 Zyklen), bis die Belege konsistent sind.
+
+4. **Synthese & Vault-Ablage:**
+   - Fertige Dossiers enthalten strukturierte Abschnitte, Kernaussagen und Quellenverweise.
+   - Die Engine speichert das Ergebnis direkt in `data/obsidian_vault/02_Wissensbibliothek/` und generiert bei Bedarf HTML- und PDF-Exportdateien für Telegram.
+
+---
+
+## 11. Standardisiertes Pluginsystem & Runtime-Hooks
+
+Das Pluginsystem (`backend/plugin_manager.py`) trennt Kernfunktionen von modularen Erweiterungen.
+
+### Verzeichnisstruktur eines Plugins
+Jedes Plugin liegt in einem eigenen Unterverzeichnis in `plugins/<plugin_id>/`:
+- `plugin.json`: Deklaratives Manifest mit Name, Version, Autor, Berechtigungen und Konfigurationsparametern.
+- `plugin.py`: Python-Klasse abgeleitet von `BasePlugin` mit Lebenszyklus- und Tool-Hooks.
+
+### Lebenszyklus & Hooks
+1. **Lifecycle-Hooks:**
+   - `on_load()`: Initialisierung beim Systemstart.
+   - `on_enable()`: Aktivierung über UI oder API (`/api/v1/plugins/{id}/toggle`).
+   - `on_disable()`: Geordnetes Abschalten von Hintergrundthreads oder Ressourcen.
+   - `on_unload()`: Bereinigung vor Hot-Reload (`/api/v1/plugins/{id}/reload`).
+
+2. **Tool- und Message-Hooks:**
+   - `before_tool_execute(tool_name, params)`: Überprüft oder modifiziert Parameter vor dem Tool-Aufruf. Plugins können destruktive Aktionen blockieren.
+   - `after_tool_execute(tool_name, result)`: Prüft Rückgaben, filtert sensible Schlüssel (z. B. API-Tokens) oder reichert Daten an.
+   - `on_message_received(message)` / `on_task_completed(task)`: Reagiert auf System-Events.
+
+### Enthaltene Starter-Plugins
+- **System Metrics (`plugins/system_metrics/`):** Liefert Telemetriedaten (CPU-, RAM-, Disk-Auslastung) über das Tool `get_system_telemetry`.
+- **Security Audit Hook (`plugins/security_audit_hook/`):** Fängt gefährliche Shell-Befehle (z. B. `rm -rf /`) vor der Ausführung ab und maskiert Secrets (`sk-...`, `ghp_...`) in Tool-Rückgaben.
+- **Cost Guard (`plugins/cost_guard/`):** Überwacht das tägliche Token-Budget und blockiert LLM-Aufrufe bei Überschreitung des definierten Limits.
+
+### Konfiguration im Dashboard
+In den Einstellungen (Settings > Plugins) können alle installierten Plugins per Klick aktiviert, deaktiviert oder neu geladen werden. Der Status wird persistent in `data/plugins_state.json` gesichert.
+
+---
+
 # Teil 3: Operatives Runbook & Schnellbehebung
 
 ### Schnellbefehle im Fehlerfall

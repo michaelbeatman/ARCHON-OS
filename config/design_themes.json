@@ -48,7 +48,7 @@
         "components": {
           "os-workspace": {
             "normal": {
-              "background-color": "#f8fafc",
+              "background-color": "#ffffff",
               "color": "#0f172a",
               "font-family": "'Outfit', sans-serif",
               "font-size": "15",

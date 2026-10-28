@@ -150,6 +150,14 @@ Der Telegram-Bot synchronisiert Nachrichten mit der Session `Telegram Bot (Live-
 
 ---
 
+### Telegram Voice-Pipeline & Sprachausgabe
+Die Sprachverarbeitung (`backend/voice_pipeline.py`) erweitert Archon OS um mobile Sprachsteuerung:
+- **Voice-to-Text Ingestion (`POST /api/telegram/voice-relay`):** Sprachnachrichten (`.ogg`/Opus) werden empfangen und über Whisper (Groq, OpenAI oder Gemini) transkribiert.
+- **Intent- & Rufnamen-Erkennung:** Sprichst du einen Agenten im Sprachmemo direkt an (z. B. „Robert, prüfe bitte...“ oder „/anwalt“), wird der Auftrag automatisch an dessen Rollenprofil übergeben.
+- **Sprachantwort via edge-tts:** Das System synthetisiert die Antwort mit der deutschen neuronalen Stimme `de-DE-ConradNeural` und übermittelt sie als native Audioblase via `sendVoice` an dein Smartphone.
+
+---
+
 ## 2. Eingang (Inbox) & E-Mail-Synchronisation
 
 Das Modul **Eingang** empfängt Mails und ordnet sie bestehenden Kontakten zu.
@@ -222,7 +230,15 @@ Projects/
 
 ---
 
-## 5. Hermes & Hintergrund-Workflows
+### Interaktive Code-Sandbox & Live-Runner
+Der Showroom (`views_core.py` & `static/views/view_showroom.html`) erlaubt das direkte Ausführen von Skripten:
+- **Sandbox-Ausführung (`POST /api/views/showroom/run-code`):** Bei Auswahl von Python- oder Code-Dateien blendet der Viewer die Schaltfläche **„Sandbox Run“** ein.
+- **Terminal-Konsole:** Ein ausklappbares Terminal zeigt Exit-Code, Ausführungszeit in Millisekunden sowie `STDOUT` und `STDERR` in Echtzeit an.
+- **Sicherheits-Isolation:** Skripte laufen in einem flüchtigen Scratch-Ordner mit einem festen Timeout von 12 Sekunden.
+
+---
+
+## 5. Operations, Kanban & Hintergrund-Workflows
 
 `hermes` führt zeitintensive Hintergrundaufgaben autark aus.
 
@@ -244,7 +260,19 @@ docker logs --tail 50 hermes
 
 ---
 
-## 6. Backup & Wiederherstellung
+### Kanban Qualitäts-Gate (4-Augen-Review)
+Das Qualitäts-Gate (`backend/operations_api.py`) sichert Arbeitsergebnisse ab, bevor eine Aufgabe auf `done` verschoben werden kann:
+- **Unabhängiger Prüfer:** Katharina Völk (QM/Compliance) oder Robert prüft das Ergebnis automatisch auf Vollständigkeit, Substanz und Handlungsfähigkeit (`POST /api/operations/kanban/tasks/{task_id}/quality-review`).
+- **Status-Sperre:** Bei Mängeln (`changes_requested`) verbleibt der Task in `review` mit dem Badge `⚠ 4-Augen: Nachbesserung`. Das Verschieben nach `done` wird serverseitig abgewiesen, bis Mängel behoben sind oder der Operator eine manuelle Freigabe erteilt.
+
+### Autonome Tiefenrecherche & Reflexionsschleife v2
+Das Research Lab (`backend/research_engine.py`) führt mehrstufige Analysen durch:
+- **Re-Search Loop:** Zerlegt komplexe Aufgaben in 3–5 Teilfragen, bewertet Lücken und startet bei Bedarf bis zu 3 autonome Nachfolge-Suchläufe.
+- **Fallback-Kette & SSRF-Schutz:** Grokipedia und SearXNG mit Fallback auf Jina Reader API; Schutzfilter gegen Zugriffe auf lokale Netzwerkbereiche (RFC 1918) und Cloud-Metadaten.
+
+---
+
+## 6. Backup, Updatesystem & Plugins
 
 ### Automatisches Backup
 `paperclip-orchestrator` führt stündlich automatisierte Backups der SQLite-Datenbanken aus. Die Archive landen unter `/opt/data/backups/`.
@@ -259,6 +287,19 @@ docker exec ARCHON-OS sqlite3 /app/agentic_memory.db ".backup '/app/data/backups
 # 2. Sicherung des Obsidian Vaults
 Compress-Archive -Path "c:\.Antigravity-projekte\obsidian\*" -DestinationPath "c:\.Antigravity-projekte\backup_obsidian_$(Get-Date -Format 'yyyyMMdd_HHmmss').zip"
 ```
+
+---
+
+### Release-Lifecycle, Updatesystem & GitHub-Sync
+Das Updatesystem (`backend/system_updater.py`) synchronisiert Entwicklungsrechner und Produktivserver:
+- **GitHub-Push aus den Settings:** Ein Klick auf *„Änderungen zu GitHub pushen“* (`POST /api/v1/system/update/push`) committed und pusht den aktuellen Stand über Docker-optimierte Git-Parameter (`-c core.checkstat=minimal`).
+- **Pre-Update Snapshots & Rollback:** Vor jedem Pull (`POST /api/v1/system/update/apply`) sichert das System alle SQLite-Datenbanken konsistent in `data/snapshots/`. Im Fehlerfall stellt `POST /api/v1/system/update/rollback` den alten Zustand wieder her.
+
+### Standardisiertes Pluginsystem & Runtime-Hooks
+Das modulare Pluginsystem (`backend/plugin_manager.py`) trennt Erweiterungen vom Systemkern:
+- **Verzeichnisstruktur:** Jedes Plugin liegt unter `plugins/<plugin_id>/` mit Manifest `plugin.json` und Implementierung `plugin.py`.
+- **Hooks:** Lifecycle-Hooks (`on_load`, `on_enable`, `on_disable`) und Tool-Interzeptoren (`before_tool_execute`, `after_tool_execute`).
+- **Starter-Plugins:** `system_metrics` (Hardware-Telemetrie), `security_audit_hook` (Befehlsfilter & Secret-Maskierung) und `cost_guard` (Token-Budgetüberwachung).
 
 ---
 
@@ -302,130 +343,7 @@ Wenn eine Benachrichtigung oder ein Bericht in Telegram eintrifft:
 
 ---
 
-## 9. Release-Lifecycle, Updatesystem & GitHub-Sync
-
-Das Updatesystem (`backend/system_updater.py`) synchronisiert den Code-Stand zwischen Entwicklungsrechner und Produktivserver.
-
-### Architektur des Update-Workflows
-1. **GitHub-Synchronisation (Push):**
-   - In den Einstellungen (Settings > Updates) überträgt die Schaltfläche **„Änderungen zu GitHub pushen“** den aktuellen Entwicklungsstand auf das Remote-Repository.
-   - Der Endpoint `/api/v1/system/update/push` führt `git add -A`, `git commit` und `git push` im Container aus.
-   - Um Timeouts auf Docker-Bind-Mounts (Windows 9P/virtiofs) zu vermeiden, nutzt Git optimierte Parameter (`-c core.checkstat=minimal`, `-c core.trustctime=false`, `-c core.fileMode=false`, `-c core.autocrlf=true`).
-
-2. **Server-Update (Pull):**
-   - Auf dem Produktivserver prüft Archon OS neue Commits (`/api/v1/system/update/check`).
-   - Vor der Installation (`/api/v1/system/update/apply`) sichert das System automatisch SQLite-Datenbanken (`agent_os.db`, `agentic_memory.db`) und Konfigurationsdateien in `data/snapshots/`.
-   - Nach erfolgreichem `git pull` startet der Container den Dienst neu.
-
-3. **Rollback-Schutz:**
-   - Schlägt ein Update oder Migrationstest fehl, stellt die Rollback-Funktion (`/api/v1/system/update/rollback`) den vorherigen Git-Commit und die Datenbank-Snapshots wieder her.
-
 ---
-
-## 10. Autonome Tiefenrecherche & Reflexionsschleife v2
-
-Das Research Lab (`backend/research_engine.py`) führt mehrstufige Recherchen durch, wenn einfache Suchanfragen für komplexe Frage- und Marktlagen nicht ausreichen.
-
-### Recherche-Ablauf
-1. **Planung & Query-Generierung:**
-   - Die Anfrage wird in 3 bis 5 gezielte Teilfragen zerlegt.
-   - Ein SSRF-Filter (`_is_safe_url`) blockiert Zugriffe auf interne Netzwerkbereiche (Localhost, RFC 1918 Adressen, Metadaten-Endpunkte).
-
-2. **Evidenz-Sammlung mit Multiprovider-Fallback:**
-   - Primäre Suche über Grokipedia / SearXNG.
-   - Automatischer Fallback auf Jina Reader API bei Rate-Limits oder Timeout.
-   - Parallelisierung von Web-Extraktionen mit Token-Begrenzung pro Dokument.
-
-3. **Reflexionsschleife (Re-Search Loop):**
-   - Nach der ersten Analyse bewertet der Reflexions-Prompter Widersprüche und Lücken.
-   - Bei Informationsdefiziten generiert die Engine autonome Nachfolge-Suchläufe (bis zu 3 Zyklen), bis die Belege konsistent sind.
-
-4. **Synthese & Vault-Ablage:**
-   - Fertige Dossiers enthalten strukturierte Abschnitte, Kernaussagen und Quellenverweise.
-   - Die Engine speichert das Ergebnis direkt in `data/obsidian_vault/02_Wissensbibliothek/` und generiert bei Bedarf HTML- und PDF-Exportdateien für Telegram.
-
----
-
-## 11. Standardisiertes Pluginsystem & Runtime-Hooks
-
-Das Pluginsystem (`backend/plugin_manager.py`) trennt Kernfunktionen von modularen Erweiterungen.
-
-### Verzeichnisstruktur eines Plugins
-Jedes Plugin liegt in einem eigenen Unterverzeichnis in `plugins/<plugin_id>/`:
-- `plugin.json`: Deklaratives Manifest mit Name, Version, Autor, Berechtigungen und Konfigurationsparametern.
-- `plugin.py`: Python-Klasse abgeleitet von `BasePlugin` mit Lebenszyklus- und Tool-Hooks.
-
-### Lebenszyklus & Hooks
-1. **Lifecycle-Hooks:**
-   - `on_load()`: Initialisierung beim Systemstart.
-   - `on_enable()`: Aktivierung über UI oder API (`/api/v1/plugins/{id}/toggle`).
-   - `on_disable()`: Geordnetes Abschalten von Hintergrundthreads oder Ressourcen.
-   - `on_unload()`: Bereinigung vor Hot-Reload (`/api/v1/plugins/{id}/reload`).
-
-2. **Tool- und Message-Hooks:**
-   - `before_tool_execute(tool_name, params)`: Überprüft oder modifiziert Parameter vor dem Tool-Aufruf. Plugins können destruktive Aktionen blockieren.
-   - `after_tool_execute(tool_name, result)`: Prüft Rückgaben, filtert sensible Schlüssel (z. B. API-Tokens) oder reichert Daten an.
-   - `on_message_received(message)` / `on_task_completed(task)`: Reagiert auf System-Events.
-
-### Enthaltene Starter-Plugins
-- **System Metrics (`plugins/system_metrics/`):** Liefert Telemetriedaten (CPU-, RAM-, Disk-Auslastung) über das Tool `get_system_telemetry`.
-- **Security Audit Hook (`plugins/security_audit_hook/`):** Fängt gefährliche Shell-Befehle (z. B. `rm -rf /`) vor der Ausführung ab und maskiert Secrets (`sk-...`, `ghp_...`) in Tool-Rückgaben.
-- **Cost Guard (`plugins/cost_guard/`):** Überwacht das tägliche Token-Budget und blockiert LLM-Aufrufe bei Überschreitung des definierten Limits.
-
-### Konfiguration im Dashboard
-In den Einstellungen (Settings > Plugins) können alle installierten Plugins per Klick aktiviert, deaktiviert oder neu geladen werden. Der Status wird persistent in `data/plugins_state.json` gesichert.
-
----
-
-## 12. Kanban Qualitäts-Gate & 4-Augen-Review
-
-Das Qualitäts-Gate (`backend/operations_api.py`) sichert Arbeitsergebnisse ab, bevor eine Aufgabe im Kanban-Board als abgeschlossen (`done`) markiert werden kann.
-
-### Ablauf des 4-Augen-Reviews
-1. **Unabhängige Zuweisung:**
-   - Sobald ein Task bearbeitet wurde und im Status `review` liegt, prüft ein unabhängiger Reviewer-Agent (Standard: Katharina Völk für Qualitäts- und Compliance-Vorgaben bzw. Robert bei Eigenarbeiten von Katharina) das Teilergebnis.
-   - Der Prüf-Aufruf erfolgt über `POST /api/operations/kanban/tasks/{task_id}/quality-review`.
-
-2. **Prüfkriterien:**
-   - **Vollständigkeit:** Wurde die Aufgabenstellung ohne Auslassungen beantwortet?
-   - **Substanz & Evidenz:** Gibt es Platzhalter, vage Formulierungen oder unbelegte Thesen?
-   - **Handlungsfähigkeit:** Liefert das Ergebnis konkrete, umsetzbare nächste Schritte?
-
-3. **Bewertung & Status-Sperre:**
-   - Das Review liefert einen Score (1–100%) sowie das Prädikat `approved` oder `changes_requested`.
-   - Bei `approved` wechselt der Task auf `done` und erhält das Badge `✓ 4-Augen: Freigegeben`.
-   - Bei `changes_requested` verbleibt der Task in `review` mit dem Badge `⚠ 4-Augen: Nachbesserung`. Das Verschieben nach `done` wird serverseitig blockiert, bis Mängel behoben sind oder der Operator eine manuelle Freigabe (Human-in-the-Loop Override) erteilt.
-
----
-
-## 13. Interaktive Showroom-Sandbox & Live-Runner
-
-Der Showroom (`views_core.py` & `static/views/view_showroom.html`) enthält eine Code-Sandbox zur direkten Ausführung von Analyse-Skripten und Berechnungsmodellen.
-
-### Sandbox-Funktionen
-1. **Live-Ausführung (`POST /api/views/showroom/run-code`):**
-   - Bei Anzeige von `.py`-, `.js`- oder `.sh`-Dateien im Projekt-Explorer blendet der Showroom die Schaltfläche **„Sandbox Run“** ein.
-   - Python-Skripte werden in einem isolierten Scratch-Verzeichnis mit einem festen Timeout von 12 Sekunden ausgeführt.
-
-2. **Terminal-Konsole:**
-   - Unterhalb des Viewers öffnet sich ein dunkles Terminal-Drawer mit Ausführungszeit in Millisekunden, Exit-Code sowie der vollständigen Ausgabe auf `STDOUT` und `STDERR`.
-   - Fehlerhafte Skripte oder Timeouts werden mit optischem Status-Indikator signalisiert, ohne den Browser oder das Backend zu blockieren.
-
----
-
-## 14. Telegram Voice-Pipeline & Sprachausgabe
-
-Die Sprach-Pipeline (`backend/voice_pipeline.py`) ermöglicht die mobile Steuerung über Telegram per Sprachnachricht.
-
-### Komponenten der Sprachverarbeitung
-1. **Voice-to-Text Ingestion:**
-   - Eingehende Sprachmemos (`.ogg`/Opus) werden über den Endpunkt `POST /api/telegram/voice-relay` entgegengenommen und über Whisper (Groq Whisper-large-v3, OpenAI Whisper-1 oder Gemini Audio) transkribiert.
-   - Die Intent-Erkennung filtert Ziel-Agenten (z. B. „Robert“, „/anwalt“, „Katharina“) automatisch aus dem Transkript heraus und delegiert den Auftrag an das entsprechende Rollenprofil.
-
-2. **Text-to-Speech Synthese (`edge-tts`):**
-   - Die Antwort des Agenten kann als MP3-Sprachnachricht synthetisiert und über die Telegram Bot API (`sendVoice`) direkt als Audioblase aufs Smartphone zurückgesendet werden.
-   - Verwendet wird die deutsche neuronale Stimme `de-DE-ConradNeural` ohne Notwendigkeit externer kostenpflichtiger TTS-Schlüssel.
-   - Der Endpunkt `POST /api/voice/synthesize` steht auch für das Web-Dashboard und mobile Clients zur Verfügung.
 
 ---
 

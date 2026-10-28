@@ -377,6 +377,58 @@ In den Einstellungen (Settings > Plugins) können alle installierten Plugins per
 
 ---
 
+## 12. Kanban Qualitäts-Gate & 4-Augen-Review
+
+Das Qualitäts-Gate (`backend/operations_api.py`) sichert Arbeitsergebnisse ab, bevor eine Aufgabe im Kanban-Board als abgeschlossen (`done`) markiert werden kann.
+
+### Ablauf des 4-Augen-Reviews
+1. **Unabhängige Zuweisung:**
+   - Sobald ein Task bearbeitet wurde und im Status `review` liegt, prüft ein unabhängiger Reviewer-Agent (Standard: Katharina Völk für Qualitäts- und Compliance-Vorgaben bzw. Robert bei Eigenarbeiten von Katharina) das Teilergebnis.
+   - Der Prüf-Aufruf erfolgt über `POST /api/operations/kanban/tasks/{task_id}/quality-review`.
+
+2. **Prüfkriterien:**
+   - **Vollständigkeit:** Wurde die Aufgabenstellung ohne Auslassungen beantwortet?
+   - **Substanz & Evidenz:** Gibt es Platzhalter, vage Formulierungen oder unbelegte Thesen?
+   - **Handlungsfähigkeit:** Liefert das Ergebnis konkrete, umsetzbare nächste Schritte?
+
+3. **Bewertung & Status-Sperre:**
+   - Das Review liefert einen Score (1–100%) sowie das Prädikat `approved` oder `changes_requested`.
+   - Bei `approved` wechselt der Task auf `done` und erhält das Badge `✓ 4-Augen: Freigegeben`.
+   - Bei `changes_requested` verbleibt der Task in `review` mit dem Badge `⚠ 4-Augen: Nachbesserung`. Das Verschieben nach `done` wird serverseitig blockiert, bis Mängel behoben sind oder der Operator eine manuelle Freigabe (Human-in-the-Loop Override) erteilt.
+
+---
+
+## 13. Interaktive Showroom-Sandbox & Live-Runner
+
+Der Showroom (`views_core.py` & `static/views/view_showroom.html`) enthält eine Code-Sandbox zur direkten Ausführung von Analyse-Skripten und Berechnungsmodellen.
+
+### Sandbox-Funktionen
+1. **Live-Ausführung (`POST /api/views/showroom/run-code`):**
+   - Bei Anzeige von `.py`-, `.js`- oder `.sh`-Dateien im Projekt-Explorer blendet der Showroom die Schaltfläche **„Sandbox Run“** ein.
+   - Python-Skripte werden in einem isolierten Scratch-Verzeichnis mit einem festen Timeout von 12 Sekunden ausgeführt.
+
+2. **Terminal-Konsole:**
+   - Unterhalb des Viewers öffnet sich ein dunkles Terminal-Drawer mit Ausführungszeit in Millisekunden, Exit-Code sowie der vollständigen Ausgabe auf `STDOUT` und `STDERR`.
+   - Fehlerhafte Skripte oder Timeouts werden mit optischem Status-Indikator signalisiert, ohne den Browser oder das Backend zu blockieren.
+
+---
+
+## 14. Telegram Voice-Pipeline & Sprachausgabe
+
+Die Sprach-Pipeline (`backend/voice_pipeline.py`) ermöglicht die mobile Steuerung über Telegram per Sprachnachricht.
+
+### Komponenten der Sprachverarbeitung
+1. **Voice-to-Text Ingestion:**
+   - Eingehende Sprachmemos (`.ogg`/Opus) werden über den Endpunkt `POST /api/telegram/voice-relay` entgegengenommen und über Whisper (Groq Whisper-large-v3, OpenAI Whisper-1 oder Gemini Audio) transkribiert.
+   - Die Intent-Erkennung filtert Ziel-Agenten (z. B. „Robert“, „/anwalt“, „Katharina“) automatisch aus dem Transkript heraus und delegiert den Auftrag an das entsprechende Rollenprofil.
+
+2. **Text-to-Speech Synthese (`edge-tts`):**
+   - Die Antwort des Agenten kann als MP3-Sprachnachricht synthetisiert und über die Telegram Bot API (`sendVoice`) direkt als Audioblase aufs Smartphone zurückgesendet werden.
+   - Verwendet wird die deutsche neuronale Stimme `de-DE-ConradNeural` ohne Notwendigkeit externer kostenpflichtiger TTS-Schlüssel.
+   - Der Endpunkt `POST /api/voice/synthesize` steht auch für das Web-Dashboard und mobile Clients zur Verfügung.
+
+---
+
 # Teil 3: Operatives Runbook & Schnellbehebung
 
 ### Schnellbefehle im Fehlerfall

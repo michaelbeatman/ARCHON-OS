@@ -15,6 +15,10 @@
 | **10** | **Eingang (Inbox) Funktionsprüfung & Re-Architektur** | Hoch | Abgeschlossen | Suchleiste unter den Header mit Filter-/Markierungstools; linker Balken fokussiert auf markierte/angepinnte Items |
 | **11** | **Tokenguard: Zeitraum-Skalierungsleiste für Grafen** | Normal | Abgeschlossen | Interaktive Steuerleiste zur flexiblen Skalierung des Zeitraums (24h, 7T, 30T, 90T, Gesamt) für Verbrauchs-Chart |
 | **12** | **Informationsquellen-Strategie (Research Lab)** | Hoch | Offen | Gemeinsame Bestandsaufnahme und Bewertung aller Wissensquellen (Grokipedia, Wikipedia, Fachportale, amtliche Quellen, ArXiv, Websuche): Vertrauensstufen, Rolle KI-generierter Quellen, Kosten/Limits, Quellen-Priorisierung je Fragetyp |
+| **13** | **n8n Workflow-Mesh & Routine-Automation** | Hoch | Geplant | Vollständige n8n-Anbindung, Webhook-Trigger, zeitgesteuerte Routine-Workflows (Morning-Briefing, automatisierte Triage, Status-Berichte) |
+| **14** | **Telegram Voice-Pipeline (Voice-to-Text & Audio)** | Hoch | Abgeschlossen | Whisper-Transkription eingehender Telegram-Sprachnachrichten, Delegation an Ziel-Agenten, Sprachausgabe via edge-tts |
+| **15** | **Kanban Qualitäts-Gate (4-Augen-Review vor Done)** | Hoch | Abgeschlossen | Automatischer Peer-Review-Prüfschritt vor Verschieben auf "Done", Prüfung auf Vollständigkeit & Belege, Re-Iterationsschleife |
+| **16** | **Interaktive Showroom-Sandbox & Live-Runner** | Normal | Abgeschlossen | Sichere Ausführung von generiertem Code (Python-Datenanalyse, HTML/JS-Rechner) direkt im Showroom mit interaktiven Testdaten |
 
 ---
 
@@ -94,3 +98,26 @@
 - **Zu klaeren:** Vertrauensstufen und Gewichtung in der Triangulation, Umgang mit KI-generierten Quellen (Grokipedia), Zuverlaessigkeit der Suche (Fallbacks, SearXNG selbst hosten, Tavily/Jina/Firecrawl mit Key), Rate-Limits und Caching der Treffer, Datenschutz bei Drittdiensten (z.B. Jina Reader erhaelt die URL).
 - **Ergebnis:** Priorisierte Quellenliste, Konfiguration pro Fragetyp, Entscheidung zu kostenpflichtigen Providern.
 - **Hintergrund:** Benchmark und Code-Analyse siehe `scratch/ii/` (ii-researcher-Vergleich, `research_engine_v2.py`).
+
+---
+
+### Meilenstein 13: n8n Workflow-Mesh & Routine-Automation
+- **n8n Konnektivität & Health-Check:** Vollständige Kopplung von Archon OS an die lokale oder containerisierte n8n-Instanz über `scripts/mcp_n8n_driver.py` und Webhook-Endpoints.
+- **Geplante Routine-Jobs (Cron):** Konfiguration automatisierter Abläufe (z. B. Morning-Briefing um 07:30 Uhr mit Triage neuer E-Mails und offenen Kanban-Tasks, wöchentlicher Backup- und System-Audit).
+- **Zwei-Wege-Steuerung:** Triggerung von n8n-Szenarien direkt aus dem Agenten-Chat bzw. per Telegram-Befehl sowie Rückmeldung von n8n-Ergebnissen in das Kanban-Board.
+
+### Meilenstein 14: Telegram Voice-Pipeline (Sprachnachrichten & Audio-Antwort)
+- **Voice-to-Text Ingestion:** Empfang von Telegram-Sprachnachrichten (`.ogg`/Opus) über das Hermes-Gateway und Transkription via Whisper (lokal oder API).
+- **Intelligente Intent-Erkennung & Routing:** Zuordnung der transkribierten Sprachnachricht an den gewünschten Agenten (z. B. `/robert` oder Erkennung des Rufnamens im Fließtext).
+- **Optionale Audio-Antwort (TTS):** Generierung kompakter Sprachnotizen als Telegram-Audioblase (z. B. via Edge-TTS oder Piper) für unterwegs.
+
+### Meilenstein 15: Kanban Qualitäts-Gate (4-Augen-Review vor Task-Abschluss)
+- **Peer-Review Workflow:** Automatische Abfang-Logik beim Übergang eines Tasks in den Status `done`.
+- **Reviewer-Delegation:** Zuweisung an eine definierte Prüf-Rolle (z. B. Kritiker, Faktenprüfer oder Katharina Völk für Compliance/Stil).
+- **Abnahmekriterien & Re-Iteration:** Automatischer Abgleich des Arbeitsergebnisses gegen Aufgabenstellung und Mindeststandards. Bei Mängeln Rückversetzung auf `in_progress` mit konkretem Feedback; bei Freigabe finaler Abschluss.
+
+### Meilenstein 16: Interaktive Showroom-Sandbox & Live-Runner
+- **Ausführungsumgebung:** Einbindung einer sicheren Code-Sandbox im Showroom (Browser-basiert via Pyodide oder flüchtiger Docker-Subcontainer).
+- **Interaktive Vorschau:** Direkte Ausführung von generierten Python-Datenanalysen, Tabellen-Kalkulationen oder HTML5/JS-Rechnern mit dynamischen Eingabefeldern.
+- **Artefakt-Export:** Bereitstellung von Download- und Teilen-Optionen für validierte Code-Artefakte.
+

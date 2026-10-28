@@ -157,6 +157,11 @@
               <button id="btn-md-mode-html" onclick="setShowroomMarkdownMode('html')" title="Formatiertes HTML (Word-kompatibel)" class="px-2 py-1 text-[10px] font-mono font-bold rounded text-blue-600 dark:text-blue-400 hover:text-[var(--foreground)]">HTML</button>
             </div>
             <!-- Pure Icon Actions -->
+            <!-- Live Sandbox Button -->
+            <button id="btn-showroom-run" onclick="runShowroomCodeSandbox()" title="Code in isolierter Sandbox ausführen" class="hidden px-2 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+              <i data-lucide="play" class="w-3.5 h-3.5 text-emerald-500 fill-emerald-500"></i>
+              <span>Sandbox Run</span>
+            </button>
             <!-- Copy Button -->
             <button id="btn-showroom-copy" onclick="copyCurrentFileContent()" title="Inhalt in Zwischenablage kopieren" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--secondary)] flex items-center justify-center transition cursor-pointer">
               <i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-300"></i>
@@ -222,6 +227,22 @@
             <iframe id="showroom-viewer-iframe" src="about:blank" sandbox="allow-scripts allow-forms allow-same-origin" class="flex-1 w-full h-[65vh] border-none rounded bg-white"></iframe>
           </div>
         </div>
+
+        <!-- Terminal Console Drawer für Code Sandbox -->
+        <div id="showroom-sandbox-console" class="hidden mt-3 rounded-xl border border-[var(--border)] bg-slate-950 text-slate-100 p-3.5 font-mono text-xs shadow-lg space-y-2 shrink-0">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div class="flex items-center gap-2">
+              <span id="showroom-sandbox-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span class="text-[11px] font-bold tracking-tight text-slate-300">Sandbox Terminal Output</span>
+              <span id="showroom-sandbox-duration" class="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-400">0 ms</span>
+            </div>
+            <button type="button" onclick="document.getElementById('showroom-sandbox-console').classList.add('hidden')" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <pre id="showroom-sandbox-output" class="max-h-48 overflow-y-auto whitespace-pre-wrap text-slate-200 text-[11.5px] leading-relaxed custom-scrollbar select-text"></pre>
+        </div>
+
         <!-- Toast-Feedback unten -->
         <div id="showroom-toast" class="hidden mt-2 p-2 rounded text-xs font-mono border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] text-center transition-all"></div>
       </div>

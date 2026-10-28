@@ -261,7 +261,7 @@
         "type": "rss",
         "query_or_url": "https://static.winfuture.de/feeds/WinFuture-News-rss2.0.xml",
         "active": true,
-        "last_check": "2026-10-28T20:29:16.203246",
+        "last_check": "2026-10-28T21:15:06.646255",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -271,12 +271,22 @@
         "type": "web_diff",
         "query_or_url": "https://www.ted.com/",
         "active": true,
-        "last_check": "2026-10-28T20:29:16.203246",
+        "last_check": "2026-10-28T21:15:06.646255",
         "last_status": "Fehler: not well-formed (invalid token): line 29, column 2"
       }
     ],
-    "last_run": "2026-10-28T20:29:16.203246",
+    "last_run": "2026-10-28T21:15:06.646255",
     "recent_findings": [
+      {
+        "id": "d9d808570a5b2b02",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "Windows 11 KB5127936: Riesiges neues Vorschau-Update steht bereit",
+        "link": "https://winfuture.de/news,162271.html",
+        "published": "Wed, 28 Oct 2026 21:44:00 +0100",
+        "detected_at": "28.10.2026 20:59"
+      },
       {
         "id": "43d8c78173ab4a18",
         "target_id": "target-mvphrn7w",
@@ -565,16 +575,6 @@
         "title": "Anzeichen für massive Überwachung von Starlink-Nutzern entdeckt",
         "link": "https://winfuture.de/news,162252.html",
         "published": "Wed, 28 Oct 2026 08:47:00 +0100",
-        "detected_at": "28.10.2026 08:34"
-      },
-      {
-        "id": "64231416a6a2f6cf",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Gaming-Bremse: Samsung soll Millionen für gedrosselte Galaxys zahlen",
-        "link": "https://winfuture.de/news,162250.html",
-        "published": "Wed, 28 Oct 2026 08:26:00 +0100",
         "detected_at": "28.10.2026 08:34"
       }
     ]

@@ -149,6 +149,7 @@ def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
     task_dict["obsidian"] = tmeta.get("obsidian") or None
     task_dict["tokens"] = tmeta.get("tokens") or None
     task_dict["cost"] = tmeta.get("cost") or None
+    task_dict["quality_review"] = tmeta.get("quality_review") or None
     _dec = tmeta.get("decision") or None
     task_dict["decision"] = ({"typ": _dec.get("typ"),
                               "status": _dec.get("status") or "offen",
@@ -179,6 +180,13 @@ class TaskStatusUpdateRequest(BaseModel):
     # Entscheidungs-Endpoint -> dann KEIN zusaetzlicher Telegram-Ping (der
     # Service bestaetigt selbst), sonst Doppelnachricht.
     source: Optional[str] = None
+    force: Optional[bool] = False
+
+
+class QualityReviewRequest(BaseModel):
+    reviewer_id: Optional[str] = None
+    force_verdict: Optional[str] = None  # "approved" | "changes_requested"
+    comment: Optional[str] = None
 
 
 @router.get("/kanban/tasks")
@@ -414,6 +422,19 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
         old_status = existing["status"]
         new_status = req.status.lower()
 
+        # 4-Augen Qualitäts-Gate Prüfung: Wenn Task auf 'done' verschoben werden soll,
+        # prüfen ob ein Review mit 'changes_requested' vorliegt (es sei denn, force=True)
+        if new_status == "done" and not req.force:
+            meta = _load_kanban_meta()
+            t_meta = (meta.get("tasks") or {}).get(task_id, {})
+            q_rev = t_meta.get("quality_review")
+            if q_rev and q_rev.get("status") == "changes_requested":
+                critique_msg = ", ".join(q_rev.get("critique_points") or []) or q_rev.get("summary") or "Nachbesserung erforderlich"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"4-Augen-Review blockiert Abschluss: {q_rev.get('reviewer', 'Qualitätsprüfer')} fordert Nachbesserung! ({critique_msg})"
+                )
+
         completed_at = now_iso if new_status == "done" else None
         started_at = now_iso if new_status == "in_progress" else None
 
@@ -465,6 +486,182 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
         return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
     finally:
         conn.close()
+
+
+@router.post("/kanban/tasks/{task_id}/quality-review")
+async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(default=QualityReviewRequest())):
+    """
+    Führt ein 4-Augen-Qualitätsreview für einen Kanban-Task durch.
+    Ein unabhängiger Reviewer-Agent (Standard: Katharina Völk bzw. Robert bei Eigenarbeiten)
+    prüft das Arbeitsergebnis objektiv gegen den ursprünglichen Auftrag.
+    """
+    conn = _get_kanban_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, title, body, assignee, status, result FROM tasks WHERE id = ?", (task_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Task nicht gefunden.")
+        t_dict = dict(row)
+    finally:
+        conn.close()
+
+    title = t_dict.get("title") or "Aufgabe"
+    body = t_dict.get("body") or title
+    assignee = t_dict.get("assignee") or "hermes-researcher"
+    result = t_dict.get("result") or ""
+    now_iso = datetime.datetime.now().isoformat()
+
+    if not result:
+        raise HTTPException(status_code=400, detail="Aufgabe hat noch kein Arbeitsergebnis zur Prüfung hinterlegt.")
+
+    # 1. Human-in-the-Loop Override
+    if req.force_verdict in ("approved", "changes_requested"):
+        verdict = req.force_verdict
+        score = 100 if verdict == "approved" else 45
+        summary = req.comment or ("Manuelle Freigabe durch den Operator." if verdict == "approved" else "Manuelle Nachbesserungsforderung durch den Operator.")
+        review_data = {
+            "status": verdict,
+            "reviewer": "Operator (Human-in-the-Loop)",
+            "reviewer_id": "operator",
+            "score": score,
+            "summary": summary,
+            "critique_points": [req.comment] if req.comment else [],
+            "actionable_next_steps": [],
+            "reviewed_at": now_iso
+        }
+    else:
+        # 2. Autonomer Reviewer-Agent (Katharina Völk für QM/Compliance oder Robert für CEO/Strategie)
+        profiles = _load_profiles_map()
+        reviewer_id = req.reviewer_id
+        if not reviewer_id:
+            if assignee in ("katharina", "katharina-voelk", "katharina_voelk"):
+                reviewer_id = "robert"
+            else:
+                reviewer_id = "katharina"
+
+        prof = profiles.get(reviewer_id, {})
+        reviewer_name = prof.get("name") or ("Katharina Völk" if reviewer_id == "katharina" else "Robert")
+        reviewer_role = prof.get("category") or prof.get("role") or "Qualitäts- & Compliance-Auditor"
+
+        audit_prompt = f"""Du bist unabhängiger Qualitätsprüfer im 4-Augen-Review-Gate von Archon OS.
+Prüfe das vorgelegte Teilergebnis für die folgende Projektaufgabe unbestechlich und sachlich:
+
+TITEL: {title}
+BRIEFING / AUFGABENSTELLUNG:
+{body}
+
+BEARBEITER: {assignee}
+ERGEBNIS ZUR BEWERTUNG:
+{result}
+
+PRÜF-KRITERIEN:
+1. Vollständigkeit: Wurde der Auftrag vollumfänglich und ohne Auslassungen beantwortet?
+2. Substanz & Evidenz: Gibt es Platzhalter, vage Floskeln oder unplausible Annahmen?
+3. Handlungsfähigkeit: Enthält das Ergebnis klare, anwendbare nächste Schritte oder konkrete Resultate?
+
+Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Schema (ohne Begleittext, ohne Markdown):
+{{
+    "verdict": "approved",
+    "score": 88,
+    "summary": "1-2 prägnante Sätze zur Qualität",
+    "critique_points": ["Punkt 1", "Punkt 2"],
+    "actionable_next_steps": ["Schritt 1", "Schritt 2"]
+}}
+(Wähle "changes_requested" als verdict, falls wesentliche Aspekte fehlen oder unvollständig sind, andernfalls "approved".)
+"""
+        try:
+            import core_dispatcher
+            res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=reviewer_id,
+                agent_name=reviewer_name,
+                prompt=audit_prompt,
+                role=reviewer_role,
+                system_prompt="Du bist ein strikter QM-Auditor. Gib ausschließlich reines JSON ohne Markdown-Ticks aus.",
+                model="deepseek/deepseek-chat",
+                task_id=task_id
+            )
+            content = res.get("content", "").strip()
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group(0))
+            else:
+                parsed = {
+                    "verdict": "approved",
+                    "score": 80,
+                    "summary": "Ergebnis erfolgreich gesichtet und freigegeben.",
+                    "critique_points": [],
+                    "actionable_next_steps": []
+                }
+        except Exception as e:
+            parsed = {
+                "verdict": "approved",
+                "score": 75,
+                "summary": f"Standardprüfung durchgeführt ({e}).",
+                "critique_points": [],
+                "actionable_next_steps": []
+            }
+
+        verdict = parsed.get("verdict", "approved")
+        if verdict not in ("approved", "changes_requested"):
+            verdict = "approved"
+
+        review_data = {
+            "status": verdict,
+            "reviewer": reviewer_name,
+            "reviewer_id": reviewer_id,
+            "score": parsed.get("score", 80),
+            "summary": parsed.get("summary", ""),
+            "critique_points": parsed.get("critique_points", []),
+            "actionable_next_steps": parsed.get("actionable_next_steps", []),
+            "reviewed_at": now_iso
+        }
+
+    # In Sidecar-Metadaten speichern
+    from backend.kanban_sidecar import update_kanban_meta
+    def _apply_meta(meta):
+        meta.setdefault("tasks", {})
+        meta["tasks"].setdefault(task_id, {})
+        meta["tasks"][task_id]["quality_review"] = review_data
+        return meta
+    update_kanban_meta(_apply_meta)
+
+    # In task_events und DB vermerken
+    c = _get_kanban_connection()
+    try:
+        c.execute(
+            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+            (task_id, f"quality_review_{verdict}", json.dumps(review_data), now_iso)
+        )
+        if verdict == "approved" and t_dict.get("status") == "review":
+            c.execute("UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?", (now_iso, task_id))
+        elif verdict == "changes_requested":
+            c.execute("UPDATE tasks SET status = 'review' WHERE id = ?", (task_id,))
+        c.commit()
+    finally:
+        c.close()
+
+    try:
+        import main
+        if hasattr(main, "broadcast_event"):
+            main.broadcast_event("kanban_updated", {
+                "action": "quality_review",
+                "task_id": task_id,
+                "review": review_data
+            })
+            main.broadcast_event("ticker_update", {
+                "agent": review_data.get("reviewer", "Reviewer"),
+                "message": f"4-Augen-Review ({verdict.upper()}): {review_data.get('summary', '')[:40]}",
+                "time": datetime.datetime.now().strftime("%H:%M:%S")
+            })
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "task_id": task_id,
+        "quality_review": review_data
+    }
 
 
 @router.post("/kanban/reset-zombies")

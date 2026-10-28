@@ -3880,6 +3880,86 @@ async def api_telegram_relay(ziel_agent: str = Form(""), text: str = Form(""),
     logger.info(f"[Relay] {ziel}: {len(msg)} Z rein, {len(antwort)} Z zurueck an Telegram")
     return {"status": "ok", "ziel_agent": ziel, "antwort_kopf": antwort[:400]}
 
+@app.post("/api/telegram/voice-relay")
+async def api_telegram_voice_relay(
+    file: UploadFile = File(None),
+    file_id: str = Form(""),
+    chat_id: str = Form(""),
+    ziel_agent: str = Form(""),
+    reply_voice: bool = Form(True)
+):
+    """
+    Empfaengt Sprachnachrichten aus Telegram (als Upload oder per Telegram file_id),
+    transkribiert sie, routet sie an den Ziel-Agenten und sendet Text + Sprachantwort zurueck.
+    """
+    from backend.voice_pipeline import (
+        transcribe_audio_bytes, download_telegram_file,
+        detect_target_agent, synthesize_speech, send_telegram_voice
+    )
+
+    audio_bytes = b""
+    fname = "voice.ogg"
+
+    if file:
+        audio_bytes = await file.read()
+        fname = file.filename or "voice.ogg"
+    elif file_id:
+        try:
+            audio_bytes, fname = await download_telegram_file(file_id)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Download von Telegram fehlgeschlagen: {e}")
+
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Keine Audio-Daten uebergeben.")
+
+    # 1. Transkribieren
+    transcript = await transcribe_audio_bytes(audio_bytes, filename=fname)
+
+    # 2. Agenten-Routing
+    detected_agent, clean_prompt = detect_target_agent(transcript)
+    target = (ziel_agent or "").strip() or detected_agent
+
+    # 3. An bestehenden Relay weiterleiten
+    relay_res = await api_telegram_relay(ziel_agent=target, text=clean_prompt)
+    answer_text = relay_res.get("antwort_kopf", "")
+
+    # 4. Sprachantwort erzeugen & an Telegram senden
+    voice_sent = False
+    tgt_chat = chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")
+    if reply_voice and tgt_chat and answer_text and not answer_text.startswith("[Sprachnachricht"):
+        try:
+            speech_path = await synthesize_speech(answer_text)
+            voice_sent = await send_telegram_voice(tgt_chat, speech_path, caption=f"Antwort von {target}")
+            if os.path.exists(speech_path):
+                os.remove(speech_path)
+        except Exception as v_err:
+            logger.warning(f"[VoiceRelay] Sprachantwort-Versand fehlgeschlagen: {v_err}")
+
+    return {
+        "status": "ok",
+        "transcript": transcript,
+        "ziel_agent": target,
+        "clean_prompt": clean_prompt,
+        "antwort": answer_text,
+        "voice_sent": voice_sent
+    }
+
+
+class VoiceSynthesizePayload(BaseModel):
+    text: str
+    voice: Optional[str] = "de-DE-ConradNeural"
+
+
+@app.post("/api/voice/synthesize")
+async def api_voice_synthesize(payload: VoiceSynthesizePayload):
+    """Generiert eine Audiodatei aus Text via edge-tts."""
+    from backend.voice_pipeline import synthesize_speech
+    try:
+        mp3_path = await synthesize_speech(payload.text, voice=payload.voice or "de-DE-ConradNeural")
+        return FileResponse(mp3_path, media_type="audio/mpeg", filename="voice_output.mp3")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # =========================================================================
 # ZENTRALER ENTSCHEIDUNGS-SERVICE (12.10.2026, User-Entscheidung "2c")

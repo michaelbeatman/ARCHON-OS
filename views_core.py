@@ -743,6 +743,109 @@ async def archive_showroom_report(filename: str = Query(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class CodeRunPayload(BaseModel):
+    filepath: Optional[str] = None
+    code: Optional[str] = None
+    language: Optional[str] = "python"
+    stdin: Optional[str] = ""
+
+
+@router.post("/showroom/run-code")
+async def run_showroom_code(payload: CodeRunPayload):
+    """
+    Fuehrt Code-Snippets oder Skripte aus dem Showroom in einer isolierten Sandbox aus.
+    Gibt stdout, stderr, Exit-Code und Laufzeit zurueck.
+    """
+    import tempfile
+    import time
+    import subprocess
+    import sys
+
+    code_to_run = payload.code or ""
+    lang = (payload.language or "python").lower()
+
+    if payload.filepath:
+        target_path = Path(payload.filepath)
+        if not target_path.exists():
+            raise HTTPException(status_code=404, detail="Datei fuer Ausfuehrung nicht gefunden.")
+        if target_path.suffix.lower() == ".py":
+            lang = "python"
+        elif target_path.suffix.lower() in (".js", ".ts"):
+            lang = "javascript"
+        elif target_path.suffix.lower() in (".sh", ".bash"):
+            lang = "bash"
+        if not code_to_run:
+            try:
+                code_to_run = target_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Datei konnte nicht gelesen werden: {e}")
+
+    if not code_to_run.strip():
+        raise HTTPException(status_code=400, detail="Kein Quellcode zur Ausfuehrung uebergeben.")
+
+    if lang == "python":
+        scratch_dir = Path("/tmp/archon_sandbox") if os.path.exists("/tmp") else Path(tempfile.gettempdir())
+        scratch_dir.mkdir(parents=True, exist_ok=True)
+
+        with tempfile.NamedTemporaryFile("w", suffix=".py", dir=str(scratch_dir), delete=False, encoding="utf-8") as f:
+            f.write(code_to_run)
+            tmp_path = f.name
+
+        start_time = time.perf_counter()
+        try:
+            res = subprocess.run(
+                [sys.executable or "python", tmp_path],
+                capture_output=True,
+                text=True,
+                timeout=12,
+                cwd=str(scratch_dir),
+                input=payload.stdin or ""
+            )
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
+            return {
+                "status": "success" if res.returncode == 0 else "error",
+                "exit_code": res.returncode,
+                "stdout": res.stdout,
+                "stderr": res.stderr,
+                "duration_ms": elapsed_ms,
+                "language": "python"
+            }
+        except subprocess.TimeoutExpired:
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
+            return {
+                "status": "timeout",
+                "exit_code": 124,
+                "stdout": "",
+                "stderr": "Ausfuehrung nach 12 Sekunden abgebrochen (Timeout).",
+                "duration_ms": elapsed_ms,
+                "language": "python"
+            }
+        except Exception as ex:
+            return {
+                "status": "error",
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": f"Fehler bei Ausfuehrung: {ex}",
+                "duration_ms": 0,
+                "language": "python"
+            }
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+    return {
+        "status": "error",
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": f"Sprache '{lang}' wird im Backend-Runner nicht direkt unterstuetzt.",
+        "duration_ms": 0,
+        "language": lang
+    }
+
+
 # =========================================================================
 # THEME & CSS LIVE STUDIO PERSISTENCE ENDPOINTS
 # =========================================================================

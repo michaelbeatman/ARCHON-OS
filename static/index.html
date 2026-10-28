@@ -4903,6 +4903,10 @@ print('Ausführung erfolgreich!')</textarea>
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
         currentShowroomFile.data = data;
+        const btnRun = document.getElementById("btn-showroom-run");
+        const isRunnable = ['.py', '.js', '.sh', '.bash'].includes((fileObj.ext || '').toLowerCase());
+        if (btnRun) btnRun.classList.toggle("hidden", !isRunnable);
+
         if (data.type === "image") {
           if (imgView && imgElem) {
             imgElem.src = data.data_url || "";
@@ -4934,6 +4938,57 @@ print('Ausführung erfolgreich!')</textarea>
       }
       if (window.lucide) lucide.createIcons();
     }
+
+    window.runShowroomCodeSandbox = async function() {
+      if (!currentShowroomFile || !currentShowroomFile.path) return;
+      const consoleEl = document.getElementById("showroom-sandbox-console");
+      const outputEl = document.getElementById("showroom-sandbox-output");
+      const durationEl = document.getElementById("showroom-sandbox-duration");
+      const dotEl = document.getElementById("showroom-sandbox-dot");
+      const btnRun = document.getElementById("btn-showroom-run");
+
+      if (consoleEl) consoleEl.classList.remove("hidden");
+      if (outputEl) outputEl.textContent = `[Archon Sandbox] Starte Ausführung von ${currentShowroomFile.name}...\n`;
+      if (dotEl) dotEl.className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
+      if (durationEl) durationEl.textContent = "Läuft...";
+
+      const origHtml = btnRun ? btnRun.innerHTML : "";
+      if (btnRun) {
+        btnRun.disabled = true;
+        btnRun.innerHTML = `<span class="animate-pulse">Läuft...</span>`;
+      }
+
+      try {
+        const res = await fetch("/api/views/showroom/run-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filepath: currentShowroomFile.path, code: currentShowroomFile.data?.content || "" })
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.detail || "Sandbox-Fehler");
+
+        if (durationEl) durationEl.textContent = `${d.duration_ms || 0} ms`;
+        const isOk = d.status === "success";
+        if (dotEl) dotEl.className = `w-2.5 h-2.5 rounded-full ${isOk ? "bg-emerald-500" : "bg-rose-500"}`;
+
+        let out = `[Archon Sandbox] Exit Code: ${d.exit_code} (${d.status.toUpperCase()}) — Laufzeit: ${d.duration_ms || 0} ms\n────────────────────────────────────────────────────────────\n`;
+        if (d.stdout) out += `STDOUT:\n${d.stdout}\n`;
+        if (d.stderr) out += `STDERR:\n${d.stderr}\n`;
+        if (!d.stdout && !d.stderr) out += "(Keine Ausgabe auf STDOUT/STDERR erzeugt)\n";
+
+        if (outputEl) outputEl.textContent = out;
+      } catch (err) {
+        if (dotEl) dotEl.className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+        if (outputEl) outputEl.textContent += `\n[Sandbox-Fehler]: ${err.message}`;
+      } finally {
+        if (btnRun) {
+          btnRun.disabled = false;
+          btnRun.innerHTML = origHtml;
+          if (window.lucide) lucide.createIcons();
+        }
+      }
+    };
+
     function setShowroomMarkdownMode(mode) {
       showroomMdMode = mode;
       const placeholder = document.getElementById("showroom-viewer-placeholder");
@@ -9592,6 +9647,47 @@ ${logExcerpt}
             <div id="ops-detail-project-files" class="hidden mt-1.5 max-h-40 overflow-y-auto p-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[11.5px] font-mono space-y-0.5"></div>
             <div id="ops-detail-project-viewer" class="hidden mt-1.5 max-h-64 overflow-auto p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[11.5px] leading-relaxed whitespace-pre-wrap font-mono text-primary-custom"></div>
           </div>
+          </div>
+        </div>
+
+        <!-- 4-AUGEN QUALITÄTS-GATE -->
+        <div id="ops-detail-quality-gate" class="p-3.5 rounded-xl border border-indigo-500/25 bg-indigo-500/5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-lg bg-indigo-500/15 flex items-center justify-center text-indigo-500 font-bold">
+                <i data-lucide="shield-check" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h4 class="text-xs font-mono uppercase font-bold text-[var(--foreground)]">4-Augen Qualitäts-Gate</h4>
+                <p class="text-[10.5px] text-[var(--muted-foreground)]">Unabhängiges Peer-Review vor dem Verschieben auf „Done“</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="btn-ops-trigger-review" onclick="triggerTaskQualityReview()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1.5">
+                <i data-lucide="search-check" class="w-3.5 h-3.5"></i> Review starten
+              </button>
+              <button type="button" id="btn-ops-human-approve" onclick="humanOverrideQualityReview('approved')" class="px-2.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-[11px] font-bold transition cursor-pointer flex items-center gap-1" title="Manuelle Freigabe ohne KI-Review">
+                <i data-lucide="check" class="w-3.5 h-3.5"></i> Freigeben
+              </button>
+            </div>
+          </div>
+          <div id="ops-quality-review-result-box" class="hidden p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs space-y-2">
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+              <div class="flex items-center gap-2">
+                <span id="ops-qr-badge" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold">Status</span>
+                <span id="ops-qr-score" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-500/10 text-slate-400">Score: 85%</span>
+              </div>
+              <span id="ops-qr-reviewer" class="text-[10px] font-mono text-[var(--muted-foreground)]">Geprüft von Katharina Völk</span>
+            </div>
+            <p id="ops-qr-summary" class="text-xs text-[var(--foreground)] font-medium leading-relaxed"></p>
+            <div id="ops-qr-critique-section" class="hidden space-y-1">
+              <span class="text-[10px] uppercase font-mono font-bold text-amber-500 block">Kritikpunkte / Nachbesserung:</span>
+              <ul id="ops-qr-critique-list" class="list-disc list-inside text-[11px] text-amber-600 dark:text-amber-400 space-y-0.5 pl-1"></ul>
+            </div>
+            <div id="ops-qr-steps-section" class="hidden space-y-1">
+              <span class="text-[10px] uppercase font-mono font-bold text-emerald-500 block">Nächste Schritte:</span>
+              <ul id="ops-qr-steps-list" class="list-disc list-inside text-[11px] text-emerald-600 dark:text-emerald-400 space-y-0.5 pl-1"></ul>
+            </div>
           </div>
         </div>
 

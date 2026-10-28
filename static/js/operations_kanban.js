@@ -1363,6 +1363,11 @@
           const tokenBadge = (t.tokens || t.cost)
             ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border bg-indigo-500/10 text-indigo-500 border-indigo-500/30" title="Token & Kosten">🪙 ${t.tokens ? (typeof t.tokens === 'number' && t.tokens >= 1000 ? (t.tokens / 1000).toFixed(1) + 'k' : t.tokens) + ' Tok' : ''}${t.tokens && t.cost !== undefined ? ' · ' : ''}${t.cost !== undefined && t.cost !== null ? '$' + Number(t.cost).toFixed(2) : ''}</span>`
             : '';
+          let qrBadge = '';
+          if (t.quality_review) {
+            const isAppr = t.quality_review.status === 'approved';
+            qrBadge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold border ${isAppr ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/15 text-amber-600 border-amber-500/40'} shrink-0" title="4-Augen-Review: ${isAppr ? 'Freigegeben' : 'Nachbesserung'} (${t.quality_review.score || 80}%)">${isAppr ? '✓ 4-Augen' : '⚠ 4-Augen'}</span>`;
+          }
           return `
               <div draggable="true" 
                    ondragstart="onKanbanDragStart(event, '${t.id}')"
@@ -1374,7 +1379,7 @@
                 </div>` : ''}
                 <div class="p-3 space-y-2.5">
                   <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
-                    <div class="flex items-center gap-1 min-w-0 truncate">${statusBadge}${dueBadge}${modelBadge}${tokenBadge}</div>
+                    <div class="flex items-center gap-1 min-w-0 truncate">${statusBadge}${qrBadge}${dueBadge}${modelBadge}${tokenBadge}</div>
                     <div class="flex items-center gap-1 shrink-0">
                       ${countBadge}
                       ${decOpen ? '' : `<span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span>`}
@@ -2326,6 +2331,62 @@
         if (modelTag) modelTag.textContent = task.model_override ? task.model_override.split('/').pop() : 'OmniRoute Auto';
         populateOpsDetailMeta(taskId);
 
+        // 4-Augen Qualitäts-Gate Darstellung
+        const qrBox = document.getElementById('ops-quality-review-result-box');
+        const qrBadgeEl = document.getElementById('ops-qr-badge');
+        const qrScoreEl = document.getElementById('ops-qr-score');
+        const qrReviewerEl = document.getElementById('ops-qr-reviewer');
+        const qrSummaryEl = document.getElementById('ops-qr-summary');
+        const qrCritiqueSec = document.getElementById('ops-qr-critique-section');
+        const qrCritiqueList = document.getElementById('ops-qr-critique-list');
+        const qrStepsSec = document.getElementById('ops-qr-steps-section');
+        const qrStepsList = document.getElementById('ops-qr-steps-list');
+
+        const qRev = task.quality_review || null;
+        if (qrBox) {
+          if (!qRev) {
+            qrBox.classList.add('hidden');
+          } else {
+            qrBox.classList.remove('hidden');
+            const isAppr = qRev.status === 'approved';
+            if (qrBadgeEl) {
+              qrBadgeEl.textContent = isAppr ? '✓ Freigegeben' : '⚠ Nachbesserung';
+              qrBadgeEl.className = isAppr
+                ? 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                : 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40';
+            }
+            if (qrScoreEl) {
+              qrScoreEl.textContent = `Score: ${qRev.score || 80}%`;
+              qrScoreEl.className = `px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${isAppr ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'}`;
+            }
+            if (qrReviewerEl) {
+              const revTime = qRev.reviewed_at ? new Date(qRev.reviewed_at).toLocaleTimeString('de-DE') : '';
+              qrReviewerEl.textContent = `Geprüft von ${qRev.reviewer || 'QM'} ${revTime ? '· ' + revTime : ''}`;
+            }
+            if (qrSummaryEl) qrSummaryEl.textContent = qRev.summary || '';
+
+            const critiques = qRev.critique_points || [];
+            if (qrCritiqueSec && qrCritiqueList) {
+              if (critiques.length > 0) {
+                qrCritiqueSec.classList.remove('hidden');
+                qrCritiqueList.innerHTML = critiques.map(c => `<li>${opsEscapeHtml(c)}</li>`).join('');
+              } else {
+                qrCritiqueSec.classList.add('hidden');
+              }
+            }
+
+            const steps = qRev.actionable_next_steps || [];
+            if (qrStepsSec && qrStepsList) {
+              if (steps.length > 0) {
+                qrStepsSec.classList.remove('hidden');
+                qrStepsList.innerHTML = steps.map(s => `<li>${opsEscapeHtml(s)}</li>`).join('');
+              } else {
+                qrStepsSec.classList.add('hidden');
+              }
+            }
+          }
+        }
+
         const subtasks = data.subtasks || [];
         if (subtasks.length > 0) {
           if (subtasksSection) subtasksSection.classList.remove('hidden');
@@ -2383,6 +2444,52 @@
       if (modal) modal.classList.add('hidden');
       currentOpsDetailTaskId = null;
     }
+
+    window.triggerTaskQualityReview = async function() {
+      if (!currentOpsDetailTaskId) return;
+      const btn = document.getElementById('btn-ops-trigger-review');
+      const origHtml = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-pulse">Prüfe Qualität...</span>`;
+      }
+      try {
+        const res = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(currentOpsDetailTaskId)}/quality-review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.detail || 'Fehler beim Quality Review');
+        await openTaskDetailModal(currentOpsDetailTaskId);
+        await loadOperationsKanban();
+      } catch (err) {
+        alert('Qualitäts-Review fehlgeschlagen: ' + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          if (window.lucide) lucide.createIcons();
+        }
+      }
+    };
+
+    window.humanOverrideQualityReview = async function(verdict) {
+      if (!currentOpsDetailTaskId) return;
+      try {
+        const res = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(currentOpsDetailTaskId)}/quality-review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force_verdict: verdict || 'approved', comment: 'Manuell freigegeben durch Operator' })
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.detail || 'Fehler beim Freigeben');
+        await openTaskDetailModal(currentOpsDetailTaskId);
+        await loadOperationsKanban();
+      } catch (err) {
+        alert('Freigabe fehlgeschlagen: ' + err.message);
+      }
+    };
 
     async function updateCurrentTaskStatus(newStatus) {
       if (!currentOpsDetailTaskId) return;

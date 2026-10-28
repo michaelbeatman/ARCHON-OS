@@ -261,7 +261,7 @@
         "type": "rss",
         "query_or_url": "https://static.winfuture.de/feeds/WinFuture-News-rss2.0.xml",
         "active": true,
-        "last_check": "2026-10-28T15:45:32.552696",
+        "last_check": "2026-10-28T20:29:16.203246",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -271,12 +271,72 @@
         "type": "web_diff",
         "query_or_url": "https://www.ted.com/",
         "active": true,
-        "last_check": "2026-10-28T15:45:32.552696",
+        "last_check": "2026-10-28T20:29:16.203246",
         "last_status": "Fehler: not well-formed (invalid token): line 29, column 2"
       }
     ],
-    "last_run": "2026-10-28T15:45:32.552696",
+    "last_run": "2026-10-28T20:29:16.203246",
     "recent_findings": [
+      {
+        "id": "43d8c78173ab4a18",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "PS5: Sony bringt transparente PlayStation-DualSense-Controller & Cover",
+        "link": "https://winfuture.de/news,162272.html",
+        "published": "Wed, 28 Oct 2026 21:03:00 +0100",
+        "detected_at": "28.10.2026 20:15"
+      },
+      {
+        "id": "571e1cf9f9e4be48",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "MacBook Pro mit Touch: Apples neue Laptops kosten bis zu 16.000 Euro",
+        "link": "https://winfuture.de/news,162270.html",
+        "published": "Wed, 28 Oct 2026 20:30:00 +0100",
+        "detected_at": "28.10.2026 19:45"
+      },
+      {
+        "id": "9f7c6769b1a2d903",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "US-Satellit fotografiert Chinas geheimen Raumgleiter im Erdorbit",
+        "link": "https://winfuture.de/news,162269.html",
+        "published": "Wed, 28 Oct 2026 18:17:00 +0100",
+        "detected_at": "28.10.2026 17:45"
+      },
+      {
+        "id": "43a28fcca7b75a01",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "Amazon präsentiert neue Echo-Geräte und mehr - Preise steigen erneut",
+        "link": "https://winfuture.de/news,162268.html",
+        "published": "Wed, 28 Oct 2026 17:40:00 +0100",
+        "detected_at": "28.10.2026 16:45"
+      },
+      {
+        "id": "05e493d75ac3f47f",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "No Man's Sky: Forsaken - Halloween-Update und Start für iOS-Geräte",
+        "link": "https://winfuture.de/videos/Spiele/No-Mans-Sky-Forsaken-Halloween-Update-und-Start-fuer-iOS-Geraete-29186.html",
+        "published": "Wed, 28 Oct 2026 17:20:21 +0100",
+        "detected_at": "28.10.2026 16:45"
+      },
+      {
+        "id": "65fa609b7c531281",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "ProgDVB Download - Fernsehen & Radio über DVB empfangen",
+        "link": "https://winfuture.de/downloadvorschalt,785.html",
+        "published": "Wed, 28 Oct 2026 16:55:11 +0100",
+        "detected_at": "28.10.2026 16:15"
+      },
       {
         "id": "081820a6f89d92f3",
         "target_id": "target-mvphrn7w",
@@ -516,66 +576,6 @@
         "link": "https://winfuture.de/news,162250.html",
         "published": "Wed, 28 Oct 2026 08:26:00 +0100",
         "detected_at": "28.10.2026 08:34"
-      },
-      {
-        "id": "d018896078bd8544",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Grand Theft Auto VI: Download von GTA 6 wohl über 200 GB groß",
-        "link": "https://winfuture.de/news,162249.html",
-        "published": "Wed, 28 Oct 2026 08:05:00 +0100",
-        "detected_at": "28.10.2026 08:34"
-      },
-      {
-        "id": "e057bd197b18ce60",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Kritische UEFI-Lücke gefährdet massenhaft Server in aller Welt",
-        "link": "https://winfuture.de/news,162251.html",
-        "published": "Wed, 28 Oct 2026 07:43:00 +0100",
-        "detected_at": "28.10.2026 06:59"
-      },
-      {
-        "id": "2e98681233b17801",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Notebooksbilliger: Angebote der Woche stark reduziert 28. Oktober",
-        "link": "https://winfuture.de/special/notebooksbilliger/angebote#1793169303",
-        "published": "Wed, 28 Oct 2026 07:35:03 +0100",
-        "detected_at": "28.10.2026 06:59"
-      },
-      {
-        "id": "b80f7781138ab2a0",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Aktuelle Technik-Blitzangebote von Amazon im Überblick 28. Oktober",
-        "link": "https://winfuture.de/special/amazon/angebote/#1793167860",
-        "published": "Wed, 28 Oct 2026 07:11:00 +0100",
-        "detected_at": "28.10.2026 06:29"
-      },
-      {
-        "id": "9b26cd24c2b77e08",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "IPv4-Apps in IPv6-Netzen: Microsoft startet CLAT in Windows 11",
-        "link": "https://winfuture.de/news,162248.html",
-        "published": "Tue, 27 Oct 2026 20:21:00 +0100",
-        "detected_at": "27.10.2026 19:33"
-      },
-      {
-        "id": "16035c65e5bddf9c",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Messenger-Fail: Signal-Bug macht Anhören möglich, Update gestartet",
-        "link": "https://winfuture.de/news,162246.html",
-        "published": "Tue, 27 Oct 2026 20:00:00 +0100",
-        "detected_at": "27.10.2026 19:03"
       }
     ]
   }

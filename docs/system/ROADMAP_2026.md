@@ -7,7 +7,7 @@
 | **2** | **Steuerapp für Android** | Mittel | Geplant | PWA vs. Native Kotlin/Flutter-Client, Endpunkt-Sicherheit, Push-Benachrichtigungen, Dynamic DNS/Tailscale-Tunneling |
 | **3** | **Multilingualität (i18n)** | Mittel | Geplant | Mehrsprachigkeit für UI-Strings, lokalisierte System-Prompts, Sprachumschaltung de/en |
 | **4** | **Multi-User & Kollaboration** | Mittel | Geplant | RBAC-Rollenmodell, Benutzer-Authentifizierung (JWT/OAuth), Sitzungs- und Workspace-Isolation |
-| **5** | **Funktionserweiterung / Pluginsystem** | Mittel | Geplant | Standardisierte Plugin-Schnittstelle, Runtime-Skill-Registrierung, Manifest-Validierung, dynamische Tool-Einbindung |
+| **5** | **Funktionserweiterung / Pluginsystem** | Mittel | Abgeschlossen | Standardisierte Plugin-Schnittstelle (`backend/plugin_manager.py`), Manifeste (`plugin.json`), Lifecycle-Hooks, Registry-Integration & 3 Starter-Plugins |
 | **6** | **Designkonzept-Überarbeitung** | Hoch | Geplant | Ergonomisches Designsystem, konsistente Typografie, modernisiertes UI-Layout, Dark/Light-Mode-Verfeinerung |
 | **7** | **LinkedIn-Import im CRM (Bugfix & Dedup)** | Dringend | Abgeschlossen | 1.722 Duplikate bei 908 Kontakten bereinigt, CRM-Route & Import-Dedupe zeitzonen- und sender-unabhängig gehärtet |
 | **8** | **Obere Icons prüfen & korrigieren** | Hoch | Abgeschlossen | Audit aller oberen Navigations- und Subview-Icons, Behebung doppelter Icons, Korrektur des Kanban-Icons |
@@ -47,10 +47,15 @@
 - **Rechte & Rollen (RBAC):** Unterscheidung zwischen Admin-, Operator- und Viewer-Rechten.
 - **Daten-Isolation:** Benutzerbezogene Chats, Gedächtnisspeicher und History-Filterung bei gemeinsamen Ressourcen.
 
-### Meilenstein 5: Funktionserweiterung & Pluginsystem
-- **Plugin-Architektur:** Überarbeitung des bestehenden Skill- und Werkzeug-Ökosystems nach standardisierten Manifesten (`manifest.json` / `PLUGIN.md`).
-- **Lifecycle-Hooks:** Definierte Event-Hooks (`on_message`, `on_tool_execute`, `on_agent_complete`).
-- **Sicherheits-Sandbox:** Berechtigungsverwaltung für Dateisystem-, Netzwerk- und API-Zugriffe einzelner Module.
+### Meilenstein 5: Funktionserweiterung & Pluginsystem (Abgeschlossen)
+- **Plugin-Architektur:** Zentraler `PluginManager` (`backend/plugin_manager.py`) mit standardisierten Manifesten (`plugin.json`), dynamischem Import via `importlib` und Exception-Isolation.
+- **Lifecycle- & Filter-Hooks:** Standard-Hooks `on_load`, `on_enable`, `on_disable`, `before_tool_execute`, `after_tool_execute`, `on_message_received`, `on_task_completed`.
+- **Sicherheits- & Tool-Auditing:** Hook-Pipeline blockiert destruktive Befehle (`rm -rf`, Directory Traversal) und maskiert Secrets in Ausgaben.
+- **REST-API & UI-Integration:** `/api/v1/plugins` (Auflisten, Umschalten, Neuladen, Konfigurieren) nahtlos in die Settings-Registry (Tab PLUGINS) integriert.
+- **3 Produktions-Plugins:**
+  1. `plugins/system_metrics/`: Exportiert das LLM-Tool `get_system_telemetry` für Host- und Docker-Status.
+  2. `plugins/security_audit_hook/`: Interzeptiert destruktive Shell-Kommandos und schützt sensible Token.
+  3. `plugins/cost_guard/`: Überwacht Token-Verbrauch und Tagesbudget mit Werkzeug `check_token_budget`.
 
 ### Meilenstein 6: Designkonzept modernisieren
 - **Design Tokens:** Vereinheitlichung von Farbwerten, Abständen, Typografie und Schatten in einem zentralen Theme.

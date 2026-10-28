@@ -6485,6 +6485,29 @@ def api_get_guardian_config():
             except Exception:
                 pass
 
+    try:
+        from backend.plugin_manager import get_plugin_manager
+        pm = get_plugin_manager()
+        for p in pm.plugins.values():
+            tools_list = [t.get("name") for t in p.get_tools() if "name" in t]
+            discovered_plugins.append({
+                "id": p.id,
+                "name": p.name,
+                "desc": p.description,
+                "problem": p.manifest.get("problem", "Fehlende Überwachung oder fehlende modulare Werkzeuge."),
+                "solution": p.manifest.get("solution", p.description),
+                "tradeoff": p.manifest.get("tradeoff", "Geringe Latenz beim Hook-Durchlauf."),
+                "when_to_disable": p.manifest.get("when_to_disable", "Wenn dieses Modul vorübergehend nicht aktiv sein soll."),
+                "category": "Tools & Execution" if p.category == "tool" else "Sicherheit & Wächter",
+                "tools": tools_list,
+                "icon": "shield-check" if p.category == "security" else "cpu",
+                "version": p.version,
+                "enabled": p.enabled,
+                "is_modular_plugin": True
+            })
+    except Exception as e:
+        print(f"[GuardianConfig] PluginManager integration error: {e}")
+
     return {
         "status": "success",
         "plugins": discovered_plugins,
@@ -6588,6 +6611,17 @@ def api_toggle_guardian_plugin(payload: dict):
         cfg["plugins"]["enabled"] = enabled_list
         with open(config_file, "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg, f, default_flow_style=False)
+
+        try:
+            from backend.plugin_manager import get_plugin_manager
+            pm = get_plugin_manager()
+            if plugin_id in pm.plugins:
+                if enable:
+                    pm.enable_plugin(plugin_id)
+                else:
+                    pm.disable_plugin(plugin_id)
+        except Exception as e:
+            print(f"[PluginToggle] Error updating plugin manager: {e}")
 
         # Synchronisiere Schalter direkt mit backend/autonomy_settings.py (settings.json)
         plugin_autonomy_bridge = {
@@ -8875,6 +8909,90 @@ def api_system_update_backup(payload: dict = Body(default={})):
     tag = payload.get("tag", "manual").strip() or "manual"
     return system_updater.create_snapshot(tag=tag)
 
+
+# --- PLUGIN SYSTEM & EXTENSIBILITY (MEILENSTEIN 5) ---
+@app.get("/api/v1/plugins")
+def api_list_plugins():
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    return {"status": "success", "plugins": pm.list_plugins_summary()}
+
+@app.post("/api/v1/plugins/{plugin_id}/toggle")
+def api_toggle_plugin(plugin_id: str, payload: dict = Body(default={})):
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    plugin = pm.plugins.get(plugin_id)
+    if not plugin:
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' nicht gefunden.")
+    enable = payload.get("enable")
+    if enable is None:
+        enable = not plugin.enabled
+    if enable:
+        pm.enable_plugin(plugin_id)
+    else:
+        pm.disable_plugin(plugin_id)
+    return {"status": "success", "plugin_id": plugin_id, "enabled": plugin.enabled}
+
+@app.post("/api/v1/plugins/{plugin_id}/reload")
+def api_reload_plugin(plugin_id: str):
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    success = pm.reload_plugin(plugin_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Fehler beim Neuladen von Plugin '{plugin_id}'.")
+    return {"status": "success", "message": f"Plugin '{plugin_id}' erfolgreich neu geladen."}
+
+@app.get("/api/v1/plugins/{plugin_id}/config")
+def api_get_plugin_settings(plugin_id: str):
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    plugin = pm.plugins.get(plugin_id)
+    if not plugin:
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' nicht gefunden.")
+    return {
+        "status": "success",
+        "plugin_id": plugin_id,
+        "config": plugin.config,
+        "schema": plugin.manifest.get("settings_schema", {})
+    }
+
+@app.post("/api/v1/plugins/{plugin_id}/config")
+def api_save_plugin_settings(plugin_id: str, payload: dict = Body(...)):
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    plugin = pm.plugins.get(plugin_id)
+    if not plugin:
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' nicht gefunden.")
+    success = plugin.save_config(payload)
+    return {"status": "success" if success else "error", "config": plugin.config}
+
+@app.post("/api/v1/plugins/discover")
+def api_discover_plugins():
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    pm.load_all_plugins()
+    return {"status": "success", "plugins": pm.list_plugins_summary()}
+
+@app.get("/api/v1/plugins/tools")
+def api_get_plugin_tools():
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    return {"status": "success", "tools": pm.get_all_exported_tools()}
+
+@app.post("/api/v1/plugins/tools/execute")
+async def api_execute_plugin_tool(payload: dict = Body(...)):
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    tool_name = payload.get("tool_name", "")
+    args = payload.get("args", {})
+    if not tool_name:
+        raise HTTPException(status_code=400, detail="tool_name erforderlich.")
+    try:
+        res = await pm.execute_plugin_tool(tool_name, args)
+        return {"status": "success", "result": res}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 _VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
 
 
@@ -10621,7 +10739,15 @@ async def api_skills_mcp_execute(tool_name: str = Body(...), arguments: Dict = B
         if server_name not in allowed_servers and tool_name not in allowed_tools:
             raise HTTPException(status_code=403, detail=f"Agent '{agent_id}' is not authorized to use MCP server '{server_name}'. Must be assigned by User.")
     
-    return await skills_engine.mcp.execute_mcp_tool(tool_name, arguments)
+    from backend.plugin_manager import get_plugin_manager
+    pm = get_plugin_manager()
+    try:
+        arguments = await pm.apply_before_tool_execute(tool_name, arguments, {"agent_id": agent_id})
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+    
+    raw_res = await skills_engine.mcp.execute_mcp_tool(tool_name, arguments)
+    return await pm.apply_after_tool_execute(tool_name, raw_res, {"agent_id": agent_id})
 
 @app.get("/api/v1/hud/telemetry")
 async def get_hud_telemetry():

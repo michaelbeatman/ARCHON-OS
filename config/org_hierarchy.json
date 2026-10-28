@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-27T18:11:02.289627",
+  "updated_at": "2026-10-28T18:40:07.601083",
   "nodes": [
     {
       "id": "executive_decision_architect",
@@ -990,8 +990,8 @@
       "name": "FinOps & LLM Cost Optimization Lead",
       "group": null,
       "category": "7. Tech, Software & Data",
-      "x": 1200,
-      "y": 140
+      "x": 20,
+      "y": 2580
     },
     {
       "id": "n8n_process_architect",
@@ -1244,16 +1244,16 @@
       "to": "sre_observability_engineer"
     },
     {
-      "from": "micha",
-      "to": "finops_cost_optimizer"
-    },
-    {
       "from": "executive_decision_architect",
       "to": "n8n_process_architect"
     },
     {
       "from": "executive_decision_architect",
       "to": "ai_governance_officer"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "finops_cost_optimizer"
     }
   ],
   "canvas_width": 3200,

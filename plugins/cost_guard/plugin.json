@@ -1,0 +1,47 @@
+{
+  "id": "archon.guard.cost_guard",
+  "name": "Cost & Token Guard",
+  "version": "1.1.0",
+  "description": "Überwacht das tägliche LLM-Budget, berechnet kumulierte Token-Kosten und warnt oder stoppt Agenten vor Budgetüberschreitungen.",
+  "author": "Archon Financial Ops",
+  "category": "security",
+  "default_enabled": true,
+  "permissions": ["system_info", "filesystem_write"],
+  "hooks": ["on_startup", "before_tool_execute", "on_task_completed"],
+  "entry_point": "plugin.py:CostGuardPlugin",
+  "settings_schema": {
+    "type": "object",
+    "properties": {
+      "daily_budget_usd": {
+        "type": "number",
+        "title": "Tagesbudget in USD ($)",
+        "default": 10.0
+      },
+      "alert_threshold_percent": {
+        "type": "number",
+        "title": "Warnschwelle (%)",
+        "default": 80.0
+      },
+      "block_on_exceeded": {
+        "type": "boolean",
+        "title": "Bei Budgetüberschreitung Anfragen blockieren",
+        "default": false
+      }
+    }
+  },
+  "default_config": {
+    "daily_budget_usd": 10.0,
+    "alert_threshold_percent": 80.0,
+    "block_on_exceeded": false
+  },
+  "tools": [
+    {
+      "name": "check_token_budget",
+      "description": "Gibt den aktuellen Tagesverbrauch an LLM-Token und das verbleibende Budget zurück.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ]
+}

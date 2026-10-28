@@ -1,0 +1,31 @@
+{
+  "id": "archon.security.audit_hook",
+  "name": "Security & Destructive Action Interceptor",
+  "version": "1.0.0",
+  "description": "Prüft Tool-Aufrufe und Terminal-Befehle vor der Ausführung auf destruktive Muster (rm -rf, Secret-Leaks, Directory Traversal) und protokolliert Audit-Ereignisse.",
+  "author": "Archon Security Team",
+  "category": "security",
+  "default_enabled": true,
+  "permissions": ["system_info"],
+  "hooks": ["before_tool_execute", "after_tool_execute", "on_message_received"],
+  "entry_point": "plugin.py:SecurityAuditPlugin",
+  "settings_schema": {
+    "type": "object",
+    "properties": {
+      "block_destructive_commands": {
+        "type": "boolean",
+        "title": "Destruktive Shell-Befehle automatisch blockieren",
+        "default": true
+      },
+      "mask_env_secrets": {
+        "type": "boolean",
+        "title": "Erkannte Tokens und API-Keys in Tool-Ausgaben maskieren",
+        "default": true
+      }
+    }
+  },
+  "default_config": {
+    "block_destructive_commands": true,
+    "mask_env_secrets": true
+  }
+}

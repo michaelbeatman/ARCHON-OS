@@ -41,7 +41,7 @@ CONFIG_TARGETS = [
 ]
 
 
-def _run_git(args: List[str], timeout: int = 15) -> Dict[str, Any]:
+def _run_git(args: List[str], timeout: int = 60) -> Dict[str, Any]:
     """Führt einen Git-Befehl sicher im Workspace-Verzeichnis aus."""
     try:
         env = os.environ.copy()
@@ -51,6 +51,8 @@ def _run_git(args: List[str], timeout: int = 15) -> Dict[str, Any]:
             "git",
             "-c", "safe.directory=*",
             "-c", "core.fileMode=false",
+            "-c", "core.checkstat=minimal",
+            "-c", "core.trustctime=false",
             "-c", "core.autocrlf=true",
             "-c", "core.fsmonitor=false",
             "-c", "credential.helper=",

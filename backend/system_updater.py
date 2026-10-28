@@ -156,7 +156,7 @@ def get_update_status() -> Dict[str, Any]:
     changed_files_count = len(status_check["stdout"].splitlines()) if dirty else 0
 
     # Remote Fetch ausführen
-    fetch_res = _run_git(["fetch", "origin", "main"], timeout=15)
+    fetch_res = _run_git(["fetch", "origin", "main"], timeout=30)
     if not fetch_res["success"]:
         return {
             "status": "offline_or_error",
@@ -378,13 +378,13 @@ def push_changes(commit_message: Optional[str] = None) -> Dict[str, Any]:
         return {"status": "error", "message": f"Git Commit fehlgeschlagen: {commit_res['stderr']}"}
 
     # 3. Pull rebase to ensure clean linear history
-    pull_res = _run_git(["pull", "origin", "main", "--rebase"], timeout=30)
+    pull_res = _run_git(["pull", "origin", "main", "--rebase"], timeout=60)
     if not pull_res["success"]:
-        _run_git(["rebase", "--abort"])
+        _run_git(["rebase", "--abort"], timeout=30)
         return {"status": "error", "message": f"Git Pull Rebase vor Push fehlgeschlagen: {pull_res['stderr']}"}
 
     # 4. Git Push
-    push_res = _run_git(["push", "origin", "main"], timeout=30)
+    push_res = _run_git(["push", "origin", "main"], timeout=60)
     if not push_res["success"]:
         return {"status": "error", "message": f"Git Push fehlgeschlagen: {push_res['stderr']}"}
 

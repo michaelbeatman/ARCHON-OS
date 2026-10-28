@@ -8829,29 +8829,39 @@ def api_get_research_dossier(filename: str):
 # --- SYSTEM UPDATE & RELEASE-LIFECYCLE (MEILENSTEIN 1) ---
 @app.get("/api/v1/system/update/check")
 def api_system_update_check():
+    import importlib
     from backend import system_updater
+    importlib.reload(system_updater)
     return system_updater.get_update_status()
 
 @app.post("/api/v1/system/update/push")
 def api_system_update_push(payload: dict = Body(default={})):
+    import importlib
     from backend import system_updater
+    importlib.reload(system_updater)
     msg = payload.get("message")
     return system_updater.push_changes(commit_message=msg)
 
 @app.post("/api/v1/system/update/apply")
 def api_system_update_apply(payload: dict = Body(default={})):
+    import importlib
     from backend import system_updater
+    importlib.reload(system_updater)
     make_backup = payload.get("backup", True)
     return system_updater.apply_update(make_backup=make_backup)
 
 @app.get("/api/v1/system/update/snapshots")
 def api_system_update_snapshots():
+    import importlib
     from backend import system_updater
+    importlib.reload(system_updater)
     return {"status": "success", "snapshots": system_updater.list_snapshots()}
 
 @app.post("/api/v1/system/update/rollback")
 def api_system_update_rollback(payload: dict = Body(...)):
+    import importlib
     from backend import system_updater
+    importlib.reload(system_updater)
     snapshot_id = payload.get("snapshot_id", "").strip()
     if not snapshot_id:
         raise HTTPException(status_code=400, detail="Snapshot-ID erforderlich.")
@@ -8859,7 +8869,9 @@ def api_system_update_rollback(payload: dict = Body(...)):
 
 @app.post("/api/v1/system/update/backup")
 def api_system_update_backup(payload: dict = Body(default={})):
+    import importlib
     from backend import system_updater
+    importlib.reload(system_updater)
     tag = payload.get("tag", "manual").strip() or "manual"
     return system_updater.create_snapshot(tag=tag)
 

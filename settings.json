@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +390,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,12 +410,322 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-10-29T09:14:49.202890",
+        "last_check": "2026-10-29T09:58:48.076536",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-10-29T09:14:49.202890",
+    "last_run": "2026-10-29T09:58:48.076536",
     "recent_findings": [
+      {
+        "id": "f36d73b515bba5d1",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "BASF stärkt Taiwans Chip-Zukunft mit starkem Signal - CHEMIE TECHNIK",
+        "link": "https://news.google.com/rss/articles/CBMi1AFBVV95cUxQQXFtR3FRLUptQ0owTG1kcVJ3WG92b1NtTGppMGRKNzgtY2pKcFlSaTYxT3ZGUzZKQUtxUUZRZ0x1T1VId1JoOG5QdWQ1aHhELUhfRUlxT1RrYTJrd3loZGhYS041M01FVGZ0MnpLa21JdlRENHBGd3FIeHQzQ0V5VXBGWnhRVXJJQkNHR25tNUdWQkw2V0lvUnNPRVZaZElJMmNQWHE1UWVmanhzV1lIWTg4OUVOaWxBa1N4eHRFRnh5ekI4b0NZa0xNbmpFTGZ1Y29oRA?oc=5",
+        "published": "Tue, 27 Oct 2026 11:43:11 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "01cb0689ada85c6d",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Wirtschaftsministerium: Referat für Wind- und Solarindustrie wird aufgelöst - Table.Briefings",
+        "link": "https://news.google.com/rss/articles/CBMirAFBVV95cUxPWHJwUDhMYV9iODJrR1FobzNPak51aWN5ZGtHWTVNVUhqZFpJMmpTUnMwUkVmQWhLODRnbklVMnVxMk9EMDhjZ1dTMU1ZTzIyemNlREdzUlB1d1pHcDRIVjNadUFWRFN2blVrTm9Ha3NXMjZoZzZqTlpTVk53VlplWDRsS0hZMlRpTHVuMnUwdVRlVlBkdXFZOEM2REZRSVQzQ3JvUkRVN2I5ald5?oc=5",
+        "published": "Tue, 06 Oct 2026 07:00:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "129dc817ce056e7e",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Invest in Germany Summit: Wirtschaftsministerium plant fünf Millionen Euro für Finanzgipfel - correctiv.org",
+        "link": "https://news.google.com/rss/articles/CBMitAFBVV95cUxPSFBaUW95RjJkaXUwS2VMMjV0VXVPdGMwMWM3b2I1LUVibnczOFZTd1k3aFc5MkJVbGh1d0I5MEwwaWN1T1NYc3Z4SE1sTWl4TVc5UzFVc2I3MXlxUkVaMHRJZ2dEaFo3NXhjbUQtWGhockZEU2Z2WkhsdnF3aTBYYWc0aTRiTkhVS2xHNFI5LXpxSGZLZU5zczlvT0ZNSHFKVHl4SmtXQXhiQ1BwNFdaT1MtdEg?oc=5",
+        "published": "Wed, 07 Oct 2026 07:00:00 GMT",
+        "detected_at": "29.10.2026 09:58",
+        "is_priority": true,
+        "matched_keywords": [
+          "invest in germany"
+        ]
+      },
+      {
+        "id": "5b427975dfdbcc91",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "BASF unterzeichnet Absichtserklärung mit Taiwans Wirtschaftsministerium zur Förderung der Halbleiterfertigung der nächsten Generation - MarketScreener Deutschland",
+        "link": "https://news.google.com/rss/articles/CBMi_AFBVV95cUxOOTFBUklybmpOOU82Y1dTSU1XN09LWDdISXNjZW4teFRXOEdGQ0R0RDFleDVnaS1ySkd2UlNyOTNwZXVMTjIxMUYtcnNCVXpQMDlhaXU2MGJJa3FOYWUxSkNhZV9OeEdsUWZPU3ZZUFVFdDFHUWRLbGlJRDBkdFViNm5qT1VUWjk2aUV2VDJNMzMybmdMbWFjMTg4NERveGhSMmEzNVFIa1VYSTBGc081amN2eGJXZ0VWVVJIc3RnTXBBNi1TVlI3LXRaZFZGNmlSeE11MHgzZUp3clhMeWhBSjN0RGF5eENFQ0lMZ18yZm9JSDZ2Wk1rTjl3R0E?oc=5",
+        "published": "Wed, 21 Oct 2026 03:07:00 GMT",
+        "detected_at": "29.10.2026 09:58",
+        "is_priority": true,
+        "matched_keywords": [
+          "halbleiter"
+        ]
+      },
+      {
+        "id": "83abc59d56a0a4d5",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Neues Investitionsprüfgesetz: Wirtschaftsministerium will Beteiligungen ab 15 Prozent prüfen - Mittelstand Nachrichten",
+        "link": "https://news.google.com/rss/articles/CBMi7AFBVV95cUxPZDlRTGJ0NTZzTnFNZXdwLUtLTlRzRE50QmdHZmJpc2ZPcXJvSlpaelVzeHRJMXVBOFlhT2prNUZFVjNKRXdtSFFLSzZYWlR3eUtxTU84QTJsVk91eWJiTFRNLUN0b2hWMGw0V1RvQWx0M29UZWNPMUp0b2NmUHRzc3ZBbExGM2x1a3QyUTg5MjlsakhkYmNxRGJ1NGdiNFJQb0c3UDdiNnB4UXBCOUx2bzFWZUxMOE84ZHZsS0VRTnlBMWk5N1l4VUpubWtvdWJlbFVfU05NQ0Q3M3J3V3pSQjRVSGVDWkFNdC1WMg?oc=5",
+        "published": "Thu, 01 Oct 2026 19:16:58 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "fdfe0e5097665b4c",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Katherina Reiche: Schon wieder neue Gutachter fürs Wirtschaftsministerium - WELT",
+        "link": "https://news.google.com/rss/articles/CBMi2AFBVV95cUxQN0gtSGNyNlJLTTM4aUFNUzNBa3BhOTd4Q1BpM0F6UV8waEsxbnBfd1dPVHhYaWFSSVA5TDU0dXdHQk5iQS1walFONFJtcDZ4LXVQT0M0aF8tX1hlSm5CVmlOazQ1ZDZmWElqeG5mNVNkN0ZmVXU1WHRPZVE1dmZUeVBtRUQ2OUIwYTJOTk12bTljT1NwTEJLQWxvdU9lblRfRGtYVHlnaVZNMExuU3JtbWctbUFvdk9WeXNObm02NFJQekhUWmdscWpJVUt6bVBRWkktWUxXcVM?oc=5",
+        "published": "Thu, 16 Jul 2026 07:00:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "1241d53daeb4d261",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Österreichs Wirtschaftsministerium kündigt Speicher-Offensive an und umreißt Pläne für neue Solarförderung - pv magazine Deutschland",
+        "link": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxQRWw2Y21aX1NacFRoblRMV1F6enYzbUFLQ0s0UWZVZklRVXM0ZWk3ZmoxbmN5VTR1ZjlqcngzZnpuMk1JTGs1dUQ2d3F2SkF5OGVQdWRRVWU5OXBBS0gxMkgzRUpaZ2dqdWYtREMzN1IxU0ZmbEs1cFdlRXRURXZDd2lfa1Q3QUNmaURUS00wcG5lQWNtUHFXMjJzY3ZRZFpKU0JoNXVWOUtnUGpNYzY1M2V6X1QtRmVxTFN2UkVjS2ZMTGtlV1Y0OWwzRTl3dWJCbVNONXVfMEpiYlV0ejh3a1ZvZGI1dw?oc=5",
+        "published": "Fri, 21 Aug 2026 07:00:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "6baa9987393c6098",
+        "target_id": "src-gtai",
+        "target_name": "GTAI (Germany Trade & Invest)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Wirtschaft in Zypern - Germany Trade & Invest (GTAI)",
+        "link": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFAyUGlMdXAweDdXNjZrQnpobEJSNkpRZDBBd3I5amk5bU40NmRUVkV3Qjlrc1R4Nmh6c0VCeGhwUUVmTnpObGN5cllLblhNZzRDWnFaVHZrUGxPdw?oc=5",
+        "published": "Sat, 27 Apr 2024 07:42:38 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "f9c02ecbb15388b9",
+        "target_id": "src-gtai",
+        "target_name": "GTAI (Germany Trade & Invest)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Wirtschaft in Brasilien - Germany Trade & Invest (GTAI)",
+        "link": "https://news.google.com/rss/articles/CBMiXkFVX3lxTE5YbTQ0Wlh4YmNyWTBBanlaS2tmeXduYlVRcjhmaEZ6eEIzdEJDSkQ5NGpqWUxvSmJzWmJkZHNua2MyNWRlcGU2OGNFZU1ENE1JRzdlUlkxMi1rcjNaOWc?oc=5",
+        "published": "Tue, 23 Apr 2024 00:38:03 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "91f95616041b1686",
+        "target_id": "src-gtai",
+        "target_name": "GTAI (Germany Trade & Invest)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Wirtschaft in Marokko - Germany Trade & Invest (GTAI)",
+        "link": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE9DSzZveGRvQS1GLUZXd3p2T3E2anhnOU1VeE45LXRnbzBfZTFFZTlNV1hxVWcwNHg1SWs4alNTc1RMbFdvcXd2S0NyNHRGdU82ak5VeVRhOGJBZUk?oc=5",
+        "published": "Tue, 23 Apr 2024 12:19:35 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "d78cae82d1be2acf",
+        "target_id": "src-gtai",
+        "target_name": "GTAI (Germany Trade & Invest)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Global Gateway Investment Hub: Deutsche Anlaufstelle - Germany Trade & Invest (GTAI)",
+        "link": "https://news.google.com/rss/articles/CBMidkFVX3lxTE9mdnUwVmFOTXZ2Y2RCR040b1NvLUk2ZExZMk1RZmFvczBldFQya3VXR05ieVdmWlRKSF9sZk1la3pTM3MtWHBBV3U4d25WWC1Xa2VBd1ktbGtMZEFWT1FzZlk4TU5QemQwa2FwcVpmdkM4V0FvUlE?oc=5",
+        "published": "Fri, 23 Jan 2026 00:15:39 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "4086ba22caf005a1",
+        "target_id": "src-gtai",
+        "target_name": "GTAI (Germany Trade & Invest)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Wirtschaft in Frankreich - Germany Trade & Invest (GTAI)",
+        "link": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE1RRVhxMU5TM0sybUNkel9Td1J3UEczSXRMczRHY2xBZXh2c2l0cC1aUmFNSVlLdlBxVUIxOHJTbEc0U3dpQzBlOGowd0ZCRG9UXzlVR0pJU1dmN1RNcXBZ?oc=5",
+        "published": "Wed, 24 Apr 2024 13:34:58 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "9ad4c96fdd33e96d",
+        "target_id": "src-invest-radar",
+        "target_name": "High-Impact Investitions-Radar",
+        "category": "Investitionen & Geopolitik",
+        "title": "Asienreise von Merz: Neue Partner gegen Chinas Dominanz - ZDFheute",
+        "link": "https://news.google.com/rss/articles/CBMihgFBVV95cUxORGQ2WTRiXzEyTHhKaWdPSVBHMkxsVElSNFp2SDZpRDNXNzNRalZPQlM3a2tsUnM1Skt6ZFIzZnBIUDJ1RWRuQWhub015NVg5Y0U5SVVkQ2tCSHhTMERRb2lpMTNJLVNHZ29yMm44SkVlTVdqb3JaRjdlS1NTWVA5dDFqNnI1dw?oc=5",
+        "published": "Tue, 27 Oct 2026 13:01:00 GMT",
+        "detected_at": "29.10.2026 09:58",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
+      },
+      {
+        "id": "584ae3ddc9d1983b",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Spritpreise: Wo kommt am meisten vom Tankrabatt bei den Autofahrern an?",
+        "link": "https://www.handelsblatt.com/politik/spritpreise-so-viel-tankrabatt-kommt-bei-autofahrern-tatsaechlich-an/100263312.html",
+        "published": "Thu, 29 Oct 2026 09:34:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "9ba012dd1e6935d2",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ Ukraine-Krieg +++: Ukrainer und Russen bereiten Evakuierung von Oleschky vor",
+        "link": "https://www.handelsblatt.com/politik/international/ukraine-ukrainer-und-russen-bereiten-evakuierung-vonoleschky-vor/27982126.html",
+        "published": "Thu, 29 Oct 2026 09:31:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "d4420f1bff26a52d",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "AfD-Leaks: Ein Lichtkünstler gegen rechts, der für die AfD leuchtete",
+        "link": "https://www.handelsblatt.com/politik/deutschland/afd-leaks-ein-lichtkuenstler-gegen-rechts-der-fuer-die-afd-leuchtete/100265652.html",
+        "published": "Thu, 29 Oct 2026 09:21:06 GMT",
+        "detected_at": "29.10.2026 09:58",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
+      },
+      {
+        "id": "01a169c2fc21eed4",
+        "target_id": "src-reuters",
+        "target_name": "Reuters Business (Globale Märkte)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Ulrich Reuter: Sparkassen-Präsident sieht Aufschwung als Mittel gegen Polarisierung - DIE ZEIT",
+        "link": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxPSFBSN3BtdlRmdWlWYVM2ZjUwY1RzVjdQbnZzNDlXaHZiRmdRTEVDOThGcUl5bEVUUTM0Z0wwTGwyZzRDdzFjMm1SN0ZUUVYtb1prUmU4cTNsRmVTVVB0eGlacW1IbldBUVVGRzRCU1IxcmlYX2pIaVBSVGU3V1BUWWJVNzRZRk1zSFB6SDlvdkVZRGhoR2c3YTVwcGltTk8wN3FaSXg2ckVDZms?oc=5",
+        "published": "Thu, 15 Oct 2026 07:00:00 GMT",
+        "detected_at": "29.10.2026 09:58",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
+      },
+      {
+        "id": "56c94bb7b94c598a",
+        "target_id": "src-reuters",
+        "target_name": "Reuters Business (Globale Märkte)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "BASF Aktie: Evonik-Offerte laut Reuters erhöht - Börse Express",
+        "link": "https://news.google.com/rss/articles/CBMinwFBVV95cUxQeGgzRlZUU3kzZ2J5V2N2bjVSOVN3RlNrNFhibVVuTU9wcDNIeWtKby1weklRUXN2MS12Z041OW01QVhNdE5ZeGhRZXhlUkRVRE9VTTB6RzJwdVZveW8wSFA0eHhjWW0yTkVsSlc4OGFjQWhndlc5VWlfVTkxa3VOTjJzczhaclFOLUV2cVJEdVc3NEFzTTl5N1drZFQ5ZWs?oc=5",
+        "published": "Fri, 23 Oct 2026 23:02:06 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "53ac8ebeda665c42",
+        "target_id": "src-reuters",
+        "target_name": "Reuters Business (Globale Märkte)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Reuters-Umfrage: 100 % der Experten gehen davon aus, dass die Fed die Zinsen im Dezember anheben wird, im Oktober aber möglicherweise pausieren wird. - Vietnam.vn",
+        "link": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNQmowbUx3MWE5VEJLVl84ZDJCYWowdTVuaEY0RzY0dWtsdzhmWktJbUs4Z25jUU1XYkg5MVRnLXJzZk1mYWxMQV9hdTVTLW5iT1ZVbVRpMzVVMTROSURlWjRBRG5vMUcyckZzT0hpMHh6TmFVQkc3ajQzb2VURGp4M3FIVVJ0UkFSVzhRNnptcFFkUnRwNk44RThZNXNBOWJMX2puVWtpd0t1YndETkEzeUlWTEtWQk5aX3JiMg?oc=5",
+        "published": "Wed, 21 Oct 2026 07:00:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "8b459cbc47eb134e",
+        "target_id": "src-reuters",
+        "target_name": "Reuters Business (Globale Märkte)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Shein: Investoren zweifeln an Bewertung - viel zu hoch - Manager Magazin",
+        "link": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxPLVFCSXBnS1JHZmluWGJ4OWlNZm56cDl1X0UwdVZVOGVIbUtmN0t4U1paSDhBaUtuU0VUSTZEZEgzOFVUZDdzQmh4VlBUWWdEcEh5WjdOS0w2SjhiS3JWZ3NoR0ZqeFBOVGU1OHNNSzdhZ0w1OFdZZWNtYzMxeWpNUW5XZnh2RDdyZjMxbkVlLV9nQUpseEpBbFpYSFdFMmJCTVlMQWZfMi14ZGVkWVJYNTI3OHZHeHBJM0xUeHBDamdUVHRERzh0bkZnVGJycDdVZFJfNGhQaw?oc=5",
+        "published": "Thu, 13 Aug 2026 07:00:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "5e2e0924af3a1250",
+        "target_id": "src-reuters",
+        "target_name": "Reuters Business (Globale Märkte)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Anthropic plant Billionen-Börsengang – trotz acht Milliarden Dollar Verlust - FAZ",
+        "link": "https://news.google.com/rss/articles/CBMi7gFBVV95cUxNTUVESFQtLUdUY1pGNC16aElKM1JueWZHaURLY0phM0s3cXVWVDdNTmRQQk9rVGRRV2dzeFp5T19JVmtXMDMyUlotby1aS2l4QS1Jb1huamNtQ3o0bmxWdXJoM3N0cmVLZGlGa1FHS3owYTh3SzBub0p3a2ZwT2NUQWRObm1xSU05cjRHU2JnQkNGdXBWWGVwd05rb0NGSzJ5a3NMbHNRNUZPNUM5N1Q5anV4UHBualNYTXVDMm9vUzNMQUEwcjFjaGt4VVgwUHNuVHdxOGZqRFNBRmUxTENoNXZkci04VWhjTnF3QTVn?oc=5",
+        "published": "Tue, 29 Sep 2026 07:00:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "0a14941b06d15d5e",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "ROUNDUP: Vonovia wird vorsichtiger - Hohe Zinsen belasten Immobilenverkäufe - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxOMHpLXzE1ci0weGgwa3pEcGNweWtvSlpxOXB2cUNsaUxid2RxSktrcGRQcTFmMlA3anJzc3RCQWpfakRzQnlTQ1F6Uk02RUY5dnJqZ2ItSDRabkE5ZmNVVVl6WDZqOEMyVkJHNGpnMlhDdl9yQnJxUTNXZ0oxMTYwa3UxRmFkWUg4TzFkY1N4UmtwSE9WWHBfd29pVE9renBxTXhvVUtoOFlFcjBxalI1NXlNSF9ZdlRiMzJseDJVYklSdw?oc=5",
+        "published": "Thu, 29 Oct 2026 09:49:38 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "0fd4d940b9b6d213",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "DAX 40-Wert SAP SE-Aktie: So viel hätte eine Investition in SAP SE von vor 5 Jahren abgeworfen - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxNMXRIUnB3a25KSkp1a090UnZiZHU3c19nVGs5ajQ5QmpXS1NfQVROaU5Gd04zUVFWcEVXQ1VSOEhZcnFvbDVJZ3JhenFtRW5tZzI5V3NSUDAwaDFqWmUyUENadHREMWVwMXgyMXJLc2x5N2RpakxubXpZTkhDa0QxMkE2ODhkNUJIR0sxOXpGeXBfbFVVcUtVOFJpUjBzWTl4V0FXT3NMWktTMkp0RjJ6alB6c2ZQaXUwMU5GbWxiRGh3NkRaczAwU0pfMHRMZHNEVEY0OUlmWjU1X0RFbXc?oc=5",
+        "published": "Thu, 29 Oct 2026 09:16:39 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "77ff863d9894bdad",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Volkswagen meldet 5,82 Milliarden Euro Quartalsverlust",
+        "link": "https://www.heise.de/news/Volkswagen-meldet-5-82-Milliarden-Euro-Quartalsverlust-11504313.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-10-29T10:36:00+01:00",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "5db13862ea7a45d4",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Samsung gibt groben Ausblick auf Galaxy S27 und Produktroadmap 2027",
+        "link": "https://www.heise.de/news/Samsung-gibt-groben-Ausblick-auf-Galaxy-S27-und-Produktroadmap-2027-11504263.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-10-29T10:33:00+01:00",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "77a40e02969b0fde",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise+ | Datenarchitektur als Schlüssel für erfolgreiche Transformationsprojekte",
+        "link": "https://www.heise.de/hintergrund/Datenarchitektur-als-Schluessel-fuer-erfolgreiche-Transformationsprojekte-11501475.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
+        "published": "2026-10-29T10:30:00+01:00",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "1a2094b8da9e47db",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Ubuntu Core Desktop ist zurück – fürs Web, Entwickler und Gamer",
+        "link": "https://www.heise.de/news/Ubuntu-Core-Desktop-ist-zurueck-fuers-Web-Entwickler-und-Gamer-11504219.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-10-29T10:25:00+01:00",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "d0ff76495dbb0dde",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "KI-Investitionen tragen nicht überall Früchte",
+        "link": "https://www.tagesschau.de/wirtschaft/unternehmen/microsoft-alphabet-kuenstliche-intelligenz-cloud-100.html",
+        "published": "Thu, 29 Oct 2026 10:28:06 +0100",
+        "detected_at": "29.10.2026 09:58"
+      },
+      {
+        "id": "546ac6894f88799e",
+        "target_id": "src-spektrum",
+        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "title": "Hera-Mission: Raumsonde Hera nimmt erstes Detailbild vom Zielobjekt auf - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMimgFBVV95cUxORHItZjB1aC00THNLTDNveVoyTnl3WU5qT0tTRC1NUmo1MXU2amtEa0duSWoyNy11eW5FM2J0eGZEOGtGYlNZTG5oclhqR0xQMUdUQzRtX1JXOEFhckFEUXM3Z3YwZGppTjBPM1llNHFEM1FaMWN1c25mY2Z5LWNsS1dUNjZtcXZRbjNtdlgyQkxHREo5Y040cmxB?oc=5",
+        "published": "Wed, 28 Oct 2026 15:00:00 GMT",
+        "detected_at": "29.10.2026 09:58"
+      },
       {
         "id": "f998345d08670ae1",
         "target_id": "src-bundesregierung",
@@ -428,333 +738,6 @@
         "is_priority": true,
         "matched_keywords": [
           "invest in germany"
-        ]
-      },
-      {
-        "id": "87add3190bb3846d",
-        "target_id": "src-bundesbank",
-        "target_name": "Deutsche Bundesbank (Presse & Daten)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Monatsbericht – April 2025 - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMi6wJBVV95cUxNVjRIdVZPeGJXMFoyM1Q4MWZON0pncTN6N3JEZ3BLSFVXZHFFcFNIMlpicDFnQjlKNFdWTlFIbllhWnktQ3pPaTJDOEwxMnV1aGVxdVBlZmcwNzVfSmdXd2JiVHJkLVJscGNySEVBS2FrVWdfN0t2UmUyMjBnS3R3ZDFRaExGbEczWGtpbDlwdFVPLWp2My1pbExyU1A1NmMwSVN2eFljcGxTajNDTjRNeWx5T0dUMEUzOU9Dc3E2bTBDQWN4bWVNeU90ZjNHVW1FOTdYZXRFYXJMdmdJUnBDMGNVUmJzMEZYOGktS3hVTDUtVmNkNjZKWVBUdG4xYjlDTWFlYjFja2tfX0EwX1daNHl2QkEzQzVGcGdGc0NEY19OSXZRMkxIMUdWa0V4TExqbWxPRUFMWFMxV2JQd0VBZWk1a1hjMDhDamtMTkVzOVJnSjJxTUNHTUdDTG5CRnktRkZvMVRoVFA0SVE?oc=5",
-        "published": "Thu, 24 Apr 2025 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:14"
-      },
-      {
-        "id": "a18f626f3e827203",
-        "target_id": "src-bundesbank",
-        "target_name": "Deutsche Bundesbank (Presse & Daten)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Kurzbericht: Konjunkturlage - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE9yYTVHeGFuWkN6TEJJYnlibFFZa2RIREJRYWtsdmVQSUNGbklxcGgxU1NIYktGYTFYUGVlYXR2cFM2ZXY1SlFPVVNBRWlXeHBMaVRzdy1saHNkOG9zUmh2Mg?oc=5",
-        "published": "Mon, 21 Sep 2026 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:14"
-      },
-      {
-        "id": "b97559e31a325f7b",
-        "target_id": "src-bundesbank",
-        "target_name": "Deutsche Bundesbank (Presse & Daten)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Pressemitteilung Tenderergebnis Aufstockung Bundesschatzanweisungen - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxNVzVuQmRKU1VTREVPdm1rMzJnb3dNaFlSX2hzeElnY3pzZ1VqNXBENDdVeXNZaWFqd1V1ZUpObk5YcWY2YUV3dUczWnZnYXgzLW1RaVJGcEZLUXpsaDFuQUJwRHVMN2c0ZGtNbW9UbGVHNEtGUEVZUU5OMGNmU3ZjNUtESURZbFlGMGJ1QV81bVhRMnBXeEstTVlTRzlqb2pMc180VGUzQ083MWhpV1ZtRzh1eExxUlREOUVOU3RydXRlcHZZYVc0THFyT2paX3Y5N2hSa1Q1cURZU0FoWnRmU1NvMDR2dw?oc=5",
-        "published": "Tue, 27 Oct 2026 10:41:09 GMT",
-        "detected_at": "29.10.2026 09:14"
-      },
-      {
-        "id": "b787d20bfcdc4046",
-        "target_id": "src-bundesbank",
-        "target_name": "Deutsche Bundesbank (Presse & Daten)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Kurzbericht: Konjunkturlage - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE96RGxFRGdKcXUzSnhJX3NpcW4tRjg2aU96T3pTSGlScG9pNnJ6Z0JkZXVPRmhVZVNlcWJKWWpOdUc0Qm1XM3RzMXo3a3R4c29hQVpLMkdhQVNxVzBlZVI1Ng?oc=5",
-        "published": "Wed, 21 Oct 2026 10:00:00 GMT",
-        "detected_at": "29.10.2026 09:14"
-      },
-      {
-        "id": "f1279cf18c441068",
-        "target_id": "src-bundesbank",
-        "target_name": "Deutsche Bundesbank (Presse & Daten)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Deutsche Bundesbank Monatsbericht 22.10.2026 16• - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMixwFBVV95cUxON2xyc2xZRi1uaVJyUXQ3cnBrMDVxWjJhR1kyNzk5LVFERTlnQ1FGNDllek1GemgwcGNJQlRqMzZEc24xeW0wdVItbC1EMS1QUUFWVG5XMFFaV0stbFh2aXRGdnJNNlZQUUpKejBIUXhXaEU5Sk9BNmRfVHo0UzVELVlkTDhxQlN1ZS15NG1Ub0xGZWdlSkpaV2VIT1Bfem5sQU5yZ2NIYW5kcTlvRDl1cy1nWFFBNVRCejlzZW1COXZZMlNDQkZF?oc=5",
-        "published": "Thu, 22 Oct 2026 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:14"
-      },
-      {
-        "id": "ec7cd027cf8abf18",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Vorsicht, Denkfalle!: Kann ich nicht, mag ich nicht - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMipwFBVV95cUxPd29NeU5sNVVaTmVHaDFKV1JkenRCRldHQmVNNGJTTm1WaXNnZE0teUJieE00d3lkckFBVnJKdmxUZDJSakU5RmRDS1RMNmUyeXY4MFZyMXlQcjJIcmtPZzVPV3A0aGF0QWdxOU5KR0s4dFhQNkUxYkloN1hTaWFJWTBuZVVNak5WWnFjRkhHeldSMTVLMHM2bF9sTnAzcnlTaEdCeGNhMA?oc=5",
-        "published": "Sat, 24 Oct 2026 13:00:00 GMT",
-        "detected_at": "29.10.2026 09:14"
-      },
-      {
-        "id": "e8a2ce6875e01bfd",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "heise-Angebot: iX-Workshop: Mehr Tempo beim Coding – mit KI-Assistenten effizient programmieren",
-        "link": "https://www.heise.de/news/iX-Workshop-Mehr-Tempo-beim-Coding-mit-KI-Assistenten-effizient-programmieren-11480226.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-10-29T10:00:00+01:00",
-        "detected_at": "29.10.2026 09:11"
-      },
-      {
-        "id": "8542a015cfb90676",
-        "target_id": "src-bundesregierung",
-        "target_name": "Bundesregierung (Presse & Gipfel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Invest in Germany-Summit in Berlin - Bundesregierung",
-        "link": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOSzRYRjExY2xMZThTMUpvVzhITXNwdTByTGYzWEJSN0lPdVNoOWEtNFl4dHRkZ29vQ29TUjYzOGNhNTQ4ZGZLMnR1TGNyeXh4MlBUY1lKZ2ZlZ1dMOWE1VGVRRmlGZHZKRElHcG50UC03R3FfOTlfQ1hQdXhXdVNHSnpRRXo2TjF5?oc=5",
-        "published": "Mon, 19 Oct 2026 14:24:51 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "invest in germany"
-        ]
-      },
-      {
-        "id": "03698643fe1ecb0f",
-        "target_id": "src-bundesregierung",
-        "target_name": "Bundesregierung (Presse & Gipfel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Pressestatements nach dem Invest in Germany-Summit - Bundesregierung",
-        "link": "https://news.google.com/rss/articles/CBMijgFBVV95cUxPMjlKRnFIaXBxN2ZKTUxlbHcxQ3hoOUNGSnItdHBENmM4TThUUzFKR2RTRktuR0JNbGhHc0M1NjhVQVRRemNQMnB1ZFFTeklROERaQ19BMmVVVGdCTWE1Y1BzbGl0UHduRW0tMVdQcVFXLTZ6WWFVZmJESzZ5czIzcERsbWd4cUxqMXJXQmRB?oc=5",
-        "published": "Tue, 20 Oct 2026 17:37:20 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "invest in germany"
-        ]
-      },
-      {
-        "id": "5bb3eb3bd1747b32",
-        "target_id": "src-bundesregierung",
-        "target_name": "Bundesregierung (Presse & Gipfel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Bundeskanzler bei „Invest in Germany Summit“ - Bundesregierung",
-        "link": "https://news.google.com/rss/articles/CBMisAFBVV95cUxNZ3VMZ0lKLVV4SjJXTGhjUTdRbVRZcVVXT25uUnJiZlQxTXRkXzhNbTNsLWE1TmhIOTZ3N3VncGhtQmdSZmh0Z1FaR3ktclZIdW1HSkVYdnM0b3NKVG5HSXl0UlNzcF9LbzN2TFhPbXVHWlF4eFgzeEpSTi1aYTdOeXFCaWNuUGZCQWNNUS1WSFNNOFduR21VQkRCNFpobnpucV9iLThRWXQ5eFBxQnR4OQ?oc=5",
-        "published": "Tue, 20 Oct 2026 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "invest in germany"
-        ]
-      },
-      {
-        "id": "3231f4ec2336831b",
-        "target_id": "src-bundesregierung",
-        "target_name": "Bundesregierung (Presse & Gipfel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Wirtschaftspolitik im Zeichen der Nachhaltigkeit - bundesregierung.de",
-        "link": "https://news.google.com/rss/articles/CBMi7gFBVV95cUxQNTFqcjV3Z1gydUtWNDc0SUI3MWtyb2FhR2NXOFRteVhEOTc2LXF5T3FLMlhXLUtkYXVkbDFqbmhwX1gteGllN29ZS2FhSDV4Qk1jZ1JuZ2NORUM2VmM2TTVXUjY3eF9fNl9kekJWdTY1eEU1QzBva0F6VkMtNzlaNlBKU3FUYzFsWHVpTDhrRXFleFlhdDZyQU42cm9XQjVYcGpCaTF6VjZkOFZ2S2I4ZjJIT3ZNZjlYYWkxMDZMRVZvSWRGNW9RNkg1bG50S1cyZndmTFB2ZC1SdlJKLTRINkE1b0VsTWRpMEZTTmxR?oc=5",
-        "published": "Thu, 20 Feb 2025 08:00:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "2d8b8721f5fe4f89",
-        "target_id": "src-bundesregierung",
-        "target_name": "Bundesregierung (Presse & Gipfel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Das Erbe Ludwig Erhards - Herausforderung an die Wirtschaftspolitik - Rede des Bundeskanzlers auf der Festveranstaltung zum 90. Geburtstag von Professor Dr. Ludwig Erhard - www.bundesregierung.de",
-        "link": "https://news.google.com/rss/articles/CBMi5gJBVV95cUxPN3VRS2o4cG5wUTJtQWoycE9JU0MxYXVJRjRJdThrclU1LW5OTWlQTGdQZFo4VjluMnpPSzhxWnkzckhLZ0puYklpOEY3WDNVcUYxZXdPMXMtS0ROV2RKMU9PMzNVOEhOcTNHM25MV1RyZG83ckxJTTJoakVId21fbXg5Ymo0cEY5U0U1ckMxY1RuRDBSWGo1a1ZnT0p0UjRWSmZrcWtWRXVmNzVzT1cxNFZXSGZmUGtHVS1jWlFKck9peV9qZl9KY2NtdDUxbW5zTnkxS1RwdGF1UWs3eWJsZklVaFd5bVFkSWlaeWk1eEhpdWtrRnlQQXQ2Y2xUbFZBTWNxZFV2VG42WTRNa3BOeE5uQnlpOEdKdEIxR3V2UF95LXF3UHYyWVJJUlgyVnUwdFNCQkRsRTRpdXhyZkc0aTNmQXZ4Q0hZNFJzRWhuclFmNXczLUdneXZlMC1iLUpzazQ5OG5n?oc=5",
-        "published": "Sun, 18 Feb 2024 07:37:56 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "89b130ba9ae37cbc",
-        "target_id": "src-bundesregierung",
-        "target_name": "Bundesregierung (Presse & Gipfel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Neues Wirtschaftswachstum und gute Arbeit - Bundesregierung",
-        "link": "https://news.google.com/rss/articles/CBMiigFBVV95cUxQNWx6X0daaHAwSG0yMzJaNkNfeG02anlQaXA2TGtZb0Ftam5NZDIwb01lYV9JdEJvN2F1R0ZEYUlkWkU0Tmh3dEpsU05CV1I4OW12ZUZBSUxzTHM3UXBkZ3JRS0NkY0p0TVlWbkExcFhvbEJCSXpyQkktaVVpZDZGU2JWazd2Qk9RWXc?oc=5",
-        "published": "Thu, 10 Sep 2026 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "badd2aeeffc2fa9c",
-        "target_id": "src-bundesregierung",
-        "target_name": "Bundesregierung (Presse & Gipfel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Organisationsplan BKAmt 2026 09 07 - bundesregierung.de",
-        "link": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxOZGR0cUlYUkc3VDE5d3c4Q1FYRWFPOWx5dDR3eG51VFhKdUQ1Y0g2R2NxR3BMdFRGQVhJRnJIT3BIOUlQb1IzbTNJLThXYXRLbkE3aURMcVpOWF9Uemp4NE9jNnY2aFVVS1VoMlUyNklyTjJnaURILW9jUzN6YnBLbmY4WDNRWmJMT216eWpvUkkzUG9uMjJUdmxXcEE2QUNNamNNQWJZREc3aW5mZFJvdTZ5ejBYcmEySExBbmgzMEhBcTI3S29sb1YxN3lWb2loN3YyVmpOUHRQUQ?oc=5",
-        "published": "Mon, 07 Sep 2026 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "c1b316e4c2c7a8b6",
-        "target_id": "src-bundesregierung",
-        "target_name": "Bundesregierung (Presse & Gipfel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Kabinett beschließt FSP - bundesregierung.de",
-        "link": "https://news.google.com/rss/articles/CBMisAFBVV95cUxOVkFEdG50aWUyRXNVTEJsR19CbkRJYlFtUV90S3pPZDBhblktRko1TktqZXRDbW8wYXRsVGU5N3A5dGNBYVlDRVJLM1pGcno4ZjRIYm9odXN5azM1bXFEdzV6eEhKSEpwdlJ2bEJ2SmxsdnE2Rk5RbHFMd3FsV24yd1QwWHNfSkNOMEJoX2R2NXRiSHZFMW01ak00NTZDNzhnRHk4OWpmdWNYdU1OVWNoVg?oc=5",
-        "published": "Wed, 16 Jul 2025 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "50cd0198986b4a9e",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Nachbarn hängen Deutschlands Industrie ab: Jetzt reagiert das Wirtschaftsministerium - Berliner Zeitung",
-        "link": "https://news.google.com/rss/articles/CBMizgFBVV95cUxPOHNDV2JFTWgwR0hFcXVONG10UmJ4Z25BaGRYLWtIZWRkZzdVWFJzLTJ2RHlZWW9mM2ZUNlpwOFpCYVlDV1VTVWhsVV8yM3I1T0MwS1F3c0tEQmRvdjhkUU1TUlc2WmRjeHdxQktybWs5Tm5MRWprUnJYVmExeDNPSDc3cm8wdTBCN0M1UFdBY180bHJ6Q1VaXzJrSFJhRWNkNFNhcEhZbHlhZzhpLXB3ZzNDVjkxdm9rSEVBQURaclBJaXlERmxUX1RSNFZFZw?oc=5",
-        "published": "Fri, 23 Oct 2026 14:35:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "eeb932f28ed5c555",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Wirtschaftsministerium verurteilt Anvisierung einer Zementfabrik südlich von Hamdan durch den saudischen Feind - وكالة سبأ",
-        "link": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1sWnktaENnYWx6aTItcUpxcThhVTludEh3ajBYWHJudUZLSUxFcHl0RHNKTjR1d0hRWnZFdEVjREpqMFlfS29tSURNRHZQWlk?oc=5",
-        "published": "Sat, 24 Oct 2026 19:47:24 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "c28e3181f3d73e05",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Wirtschaftsministerium plant Förderstopp für kleine Solaranlagen - MDR.de",
-        "link": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxNTjQ4d2xVVkM4SWFDRzhCLTZUdi1EWHpwbUh5TGpMVlVqZWZqTy1rVmhWTW9FUHd1Yk41elpUTlRzcGgzS2oxcnVUVF9maldzWWVfOTJudFJ6OWhLcERZb1M4VXRnTDdaU3RPbVlmMnZwU09PNTdiTTVWV0NxYnc1Q1o0YXVnZGYzLUZoNVZpRXplLXpuOWlONUlMbHVJSUE2N0JkNVZ2VU90VXcydFFpQkQwRVk1NDh0T1RMOHRBaFBSZl9zRVpoaURkOG56UnF0d2V3LWhudmc3NGJzVmhySHFGUQ?oc=5",
-        "published": "Fri, 27 Feb 2026 08:00:00 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "förderstopp"
-        ]
-      },
-      {
-        "id": "555c684aae5a2d16",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Reiche will Förderung für kleine PV-Anlagen streichen - FAZ",
-        "link": "https://news.google.com/rss/articles/CBMixgFBVV95cUxPWktPUmlYa3FiMDlaMTBHVVpxS2ZvZ0UyUU1jV0JvN3RtZnZkd1lHNHRRU1puUDdRUW9wSjBROVpPbGZNdHlxOHBLWE9rMU1qZWxJT3BlQ3RMSTV4NGxzUm9uRG05ZWM5TFRNYks0dWZ1VEtUU0NUWmE5NGxnWVZwaU1lLTRMc0tGeXViZHB2NEJ4d3ZCYWRpTEFlVWxCaGV2amxZYWw1U1c4LWozNThOS1ZIaW5sM3FLMllLaFVSVnNWUGpaanc?oc=5",
-        "published": "Thu, 26 Feb 2026 08:00:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "499db360eecf15e1",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Erneuerbare Energien - Wirtschaftsministerium will Förderung kleinerer Solaranlagen streichen - Deutschlandfunk",
-        "link": "https://news.google.com/rss/articles/CBMisAFBVV95cUxQc3VWc0pob19ldmhFa0FWcTVRbjlIZ3J5X2pjRi1aMVJ4WXFZaWNLakxrcUhZRW80a2ZLRlFRSXd4U1hiQzBPN0lIcjM0b3FsdUlsc2Z1Q0hNZ3VNQ29sZ1VjVEpCdkFuUDhpM2ExX0hnbE5CVEtiQUVHR2F4eUxVNXY1eTN5WnpXc2ZyZ25BcDN0ZS04cEpRMzhFMncxNjVGaXFxM0RLc09oSWNYa3R1Uw?oc=5",
-        "published": "Fri, 27 Feb 2026 08:00:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "3358359866364547",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Künstliche Intelligenz - Bundesministerium für Wirtschaft und Energie",
-        "link": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxQWm9iZ0Nta0lwQi0tM1FONWhvV2szejFtUzU2TkExM1ZQVk5ZTUZGTTIzQUZHdjZfRjduVjhhOVBwdHJXQWozcjNEUlhKVi1Obm53VlF0eTlJUTdmZHZzRS1wb3hIZ3Z6SlF1SXQ1TGZJLVl3emhKc0ZuT0ZfNnY4cEVQeDdFYVQ1TWxWT0pTeTRkMTFkZGNOVXBsNWtsUHp4VFI1bjQzbGE?oc=5",
-        "published": "Wed, 25 Jun 2025 09:03:26 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "eb93060f308327c6",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "NRW: Warum Verteidigung erstmals ein Hauptthema in der Innovationsstrategie 2028–2034 ist - Table.Briefings",
-        "link": "https://news.google.com/rss/articles/CBMivwFBVV95cUxQWFhhTHhSaGtUMThNMkVtQ3hDZEwwVGZIWVNPd3IySG9sdW1KRkRfX0x1WkJOaGVfRmRZZU5fQlZyUWw0ZHB6YjM2ZEpUWlVQU3JOVVVmS1BNN3hlMkNuMERIWE9Ya0U2dndKNzY3LVg4c0d1RUZlM2Z3NXdOY3Qtb2g3S21ncjdhZDJZdlFHcnNxYkJLd0IyOG1oYlprMG1nWmxWYWVHYkVUOWF0clBGY2RyUHJDMkxKank2cWdJUQ?oc=5",
-        "published": "Wed, 28 Oct 2026 22:23:46 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "3c1220a8375730b7",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Coronahilfen: Brisante Liste im Wirtschaftsministerium sorgt für Fragen - SWR",
-        "link": "https://news.google.com/rss/articles/CBMi4gFBVV95cUxOSDBFb05lQzlpQVhoY0o0bFFxYkxhbXFhUFFpU3VtV0t0S3UzU1NDbF9YUUpFMnJXcVg0cHRLOU9TbGRMUFVqMDIxYWRnSGxRb3hrcWdmVU5IRWFyWnFpN1Q4bTlLUk9oaERrdTNGa3c4VEtKQjgwSF8wdlNybm1QVDRST2M4VXVCYlA2Sy1iZ3B2N1JjR3B2R2J5U0lvZi1VSVJEX0wzX1hsWjc3UEF2aVBrTXdZeHdueUpPTlQ4UUlSQ3BfMklUX05jOVhVR2lGalFZbll4WjY2Y3RzUUFlVXJ3?oc=5",
-        "published": "Wed, 30 Sep 2026 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "b7f29a147aab07ca",
-        "target_id": "src-dihk",
-        "target_name": "DIHK (Außenwirtschaft & Handel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "DIHK Ideenpapier für moderne Handelsabkommen - DIHK - Deutsche Industrie- und Handelskammer",
-        "link": "https://news.google.com/rss/articles/CBMitAFBVV95cUxPSjRQdXM5UVRDdkhLVEppdjhMOHlneEpOWXllOWdZb0Q2dnFKdjc0WDk1WWQyVHhUaHZsZFBJdTNxam5rQjNKNHJJS0VFTEFINU1WVk80WVFpNXltVG5raHhIMzlxU0FFSXVMVmtJUHg1QU03bGhicHZId29KanUyNm9HRFVHYjh0RGR6QVZpS2tMY1J6YkFJNjBFUFB0ak14S0EzY3lRWGplMGNRLXprOVZMMTU?oc=5",
-        "published": "Sun, 24 Nov 2019 06:09:26 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "handelsabkommen"
-        ]
-      },
-      {
-        "id": "b609a8b97072c79d",
-        "target_id": "src-dihk",
-        "target_name": "DIHK (Außenwirtschaft & Handel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Jetzt EU-Handelsabkommen mit den Vereinigten Arabischen Emiraten zügig vorantreiben - DIHK - Deutsche Industrie- und Handelskammer",
-        "link": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxPYWVBV1ZYSHZ5QkNYNFgtTjgtb1I4WC1tZWJoNlptem5EcGVtWTVFVE5hMmZwVEs3U0RSX2RLZ09INlUwMGFfOFNLNDlGbW1EVHZKMWdoUlZPTnBqUkxBOUVGVkNFdkpiejUtVDJnR2kyeU5nZldvenljREtaTGVOTFJIb0w2Ui10UUxEMmtHb2R0SDJ1N1dEajVYbHhMTjM0aXI0R1FjdWJSdmpzZW55WkhJaERhQXdUWTdkU2w4eXYxQQ?oc=5",
-        "published": "Tue, 08 Sep 2026 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "handelsabkommen"
-        ]
-      },
-      {
-        "id": "2e635fa08f6eade7",
-        "target_id": "src-dihk",
-        "target_name": "DIHK (Außenwirtschaft & Handel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "DIHK-Impulse für das EU-Freihandelsabkommen mit den VAE - DIHK - Deutsche Industrie- und Handelskammer",
-        "link": "https://news.google.com/rss/articles/CBMinAFBVV95cUxNTkptTzB5Y0dJcVF6NThDekZJZnVSd2JQU2NUcDI4ZXJCM2lfZy1yRC12LWVOQTdmcWtHdkZiX2djZm5GY2p0RDljR1Vob3Fla2F1QUx5RF9zaS04TWFqeFZILUsxendBenpodm4wZWxFOXpja0xrYTNIZGFxdzRFX1ZkeHU0ZDV4cFZsbzJMWUtyclNVMmp0bzhPekY?oc=5",
-        "published": "Tue, 08 Sep 2026 07:00:00 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "handelsabkommen",
-          "freihandelsabkommen"
-        ]
-      },
-      {
-        "id": "44fac6f048c25514",
-        "target_id": "src-dihk",
-        "target_name": "DIHK (Außenwirtschaft & Handel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "EU muss in Südostasien Tempo machen – sonst ziehen andere vorbei - DIHK - Deutsche Industrie- und Handelskammer",
-        "link": "https://news.google.com/rss/articles/CBMipgFBVV95cUxPRTZicXBweFNSVzByTGgtYWhCUVlYUS1jZXdTcmZwMWtZaVlwUTVfbjN0Vzg0RHdjS2U1RWNQRHhKYjFPY2lzdHYxUWd0TjRzY2lLR2RfaHdCOGR0WGgyemt6ZHJTVXBnbmRpUm9waW5DOTAtVzF0NUw4dnI2ZXFOSDNEcTlEelk5dkQtN2pFVnM2a1VvZ3g1M2RvMmN6QmVsR256dGlR?oc=5",
-        "published": "Tue, 24 Feb 2026 08:00:00 GMT",
-        "detected_at": "29.10.2026 09:10"
-      },
-      {
-        "id": "c5d4a2b69e10a986",
-        "target_id": "src-dihk",
-        "target_name": "DIHK (Außenwirtschaft & Handel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "EU-Indien Handelsabkommen - DIHK - Deutsche Industrie- und Handelskammer",
-        "link": "https://news.google.com/rss/articles/CBMitAFBVV95cUxPM2VDRS15TXp1eTR1N21iaWpEaWFlR3l2ZHY2MVJiMlVaaTV2NXUzdWlQTldFV1FUbHBoOVhQMjZlM2w0UnpNS0JvZllBR3k5em52RHJJZ2xIaHlJaDB3UHh4YkJ4bi14NUpkU3pNZ2hoZzdVMHh1ZE9iMlZUMk5scEhtejh6RTJ3Q2tQME1DYUp0OEhPRFZKWkJET3dka3ZWNG9abWJsQWZPVTh2UXJrUzVIVFk?oc=5",
-        "published": "Fri, 29 Mar 2024 17:04:40 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "handelsabkommen"
-        ]
-      },
-      {
-        "id": "04187594536b2d60",
-        "target_id": "src-dihk",
-        "target_name": "DIHK (Außenwirtschaft & Handel)",
-        "category": "Investitionen & Geopolitik",
-        "title": "EU-Indien: Zwei Milliarden Gründe für ein Mega-Handelsabkommen - DIHK - Deutsche Industrie- und Handelskammer",
-        "link": "https://news.google.com/rss/articles/CBMipAFBVV95cUxOUEdxcnlmZmNULUtjd0ZKZVprRC11MlVZckJDdmJ6dC1vZ0ZJYmctS0NrWkI3Sm5fUDVJOE1nTkJmTmY0eHBMam5LdlhvdjBlRzVCOWI5NmFiZ1JMTGFmZTA1blZNd3NNdDI3OElaTGlZeGpmY0ZHc2w3Z3V4dUFhMHBkZ3VBRmY0QVBZZlg0VGtUV1h0bmR6eWhwaVFwOFNLcTJmVw?oc=5",
-        "published": "Mon, 19 Jan 2026 08:00:00 GMT",
-        "detected_at": "29.10.2026 09:10",
-        "is_priority": true,
-        "matched_keywords": [
-          "handelsabkommen"
         ]
       }
     ]

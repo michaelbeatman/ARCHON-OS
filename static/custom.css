@@ -30,7 +30,7 @@
   --appshell-canvas-padding: 24px;
 
   /* Global Typography Token (Inter / Modern & Clean) */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* --------------------------------------------------------------------------
@@ -47,7 +47,7 @@
    3. GLOBALE APP & TYPOGRAFIE (INTER STANDARD)
    -------------------------------------------------------------------------- */
 html, body, button, input, select, textarea, p, h1, h2, h3, h4, h5, h6, label {
-  font-family: var(--font-family) !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
 }
 
 html, body {
@@ -58,7 +58,7 @@ html, body {
 }
 
 .font-sans {
-  font-family: var(--font-family) !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
 }
 
 code, pre, kbd, samp, .font-mono, [class*="font-mono"] {
@@ -1164,22 +1164,22 @@ aside.flex-shrink-0 > nav.flex-1 {
 }
 
 button#agent-tab-btn-chat > span.agent-tab-label {
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 13px !important;
 }
 
 button#ops-subtab-comm > span.ops-tab-label {
   font-size: 12px !important;
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
 }
 
 button#ops-subtab-kanban > span.ops-tab-label {
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 12px !important;
 }
 
 button#ops-subtab-org > span.ops-tab-label {
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 12px !important;
 }
 
@@ -1374,7 +1374,7 @@ div.shrink-0 > div.flex > span.w-2\.5 {
 }
 
 header#ops-header-bar > div.flex {
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 10px !important;
 }
 

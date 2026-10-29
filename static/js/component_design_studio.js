@@ -292,9 +292,20 @@ async function initArchonComponentDesign(force = false) {
   _cdsInitPromise = (async () => {
     let hadCache = false;
     try {
+      const customTheme = localStorage.getItem("archon_theme_custom");
+      if (customTheme && (customTheme.includes("'Inter'") || customTheme.includes("'Space Grotesk'"))) {
+        const fixed = customTheme.replace(/'Inter',\s*sans-serif/g, "'Outfit', sans-serif")
+                                 .replace(/'Space Grotesk',\s*sans-serif/g, "'Outfit', sans-serif");
+        localStorage.setItem("archon_theme_custom", fixed);
+      }
       const cached = localStorage.getItem("archon_cds_store_v1");
       if (cached) {
-        const parsed = JSON.parse(cached);
+        const migrated = cached.replace(/'Inter',\s*sans-serif/g, "'Outfit', sans-serif")
+                               .replace(/'Space Grotesk',\s*sans-serif/g, "'Outfit', sans-serif");
+        if (migrated !== cached) {
+          localStorage.setItem("archon_cds_store_v1", migrated);
+        }
+        const parsed = JSON.parse(migrated);
         if (parsed && parsed.themes && Object.keys(parsed.themes).length > 0) {
           cdsStore = parsed;
           hadCache = true;

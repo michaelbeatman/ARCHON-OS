@@ -6,7 +6,7 @@
       borderRadius: 8,
       cardPadding: 16,
       fontSize: 14,
-      fontFamily: "'Inter', sans-serif",
+      fontFamily: "'Outfit', sans-serif",
       borderWidth: 1,
       
       // Global Colors

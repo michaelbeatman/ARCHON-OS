@@ -56,26 +56,26 @@ div#ops-kanban-columns-container > div.w-80 > div.flex-1 {
 
 button#ops-subtab-comm > span.ops-tab-label {
   font-size: 12px !important;
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
 }
 
 button#agent-tab-btn-chat > span.agent-tab-label {
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 13px !important;
 }
 
 header#ops-header-bar > div.flex {
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 10px !important;
 }
 
 button#ops-subtab-kanban > span.ops-tab-label {
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 12px !important;
 }
 
 button#ops-subtab-org > span.ops-tab-label {
-  font-family: 'Montserrat', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 12px !important;
 }
 */

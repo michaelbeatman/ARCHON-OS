@@ -149,7 +149,7 @@ header#inbox-header-bar > div.flex > button.h-8 {
 }
 
 div#mission-control-header-bar > div.flex > h1.text-sm {
-  font-family: 'Inter', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 24px !important;
 }
 
@@ -168,7 +168,7 @@ button#ops-subtab-kanban > span {
 }
 
 div > div.flex > h1.text-sm {
-  font-family: 'Inter', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   text-transform: none !important;
   font-size: 24px !important;
   font-weight: 600 !important;
@@ -182,18 +182,18 @@ div#view-library > div.flex {
 }
 
 #library-tab-btn-rag {
-  font-family: 'Inter', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 17px !important;
 }
 
 #library-tab-btn-erfasser {
-  font-family: 'Inter', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   font-size: 17px !important;
 }
 
 #library-tab-btn-vault {
   font-size: 17px !important;
-  font-family: 'Inter', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
   background-color: #ffffff !important;
 }
 
@@ -202,7 +202,7 @@ div#view-library > div.flex > div.flex {
 }
 
 body {
-  font-family: 'Inter', sans-serif !important;
+  font-family: var(--font-family, 'Outfit', sans-serif) !important;
 }
 
 div.min-w-0 > div.flex > div.inline-flex {
@@ -459,7 +459,7 @@ div.p-3 > div.flex > button.px-2 {
       --border-radius: 8px;
       --card-padding: 16px;
       --font-size: 14px;
-      --font-family: 'Inter', sans-serif;
+      --font-family: 'Outfit', sans-serif;
       
       /* Global Colors */
       --page-bg: #f8fafc;
@@ -748,7 +748,7 @@ div.p-3 > div.flex > button.px-2 {
     body {
       background-color: var(--page-bg) !important;
       color: var(--text-primary) !important;
-      font-family: var(--font-family, 'Inter', sans-serif) !important;
+      font-family: var(--font-family, 'Outfit', sans-serif) !important;
       font-size: var(--font-size, 14px) !important;
       transition: none;
     }

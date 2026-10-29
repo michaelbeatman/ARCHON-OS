@@ -37,6 +37,23 @@ except ImportError:
         return {"score": 8, "recommendation": "TRUST", "passed": True, "pattern_flags": []}
 
 
+# Import Informationsquellen-Strategie & Vertrauens-Registry
+try:
+    from backend.research_sources import get_domain_reputation, evaluate_triangulation_quality, format_citation
+except ImportError:
+    def get_domain_reputation(d):
+        return {"name": "Web", "level": 2, "weight": 0.8, "badge_color": "sky"}
+    def evaluate_triangulation_quality(sources):
+        unique = set(s.get("domain", "") for s in sources if s.get("domain") and not s.get("ai_generated"))
+        if len(unique) >= 3:
+            return {"verdict": "HOCH (>=3 unabhängige Domains)", "score": 9, "unique_domains": len(unique)}
+        elif len(unique) == 2:
+            return {"verdict": "MODERAT (2 unabhängige Domains)", "score": 6, "unique_domains": 2}
+        return {"verdict": "GERING (Einzelquelle)", "score": 3, "unique_domains": len(unique)}
+    def format_citation(name, url, d=None):
+        return f"[{name}]({url})"
+
+
 PROVIDERS_CONFIG = {
     "duckduckgo": {
         "id": "duckduckgo",
@@ -541,18 +558,12 @@ def run_research_mission(
             ),
         }
 
-    # 3. Triangulations-Score berechnen (KI-generierte Quellen wie Grokipedia zaehlen nicht als unabhaengig)
+    # 3. Triangulations-Score & Evidenz-Stufe berechnen
     unique_domains = set(s.get("domain", "") for s in cleaned_sources
                          if s.get("domain") and not s.get("ai_generated"))
-    if len(unique_domains) >= 3:
-        triangulation_verdict = "HOCH (≥3 unabhängige Domains)"
-        triangulation_score = 9
-    elif len(unique_domains) == 2:
-        triangulation_verdict = "MODERAT (2 unabhängige Domains)"
-        triangulation_score = 6
-    else:
-        triangulation_verdict = "GERING (Einzelquelle oder unbestätigt)"
-        triangulation_score = 3
+    triang_eval = evaluate_triangulation_quality(cleaned_sources)
+    triangulation_verdict = triang_eval.get("verdict", "GERING")
+    triangulation_score = triang_eval.get("score", 4)
 
     # 4. Synthese erstellen mit gewähltem Modell & Agent
     synth_res = query_omniroute_synthesis(
@@ -627,11 +638,13 @@ def build_and_save_dossier(
 
 ### Quellenverzeichnis & Triangulationsmatrix
 
-| # | Quelle / Provider | Domain | Titel | URL |
-|---|-------------------|--------|-------|-----|
+| # | Quelle / Provider | Vertrauensstufe | Domain | Titel | URL |
+|---|-------------------|-----------------|--------|-------|-----|
 """
     for i, s in enumerate(cleaned_sources):
-        dossier_content += f"| {i+1} | {s.get('source', '-')} | `{s.get('domain', '-')}` | {s.get('title', '-')} | [{s.get('domain', 'Link')}]({s.get('url', '#')}) |\n"
+        rep = get_domain_reputation(s.get('domain', ''))
+        tier_label = f"{rep.get('name', 'Web')} (Lvl {rep.get('level', 2)})"
+        dossier_content += f"| {i+1} | {s.get('source', '-')} | {tier_label} | `{s.get('domain', '-')}` | {s.get('title', '-')} | [{s.get('domain', 'Link')}]({s.get('url', '#')}) |\n"
 
     dossier_content += "\n\n*Erstellt durch Archon OS Research Lab (Säule 2: Kognition & Wissen)*\n"
 

@@ -92,12 +92,20 @@
 - **Zeitbereiche:** Umschaltung zwischen 24 Stunden, 7 Tagen, 30 Tagen, 90 Tagen und All-Time.
 - **Dynamische Skalierung:** Automatische Neuberechnung der Verbrauchsdaten, Token-Kosten und Trendlinien bei Zeitraum-Wechsel.
 
-### Meilenstein 12: Informationsquellen-Strategie (Offen)
-- **Ausgangslage (Okt 2026):** Grokipedia ist als Standardquelle aktiv (KI-generiert, zaehlt nicht als unabhaengige Quelle in der Triangulation). Wikipedia lieferte im Test wegen Drosselung (HTTP 429) keine Treffer, ArXiv teils HTTP 500, DuckDuckGo zeitweise blockiert.
-- **Gemeinsame Sitzung:** Welche Quellen braucht Archon je Fragetyp (Recht/Regulierung, Technik, Markt, Wissenschaft, Tagesaktuelles)? Welche Quelle gilt als amtlich, fachlich belastbar oder nur als Hinweis?
-- **Zu klaeren:** Vertrauensstufen und Gewichtung in der Triangulation, Umgang mit KI-generierten Quellen (Grokipedia), Zuverlaessigkeit der Suche (Fallbacks, SearXNG selbst hosten, Tavily/Jina/Firecrawl mit Key), Rate-Limits und Caching der Treffer, Datenschutz bei Drittdiensten (z.B. Jina Reader erhaelt die URL).
-- **Ergebnis:** Priorisierte Quellenliste, Konfiguration pro Fragetyp, Entscheidung zu kostenpflichtigen Providern.
-- **Hintergrund:** Benchmark und Code-Analyse siehe `scratch/ii/` (ii-researcher-Vergleich, `research_engine_v2.py`).
+### Meilenstein 12: Informationsquellen-Strategie & Vertrauens-Registry (Abgeschlossen)
+- **Kuratierter Quellen-Pool (15 Quellen):** Strukturierte Unterteilung in 4 Kernbereiche:
+  1. *Investitionen & Geopolitik (High Impact):* Bundesregierung (Kabinett/Gipfel), BMWK (Industrieförderung/Subventionen), DIHK (Außenwirtschaft/Freihandelsabkommen), GTAI (Germany Trade & Invest), High-Impact Investitions-Radar (Invest in Germany Summit, Deutschlandfonds).
+  2. *Wirtschaft & Finanzen (Makroökonomie):* Handelsblatt Top-Themen & Politik/Ökonomie, Deutsche Bundesbank (Geldpolitik/Monatsberichte), Reuters Business, Finanzen & Börse Radar (DAX/Investorenströme).
+  3. *Technologie & KI:* Heise Online (IT-Leitmedium DACH), TechCrunch (Startups/Venture), ArXiv AI (Wissenschaftliche CS-Preprints).
+  4. *Politik & Wissenschaft:* Tagesschau (Öffentlich-rechtliche Faktenbasis), Spektrum der Wissenschaft.
+- **Trust-Tiers & Gewichtung in der Triangulation:**
+  - *Tier 1 (Amtlich & Primärquelle, Gewicht 1.0):* Bundesregierung, BMWK, Bundesbank, DIHK, GTAI.
+  - *Tier 2 (Etabliertes Leitmedium, Gewicht 0.9):* Handelsblatt, Tagesschau, Reuters, Heise, Spektrum, TechCrunch.
+  - *Tier 3 (Wissenschaftliche Evidenz, Gewicht 0.85):* ArXiv CS/AI.
+  - *Tier 4 (Markt- & Börsendaten, Gewicht 0.8):* Finanzen.net, Börse Online.
+  - *Tier 5 (KI-Hinweis, Gewicht 0.5):* Grokipedia, Web-Snippets (Gilt nur als Hinweis, zählt nicht als unabhängige Quelle in der Triangulation).
+- **Zitations-Standard (0-Halluzination):** Verpflichtende Markdown-Hyperlinks `[Quelle: Name](URL)` im Text sowie abschließende Triangulations- und Quellenverzeichnisse in allen generierten Dossiers, LinkedIn-Posts und Strategievorlagen.
+- **System-Integration:** Vollständig hinterlegt in `backend/research_sources.py`, `research_engine.py`, `settings.json` (Watchdog Radar Targets & 16 High-Impact Keywords) sowie im Research Lab UI (`static/views/view_research.html`, `static/js/research_lab.js`) und via API `GET /api/v1/research/sources`.
 
 ---
 

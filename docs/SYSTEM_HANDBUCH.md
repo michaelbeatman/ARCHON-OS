@@ -470,9 +470,9 @@ Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon O
     * **Nutzen:** Modulare Laufzeit-Erweiterungen ohne Kernel-Code-Eingriffe.
 
 15. **Research Lab (Deep Search & Evidenz-Triangulation)**
-    * **Problem:** Einfache Internetsuchen liefern oberflächliche, ungeprüfte Einzeltreffer.
-    * **Mechanik:** Mehrstufiges Forschungs-Cockpit mit Quellen-Monitor und Evidenz-Score. **Neu in v0.3.5:** Autonome Tiefenrecherche & Re-Search Loop v2: Zerlegung in 3–5 Teilfragen, autonome Lückenanalyse, bis zu 3 iterative Nachfolge-Suchläufe, Multi-Provider Fallback (SearXNG / Jina Reader) und SSRF-Schutz.
-    * **Nutzen:** Wissenschaftlich belastbare, triangulierte Dossiers.
+    * **Problem:** Einfache Internetsuchen liefern oberflächliche, ungeprüfte Einzeltreffer ohne Nachvollziehbarkeit.
+    * **Mechanik:** Mehrstufiges Forschungs-Cockpit mit Quellen-Monitor und Evidenz-Score. **Neu in Meilenstein 12:** Kuratierte Informationsquellen-Strategie (`backend/research_sources.py`) mit 15 verifizierten Quellen in 4 Kategorien (Investitionen & Geopolitik High Impact, Wirtschaft & Finanzen, Technologie & KI, Politik & Wissenschaft), 5-stufigem Vertrauensmodell (Tier 1: Amtlich 1.0 bis Tier 5: KI-Hinweis 0.5) und Zitationspflicht via Markdown-Hyperlinks `[Quelle: Name](URL)` sowie automatischer Triangulationsmatrix in allen Dossiers.
+    * **Nutzen:** Wissenschaftlich und wirtschaftlich belastbare, triangulierte Dossiers mit lückenlosem Primärquellen-Nachweis.
 
 16. **Telemetrie & Logs (3-Quellen Live-Audit Stream)**
     * **Problem:** Verteilte Logs in verschiedenen Containern erschweren die Fehlerdiagnose.

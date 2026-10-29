@@ -394,6 +394,42 @@ Wähle links ein archiviertes Dossier aus, um die Recherche-Ergebnisse und Quell
         </div>
       </div>
 
+      
+      <!-- Kuratierter Quellen-Pool & Informationsquellen-Strategie (Meilenstein 12) -->
+      <div class="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs flex flex-col os-island">
+        <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border)] mb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">VERIFIZIERTE QUELLEN-STRATEGIE &amp; TRUST-TIERS</h3>
+          </div>
+          <span id="research-sources-count-badge" class="text-[10px] font-mono font-bold text-sky-500 bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/25">15 Verifizierte Quellen</span>
+        </div>
+
+        <!-- Filter-Pills für Kategorien -->
+        <div class="flex items-center gap-1.5 flex-wrap pb-2.5 border-b border-[var(--border)] mb-3 text-xs font-mono">
+          <button type="button" onclick="filterResearchSourcesPool('all')" id="rf-cat-all" class="px-2.5 py-1 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold transition">Alle (15)</button>
+          <button type="button" onclick="filterResearchSourcesPool('Investitionen & Geopolitik')" id="rf-cat-inv" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] transition">Investitionen &amp; Geopolitik (High Impact)</button>
+          <button type="button" onclick="filterResearchSourcesPool('Wirtschaft & Finanzen')" id="rf-cat-wirt" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] transition">Wirtschaft &amp; Finanzen</button>
+          <button type="button" onclick="filterResearchSourcesPool('Technologie & KI')" id="rf-cat-tech" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] transition">Technologie &amp; KI</button>
+          <button type="button" onclick="filterResearchSourcesPool('Politik & Wissenschaft')" id="rf-cat-pol" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] transition">Politik &amp; Wissenschaft</button>
+        </div>
+
+        <!-- Grid der kuratierten Quellen -->
+        <div id="research-curated-sources-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          <!-- Dynamisch via renderResearchSourcesPool() befüllt -->
+        </div>
+
+        <!-- Zitations-Standard Infoleiste -->
+        <div class="mt-3.5 p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] flex items-center justify-between text-xs font-mono">
+          <div class="flex items-center gap-2">
+            <i data-lucide="link" class="w-4 h-4 text-emerald-500"></i>
+            <span class="text-[var(--foreground)] font-bold">Zitations-Standard:</span>
+            <span class="text-[var(--muted-foreground)]">Jede Agenten-Synthese bettet Primärquellen als Markdown-Hyperlinks <code class="px-1 py-0.5 rounded bg-[var(--secondary)] text-[var(--foreground)] font-bold">[Quelle: Name](URL)</code> ein.</span>
+          </div>
+          <span class="text-[10px] font-bold text-emerald-500 uppercase">0-Halluzination-Policy</span>
+        </div>
+      </div>
+
       <!-- Triangulations-Regeln & Vault-Integration -->
       <div class="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs flex flex-col os-island">
         <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border)] mb-3">

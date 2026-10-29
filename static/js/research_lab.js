@@ -66,7 +66,7 @@
       if (tab === "dossiers") {
         refreshResearchHistory();
       } else if (tab === "quellen") {
-        refreshResearchProviders();
+        refreshResearchProviders(); loadCuratedSourcesPool();
       }
 
       if (window.lucide) window.lucide.createIcons();
@@ -137,7 +137,7 @@
       }
     }
     async function loadResearchLab() {
-      await refreshResearchProviders();
+      await refreshResearchProviders(); loadCuratedSourcesPool();
       await refreshResearchHistory();
       await loadResearchAgentsAndModels();
     }
@@ -461,3 +461,104 @@
       if (window.lucide) window.lucide.createIcons();
     }
     window.filterResearchHistoryList = filterResearchHistoryList;
+
+
+    // =========================================================================
+    // INFORMATIONSQUELLEN-STRATEGIE (MEILENSTEIN 12): TRUST-TIERS & POOL
+    // =========================================================================
+    let curatedSourcesPool = [];
+    let activeSourcesCategoryFilter = 'all';
+
+    async function loadCuratedSourcesPool() {
+      const container = document.getElementById("research-curated-sources-grid");
+      if (!container) return;
+      try {
+        const res = await fetch("/api/v1/research/sources");
+        if (!res.ok) return;
+        const data = await res.json();
+        curatedSourcesPool = data.sources || [];
+        renderResearchSourcesPool();
+      } catch (err) {
+        console.warn("Fehler beim Laden der verifizierten Quellen:", err);
+      }
+    }
+    window.loadCuratedSourcesPool = loadCuratedSourcesPool;
+
+    function renderResearchSourcesPool() {
+      const container = document.getElementById("research-curated-sources-grid");
+      if (!container) return;
+
+      const filtered = activeSourcesCategoryFilter === 'all'
+        ? curatedSourcesPool
+        : curatedSourcesPool.filter(s => s.category === activeSourcesCategoryFilter);
+
+      const countBadge = document.getElementById("research-sources-count-badge");
+      if (countBadge) {
+        countBadge.innerText = `${filtered.length} / ${curatedSourcesPool.length} Quellen`;
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="col-span-full p-4 text-center text-xs font-mono text-[var(--muted-foreground)]">Keine Quellen für diesen Filter vorhanden.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(s => {
+        let badgeClass = "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25";
+        if (s.tier_level === 1) {
+          badgeClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25";
+        } else if (s.tier_level === 3) {
+          badgeClass = "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25";
+        } else if (s.tier_level === 4) {
+          badgeClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25";
+        }
+
+        const typeLabel = s.source_type === "rss" ? "RSS Feed" : "Search Feed";
+
+        return `
+          <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between gap-2 shadow-2xs hover:border-[var(--muted-foreground)] transition">
+            <div class="space-y-1">
+              <div class="flex items-center justify-between gap-1.5">
+                <span class="text-xs font-bold font-mono text-[var(--foreground)] truncate">${s.name}</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${badgeClass} shrink-0">
+                  Lvl ${s.tier_level} · ${s.tier_name.split(' ')[0]}
+                </span>
+              </div>
+              <p class="text-[11px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">${s.description || ''}</p>
+            </div>
+            <div class="pt-2 border-t border-[var(--border)]/60 flex items-center justify-between text-[10px] font-mono">
+              <span class="text-[var(--muted-foreground)]">${typeLabel} · ${s.domain}</span>
+              <a href="${s.homepage || '#'}" target="_blank" rel="noopener" class="text-sky-500 hover:underline flex items-center gap-0.5">
+                Webseite <i data-lucide="external-link" class="w-2.5 h-2.5"></i>
+              </a>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+    window.renderResearchSourcesPool = renderResearchSourcesPool;
+
+    function filterResearchSourcesPool(cat) {
+      activeSourcesCategoryFilter = cat;
+      const buttons = [
+        { id: 'rf-cat-all', cat: 'all' },
+        { id: 'rf-cat-inv', cat: 'Investitionen & Geopolitik' },
+        { id: 'rf-cat-wirt', cat: 'Wirtschaft & Finanzen' },
+        { id: 'rf-cat-tech', cat: 'Technologie & KI' },
+        { id: 'rf-cat-pol', cat: 'Politik & Wissenschaft' }
+      ];
+
+      buttons.forEach(b => {
+        const el = document.getElementById(b.id);
+        if (el) {
+          if (b.cat === cat) {
+            el.className = "px-2.5 py-1 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold transition";
+          } else {
+            el.className = "px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] transition";
+          }
+        }
+      });
+      renderResearchSourcesPool();
+    }
+    window.filterResearchSourcesPool = filterResearchSourcesPool;

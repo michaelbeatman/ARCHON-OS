@@ -1738,7 +1738,9 @@ async def api_watchdog_dispatch_action(payload: Dict = Body(...)):
         title = f"✍️ LinkedIn-Post: {f['title'][:60]}"
         prompt_instruction = custom_prompt or (
             "Analysiere diesen Fund, arbeite die Kern-Relevanz für den deutschen Markt heraus "
-            "und formuliere einen ansprechenden LinkedIn-Beitrag (Hook, Story, 3 Takeaways, Call-to-Action)."
+            "und formuliere einen ansprechenden LinkedIn-Beitrag (Hook, Story, 3 Takeaways, Call-to-Action). "
+            "ZITATIONS-PFLICHT: Bette die Primärquelle als sauberen Markdown-Link [Quelle: Name](URL) "
+            "direkt im Text oder am Beitragsende ein."
         )
         body = (
             f"📱 **LinkedIn-Content Auftrag**\n\n"
@@ -1753,8 +1755,9 @@ async def api_watchdog_dispatch_action(payload: Dict = Body(...)):
         assignee = "executive_decision_architect"
         title = f"📊 Strategie-Dossier: {f['title'][:60]}"
         prompt_instruction = custom_prompt or (
-            "Prüfe die strategische Tragweite dieser Meldung für unsere Bau- und Projektentwicklungen "
-            "und erstelle eine 1-Seiten-Entscheidungsvorlage mit Handlungsoptionen."
+            "Prüfe die strategische Tragweite dieser Meldung für unsere Bau-, Investitions- und Projektentwicklungen "
+            "und erstelle eine 1-Seiten-Entscheidungsvorlage mit Handlungsoptionen. "
+            "ZITATIONS-PFLICHT: Zitiere die Primärquelle mit offiziellem Link [Quelle: Name](URL) und Einstufung (Amtlich/Leitmedium)."
         )
         body = (
             f"🏛️ **Strategische Vorlage für Robert (CEO)**\n\n"
@@ -1769,8 +1772,9 @@ async def api_watchdog_dispatch_action(payload: Dict = Body(...)):
         title = f"🧺 Trend-Synthese aus {len(findings)} Radar-Funden"
         items_text = "\n".join([f"- **{it['title']}** ({it.get('category')}): {it.get('link')}\n  {it.get('snippet', '')[:180]}" for it in findings])
         prompt_instruction = custom_prompt or (
-            f"Erstelle aus diesen {len(findings)} gesammelten Trend-Meldungen eine zusammenfassende Branchen-Synthese "
-            "sowie zwei darauf aufbauende Content-Ideen."
+            f"Erstelle aus diesen {len(findings)} gesammelten Trend-Meldungen eine zusammenfassende Branchen- und Investitions-Synthese "
+            "sowie zwei darauf aufbauende Content-Ideen. "
+            "ZITATIONS-PFLICHT: Zitiere alle herangezogenen Quellen als anklickbare Hyperlinks [Quelle: Name](URL) in einem abschließenden Quellenverzeichnis."
         )
         body = (
             f"🧺 **Sammelkorb-Synthese ({len(findings)} Quellen)**\n\n"
@@ -8963,6 +8967,16 @@ def api_get_research_dossier(filename: str):
         content = f.read()
     return {"status": "success", "filename": safe_name, "content": content}
 
+@app.get("/api/v1/research/sources")
+def api_get_research_sources():
+    from backend.research_sources import get_curated_sources_pool, TRUST_TIERS
+    return {
+        "status": "success",
+        "sources": get_curated_sources_pool(),
+        "trust_tiers": TRUST_TIERS
+    }
+
+
 # --- SYSTEM UPDATE & RELEASE-LIFECYCLE (MEILENSTEIN 1) ---
 @app.get("/api/v1/system/update/check")
 def api_system_update_check():
@@ -13486,6 +13500,13 @@ async def api_save_inbox_watcher_config(payload: Dict = Body(...)):
 async def api_scan_inbox_watcher_now():
     from backend.inbox_watcher import scan_and_process_inbox
     res = await scan_and_process_inbox()
+    try:
+        from backend.internet_watchdog import run_watchdog_scan
+        loop = asyncio.get_event_loop()
+        wd_res = await loop.run_in_executor(None, run_watchdog_scan, True)
+        res["internet_watchdog"] = wd_res
+    except Exception as e:
+        res["internet_watchdog_error"] = str(e)
     return res
 
 @app.get("/api/tools/proposals")

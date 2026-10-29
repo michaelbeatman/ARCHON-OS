@@ -261,7 +261,7 @@
         "type": "rss",
         "query_or_url": "https://static.winfuture.de/feeds/WinFuture-News-rss2.0.xml",
         "active": true,
-        "last_check": "2026-10-28T21:15:06.646255",
+        "last_check": "2026-10-29T08:54:45.946581",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -271,12 +271,92 @@
         "type": "web_diff",
         "query_or_url": "https://www.ted.com/",
         "active": true,
-        "last_check": "2026-10-28T21:15:06.646255",
+        "last_check": "2026-10-29T08:54:45.946581",
         "last_status": "Fehler: not well-formed (invalid token): line 29, column 2"
       }
     ],
-    "last_run": "2026-10-28T21:15:06.646255",
+    "last_run": "2026-10-29T08:54:45.946581",
     "recent_findings": [
+      {
+        "id": "d5ca316a68505863",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "Schluss mit SMS: Microsoft setzt auf Passkeys, Nutzer müssen handeln",
+        "link": "https://winfuture.de/news,162279.html",
+        "published": "Thu, 29 Oct 2026 09:47:00 +0100",
+        "detected_at": "29.10.2026 08:54"
+      },
+      {
+        "id": "a53ae2ea3e9694c6",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "Preise machen chinesischen KI-Speicher trotz wenig Ausbeute profitabel",
+        "link": "https://winfuture.de/news,162273.html",
+        "published": "Thu, 29 Oct 2026 09:27:00 +0100",
+        "detected_at": "29.10.2026 08:42"
+      },
+      {
+        "id": "14e19a2ab4ce6421",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "China-Hacker nutzen PHP2Shell, um Firewalls auszuschalten",
+        "link": "https://winfuture.de/news,162277.html",
+        "published": "Thu, 29 Oct 2026 09:06:00 +0100",
+        "detected_at": "29.10.2026 08:42"
+      },
+      {
+        "id": "2e893db0e005eee0",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "Gruselig günstig: Waipu.tv mit Disney+ kostet nur noch die Hälfte",
+        "link": "https://winfuture.de/news,162276.html",
+        "published": "Thu, 29 Oct 2026 08:45:00 +0100",
+        "detected_at": "29.10.2026 08:42"
+      },
+      {
+        "id": "8e42ff8642aa36db",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "Alles zum WLAN im Flugzeug: Kosten, Tempo und Technik im Überblick",
+        "link": "https://winfuture.de/faq/355",
+        "published": "Thu, 29 Oct 2026 08:25:10 +0100",
+        "detected_at": "29.10.2026 08:42"
+      },
+      {
+        "id": "00b9bee90a78798d",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "Microsoft: Mitarbeiter unter Druck, während die Gewinne sprudeln",
+        "link": "https://winfuture.de/news,162275.html",
+        "published": "Thu, 29 Oct 2026 08:05:00 +0100",
+        "detected_at": "29.10.2026 08:42"
+      },
+      {
+        "id": "6d9c64e6628cd364",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "GTA 6: Neues Gameplay taucht völlig überraschend in South Park auf",
+        "link": "https://winfuture.de/news,162274.html",
+        "published": "Thu, 29 Oct 2026 07:45:00 +0100",
+        "detected_at": "29.10.2026 08:42"
+      },
+      {
+        "id": "acc7adce6ecdda57",
+        "target_id": "target-mvphrn7w",
+        "target_name": "Winfuture",
+        "category": "Technik",
+        "title": "Aktuelle Technik-Blitzangebote von Amazon im Überblick 29. Oktober",
+        "link": "https://winfuture.de/special/amazon/angebote/#1793254260",
+        "published": "Thu, 29 Oct 2026 07:11:00 +0100",
+        "detected_at": "29.10.2026 08:42"
+      },
       {
         "id": "d9d808570a5b2b02",
         "target_id": "target-mvphrn7w",
@@ -496,86 +576,6 @@
         "link": "https://winfuture.de/videos/Film-TV/Dune-Part-Three-Finaler-Trailer-zum-epischen-Abschluss-der-Reihe-29184.html",
         "published": "Wed, 28 Oct 2026 11:34:13 +0100",
         "detected_at": "28.10.2026 11:04"
-      },
-      {
-        "id": "5f0b25a64c439815",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Discord öffnet Chats für Google: Das müsst ihr jetzt alles wissen",
-        "link": "https://winfuture.de/news,162256.html",
-        "published": "Wed, 28 Oct 2026 11:14:00 +0100",
-        "detected_at": "28.10.2026 10:34"
-      },
-      {
-        "id": "8782ca5d63de6c6c",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Pro-russische Hacker greifen gezielt Wasser- und Industrieanlagen an",
-        "link": "https://winfuture.de/news,162257.html",
-        "published": "Wed, 28 Oct 2026 10:53:00 +0100",
-        "detected_at": "28.10.2026 10:04"
-      },
-      {
-        "id": "63213aea9a9f1aa6",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Google Chrome Download - Schneller und sicherer Browser",
-        "link": "https://winfuture.de/downloadvorschalt,2949.html",
-        "published": "Wed, 28 Oct 2026 10:48:11 +0100",
-        "detected_at": "28.10.2026 10:04"
-      },
-      {
-        "id": "346a8f45f2cbfead",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Copilot-Ausfall in Edge: Microsoft legt KI-Leiste mit Migration lahm",
-        "link": "https://winfuture.de/news,162255.html",
-        "published": "Wed, 28 Oct 2026 10:11:00 +0100",
-        "detected_at": "28.10.2026 09:34"
-      },
-      {
-        "id": "081da016e52dcb4a",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Streaming-Preise: Netflix-Premium-Abo kostet nun 21,99 Euro",
-        "link": "https://winfuture.de/infografik/32314/Streaming-Preise-Netflix-Premium-Abo-kostet-nun-2199-Euro-1792764848.html",
-        "published": "Wed, 28 Oct 2026 10:05:18 +0100",
-        "detected_at": "28.10.2026 09:34"
-      },
-      {
-        "id": "a29d252f8a6972f4",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Tech-Index stürzt um 40% ab: Die KI-Blase platzt in China bereits",
-        "link": "https://winfuture.de/news,162254.html",
-        "published": "Wed, 28 Oct 2026 09:50:00 +0100",
-        "detected_at": "28.10.2026 09:04"
-      },
-      {
-        "id": "e9b0c6004f91e798",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "ADAC schlägt Alarm: Notbremsassistenten übersehen viele Kinder",
-        "link": "https://winfuture.de/news,162253.html",
-        "published": "Wed, 28 Oct 2026 09:30:00 +0100",
-        "detected_at": "28.10.2026 09:04"
-      },
-      {
-        "id": "dd00e1137292ce53",
-        "target_id": "target-mvphrn7w",
-        "target_name": "Winfuture",
-        "category": "Technik",
-        "title": "Anzeichen für massive Überwachung von Starlink-Nutzern entdeckt",
-        "link": "https://winfuture.de/news,162252.html",
-        "published": "Wed, 28 Oct 2026 08:47:00 +0100",
-        "detected_at": "28.10.2026 08:34"
       }
     ]
   }

@@ -15,7 +15,7 @@
 | **10** | **Eingang (Inbox) Funktionsprüfung & Re-Architektur** | Hoch | Abgeschlossen | Suchleiste unter den Header mit Filter-/Markierungstools; linker Balken fokussiert auf markierte/angepinnte Items |
 | **11** | **Tokenguard: Zeitraum-Skalierungsleiste für Grafen** | Normal | Abgeschlossen | Interaktive Steuerleiste zur flexiblen Skalierung des Zeitraums (24h, 7T, 30T, 90T, Gesamt) für Verbrauchs-Chart |
 | **12** | **Informationsquellen-Strategie (Research Lab)** | Hoch | Offen | Gemeinsame Bestandsaufnahme und Bewertung aller Wissensquellen (Grokipedia, Wikipedia, Fachportale, amtliche Quellen, ArXiv, Websuche): Vertrauensstufen, Rolle KI-generierter Quellen, Kosten/Limits, Quellen-Priorisierung je Fragetyp |
-| **13** | **n8n Workflow-Mesh & Routine-Automation** | Hoch | Geplant | Vollständige n8n-Anbindung, Webhook-Trigger, zeitgesteuerte Routine-Workflows (Morning-Briefing, automatisierte Triage, Status-Berichte) |
+| **13** | **n8n Workflow-Mesh & Routine-Automation** | Hoch | Abgeschlossen | Vollständige n8n-Anbindung, Webhook-Trigger, zeitgesteuerte Routine-Workflows (Morning-Briefing 07:30 Uhr Mo-Fr, Weekly Maintenance So 23:00 Uhr, stündlicher RSS-Scan) |
 | **14** | **Telegram Voice-Pipeline (Voice-to-Text & Audio)** | Hoch | Abgeschlossen | Whisper-Transkription eingehender Telegram-Sprachnachrichten, Delegation an Ziel-Agenten, Sprachausgabe via edge-tts |
 | **15** | **Kanban Qualitäts-Gate (4-Augen-Review vor Done)** | Hoch | Abgeschlossen | Automatischer Peer-Review-Prüfschritt vor Verschieben auf "Done", Prüfung auf Vollständigkeit & Belege, Re-Iterationsschleife |
 | **16** | **Interaktive Showroom-Sandbox & Live-Runner** | Normal | Abgeschlossen | Sichere Ausführung von generiertem Code (Python-Datenanalyse, HTML/JS-Rechner) direkt im Showroom mit interaktiven Testdaten |
@@ -101,10 +101,13 @@
 
 ---
 
-### Meilenstein 13: n8n Workflow-Mesh & Routine-Automation
-- **n8n Konnektivität & Health-Check:** Vollständige Kopplung von Archon OS an die lokale oder containerisierte n8n-Instanz über `scripts/mcp_n8n_driver.py` und Webhook-Endpoints.
-- **Geplante Routine-Jobs (Cron):** Konfiguration automatisierter Abläufe (z. B. Morning-Briefing um 07:30 Uhr mit Triage neuer E-Mails und offenen Kanban-Tasks, wöchentlicher Backup- und System-Audit).
-- **Zwei-Wege-Steuerung:** Triggerung von n8n-Szenarien direkt aus dem Agenten-Chat bzw. per Telegram-Befehl sowie Rückmeldung von n8n-Ergebnissen in das Kanban-Board.
+### Meilenstein 13: n8n Workflow-Mesh & Routine-Automation (Abgeschlossen)
+- **n8n Konnektivität & Health-Check:** Vollständige Kopplung von Archon OS an die containerisierte n8n-Instanz (Port 5678, `agentic_mesh` Netzwerk) über `scripts/mcp_n8n_driver.py` und native Webhook-Endpoints.
+- **Aktive Routine-Workflows:**
+  1. *Archon Morning-Briefing Routine* (Schedule: Werktags 07:30 Uhr & Webhook `POST /webhook/archon-morning-briefing`): Ruft `/api/system/standup/run` auf, speichert Briefing im Obsidian Vault und sendet es via `POST /api/telegram/send` an den Nutzer.
+  2. *Archon Weekly Maintenance & System-Audit* (Schedule: Sonntags 23:00 Uhr & Webhook `POST /webhook/archon-weekly-audit`): Führt atomare SQLite-Backups aus (`/api/system/backup-db`) und prüft den System-Health-Score.
+  3. *Archon RSS & News Watchdog Routine* (Schedule: Stündlich & Webhook `POST /webhook/archon-rss-watchdog`): Führt automatisierte Scans der konfigurierten RSS-Feeds (z. B. WinFuture) und Web-Diff-Ziele durch.
+- **Funktions-Webhooks & Treiber:** 5 weitere Spezial-Workflows für Web-Extraktion, Multi-Channel-Dispatching, Dokumenten-Rendering, Feed-Suche und CRM-Sync vollständig in n8n aktiviert und verifiziert.
 
 ### Meilenstein 14: Telegram Voice-Pipeline (Sprachnachrichten & Audio-Antwort)
 - **Voice-to-Text Ingestion:** Empfang von Telegram-Sprachnachrichten (`.ogg`/Opus) über das Hermes-Gateway und Transkription via Whisper (lokal oder API).

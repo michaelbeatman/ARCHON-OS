@@ -451,8 +451,8 @@ Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon O
 
 11. **Workflow-Engine (n8n Automation Mesh auf Port 5678)**
     * **Problem:** Komplexe Trigger-Action-Ketten überfordern lineare Chat-Agenten.
-    * **Mechanik:** Visueller Workflow-Editor für Cron-Jobs, API-Connectors und Webhook-Ketten.
-    * **Nutzen:** Zeitgesteuerte und ereignisbasierte Automatisierungsroutinen.
+    * **Mechanik:** Visueller Workflow-Editor für Cron-Jobs, API-Connectors und Webhook-Ketten. **Aktivierte Routinen:** 1. *Morning-Briefing* (Werktags 07:30 Uhr & Webhook `POST /webhook/archon-morning-briefing` mit Obsidian-Ablage und Telegram-Versand), 2. *Weekly Maintenance & Audit* (Sonntags 23:00 Uhr mit DB-Backup und Health-Check), 3. *RSS & News Watchdog* (stündlicher Scan), plus 5 aktive Funktions-Webhooks für Extraktion, Messaging, Dokumente, Feed-Suche und CRM-Sync.
+    * **Nutzen:** Autonome zeitgesteuerte Hintergrundroutinen ohne manuelles Zutun.
 
 12. **LLM Gateway (OmniRoute AI Router Dashboard)**
     * **Problem:** Abhängigkeit von einzelnen LLM-Providern und unkalkulierbare API-Kosten.

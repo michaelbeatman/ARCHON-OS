@@ -3961,6 +3961,29 @@ async def api_voice_synthesize(payload: VoiceSynthesizePayload):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class TelegramSendPayload(BaseModel):
+    text: str
+    chat_id: Optional[str] = ""
+    parse_mode: Optional[str] = "Markdown"
+
+
+@app.post("/api/telegram/send")
+async def api_telegram_send(payload: TelegramSendPayload):
+    """
+    Versendet eine Benachrichtigung, ein Briefing oder System-Statusnachricht
+    direkt an Telegram (z. B. aufgerufen durch n8n Automatisierungs-Routinen).
+    """
+    import telegram_notify
+    if not payload.text:
+        raise HTTPException(status_code=400, detail="Text darf nicht leer sein.")
+    try:
+        res = telegram_notify.send_telegram_message(payload.text, parse_mode=payload.parse_mode)
+        return {"status": "success", "result": res}
+    except Exception as e:
+        logger.warning(f"[TelegramSend] Fehler: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 # =========================================================================
 # ZENTRALER ENTSCHEIDUNGS-SERVICE (12.10.2026, User-Entscheidung "2c")
 # kanban.db ist die WAHRHEIT: Eine Entscheidung IST ein Kanban-Task im Status

@@ -390,3 +390,112 @@ curl.exe -s http://127.0.0.1:8090/api/health
 ```bash
 curl.exe -s http://127.0.0.1:2375/version
 ```
+
+---
+
+# Anhang: System-Glossar (Kernansichten & Mechaniken)
+
+Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon OS (inklusive Version v0.3.5).
+
+### I. Die 20 System-Ansichten & Spezial-Studios
+
+1. **Mission Control (Monitoring-Cockpit & Leitstand)**
+   * **Problem:** Fehlender Gesamtüberblick über Flottenlast, TPM-Durchsatz, Kosten und blockierte Freigaben.
+   * **Mechanik:** Bündelt 5 KPI-Kacheln, Board-Projektion, Active Process Inspection Bar (3-Slot-Footer), 15-Minuten-Token-Aktivitätsband und Live-Audit-Stream.
+   * **Nutzen:** Verzögerungsfreie 360°-Überwachung des gesamten Systems auf einem Bildschirm.
+
+2. **Operations – Kanban Board & Task-Engine**
+   * **Problem:** Aufgaben gehen in reinen Chat-Verläufen unter und lassen sich weder steuern noch auditieren.
+   * **Mechanik:** 5 Lebenszyklus-Spalten auf `kanban.db` (Single Source of Truth) mit WIP-Limits, Prioritätsfiltern (P0–P3), Zeiterfassung und Obsidian-Sync. **Neu in v0.3.5:** Integriert das 4-Augen Qualitäts-Gate: Vor Verschieben auf `done` prüft ein Peer-Reviewer (Katharina Völk für QM/Compliance oder Robert) das Arbeitsergebnis auf Vollständigkeit, Substanz und Handlungsfähigkeit (1–100% Score) mit Status-Sperre bei `changes_requested` und Human-in-the-Loop Override (`force=True`).
+   * **Nutzen:** Verhindert unfertige Arbeitsstände im `done`-Status durch verbindliches Vier-Augen-Review.
+
+3. **Operations – Interaktives 2D-Organigramm & Berichtslinien**
+   * **Problem:** Flache Agentenlisten bieten keine Hierarchie für Eskalationen oder Vertretungsregeln.
+   * **Mechanik:** Visualisiert 56 Knoten und 55 Berichtslinien als 2D-Graph (Apex -> CEO Robert -> Fach-Leads -> Spezialisten) mit Drag & Drop und Speicherung in `config/org_hierarchy.json`.
+   * **Nutzen:** Definiert verbindliche Eskalations- und Delegationsketten.
+
+4. **Operations – Interne Agenten-Kommunikation (Funkverkehr)**
+   * **Problem:** Fehlende Nachvollziehbarkeit bei agentenübergreifender Zusammenarbeit im Hintergrund.
+   * **Mechanik:** Live-Mitschnitt des A2A-Nachrichtenaustauschs zwischen Hermes-Kern und Subagenten.
+   * **Nutzen:** Volle Transparenz über Zwischenergebnisse und Absprachen.
+
+5. **Eingang & Triage (3-Spalten HITL-Gatekeeper & Postfach)**
+   * **Problem:** Unkontrollierte externe Impulse (Mails, Telegram, RSS) stören laufende Kernprozesse.
+   * **Mechanik:** 3-Spalten-Triage mit Vorprüfung, Sentiment-Analyse, Prioritäts-Klassifizierung und Freigabe-Buttons.
+   * **Nutzen:** Human-in-the-Loop Filter vor Übernahme in den operativen Task-Workflow.
+
+6. **Agenten-Kader & Flottenmanagement (8-Reiter-Cockpit)**
+   * **Problem:** Agentenkonfigurationen und Systemprompts waren verteilt und schwer wartbar.
+   * **Mechanik:** 8 Reiter für Kaderübersicht, Personalakten, Rollen, Soul-Engine, Skills, Marktplatz, Funk und Modellzuweisungen.
+   * **Nutzen:** Zentrale Administration aller 57 Agenten-Profile und Werkzeugberechtigungen.
+
+7. **Master Chat (Dual-Mode Workspace & Multi-Session-Sidebar)**
+   * **Problem:** Kein schneller Wechsel zwischen 1:1-Dialog, Gruppenchat und Missions-Auftrag.
+   * **Mechanik:** Dual-Mode ('Direkt' vs. 'Mission'), Multi-File-Upload, Screen-Capture, Reasoning-Budget (0 bis 16k Tokens) und Session-Historie. **Neu in v0.3.5:** Telegram Voice-Pipeline: Eingehende Sprachnachrichten (.ogg/Opus) werden via Whisper/Gemini transkribiert, per Rufname geroutet und Antworten via `edge-tts` (`de-DE-ConradNeural`) als natürliche Sprachmemos direkt auf Telegram zurückgesendet.
+   * **Nutzen:** Durchgängige Arbeitsfläche für Text-, Bild- und Sprachinteraktion.
+
+8. **AI Mastermind & Boardroom (55 Methodik-Frameworks)**
+   * **Problem:** Komplexe Entscheidungen werden oft einseitig oder ohne Methodik getroffen.
+   * **Mechanik:** 55 strukturierte Frameworks (SWOT, Six Thinking Hats, Pre-Mortem, AHP, etc.) mit Multi-Agenten-Debatte.
+   * **Nutzen:** Objektive, methodisch abgesicherte Entscheidungsvorlagen.
+
+9. **Showroom (Projekt-Explorer, Artefakt-Galerie & Python-Sandbox)**
+   * **Problem:** Generierte Deliverables (HTML, Berichte, Skripte) gehen im Chat-Verlauf verloren.
+   * **Mechanik:** Katalogisiert Arbeitsergebnisse nach Ersteller, Typ und Datum mit Markdown-/HTML-Rendering. **Neu in v0.3.5:** Interaktiver Live-Runner zur direkten Code-Ausführung im Browser mit 12s Timeout, isoliertem Scratch-Verzeichnis und ausklappbarem Terminal-Drawer (STDOUT, STDERR, Exit-Code und Millisekunden-Laufzeit).
+   * **Nutzen:** Deliverables und Skripte direkt im Showroom ohne Konsolenwechsel prüfen und ausführen.
+
+10. **Zentralbibliothek & 2nd Brain (RAG, Auto-OCR & Obsidian-Vault)**
+    * **Problem:** Silowissen in Dokumenten ohne zentrale semantische Suchbarkeit.
+    * **Mechanik:** RAG-Pipeline zu AnythingLLM (Port 3001), 3-stufige Ordnerstruktur in `obsidian_vault` und Auto-OCR.
+    * **Nutzen:** Semantisch durchsuchbares Unternehmensgedächtnis mit Live-Sync.
+
+11. **Workflow-Engine (n8n Automation Mesh auf Port 5678)**
+    * **Problem:** Komplexe Trigger-Action-Ketten überfordern lineare Chat-Agenten.
+    * **Mechanik:** Visueller Workflow-Editor für Cron-Jobs, API-Connectors und Webhook-Ketten.
+    * **Nutzen:** Zeitgesteuerte und ereignisbasierte Automatisierungsroutinen.
+
+12. **LLM Gateway (OmniRoute AI Router Dashboard)**
+    * **Problem:** Abhängigkeit von einzelnen LLM-Providern und unkalkulierbare API-Kosten.
+    * **Mechanik:** Dynamisches Multi-Provider Routing mit Fallback-Kaskaden und Latenz-Tracking.
+    * **Nutzen:** Höchste Ausfallsicherheit bei optimierten Token-Kosten.
+
+13. **Token Guard (Guardian & Token Analytics)**
+    * **Problem:** Unerwartete Kostenspitzen durch ausufernde Kontextfenster und Loops.
+    * **Mechanik:** 3 Sub-Views, Hard-Clipper (32k/20 Turns), Context-Swapper und Verbrauchs-Alerts.
+    * **Nutzen:** Transparente Kostenkontrolle und Budget-Schutz.
+
+14. **Erweiterungen & Modul-Zentrale (Pluginsystem)**
+    * **Problem:** Systemfähigkeiten ließen sich bisher nicht isoliert zur Laufzeit erweitern.
+    * **Mechanik:** 34 Evey-Plugins in 8 Fach-Reitern. **Neu in v0.3.5:** Standardisiertes Pluginsystem unter `plugins/<plugin_id>/plugin.json` mit 4 Lifecycle-Hooks (`on_load`, `on_enable`, `on_disable`, `on_unload`) und 2 Tool-Interzeptoren (`before_tool_execute`, `after_tool_execute`) inklusive 3 Starter-Plugins (System Metrics, Security Audit Hook, Cost Guard).
+    * **Nutzen:** Modulare Laufzeit-Erweiterungen ohne Kernel-Code-Eingriffe.
+
+15. **Research Lab (Deep Search & Evidenz-Triangulation)**
+    * **Problem:** Einfache Internetsuchen liefern oberflächliche, ungeprüfte Einzeltreffer.
+    * **Mechanik:** Mehrstufiges Forschungs-Cockpit mit Quellen-Monitor und Evidenz-Score. **Neu in v0.3.5:** Autonome Tiefenrecherche & Re-Search Loop v2: Zerlegung in 3–5 Teilfragen, autonome Lückenanalyse, bis zu 3 iterative Nachfolge-Suchläufe, Multi-Provider Fallback (SearXNG / Jina Reader) und SSRF-Schutz.
+    * **Nutzen:** Wissenschaftlich belastbare, triangulierte Dossiers.
+
+16. **Telemetrie & Logs (3-Quellen Live-Audit Stream)**
+    * **Problem:** Verteilte Logs in verschiedenen Containern erschweren die Fehlerdiagnose.
+    * **Mechanik:** Konsolidierter Echtzeit-Stream aus Backend, Hermes-Daemon und Docker-Proxy.
+    * **Nutzen:** Schnelle Ursachenanalyse bei Systemfehlern.
+
+17. **Spezial-Studio: Archon Prompt Studio (1.079 Vorlagen & Fabric SOP)**
+    * **Problem:** Unstrukturierte Prompts führen zu inkonsistenten Agenten-Ergebnissen.
+    * **Mechanik:** Durchsuchbare Vorlagenbibliothek mit 1.079 Fabric-Patterns und System-Prompt-Generatoren.
+    * **Nutzen:** Sofort einsatzbereite, praxiserprobte Prompt-Schablonen.
+
+18. **Spezial-Studio: Visual CSS Live Studio & In-Place Transform Gizmo (Alt + S)**
+    * **Problem:** UI-Anpassungen erfordern zeitraubende Code-Edits und Container-Neustarts.
+    * **Mechanik:** Live-CSS-Editor im Browser mit visuellem Gizmo und direktem Speichern in `custom.css`.
+    * **Nutzen:** Design-Anpassungen in Echtzeit ohne Entwicklungsunterbrechung.
+
+19. **Spezial-Studio: Design System Lab & AppShell Architekt**
+    * **Problem:** Inkonsistente UI-Komponenten und Layout-Brüche zwischen Ansichten.
+    * **Mechanik:** 15 standardisierte Komponenten, Farbtoken und AppShell-Layout-Presets.
+    * **Nutzen:** Einheitliche Gestaltung und schnelle Erstellung neuer Ansichten.
+
+20. **System Control Center & Release-Lifecycle**
+    * **Problem:** Systemeinstellungen und Aktualisierungen waren manuell und fehleranfällig.
+    * **Mechanik:** 7 Administrations-Reiter und Omnibox (`Strg + K`). **Neu in v0.3.5:** 1-Klick Updatesystem & Continuous Deployment mit Pre-Update Snapshots aller SQLite-Datenbanken (WAL) in `data/snapshots/` vor jedem Git-Pull, 1-Klick Rollback und minimalen Git-Stat-Prüfungen gegen Mount-Timeouts.
+    * **Nutzen:** Sichere 1-Klick Aktualisierung zwischen Entwicklungsumgebung und Homeserver.
+

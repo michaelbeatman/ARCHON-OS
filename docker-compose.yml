@@ -30,6 +30,17 @@ services:
       - ./agent_workspace/builds:/projects/builds
       - ${USERPROFILE}/.hermes:/opt/data
       - C:\Mein Obsidian:/opt/data/obsidian
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: "2.0"
 
   n8n:
     image: n8nio/n8n:latest
@@ -62,6 +73,17 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./scripts/patches/n8n_auth_service.js:/usr/local/lib/node_modules/n8n/dist/auth/auth.service.js:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "1.5"
 
   # -------------------------------------------------------------
   # DOCKER SOCKET PROXY (Safe API Access for Agents / Paperclip)
@@ -84,6 +106,17 @@ services:
       - DELETE=0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:2375/version >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
 
   # -------------------------------------------------------------
   # HERMES AGENT ORCHESTRATOR (Core Gateway on Port 8644)
@@ -116,6 +149,17 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - HERMES_DASHBOARD_SESSION_TOKEN=${HERMES_DASHBOARD_SESSION_TOKEN:-***REMOVED_HERMES_DASHBOARD_SESSION_TOKEN***}
     command: ["gateway", "run"]
+    healthcheck:
+      test: ["CMD", "/opt/hermes/.venv/bin/hermes", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 3072M
+          cpus: "2.5"
 
   # -------------------------------------------------------------
   # HERMES DASHBOARD (Metrics & Trace on Port 9119)
@@ -138,6 +182,17 @@ services:
     ports:
       - "127.0.0.1:9119:9119"
     command: ["dashboard", "--host", "127.0.0.1", "--port", "9120", "--no-open"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9120/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
 
   hermes-dashboard-proxy:
     image: alpine/socat:latest
@@ -148,66 +203,11 @@ services:
       - hermes-dashboard
     entrypoint: ["socat"]
     command: ["tcp-listen:9119,fork,reuseaddr", "tcp-connect:127.0.0.1:9120"]
-
-  # -------------------------------------------------------------
-  # HERMES WEBUI (Rückbau zu Gunsten nativer Chat-Integration)
-  # -------------------------------------------------------------
-  # hermes-webui:
-  #   image: hermes-agent-plus:latest
-  #   container_name: hermes-webui
-  #   restart: unless-stopped
-  #   networks:
-  #     - agentic_mesh
-  #   depends_on:
-  #     - hermes
-  #   volumes:
-  #     - ${USERPROFILE}/.hermes:/opt/data
-  #     - ./obsidian_vault:/opt/data/obsidian
-  #     - ./agent_workspace:/projects
-  #   environment:
-  #     - DOCKER_HOST=tcp://docker-socket-proxy:2375
-  #     - HERMES_HOME=/opt/data
-  #     - HERMES_WEBUI_AGENT_DIR=/opt/hermes
-  #     - HERMES_WEBUI_PYTHON=/opt/hermes/.venv/bin/python
-  #     - HERMES_WEBUI_STATE_DIR=/opt/data/webui
-  #     - HERMES_WEBUI_HOST=0.0.0.0
-  #     - HERMES_WEBUI_PORT=8787
-  #     - HERMES_WEBUI_ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8787,http://127.0.0.1:8787,http://localhost:9119,http://127.0.0.1:9119,*
-  #     - HERMES_WEBUI_TRUST_FORWARDED_HOST=true
-  #   ports:
-  #     - "127.0.0.1:8787:8787"
-  #   command: ["/opt/hermes/.venv/bin/python", "/opt/data/plugins/hermes-webui/server.py"]
-
-  # -------------------------------------------------------------
-  # PAPERCLIP ORCHESTRATOR — ENTFERNT 09.10.2026 (Orchestrierung läuft über Hermes Agent / Kanban)
-  # -------------------------------------------------------------
-  # paperclip:
-  #   build:
-  #     context: ./paperclip
-  #     dockerfile: Dockerfile
-  #   image: paperclip-orchestrator:latest
-  #   container_name: paperclip-orchestrator
-  #   restart: unless-stopped
-  #   networks:
-  #     - agentic_mesh
-  #   ports:
-  #     - "${PAPERCLIP_PORT:-3180}:3100"
-  #   environment:
-  #     - HOST=0.0.0.0
-  #     - PORT=3100
-  #     - PAPERCLIP_HOME=/paperclip
-  #     - PAPERCLIP_BIND=all-interfaces
-  #     - PAPERCLIP_DEPLOYMENT_MODE=authenticated
-  #     - PAPERCLIP_DEPLOYMENT_EXPOSURE=private
-  #     - PAPERCLIP_PUBLIC_URL=http://localhost:3180
-  #     - BETTER_AUTH_URL=http://localhost:3180
-  #     - BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8501,http://localhost:3180,http://127.0.0.1:8501,http://127.0.0.1:3180,http://localhost:3100
-  #     - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-archon-os-paperclip-secure-secret-key-2026-auth}
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-  #   volumes:
-  #     - paperclip_volume:/paperclip
-  #     - ./scripts/paperclip_hire_agent.cjs:/app/paperclip_hire_agent.cjs:ro
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.2"
 
   anything-llm:
     image: mintplexlabs/anythingllm:latest
@@ -224,9 +224,243 @@ services:
     volumes:
       - anythingllm_storage:/app/server/storage
       - /mnt/raid/AgenticOS-2026/agent_workspace/obsidian_vault:/app/server/storage/obsidian_vault:ro
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: "2.0"
 
+  litestream:
+    image: litestream/litestream:0.3.13
+    container_name: litestream
+    restart: unless-stopped
+    profiles: ["backup", "replication", "all"]
+    networks:
+      - agentic_mesh
+    volumes:
+      - ./config/litestream.yml:/etc/litestream.yml:ro
+      - ${USERPROFILE}/.hermes:/opt/data
+      - ./:/app
+      - ./data/litestream_replicas:/opt/litestream_replicas
+    command: ["replicate", "--config", "/etc/litestream.yml"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: langfuse
+    restart: unless-stopped
+    profiles: ["tracing", "observability", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${LANGFUSE_DATABASE_URL:-}
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-archon-langfuse-secret-key-2026}
+      - SALT=${LANGFUSE_SALT:-archon-langfuse-salt-2026}
+      - TELEMETRY_ENABLED=false
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "1.5"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    restart: unless-stopped
+    profiles: ["monitoring", "observability", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    restart: unless-stopped
+    profiles: ["monitoring", "observability", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-archon_admin_2026}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    profiles: ["monitoring", "observability", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "3002:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    container_name: caddy-gateway
+    restart: unless-stopped
+    profiles: ["gateway", "proxy", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  authelia:
+    image: authelia/authelia:4.38
+    container_name: authelia-sso
+    restart: unless-stopped
+    profiles: ["gateway", "proxy", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "9091:9091"
+    volumes:
+      - ./config/authelia:/config
+    environment:
+      - AUTHELIA_JWT_SECRET=${AUTHELIA_JWT_SECRET:-archon_jwt_secret_dev_2026}
+      - AUTHELIA_SESSION_SECRET=${AUTHELIA_SESSION_SECRET:-archon_session_secret_dev_2026}
+      - AUTHELIA_STORAGE_KEY=${AUTHELIA_STORAGE_KEY:-archon_storage_key_dev_2026}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: loki
+    restart: unless-stopped
+    profiles: ["logging", "observability", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./config/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: promtail
+    restart: unless-stopped
+    profiles: ["logging", "observability", "all"]
+    networks:
+      - agentic_mesh
+    volumes:
+      - ./config/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DATA_DIR:-./data}/logs:/opt/data/logs:ro
+    command: -config.file=/etc/promtail/config.yml
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.3"
+
+  metabase:
+    image: metabase/metabase:v0.50.23
+    container_name: metabase-bi
+    restart: unless-stopped
+    profiles: ["bi", "analytics", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "3030:3000"
+    volumes:
+      - metabase_data:/metabase-data
+      - ${DATA_DIR:-./data}:/opt/data:ro
+    environment:
+      - MB_DB_FILE=/metabase-data/metabase.db
+      - MB_ANON_TRACKING_ENABLED=false
+      - MB_SITE_NAME=Archon OS Business Intelligence
+      - JAVA_OPTS=-Xmx512m
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+
+  docuseal:
+    image: docuseal/docuseal:latest
+    container_name: docuseal-esign
+    restart: unless-stopped
+    profiles: ["esign", "legal", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "3080:3000"
+    volumes:
+      - docuseal_data:/data
+    environment:
+      - DOCUSEAL_DATABASE_URL=sqlite3:/data/docuseal.sqlite3
+      - PORT=3000
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
 
 volumes:
   n8n_data:
   paperclip_volume:
   anythingllm_storage:
+  prometheus_data:
+  grafana_data:
+  uptime_kuma_data:
+  caddy_data:
+  caddy_config:
+  loki_data:
+  metabase_data:
+  docuseal_data:

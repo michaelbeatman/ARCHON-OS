@@ -19,6 +19,22 @@ if "%COMMIT_MSG%"=="" (
 echo [1/3] Pruefe Status und fuege Aenderungen hinzu...
 git add -A
 
+echo [1b/3] Fuehre Sicherheits-Audit auf gestagte Dateien aus...
+if exist ".venv-tools\Scripts\python.exe" (
+    ".venv-tools\Scripts\python.exe" scripts\audit_secrets.py --staged
+) else (
+    python scripts\audit_secrets.py --staged
+)
+if errorlevel 1 (
+    echo.
+    echo ========================================================
+    echo   [SICHERHEITS-STOPP] Kritische Zugangsdaten erkannt!
+    echo   Git Push und Commit wurden abgebrochen.
+    echo ========================================================
+    git reset
+    exit /b 1
+)
+
 echo [2/3] Erstelle Commit: "%COMMIT_MSG%"...
 git commit -m "%COMMIT_MSG%"
 if errorlevel 1 (

@@ -127,7 +127,8 @@
       }
       
       const gwKeyEl = document.getElementById("setting-gateway-key");
-      if (gwKeyEl) gwKeyEl.value = "sk-949ea8f3766d6490-f9ab38-33bea980";
+      // Gateway key is loaded from backend environment or settings
+      if (gwKeyEl && !gwKeyEl.value) gwKeyEl.value = "";
       try {
         const res = await fetch("/api/v1/services");
         servicesList = await res.json();

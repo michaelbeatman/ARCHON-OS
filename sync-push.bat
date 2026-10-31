@@ -14,6 +14,24 @@ echo 2. Fuege freigegebene Aenderungen hinzu...
 git add -A
 
 echo.
+echo 2b. Fuehre Sicherheits-Audit auf gestagte Dateien aus...
+if exist ".venv-tools\Scripts\python.exe" (
+  ".venv-tools\Scripts\python.exe" scripts\audit_secrets.py --staged
+) else (
+  python scripts\audit_secrets.py --staged
+)
+if errorlevel 1 (
+  echo.
+  echo ===================================================
+  echo [SICHERHEITS-STOPP] Secret-Fund erkannt!
+  echo Git Commit und Push wurden vorab abgebrochen.
+  echo ===================================================
+  git reset
+  pause
+  exit /b 1
+)
+
+echo.
 echo 3. Erstelle Commit...
 for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value 2^>nul') do set dt=%%I
 if defined dt (

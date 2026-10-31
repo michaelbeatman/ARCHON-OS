@@ -1,0 +1,43 @@
+---
+# Defaults and configuration variables for archon_node role
+archon_repo_url: "https://github.com/micha/AgenticOS-2026.git"
+archon_install_root: "/opt/archon-os"
+archon_data_root: "/opt/data"
+archon_user_name: "{{ ansible_user | default(ansible_env.USER | default('ubuntu')) }}"
+
+# Required Linux system packages
+archon_system_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - git
+  - rsync
+  - jq
+  - unzip
+  - htop
+  - python3
+  - python3-pip
+  - python3-venv
+
+# Working and persistence directories
+archon_directories:
+  - "{{ archon_install_root }}"
+  - "{{ archon_install_root }}/data"
+  - "{{ archon_install_root }}/agent_workspace"
+  - "{{ archon_install_root }}/pocketbase/pb_data"
+  - "{{ archon_install_root }}/pocketbase-media/pb_data"
+  - "{{ archon_install_root }}/paperclip_data"
+  - "{{ archon_install_root }}/obsidian_vault"
+  - "{{ archon_install_root }}/static/avatars"
+  - "{{ archon_install_root }}/logs"
+  - "{{ archon_data_root }}"
+  - "{{ archon_data_root }}/backups"
+  - "{{ archon_data_root }}/secrets"
+  - "{{ archon_data_root }}/snapshots"
+  - "{{ ansible_env.HOME }}/.hermes"
+
+# Services to expose and check
+archon_compose_file: "docker-compose.dev.yml"
+archon_healthcheck_url: "http://localhost:8501/health"

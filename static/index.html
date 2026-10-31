@@ -315,6 +315,14 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
+          <button id="nav-finance" onclick="setTab('finance')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="receipt" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Rechnungswesen</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Belege & Finanzen</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
         </div>
       </div>
     </nav>
@@ -1255,6 +1263,9 @@
       <!-- VIEW: VIEW-GUARDIAN (Extracted) -->
       <div id="view-guardian-mount"></div>
 
+      <!-- VIEW CONTAINER: RECHNUNGSWESEN & BELEGE -->
+      <div id="view-finance-mount"></div>
+
       <!-- VIEW CONTAINER: ERWEITERUNGEN (8 FACHREITER) -->
       <!-- VIEW: VIEW-PLUGINS (Extracted) -->
       <div id="view-plugins-mount"></div>
@@ -1954,6 +1965,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/appshell_architect.js?v=202610271155"></script>
   <script src="/static/js/css_live_studio.js?v=202610261908"></script>
   <script src="/static/js/guardian.js?v=202610280630"></script>
+  <script src="/static/js/finance_controller.js?v=202610310545"></script>
   <script src="/static/js/prompt_studio.js?v=202610242200"></script>
   <script src="/static/js/wissensbibliothek.js?v=202610241345"></script>
   <script src="/static/js/skill_markt.js?v=202610272015"></script>
@@ -2465,6 +2477,7 @@ print('Ausführung erfolgreich!')</textarea>
           fetch('/static/views/view_plugins.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/view_research.html?v=202610272230').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/watchdog_view.html?v=202610272200').then(r => r.text()).then(html => { const el = document.getElementById('view-watchdog-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }),
+          fetch('/static/views/view_finance.html?v=202610310545').then(r => r.text()).then(html => { const el = document.getElementById('view-finance-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initFinanceView === 'function') initFinanceView(); }),
           fetch('/static/views/view_brain.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; })
         ]);
       } catch(err) {
@@ -2621,7 +2634,8 @@ print('Ausführung erfolgreich!')</textarea>
         "view-workspace-gallery",
         "view-brain",
         "view-agent-terminal",
-        "view-design-system"
+        "view-design-system",
+        "view-finance"
       ];
       // Verstecke ausnahmslos alle Views per inline-style und class
       allViews.forEach(id => {
@@ -2653,7 +2667,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (selectedView) {
         selectedView.classList.remove("hidden");
         selectedView.style.display = (tabId === "kanban" || tabId === "agent-profiles") ? "block" : "flex";
-        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream") {
+        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream" || tabId === "finance") {
           selectedView.style.height = "100%";
           selectedView.style.flex = "1 1 0%";
           selectedView.style.minHeight = "0";
@@ -2695,6 +2709,9 @@ print('Ausführung erfolgreich!')</textarea>
       if (tabId === "guardian") {
         if (typeof setGuardianSubTab === 'function') setGuardianSubTab(typeof guardianCurrentSubTab !== 'undefined' ? guardianCurrentSubTab : 'overview');
         if (shouldFetchTab('guardian')) loadGuardianData();
+      }
+      if (tabId === "finance") {
+        if (typeof initFinanceView === 'function') initFinanceView();
       }
       if (tabId === "plugins") {
         if (shouldFetchTab('plugins')) loadPluginCenterData();
@@ -2744,7 +2761,8 @@ print('Ausführung erfolgreich!')</textarea>
         "watchdog": "nav-watchdog",
         "kanban": "nav-kanban",
         "workspace-gallery": "nav-workspace-gallery",
-        "design-system": "nav-design-system"
+        "design-system": "nav-design-system",
+        "finance": "nav-finance"
       };
       const activeNavId = navIds[tabId] || (tabId === "paperclip" ? "nav-operations" : `nav-${tabId}`);
       const allNavBtns = document.querySelectorAll('.archon-nav-item');
@@ -2789,7 +2807,8 @@ print('Ausführung erfolgreich!')</textarea>
         "research": "Research Lab (Wissensbeschaffung)",
         "watchdog": "Internet-Watchdog (Web-Radar & Monitoring)",
         "kanban": "Pipeline",
-        "workspace-gallery": "Workspace Gallery"
+        "workspace-gallery": "Workspace Gallery",
+        "finance": "Rechnungswesen (Belege & Finanzen)"
       };
       const iconMap = {
         "inbox": "inbox",
@@ -2811,7 +2830,8 @@ print('Ausführung erfolgreich!')</textarea>
         "research": "microscope",
         "watchdog": "radar",
         "kanban": "git-branch",
-        "workspace-gallery": "images"
+        "workspace-gallery": "images",
+        "finance": "receipt"
       };
       const finalTitle = titleMap[tabId] || "Archon OS";
       const finalIcon = iconMap[tabId] || "layout-grid";
@@ -9695,6 +9715,28 @@ ${logExcerpt}
               <span class="text-[10px] uppercase font-mono font-bold text-emerald-500 block">Nächste Schritte:</span>
               <ul id="ops-qr-steps-list" class="list-disc list-inside text-[11px] text-emerald-600 dark:text-emerald-400 space-y-0.5 pl-1"></ul>
             </div>
+          </div>
+        </div>
+
+        <!-- HUMAN FEEDBACK & QUALITÄTS-BEWERTUNG (Pillar 6 & 7) -->
+        <div id="ops-detail-feedback-section" class="p-3.5 rounded-xl border border-amber-500/25 bg-amber-500/5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <span>⭐ Human-Feedback-Loop</span>
+            </span>
+            <div id="ops-detail-feedback-status" class="text-[10.5px] font-mono text-[var(--muted-foreground)]">Noch nicht bewertet</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="ops-feedback-thumbs-up" type="button" onclick="submitOpsTaskFeedback(1)" class="flex-1 py-1.5 px-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-mono text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>👍 Gut (Akzeptiert)</span>
+            </button>
+            <button id="ops-feedback-thumbs-down" type="button" onclick="submitOpsTaskFeedback(-1)" class="flex-1 py-1.5 px-3 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-mono text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>👎 Mangelhaft (Regressionstest)</span>
+            </button>
+          </div>
+          <div id="ops-feedback-comment-box" class="space-y-1.5">
+            <input id="ops-feedback-comment-input" type="text" placeholder="Korrekturhinweis oder Kritikpunkt eingeben (optional)..." class="w-full px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs text-[var(--foreground)] focus:outline-none focus:border-amber-500" />
+            <input id="ops-feedback-correction-input" type="text" placeholder="Erwartetes Wunschergebnis (Gold-Standard)..." class="w-full px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs text-[var(--foreground)] focus:outline-none focus:border-amber-500" />
           </div>
         </div>
 

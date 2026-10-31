@@ -5,12 +5,20 @@ def _mirror_to_archon_inbox(msg):
         os.makedirs('/opt/data/inbox/telegram', exist_ok=True)
         u = getattr(msg, 'from_user', None)
         s_name = f'@{u.username}' if (u and getattr(u, 'username', None)) else (getattr(u, 'first_name', 'User') if u else 'User')
+        
+        is_photo = bool(getattr(msg, 'photo', None))
+        is_doc = bool(getattr(msg, 'document', None))
+        caption = getattr(msg, 'caption', '') or ''
+        text_content = getattr(msg, 'text', '') or caption
+        msg_type = 'PHOTO' if is_photo else ('DOCUMENT' if is_doc else 'TEXT')
+
         doc = {
             'id': f'tg_{int(time.time())}_{getattr(msg, "message_id", "0")}',
-            'type': 'TEXT',
+            'type': msg_type,
             'sender': f'{s_name} ({getattr(u, "id", "")})',
             'chat_id': getattr(getattr(msg, 'chat', None), 'id', ''),
-            'text': getattr(msg, 'text', '') or '',
+            'text': text_content,
+            'is_receipt_candidate': is_photo or is_doc or any(w in text_content.lower() for w in ['beleg', 'rechnung', 'quittung', 'bewirtung', 'tanken', 'eur', '€']),
             'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),
             'mtime': time.time()
         }
@@ -11024,15 +11032,4 @@ def register(ctx) -> None:
         check_fn=telegram_deps_present,
         ensure_deps_fn=check_telegram_requirements,
         is_connected=_is_connected,
-        required_env=["TELEGRAM_BOT_TOKEN"],
-        install_hint="Run `hermes setup` to install Telegram support.",
-        setup_fn=interactive_setup,
-        apply_yaml_config_fn=_apply_yaml_config,
-        allowed_users_env="TELEGRAM_ALLOWED_USERS",
-        allow_all_env="TELEGRAM_ALLOW_ALL_USERS",
-        cron_deliver_env_var="TELEGRAM_HOME_CHANNEL",
-        standalone_sender_fn=_standalone_send,
-        max_message_length=4096,
-        emoji="✈️",
-        allow_update_command=True,
-    )
+        required_env=["TELEGRAM_BOT_TOKEN"                                                                                                                                                                                                                                                                                                                                                                                                                                                                             

@@ -172,6 +172,54 @@
         if (showOverlay) {
           hideLoadingOverlay();
         }
+        initOpsRealtimeStream();
+      }
+    }
+
+    // =========================================================================
+    // REAL-TIME SSE STREAMING (Pillar 1 & 2 / Live Push statt Polling)
+    // =========================================================================
+    let _opsEventSource = null;
+    let _opsSseReconnectTimer = null;
+
+    function initOpsRealtimeStream() {
+      if (_opsEventSource) return;
+      try {
+        _opsEventSource = new EventSource('/api/v1/events/stream');
+        _opsEventSource.onopen = function() {
+          console.log('[Archon SSE] Verbunden mit /api/v1/events/stream');
+        };
+
+        _opsEventSource.onmessage = function(event) {
+          try {
+            if (!event.data || event.data.startsWith(':')) return;
+            const msg = JSON.parse(event.data);
+            const evType = msg.type || '';
+            const evData = msg.data || {};
+
+            if (evType === 'kanban_updated' || evType === 'task_status' || evType === 'mission_created') {
+              console.log('[Archon SSE] Board-Änderung empfangen:', evType, evData);
+              loadOperationsData(false);
+            } else if (evType === 'task_chunk') {
+              const outEl = document.getElementById(`ops-task-stream-${evData.task_id}`);
+              if (outEl && evData.chunk) {
+                outEl.textContent += evData.chunk;
+                outEl.scrollTop = outEl.scrollHeight;
+              }
+            }
+          } catch(e) {}
+        };
+
+        _opsEventSource.onerror = function() {
+          if (_opsEventSource) {
+            _opsEventSource.close();
+            _opsEventSource = null;
+          }
+          clearTimeout(_opsSseReconnectTimer);
+          _opsSseReconnectTimer = setTimeout(initOpsRealtimeStream, 5000);
+        };
+      } catch(err) {
+        console.warn('[Archon SSE] Initialisierung fehlgeschlagen:', err);
       }
     }
 
@@ -2104,10 +2152,34 @@
         if (!res.ok) throw new Error('Task konnte nicht geladen werden');
         const data = await res.json();
         const task = data.task;
+        currentOpsDetailTaskAssignee = task.assignee || 'default';
 
         if (titleEl) titleEl.textContent = task.title;
         if (statusSelect) statusSelect.value = (task.status || 'todo').toLowerCase();
         if (bodyEl) bodyEl.textContent = task.body || 'Keine Beschreibung hinterlegt.';
+
+        // Human-Feedback-Status laden & Felder leeren
+        const fbStatusEl = document.getElementById('ops-detail-feedback-status');
+        const fbCommentEl = document.getElementById('ops-feedback-comment-input');
+        const fbCorrEl = document.getElementById('ops-feedback-correction-input');
+        if (fbCommentEl) fbCommentEl.value = '';
+        if (fbCorrEl) fbCorrEl.value = '';
+        if (fbStatusEl) {
+          fbStatusEl.textContent = 'Lade Feedback...';
+          fetch(`/api/operations/feedback/task/${encodeURIComponent(taskId)}`)
+            .then(r => r.json())
+            .then(d => {
+              if (d && d.feedbacks && d.feedbacks.length > 0) {
+                const latest = d.feedbacks[0];
+                fbStatusEl.innerHTML = latest.score > 0
+                  ? '<span class="text-emerald-500 font-bold">👍 Positiv bewertet</span>'
+                  : `<span class="text-rose-500 font-bold">👎 Mangelhaft gemeldet (${latest.auto_eval_case_id || 'Testfall'})</span>`;
+              } else {
+                fbStatusEl.textContent = 'Noch nicht bewertet';
+              }
+            })
+            .catch(() => { if (fbStatusEl) fbStatusEl.textContent = 'Noch nicht bewertet'; });
+        }
         // ERGEBNIS direkt im Dialog anzeigen (User-Wunsch 11.10.2026):
         // vorher nur body + wer/wann - das Ergebnis war nur per Suche zu finden.
         const resultSection = document.getElementById('ops-detail-result-section');
@@ -2652,3 +2724,41 @@
       });
     }
     window.onOndEditProviderChange = onOndEditProviderChange;
+
+    window.submitOpsTaskFeedback = async function(score) {
+      if (!currentOpsDetailTaskId) return;
+      const comment = document.getElementById('ops-feedback-comment-input')?.value || '';
+      const correction = document.getElementById('ops-feedback-correction-input')?.value || '';
+      const statusEl = document.getElementById('ops-detail-feedback-status');
+      if (statusEl) statusEl.textContent = 'Speichere Feedback...';
+      try {
+        const res = await fetch('/api/operations/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task_id: currentOpsDetailTaskId,
+            agent_id: typeof currentOpsDetailTaskAssignee !== 'undefined' ? currentOpsDetailTaskAssignee : 'default',
+            score: score,
+            comment: comment,
+            corrected_text: correction,
+            source: 'kanban_modal'
+          })
+        });
+        const d = await res.json();
+        if (res.ok && d.status === 'success') {
+          if (typeof showArchonToast === 'function') {
+            showArchonToast(score > 0 ? 'Feedback erfasst: Positiv' : 'Feedback erfasst: Neuer Gold-Standard Testfall generiert', 'success');
+          }
+          if (statusEl) {
+            statusEl.innerHTML = score > 0 
+              ? '<span class="text-emerald-500 font-bold">✅ Positiv erfasst</span>' 
+              : `<span class="text-rose-500 font-bold">⚠️ Als Testfall hinterlegt (${d.auto_eval_case_id || 'Gold-Case'})</span>`;
+          }
+        } else {
+          if (statusEl) statusEl.textContent = 'Fehler beim Speichern';
+        }
+      } catch (err) {
+        if (statusEl) statusEl.textContent = 'Fehler: ' + err;
+      }
+    };
+

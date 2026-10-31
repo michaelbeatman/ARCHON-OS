@@ -1,0 +1,118 @@
+---
+# ==============================================================================
+# Archon Node Provisioning Tasks
+# ==============================================================================
+
+- name: Update apt cache and install essential dependencies
+  apt:
+    name: "{{ archon_system_packages }}"
+    state: present
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+- name: Create keyring directory for Docker
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == "Debian"
+
+- name: Download Docker official GPG key
+  get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+    force: no
+  when: ansible_distribution == "Ubuntu"
+
+- name: Add Docker repository to Apt sources
+  apt_repository:
+    repo: "deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  when: ansible_distribution == "Ubuntu"
+
+- name: Install Docker CE, CLI, and Docker Compose plugin
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+- name: Ensure Docker service is started and enabled
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Add deployment user to docker group
+  user:
+    name: "{{ archon_user_name }}"
+    groups: docker
+    append: yes
+
+- name: Ensure target application and data directory tree exists
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ archon_user_name }}"
+    group: "{{ archon_user_name }}"
+    mode: '0775'
+  loop: "{{ archon_directories }}"
+
+- name: Check if .env configuration exists
+  stat:
+    path: "{{ archon_install_root }}/.env"
+  register: env_file_stat
+
+- name: Initialize .env from .env.example if missing
+  copy:
+    src: "{{ archon_install_root }}/.env.example"
+    dest: "{{ archon_install_root }}/.env"
+    remote_src: yes
+    owner: "{{ archon_user_name }}"
+    group: "{{ archon_user_name }}"
+    mode: '0600'
+  when: not env_file_stat.stat.exists and archon_install_root is defined
+
+- name: Configure file permissions for runtime data directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    recurse: yes
+    owner: "{{ archon_user_name }}"
+    group: "{{ archon_user_name }}"
+    mode: 'u=rwX,g=rX,o=rX'
+  loop:
+    - "{{ archon_install_root }}/data"
+    - "{{ archon_install_root }}/pocketbase"
+    - "{{ archon_install_root }}/static"
+  ignore_errors: yes
+
+- name: Launch Docker Compose stack
+  command:
+    cmd: "docker compose -f {{ archon_compose_file }} up -d"
+    chdir: "{{ archon_install_root }}"
+  become_user: "{{ archon_user_name }}"
+  register: docker_compose_output
+  changed_when: "'Started' in docker_compose_output.stdout or 'Created' in docker_compose_output.stdout"
+
+- name: Verify Mission Control health endpoint
+  uri:
+    url: "{{ archon_healthcheck_url }}"
+    method: GET
+    status_code: 200
+  register: health_result
+  until: health_result.status == 200
+  retries: 12
+  delay: 5
+  ignore_errors: yes
+
+- name: Display deployment completion status
+  debug:
+    msg: "Archon OS Node provisioning complete. Mission Control reachable on port 8501."

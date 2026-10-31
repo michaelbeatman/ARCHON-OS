@@ -18,6 +18,16 @@ credentials.json
 gmail_token.json
 google_token.json
 **/API-Keys.md
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+id_ed25519*
+*.kdbx
+*.ovpn
+secrets/
+data/secrets/
 
 # Obsidian Vaults & Personal Knowledge / Correspondence / Protocols
 *obsidian*

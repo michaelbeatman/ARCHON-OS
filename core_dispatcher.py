@@ -337,11 +337,33 @@ async def dispatch_to_omniroute_or_container(
     Zentraler Dispatcher: Nutzt dynamisch den im Profil konfigurierten Provider & das Sprachmodell.
     Ermittelt API-Keys live aus api_provider.collect_keys(), Profil-.env oder System-Environment.
     Geregelt über globalen Concurrency Throttle Semaphore (Pillar 2).
+    Instrumentiert mit OpenTelemetry- / Langfuse-Spans.
     """
+    t_start = time.time()
     async with _TASK_SEMAPHORE:
-        return await _dispatch_to_omniroute_or_container_exec(
+        res = await _dispatch_to_omniroute_or_container_exec(
             agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id
         )
+        duration_ms = (time.time() - t_start) * 1000.0
+        try:
+            from backend.otel_tracer import tracer
+            tr_id = f"task-{task_id}" if task_id else tracer.start_trace(f"exec.{agent_id}", task_id=task_id, agent_id=agent_id)
+            tracer.record_span(
+                trace_id=tr_id,
+                name=f"llm.{agent_id}",
+                span_type="llm",
+                agent_id=agent_id,
+                model=res.get("model") or model,
+                input_data=prompt[:500],
+                output_data=(res.get("content") or "")[:500],
+                input_tokens=res.get("input_tokens", 0),
+                output_tokens=res.get("output_tokens", 0),
+                duration_ms=duration_ms,
+                status="OK" if res.get("status") == "success" else "ERROR"
+            )
+        except Exception:
+            pass
+        return res
 
 async def _dispatch_to_omniroute_or_container_exec(
     agent_id: str, 
@@ -368,6 +390,19 @@ async def _dispatch_to_omniroute_or_container_exec(
             if lines:
                 memory_context_addon = "\n\n### [RELEVANTE ERKENNTNISSE AUS DEINEM LANGZEITGEDÄCHTNIS]:\n" + "\n".join(lines)
     except Exception as mem_err:
+        pass
+
+    # Prompt-Registry & Canary-Routing
+    effective_prompt_info = None
+    try:
+        from backend.prompt_registry import prompt_registry
+        eff = prompt_registry.get_effective_prompt(agent_id, task_id)
+        if eff and eff.get("prompt"):
+            system_prompt = eff["prompt"]
+            effective_prompt_info = eff
+            if eff.get("model") and not model:
+                model = eff["model"]
+    except Exception:
         pass
 
     full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{memory_context_addon}".strip()

@@ -1,0 +1,28 @@
+# Litestream Continuous SQLite Replication Configuration for Archon OS
+# Docs: https://litestream.io/reference/config/
+
+# Global replication settings
+dbs:
+  # 1. Hermes Kanban Database (Single Source of Truth fuer Tasks & Status)
+  - path: /opt/data/kanban.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/kanban.db
+        sync-interval: 5s
+        retention: 72h
+
+  # 2. Hermes State & Session History
+  - path: /opt/data/state.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/state.db
+        sync-interval: 10s
+        retention: 72h
+
+  # 3. Archon Agentic Memory (Standard-Tabellen: user_profile, learnings, kv_store, tasks)
+  - path: /app/data/agentic_memory.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/agentic_memory.db
+        sync-interval: 10s
+        retention: 72h

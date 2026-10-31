@@ -54,6 +54,19 @@ async def add_no_cache_for_avatars(request: Request, call_next):
 async def health_check():
     return {"status": "ok", "timestamp": time.time()}
 
+@app.get("/metrics")
+def prometheus_metrics():
+    """Prometheus-konformer Metriken-Endpoint fuer Scraping und Monitoring."""
+    from fastapi.responses import Response
+    try:
+        from backend.metrics_collector import metrics_collector
+        return Response(
+            content=metrics_collector.generate_prometheus_metrics(),
+            media_type="text/plain; version=0.0.4; charset=utf-8"
+        )
+    except Exception as e:
+        return Response(content=f"# Error collecting metrics: {e}\n", status_code=500, media_type="text/plain")
+
 WORKSPACE_DIR = "/app/agent_workspace" if os.path.exists("/app/agent_workspace") or os.path.exists("/.dockerenv") else "./agent_workspace"
 MEMORY_DIR = "/app/data" if os.path.exists("/app/data") else "."
 DATA_DIR = MEMORY_DIR
@@ -354,8 +367,9 @@ async def forward_to_hermes(request: Request) -> Response:
         
     fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length", "authorization", "cookie"]}
     fwd_headers["Host"] = "localhost:8787"
-    fwd_headers["X-Hermes-Session-Token"] = "***REMOVED_OMNIROUTE_API_KEY***"
-    fwd_headers["Authorization"] = "Bearer ***REMOVED_OMNIROUTE_API_KEY***"
+    _hermes_tok = os.getenv("HERMES_SESSION_TOKEN") or os.getenv("OMNIROUTE_API_KEY") or "sk-archon-session-dev"
+    fwd_headers["X-Hermes-Session-Token"] = _hermes_tok
+    fwd_headers["Authorization"] = f"Bearer {_hermes_tok}"
     
     body = await request.body()
     last_err = None
@@ -4438,13 +4452,13 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
                         "default": model_val,
                         "provider": provider_val,
                         "base_url": "http://omniroute:20128/v1",
-                        "api_key": "***REMOVED_OMNIROUTE_API_KEY***"
+                        "api_key": os.getenv("OMNIROUTE_API_KEY", "sk-archon-local-dev")
                     },
                     "providers": {
                         "omniroute": {
                             "name": "OmniRoute",
                             "base_url": "http://omniroute:20128/v1",
-                            "api_key": "***REMOVED_OMNIROUTE_API_KEY***",
+                            "api_key": os.getenv("OMNIROUTE_API_KEY", "sk-archon-local-dev"),
                             "key_env": "OMNIROUTE_API_KEY"
                         }
                     }

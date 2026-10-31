@@ -1,0 +1,89 @@
+name: Archon OS CI & E2E Quality Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  validate-and-audit:
+    name: 1. Pre-Flight Config & Secrets Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Quellcode auschecken
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Basis-Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml requests psutil
+
+      - name: Pre-Flight Konfigurationsprüfung
+        run: python scripts/validate_config.py
+
+      - name: Secrets- & Credential-Audit (Zero-Leak Gate)
+        run: python scripts/audit_secrets.py --all
+
+  test-suites:
+    name: 2. Unit- & Security-Tests
+    needs: validate-and-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Quellcode auschecken
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml requests psutil
+
+      - name: Security-Guard Tests ausführen
+        run: python -m unittest tests/test_security_and_validation.py
+
+      - name: Router Tests ausführen
+        run: python -m unittest tests/test_jev_router.py
+
+  e2e-lifecycle:
+    name: 3. End-to-End Lebenszyklus (Telegram -> Triage -> Task -> Fan-In -> Freigabe)
+    needs: test-suites
+    runs-on: ubuntu-latest
+    steps:
+      - name: Quellcode auschecken
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests psutil
+
+      - name: E2E Lifecycle & MCP Testsuite
+        run: python -m unittest tests/test_e2e_lifecycle.py
+
+  docker-lint:
+    name: 4. Docker-Compose Validierung
+    needs: validate-and-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Quellcode auschecken
+        uses: actions/checkout@v4
+
+      - name: Docker Compose Syntaxprüfung
+        run: docker compose config --quiet

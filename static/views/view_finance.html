@@ -1,0 +1,559 @@
+<div id="view-finance" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+
+  <!-- ========================================================================= -->
+  <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR RECHNUNGSWESEN & FINANZEN -->
+  <!-- ========================================================================= -->
+  <header id="finance-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+    <!-- Links: Status-Pulse, Titel & Subtitel & Badges -->
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="relative shrink-0 flex items-center justify-center">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h2 id="finance-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">
+            Rechnungswesen &amp; Belege
+          </h2>
+          <button type="button" onclick="openContextHelp('finance')" title="Hilfe zu Finanzen &amp; Belegen" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          </button>
+          <span id="finance-receipt-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">
+            0 Belege
+          </span>
+          <span id="finance-total-amount-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 flex items-center gap-1 shrink-0">
+            0.00 EUR
+          </span>
+        </div>
+        <p id="finance-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">
+          Vision-OCR-Belegextraktion, Telegram-Postfach, Kostenkategorien &amp; Buchhaltungs-Freigabe
+        </p>
+      </div>
+    </div>
+
+    <!-- Rechts: 4 Cadre-Subtab-Kacheln (72px) -->
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      
+      <!-- 1. Belege -->
+      <button 
+        type="button" 
+        id="finance-subtab-btn-receipts" 
+        onclick="setFinanceSubTab('receipts')" 
+        class="finance-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Belege &amp; Quittungen"
+      >
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative rounded-xl bg-slate-100 dark:bg-slate-800">
+          <i data-lucide="receipt" class="w-6 h-6 text-emerald-500"></i>
+        </div>
+        <span class="finance-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Belege</span>
+      </button>
+
+      <!-- 2. Ausgaben & Analytics -->
+      <button 
+        type="button" 
+        id="finance-subtab-btn-analytics" 
+        onclick="setFinanceSubTab('analytics')" 
+        class="finance-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Kostenanalysen &amp; BI"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative rounded-xl bg-slate-100 dark:bg-slate-800">
+          <i data-lucide="bar-chart-3" class="w-6 h-6 text-sky-500"></i>
+        </div>
+        <span class="finance-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Analytics</span>
+      </button>
+
+      <!-- 3. E-Signatur Verträge -->
+      <button 
+        type="button" 
+        id="finance-subtab-btn-contracts" 
+        onclick="setFinanceSubTab('contracts')" 
+        class="finance-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Verträge &amp; E-Signaturen"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative rounded-xl bg-slate-100 dark:bg-slate-800">
+          <i data-lucide="file-check-2" class="w-6 h-6 text-indigo-500"></i>
+        </div>
+        <span class="finance-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Verträge</span>
+      </button>
+
+      <!-- 4. Mahnwesen -->
+      <button 
+        type="button" 
+        id="finance-subtab-btn-dunning" 
+        onclick="setFinanceSubTab('dunning')" 
+        class="finance-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Mahnwesen &amp; Offene Posten"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative rounded-xl bg-slate-100 dark:bg-slate-800">
+          <i data-lucide="alert-triangle" class="w-6 h-6 text-amber-500"></i>
+        </div>
+        <span class="finance-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Mahnwesen</span>
+      </button>
+
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- SUBTAB 1: BELEGE & RECHNUNGEN (Split-View: Tabelle links + Inspektor rechts) -->
+  <!-- ========================================================================= -->
+  <div id="finance-view-receipts" class="flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden">
+    
+    <!-- Filterleiste & Schnell-Upload -->
+    <div class="p-2.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div class="flex items-center gap-2 flex-1 min-w-[260px]">
+        <div class="relative flex-1">
+          <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]"></i>
+          <input 
+            type="text" 
+            id="finance-search-input" 
+            oninput="renderFinanceReceipts()" 
+            placeholder="Händler, Kategorie oder ID suchen..." 
+            class="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] text-xs focus:outline-hidden focus:ring-1 focus:ring-sky-500"
+          >
+        </div>
+        <select 
+          id="finance-category-filter" 
+          onchange="renderFinanceReceipts()" 
+          class="px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs focus:outline-hidden"
+        >
+          <option value="ALL">Alle Kategorien</option>
+          <option value="Bewirtung">Bewirtung</option>
+          <option value="Tanken">Tanken / KFZ</option>
+          <option value="Reisekosten">Reisekosten</option>
+          <option value="Software">Software &amp; Cloud</option>
+          <option value="IT-Hardware">IT &amp; Hardware</option>
+          <option value="Buero">Büromaterial</option>
+          <option value="Sonstiges">Sonstiges</option>
+        </select>
+        <select 
+          id="finance-status-filter" 
+          onchange="renderFinanceReceipts()" 
+          class="px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs focus:outline-hidden"
+        >
+          <option value="ALL">Alle Status</option>
+          <option value="pending_review">Prüfung offen</option>
+          <option value="approved">Freigegeben</option>
+          <option value="rejected">Abgelehnt</option>
+        </select>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <label class="cursor-pointer px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+          <span>Beleg hochladen</span>
+          <input type="file" id="finance-file-upload-input" accept="image/*,.pdf" onchange="handleFinanceFileUpload(event)" class="hidden">
+        </label>
+        <button onclick="loadFinanceReceipts()" title="Neu laden" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Hauptbereich: 60/40 Split -->
+    <div class="flex-1 min-h-0 w-full flex flex-col md:flex-row gap-2 overflow-hidden">
+      
+      <!-- Linke Spalte: Belegtabelle (60%) -->
+      <div class="flex-1 min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex flex-col overflow-hidden">
+        <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 flex items-center justify-between text-xs font-bold text-[var(--muted-foreground)]">
+          <span>Erfasste Belege (<span id="finance-filtered-count">0</span>)</span>
+          <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Klick auf Zeile öffnet Beleg-Inspektor</span>
+        </div>
+        
+        <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="sticky top-0 bg-[var(--card)] z-10 text-[10px] uppercase font-mono tracking-wider text-[var(--muted-foreground)] border-b border-[var(--border)]">
+              <tr>
+                <th class="py-2 px-3">Datum</th>
+                <th class="py-2 px-3">Händler</th>
+                <th class="py-2 px-3">Kategorie</th>
+                <th class="py-2 px-3 text-right">Brutto</th>
+                <th class="py-2 px-3">Status</th>
+                <th class="py-2 px-3 text-center">Quelle</th>
+              </tr>
+            </thead>
+            <tbody id="finance-receipts-tbody" class="divide-y divide-[var(--border)] font-sans">
+              <tr>
+                <td colspan="6" class="py-8 text-center text-xs text-[var(--muted-foreground)]">
+                  Lade Belege...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Rechte Spalte: Detail-Inspektor & Beleg-Vorschau (40%) -->
+      <div id="finance-detail-panel" class="w-full md:w-[420px] lg:w-[460px] shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex flex-col overflow-hidden">
+        <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 flex items-center justify-between">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-500"></i>
+            <span class="text-xs font-bold text-[var(--foreground)] truncate">Beleg-Inspektor</span>
+          </div>
+          <span id="finance-detail-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+            Ausstehend
+          </span>
+        </div>
+
+        <div id="finance-detail-empty" class="flex-1 flex flex-col items-center justify-center p-6 text-center text-xs text-[var(--muted-foreground)]">
+          <i data-lucide="receipt" class="w-10 h-10 text-[var(--muted-foreground)] opacity-40 mb-2"></i>
+          <p class="font-semibold text-[var(--foreground)]">Kein Beleg ausgewählt</p>
+          <p class="text-[11px] mt-1">Wählen Sie links eine Zeile aus, um die Belegvorschau und OCR-Daten zu prüfen.</p>
+        </div>
+
+        <div id="finance-detail-content" class="hidden flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar p-3 space-y-3">
+          
+          <!-- Bild-Vorschau -->
+          <div class="w-full h-44 rounded-xl border border-[var(--border)] bg-black/10 dark:bg-black/30 overflow-hidden flex items-center justify-center relative group">
+            <img id="finance-detail-img" src="" alt="Belegvorschau" class="w-full h-full object-contain">
+            <a id="finance-detail-img-link" href="#" target="_blank" class="absolute bottom-2 right-2 px-2 py-1 rounded bg-black/70 text-white text-[10px] font-mono flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+              <i data-lucide="external-link" class="w-3 h-3"></i> Vollbild
+            </a>
+          </div>
+
+          <!-- Editierbare Formular-Felder -->
+          <div class="space-y-2 text-xs">
+            <div>
+              <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Händler / Aussteller</label>
+              <input type="text" id="finance-edit-merchant" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs mt-0.5">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Brutto (EUR)</label>
+                <input type="number" step="0.01" id="finance-edit-amount" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs font-mono font-bold mt-0.5">
+              </div>
+              <div>
+                <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">MwSt (EUR)</label>
+                <input type="number" step="0.01" id="finance-edit-tax" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs font-mono mt-0.5">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Kategorie</label>
+                <select id="finance-edit-category" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs mt-0.5">
+                  <option value="Bewirtung">Bewirtung</option>
+                  <option value="Tanken">Tanken / KFZ</option>
+                  <option value="Reisekosten">Reisekosten</option>
+                  <option value="Software">Software &amp; Cloud</option>
+                  <option value="IT-Hardware">IT &amp; Hardware</option>
+                  <option value="Buero">Büromaterial</option>
+                  <option value="Sonstiges">Sonstiges</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Zahlungsart</label>
+                <input type="text" id="finance-edit-payment" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs mt-0.5">
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Belegdatum</label>
+              <input type="text" id="finance-edit-date" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs font-mono mt-0.5">
+            </div>
+          </div>
+
+          <!-- Aktions-Buttons -->
+          <div class="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-2">
+            <button onclick="approveCurrentReceipt()" class="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer">
+              <i data-lucide="check" class="w-4 h-4"></i> Freigeben
+            </button>
+            <button onclick="saveCurrentReceiptEdits()" class="px-3 py-2 rounded-xl bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)] font-medium text-xs transition cursor-pointer">
+              Speichern
+            </button>
+            <button onclick="rejectCurrentReceipt()" class="px-3 py-2 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 font-medium text-xs transition cursor-pointer">
+              Ablehnen
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUBTAB 2: AUSGABEN-ANALYTICS & BI                                         -->
+  <!-- ========================================================================= -->
+  <div id="finance-view-analytics" class="hidden flex-1 min-h-0 w-full flex flex-col gap-3 overflow-y-auto custom-scrollbar p-1">
+    
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="p-4 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
+        <span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Gesamtausgaben (Erfasst)</span>
+        <div id="finance-kpi-total" class="text-2xl font-black text-[var(--foreground)] mt-1">0.00 EUR</div>
+        <span class="text-[11px] text-emerald-500 flex items-center gap-1 mt-1 font-medium">
+          <i data-lucide="trending-up" class="w-3.5 h-3.5"></i> Alle erfassten Belege
+        </span>
+      </div>
+
+      <div class="p-4 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
+        <span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Freigegebene Summe</span>
+        <div id="finance-kpi-approved" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">0.00 EUR</div>
+        <span class="text-[11px] text-[var(--muted-foreground)] mt-1 block">Bereit für Buchhaltungsexport</span>
+      </div>
+
+      <div class="p-4 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
+        <span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Offene Belege</span>
+        <div id="finance-kpi-pending" class="text-2xl font-black text-amber-500 mt-1">0</div>
+        <span class="text-[11px] text-[var(--muted-foreground)] mt-1 block">Warten auf Prüfung</span>
+      </div>
+    </div>
+
+    <!-- Metabase Quick Link -->
+    <div class="p-4 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center">
+          <i data-lucide="pie-chart" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-[var(--foreground)]">Erweiterte Metabase BI Berichte</h3>
+          <p class="text-xs text-[var(--muted-foreground)]">Vollständige Klick-Dashboards, monatliche Kostenkurven und Deckungsbeiträge.</p>
+        </div>
+      </div>
+      <a href="http://localhost:3030" target="_blank" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
+        <span>Metabase öffnen</span>
+        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+      </a>
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUBTAB 3: E-SIGNATUR VERTRÄGE (DocuSeal)                                  -->
+  <!-- ========================================================================= -->
+  <div id="finance-view-contracts" class="hidden flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden">
+    <div class="p-2.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between text-xs">
+      <div class="font-bold text-[var(--foreground)] flex items-center gap-2">
+        <i data-lucide="file-check-2" class="w-4 h-4 text-indigo-500"></i>
+        <span>Verträge zur digitalen Signatur (<span id="finance-contracts-count">0</span>)</span>
+      </div>
+      <a href="http://localhost:3080" target="_blank" class="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs font-semibold text-[var(--foreground)] flex items-center gap-1 transition">
+        <span>DocuSeal Konsole</span>
+        <i data-lucide="external-link" class="w-3 h-3"></i>
+      </a>
+    </div>
+
+    <div class="flex-1 min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs overflow-y-auto custom-scrollbar">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead class="sticky top-0 bg-[var(--card)] z-10 text-[10px] uppercase font-mono tracking-wider text-[var(--muted-foreground)] border-b border-[var(--border)]">
+          <tr>
+            <th class="py-2.5 px-3">Titel</th>
+            <th class="py-2.5 px-3">Unterzeichner</th>
+            <th class="py-2.5 px-3">E-Mail</th>
+            <th class="py-2.5 px-3">Status</th>
+            <th class="py-2.5 px-3">Datum</th>
+            <th class="py-2.5 px-3 text-right">Signatur-Link</th>
+          </tr>
+        </thead>
+        <tbody id="finance-contracts-tbody" class="divide-y divide-[var(--border)] font-sans">
+          <tr>
+            <td colspan="6" class="py-8 text-center text-xs text-[var(--muted-foreground)]">
+              Lade Verträge...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUBTAB 4: MAHNWESEN & DEBITOREN (3-Stufen Mahnwesen mit HITL-Freigabe)     -->
+  <!-- ========================================================================= -->
+  <div id="finance-view-dunning" class="hidden flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden">
+    
+    <!-- Mahnwesen Toolbar -->
+    <div class="p-2.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div class="flex items-center gap-2 flex-1 min-w-[240px]">
+        <div class="relative flex-1">
+          <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]"></i>
+          <input 
+            type="text" 
+            id="finance-dunning-search" 
+            oninput="renderDunningInvoices()" 
+            placeholder="Rechnung oder Kunde suchen..." 
+            class="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs focus:outline-hidden"
+          >
+        </div>
+        <select 
+          id="finance-dunning-filter" 
+          onchange="renderDunningInvoices()" 
+          class="px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs focus:outline-hidden"
+        >
+          <option value="ALL">Alle Rechnungen</option>
+          <option value="overdue">Nur Überfällige</option>
+          <option value="dunning_1">Stufe 1 (Erinnerung)</option>
+          <option value="dunning_2">Stufe 2 (Mahnung)</option>
+          <option value="dunning_3">Stufe 3 (Letzte Mahnung)</option>
+          <option value="open">Offen (in Frist)</option>
+          <option value="paid">Bezahlt</option>
+        </select>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="openCreateInvoiceModal()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Rechnung anlegen</span>
+        </button>
+        <button onclick="loadDunningInvoices()" title="Neu laden" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- 60/40 Split: Rechnungen links + Mahnentwurf rechts -->
+    <div class="flex-1 min-h-0 w-full flex flex-col md:flex-row gap-2 overflow-hidden">
+      
+      <!-- Tabelle Rechnungen (60%) -->
+      <div class="flex-1 min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex flex-col overflow-hidden">
+        <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 flex items-center justify-between text-xs font-bold text-[var(--muted-foreground)]">
+          <span>Ausgangsrechnungen (<span id="finance-dunning-count">0</span>)</span>
+          <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Klick zeigt Mahnentwurf</span>
+        </div>
+        
+        <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="sticky top-0 bg-[var(--card)] z-10 text-[10px] uppercase font-mono tracking-wider text-[var(--muted-foreground)] border-b border-[var(--border)]">
+              <tr>
+                <th class="py-2.5 px-3">Rechnung</th>
+                <th class="py-2.5 px-3">Kunde</th>
+                <th class="py-2.5 px-3">Fälligkeit</th>
+                <th class="py-2.5 px-3 text-right">Betrag</th>
+                <th class="py-2.5 px-3">Status / Mahnstufe</th>
+                <th class="py-2.5 px-3 text-right">Aktion</th>
+              </tr>
+            </thead>
+            <tbody id="finance-dunning-tbody" class="divide-y divide-[var(--border)] font-sans">
+              <tr>
+                <td colspan="6" class="py-8 text-center text-xs text-[var(--muted-foreground)]">
+                  Lade Rechnungsdaten...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Mahnentwurf Inspektor (40%) -->
+      <div id="finance-dunning-panel" class="w-full md:w-[420px] lg:w-[460px] shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex flex-col overflow-hidden">
+        <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 flex items-center justify-between">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i data-lucide="mail-warning" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span class="text-xs font-bold text-[var(--foreground)] truncate">Mahnungs-Entwurf &amp; Freigabe</span>
+          </div>
+          <span id="finance-dunning-stage-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-500/10 text-[var(--muted-foreground)] border border-[var(--border)]">
+            Keine Auswahl
+          </span>
+        </div>
+
+        <div id="finance-dunning-empty" class="flex-1 flex flex-col items-center justify-center p-6 text-center text-xs text-[var(--muted-foreground)]">
+          <i data-lucide="file-clock" class="w-10 h-10 text-[var(--muted-foreground)] opacity-40 mb-2"></i>
+          <p class="font-semibold text-[var(--foreground)]">Keine Rechnung ausgewählt</p>
+          <p class="text-[11px] mt-1">Wählen Sie links eine überfällige Rechnung, um eine Zahlungserinnerung oder Mahnung zu generieren.</p>
+        </div>
+
+        <div id="finance-dunning-content" class="hidden flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar p-3 space-y-3">
+          
+          <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 space-y-1 text-xs">
+            <div class="flex justify-between font-mono text-[11px]">
+              <span class="text-[var(--muted-foreground)]">Rechnungsnummer:</span>
+              <span id="dunning-detail-invid" class="font-bold text-[var(--foreground)]">-</span>
+            </div>
+            <div class="flex justify-between font-mono text-[11px]">
+              <span class="text-[var(--muted-foreground)]">Kunde:</span>
+              <span id="dunning-detail-cust" class="font-bold text-[var(--foreground)]">-</span>
+            </div>
+            <div class="flex justify-between font-mono text-[11px]">
+              <span class="text-[var(--muted-foreground)]">Verzug:</span>
+              <span id="dunning-detail-overdue" class="font-bold text-rose-500">-</span>
+            </div>
+          </div>
+
+          <!-- Stufen-Auswahl & Entwurf generieren -->
+          <div class="space-y-1">
+            <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Mahnstufe wählen</label>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="generateDraftForSelected(1)" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-amber-500 hover:text-amber-500 text-xs font-semibold text-center transition cursor-pointer">
+                Stufe 1<br><span class="text-[9.5px] font-normal text-[var(--muted-foreground)]">Erinnerung (0€)</span>
+              </button>
+              <button onclick="generateDraftForSelected(2)" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-orange-500 hover:text-orange-500 text-xs font-semibold text-center transition cursor-pointer">
+                Stufe 2<br><span class="text-[9.5px] font-normal text-[var(--muted-foreground)]">Mahnung (+5€)</span>
+              </button>
+              <button onclick="generateDraftForSelected(3)" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-rose-500 hover:text-rose-500 text-xs font-semibold text-center transition cursor-pointer">
+                Stufe 3<br><span class="text-[9.5px] font-normal text-[var(--muted-foreground)]">Letzte (+10€)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Entwurfstext zur Prüfung / Bearbeitung -->
+          <div class="space-y-1 flex-1 flex flex-col">
+            <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Entwurfsschreiben (Vorschau)</label>
+            <textarea 
+              id="dunning-draft-textarea" 
+              rows="9" 
+              class="w-full p-2.5 rounded-xl bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs font-mono leading-relaxed focus:outline-hidden custom-scrollbar"
+              placeholder="Hier erscheint der generierte Mahnentwurf..."
+            ></textarea>
+          </div>
+
+          <!-- Aktionen -->
+          <div class="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-2">
+            <button onclick="approveCurrentDunningDraft()" id="btn-approve-dunning" class="flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer">
+              <i data-lucide="send" class="w-4 h-4"></i> Mahnung freigeben &amp; versenden
+            </button>
+            <button onclick="markCurrentInvoicePaid()" class="px-3 py-2 rounded-xl bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600/20 font-bold text-xs transition cursor-pointer">
+              Als bezahlt markieren
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Rechnungs-Anlage Modal -->
+  <div id="modal-create-invoice" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xl p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <h3 class="text-sm font-bold text-[var(--foreground)] flex items-center gap-2">
+          <i data-lucide="receipt" class="w-4 h-4 text-sky-500"></i> Neue Ausgangsrechnung
+        </h3>
+        <button onclick="closeCreateInvoiceModal()" class="p-1 rounded-lg hover:bg-[var(--secondary)] text-[var(--muted-foreground)] cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Kundenname / Firma</label>
+          <input type="text" id="new-inv-customer" placeholder="z. B. Musterfirma GmbH" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs mt-0.5">
+        </div>
+        <div>
+          <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">E-Mail Adresse</label>
+          <input type="email" id="new-inv-email" placeholder="buchhaltung@musterfirma.de" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs mt-0.5">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Nettobetrag (EUR)</label>
+            <input type="number" step="0.01" id="new-inv-amount" placeholder="1000.00" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs font-mono font-bold mt-0.5">
+          </div>
+          <div>
+            <label class="text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold">Zahlungsziel (Tage)</label>
+            <input type="number" id="new-inv-days" value="14" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-xs font-mono mt-0.5">
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-[var(--border)] flex justify-end gap-2">
+        <button onclick="closeCreateInvoiceModal()" class="px-3 py-1.5 rounded-xl border border-[var(--border)] hover:bg-[var(--secondary)] text-xs font-medium text-[var(--foreground)] cursor-pointer">
+          Abbrechen
+        </button>
+        <button onclick="submitNewInvoice()" class="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-xs cursor-pointer">
+          Rechnung speichern
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>

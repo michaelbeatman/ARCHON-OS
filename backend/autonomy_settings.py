@@ -276,6 +276,17 @@ DEFAULT_AUTONOMY_SETTINGS: Dict[str, Dict[str, Any]] = {
         "max_ram_pct": 85,
         "min_free_disk_gb": 2.0,
         "throttle_action": "pause_low_priority"
+    },
+    # Benachrichtigungs-Einstellungen und Ruhezeiten (Quiet Hours / Digest)
+    "notification_policy": {
+        "quiet_hours_enabled": True,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "07:00",
+        "timezone": "Europe/Berlin",
+        "allow_emergency_during_quiet": True,
+        "digest_enabled": True,
+        "digest_delivery_time": "08:00",
+        "min_severity": "low"
     }
 }
 

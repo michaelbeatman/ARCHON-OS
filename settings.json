@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +390,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,12 +410,52 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-10-31T10:10:43.193266",
+        "last_check": "2026-10-31T10:40:50.351704",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-10-31T10:10:43.193266",
+    "last_run": "2026-10-31T10:40:50.351704",
     "recent_findings": [
+      {
+        "id": "f3a3354ba9f050b0",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "NRW: Warum Verteidigung erstmals ein Hauptthema in der Innovationstrategie 2028–2034 ist - Table.Briefings",
+        "link": "https://news.google.com/rss/articles/CBMivgFBVV95cUxQQk0zVl85SmJfSmM3WEtHcHllejNDdV9fMUdPUlNrLUFsM2FUN0xkM0hOdWJYUXVTSnF4N1ZzS3BMd2M3VHRScHJNb3NER3pnaHRxTDZLbzQtaTNlWGlOUW81LUFsZGQ5bHh5b0VFaG5PNWsxcWNTNThJWXBwWnRXa2J3UUpFalVlRF9nMUdYNEk1VGlsMEltblBXOUU4NmFHaGxWblVCOGlZb3hTY0hYNGNiQXBadm04LW5UZ0VB?oc=5",
+        "published": "Wed, 28 Oct 2026 17:17:44 GMT",
+        "detected_at": "31.10.2026 10:40"
+      },
+      {
+        "id": "b8d9fd62d8b2d972",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "UN: Türkei nominiert Chef der OSZE für Nachfolge von Guterres",
+        "link": "https://www.handelsblatt.com/politik/international/un-tuerkei-nominiert-chef-der-osze-fuer-nachfolge-von-guterres/100266310.html",
+        "published": "Sat, 31 Oct 2026 10:19:17 GMT",
+        "detected_at": "31.10.2026 10:40"
+      },
+      {
+        "id": "a792bede768c64f2",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Polen: Krise um Verfassungsgericht in Polen spitzt sich zu",
+        "link": "https://www.handelsblatt.com/politik/international/polen-krise-um-verfassungsgericht-in-polen-spitzt-sich-zu/100266281.html",
+        "published": "Sat, 31 Oct 2026 10:05:47 GMT",
+        "detected_at": "31.10.2026 10:40"
+      },
+      {
+        "id": "95a0b7ec5f58900f",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "MacBook Pro mit Touch: Fünf interessante technische Kleinigkeiten",
+        "link": "https://www.heise.de/news/MacBook-Pro-mit-Touch-Fuenf-interessante-technische-Kleinigkeiten-11506972.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-10-31T11:26:00+01:00",
+        "detected_at": "31.10.2026 10:40"
+      },
       {
         "id": "6a4a7fc52f9a32df",
         "target_id": "src-finanzen-boerse",
@@ -683,51 +723,6 @@
         "link": "https://www.tagesschau.de/inland/innenpolitik/linke-berlin-parteitag-eralp-100.html",
         "published": "Sat, 31 Oct 2026 08:43:12 +0100",
         "detected_at": "31.10.2026 08:00"
-      },
-      {
-        "id": "e05719c113775967",
-        "target_id": "src-invest-radar",
-        "target_name": "High-Impact Investitions-Radar",
-        "category": "Investitionen & Geopolitik",
-        "title": "Asien-Reise - Kanzler Merz wirbt in Singapur für Freihandelsabkommen mit Ländern der Pazifik-Region - Deutschlandfunk",
-        "link": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOYVc5Y0RyemtGUWhaRWdiUkY3RVhDdWJDT2gwUlFnanVPc3VVLUJPYXQ1SEEtZ292a0VidUY0N3Nza1N1T0hrM1JPZmZ3RHltVU12M3dqSVR3TGhNbnFVQzhESWxPekxrdmhYQ1c2RldXTHJJRGFhRUpFRTlwX2kyTlVEWndlTjVXRmxhZ3lHVFR5aWZQN2JQLVg0OVhHdjRpTjZTb2ZkSVNDT1MyZEY3Nmo1VS1SWjQwY1NNQ1B2R2Vfa1FpRlE?oc=5",
-        "published": "Tue, 27 Oct 2026 11:03:28 GMT",
-        "detected_at": "31.10.2026 07:38",
-        "is_priority": true,
-        "matched_keywords": [
-          "handelsabkommen",
-          "freihandelsabkommen"
-        ]
-      },
-      {
-        "id": "3a45b40adca8758b",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Deutschland: „Mehr Begeisterung führt zu mehr Gelassenheit“ - Dieser Merz-Berater empfiehlt weniger Angst vor der AfD",
-        "link": "https://www.handelsblatt.com/politik/deutschland/deutschland-dieser-merz-berater-empfiehlt-weniger-angst-vor-der-afd/100264898.html",
-        "published": "Sat, 31 Oct 2026 06:56:00 GMT",
-        "detected_at": "31.10.2026 07:30"
-      },
-      {
-        "id": "1377f4937dc10221",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Investition vergrößert: Führungskraft greift bei Knorr-Bremse-Anteilen zu - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMixAFBVV95cUxNYkw1aEtmSWQwNTV3c2hQZGtFTEU2em9PV2FvZWVwaDBUanc5eDQ2QlV2ZG1DZmR2amw1SnhmQ0RZZHFDOXFQMERaVkplbm50eUNNWjJKX3pGRHNGR2l2R0g1dll5NlJZMGNyTnBnUEpfMFZrcWdka1pjS1llalpNSlhwel8tV3NJVms2WTNQTGJCXzVlTklQUlBmWk9yTnBxZktDQlc3R0Q5bXBydHpYUWs5ZGdPZEFEOEoxQjZqT3U1ZlMw?oc=5",
-        "published": "Sat, 31 Oct 2026 07:01:11 GMT",
-        "detected_at": "31.10.2026 07:30"
-      },
-      {
-        "id": "d9e44f377899564b",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Investition vergrößert: Führungskraft greift bei Knorr-Bremse-Anteilen zu - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMixAFBVV95cUxPNGlIbkRMY2p4Y2FfWno2dGRUNmktMHh0TmhucEMzams3TlVINWZiTjFteUoxNkF0U1UwWU5NUnlnWHdBZmlVMnJCMW51X1NuQVdJbjRGc2p3b09KVnJOeUU1TnNqNUVZeDB6QUxEdVJwRC1qWDFxQWVSeG1pWk5FSlZ5dkRTZEZsUHNsN2E4U3I4YkRNM1d6TXJZMnFxdDBUSFNTdENieXVhRkdhaDBtVHZtNzF6T0hwQWV5TFAyX2hHTVhJ?oc=5",
-        "published": "Sat, 31 Oct 2026 07:01:11 GMT",
-        "detected_at": "31.10.2026 07:30"
       }
     ]
   }

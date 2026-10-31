@@ -19,6 +19,14 @@
 | **14** | **Telegram Voice-Pipeline (Voice-to-Text & Audio)** | Hoch | Abgeschlossen | Whisper-Transkription eingehender Telegram-Sprachnachrichten, Delegation an Ziel-Agenten, Sprachausgabe via edge-tts |
 | **15** | **Kanban Qualitäts-Gate (4-Augen-Review vor Done)** | Hoch | Abgeschlossen | Automatischer Peer-Review-Prüfschritt vor Verschieben auf "Done", Prüfung auf Vollständigkeit & Belege, Re-Iterationsschleife |
 | **16** | **Interaktive Showroom-Sandbox & Live-Runner** | Normal | Abgeschlossen | Sichere Ausführung von generiertem Code (Python-Datenanalyse, HTML/JS-Rechner) direkt im Showroom mit interaktiven Testdaten |
+| **17** | **API-Tokens & Key-Sicherheit mit Scopes** | Hoch | Abgeschlossen | Feingranulare Scopes (`read:tasks`, `write:tasks`, `admin:system`), Token-Bucket Rate-Limits & Settings-Tab (`backend/api_auth.py`) |
+| **18** | **E-Mail-Freigabe-Queue (4-Augen / HITL)** | Hoch | Abgeschlossen | Quarantäne-Warteschlange für E-Mail-Entwürfe autonomer Agenten vor Versand (`backend/email_draft_queue.py`) |
+| **19** | **Kanban-Mehrfachaktionen & 10-Minuten-Undo** | Hoch | Abgeschlossen | Bulk-Move, Bulk-Delete, Bulk-Assignee mit persistenten DB-Snapshots und 10-Minuten Reversibilitäts-Puffer |
+| **20** | **Agent-Scorecards & Personalakte (Obsidian-Sync)** | Hoch | Abgeschlossen | 8 standardisierte operative Leistungskennzahlen in der Personalakte mit bidirektionalem Sync in `Personalakten/<agent>.md` |
+| **21** | **GoBD & ISO 27001 Revisions-Audit-Log** | Kritisch | Abgeschlossen | Lückenlose SHA-256 Hashkette (Merkle-Prinzip), Manipulationserkennung `/verify`, 1-Klick Prüfer-Export (JSON/CSV) |
+| **22** | **Datenschutz-Routing (Zero Egress) & Lokales LLM** | Kritisch | Abgeschlossen | Automatisches Routing sensibler Daten an On-Premise LLMs (LM Studio/Ollama), EU-Fallback (Mistral AI), Footer-Statusleuchten `LOKAL`/`DSGVO` |
+| **23** | **Dual-LLM Guard gegen Prompt Injection** | Kritisch | Abgeschlossen | 2-Stufen Quarantäne-Filterung externer Daten vor Übergabe an Werkzeug-Agenten & interaktiver `[T]`-Trusted Source Toggle |
+| **24** | **Verschlüsselter Notfallzugang (Break-Glass Protocol)** | Kritisch | Abgeschlossen | Zero-Dependency PBKDF2-200k/HMAC verschlüsselter Tresor (`break_glass_vault.enc`) für Katastrophen-Wiederherstellung bei Betreiberausfall |
 
 ---
 
@@ -131,4 +139,39 @@
 - **Ausführungsumgebung:** Einbindung einer sicheren Code-Sandbox im Showroom (Browser-basiert via Pyodide oder flüchtiger Docker-Subcontainer).
 - **Interaktive Vorschau:** Direkte Ausführung von generierten Python-Datenanalysen, Tabellen-Kalkulationen oder HTML5/JS-Rechnern mit dynamischen Eingabefeldern.
 - **Artefakt-Export:** Bereitstellung von Download- und Teilen-Optionen für validierte Code-Artefakte.
+
+---
+
+### Meilenstein 17: API-Tokens & Key-Sicherheit mit Scopes (Abgeschlossen)
+- **Feingranulare Scopes:** API-Keys mit Rechten (`read:tasks`, `write:tasks`, `execute:agent`, `admin:system`).
+- **Token-Bucket Rate-Limiting:** Konfigurierbares Sliding-Window Rate-Limiting zum Schutz vor DoS (`backend/api_auth.py`).
+- **Settings-Tab:** Verwaltung und Revocation von API-Schlüsseln im System Control Center.
+
+### Meilenstein 18: E-Mail-Freigabe-Queue (Abgeschlossen)
+- **HITL-Quarantäne:** Ausgehende E-Mail-Entwürfe autonomer Agenten werden in `pending_approval` gehalten (`backend/email_draft_queue.py`).
+- **Postfach-Integration:** Eigener Reiter *Entwürfe & Freigaben* im Postfach mit Freigabe-, Überarbeitungs- und Löschfunktion.
+
+### Meilenstein 19: Kanban-Mehrfachaktionen & 10-Minuten-Undo (Abgeschlossen)
+- **Massenoperationen:** Checkbox-Auswahl für Bulk-Move, Bulk-Delete und Bulk-Assignee im Kanban-Board (`backend/operations_api.py`).
+- **Reversibilität:** Automatischer SQLite-Snapshot vor jeder Sammeloperation und 10-Minuten-Undo-Toast zur vollständigen Wiederherstellung.
+
+### Meilenstein 20: Agent-Scorecards & Personalakte (Abgeschlossen)
+- **8 Operative Kennzahlen:** Erfolgsrate, Token-Verbrauch, Kosten, Latenz, Tool-Zuverlässigkeit, HITL-Feedback, Pünktlichkeit, Aufgabenvolumen (`backend/agent_scorecards.py`).
+- **Obsidian-Synchronisation:** Nahtloser Abgleich mit Notizen und Beurteilungen in `Personalakten/<agent_id>.md`.
+
+### Meilenstein 21: Revisionssicheres GoBD / ISO 27001 Audit-Log (Abgeschlossen)
+- **SHA-256 Hashkette:** Unveränderliche Merkle-Verkettung aller System-, Finanz- und Freigabetransaktionen (`backend/audit_log.py`).
+- **Integritätsprüfung & Export:** REST-Endpunkt `/api/governance/audit-log/verify` zur Manipulationserkennung und 1-Klick Prüfbericht-Export als JSON/CSV.
+
+### Meilenstein 22: Datenschutz-Routing (Zero Egress) & Lokales LLM (Abgeschlossen)
+- **Zero Egress:** Sensible Datenkategorien (Finanzen, Verträge, CRM, HR) werden zwingend an lokale LLMs (LM Studio/Ollama) oder EU-Mistral geroutet (`backend/privacy_router.py`).
+- **DSGVO-Statusleuchten:** Permanente visuelle Indikatoren (`LOKAL` & `DSGVO`) im Footer der Seitenleiste.
+
+### Meilenstein 23: Dual-LLM Guard gegen Prompt Injection (Abgeschlossen)
+- **2-Stufen Quarantäne:** Fremddaten durchlaufen Stufe 1 (unprivilegiertes Modell ohne Tools) vor Übergabe an Stufe 2 (Werkzeug-Agent) (`backend/dual_llm_sanitizer.py`).
+- **`[T]`-Trusted Source Badges:** Interaktives Whitelisting vertrauenswürdiger Absender in der Inbox und im Master Chat.
+
+### Meilenstein 24: Verschlüsselter Notfallzugang (Break-Glass Protocol) (Abgeschlossen)
+- **Katastrophen-Wiederherstellung:** Zero-Dependency Verschlüsselung (PBKDF2-200k, HMAC-SHA256, Keystream) via `scripts/break_glass_recovery.py`.
+- **Notfall-Kit:** Bereitstellung von `data/backups/break_glass_vault.enc` und ausdruckbarer Anleitung `data/backups/BREAK_GLASS_RECOVERY_KIT.md`.
 

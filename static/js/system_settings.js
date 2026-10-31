@@ -193,7 +193,7 @@
       }
 
       activeSettingsTab = targetTab;
-      const tabs = ["kernel", "autonomy", "services", "routing", "frameworks", "plugins", "comm", "design", "update"];
+      const tabs = ["kernel", "autonomy", "services", "routing", "keys", "frameworks", "plugins", "comm", "design", "update"];
       tabs.forEach(t => {
         const pane = document.getElementById(`settings-tab-${t}`);
         const btn = document.getElementById(`btn-tab-${t}`);
@@ -217,6 +217,11 @@
         }
       });
 
+      if (targetTab === "keys") {
+        if (typeof loadApiKeys === "function") {
+          loadApiKeys();
+        }
+      }
       if (targetTab === "update") {
         if (typeof checkSystemUpdateStatus === "function") {
           checkSystemUpdateStatus();
@@ -2477,4 +2482,235 @@
     }
 
     window.pushChangesToGitHub = pushChangesToGitHub;
+
+    // =========================================================================
+    // API-KEYS & SCOPES ACCESS MANAGEMENT (t-6fad7a)
+    // =========================================================================
+    let lastGeneratedRawKey = "";
+
+    async function loadApiKeys() {
+      const tbody = document.getElementById("api-keys-table-body");
+      const badge = document.getElementById("api-keys-count-badge");
+      if (!tbody) return;
+
+      tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-[var(--muted-foreground)] font-sans">Lade API-Keys...</td></tr>';
+
+      try {
+        const res = await fetch("/api/operations/keys");
+        const data = await res.json();
+        const keys = (data.status === "success" && data.keys) ? data.keys : [];
+
+        if (badge) badge.innerText = `${keys.length} Key${keys.length === 1 ? "" : "s"}`;
+
+        if (keys.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8" class="py-8 text-center text-[var(--muted-foreground)] font-sans">
+                <div class="flex flex-col items-center justify-center gap-1.5">
+                  <i data-lucide="key" class="w-6 h-6 text-zinc-400 mb-1"></i>
+                  <span class="font-bold text-xs">Noch keine API-Keys vorhanden</span>
+                  <span class="text-[11px]">Klicke oben rechts auf "+ Neuen API-Key generieren", um n8n oder Clients anzubinden.</span>
+                </div>
+              </td>
+            </tr>
+          `;
+          if (typeof lucide !== "undefined") lucide.createIcons();
+          return;
+        }
+
+        tbody.innerHTML = keys.map(k => {
+          const isActive = k.is_active;
+          const statusBadge = isActive
+            ? '<span class="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">AKTIV</span>'
+            : '<span class="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold bg-zinc-500/10 text-zinc-500 border border-zinc-500/20">WIDERRUFEN</span>';
+
+          const scopesBadges = (k.scopes || []).map(s => {
+            let col = "bg-sky-500/10 text-sky-600 border-sky-500/20";
+            if (s === "kanban_rw") col = "bg-amber-500/10 text-amber-600 border-amber-500/20";
+            if (s === "agent_execute") col = "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+            if (s === "admin_full") col = "bg-rose-500/10 text-rose-600 border-rose-500/20";
+            return `<span class="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold border ${col}">${s}</span>`;
+          }).join(" ");
+
+          const createdDate = k.created_at ? new Date(k.created_at).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "-";
+          const lastUsed = k.last_used_at ? new Date(k.last_used_at).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "Nie";
+
+          const rpmText = k.rate_limit_rpm ? `${k.rate_limit_rpm} / Min` : "∞";
+          const rpdText = k.rate_limit_rpd ? `${k.rate_limit_rpd} / Tag` : "∞";
+
+          const actionBtn = isActive
+            ? `<button type="button" onclick="revokeApiKey('${k.key_id}', '${escapeHtml(k.name)}')" class="px-2 py-1 rounded text-[10px] font-mono font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border border-amber-500/30 transition cursor-pointer" title="Key sperren">Widerrufen</button>`
+            : `<button type="button" onclick="deleteApiKey('${k.key_id}', '${escapeHtml(k.name)}')" class="px-2 py-1 rounded text-[10px] font-mono font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/30 transition cursor-pointer" title="Key endgültig entfernen">Löschen</button>`;
+
+          return `
+            <tr class="hover:bg-[var(--secondary)]/20 transition-colors">
+              <td class="py-2.5 px-4 font-sans font-bold text-[var(--foreground)]">${escapeHtml(k.name)}</td>
+              <td class="py-2.5 px-3 font-mono text-[var(--muted-foreground)]">${escapeHtml(k.key_prefix)}</td>
+              <td class="py-2.5 px-3"><div class="flex flex-wrap gap-1">${scopesBadges}</div></td>
+              <td class="py-2.5 px-3 text-[10px] text-[var(--muted-foreground)]">${rpmText} | ${rpdText}</td>
+              <td class="py-2.5 px-3 text-[10px] text-[var(--muted-foreground)]">${createdDate}</td>
+              <td class="py-2.5 px-3 text-[10px] text-[var(--muted-foreground)]">${lastUsed}</td>
+              <td class="py-2.5 px-3">${statusBadge}</td>
+              <td class="py-2.5 px-4 text-right">${actionBtn}</td>
+            </tr>
+          `;
+        }).join("");
+
+        if (typeof lucide !== "undefined") lucide.createIcons();
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-4 text-center text-rose-500 font-sans">Fehler beim Laden: ${err.message}</td></tr>`;
+      }
+    }
+
+    function openCreateApiKeyModal() {
+      const modal = document.getElementById("modal-create-api-key");
+      if (modal) {
+        modal.classList.remove("hidden");
+        const nameInput = document.getElementById("new-key-name");
+        if (nameInput) {
+          nameInput.value = "";
+          setTimeout(() => nameInput.focus(), 50);
+        }
+      }
+    }
+
+    function closeCreateApiKeyModal() {
+      const modal = document.getElementById("modal-create-api-key");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    async function submitCreateApiKey() {
+      const nameInput = document.getElementById("new-key-name");
+      const name = nameInput ? nameInput.value.trim() : "";
+      if (!name) {
+        alert("Bitte gib einen Namen oder Verwendungszweck an (z. B. 'n8n Automation').");
+        if (nameInput) nameInput.focus();
+        return;
+      }
+
+      const scopes = [];
+      ["read_only", "kanban_rw", "agent_execute", "admin_full"].forEach(s => {
+        const cb = document.getElementById(`scope-${s}`);
+        if (cb && cb.checked) scopes.push(s);
+      });
+
+      if (scopes.length === 0) {
+        alert("Bitte wähle mindestens eine Berechtigung (Scope) aus.");
+        return;
+      }
+
+      const rpmInput = document.getElementById("new-key-rpm");
+      const rpdInput = document.getElementById("new-key-rpd");
+      const rpm = rpmInput ? parseInt(rpmInput.value) || 0 : 60;
+      const rpd = rpdInput ? parseInt(rpdInput.value) || 0 : 5000;
+
+      try {
+        const res = await fetch("/api/operations/keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name,
+            scopes: scopes,
+            rate_limit_rpm: rpm,
+            rate_limit_rpd: rpd,
+            created_by: "admin"
+          })
+        });
+
+        const data = await res.json();
+        if (data.status === "success" && data.result) {
+          closeCreateApiKeyModal();
+          lastGeneratedRawKey = data.result.raw_token;
+
+          // Einmalanzeige-Banner aufklappen
+          const alertBox = document.getElementById("api-key-new-token-alert");
+          const tokenInput = document.getElementById("api-key-new-token-input");
+          if (alertBox && tokenInput) {
+            tokenInput.value = lastGeneratedRawKey;
+            alertBox.classList.remove("hidden");
+            alertBox.scrollIntoView({ behavior: "smooth" });
+          }
+
+          await loadApiKeys();
+        } else {
+          alert(`Fehler beim Erstellen: ${data.detail || data.message || "Unbekannter Fehler"}`);
+        }
+      } catch (err) {
+        alert(`Netzwerkfehler: ${err.message}`);
+      }
+    }
+
+    async function copyNewGeneratedKey() {
+      const tokenInput = document.getElementById("api-key-new-token-input");
+      const btn = document.getElementById("btn-copy-new-key");
+      if (!tokenInput || !tokenInput.value) return;
+
+      try {
+        await navigator.clipboard.writeText(tokenInput.value);
+        if (btn) {
+          const orig = btn.innerHTML;
+          btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i> Kopiert!';
+          if (typeof lucide !== "undefined") lucide.createIcons();
+          setTimeout(() => {
+            btn.innerHTML = orig;
+            if (typeof lucide !== "undefined") lucide.createIcons();
+          }, 2000);
+        }
+      } catch (e) {
+        tokenInput.select();
+        document.execCommand("copy");
+        alert("API-Key in die Zwischenablage kopiert!");
+      }
+    }
+
+    async function revokeApiKey(keyId, name) {
+      if (!confirm(`Möchtest du den API-Key "${name}" wirklich unwiderruflich sperren? Bereits angebundene Dienste (n8n, Telegram) haben danach keinen Zugriff mehr.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/operations/keys/${encodeURIComponent(keyId)}/revoke`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revoked_by: "admin" })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          await loadApiKeys();
+        } else {
+          alert(`Fehler: ${data.detail || "Konnte Key nicht sperren."}`);
+        }
+      } catch (err) {
+        alert(`Netzwerkfehler: ${err.message}`);
+      }
+    }
+
+    async function deleteApiKey(keyId, name) {
+      if (!confirm(`Soll der inaktive Key "${name}" endgültig aus der Übersicht entfernt werden? (Das SHA-256 Audit-Log bleibt rechtssicher erhalten)`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/operations/keys/${encodeURIComponent(keyId)}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          await loadApiKeys();
+        } else {
+          alert(`Fehler: ${data.detail || "Konnte Key nicht löschen."}`);
+        }
+      } catch (err) {
+        alert(`Netzwerkfehler: ${err.message}`);
+      }
+    }
+
+    window.loadApiKeys = loadApiKeys;
+    window.openCreateApiKeyModal = openCreateApiKeyModal;
+    window.closeCreateApiKeyModal = closeCreateApiKeyModal;
+    window.submitCreateApiKey = submitCreateApiKey;
+    window.copyNewGeneratedKey = copyNewGeneratedKey;
+    window.revokeApiKey = revokeApiKey;
+    window.deleteApiKey = deleteApiKey;
     

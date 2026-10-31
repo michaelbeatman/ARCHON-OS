@@ -1,6 +1,6 @@
 <!-- MODAL: SYSTEM SETTINGS CONTROL CENTER -->
   <div id="system-settings-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-    <div id="system-settings-modal-card" class="os-modal bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 w-[94vw] max-w-6xl h-[92vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden transition-all duration-200">
+    <div id="system-settings-modal-card" class="os-modal bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 w-[96vw] max-w-7xl h-[92vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden transition-all duration-200">
       <!-- Modal Header -->
       <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
         <h3 class="text-sm font-bold uppercase text-[var(--foreground)] tracking-wider flex items-center gap-2">
@@ -24,6 +24,7 @@
         <button onclick="setSettingsTab('autonomy')" id="btn-tab-autonomy" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">AUTONOMIE &amp; MODULE (36)</button>
         <button onclick="setSettingsTab('services')" id="btn-tab-services" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">CONTAINER &amp; DIENSTE</button>
         <button onclick="setSettingsTab('routing')" id="btn-tab-routing" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">PROVIDER &amp; GATEWAY</button>
+        <button onclick="setSettingsTab('keys')" id="btn-tab-keys" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)] flex items-center gap-1.5" style="bottom: -1px; border-color: transparent; background-color: transparent;"><i data-lucide="key" class="w-3 h-3"></i> API-KEYS &amp; ACCESS</button>
         <button onclick="setSettingsTab('frameworks')" id="btn-tab-frameworks" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">METHODIKEN</button>
         <button onclick="setSettingsTab('plugins')" id="btn-tab-plugins" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">PLUGINS</button>
         <button onclick="setSettingsTab('comm')" id="btn-tab-comm" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">KOMMUNIKATION</button>
@@ -31,7 +32,187 @@
         <button onclick="setSettingsTab('update')" id="btn-tab-update" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)] flex items-center gap-1.5" style="bottom: -1px; border-color: transparent; background-color: transparent;"><i data-lucide="refresh-cw" class="w-3 h-3"></i> SYSTEM-UPDATE</button>
       </div>
       <!-- Tab Content Area -->
-      <div class="flex-1 overflow-y-auto py-4 space-y-4">
+      <div id="system-settings-modal-content-area" class="flex-1 overflow-y-auto py-4 pr-2 space-y-4 custom-scrollbar">
+
+        <!-- Tab: API-Keys & Zugriffsverwaltung (t-6fad7a) -->
+        <div id="settings-tab-keys" class="hidden space-y-4 text-xs p-1">
+          <!-- Header Card -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                <i data-lucide="key" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs uppercase font-mono tracking-wider text-[var(--foreground)]">API-Keys &amp; Zugriffs-Governance</h4>
+                <p class="text-[11px] text-[var(--muted-foreground)]">Verwalte kryptografische API-Tokens für n8n, Telegram und MCP-Clients mit Scopes, Rate-Limits und GoBD/ISO-Auditierung.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="loadApiKeys()" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Aktualisieren
+              </button>
+              <button type="button" onclick="openCreateApiKeyModal()" class="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition cursor-pointer flex items-center gap-1.5 shadow-xs">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> + Neuen API-Key generieren
+              </button>
+            </div>
+          </div>
+
+          <!-- One-Time Token Banner (Initially hidden, shown when a new key is generated) -->
+          <div id="api-key-new-token-alert" class="hidden p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                <i data-lucide="check-circle" class="w-4 h-4"></i> API-Key erfolgreich generiert!
+              </span>
+              <button type="button" onclick="document.getElementById('api-key-new-token-alert').classList.add('hidden')" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">Schließen</button>
+            </div>
+            <p class="text-[11px] text-[var(--foreground)]">
+              Kopiere diesen Key <strong>jetzt</strong>. Gemäß ISO 27001 &amp; GoBD-Rechtssicherheit wird der Klartext-Token <strong>nur ein einziges Mal</strong> angezeigt und danach ausschließlich als SHA-256-Hash gespeichert:
+            </p>
+            <div class="flex items-center gap-2 pt-1">
+              <input type="text" id="api-key-new-token-input" readonly class="flex-1 px-3 py-2 text-xs font-mono font-bold bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] select-all">
+              <button type="button" onclick="copyNewGeneratedKey()" id="btn-copy-new-key" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i> Kopieren
+              </button>
+            </div>
+          </div>
+
+          <!-- Scopes & Security Info Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2.5">
+            <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1 shadow-2xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold font-mono text-[10px] text-sky-600 dark:text-sky-400 uppercase">Scope: read_only</span>
+                <i data-lucide="eye" class="w-3.5 h-3.5 text-sky-500"></i>
+              </div>
+              <p class="text-[10.5px] text-[var(--muted-foreground)]">Lesender Zugriff auf Status, Container-Telemetrie, Logs und Agentenliste.</p>
+            </div>
+            <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1 shadow-2xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold font-mono text-[10px] text-amber-600 dark:text-amber-400 uppercase">Scope: kanban_rw</span>
+                <i data-lucide="columns" class="w-3.5 h-3.5 text-amber-500"></i>
+              </div>
+              <p class="text-[10.5px] text-[var(--muted-foreground)]">Karten lesen, anlegen, verschieben und aktualisieren (z.B. für n8n Workflows).</p>
+            </div>
+            <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1 shadow-2xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold font-mono text-[10px] text-emerald-600 dark:text-emerald-400 uppercase">Scope: agent_execute</span>
+                <i data-lucide="bot" class="w-3.5 h-3.5 text-emerald-500"></i>
+              </div>
+              <p class="text-[10.5px] text-[var(--muted-foreground)]">Triggerung von autonomen Agenten-Jobs und Chat-Aufträgen (Telegram &amp; Remote).</p>
+            </div>
+            <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1 shadow-2xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold font-mono text-[10px] text-rose-600 dark:text-rose-400 uppercase">Scope: admin_full</span>
+                <i data-lucide="shield" class="w-3.5 h-3.5 text-rose-500"></i>
+              </div>
+              <p class="text-[10.5px] text-[var(--muted-foreground)]">Uneingeschränkter Administrator-Zugriff auf alle APIs und Konfigurationen.</p>
+            </div>
+          </div>
+
+          <!-- Keys Table Container -->
+          <div class="border border-[var(--border)] rounded-xl bg-[var(--card)] shadow-xs overflow-hidden">
+            <div class="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between bg-[var(--secondary)]/30">
+              <div class="flex items-center gap-2">
+                <i data-lucide="list" class="w-4 h-4 text-[var(--foreground)]"></i>
+                <h5 class="font-bold text-xs uppercase font-mono tracking-wider text-[var(--foreground)]">Aktive &amp; Widerrufene API-Keys</h5>
+              </div>
+              <span id="api-keys-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">0 Keys</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="border-b border-[var(--border)] bg-[var(--secondary)]/10 text-[10.5px] font-mono text-[var(--muted-foreground)] uppercase">
+                    <th class="py-2.5 px-4 font-bold">Name / Verwendungszweck</th>
+                    <th class="py-2.5 px-3 font-bold">Key-Präfix</th>
+                    <th class="py-2.5 px-3 font-bold">Scopes</th>
+                    <th class="py-2.5 px-3 font-bold">Rate-Limits</th>
+                    <th class="py-2.5 px-3 font-bold">Erstellt am</th>
+                    <th class="py-2.5 px-3 font-bold">Letzte Nutzung</th>
+                    <th class="py-2.5 px-3 font-bold">Status</th>
+                    <th class="py-2.5 px-4 font-bold text-right">Aktionen</th>
+                  </tr>
+                </thead>
+                <tbody id="api-keys-table-body" class="divide-y divide-[var(--border)] font-mono text-[11px]">
+                  <tr>
+                    <td colspan="8" class="py-6 text-center text-[var(--muted-foreground)] font-sans">Lade API-Keys...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Creation Modal (Embedded Overlay) -->
+          <div id="modal-create-api-key" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 w-full max-w-lg shadow-2xl space-y-4">
+              <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+                <h4 class="font-bold text-xs uppercase font-mono text-[var(--foreground)] flex items-center gap-2">
+                  <i data-lucide="key" class="w-4 h-4 text-indigo-500"></i> Neuen API-Key anlegen
+                </h4>
+                <button type="button" onclick="closeCreateApiKeyModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <div class="space-y-3 font-sans text-xs">
+                <div>
+                  <label class="block font-bold text-[11px] uppercase font-mono text-[var(--foreground)] mb-1">Name / Zweck <span class="text-red-500">*</span></label>
+                  <input type="text" id="new-key-name" placeholder="z. B. n8n Master Automation oder Telegram Bot" class="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs">
+                </div>
+                <div>
+                  <label class="block font-bold text-[11px] uppercase font-mono text-[var(--foreground)] mb-1.5">Berechtigungen (Scopes)</label>
+                  <div class="grid grid-cols-2 gap-2 bg-[var(--secondary)]/20 p-2.5 rounded-xl border border-[var(--border)]">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" id="scope-read_only" checked class="rounded border-zinc-400 text-indigo-600 focus:ring-indigo-500">
+                      <div>
+                        <div class="font-mono font-bold text-[11px] text-[var(--foreground)]">read_only</div>
+                        <div class="text-[9.5px] text-[var(--muted-foreground)]">Status &amp; Logs lesen</div>
+                      </div>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" id="scope-kanban_rw" checked class="rounded border-zinc-400 text-indigo-600 focus:ring-indigo-500">
+                      <div>
+                        <div class="font-mono font-bold text-[11px] text-[var(--foreground)]">kanban_rw</div>
+                        <div class="text-[9.5px] text-[var(--muted-foreground)]">Kanban lesen/schreiben</div>
+                      </div>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" id="scope-agent_execute" class="rounded border-zinc-400 text-indigo-600 focus:ring-indigo-500">
+                      <div>
+                        <div class="font-mono font-bold text-[11px] text-[var(--foreground)]">agent_execute</div>
+                        <div class="text-[9.5px] text-[var(--muted-foreground)]">Agenten starten</div>
+                      </div>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" id="scope-admin_full" class="rounded border-zinc-400 text-indigo-600 focus:ring-indigo-500">
+                      <div>
+                        <div class="font-mono font-bold text-[11px] text-[var(--foreground)]">admin_full</div>
+                        <div class="text-[9.5px] text-[var(--muted-foreground)]">Voller Systemzugriff</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block font-bold text-[11px] uppercase font-mono text-[var(--foreground)] mb-1">Limit / Minute (RPM)</label>
+                    <input type="number" id="new-key-rpm" value="60" min="0" class="w-full px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono text-xs">
+                    <span class="text-[9.5px] text-[var(--muted-foreground)]">0 = unbegrenzt</span>
+                  </div>
+                  <div>
+                    <label class="block font-bold text-[11px] uppercase font-mono text-[var(--foreground)] mb-1">Limit / Tag (RPD)</label>
+                    <input type="number" id="new-key-rpd" value="5000" min="0" class="w-full px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono text-xs">
+                    <span class="text-[9.5px] text-[var(--muted-foreground)]">0 = unbegrenzt</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+                <button type="button" onclick="closeCreateApiKeyModal()" class="px-3.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] font-mono text-xs cursor-pointer">Abbrechen</button>
+                <button type="button" onclick="submitCreateApiKey()" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-mono text-xs font-bold cursor-pointer shadow-xs flex items-center gap-1.5">
+                  <i data-lucide="check" class="w-3.5 h-3.5"></i> Key erzeugen
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
         <!-- Tab: System-Update & Release-Lifecycle (Meilenstein 1) -->
         <div id="settings-tab-update" class="hidden space-y-4 text-xs p-1">
           <!-- Header Card -->
@@ -140,6 +321,25 @@
           <!-- Active Provider Live Banner -->
           <div id="llm-active-provider-banner">
             <!-- Dynamisch über loadLLMProvidersSettings() gefüllt -->
+          </div>
+
+          <!-- Sensitive Routing & Privacy Banner (t-c4489c) -->
+          <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                <i data-lucide="shield-check" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-xs font-mono text-[var(--foreground)]">Datenschutz-Routing für sensible Daten</span>
+                  <span class="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">Zero Egress</span>
+                </div>
+                <p class="text-[11px] text-[var(--muted-foreground)]">Finanz-, Vertrags- und CRM-Daten verlassen das System nie unverschlüsselt (Delegation an Lokales LLM / Mistral AI).</p>
+              </div>
+            </div>
+            <button type="button" onclick="openPrivacySettingsModal()" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs shrink-0">
+              <i data-lucide="settings" class="w-3.5 h-3.5"></i> Konfigurieren
+            </button>
           </div>
           <!-- Provider Cards Grid -->
           <div>
@@ -1001,6 +1201,68 @@
                   <option value="abort">Update abbrechen (abort)</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          <!-- Section 15: Notfallzugang & Verschlüsselter Break-Glass Vault (t-8efcf3) -->
+          <div id="hermes-sec-15" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] flex-wrap gap-2">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
+                  <i data-lucide="key-round" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h5 class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                    15. Notfallzugang &amp; Verschlüsselter Break-Glass Vault (t-8efcf3)
+                  </h5>
+                  <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Kryptografisch gesicherter Notfallzugang bei Betreiberausfall (PBKDF2-200k + SHA256)</span>
+                </div>
+              </div>
+              <div id="break-glass-status-badge" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                Vault Status prüfen...
+              </div>
+            </div>
+
+            <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono">
+              <div class="space-y-1">
+                <div class="text-[var(--foreground)] font-semibold flex items-center gap-2">
+                  <span>Notfall-Archiv:</span>
+                  <span id="break-glass-meta-filename" class="text-[11px] text-[var(--muted-foreground)]">data/backups/break_glass_vault.enc</span>
+                </div>
+                <div class="text-[11px] text-[var(--muted-foreground)]">
+                  Enthält verschlüsselt: <code class="text-zinc-600 dark:text-zinc-400">.env, settings.json, agentic_memory.db, privacy_routing.json</code>
+                </div>
+                <div id="break-glass-checksum-line" class="text-[10px] text-[var(--muted-foreground)] truncate max-w-md">
+                  Checksumme: --
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button type="button" onclick="downloadBreakGlassKit()" id="btn-download-break-glass-kit" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                  <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Recovery-Kit (.md)
+                </button>
+                <button type="button" onclick="createBreakGlassVaultUI()" id="btn-create-break-glass-vault" class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                  <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Vault neu generieren
+                </button>
+              </div>
+            </div>
+
+            <!-- Recovery Key Display Banner (wird nach Generierung eingeblendet) -->
+            <div id="break-glass-new-key-banner" class="hidden p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-rose-600 dark:text-rose-400 font-mono uppercase flex items-center gap-1.5">
+                  <i data-lucide="alert-triangle" class="w-4 h-4"></i> Neuer Notfallschlüssel generiert:
+                </span>
+                <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Einmalige Anzeige!</span>
+              </div>
+              <div class="flex items-center justify-between gap-3 p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] font-mono">
+                <span id="break-glass-displayed-key" class="text-sm font-bold text-[var(--foreground)] tracking-wider select-all">ARCHON-BG-...</span>
+                <button type="button" onclick="copyBreakGlassKey()" class="text-xs text-sky-500 hover:text-sky-400 font-semibold flex items-center gap-1 transition cursor-pointer">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i> Kopieren
+                </button>
+              </div>
+              <p class="text-[11px] text-[var(--muted-foreground)]">
+                Drucken Sie das <strong>Recovery-Kit</strong> sofort aus oder hinterlegen Sie diesen Schlüssel in einem sicheren Tresor.
+              </p>
             </div>
           </div>
 

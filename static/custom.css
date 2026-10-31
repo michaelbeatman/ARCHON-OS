@@ -34,6 +34,78 @@
 }
 
 /* --------------------------------------------------------------------------
+   1.1 SYSTEMWEITE SCROLLBAR (DEZENT & PERMANENT BEI SCROLL-CONTAINERN)
+   -------------------------------------------------------------------------- */
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(140, 140, 140, 0.45) transparent !important;
+}
+
+.dark *,
+[data-theme="dark"] * {
+  scrollbar-color: rgba(220, 220, 220, 0.35) transparent !important;
+}
+
+::-webkit-scrollbar {
+  width: 7px !important;
+  height: 7px !important;
+  display: block !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-track:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+.dark ::-webkit-scrollbar-track:hover,
+[data-theme="dark"] ::-webkit-scrollbar-track:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(130, 130, 130, 0.45) !important;
+  border-radius: 9999px !important;
+  border: 1.5px solid transparent !important;
+  background-clip: padding-box !important;
+  min-height: 28px !important;
+  transition: background-color 0.15s ease !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(90, 90, 90, 0.75) !important;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(50, 50, 50, 0.90) !important;
+}
+
+.dark ::-webkit-scrollbar-thumb,
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background-color: rgba(220, 220, 220, 0.35) !important;
+  border: 1.5px solid transparent !important;
+  background-clip: padding-box !important;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.60) !important;
+}
+
+.dark ::-webkit-scrollbar-thumb:active,
+[data-theme="dark"] ::-webkit-scrollbar-thumb:active {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.custom-scrollbar,
+.overflow-y-auto,
+.overflow-x-auto {
+  scrollbar-width: thin !important;
+}
+
+/* --------------------------------------------------------------------------
    2. SYSTEMLEITPLANKEN: ZERO SHADOWS & BORDER-FIRST RESET
    -------------------------------------------------------------------------- */
 *,
@@ -762,9 +834,6 @@ div.flex > div.flex > span.w-1\.5 {
 
 #inbox-search-input,
 #profile-search-input,
-#prof-edit-person-name,
-#prof-edit-id,
-#prof-edit-name,
 #prof-edit-category,
 #prof-edit-provider,
 #prof-edit-model,
@@ -1100,10 +1169,45 @@ div#ops-kanban-columns-container .ops-col-done,
 
 #profile-editor-role {
   font-size: 15px !important;
+  text-shadow: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  box-shadow: none !important;
 }
 
 #profile-editor-title {
   font-size: 27px !important;
+  font-weight: 800 !important;
+  text-shadow: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  box-shadow: none !important;
+}
+
+#profile-editor-id-tag,
+#profile-editor-cat-tag,
+.prof-title-text,
+.prof-role-text,
+.prof-list-item span,
+.prof-list-item div,
+.prof-list-item h1,
+.prof-list-item h2,
+.prof-list-item h3,
+.prof-list-item p,
+#prof-edit-person-name,
+#prof-edit-id,
+#prof-edit-name,
+#agent-profiles-global-header h2,
+#agent-profiles-global-header span,
+#agent-profiles-global-header div {
+  text-shadow: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+.prof-list-item span,
+.prof-list-item div:not(.relative) {
+  box-shadow: none !important;
 }
 
 #sidebar-logo-img {
@@ -1200,8 +1304,11 @@ div#agent-pane-overview > div.prof-panel-card {
   border-width: 0px !important;
 }
 
-div#agent-profiles-global-header > div.flex {
-  width: 521px !important;
+div#agent-profiles-global-header > div.flex:nth-child(2) {
+  flex: 0 1 auto !important;
+  max-width: 440px !important;
+  min-width: 0 !important;
+  width: auto !important;
 }
 
 div#agent-profiles-global-header > div.flex > div.relative {
@@ -1209,13 +1316,26 @@ div#agent-profiles-global-header > div.flex > div.relative {
   border-width: 0px !important;
 }
 
-div#agent-profiles-global-header > div.shrink-0 {
+div#agent-profiles-global-header > div.shrink-0:first-child {
   padding-right: 0px !important;
   width: 266px !important;
   min-width: 230px !important;
   height: 80px !important;
   border-width: 0px !important;
   padding-left: 18px !important;
+}
+
+#agent-cadre-subtabs-nav,
+div#agent-profiles-global-header > div:last-child {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  width: auto !important;
+  min-width: fit-content !important;
+  max-width: 100% !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
+  padding-right: 12px !important;
 }
 
 div#catalog-expanded-footer > div.grid > button.py-1\.5 {
@@ -1387,7 +1507,7 @@ header#ops-header-bar > div.flex > h1.text-sm {
 /* ========================================================================= */
 /* ELASTISCHE SPALTEN & RAHMENLOSE INSELN (AGENTENKADER)                     */
 /* ========================================================================= */
-div#agent-profiles-global-header > div.shrink-0 {
+div#agent-profiles-global-header > div.shrink-0:first-child {
   padding-left: 20px !important;
   padding-right: 0px !important;
   width: 266px !important;
@@ -1395,6 +1515,14 @@ div#agent-profiles-global-header > div.shrink-0 {
   height: 80px !important;
   border-width: 0px !important;
   border: none !important;
+}
+
+#agent-cadre-subtabs-nav {
+  width: auto !important;
+  min-width: fit-content !important;
+  max-width: none !important;
+  flex-shrink: 0 !important;
+  overflow: visible !important;
 }
 
 #prof-col-stammdaten,

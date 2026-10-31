@@ -1169,6 +1169,7 @@
       } catch (e) {
         if (statusEl) statusEl.innerText = "Fehler beim Laden";
       }
+      loadAgentScorecard(id);
     }
     async function saveInlineSoulMarkdown(agentId) {
       const id = agentId || currentSelectedProfileId || "hermes_default";
@@ -2975,3 +2976,119 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
       }
     }
     window.onAgentTabReasoningChange = onAgentTabReasoningChange;
+
+    // =========================================================================
+    // AGENT SCORECARD & OPERATOR NOTIZEN (t-f257ba)
+    // =========================================================================
+
+    window.loadAgentScorecard = async function(agentId) {
+      const id = agentId || currentSelectedProfileId || "default";
+      try {
+        const res = await fetch(`/api/operations/agents/${id}/scorecard`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const sc = json.scorecard;
+        if (!sc) return;
+
+        // 1. Update 6 KPI Tiles
+        const elSuccess = document.getElementById("pa-kpi-success");
+        const elSuccessSub = document.getElementById("pa-kpi-success-sub");
+        if (elSuccess) elSuccess.innerText = `${sc.success_rate}%`;
+        if (elSuccessSub) elSuccessSub.innerText = `${sc.completed_tasks} / ${sc.total_tasks} Tasks`;
+
+        const elTokens = document.getElementById("pa-kpi-tokens");
+        const elTokensSub = document.getElementById("pa-kpi-tokens-sub");
+        const tokenK = sc.total_tokens >= 1000 ? (sc.total_tokens / 1000).toFixed(1) + 'k' : sc.total_tokens;
+        if (elTokens) elTokens.innerText = `${tokenK} Tok`;
+        if (elTokensSub) elTokensSub.innerText = `$${sc.avg_cost.toFixed(2)} / Task`;
+
+        const elSpeed = document.getElementById("pa-kpi-speed");
+        const elSpeedSub = document.getElementById("pa-kpi-speed-sub");
+        if (elSpeed) elSpeed.innerText = sc.avg_duration_minutes > 0 ? `${sc.avg_duration_minutes}m` : `< 1m`;
+        if (elSpeedSub) elSpeedSub.innerText = `Ø Durchlaufzeit`;
+
+        const elFeedback = document.getElementById("pa-kpi-feedback");
+        const elFeedbackSub = document.getElementById("pa-kpi-feedback-sub");
+        if (elFeedback) elFeedback.innerText = `${sc.feedback_rate}%`;
+        if (elFeedbackSub) elFeedbackSub.innerText = `${sc.feedback_count} Ratings`;
+
+        const elAutonomy = document.getElementById("pa-kpi-autonomy");
+        const elAutonomySub = document.getElementById("pa-kpi-autonomy-sub");
+        if (elAutonomy) elAutonomy.innerText = `${sc.autonomy_rate}%`;
+        if (elAutonomySub) elAutonomySub.innerText = `First-Pass Rate`;
+
+        const elLearnings = document.getElementById("pa-kpi-learnings");
+        const elLearningsSub = document.getElementById("pa-kpi-learnings-sub");
+        if (elLearnings) elLearnings.innerText = sc.learnings_count;
+        if (elLearningsSub) elLearningsSub.innerText = `Heuristiken`;
+
+        // 2. Projects Badges
+        const projContainer = document.getElementById("pa-scorecard-projects");
+        if (projContainer) {
+          if (!sc.projects || sc.projects.length === 0) {
+            projContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] italic">Keine Projekte verknüpft</span>`;
+          } else {
+            projContainer.innerHTML = sc.projects.map(p => `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] font-bold">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> ${escapeHtml(p)}
+              </span>
+            `).join('');
+          }
+        }
+
+        // 3. Recent Milestones
+        const mileContainer = document.getElementById("pa-scorecard-milestones");
+        if (mileContainer) {
+          if (!sc.recent_tasks || sc.recent_tasks.length === 0) {
+            mileContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] italic">Keine aktiven Aufgaben</span>`;
+          } else {
+            mileContainer.innerHTML = sc.recent_tasks.map(t => `
+              <div class="flex items-center justify-between gap-1 p-1 rounded hover:bg-[var(--secondary)]/50">
+                <span class="truncate font-medium text-[var(--foreground)]">${escapeHtml(t.title)}</span>
+                <span class="px-1.5 py-0.2 rounded text-[8.5px] uppercase font-bold bg-[var(--secondary)] border border-[var(--border)] shrink-0">${t.status}</span>
+              </div>
+            `).join('');
+          }
+        }
+
+        // 4. Operator Notes
+        const notesInput = document.getElementById("pa-operator-notes");
+        if (notesInput) {
+          notesInput.value = sc.operator_notes || "";
+        }
+
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        console.error("Scorecard error:", err);
+      }
+    };
+
+    window.refreshAgentScorecard = function() {
+      loadAgentScorecard();
+    };
+
+    window.saveOperatorNotes = async function() {
+      const id = currentSelectedProfileId || "default";
+      const notes = document.getElementById("pa-operator-notes")?.value || "";
+      try {
+        const res = await fetch(`/api/operations/agents/${id}/operator-notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notes })
+        });
+        if (res.ok) {
+          if (typeof showArchonToast === 'function') {
+            showArchonToast("Operator-Beurteilung in Obsidian Personalakte gespeichert!", "success");
+          } else {
+            alert("Operator-Beurteilung in Obsidian Personalakte gespeichert!");
+          }
+          loadInlinePersonalakte(id);
+        } else {
+          alert("Fehler beim Speichern der Notizen.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Netzwerkfehler.");
+      }
+    };
+

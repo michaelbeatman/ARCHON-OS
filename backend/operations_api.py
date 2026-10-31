@@ -11,6 +11,8 @@ import re
 import sqlite3
 import datetime
 import subprocess
+import time
+import secrets
 from typing import List, Dict, Optional, Any
 from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File
 from fastapi.responses import FileResponse, Response
@@ -485,6 +487,245 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
             pass
 
         return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
+    finally:
+        conn.close()
+
+
+# In-Memory Store für 10-Minuten Undo-Transaktionen (t-c2b384)
+_KANBAN_UNDO_STORE: Dict[str, Dict[str, Any]] = {}
+
+class KanbanBulkActionRequest(BaseModel):
+    task_ids: List[str]
+    action: str  # "move", "assign", "tag", "delete"
+    payload: Dict[str, Any] = {}
+
+class KanbanBulkUndoRequest(BaseModel):
+    undo_token: str
+
+@router.post("/kanban/bulk")
+async def api_kanban_bulk_action(req: KanbanBulkActionRequest):
+    """Führt eine Mehrfachaktion auf ausgewählten Kanban-Tasks aus mit 10-Minuten-Undo-Puffer (t-c2b384)."""
+    task_ids = [tid.strip() for tid in req.task_ids if tid and tid.strip()]
+    if not task_ids:
+        raise HTTPException(status_code=400, detail="Keine Aufgaben übergeben.")
+
+    action = req.action.lower()
+    if action not in ("move", "assign", "tag", "delete"):
+        raise HTTPException(status_code=400, detail=f"Unbekannte Aktion: {action}")
+
+    conn = _get_kanban_connection()
+    now_iso = datetime.datetime.now().isoformat()
+    now_ts = time.time()
+    undo_token = f"undo_{secrets.token_hex(8)}"
+
+    try:
+        cursor = conn.cursor()
+        # 1. Schnappschuss der betroffenen Tasks sichern
+        placeholders = ",".join("?" for _ in task_ids)
+        cursor.execute(f"SELECT id, title, assignee, status FROM tasks WHERE id IN ({placeholders})", task_ids)
+        rows = cursor.fetchall()
+        if not rows:
+            raise HTTPException(status_code=404, detail="Keine passenden Aufgaben gefunden.")
+
+        meta = _load_kanban_meta()
+        snapshot = []
+        for r in rows:
+            tid = r["id"]
+            t_tags = list((meta.get("tasks", {}).get(tid, {})).get("tags", []))
+            snapshot.append({
+                "id": tid,
+                "title": r["title"],
+                "status": r["status"],
+                "assignee": r["assignee"],
+                "tags": t_tags
+            })
+
+        # 2. Aktion anwenden
+        if action == "move":
+            target_status = (req.payload.get("status") or "todo").lower()
+            completed_at = now_iso if target_status == "done" else None
+            started_at = now_iso if target_status == "in_progress" else None
+            cursor.execute(f"""
+                UPDATE tasks
+                SET status = ?,
+                    started_at = COALESCE(?, started_at),
+                    completed_at = COALESCE(?, completed_at)
+                WHERE id IN ({placeholders})
+            """, [target_status, started_at, completed_at] + task_ids)
+
+            for s in snapshot:
+                cursor.execute("""
+                    INSERT INTO task_events (task_id, kind, payload, created_at)
+                    VALUES (?, ?, ?, ?)
+                """, (s["id"], "bulk_status_changed", json.dumps({"from": s["status"], "to": target_status}), now_iso))
+                _sync_to_memory_bridge(s["id"], s["title"], s["assignee"], target_status)
+
+        elif action == "assign":
+            target_assignee = req.payload.get("assignee")
+            cursor.execute(f"""
+                UPDATE tasks
+                SET assignee = ?
+                WHERE id IN ({placeholders})
+            """, [target_assignee] + task_ids)
+
+            for s in snapshot:
+                cursor.execute("""
+                    INSERT INTO task_events (task_id, kind, payload, created_at)
+                    VALUES (?, ?, ?, ?)
+                """, (s["id"], "bulk_assignee_changed", json.dumps({"from": s["assignee"], "to": target_assignee}), now_iso))
+                _sync_to_memory_bridge(s["id"], s["title"], target_assignee, s["status"])
+
+        elif action == "tag":
+            tag_name = req.payload.get("tag", "").strip()
+            mode = req.payload.get("tag_mode", "add")  # "add" oder "remove"
+            if tag_name:
+                from backend.kanban_sidecar import update_kanban_meta
+                def _apply_tags(cur_meta):
+                    for tid in task_ids:
+                        cur_meta.setdefault("tasks", {}).setdefault(tid, {})
+                        cur_tags = set(cur_meta["tasks"][tid].get("tags") or [])
+                        if mode == "add":
+                            cur_tags.add(tag_name)
+                        elif mode == "remove":
+                            cur_tags.discard(tag_name)
+                        cur_meta["tasks"][tid]["tags"] = list(cur_tags)
+                    return cur_meta
+                update_kanban_meta(_apply_tags)
+
+        elif action == "delete":
+            # Soft-Delete über 'archived' Status, damit GoBD-konform und 100% undo-fähig
+            cursor.execute(f"""
+                UPDATE tasks
+                SET status = 'archived'
+                WHERE id IN ({placeholders})
+            """, task_ids)
+
+            for s in snapshot:
+                cursor.execute("""
+                    INSERT INTO task_events (task_id, kind, payload, created_at)
+                    VALUES (?, ?, ?, ?)
+                """, (s["id"], "bulk_archived", json.dumps({"from": s["status"]}), now_iso))
+
+        conn.commit()
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="kanban",
+                action=f"bulk_{action}",
+                agent_id="operator",
+                payload={"task_ids": task_ids, "action": action, "payload": req.payload, "affected_count": len(task_ids)}
+            )
+        except Exception:
+            pass
+
+        # 3. Snapshot im Undo-Puffer speichern (10 Minuten TTL)
+        _KANBAN_UNDO_STORE[undo_token] = {
+            "snapshot": snapshot,
+            "action": action,
+            "created_at": now_ts,
+            "expires_at": now_ts + 600.0  # 10 Minuten
+        }
+
+        # Abgelaufene Einträge bereinigen
+        for tok in list(_KANBAN_UNDO_STORE.keys()):
+            if _KANBAN_UNDO_STORE[tok]["expires_at"] < now_ts:
+                _KANBAN_UNDO_STORE.pop(tok, None)
+
+        # Broadcast WebSocket Event
+        try:
+            import main
+            if hasattr(main, "broadcast_event"):
+                main.broadcast_event("kanban_updated", {
+                    "action": f"bulk_{action}",
+                    "count": len(task_ids),
+                    "task_ids": task_ids
+                })
+        except Exception:
+            pass
+
+        return {
+            "status": "success",
+            "action": action,
+            "affected_count": len(task_ids),
+            "undo_token": undo_token,
+            "expires_in_seconds": 600
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/kanban/bulk/undo")
+async def api_kanban_bulk_undo(req: KanbanBulkUndoRequest):
+    """Macht eine Mehrfachaktion innerhalb des 10-Minuten-Zeitfensters rückgängig (t-c2b384)."""
+    token = req.undo_token.strip()
+    entry = _KANBAN_UNDO_STORE.get(token)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Undo-Transaktion nicht gefunden oder bereits abgelaufen.")
+
+    now_ts = time.time()
+    if now_ts > entry["expires_at"]:
+        _KANBAN_UNDO_STORE.pop(token, None)
+        raise HTTPException(status_code=400, detail="Das 10-Minuten-Zeitfenster für diese Aktion ist abgelaufen.")
+
+    snapshot = entry.get("snapshot") or []
+    conn = _get_kanban_connection()
+    now_iso = datetime.datetime.now().isoformat()
+    try:
+        cursor = conn.cursor()
+        for item in snapshot:
+            tid = item["id"]
+            cursor.execute("""
+                UPDATE tasks
+                SET status = ?, assignee = ?
+                WHERE id = ?
+            """, (item["status"], item["assignee"], tid))
+            cursor.execute("""
+                INSERT INTO task_events (task_id, kind, payload, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (tid, "bulk_undo_restored", json.dumps({"restored_status": item["status"]}), now_iso))
+            _sync_to_memory_bridge(tid, item["title"], item["assignee"], item["status"])
+
+        conn.commit()
+
+        # Tags im Sidecar wiederherstellen
+        from backend.kanban_sidecar import update_kanban_meta
+        def _restore_tags(cur_meta):
+            for item in snapshot:
+                tid = item["id"]
+                cur_meta.setdefault("tasks", {}).setdefault(tid, {})
+                cur_meta["tasks"][tid]["tags"] = item["tags"]
+            return cur_meta
+        update_kanban_meta(_restore_tags)
+
+        # Transaktion verbraucht
+        _KANBAN_UNDO_STORE.pop(token, None)
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="kanban",
+                action="bulk_undo",
+                agent_id="operator",
+                payload={"undo_token": token, "restored_count": len(snapshot)}
+            )
+        except Exception:
+            pass
+
+        # Broadcast
+        try:
+            import main
+            if hasattr(main, "broadcast_event"):
+                main.broadcast_event("kanban_updated", {
+                    "action": "bulk_undone",
+                    "count": len(snapshot)
+                })
+        except Exception:
+            pass
+
+        return {
+            "status": "success",
+            "message": f"{len(snapshot)} Aufgaben wurden auf ihren vorherigen Stand zurückgesetzt.",
+            "restored_count": len(snapshot)
+        }
     finally:
         conn.close()
 
@@ -1679,36 +1920,43 @@ def update_concurrency_settings(req: ConcurrencyUpdateRequest):
     }
 
 @router.get("/governance/audit-log")
-def get_audit_log_entries(limit: int = 50):
-    """Liefert die neuesten Einträge des manipulationssicheren SHA-256 Audit-Logs."""
-    from local_memory_bridge import LocalMemoryBridge
-    bridge = LocalMemoryBridge()
-    with bridge._get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT id, agent_id, action, payload, prev_hash, hash, timestamp 
-            FROM audit_log 
-            ORDER BY id DESC 
-            LIMIT ?
-        """, (limit,))
-        rows = [dict(r) for r in cur.fetchall()]
-        return {
-            "status": "success",
-            "entries": rows,
-            "total_returned": len(rows)
-        }
+def get_audit_log_entries(
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """Liefert die Einträge des revisionssicheren SHA-256 GoBD/ISO 27001 Audit-Logs mit Filterung."""
+    from backend.audit_log import chained_audit_log
+    res = chained_audit_log.list_events(category=category, search=search, limit=limit, offset=offset)
+    return {
+        "status": "success",
+        "total": res["total"],
+        "limit": res["limit"],
+        "offset": res["offset"],
+        "entries": res["entries"]
+    }
 
 @router.post("/governance/audit-log/verify")
 def verify_audit_log_chain():
     """Führt eine vollständige kryptografische Prüfung aller Verkettungen im Audit-Log durch."""
-    from local_memory_bridge import LocalMemoryBridge
-    bridge = LocalMemoryBridge()
-    result = bridge.verify_audit_chain()
+    from backend.audit_log import chained_audit_log
+    result = chained_audit_log.verify_integrity()
     return {
         "status": "success",
         "verification": result
     }
 
+@router.get("/governance/audit-log/export")
+def export_audit_log(format: str = Query(default="json")):
+    """Generiert einen revisionssicheren Prüfbericht für GoBD / ISO 27001 Auditoren als JSON oder CSV."""
+    from backend.audit_log import chained_audit_log
+    res = chained_audit_log.generate_compliance_export(format_type=format)
+    return Response(
+        content=res["content"],
+        media_type=res["content_type"],
+        headers={"Content-Disposition": f'attachment; filename="{res["filename"]}"'}
+    )
 
 
 # =========================================================================
@@ -2319,6 +2567,16 @@ def api_receipt_patch(receipt_id: str, updates: Dict[str, Any] = Body(...)):
     ok = receipt_ocr_engine.update_receipt(receipt_id, updates)
     if not ok:
         raise HTTPException(status_code=400, detail="Aktualisierung fehlgeschlagen oder keine gültigen Felder.")
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="finance",
+            action="receipt_updated",
+            agent_id="finance_operator",
+            payload={"receipt_id": receipt_id, "updates": updates}
+        )
+    except Exception:
+        pass
     return {"status": "success", "receipt_id": receipt_id, "updated": updates}
 
 
@@ -2562,16 +2820,484 @@ def api_finetuning_prepare(req: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==============================================================================
+# APPROVAL POLICIES & ESKALATION ENDPOINTS (t-5596bd)
+# ==============================================================================
+
+@router.get("/approvals/policies")
+def api_get_approval_policies(domain: Optional[str] = None):
+    """Gibt alle aktiven Freigaberegeln (optional gefiltert nach Domain) zurück."""
+    try:
+        from backend.approval_policy_engine import approval_engine
+        policies = approval_engine.get_policies(domain=domain)
+        return {"status": "success", "policies": policies}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/approvals/policies")
+def api_update_approval_policy(req: Dict[str, Any] = Body(...)):
+    """Aktualisiert eine Freigaberegel revisionssicher mit SHA-256 Hash-Kette."""
+    policy_key = req.get("policy_key", "").strip()
+    new_value = str(req.get("new_value", "")).strip()
+    user_id = req.get("user_id", "admin").strip()
+
+    if not policy_key or new_value == "":
+        raise HTTPException(status_code=400, detail="policy_key und new_value sind erforderlich.")
+
+    try:
+        from backend.approval_policy_engine import approval_engine
+        res = approval_engine.update_policy(policy_key, new_value, user_id=user_id)
+        return {"status": "success", "result": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/approvals/requests")
+def api_get_approval_requests(status: Optional[str] = None, domain: Optional[str] = None):
+    """Gibt Freigabeanfragen aus der Warteschlange zurück."""
+    try:
+        from backend.approval_policy_engine import approval_engine
+        requests = approval_engine.get_requests(status=status, domain=domain)
+        return {"status": "success", "requests": requests}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/approvals/requests")
+def api_create_approval_request(req: Dict[str, Any] = Body(...)):
+    """Erstellt eine neue Freigabeanfrage und evaluiert Auto-Freigabe Schwellenwerte."""
+    domain = req.get("domain", "finance").strip()
+    title = req.get("title", "").strip()
+    amount = float(req.get("amount", 0.0))
+    reference_id = req.get("reference_id")
+    payload = req.get("payload")
+
+    if not title:
+        raise HTTPException(status_code=400, detail="title ist erforderlich.")
+
+    try:
+        from backend.approval_policy_engine import approval_engine
+        res = approval_engine.evaluate_and_enqueue(
+            domain=domain,
+            title=title,
+            amount=amount,
+            reference_id=reference_id,
+            payload=payload
+        )
+        return {"status": "success", "result": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/approvals/requests/{request_id}/approve")
+def api_approve_request(request_id: str, req: Dict[str, Any] = Body(default={})):
+    """Gibt eine anhängige Anfrage frei (unterstützt 1. und 2. Prüfer)."""
+    approver_id = req.get("approver_id", "admin").strip()
+    try:
+        from backend.approval_policy_engine import approval_engine
+        res = approval_engine.approve_request(request_id, approver_id=approver_id)
+        return {"status": "success", "result": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/approvals/requests/{request_id}/reject")
+def api_reject_request(request_id: str, req: Dict[str, Any] = Body(...)):
+    """Lehnt eine anhängige Freigabeanfrage mit Begründung ab."""
+    rejected_by = req.get("rejected_by", "admin").strip()
+    reason = req.get("reason", "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Begründung (reason) ist erforderlich.")
+
+    try:
+        from backend.approval_policy_engine import approval_engine
+        res = approval_engine.reject_request(request_id, rejected_by=rejected_by, reason=reason)
+        return {"status": "success", "result": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/approvals/delegation")
+def api_get_delegation(user_id: str = "admin"):
+    """Ruft den Urlaubs- und Vertretungsmodus ab."""
+    try:
+        from backend.approval_policy_engine import approval_engine
+        res = approval_engine.get_delegation(user_id=user_id)
+        return {"status": "success", "delegation": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/approvals/delegation")
+def api_set_delegation(req: Dict[str, Any] = Body(...)):
+    """Aktiviert oder deaktiviert den Urlaubsmodus mit Stellvertretung."""
+    user_id = req.get("user_id", "admin").strip()
+    is_active = bool(req.get("is_active", False))
+    substitute_id = req.get("substitute_id", "katharina").strip()
+    substitute_name = req.get("substitute_name", "Katharina Völk (QM)").strip()
+
+    try:
+        from backend.approval_policy_engine import approval_engine
+        res = approval_engine.set_delegation(
+            user_id=user_id,
+            is_active=is_active,
+            substitute_id=substitute_id,
+            substitute_name=substitute_name
+        )
+        return {"status": "success", "result": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/approvals/audit-chain")
+def api_get_approval_audit_chain(limit: int = 50):
+    """Liefert die kryptografisch verkettete Revisionshistorie (GoBD/ISO 27001)."""
+    try:
+        from backend.approval_policy_engine import approval_engine
+        chain = approval_engine.get_audit_chain(limit=limit)
+        return {"status": "success", "chain": chain}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/approvals/audit-verify")
+def api_verify_approval_audit():
+    """Überprüft die mathematische Gültigkeit der gesamten SHA-256 Hash-Kette."""
+    try:
+        from backend.approval_policy_engine import approval_engine
+        integrity = approval_engine.verify_audit_integrity()
+        return {"status": "success", "integrity": integrity}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==============================================================================
+# API-KEYS & SCOPES ACCESS MANAGEMENT (t-6fad7a)
+# ==============================================================================
+
+@router.get("/keys")
+def api_list_keys():
+    """Gibt alle registrierten API-Keys ohne Klardaten zurück."""
+    try:
+        from backend.api_key_manager import api_key_manager
+        keys = api_key_manager.list_keys()
+        return {"status": "success", "keys": keys}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/keys")
+def api_create_key(req: Dict[str, Any] = Body(...)):
+    """Erstellt einen neuen API-Key und gibt den Klartext-Token einmalig zurück."""
+    name = req.get("name", "").strip()
+    scopes = req.get("scopes", ["read_only"])
+    rate_limit_rpm = int(req.get("rate_limit_rpm", 60))
+    rate_limit_rpd = int(req.get("rate_limit_rpd", 5000))
+    created_by = req.get("created_by", "admin").strip()
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Name/Zweck des API-Keys ist erforderlich.")
+
+    try:
+        from backend.api_key_manager import api_key_manager
+        res = api_key_manager.create_key(
+            name=name,
+            scopes=scopes,
+            rate_limit_rpm=rate_limit_rpm,
+            rate_limit_rpd=rate_limit_rpd,
+            created_by=created_by
+        )
+        return {"status": "success", "result": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/keys/{key_id}/revoke")
+def api_revoke_key(key_id: str, req: Dict[str, Any] = Body(default={})):
+    """Deaktiviert einen API-Key dauerhaft und revisionssicher."""
+    revoked_by = req.get("revoked_by", "admin").strip()
+    try:
+        from backend.api_key_manager import api_key_manager
+        success = api_key_manager.revoke_key(key_id, revoked_by=revoked_by)
+        if not success:
+            raise HTTPException(status_code=404, detail="Key nicht gefunden oder bereits inaktiv.")
+        return {"status": "success", "message": "API-Key erfolgreich widerrufen."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/keys/{key_id}")
+def api_delete_key(key_id: str, req: Dict[str, Any] = Body(default={})):
+    """Löscht einen Key vollständig aus der aktiven Liste."""
+    deleted_by = req.get("deleted_by", "admin").strip()
+    try:
+        from backend.api_key_manager import api_key_manager
+        success = api_key_manager.delete_key(key_id, deleted_by=deleted_by)
+        if not success:
+            raise HTTPException(status_code=404, detail="Key nicht gefunden.")
+        return {"status": "success", "message": "API-Key gelöscht."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/keys/audit")
+def api_get_keys_audit(limit: int = 50):
+    """Liefert das revisionssichere SHA-256 Audit-Log der Key-Verwaltung."""
+    try:
+        from backend.api_key_manager import api_key_manager
+        trail = api_key_manager.get_audit_trail(limit=limit)
+        return {"status": "success", "audit_log": trail}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==============================================================================
+# EMAIL DRAFT APPROVAL QUEUE (t-7ca8cd)
+# ==============================================================================
+
+@router.get("/email-drafts")
+def api_list_email_drafts(status: Optional[str] = None):
+    """Gibt alle E-Mail-Entwürfe der Freigabe-Queue zurück."""
+    try:
+        from backend.email_draft_engine import email_draft_engine
+        drafts = email_draft_engine.list_drafts(status=status)
+        return {"status": "success", "drafts": drafts}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/email-drafts")
+def api_create_email_draft(req: Dict[str, Any] = Body(...)):
+    """Erstellt einen neuen E-Mail-Entwurf (z. B. durch einen Agenten)."""
+    subject = req.get("subject", "").strip()
+    recipient = req.get("recipient", "").strip()
+    body_text = req.get("body_text", "").strip()
+    agent_id = req.get("agent_id", "default").strip()
+    agent_name = req.get("agent_name", "Hermes Orchestrator").strip()
+    sender = req.get("sender", "system@archon-os.internal").strip()
+    source_task_id = req.get("source_task_id")
+    created_by = req.get("created_by", "admin").strip()
+
+    if not subject or not recipient or not body_text:
+        raise HTTPException(status_code=400, detail="Betreff, Empfänger und Text sind erforderlich.")
+
+    try:
+        from backend.email_draft_engine import email_draft_engine
+        draft = email_draft_engine.create_draft(
+            subject=subject,
+            recipient=recipient,
+            body_text=body_text,
+            agent_id=agent_id,
+            agent_name=agent_name,
+            sender=sender,
+            source_task_id=source_task_id,
+            created_by=created_by
+        )
+        return {"status": "success", "draft": draft}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/email-drafts/{draft_id}")
+def api_get_email_draft(draft_id: str):
+    """Ruft Details zu einem E-Mail-Entwurf ab."""
+    try:
+        from backend.email_draft_engine import email_draft_engine
+        draft = email_draft_engine.get_draft(draft_id)
+        if not draft:
+            raise HTTPException(status_code=404, detail="Entwurf nicht gefunden.")
+        return {"status": "success", "draft": draft}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/email-drafts/{draft_id}/approve")
+def api_approve_email_draft(draft_id: str, req: Dict[str, Any] = Body(default={})):
+    """Aktion 1: Freigeben & Senden via SMTP."""
+    approver_id = req.get("approver_id", "admin").strip()
+    try:
+        from backend.email_draft_engine import email_draft_engine
+        draft = email_draft_engine.approve_and_send(draft_id, approver_id=approver_id)
+        return {"status": "success", "draft": draft, "message": "E-Mail freigegeben und versendet."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/email-drafts/{draft_id}")
+def api_edit_email_draft(draft_id: str, req: Dict[str, Any] = Body(...)):
+    """Aktion 2: Entwurf im Editor anpassen."""
+    from backend.email_draft_engine import email_draft_engine
+    existing = email_draft_engine.get_draft(draft_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Entwurf nicht gefunden.")
+
+    subject = req.get("subject", existing.get("subject", "")).strip()
+    recipient = req.get("recipient", existing.get("recipient", "")).strip()
+    body_text = req.get("body_text", existing.get("body_text", "")).strip()
+    editor_id = req.get("editor_id", req.get("updated_by", "admin")).strip()
+
+    if not subject or not recipient or not body_text:
+        raise HTTPException(status_code=400, detail="Betreff, Empfänger und Text dürfen nicht leer sein.")
+
+    try:
+        draft = email_draft_engine.edit_draft(draft_id, subject, recipient, body_text, editor_id=editor_id)
+        return {"status": "success", "draft": draft, "message": "Entwurf erfolgreich aktualisiert."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/email-drafts/{draft_id}/snooze")
+def api_snooze_email_draft(draft_id: str, req: Dict[str, Any] = Body(default={})):
+    """Aktion 3: Später erinnern (Snooze)."""
+    hours = int(req.get("hours", 1))
+    user_id = req.get("user_id", "admin").strip()
+    try:
+        from backend.email_draft_engine import email_draft_engine
+        draft = email_draft_engine.snooze_draft(draft_id, hours=hours, user_id=user_id)
+        return {"status": "success", "draft": draft, "message": f"Entwurf für {hours} Stunde(n) zurückgestellt."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/email-drafts/{draft_id}/regenerate")
+def api_regenerate_email_draft(draft_id: str, req: Dict[str, Any] = Body(...)):
+    """Aktion 4: Neu generieren mit Prompt-Feedback."""
+    feedback = req.get("feedback", "").strip()
+    user_id = req.get("user_id", "admin").strip()
+    if not feedback:
+        raise HTTPException(status_code=400, detail="Feedback für den Agenten ist erforderlich.")
+
+    try:
+        from backend.email_draft_engine import email_draft_engine
+        draft = email_draft_engine.regenerate_draft(draft_id, feedback_text=feedback, user_id=user_id)
+        return {"status": "success", "draft": draft, "message": "Überarbeitungsauftrag an Agenten übergeben."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/email-drafts/{draft_id}/reject")
+def api_reject_email_draft(draft_id: str, req: Dict[str, Any] = Body(default={})):
+    """Aktion 5: Abbrechen / Verwerfen."""
+    reason = req.get("reason", "Vom Nutzer verworfen").strip()
+    user_id = req.get("user_id", "admin").strip()
+    try:
+        from backend.email_draft_engine import email_draft_engine
+        draft = email_draft_engine.reject_draft(draft_id, reason=reason, user_id=user_id)
+        return {"status": "success", "draft": draft, "message": "Entwurf verworfen."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =========================================================================
+# AGENT SCORECARDS & PERSONALAKTE INTEGRATION (t-f257ba)
+# =========================================================================
+
+@router.get("/agents/{agent_id}/scorecard")
+def api_get_agent_scorecard(agent_id: str):
+    """Liefert aggregierte Leistungsmetriken, KPIs und Projektdaten für die Personalakte."""
+    try:
+        from backend.agent_scorecard_engine import agent_scorecard_engine
+        data = agent_scorecard_engine.get_scorecard(agent_id)
+        return {"status": "success", "scorecard": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/agents/{agent_id}/operator-notes")
+def api_save_agent_operator_notes(agent_id: str, req: Dict[str, Any] = Body(...)):
+    """Speichert Operator-Beurteilungen persistent und synchronisiert sie mit Obsidian."""
+    notes = req.get("notes", "").strip()
+    try:
+        from backend.agent_scorecard_engine import agent_scorecard_engine
+        agent_scorecard_engine.save_operator_notes(agent_id, notes)
+        return {"status": "success", "message": "Operator-Beurteilung gespeichert und mit Obsidian synchronisiert."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =========================================================================
+# DUAL-LLM GUARD & PROMPT INJECTION SANITIZER (t-d3f2d2)
+# =========================================================================
+
+@router.post("/security/sanitize")
+def api_sanitize_input(req: Dict[str, Any] = Body(...)):
+    """Stufe 1 Quarantäne: Untersucht externe Inputs auf Prompt Injections."""
+    text = req.get("text", "")
+    source_id = req.get("source_id", "unknown")
+    source_type = req.get("source_type", "external")
+    try:
+        from backend.dual_llm_sanitizer import sanitize_external_input
+        result = sanitize_external_input(raw_text=text, source_id=source_id, source_type=source_type)
+        return {"status": "success", "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/security/trusted-sources")
+def api_get_trusted_sources():
+    """Gibt die Whitelist vertrauenswürdiger Absender [T] zurück."""
+    try:
+        from backend.dual_llm_sanitizer import load_trusted_sources
+        sources = load_trusted_sources()
+        return {"status": "success", "trusted_sources": sources}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/security/trusted-sources/toggle")
+def api_toggle_trusted_source(req: Dict[str, Any] = Body(...)):
+    """Schaltet den Trusted-Status [T] für einen Absender um."""
+    source_id = req.get("source_id", "").strip()
+    if not source_id:
+        raise HTTPException(status_code=400, detail="Keine source_id angegeben.")
+    try:
+        from backend.dual_llm_sanitizer import toggle_trusted_source
+        res = toggle_trusted_source(source_id)
+        return {"status": "success", **res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =========================================================================
+# NOTFALLZUGANG / BREAK-GLASS PROTOCOL (t-8efcf3)
+# =========================================================================
+
+@router.get("/security/break-glass/status")
+def api_get_break_glass_status():
+    """Liefert den Integritäts- und Initialisierungsstatus des Break-Glass Vaults."""
+    try:
+        from scripts.break_glass_recovery import get_vault_status
+        return {"status": "success", "vault": get_vault_status()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/security/break-glass/create")
+def api_create_break_glass_vault():
+    """Generiert ein neues verschlüsseltes Notfall-Backup und einen einmaligen Recovery-Key."""
+    try:
+        from scripts.break_glass_recovery import create_break_glass_vault
+        res = create_break_glass_vault(operator="admin")
+        return {"status": "success", **res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/security/break-glass/kit")
+def api_download_break_glass_kit():
+    """Liefert das druckbare Notfall-Dokument (BREAK_GLASS_RECOVERY_KIT.md) als Download."""
+    try:
+        from scripts.break_glass_recovery import KIT_DOC_FILE
+        if not os.path.exists(KIT_DOC_FILE):
+            raise HTTPException(status_code=404, detail="Recovery-Kit noch nicht generiert.")
+        with open(KIT_DOC_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+        return Response(
+            content=content,
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="ARCHON_BREAK_GLASS_RECOVERY_KIT.md"'}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

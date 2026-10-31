@@ -343,11 +343,91 @@ Wenn eine Benachrichtigung oder ein Bericht in Telegram eintrifft:
 
 ---
 
----
+## 9. API-Token & Key-Sicherheit mit Scopes und Rate-Limits
+
+Die Schnittstelle `backend/api_auth.py` schützt externe Endpunkte und Automationsdienste:
+- **Feingranulare Scopes:** API-Keys werden mit spezifischen Berechtigungen ausgestellt (`read:tasks`, `write:tasks`, `execute:agent`, `admin:system`). Ein reiner Monitoring-Client kann somit niemals Systembefehle ausführen.
+- **Token-Bucket Rate-Limiting:** Jeder Schlüssel besitzt ein konfigurierbares Aufruflimit (z. B. 60 Requests pro Minute) mit automatischem Sliding-Window Schutz gegen Denial-of-Service.
+- **Verwaltung im UI:** Im System Control Center unter **API-Tokens & Sicherheit** können Schlüssel erzeugt, Berechtigungen zugewiesen und kompromittierte Keys mit einem Klick widerrufen werden.
 
 ---
 
-# Teil 3: Operatives Runbook & Schnellbehebung
+## 10. E-Mail-Freigabe-Queue & 4-Augen-Versand
+
+Um unkontrollierten E-Mail-Versand durch autonome Agenten auszuschließen, leitet `backend/email_draft_queue.py` alle generierten Nachrichten in eine Freigabe-Warteschlange:
+- **Freigabestufen:** Entwürfe erhalten den Status `pending_approval`. Der Operator prüft Betreff, Empfänger und Volltext im Postfach unter dem Reiter **Entwürfe & Freigaben**.
+- **Human-in-the-Loop Aktionen:**
+  - `[Freigeben & Senden]`: Übergibt die Nachricht an den SMTP-Dienst und dokumentiert die Transaktion im Audit-Log.
+  - `[Überarbeiten]`: Übergibt den Text mit Korrekturhinweisen zurück an den verfassenden Agenten.
+  - `[Verwerfen]`: Löscht den Entwurf unwiderruflich.
+
+---
+
+## 11. Kanban-Mehrfachaktionen & 10-Minuten-Undo
+
+Zur effizienten Steuerung großer Aufgabenmengen unterstützt das operative Board (`backend/operations_api.py`) Sammeloperationen mit zeitlich begrenzter Reversibilität:
+- **Mehrfachauswahl (Bulk Actions):** Durch Checkboxen an den Task-Karten können mehrere Aufgaben gleichzeitig in eine andere Spalte verschoben, einem neuen Agenten zugewiesen oder gelöscht werden.
+- **10-Minuten-Undo Puffer:** Nach jeder Sammelaktion speichert das System einen konsistenten JSON-Snapshot der betroffenen Tasks in `kanban.db` und blendet ein persistentes Toast-Fenster mit dem Button **„Rückgängig“** ein. 
+- Ein Klick stellt den exakten vorherigen Spalten- und Zuweisungsstatus innerhalb des 10-Minuten-Zeitfensters wieder her.
+
+---
+
+## 12. Agent-Scorecards & Obsidian-Synchronisation in der Personalakte
+
+Der Reiter **Personalakte** im Agenten-Kader visualisiert die operative Leistungsfähigkeit jedes Agenten anhand von 8 Kennzahlen (`backend/agent_scorecards.py`):
+1. **Erfolgsrate (%):** Anteil erfolgreich abgeschlossener Tasks ohne Fehlversuche.
+2. **Token-Effizienz:** Durchschnittlicher Token-Verbrauch pro gelöster Aufgabe.
+3. **Kostenakkumulation (€):** Angefallene Modellkosten über alle Einsätze.
+4. **Latenz & Reaktionszeit:** Durchschnittliche Dauer bis zum ersten Tool-Aufruf.
+5. **Tool-Zuverlässigkeit (%):** Quote fehlerfreier Tool-Ausführungen.
+6. **HITL-Feedback Score:** Historische Quote genehmigter vs. abgelehnter Freigaben.
+7. **Pünktlichkeit & Deadlines:** Quote eingehaltene vs. überschrittene Bearbeitungszeiten.
+8. **Gesamt-Aufgabenvolumen:** Gesamtzahl bearbeiteter Tickets.
+
+**Obsidian-Integration:** Jede Leistungsakte wird automatisch mit dem Obsidian Vault unter `/opt/data/obsidian/Personalakten/<agent_id>.md` synchronisiert. Leistungsnotizen und Beurteilungen können dort direkt formuliert und in Archon OS eingeblendet werden.
+
+---
+
+## 13. Revisionssicheres GoBD & ISO 27001 Audit-Log mit SHA-256 Hashkette
+
+Das Governance-Modul (`backend/audit_log.py`) zeichnet alle sicherheits-, finanz- und prozessrelevanten Aktionen manipulationssicher auf:
+- **Kryptografische Hashkette:** Jeder Eintrag enthält den SHA-256 Hash des vorherigen Eintrags sowie seiner eigenen Nutzdaten. Eine nachträgliche Manipulation bricht die Kette und wird sofort lokalisiert.
+- **Prüfer-Export (1-Klick):** Über die Ansicht **Telemetrie & Logs** kann der vollständige Prüfbericht nach GoBD- und ISO/IEC 27001-Standard als strukturierte `JSON`- oder `CSV`-Datei exportiert werden.
+- **Integritätsprüfung per API:** `/api/governance/audit-log/verify` prüft in Echtzeit, ob die Kette lückenlos und unversehrt ist.
+
+---
+
+## 14. Datenschutz-Routing (Zero Egress) & Lokale LLMs mit DSGVO-Statusleuchten
+
+Für sensible Geschäftsbereiche (Rechnungen, Verträge, CRM-Kontakte, HR-Akten) erzwingt `backend/privacy_router.py` den Schutz vor Drittland-Übertragungen:
+- **Automatische On-Premise Erkennung:** Prüft lokale Inferenzserver (LM Studio auf Port 1234, Ollama auf Port 11434) mit synchronem 0,3s Socket-Check ohne DNS-Verzögerung.
+- **EU-Fallback:** Steht keine lokale GPU zur Verfügung, greift das System auf europäische DSGVO-Provider (z. B. Mistral AI mit Rechenzentren in Frankreich) zurück.
+- **Echtzeit-Statusleuchten (Sidebar Footer):**
+  - `LOKAL`: **Grün** (Lokale Engine bereit & Zero-Egress aktiv), **Gelb** (Engine erreichbar, Routing inaktiv), **Grau** (Keine lokale Engine).
+  - `DSGVO`: **Grün** (Zero-Egress oder EU-Mistral aktiv), **Rot** (Schutz inaktiv; Datenübertragung ins Drittland möglich).
+
+---
+
+## 15. Dual-LLM Guard gegen Prompt Injection & [T]-Trusted Badges
+
+Zum Schutz vor indirekter Prompt Injection in unstrukturierten externen Daten (E-Mails, Scrapes, PDFs) implementiert `backend/dual_llm_sanitizer.py` eine 2-Stufen-Quarantäne:
+- **Stufe 1 (Quarantäne):** Eingehende Fremddaten werden durch ein isoliertes, unprivilegiertes Sprachmodell ohne Werkzeugzugriff neutralisiert und auf Jailbreak-Muster analysiert.
+- **Stufe 2 (Werkzeug-Agent):** Erst nach Freigabe erhält der primäre Arbeitsagent (z. B. Robert) die bereinigten Fakten als passive Daten-Payload.
+- **`[T]`-Trusted Source Toggle:** In der Inbox und im Master Chat erlaubt der kleine interaktive Badge `[T]` vertrauenswürdige Absender (gespeichert in `data/trusted_sources.json`) mit einem Klick freizuschalten, um vertraute interne Absender ohne Verzögerung direkt zuzustellen.
+
+---
+
+## 16. Notfallzugang & Verschlüsseltes Break-Glass Protocol
+
+Das Katastrophen- und Nachfolgeprotokoll (`scripts/break_glass_recovery.py`) stellt sicher, dass das System auch bei Komplettausfall des Betreibers oder der Docker-Infrastruktur handlungsfähig bleibt:
+- **Zero-Dependency Authenticated Encryption:** Nutzt ausschließlich Python 3 Standardbibliotheken mit PBKDF2 (200.000 Runden HMAC-SHA256) und Counter-Modus Keystream-Verschlüsselung.
+- **Tresor-Archiv:** Sichert alle kritischen Secrets (`.env`), Konfigurationen und SQLite-Datenbanken verschlüsselt in `data/backups/break_glass_vault.enc`.
+- **Notfall-Wiederherstellung:** Ein autorisierter Notfall-Operator kann im Ernstfall über das Host-Terminal mit dem ausgedruckten 64-stelligen Masterkey (`BREAK_GLASS_RECOVERY_KIT.md`) alle Daten in Sekundenschnelle ohne Docker wiederherstellen:
+  ```bash
+  python scripts/break_glass_recovery.py --restore --key <MASTERKEY>
+  ```
+
+---
 
 ### Schnellbefehle im Fehlerfall
 
@@ -391,6 +471,24 @@ curl.exe -s http://127.0.0.1:8090/api/health
 curl.exe -s http://127.0.0.1:2375/version
 ```
 
+#### 7. Audit-Log Integritätsprüfung (GoBD / ISO 27001)
+```bash
+curl.exe -s http://127.0.0.1:8501/api/governance/audit-log/verify
+```
+*Erwartetes Ergebnis:* `{"status": "valid", "tampered_records": 0, ...}`
+
+#### 8. Datenschutz-Routing & Lokale LLM Erkennung
+```bash
+curl.exe -s http://127.0.0.1:8501/api/llm-providers/privacy-status
+```
+*Gibt zurück, ob LM Studio (Port 1234) oder Ollama (Port 11434) aktiv sind und ob Zero-Egress aktiv ist.*
+
+#### 9. Notfall-Tresor Status prüfen (Break-Glass)
+```bash
+python scripts/break_glass_recovery.py --status
+```
+*Prüft Vorhandensein und Timestamp des verschlüsselten Tresors `data/backups/break_glass_vault.enc`.*
+
 ---
 
 # Anhang: System-Glossar (Kernansichten & Mechaniken)
@@ -406,8 +504,8 @@ Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon O
 
 2. **Operations – Kanban Board & Task-Engine**
    * **Problem:** Aufgaben gehen in reinen Chat-Verläufen unter und lassen sich weder steuern noch auditieren.
-   * **Mechanik:** 5 Lebenszyklus-Spalten auf `kanban.db` (Single Source of Truth) mit WIP-Limits, Prioritätsfiltern (P0–P3), Zeiterfassung und Obsidian-Sync. **Neu in v0.3.5:** Integriert das 4-Augen Qualitäts-Gate: Vor Verschieben auf `done` prüft ein Peer-Reviewer (Katharina Völk für QM/Compliance oder Robert) das Arbeitsergebnis auf Vollständigkeit, Substanz und Handlungsfähigkeit (1–100% Score) mit Status-Sperre bei `changes_requested` und Human-in-the-Loop Override (`force=True`).
-   * **Nutzen:** Verhindert unfertige Arbeitsstände im `done`-Status durch verbindliches Vier-Augen-Review.
+   * **Mechanik:** 5 Lebenszyklus-Spalten auf `kanban.db` (Single Source of Truth) mit WIP-Limits, Prioritätsfiltern (P0–P3), Zeiterfassung und Obsidian-Sync. Integriert das 4-Augen Qualitäts-Gate vor `done` (1–100% Score). **Neu:** Unterstützt Mehrfachauswahl (Bulk Actions: Verschieben, Zuweisen, Löschen) mit 10-Minuten-Undo Puffer über persistente Snapshots.
+   * **Nutzen:** Verhindert unfertige Arbeitsstände im `done`-Status und erlaubt schnelles Korrigieren versehentlicher Massenänderungen.
 
 3. **Operations – Interaktives 2D-Organigramm & Berichtslinien**
    * **Problem:** Flache Agentenlisten bieten keine Hierarchie für Eskalationen oder Vertretungsregeln.
@@ -420,18 +518,18 @@ Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon O
    * **Nutzen:** Volle Transparenz über Zwischenergebnisse und Absprachen.
 
 5. **Eingang & Triage (3-Spalten HITL-Gatekeeper & Postfach)**
-   * **Problem:** Unkontrollierte externe Impulse (Mails, Telegram, RSS) stören laufende Kernprozesse.
-   * **Mechanik:** 3-Spalten-Triage mit Vorprüfung, Sentiment-Analyse, Prioritäts-Klassifizierung und Freigabe-Buttons.
-   * **Nutzen:** Human-in-the-Loop Filter vor Übernahme in den operativen Task-Workflow.
+   * **Problem:** Unkontrollierte externe Impulse stören laufende Kernprozesse oder schleusen Injection-Angriffe ein.
+   * **Mechanik:** 3-Spalten-Triage mit Vorprüfung, Sentiment-Analyse, Prioritäts-Klassifizierung und Freigabe-Buttons. **Neu:** Enthält die E-Mail-Freigabe-Queue für ausgehende Entwürfe (`backend/email_draft_queue.py`), Dual-LLM Quarantäne gegen Prompt Injection und interaktive `[T]`-Trusted Source Badges neben Absendern zum Whitelisting vertrauenswürdiger Kontakte.
+   * **Nutzen:** Kontrollierter Datenfluss nach außen und sicherer Schutz vor bösartigen Fremdanweisungen.
 
 6. **Agenten-Kader & Flottenmanagement (8-Reiter-Cockpit)**
    * **Problem:** Agentenkonfigurationen und Systemprompts waren verteilt und schwer wartbar.
-   * **Mechanik:** 8 Reiter für Kaderübersicht, Personalakten, Rollen, Soul-Engine, Skills, Marktplatz, Funk und Modellzuweisungen.
-   * **Nutzen:** Zentrale Administration aller 57 Agenten-Profile und Werkzeugberechtigungen.
+   * **Mechanik:** 8 Reiter für Kaderübersicht, Personalakten, Rollen, Soul-Engine, Skills, Marktplatz, Funk und Modellzuweisungen. **Neu:** Der Reiter **Personalakte** visualisiert 8 standardisierte Leistungskennzahlen (Erfolgsrate, Tokens, Kosten, Latenz, Tool-Zuverlässigkeit, Feedback, Pünktlichkeit, Aufgabenvolumen) mit direkter Synchronisation in den Obsidian Vault (`Personalakten/<agent>.md`).
+   * **Nutzen:** Vollständige Transparenz über Leistungs- und Kostenhistorie aller 57 Agenten.
 
 7. **Master Chat (Dual-Mode Workspace & Multi-Session-Sidebar)**
    * **Problem:** Kein schneller Wechsel zwischen 1:1-Dialog, Gruppenchat und Missions-Auftrag.
-   * **Mechanik:** Dual-Mode ('Direkt' vs. 'Mission'), Multi-File-Upload, Screen-Capture, Reasoning-Budget (0 bis 16k Tokens) und Session-Historie. **Neu in v0.3.5:** Telegram Voice-Pipeline: Eingehende Sprachnachrichten (.ogg/Opus) werden via Whisper/Gemini transkribiert, per Rufname geroutet und Antworten via `edge-tts` (`de-DE-ConradNeural`) als natürliche Sprachmemos direkt auf Telegram zurückgesendet.
+   * **Mechanik:** Dual-Mode ('Direkt' vs. 'Mission'), Multi-File-Upload, Screen-Capture, Reasoning-Budget (0 bis 16k Tokens) und Session-Historie. Telegram Voice-Pipeline mit Whisper/Gemini und edge-tts. **Neu:** Integrierter `[T]`-Trusted Source Toggle neben dem Moduswähler für Quarantäne-Bypass bei vertrauenswürdigen Eingaben.
    * **Nutzen:** Durchgängige Arbeitsfläche für Text-, Bild- und Sprachinteraktion.
 
 8. **AI Mastermind & Boardroom (55 Methodik-Frameworks)**
@@ -441,7 +539,7 @@ Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon O
 
 9. **Showroom (Projekt-Explorer, Artefakt-Galerie & Python-Sandbox)**
    * **Problem:** Generierte Deliverables (HTML, Berichte, Skripte) gehen im Chat-Verlauf verloren.
-   * **Mechanik:** Katalogisiert Arbeitsergebnisse nach Ersteller, Typ und Datum mit Markdown-/HTML-Rendering. **Neu in v0.3.5:** Interaktiver Live-Runner zur direkten Code-Ausführung im Browser mit 12s Timeout, isoliertem Scratch-Verzeichnis und ausklappbarem Terminal-Drawer (STDOUT, STDERR, Exit-Code und Millisekunden-Laufzeit).
+   * **Mechanik:** Katalogisiert Arbeitsergebnisse nach Ersteller, Typ und Datum mit Markdown-/HTML-Rendering. Interaktiver Live-Runner zur direkten Code-Ausführung im Browser mit 12s Timeout, isoliertem Scratch-Verzeichnis und Terminal-Drawer.
    * **Nutzen:** Deliverables und Skripte direkt im Showroom ohne Konsolenwechsel prüfen und ausführen.
 
 10. **Zentralbibliothek & 2nd Brain (RAG, Auto-OCR & Obsidian-Vault)**
@@ -451,13 +549,13 @@ Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon O
 
 11. **Workflow-Engine (n8n Automation Mesh auf Port 5678)**
     * **Problem:** Komplexe Trigger-Action-Ketten überfordern lineare Chat-Agenten.
-    * **Mechanik:** Visueller Workflow-Editor für Cron-Jobs, API-Connectors und Webhook-Ketten. **Aktivierte Routinen:** 1. *Morning-Briefing* (Werktags 07:30 Uhr & Webhook `POST /webhook/archon-morning-briefing` mit Obsidian-Ablage und Telegram-Versand), 2. *Weekly Maintenance & Audit* (Sonntags 23:00 Uhr mit DB-Backup und Health-Check), 3. *RSS & News Watchdog* (stündlicher Scan), plus 5 aktive Funktions-Webhooks für Extraktion, Messaging, Dokumente, Feed-Suche und CRM-Sync.
+    * **Mechanik:** Visueller Workflow-Editor für Cron-Jobs, API-Connectors und Webhook-Ketten. Routinen für Morning-Briefing (07:30 Uhr), Maintenance (So 23:00 Uhr) und stündlichen News-Scan.
     * **Nutzen:** Autonome zeitgesteuerte Hintergrundroutinen ohne manuelles Zutun.
 
-12. **LLM Gateway (OmniRoute AI Router Dashboard)**
-    * **Problem:** Abhängigkeit von einzelnen LLM-Providern und unkalkulierbare API-Kosten.
-    * **Mechanik:** Dynamisches Multi-Provider Routing mit Fallback-Kaskaden und Latenz-Tracking.
-    * **Nutzen:** Höchste Ausfallsicherheit bei optimierten Token-Kosten.
+12. **LLM Gateway & Datenschutz-Router (OmniRoute & Zero Egress)**
+    * **Problem:** Abhängigkeit von einzelnen LLM-Providern und Risiko des Drittland-Datentransfers für sensible Geschäftsdaten.
+    * **Mechanik:** Dynamisches Multi-Provider Routing mit Fallback-Kaskaden. **Neu:** Datenschutz-Routing (`backend/privacy_router.py`) leitet sensible Datenkategorien (Finanzen, Verträge, CRM, HR) prioritär an lokale Engines (LM Studio / Ollama) oder DSGVO-zertifizierten EU-Fallback (Mistral AI). Permanente Echtzeit-Indikatoren (`LOKAL` & `DSGVO`) in der Sidebar-Fußzeile.
+    * **Nutzen:** Höchste Ausfallsicherheit, optimierte Kosten und lückenlose DSGVO-Konformität.
 
 13. **Token Guard (Guardian & Token Analytics)**
     * **Problem:** Unerwartete Kostenspitzen durch ausufernde Kontextfenster und Loops.
@@ -466,18 +564,18 @@ Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon O
 
 14. **Erweiterungen & Modul-Zentrale (Pluginsystem)**
     * **Problem:** Systemfähigkeiten ließen sich bisher nicht isoliert zur Laufzeit erweitern.
-    * **Mechanik:** 34 Evey-Plugins in 8 Fach-Reitern. **Neu in v0.3.5:** Standardisiertes Pluginsystem unter `plugins/<plugin_id>/plugin.json` mit 4 Lifecycle-Hooks (`on_load`, `on_enable`, `on_disable`, `on_unload`) und 2 Tool-Interzeptoren (`before_tool_execute`, `after_tool_execute`) inklusive 3 Starter-Plugins (System Metrics, Security Audit Hook, Cost Guard).
+    * **Mechanik:** Standardisiertes Pluginsystem unter `plugins/<plugin_id>/plugin.json` mit 4 Lifecycle-Hooks und 2 Tool-Interzeptoren inklusive Starter-Plugins (System Metrics, Security Audit Hook, Cost Guard).
     * **Nutzen:** Modulare Laufzeit-Erweiterungen ohne Kernel-Code-Eingriffe.
 
 15. **Research Lab (Deep Search & Evidenz-Triangulation)**
     * **Problem:** Einfache Internetsuchen liefern oberflächliche, ungeprüfte Einzeltreffer ohne Nachvollziehbarkeit.
-    * **Mechanik:** Mehrstufiges Forschungs-Cockpit mit Quellen-Monitor und Evidenz-Score. **Neu in Meilenstein 12:** Kuratierte Informationsquellen-Strategie (`backend/research_sources.py`) mit 15 verifizierten Quellen in 4 Kategorien (Investitionen & Geopolitik High Impact, Wirtschaft & Finanzen, Technologie & KI, Politik & Wissenschaft), 5-stufigem Vertrauensmodell (Tier 1: Amtlich 1.0 bis Tier 5: KI-Hinweis 0.5) und Zitationspflicht via Markdown-Hyperlinks `[Quelle: Name](URL)` sowie automatischer Triangulationsmatrix in allen Dossiers.
+    * **Mechanik:** Mehrstufiges Forschungs-Cockpit mit Quellen-Monitor und Evidenz-Score. Kuratierte Informationsquellen-Strategie mit 15 verifizierten Quellen und Zitationspflicht.
     * **Nutzen:** Wissenschaftlich und wirtschaftlich belastbare, triangulierte Dossiers mit lückenlosem Primärquellen-Nachweis.
 
-16. **Telemetrie & Logs (3-Quellen Live-Audit Stream)**
-    * **Problem:** Verteilte Logs in verschiedenen Containern erschweren die Fehlerdiagnose.
-    * **Mechanik:** Konsolidierter Echtzeit-Stream aus Backend, Hermes-Daemon und Docker-Proxy.
-    * **Nutzen:** Schnelle Ursachenanalyse bei Systemfehlern.
+16. **Telemetrie & Revisions-Log (GoBD / ISO 27001 Audit-Stream)**
+    * **Problem:** Manipulierbare oder unvollständige System-Logs erfüllen keine gesetzlichen Nachweispflichten.
+    * **Mechanik:** **Neu:** Revisionssicheres Audit-Log (`backend/audit_log.py`) mit kryptografischer SHA-256 Hashkette (Merkle-Prinzip), lückenloser Nachvollziehbarkeit von Finanz- und Freigabeprozessen, Manipulationserkennung (`/verify`), Kategorie-Filterung und 1-Klick Prüfbericht-Export (JSON/CSV).
+    * **Nutzen:** Vollständige Compliance für GoBD-, ISO 27001- und EU AI Act-Audits.
 
 17. **Spezial-Studio: Archon Prompt Studio (1.079 Vorlagen & Fabric SOP)**
     * **Problem:** Unstrukturierte Prompts führen zu inkonsistenten Agenten-Ergebnissen.
@@ -494,8 +592,8 @@ Referenz aller Kernansichten, Spezial-Studios und System-Mechaniken von Archon O
     * **Mechanik:** 15 standardisierte Komponenten, Farbtoken und AppShell-Layout-Presets.
     * **Nutzen:** Einheitliche Gestaltung und schnelle Erstellung neuer Ansichten.
 
-20. **System Control Center & Release-Lifecycle**
-    * **Problem:** Systemeinstellungen und Aktualisierungen waren manuell und fehleranfällig.
-    * **Mechanik:** 7 Administrations-Reiter und Omnibox (`Strg + K`). **Neu in v0.3.5:** 1-Klick Updatesystem & Continuous Deployment mit Pre-Update Snapshots aller SQLite-Datenbanken (WAL) in `data/snapshots/` vor jedem Git-Pull, 1-Klick Rollback und minimalen Git-Stat-Prüfungen gegen Mount-Timeouts.
-    * **Nutzen:** Sichere 1-Klick Aktualisierung zwischen Entwicklungsumgebung und Homeserver.
+20. **System Control Center & Notfallzugang (Settings & Break-Glass)**
+    * **Problem:** Systemeinstellungen waren verteilt; bei Betreiberausfall drohte Datenverlust.
+    * **Mechanik:** 8 Administrations-Reiter und Omnibox (`Strg + K`). 1-Klick Updatesystem mit Pre-Update Snapshots. **Neu:** API-Key Verwaltung mit Scopes und Rate-Limits (`backend/api_auth.py`), Section 15 für den verschlüsselten Notfall-Tresor (Break-Glass Protocol via `scripts/break_glass_recovery.py`) mit PBKDF2-200k Keystream-Verschlüsselung für Katastrophen-Wiederherstellung.
+    * **Nutzen:** Zentrale Systemkontrolle, gesicherte API-Schnittstellen und garantierter Weiterbetrieb im Notfall.
 

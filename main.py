@@ -8629,6 +8629,17 @@ async def api_save_settings(request: Request, settings: Dict = Body(None)):
         _save_json(SETTINGS_FILE, current)
     elif settings is not None:
         _save_json(SETTINGS_FILE, settings)
+    try:
+        from backend.audit_log import chained_audit_log
+        keys_changed = list(settings.keys()) if isinstance(settings, dict) else ["all"]
+        chained_audit_log.record_event(
+            category="config",
+            action="settings_saved",
+            agent_id="operator",
+            payload={"changed_keys": keys_changed}
+        )
+    except Exception:
+        pass
     return {"status": "success"}
 
 @app.post("/api/v1/jev/test")
@@ -10106,7 +10117,26 @@ def get_llm_providers():
         provider_map = {p["id"]: p for p in all_catalog if isinstance(p, dict) and "id" in p}
         
         # Featured providers in intuitive order
-        featured_ids = ["omniroute", "openrouter", "google", "groq", "openai", "nvidia", "anthropic", "deepseek"]
+        featured_ids = ["local", "mistral", "omniroute", "openrouter", "google", "groq", "openai", "nvidia", "anthropic", "deepseek"]
+
+        if "local" not in provider_map:
+            provider_map["local"] = {
+                "id": "local",
+                "name": "Lokales LLM (Ollama / LM Studio)",
+                "env": ["LOCAL_LLM_URL", "OLLAMA_HOST"],
+                "api": "http://127.0.0.1:11434/v1",
+                "model_count": 8,
+                "privacy_badge": "100% On-Premise"
+            }
+        if "mistral" not in provider_map:
+            provider_map["mistral"] = {
+                "id": "mistral",
+                "name": "Mistral AI (EU / Paris - DSGVO-konform)",
+                "env": ["MISTRAL_API_KEY"],
+                "api": "https://api.mistral.ai/v1",
+                "model_count": 12,
+                "privacy_badge": "EU-DSGVO Zertifiziert"
+            }
         
         if "omniroute" not in provider_map:
             provider_map["omniroute"] = {
@@ -10252,6 +10282,42 @@ def save_llm_provider_key(req: LLMProviderSaveKeyRequest):
         return {"status": "ok", "message": f"{env_key} erfolgreich hinterlegt und verteilt", "deploy": deploy_res}
     except Exception as e:
         logger.error(f"[llm-providers] save-key error: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/llm-providers/privacy-status")
+def api_get_privacy_status():
+    """Gibt den aktuellen Datenschutz- und Verbindungsstatus für Lokal-LLM und DSGVO zurück (t-c4489c)."""
+    try:
+        from backend.privacy_router import get_overall_privacy_status
+        return get_overall_privacy_status()
+    except Exception as e:
+        logger.error(f"[privacy-status] Error: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/llm-providers/privacy-routing")
+def api_save_privacy_routing(payload: Dict[str, Any] = Body(...)):
+    """Aktualisiert die Richtlinien für sensibles On-Premise Routing und EU-Fallback (t-c4489c)."""
+    try:
+        from backend.privacy_router import save_privacy_config
+        saved = save_privacy_config(payload, operator="operator")
+        return {"status": "ok", "config": saved}
+    except Exception as e:
+        logger.error(f"[privacy-routing] Error: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/llm-providers/test-connection")
+def api_test_provider_connection(payload: Dict[str, Any] = Body(...)):
+    """Testet die Live-Verbindung zu einem lokalen LLM oder Mistral AI (t-c4489c)."""
+    try:
+        from backend.privacy_router import test_endpoint_sync
+        provider = payload.get("provider", "local")
+        url = payload.get("url", "http://127.0.0.1:11434/v1")
+        api_key = payload.get("api_key")
+        model = payload.get("model")
+        res = test_endpoint_sync(provider=provider, url=url, api_key=api_key, model=model)
+        return {"status": "ok", "result": res}
+    except Exception as e:
+        logger.error(f"[test-connection] Error: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 @app.api_route("/api/session", methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"])

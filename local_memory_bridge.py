@@ -21,17 +21,24 @@ class LocalMemoryBridge:
         self.vault_path = vault_path or "C:\\Mein Obsidian"
 
         if not db_path:
+            workspace_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agentic_memory.db")
             user_hermes = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), ".hermes", "agentic_memory.db")
             for cand in [
                 os.environ.get("AGENTIC_MEMORY_DB"),
+                workspace_db,
                 "/opt/data/agentic_memory.db",
                 user_hermes,
-                os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agentic_memory.db"),
                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "agentic_memory.db"),
             ]:
                 if cand and os.path.exists(cand):
-                    db_path = cand
-                    break
+                    try:
+                        test_conn = sqlite3.connect(cand, timeout=1.0)
+                        test_conn.execute("SELECT 1;")
+                        test_conn.close()
+                        db_path = cand
+                        break
+                    except Exception:
+                        continue
             if not db_path:
                 base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
                 os.makedirs(base_dir, exist_ok=True)
@@ -542,61 +549,24 @@ tags: ["learning", "memory", "{agent_id}"]
 
     def log_audit_event(self, agent_id: str, action: str, payload: dict) -> dict:
         """
-        Pillar 6 (Zero-Trust Governance): Fügt eine unveränderbare Transaktion
-        zur kryptografisch verketteten Audit-Log-Tabelle hinzu.
-        Hash = SHA256(prev_hash + timestamp + agent_id + action + payload_json)
+        Pillar 6 (Zero-Trust Governance): Delegiert an das zentrale revisionssichere
+        GoBD/ISO 27001 Audit-Log (backend.audit_log.chained_audit_log).
         """
-        import hashlib
-        import json
-
-        payload_str = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1")
-            row = cur.fetchone()
-            prev_hash = row["hash"] if row else "GENESIS_HASH_ARCHON_OS_2026"
-
-            now_str = datetime.datetime.now().isoformat()
-            raw_data = f"{prev_hash}|{now_str}|{agent_id}|{action}|{payload_str}"
-            event_hash = hashlib.sha256(raw_data.encode("utf-8")).hexdigest()
-
-            cur.execute("""
-                INSERT INTO audit_log (agent_id, action, payload, prev_hash, hash, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (agent_id, action, payload_str, prev_hash, event_hash, now_str))
-            conn.commit()
-
-            return {
-                "status": "success",
-                "hash": event_hash,
-                "prev_hash": prev_hash,
-                "timestamp": now_str
-            }
+        from backend.audit_log import chained_audit_log
+        res = chained_audit_log.record_event(category="operations", action=action, agent_id=agent_id, payload=payload)
+        return {
+            "status": "success",
+            "hash": res["current_hash"],
+            "prev_hash": res["prev_hash"],
+            "timestamp": res["timestamp"]
+        }
 
     def verify_audit_chain(self) -> dict:
         """
-        Prüft die kryptografische Integrität der gesamten Hash-Kette.
-        Gibt True zurück, wenn kein Eintrag manipuliert wurde.
+        Prueft die kryptografische Integritaet der gesamten Hash-Kette ueber chained_audit_log.
         """
-        import hashlib
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT id, agent_id, action, payload, prev_hash, hash, timestamp FROM audit_log ORDER BY id ASC")
-            rows = cur.fetchall()
-
-            expected_prev = "GENESIS_HASH_ARCHON_OS_2026"
-            for r in rows:
-                if r["prev_hash"] != expected_prev:
-                    return {"valid": False, "corrupted_id": r["id"], "reason": "Broken previous hash link"}
-                
-                raw_data = f"{r['prev_hash']}|{r['timestamp']}|{r['agent_id']}|{r['action']}|{r['payload']}"
-                recomputed = hashlib.sha256(raw_data.encode("utf-8")).hexdigest()
-                if recomputed != r["hash"]:
-                    return {"valid": False, "corrupted_id": r["id"], "reason": "Hash mismatch (data altered)"}
-
-                expected_prev = r["hash"]
-
-            return {"valid": True, "total_records": len(rows)}
+        from backend.audit_log import chained_audit_log
+        return chained_audit_log.verify_integrity()
 
     def sync_task(self, task_id: str, title: str, role: str, status: str, result: Optional[str] = None, obsidian_note: Optional[str] = None) -> dict:
         """

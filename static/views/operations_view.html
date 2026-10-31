@@ -61,6 +61,110 @@
           <div id="ops-kanban-columns-container" class="flex gap-1.5 w-full flex-1 min-h-0 overflow-x-auto pb-1">
             <!-- Dynamische Spalten -->
           </div>
+
+          <!-- FLOATING BULK-ACTION TOOLBAR (t-c2b384: Option A) -->
+          <div id="ops-kanban-bulk-toolbar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl border border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-md text-[var(--foreground)] shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-150">
+            <div class="flex items-center gap-2 pr-3 border-r border-[var(--border)]">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
+              <span id="ops-kanban-bulk-count" class="text-xs font-mono font-bold text-indigo-500">0 markiert</span>
+              <button type="button" onclick="clearOpsKanbanSelection()" class="text-[10px] font-mono text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline cursor-pointer ml-1">
+                Aufheben
+              </button>
+            </div>
+
+            <!-- 1. Spalte verschieben Popover / Dropdown -->
+            <div class="relative">
+              <button type="button" onclick="toggleOpsBulkMoveMenu()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                <i data-lucide="arrow-right-circle" class="w-3.5 h-3.5 text-blue-500"></i>
+                <span>Verschieben</span>
+                <i data-lucide="chevron-down" class="w-3 h-3 text-[var(--muted-foreground)]"></i>
+              </button>
+              <div id="ops-bulk-move-menu" class="hidden absolute bottom-full mb-2 left-0 w-44 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-xl p-1.5 space-y-1 text-xs font-mono z-50">
+                <div class="px-2 py-1 text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider">Ziel-Spalte</div>
+                <button type="button" onclick="executeBulkMove('backlog')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-slate-400"></span> Backlog
+                </button>
+                <button type="button" onclick="executeBulkMove('todo')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-indigo-500"></span> To-Do
+                </button>
+                <button type="button" onclick="executeBulkMove('in_progress')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-amber-500"></span> In Arbeit
+                </button>
+                <button type="button" onclick="executeBulkMove('review')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-purple-500"></span> Review
+                </button>
+                <button type="button" onclick="executeBulkMove('blocked')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-rose-500"></span> Blockiert
+                </button>
+                <button type="button" onclick="executeBulkMove('done')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Erledigt
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. Zuweisen Dropdown -->
+            <div class="relative">
+              <button type="button" onclick="toggleOpsBulkAssignMenu()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                <i data-lucide="user-check" class="w-3.5 h-3.5 text-emerald-500"></i>
+                <span>Zuweisen</span>
+                <i data-lucide="chevron-down" class="w-3 h-3 text-[var(--muted-foreground)]"></i>
+              </button>
+              <div id="ops-bulk-assign-menu" class="hidden absolute bottom-full mb-2 left-0 w-52 max-h-56 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-xl p-1.5 space-y-1 text-xs font-mono z-50 custom-scrollbar">
+                <!-- Dynamisch mit Agenten befüllt -->
+              </div>
+            </div>
+
+            <!-- 3. Taggen Popover -->
+            <div class="relative">
+              <button type="button" onclick="toggleOpsBulkTagMenu()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                <i data-lucide="tag" class="w-3.5 h-3.5 text-indigo-500"></i>
+                <span>Taggen</span>
+                <i data-lucide="chevron-down" class="w-3 h-3 text-[var(--muted-foreground)]"></i>
+              </button>
+              <div id="ops-bulk-tag-menu" class="hidden absolute bottom-full mb-2 left-0 w-56 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-xl p-2.5 space-y-2 text-xs font-mono z-50">
+                <div class="text-[10px] font-bold text-[var(--muted-foreground)] uppercase">Tag hinzufügen</div>
+                <div class="flex gap-1">
+                  <input type="text" id="ops-bulk-tag-input" placeholder="z.B. Sprint-1, P1" class="flex-1 px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono focus:outline-none">
+                  <button type="button" onclick="executeBulkTag('add')" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer">+</button>
+                </div>
+                <div class="flex gap-1 pt-1 border-t border-[var(--border)]">
+                  <button type="button" onclick="executeBulkTag('remove')" class="w-full text-center py-1 rounded hover:bg-rose-500/10 text-rose-500 text-[10px] font-mono cursor-pointer">Tag entfernen...</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Löschen / Archivieren -->
+            <button type="button" onclick="executeBulkDelete()" class="h-8 px-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs" title="Ausgewählte Aufgaben archivieren">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              <span>Archivieren</span>
+            </button>
+
+            <!-- Schließen -->
+            <button type="button" onclick="clearOpsKanbanSelection()" class="p-1.5 rounded-lg hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer ml-1" title="Auswahl aufheben (Esc)">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- 10-MINUTEN UNDO FLOATING TOAST -->
+          <div id="ops-kanban-undo-toast" class="hidden fixed bottom-6 right-6 z-50 max-w-md px-4 py-3 rounded-2xl border border-indigo-500/30 bg-zinc-950/95 text-white shadow-2xl flex items-center justify-between gap-3 text-xs font-mono animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div class="min-w-0">
+                <div id="ops-kanban-undo-msg" class="font-bold truncate">Aufgaben aktualisiert</div>
+                <div class="text-[10px] text-zinc-400 flex items-center gap-1">
+                  <span>Rückgängig möglich:</span>
+                  <span id="ops-kanban-undo-timer" class="font-bold text-amber-400">10:00</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" onclick="triggerOpsBulkUndo()" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition shadow-xs">
+                <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+                <span>Rückgängig</span>
+              </button>
+              <button type="button" onclick="dismissOpsUndoToast()" class="p-1 rounded text-zinc-400 hover:text-white cursor-pointer">✕</button>
+            </div>
+          </div>
         </main>
 
         <!-- SUB-VIEW 3: ORGANISATION & TEAMS (ABLAUFDIAGRAMM & TEAMS) -->

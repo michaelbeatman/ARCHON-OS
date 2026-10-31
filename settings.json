@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +390,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,311 +410,324 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-10-31T05:39:06.599914",
+        "last_check": "2026-10-31T10:10:43.193266",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-10-31T05:39:06.599914",
+    "last_run": "2026-10-31T10:10:43.193266",
     "recent_findings": [
       {
-        "id": "b2f55420ef0a8bca",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Adobe-Konkurrenz? Das taugt KI-Klon PhotoCraft | c't uplink",
-        "link": "https://www.heise.de/news/Adobe-Konkurrenz-Das-taugt-KI-Klon-PhotoCraft-c-t-uplink-11505956.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-10-31T06:30:00+01:00",
-        "detected_at": "31.10.2026 05:39"
-      },
-      {
-        "id": "d161c47cede55e92",
+        "id": "6a4a7fc52f9a32df",
         "target_id": "src-finanzen-boerse",
         "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
         "category": "Wirtschaft & Finanzen",
-        "title": "DAX in KW 44: Diese Aktien gehörten zu den Gewinnern und Verlierern - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMizwFBVV95cUxQaXJpVzBEMy1XeTdvRDd2eGV2Rllqc1IwazdoaW1UYkRQT1FsaGRPemlsZHE4RVBQMUtSN01uYjdwWUFUOFJ4QkdqRHRMMURzMEQwSUdEYmJwcHM4NHU4UnA4UDhGVUFrdmNQZ252bkJKY1ZIR3J5dnFBcjdjMmF6NTBYVUhwaHdkdVY5MFpxUE54RjRFVmVUWTl4WmN6dWNMbFBWanB3bG45VGVxMFZIcGlzY1dFdWVNWG03bkNwVzMtNjFVLWpuOW1YX0FOVGs?oc=5",
-        "published": "Sat, 31 Oct 2026 01:12:00 GMT",
-        "detected_at": "31.10.2026 05:09"
+        "title": "So viel Wert wäre mit einer Investition in Internet Computer von vor 1 Jahr verloren gegangen - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMi3wFBVV95cUxObVlzT3JTZXRTaEtHc0VsOXdaNXJwMEhodlpjc2duN2dzYjl6ejJJNWFyY2NGSk5XYkROS0FMTzJWRU9UaVB3UHpzd0p0Sk1ERm80OEd3NkJXZEdKOFdTanBpUTlDeldKeHhMc2hrX0JGUEhZUGhRZUVUWm5leEsyLVQyTnppU2lTNVNlREFsQklLNkYtOFBqbmxYOTRlUWtRYjVRX0xKUFRFY3Q4RlRaNmlCdmJsQ3g2ZEowd3hVVURDUEpGVWZ2RHYxSFlHNmtiQnJiU3ptdHhLYWNiMDJn?oc=5",
+        "published": "Sat, 31 Oct 2026 10:03:03 GMT",
+        "detected_at": "31.10.2026 10:10",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
       },
       {
-        "id": "59358310a8426615",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
+        "id": "88e6b56fbaa7e652",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
         "category": "Wirtschaft & Finanzen",
-        "title": "+++ US-Midterms +++: US-Gericht verbietet Trumps Regierung Druck auf Wahlhelfer",
-        "link": "https://www.handelsblatt.com/politik/international/usa-us-gericht-verbietet-trumps-regierung-druck-auf-wahlhelfer/29669594.html",
-        "published": "Fri, 30 Oct 2026 10:49:36 GMT",
-        "detected_at": "31.10.2026 05:00"
+        "title": "2 DAX-Aktien gelingt der Ausbruch: Kaufchance für Anleger mit 88 Prozent Renditechance? - Börse Online",
+        "link": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxQcFJPYU9QZ0ZubGhaaTBMUkZfRXVmbS1qakJ5QzNIWF82a2NkcWZiN2ZQMzFkTlByU3ROWHM5eC13dktBdHctRUZEbVlwX3AyZW5CNHg5TGJVQU1xQ1ZORlg2SHFoZW5QYzZvSDVJRUo0ZkUzUnd2Y1lnMHpTOEpwMXY0VXZnUzhtdzhRQUNxSlNzTEQyYXJWN3VFNHd2YzJ5bjhjRC13YWFoWXFTYzlpVVYwTkNBOTI4YmR0ZGk4MWVrU2lNNmVkUU9yZU5xaUNLd2ZGVkNVNmtVZGh5T1htSS01U1JBdlVz?oc=5",
+        "published": "Sat, 31 Oct 2026 10:00:00 GMT",
+        "detected_at": "31.10.2026 10:10"
       },
       {
-        "id": "e61c6f72829a4db0",
+        "id": "d04146a5c1dce95a",
         "target_id": "src-tagesschau",
         "target_name": "Tagesschau (Eilmeldungen & Politik)",
         "category": "Politik & Wissenschaft",
-        "title": "Jugendproteste in mehr als 30 Städten geplant",
-        "link": "https://www.tagesschau.de/inland/gesellschaft/gen-z-proteste-112.html",
-        "published": "Sat, 31 Oct 2026 05:52:31 +0100",
-        "detected_at": "31.10.2026 05:00"
+        "title": "Gen-Z-Proteste: Was die Bundesregierung für die Jugend macht",
+        "link": "https://www.tagesschau.de/inland/innenpolitik/jugendproteste-bundesregierung-100.html",
+        "published": "Sat, 31 Oct 2026 11:09:19 +0100",
+        "detected_at": "31.10.2026 10:10"
       },
       {
-        "id": "4be3defcb89e2303",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Frust bei US-Farmern könnte Trump Stimmen bei den Midterms kosten",
-        "link": "https://www.tagesschau.de/ausland/amerika/usa-midterms-landwirtschaft-100.html",
-        "published": "Sat, 31 Oct 2026 05:52:21 +0100",
-        "detected_at": "31.10.2026 05:00"
-      },
-      {
-        "id": "0fe0b029acfe5662",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Kometen im November 2026: Einst verlorener Wanderer kommt wieder in Reichweite - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMipAFBVV95cUxOUVM4V0dOQXl6SjNsU3k5d2ZPaGhMNHMyaXRHY3NuZndIYU5CbU1KWXZBcGRJNmxKd3hETnhGT0pDR05xQ0xfWGk5cFBYUHl3SDQzX0kwYnpTNjZzSDNaVTExbWROS1lyZEVrdjRERFJZblpwQzVsSm9obG1UTjZYcUltMTIzMkIyaTZNdDFaRkZYdzJaT3V1Y05mSnk2VFZFUjY3cg?oc=5",
-        "published": "Fri, 30 Oct 2026 14:00:00 GMT",
-        "detected_at": "31.10.2026 05:00"
-      },
-      {
-        "id": "16c043f979c3520b",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
+        "id": "67728ff77b5fffb0",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Ukraine-Krieg: Lawrow poltert beim G20-Außenministertreffen in Atlanta",
-        "link": "https://www.handelsblatt.com/politik/international/ukraine-krieg-lawrow-poltert-beim-g20-aussenministertreffen-in-atlanta/100266269.html",
-        "published": "Sat, 31 Oct 2026 03:29:27 GMT",
-        "detected_at": "31.10.2026 04:48"
+        "title": "+++ Iran-Krieg +++: Behörde – Öltanker bei Ausfahrt aus Straße von Hormus beschossen",
+        "link": "https://www.handelsblatt.com/politik/international/iran-krieg-behoerde-oeltanker-bei-ausfahrt-aus-strasse-von-hormus-beschossen/100136895.html",
+        "published": "Sat, 31 Oct 2026 09:42:58 GMT",
+        "detected_at": "31.10.2026 10:00"
       },
       {
-        "id": "fea5a247dc256cff",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "EU-Kanada-Gipfel: Zoff um zwei Worte: Von der Leyen ignoriert Wunsch von Merz",
-        "link": "https://www.handelsblatt.com/politik/international/eu-kanada-gipfel-zoff-um-zwei-worte-von-der-leyen-ignoriert-wunsch-von-merz/100266279.html",
-        "published": "Sat, 31 Oct 2026 01:19:37 GMT",
-        "detected_at": "31.10.2026 04:48"
-      },
-      {
-        "id": "fc38125a934231a7",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Umstrittener Justizumbau: Turbulenzen in Polen – Präsident besucht Verfassungsgericht",
-        "link": "https://www.handelsblatt.com/politik/international/umstrittener-justizumbau-turbulenzen-in-polen-praesident-besucht-verfassungsgericht/100266281.html",
-        "published": "Sat, 31 Oct 2026 02:01:55 GMT",
-        "detected_at": "31.10.2026 04:48"
-      },
-      {
-        "id": "1580fa4ee7512f6d",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ US-Midterms +++: US-Staatsanwaltschaft bestätigt Ermittlungen zu Senatswahl in Alaska",
-        "link": "https://www.handelsblatt.com/politik/international/usa-us-staatsanwaltschaft-bestaetigt-ermittlungen-zu-senatswahl-in-alaska/29669594.html",
-        "published": "Fri, 30 Oct 2026 10:49:36 GMT",
-        "detected_at": "31.10.2026 04:48"
-      },
-      {
-        "id": "58d8e3eeb470f444",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Pile-ins, payouts, and pacing pressure: the investors behind the VCs open up",
-        "link": "https://techcrunch.com/2026/10/30/pile-ins-payouts-and-pacing-pressure-the-investors-behind-the-vcs-open-up/",
-        "published": "Sat, 31 Oct 2026 04:16:50 +0000",
-        "detected_at": "31.10.2026 04:38"
-      },
-      {
-        "id": "003d680fc5d56a8e",
+        "id": "b91c5aa18e57be00",
         "target_id": "src-bundesbank",
         "target_name": "Deutsche Bundesbank (Presse & Daten)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Beschlüsse des EZB-Rats (ohne Zinsbeschlüsse) Oktober 2026 - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMi8AFBVV95cUxQZEpULUtkT2prOVBrdGtKaXJhNXdtWkRkM1RwemlMcU5RdkE1R2FjS1BqNnVDQzRvSEFZLUdqZE56YWhrUzJGUXlBcGF0VmdtQ2FRZVBsVncyM3Vnall6OXhSb1lkd2Jfb3JxS3UyMFNabTBIanh6M1NDOGt1QmM0cXpCbnQ3YVNESFpYcFg5MXBvbjFrdEhmSjN4MXE5cnhaM2Y4QWdacW5OWk5HYWREZFd4SlVBNm9DTHdSMGJYcG9HTnA0MElLVFJoWV91VWg5ZkdkNTJpRTlva3plcmItYkFybjMxaDdZQy1CelRHZUM?oc=5",
-        "published": "Fri, 30 Oct 2026 14:04:16 GMT",
-        "detected_at": "31.10.2026 04:11"
+        "title": "Livestream: Itay Goldstein – AI Trading in Financial Markets - Deutsche Bundesbank",
+        "link": "https://news.google.com/rss/articles/CBMirgFBVV95cUxOTzJxQVMzVTlCSVlmSjhzb2tHYnlWdlFTZ2JOc250SlhxcnNiNUQ3QlRmVUlkR0VTdVFCZ1QwSW9HUkpMVTVXZ2JPb3l2X3JlTGpzcHVTVUNmZW5VWlNFcG54dmVZVFRvWVRHWXhsMWdrRy13VHNVT0xSRF9wdHM1WmJ6eTlsYV9oWjllQjlkLWlIU0dlZ0VRZUhycjNqa2VYVVdmX1BUVFo5a2RSUWc?oc=5",
+        "published": "Fri, 30 Oct 2026 10:55:07 GMT",
+        "detected_at": "31.10.2026 10:00"
       },
       {
-        "id": "6c24ed80f1ca19bf",
+        "id": "b0f194a3fb5b31f8",
         "target_id": "src-handelsblatt-top",
         "target_name": "Handelsblatt (Top-Themen)",
         "category": "Wirtschaft & Finanzen",
-        "title": "US-Börsen: „Absolut brutale Woche“ für Tech-Investoren – Nasdaq rutscht ab, Intel verliert rund 29 Prozent",
-        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/dow-jones-sp-500-nasdaq-nasdaq-100-auf-talfahrt-intel-aktie-verliert-29-prozent/100266181.html",
-        "published": "Fri, 30 Oct 2026 19:57:39 GMT",
-        "detected_at": "31.10.2026 04:08"
+        "title": "Kommentar: Gegen Trump und Xi hilft kein Anbiedern, sondern Verbündete",
+        "link": "https://www.handelsblatt.com/meinung/kommentare/kommentar-gegen-trump-und-xi-hilft-kein-anbiedern-sondern-verbuendete/100266175.html",
+        "published": "Sat, 31 Oct 2026 09:33:55 GMT",
+        "detected_at": "31.10.2026 09:40",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
       },
       {
-        "id": "712b2f05538e4780",
+        "id": "9e0c0eac8939ee02",
         "target_id": "src-handelsblatt-top",
         "target_name": "Handelsblatt (Top-Themen)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Deep Read: „Trumps Ziel macht ihn bedrohlicher als Marine Le Pen in Frankreich oder die AfD in Deutschland“",
-        "link": "https://www.handelsblatt.com/politik/international/usa-wenn-trump-den-zerstoerungskurs-nicht-beendet-droht-eine-tiefe-wirtschaftskrise/100263638.html",
-        "published": "Fri, 30 Oct 2026 18:17:22 GMT",
-        "detected_at": "31.10.2026 04:08"
+        "title": "Handelskonflikt: Steinmeier in Peking: „Nicht zulassen, dass die industrielle Basis verloren geht“",
+        "link": "https://www.handelsblatt.com/politik/international/handelskonflikt-nicht-zulassen-dass-die-industrielle-basis-verloren-geht/100265455.html",
+        "published": "Sat, 31 Oct 2026 08:58:46 GMT",
+        "detected_at": "31.10.2026 09:40"
       },
       {
-        "id": "70e75af7efc544c2",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Demonstrationen: Zehntausende protestieren in Italien – Kundgebungen auch in Deutschland erwartet",
-        "link": "https://www.handelsblatt.com/politik/international/demonstrationen-zehntausende-protestieren-in-italien-kundgebungen-auch-in-deutschland-erwartet/100266270.html",
-        "published": "Fri, 30 Oct 2026 23:07:17 GMT",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "501cbb962acb38da",
+        "id": "e243a5bce2b62d93",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Ukraine-Krieg: Lawrow poltert beim G20-Außenministertreffen in Atlanta",
-        "link": "https://www.handelsblatt.com/politik/international/ukraine-krieg-lawrow-poltert-beim-g20-aussenministertreffen-in-atlanta/100266269.html",
-        "published": "Sat, 31 Oct 2026 03:29:27 GMT",
-        "detected_at": "31.10.2026 04:08"
+        "title": "+++ Ukraine-Krieg +++: USA genehmigen Verkauf von 500 Patriot-Raketen an die Ukraine",
+        "link": "https://www.handelsblatt.com/politik/international/ukraine-usa-genehmigen-verkauf-von-500-patriot-raketen-an-die-ukraine/27982126.html",
+        "published": "Sat, 31 Oct 2026 09:19:35 GMT",
+        "detected_at": "31.10.2026 09:40"
       },
       {
-        "id": "2284bccd2406c761",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Umstrittener Justizumbau: Turbulenzen in Polen – Präsident besucht Verfassungsgericht",
-        "link": "https://www.handelsblatt.com/politik/international/umstrittener-justizumbau-turbulenzen-in-polen-praesident-besucht-verfassungsgericht/100266281.html",
-        "published": "Sat, 31 Oct 2026 02:01:55 GMT",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "b3e6c02e4ff2d31e",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "EU-Kanada-Gipfel: Zoff um zwei Worte: Von der Leyen ignoriert Wunsch von Merz",
-        "link": "https://www.handelsblatt.com/politik/international/eu-kanada-gipfel-zoff-um-zwei-worte-von-der-leyen-ignoriert-wunsch-von-merz/100266279.html",
-        "published": "Sat, 31 Oct 2026 01:19:37 GMT",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "b1c19bb58b12c681",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Demonstrationen: Zehntausende protestieren in Italien – Kundgebungen auch in Deutschland erwartet",
-        "link": "https://www.handelsblatt.com/politik/international/demonstrationen-zehntausende-protestieren-in-italien-kundgebungen-auch-in-deutschland-erwartet/100266270.html",
-        "published": "Fri, 30 Oct 2026 23:07:17 GMT",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "66b329d9a19606e4",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ Ukraine-Krieg +++: Lawrow – keine Entspannung zwischen Moskau und Washington",
-        "link": "https://www.handelsblatt.com/politik/international/ukraine-lawrow-keine-entspannung-zwischen-moskau-und-washington/27982126.html",
-        "published": "Fri, 30 Oct 2026 22:46:00 GMT",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "a32c9f96a80a4e26",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Deep Read: „Trumps Ziel macht ihn bedrohlicher als Marine Le Pen in Frankreich oder die AfD in Deutschland“",
-        "link": "https://www.handelsblatt.com/politik/international/usa-wenn-trump-den-zerstoerungskurs-nicht-beendet-droht-eine-tiefe-wirtschaftskrise/100263638.html",
-        "published": "Fri, 30 Oct 2026 18:17:22 GMT",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "0218443b3f976397",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "id": "faf15c8315f576a9",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
         "category": "Technologie & KI",
-        "title": "Nvidia weighs playing the cosigner for Nscale’s AI data center in West Virginia",
-        "link": "https://techcrunch.com/2026/10/30/nvidia-weighs-playing-the-cosigner-for-nscales-ai-data-center-in-west-virginia/",
-        "published": "Sat, 31 Oct 2026 01:20:05 +0000",
-        "detected_at": "31.10.2026 04:08"
+        "title": "US-Anwälte zu „Audio Intelligence“ auf der Apple Watch: Möglicherweise strafbar",
+        "link": "https://www.heise.de/news/US-Anwaelte-zu-Audio-Intelligence-auf-der-Apple-Watch-Moeglicherweise-strafbar-11489722.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-10-31T10:21:00+01:00",
+        "detected_at": "31.10.2026 09:40"
       },
       {
-        "id": "4753fc023059d346",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Salesforce’s M&A spree continues with a reported $375M deal for defense tech startup Rune",
-        "link": "https://techcrunch.com/2026/10/30/salesforces-ma-spree-continues-with-a-reported-375m-deal-for-defense-tech-startup-rune/",
-        "published": "Fri, 30 Oct 2026 23:21:23 +0000",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "e1b49ae1794f5b4e",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Ollie, a privacy-focused AI assistant, is shutting down",
-        "link": "https://techcrunch.com/2026/10/30/ollie-a-privacy-focused-ai-assistant-is-shutting-down/",
-        "published": "Fri, 30 Oct 2026 22:56:13 +0000",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "60cd66c9c10ce635",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Intel’s stock crashes, knocking $12B from government’s stake",
-        "link": "https://techcrunch.com/2026/10/30/intels-stock-crashes-knocking-12b-from-governments-stake/",
-        "published": "Fri, 30 Oct 2026 21:54:34 +0000",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "261008767fca8389",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Anthropic expected to receive high ‘junk’ rating from credit agencies following IPO, FT report says",
-        "link": "https://techcrunch.com/2026/10/30/anthropic-expected-to-receive-high-junk-rating-from-credit-agencies-following-ipo-report-says/",
-        "published": "Fri, 30 Oct 2026 21:52:03 +0000",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "c105c9c40626909d",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Applebee’s exposed customers’ personal data after leaving database password in app",
-        "link": "https://techcrunch.com/2026/10/30/applebees-exposed-customers-personal-data-after-leaving-database-password-in-app/",
-        "published": "Fri, 30 Oct 2026 21:48:53 +0000",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "0403a82dd311ab31",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Last-minute Halloween costumes for tech nerds",
-        "link": "https://techcrunch.com/2026/10/30/last-minute-halloween-costumes-for-tech-nerds/",
-        "published": "Fri, 30 Oct 2026 21:26:59 +0000",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "629a84e7e2ba975b",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Cracks are emerging in the AI spending boom",
-        "link": "https://techcrunch.com/2026/10/30/cracks-are-emerging-in-the-ai-spending-boom/",
-        "published": "Fri, 30 Oct 2026 21:17:40 +0000",
-        "detected_at": "31.10.2026 04:08"
-      },
-      {
-        "id": "d310dff60229e5c6",
+        "id": "abdb45a9412cef1e",
         "target_id": "src-tagesschau",
         "target_name": "Tagesschau (Eilmeldungen & Politik)",
         "category": "Politik & Wissenschaft",
-        "title": "G20-Außenministertreffen in Atlanta: Russland bleibt auf Distanz",
-        "link": "https://www.tagesschau.de/ausland/amerika/g20-aussenminister-102.html",
-        "published": "Sat, 31 Oct 2026 04:05:42 +0100",
-        "detected_at": "31.10.2026 04:08"
+        "title": "Chip im Kopf: Wenn Computer Gedanken verstehen lernen",
+        "link": "https://www.tagesschau.de/wissen/computer-chip-gehirn-100.html",
+        "published": "Sat, 31 Oct 2026 10:17:08 +0100",
+        "detected_at": "31.10.2026 09:40"
+      },
+      {
+        "id": "4be9832209455a12",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Evakuierungsaktion im ukrainischen Oleschky abgeschlossen",
+        "link": "https://www.tagesschau.de/ausland/europa/ukraine-evakuierung-oleschky-100.html",
+        "published": "Sat, 31 Oct 2026 10:14:41 +0100",
+        "detected_at": "31.10.2026 09:40"
+      },
+      {
+        "id": "ac64ee121d31f9e2",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise-Angebot: iX-Workshop: Multiagentensysteme entwickeln und in eigene Software integrieren",
+        "link": "https://www.heise.de/news/iX-Workshop-Multiagentensysteme-entwickeln-und-in-eigene-Software-integrieren-11480248.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-10-31T10:00:00+01:00",
+        "detected_at": "31.10.2026 09:10"
+      },
+      {
+        "id": "a6f397affd4d0933",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "KI verdrängt Fotostudios, Canon warnt vor Preisanstieg – News der Woche 44/2026",
+        "link": "https://www.heise.de/news/KI-verdraengt-Fotostudios-Canon-warnt-vor-Preisanstieg-News-der-Woche-44-2026-11506308.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-10-31T10:00:00+01:00",
+        "detected_at": "31.10.2026 09:10"
+      },
+      {
+        "id": "5f9e46f7fe36bcdd",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Italien: Erneut protestiert die Jugend: „Italien ist ein Land für Alte“",
+        "link": "https://www.handelsblatt.com/politik/international/italien-erneut-protestiert-die-jugend-italien-ist-ein-land-fuer-alte/100265636.html",
+        "published": "Sat, 31 Oct 2026 08:34:30 GMT",
+        "detected_at": "31.10.2026 09:00"
+      },
+      {
+        "id": "a94a5e1e7153cb8f",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Italien: Erneut protestiert die Jugend: „Italien ist ein Land für Alte“",
+        "link": "https://www.handelsblatt.com/politik/international/italien-erneut-protestiert-die-jugend-italien-ist-ein-land-fuer-alte/100265636.html",
+        "published": "Sat, 31 Oct 2026 08:34:30 GMT",
+        "detected_at": "31.10.2026 09:00"
+      },
+      {
+        "id": "7ab493dd888a4eb6",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Jugendprotest: Diffuse Ziele, unklare Organisation, Sorge vor Gewalt – wie läuft die Gen-Z-Demo ab?",
+        "link": "https://www.handelsblatt.com/politik/deutschland/jugendprotest-diffuse-ziele-sorge-vor-gewalt-wie-laeuft-die-gen-z-demo-ab/100265923.html",
+        "published": "Sat, 31 Oct 2026 08:33:46 GMT",
+        "detected_at": "31.10.2026 09:00"
+      },
+      {
+        "id": "c49b839a0433ae39",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Arabische Parteien in Israel stecken in einem Dilemma",
+        "link": "https://www.tagesschau.de/ausland/asien/israel-wahl-arabische-parteien-100.html",
+        "published": "Sat, 31 Oct 2026 09:49:15 +0100",
+        "detected_at": "31.10.2026 09:00"
+      },
+      {
+        "id": "dc6e5cb420711144",
+        "target_id": "src-spektrum",
+        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "title": "detektor.fm: Wie fährt Sachsen-Anhalt in Zukunft? - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMiggFBVV95cUxQNVlGYWtYS2VwM2ZpTmxiT2lDa1U0M2dTUHRaNGdiYnF3V1YyaWFramE4c1NBVDJQT2g0a2pwZGdERFFFbS1pd0tBaXlLejZscndvaEdkRy1lS2tydm5sbUsxV1NOcktzcDdJbE45cDFsSUl3NlI2a1o5UVJlck96SVhB?oc=5",
+        "published": "Sat, 31 Oct 2026 06:21:12 GMT",
+        "detected_at": "31.10.2026 09:00"
+      },
+      {
+        "id": "b2879f318046da26",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Jugendproteste: Jugendforscher über Proteste der Gen Z: „Sauer sein allein reicht nicht“",
+        "link": "https://www.handelsblatt.com/politik/deutschland/jugendproteste-wird-die-gen-z-immer-radikaler/100265361.html",
+        "published": "Sat, 31 Oct 2026 08:19:00 GMT",
+        "detected_at": "31.10.2026 08:40"
+      },
+      {
+        "id": "2d5564ba37185ba0",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Jugendprotest: Diffuse Ziele, unklare Organisation, Sorge vor Gewalt – wie läuft die Gen-Z-Demo ab?",
+        "link": "https://www.handelsblatt.com/politik/deutschland/jugendprotest-diffuse-ziele-sorge-vor-gewalt-wie-laeuft-die-gen-z-demo-ab/100265923.html",
+        "published": "Sat, 31 Oct 2026 08:33:46 GMT",
+        "detected_at": "31.10.2026 08:40"
+      },
+      {
+        "id": "6b3aef4275eef912",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "US-Raketenabwehr: Alphabet verhandelt über Einstieg bei Trumps Abwehr Golden Dome",
+        "link": "https://www.handelsblatt.com/technik/it-internet/us-raketenabwehr-alphabet-verhandelt-ueber-einstieg-bei-trumps-abwehr-golden-dome/100266283.html",
+        "published": "Sat, 31 Oct 2026 02:31:22 GMT",
+        "detected_at": "31.10.2026 08:40"
+      },
+      {
+        "id": "6d6e206fe75cff03",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Jugendproteste: Jugendforscher über Proteste der Gen Z: „Sauer sein allein reicht nicht“",
+        "link": "https://www.handelsblatt.com/politik/deutschland/jugendproteste-wird-die-gen-z-immer-radikaler/100265361.html",
+        "published": "Sat, 31 Oct 2026 08:19:00 GMT",
+        "detected_at": "31.10.2026 08:40"
+      },
+      {
+        "id": "d537215142f8dacc",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "30 Jahre „Command & Conquer: Alarmstufe Rot“: Liebesgrüße aus Neu Moskau",
+        "link": "https://www.heise.de/hintergrund/30-Jahre-Command-Conquer-Alarmstufe-Rot-Liebesgruesse-aus-Neu-Moskau-11504542.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-10-31T09:00:00+01:00",
+        "detected_at": "31.10.2026 08:10"
+      },
+      {
+        "id": "141b6b85cf4331f9",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Morning Briefing Plus: Wenn das Private öffentlich werden darf",
+        "link": "https://www.handelsblatt.com/meinung/morningbriefing/morning-briefing-plus-wenn-das-private-oeffentlich-werden-darf/100266157.html",
+        "published": "Sat, 31 Oct 2026 07:46:45 GMT",
+        "detected_at": "31.10.2026 08:00"
+      },
+      {
+        "id": "469d48ed71524512",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "KI bei der Geldanlage: Wie sicher sind ChatGPT-Anlagetipps?",
+        "link": "https://www.tagesschau.de/wirtschaft/finanzen/ki-geldanlage-chatgpt-anlagetipps-risiken-100.html",
+        "published": "Sat, 31 Oct 2026 08:45:19 +0100",
+        "detected_at": "31.10.2026 08:00"
+      },
+      {
+        "id": "a1c4e87bce3d47fc",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Die Linke in Berlin: Aus dem Trubel in die Koalition?",
+        "link": "https://www.tagesschau.de/inland/innenpolitik/linke-berlin-parteitag-eralp-100.html",
+        "published": "Sat, 31 Oct 2026 08:43:12 +0100",
+        "detected_at": "31.10.2026 08:00"
+      },
+      {
+        "id": "e05719c113775967",
+        "target_id": "src-invest-radar",
+        "target_name": "High-Impact Investitions-Radar",
+        "category": "Investitionen & Geopolitik",
+        "title": "Asien-Reise - Kanzler Merz wirbt in Singapur für Freihandelsabkommen mit Ländern der Pazifik-Region - Deutschlandfunk",
+        "link": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOYVc5Y0RyemtGUWhaRWdiUkY3RVhDdWJDT2gwUlFnanVPc3VVLUJPYXQ1SEEtZ292a0VidUY0N3Nza1N1T0hrM1JPZmZ3RHltVU12M3dqSVR3TGhNbnFVQzhESWxPekxrdmhYQ1c2RldXTHJJRGFhRUpFRTlwX2kyTlVEWndlTjVXRmxhZ3lHVFR5aWZQN2JQLVg0OVhHdjRpTjZTb2ZkSVNDT1MyZEY3Nmo1VS1SWjQwY1NNQ1B2R2Vfa1FpRlE?oc=5",
+        "published": "Tue, 27 Oct 2026 11:03:28 GMT",
+        "detected_at": "31.10.2026 07:38",
+        "is_priority": true,
+        "matched_keywords": [
+          "handelsabkommen",
+          "freihandelsabkommen"
+        ]
+      },
+      {
+        "id": "3a45b40adca8758b",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Deutschland: „Mehr Begeisterung führt zu mehr Gelassenheit“ - Dieser Merz-Berater empfiehlt weniger Angst vor der AfD",
+        "link": "https://www.handelsblatt.com/politik/deutschland/deutschland-dieser-merz-berater-empfiehlt-weniger-angst-vor-der-afd/100264898.html",
+        "published": "Sat, 31 Oct 2026 06:56:00 GMT",
+        "detected_at": "31.10.2026 07:30"
+      },
+      {
+        "id": "1377f4937dc10221",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Investition vergrößert: Führungskraft greift bei Knorr-Bremse-Anteilen zu - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMixAFBVV95cUxNYkw1aEtmSWQwNTV3c2hQZGtFTEU2em9PV2FvZWVwaDBUanc5eDQ2QlV2ZG1DZmR2amw1SnhmQ0RZZHFDOXFQMERaVkplbm50eUNNWjJKX3pGRHNGR2l2R0g1dll5NlJZMGNyTnBnUEpfMFZrcWdka1pjS1llalpNSlhwel8tV3NJVms2WTNQTGJCXzVlTklQUlBmWk9yTnBxZktDQlc3R0Q5bXBydHpYUWs5ZGdPZEFEOEoxQjZqT3U1ZlMw?oc=5",
+        "published": "Sat, 31 Oct 2026 07:01:11 GMT",
+        "detected_at": "31.10.2026 07:30"
+      },
+      {
+        "id": "d9e44f377899564b",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Investition vergrößert: Führungskraft greift bei Knorr-Bremse-Anteilen zu - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMixAFBVV95cUxPNGlIbkRMY2p4Y2FfWno2dGRUNmktMHh0TmhucEMzams3TlVINWZiTjFteUoxNkF0U1UwWU5NUnlnWHdBZmlVMnJCMW51X1NuQVdJbjRGc2p3b09KVnJOeUU1TnNqNUVZeDB6QUxEdVJwRC1qWDFxQWVSeG1pWk5FSlZ5dkRTZEZsUHNsN2E4U3I4YkRNM1d6TXJZMnFxdDBUSFNTdENieXVhRkdhaDBtVHZtNzF6T0hwQWV5TFAyX2hHTVhJ?oc=5",
+        "published": "Sat, 31 Oct 2026 07:01:11 GMT",
+        "detected_at": "31.10.2026 07:30"
       }
     ]
   }

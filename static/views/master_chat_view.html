@@ -28,6 +28,19 @@
                   <span id="master-chat-profile-category" class="h-5 px-2 rounded-md font-mono text-[11px] font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] inline-flex items-center justify-center truncate max-w-[260px] shrink-0">1. Strategie</span>
                   <div id="master-chat-profile-desc" class="text-xs text-[var(--muted-foreground)] truncate leading-relaxed">Zentrales Hermes-Basissystem mit Zugriff auf Container Tools</div>
                 </div>
+                <!-- Trusted Input [T] Toggle (t-d3f2d2 Dual-LLM Guard) -->
+                <button 
+                  type="button" 
+                  id="master-chat-trust-btn"
+                  onclick="toggleMasterChatTrust(event)"
+                  class="px-2 py-1 rounded-lg border border-zinc-500/20 bg-zinc-500/10 text-zinc-400 font-mono text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer select-none hover:border-zinc-400 shadow-2xs shrink-0"
+                  title="Dual-LLM Quarantäne aktiv: Unprivilegiertes Modell isoliert externe Eingaben vor der Werkzeugausführung. Klick aktiviert Trusted-Modus [T]."
+                >
+                  <span id="master-chat-trust-dot" class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+                  <span>T</span>
+                  <span id="master-chat-trust-label" class="text-[10px] hidden md:inline">Quarantäne</span>
+                </button>
+
                 <!-- Zweifarbiger / Monochromer Switch: "Direkt" [Switch] "Mission" -->
                 <div class="flex items-center gap-2 shrink-0 select-none cursor-pointer" onclick="toggleMasterChatModeSwitch()" title="Zwischen Direkt-Dialog und Mission umschalten">
                   <span id="master-chat-label-direct" class="text-xs font-mono font-bold transition-colors text-[var(--foreground)]">Direkt</span>

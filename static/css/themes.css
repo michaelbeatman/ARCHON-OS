@@ -1113,13 +1113,57 @@ div.p-3 > div.flex > button.px-2 {
     .text-xl { font-size: 1.5rem !important; }
     .text-2xl { font-size: 1.833rem !important; }
     .text-3xl { font-size: 2.333rem !important; }
-    /* Custom Scrollbar */
+    /* Custom Scrollbar (Systemweit dezent & immer sichtbar bei Überlauf) */
+    * {
+      scrollbar-width: thin !important;
+      scrollbar-color: rgba(140, 140, 140, 0.45) transparent !important;
+    }
+    .dark *,
+    [data-theme="dark"] * {
+      scrollbar-color: rgba(220, 220, 220, 0.35) transparent !important;
+    }
     ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 7px !important;
+      height: 7px !important;
+      display: block !important;
     }
     ::-webkit-scrollbar-track {
-      background: transparent;
+      background: transparent !important;
+    }
+    ::-webkit-scrollbar-track:hover {
+      background: rgba(0, 0, 0, 0.04) !important;
+    }
+    .dark ::-webkit-scrollbar-track:hover,
+    [data-theme="dark"] ::-webkit-scrollbar-track:hover {
+      background: rgba(255, 255, 255, 0.04) !important;
+    }
+    ::-webkit-scrollbar-thumb {
+      background-color: rgba(130, 130, 130, 0.45) !important;
+      border-radius: 9999px !important;
+      border: 1.5px solid transparent !important;
+      background-clip: padding-box !important;
+      min-height: 28px !important;
+      transition: background-color 0.15s ease !important;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(90, 90, 90, 0.75) !important;
+    }
+    ::-webkit-scrollbar-thumb:active {
+      background-color: rgba(50, 50, 50, 0.90) !important;
+    }
+    .dark ::-webkit-scrollbar-thumb,
+    [data-theme="dark"] ::-webkit-scrollbar-thumb {
+      background-color: rgba(220, 220, 220, 0.35) !important;
+      border: 1.5px solid transparent !important;
+      background-clip: padding-box !important;
+    }
+    .dark ::-webkit-scrollbar-thumb:hover,
+    [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(255, 255, 255, 0.60) !important;
+    }
+    .dark ::-webkit-scrollbar-thumb:active,
+    [data-theme="dark"] ::-webkit-scrollbar-thumb:active {
+      background-color: rgba(255, 255, 255, 0.85) !important;
     }
     /* Live Visual Text Editor Styles */
     .ui-live-editing [data-live-editable="true"] {

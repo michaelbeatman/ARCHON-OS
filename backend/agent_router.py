@@ -355,6 +355,31 @@ class AgentRouter:
             request_headers["x-api-key"] = ant_key
             request_headers["anthropic-version"] = "2023-06-01"
 
+        elif provider == "local":
+            try:
+                from backend.privacy_router import get_privacy_config
+                cfg = get_privacy_config()
+                raw_url = cfg.get("local_llm_url", "http://127.0.0.1:11434/v1").rstrip("/")
+            except Exception:
+                raw_url = os.environ.get("LOCAL_LLM_URL", "http://127.0.0.1:11434/v1").rstrip("/")
+            target_url = f"{raw_url}/chat/completions"
+            omni_key = api_keys.get("LOCAL_LLM_KEY") or ""
+            if omni_key:
+                request_headers["Authorization"] = f"Bearer {omni_key}"
+
+        elif provider == "mistral":
+            target_url = "https://api.mistral.ai/v1/chat/completions"
+            m_key = api_keys.get("MISTRAL_API_KEY") or os.environ.get("MISTRAL_API_KEY", "")
+            if not m_key:
+                try:
+                    from backend.privacy_router import get_privacy_config
+                    m_key = get_privacy_config().get("mistral_api_key", "")
+                except Exception:
+                    pass
+            if not m_key:
+                raise ValueError("Kein Mistral API-Key hinterlegt.")
+            request_headers["Authorization"] = f"Bearer {m_key}"
+
         else:
             target_url = "http://omniroute:20128/v1/chat/completions"
             omni_key = api_keys.get("OMNIROUTE_API_KEY") or ""

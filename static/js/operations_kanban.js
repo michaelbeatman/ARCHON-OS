@@ -12,6 +12,13 @@
     let currentOpsDetailTaskId = null;
     let activeCommFilter = null;
 
+    // Mehrfachauswahl & 10-Minuten-Undo State (t-c2b384)
+    let selectedOpsTaskIds = new Set();
+    let lastSelectedTaskId = null;
+    let opsBulkUndoToken = null;
+    let opsBulkUndoTimerInterval = null;
+    let opsBulkUndoExpiresAt = 0;
+
     // Interaktive Ablaufdiagramm / Organigramm Zustandsverwaltung
     let currentHierarchyData = { nodes: [], links: [], canvas_width: 2200, canvas_height: 1400 };
     let flowDraggingNode = null;
@@ -1416,18 +1423,31 @@
             const isAppr = t.quality_review.status === 'approved';
             qrBadge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold border ${isAppr ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/15 text-amber-600 border-amber-500/40'} shrink-0" title="4-Augen-Review: ${isAppr ? 'Freigegeben' : 'Nachbesserung'} (${t.quality_review.score || 80}%)">${isAppr ? '✓ 4-Augen' : '⚠ 4-Augen'}</span>`;
           }
+          const isSelected = selectedOpsTaskIds && selectedOpsTaskIds.has(t.id);
+          const checkboxHtml = `
+            <button type="button" 
+                    onclick="event.stopPropagation(); toggleOpsTaskSelection('${t.id}');" 
+                    class="kanban-card-checkbox w-4 h-4 rounded-full border ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-2xs' : 'border-[var(--border)] bg-[var(--background)] hover:border-indigo-400 opacity-60 group-hover:opacity-100'} flex items-center justify-center transition-all cursor-pointer mr-1 shrink-0" 
+                    title="Aufgabe markieren (Strg+Klick)">
+              ${isSelected ? '<svg class="w-2.5 h-2.5 stroke-current stroke-3 fill-none" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+            </button>
+          `;
           return `
               <div draggable="true" 
+                   data-task-id="${t.id}"
                    ondragstart="onKanbanDragStart(event, '${t.id}')"
-                   onclick="openTaskDetailModal('${t.id}')"
-                   class="group rounded-xl border ${decOpen ? 'border-[#e8c37a]' : 'border-[var(--border)]'} bg-[var(--card)] hover:border-indigo-500/40 hover:shadow-md transition-all duration-150 cursor-pointer overflow-hidden">
+                   onclick="handleOpsKanbanCardClick(event, '${t.id}')"
+                   class="group rounded-xl border ${isSelected ? 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30' : (decOpen ? 'border-[#e8c37a]' : 'border-[var(--border)]')} bg-[var(--card)] hover:border-indigo-500/40 hover:shadow-md transition-all duration-150 cursor-pointer overflow-hidden relative select-none">
                 ${decOpen ? `<div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-[#fdf3e2] border-b border-[#e8c37a]">
                   <span class="text-[9.5px] font-bold uppercase tracking-wider text-[#8a5d10] truncate">⏳ Offene Entscheidung · ${opsEscapeHtml(decTyp)}</span>
                   <span class="px-1.5 py-0.2 rounded border ${prioClass} text-[9px] shrink-0">${prioText}</span>
                 </div>` : ''}
                 <div class="p-3 space-y-2.5">
                   <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
-                    <div class="flex items-center gap-1 min-w-0 truncate">${statusBadge}${qrBadge}${dueBadge}${modelBadge}${tokenBadge}</div>
+                    <div class="flex items-center gap-1 min-w-0 truncate">
+                      ${checkboxHtml}
+                      ${statusBadge}${qrBadge}${dueBadge}${modelBadge}${tokenBadge}
+                    </div>
                     <div class="flex items-center gap-1 shrink-0">
                       ${countBadge}
                       ${decOpen ? '' : `<span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span>`}
@@ -2762,3 +2782,375 @@
       }
     };
 
+
+
+    // =========================================================================
+    // KANBAN BULK ACTIONS & 10-MINUTEN UNDO (t-c2b384)
+    // =========================================================================
+
+    window.handleOpsKanbanCardClick = function(event, taskId) {
+      const isCheckbox = event.target.closest('.kanban-card-checkbox');
+      if (event.ctrlKey || event.metaKey || isCheckbox) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleOpsTaskSelection(taskId);
+        return;
+      }
+      if (event.shiftKey && lastSelectedTaskId) {
+        event.preventDefault();
+        event.stopPropagation();
+        selectOpsTaskRange(lastSelectedTaskId, taskId);
+        return;
+      }
+      // Wenn nichts selektiert oder normaler Klick: Detail-Modal öffnen
+      openTaskDetailModal(taskId);
+    };
+
+    window.toggleOpsTaskSelection = function(taskId) {
+      if (!selectedOpsTaskIds) selectedOpsTaskIds = new Set();
+      if (selectedOpsTaskIds.has(taskId)) {
+        selectedOpsTaskIds.delete(taskId);
+      } else {
+        selectedOpsTaskIds.add(taskId);
+        lastSelectedTaskId = taskId;
+      }
+      updateOpsKanbanBulkToolbar();
+      updateSelectedCardVisuals();
+    };
+
+    window.selectOpsTaskRange = function(startId, endId) {
+      const cards = Array.from(document.querySelectorAll('#ops-kanban-columns-container [data-task-id]'));
+      const cardIds = cards.map(c => c.getAttribute('data-task-id')).filter(Boolean);
+      const startIdx = cardIds.indexOf(startId);
+      const endIdx = cardIds.indexOf(endId);
+      if (startIdx === -1 || endIdx === -1) {
+        toggleOpsTaskSelection(endId);
+        return;
+      }
+      const min = Math.min(startIdx, endIdx);
+      const max = Math.max(startIdx, endIdx);
+      for (let i = min; i <= max; i++) {
+        selectedOpsTaskIds.add(cardIds[i]);
+      }
+      lastSelectedTaskId = endId;
+      updateOpsKanbanBulkToolbar();
+      updateSelectedCardVisuals();
+    };
+
+    window.clearOpsKanbanSelection = function() {
+      selectedOpsTaskIds.clear();
+      lastSelectedTaskId = null;
+      closeAllBulkMenus();
+      updateOpsKanbanBulkToolbar();
+      updateSelectedCardVisuals();
+    };
+
+    function updateSelectedCardVisuals() {
+      const cards = document.querySelectorAll('#ops-kanban-columns-container [data-task-id]');
+      cards.forEach(card => {
+        const tid = card.getAttribute('data-task-id');
+        const isSel = selectedOpsTaskIds.has(tid);
+        const cb = card.querySelector('.kanban-card-checkbox');
+        if (isSel) {
+          card.classList.add('ring-2', 'ring-indigo-500', 'border-indigo-500', 'bg-indigo-50/40');
+          card.classList.remove('border-[var(--border)]');
+          if (cb) {
+            cb.className = "kanban-card-checkbox w-4 h-4 rounded-full border bg-indigo-600 border-indigo-600 text-white shadow-2xs flex items-center justify-center transition-all cursor-pointer mr-1 shrink-0";
+            cb.innerHTML = '<svg class="w-2.5 h-2.5 stroke-current stroke-3 fill-none" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+          }
+        } else {
+          card.classList.remove('ring-2', 'ring-indigo-500', 'border-indigo-500', 'bg-indigo-50/40');
+          card.classList.add('border-[var(--border)]');
+          if (cb) {
+            cb.className = "kanban-card-checkbox w-4 h-4 rounded-full border border-[var(--border)] bg-[var(--background)] hover:border-indigo-400 opacity-60 group-hover:opacity-100 flex items-center justify-center transition-all cursor-pointer mr-1 shrink-0";
+            cb.innerHTML = '';
+          }
+        }
+      });
+    }
+
+    window.updateOpsKanbanBulkToolbar = function() {
+      const bar = document.getElementById('ops-kanban-bulk-toolbar');
+      const countEl = document.getElementById('ops-kanban-bulk-count');
+      if (!bar) return;
+
+      const count = selectedOpsTaskIds.size;
+      if (count > 0) {
+        bar.classList.remove('hidden');
+        if (countEl) countEl.innerText = `${count} ${count === 1 ? 'Aufgabe' : 'Aufgaben'} markiert`;
+        populateBulkAssignMenu();
+        if (window.lucide) lucide.createIcons();
+      } else {
+        bar.classList.add('hidden');
+        closeAllBulkMenus();
+      }
+    };
+
+    function closeAllBulkMenus() {
+      document.getElementById('ops-bulk-move-menu')?.classList.add('hidden');
+      document.getElementById('ops-bulk-assign-menu')?.classList.add('hidden');
+      document.getElementById('ops-bulk-tag-menu')?.classList.add('hidden');
+    }
+
+    window.toggleOpsBulkMoveMenu = function(force) {
+      const menu = document.getElementById('ops-bulk-move-menu');
+      if (!menu) return;
+      const isHidden = menu.classList.contains('hidden');
+      closeAllBulkMenus();
+      if (typeof force === 'boolean' ? force : isHidden) {
+        menu.classList.remove('hidden');
+      }
+    };
+
+    window.toggleOpsBulkAssignMenu = function(force) {
+      const menu = document.getElementById('ops-bulk-assign-menu');
+      if (!menu) return;
+      const isHidden = menu.classList.contains('hidden');
+      closeAllBulkMenus();
+      if (typeof force === 'boolean' ? force : isHidden) {
+        menu.classList.remove('hidden');
+        populateBulkAssignMenu();
+      }
+    };
+
+    window.toggleOpsBulkTagMenu = function(force) {
+      const menu = document.getElementById('ops-bulk-tag-menu');
+      if (!menu) return;
+      const isHidden = menu.classList.contains('hidden');
+      closeAllBulkMenus();
+      if (typeof force === 'boolean' ? force : isHidden) {
+        menu.classList.remove('hidden');
+        document.getElementById('ops-bulk-tag-input')?.focus();
+      }
+    };
+
+    function populateBulkAssignMenu() {
+      const menu = document.getElementById('ops-bulk-assign-menu');
+      if (!menu) return;
+      let profiles = (typeof opsOrgData !== 'undefined' && opsOrgData && opsOrgData.nodes) ? opsOrgData.nodes : [];
+      if (!profiles || profiles.length === 0) {
+        // Fallback bekannte Agenten
+        profiles = [
+          { id: 'default', person_name: 'Default (Hermes)', avatar: '/static/avatars/avatar_001.jpg' },
+          { id: 'robert', person_name: 'Robert (CEO)', avatar: '/static/avatars/avatar_002.jpg' },
+          { id: 'katharina', person_name: 'Katharina Völk (QM)', avatar: '/static/avatars/avatar_003.jpg' },
+          { id: 'micha', person_name: 'Micha (Founder)', avatar: '/static/avatars/avatar_004.jpg' }
+        ];
+      }
+
+      menu.innerHTML = `
+        <div class="px-2 py-1 text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider">Agent zuweisen</div>
+        <button type="button" onclick="executeBulkAssign('')" class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+          <span class="w-5 h-5 rounded-full bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-[10px]">✕</span>
+          <span class="truncate">Nicht zugewiesen</span>
+        </button>
+        ${profiles.map(p => `
+          <button type="button" onclick="executeBulkAssign('${opsEscapeHtml(p.id)}')" class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+            <img src="${p.avatar || '/static/avatars/avatar_001.jpg'}" class="w-5 h-5 rounded-full object-cover shrink-0 border border-[var(--border)]">
+            <span class="truncate font-semibold">${opsEscapeHtml(p.person_name || p.name || p.id)}</span>
+          </button>
+        `).join('')}
+      `;
+    }
+
+    // 1. Bulk Move
+    window.executeBulkMove = async function(targetStatus) {
+      const taskIds = Array.from(selectedOpsTaskIds);
+      if (taskIds.length === 0) return;
+      closeAllBulkMenus();
+
+      try {
+        const res = await fetch('/api/operations/kanban/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task_ids: taskIds,
+            action: 'move',
+            payload: { status: targetStatus }
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          clearOpsKanbanSelection();
+          loadOperationsData();
+          startOpsUndoTimer(data.undo_token, data.expires_in_seconds, `${data.affected_count} Aufgaben verschoben`);
+        } else {
+          alert('Fehler: ' + (data.detail || 'Konnte nicht verschoben werden'));
+        }
+      } catch (err) {
+        console.error('Bulk move error:', err);
+      }
+    };
+
+    // 2. Bulk Assign
+    window.executeBulkAssign = async function(assigneeId) {
+      const taskIds = Array.from(selectedOpsTaskIds);
+      if (taskIds.length === 0) return;
+      closeAllBulkMenus();
+
+      try {
+        const res = await fetch('/api/operations/kanban/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task_ids: taskIds,
+            action: 'assign',
+            payload: { assignee: assigneeId }
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          clearOpsKanbanSelection();
+          loadOperationsData();
+          startOpsUndoTimer(data.undo_token, data.expires_in_seconds, `${data.affected_count} Aufgaben zugewiesen`);
+        } else {
+          alert('Fehler: ' + (data.detail || 'Zuweisung fehlgeschlagen'));
+        }
+      } catch (err) {
+        console.error('Bulk assign error:', err);
+      }
+    };
+
+    // 3. Bulk Tag
+    window.executeBulkTag = async function(mode) {
+      const taskIds = Array.from(selectedOpsTaskIds);
+      if (taskIds.length === 0) return;
+      const tagInput = document.getElementById('ops-bulk-tag-input');
+      const tag = tagInput ? tagInput.value.trim() : '';
+      if (!tag) {
+        alert('Bitte gib einen Tag-Namen ein.');
+        return;
+      }
+      closeAllBulkMenus();
+
+      try {
+        const res = await fetch('/api/operations/kanban/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task_ids: taskIds,
+            action: 'tag',
+            payload: { tag: tag, tag_mode: mode }
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          if (tagInput) tagInput.value = '';
+          clearOpsKanbanSelection();
+          loadOperationsData();
+          startOpsUndoTimer(data.undo_token, data.expires_in_seconds, `${data.affected_count} Aufgaben getaggt (#${tag})`);
+        } else {
+          alert('Fehler: ' + (data.detail || 'Taggen fehlgeschlagen'));
+        }
+      } catch (err) {
+        console.error('Bulk tag error:', err);
+      }
+    };
+
+    // 4. Bulk Delete / Archive
+    window.executeBulkDelete = async function() {
+      const taskIds = Array.from(selectedOpsTaskIds);
+      if (taskIds.length === 0) return;
+      if (!confirm(`${taskIds.length} ausgewählte Aufgaben archivieren? (Kann 10 Minuten lang rückgängig gemacht werden)`)) return;
+      closeAllBulkMenus();
+
+      try {
+        const res = await fetch('/api/operations/kanban/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task_ids: taskIds,
+            action: 'delete'
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          clearOpsKanbanSelection();
+          loadOperationsData();
+          startOpsUndoTimer(data.undo_token, data.expires_in_seconds, `${data.affected_count} Aufgaben archiviert`);
+        } else {
+          alert('Fehler: ' + (data.detail || 'Archivieren fehlgeschlagen'));
+        }
+      } catch (err) {
+        console.error('Bulk delete error:', err);
+      }
+    };
+
+    // 10-Minuten Undo Timer & Trigger
+    window.startOpsUndoTimer = function(token, ttlSeconds, actionLabel) {
+      opsBulkUndoToken = token;
+      opsBulkUndoExpiresAt = Date.now() + (ttlSeconds || 600) * 1000;
+
+      if (opsBulkUndoTimerInterval) {
+        clearInterval(opsBulkUndoTimerInterval);
+      }
+
+      const toast = document.getElementById('ops-kanban-undo-toast');
+      const msgEl = document.getElementById('ops-kanban-undo-msg');
+      const timerEl = document.getElementById('ops-kanban-undo-timer');
+      if (!toast) return;
+
+      if (msgEl) msgEl.innerText = actionLabel || 'Aktion ausgeführt';
+      toast.classList.remove('hidden');
+
+      function updateCountdown() {
+        const remainingMs = opsBulkUndoExpiresAt - Date.now();
+        if (remainingMs <= 0) {
+          clearInterval(opsBulkUndoTimerInterval);
+          dismissOpsUndoToast();
+          return;
+        }
+        const totalSec = Math.floor(remainingMs / 1000);
+        const mins = Math.floor(totalSec / 60);
+        const secs = totalSec % 60;
+        if (timerEl) {
+          timerEl.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+      }
+
+      updateCountdown();
+      opsBulkUndoTimerInterval = setInterval(updateCountdown, 1000);
+      if (window.lucide) lucide.createIcons();
+    };
+
+    window.triggerOpsBulkUndo = async function() {
+      if (!opsBulkUndoToken) return;
+      try {
+        const res = await fetch('/api/operations/kanban/bulk/undo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ undo_token: opsBulkUndoToken })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          dismissOpsUndoToast();
+          if (typeof showNotification === 'function') {
+            showNotification('Rückgängig', data.message || 'Aktion rückgängig gemacht.', 'success');
+          } else {
+            alert(data.message || 'Aktion rückgängig gemacht.');
+          }
+          loadOperationsData();
+        } else {
+          alert('Undo fehlgeschlagen: ' + (data.detail || data.message));
+        }
+      } catch (err) {
+        console.error('Undo error:', err);
+      }
+    };
+
+    window.dismissOpsUndoToast = function() {
+      const toast = document.getElementById('ops-kanban-undo-toast');
+      if (toast) toast.classList.add('hidden');
+      if (opsBulkUndoTimerInterval) {
+        clearInterval(opsBulkUndoTimerInterval);
+        opsBulkUndoTimerInterval = null;
+      }
+      opsBulkUndoToken = null;
+    };
+
+    // ESC-Key Event-Listener
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && selectedOpsTaskIds && selectedOpsTaskIds.size > 0) {
+        clearOpsKanbanSelection();
+      }
+    });

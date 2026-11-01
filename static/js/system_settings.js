@@ -2277,11 +2277,37 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
+        const versionBadge = document.getElementById("update-system-version-badge");
+        const versionEl = document.getElementById("update-current-version");
+        if (versionBadge && data.version) versionBadge.innerText = data.version;
+        if (versionEl && data.version) versionEl.innerText = `${data.version}${data.version_codename ? " · " + data.version_codename : ""}`;
+
+        const nextVer = data.next_version || "v0.3.7";
+        const nextVerBadge = document.getElementById("push-next-version-badge");
+        const btnVerLabel = document.getElementById("btn-push-version-label");
+        if (nextVerBadge) nextVerBadge.innerText = nextVer;
+        if (btnVerLabel) btnVerLabel.innerText = nextVer;
+
         if (curCommit) curCommit.innerText = `${data.current_commit || "-"} (${data.last_commit_info || ""})`;
         if (branchEl) branchEl.innerText = `${data.branch || "main"} · Remote: ${data.remote_commit || "-"}`;
+        window._localChangesList = data.changed_files || [];
         if (dirtyEl) {
-          dirtyEl.innerText = data.has_local_changes ? `⚠️ ${data.changed_files_count} modifizierte Dateien` : "✅ Keine lokalen Konflikte";
-          dirtyEl.className = data.has_local_changes ? "font-mono font-bold text-xs text-amber-500 truncate mt-0.5" : "font-mono font-bold text-xs text-emerald-500 truncate mt-0.5";
+          if (data.has_local_changes) {
+            dirtyEl.innerHTML = `<span class="inline-flex items-center gap-1.5 cursor-pointer underline underline-offset-2 hover:opacity-80">⚠️ ${data.changed_files_count} modifizierte Dateien</span>`;
+            dirtyEl.className = "font-mono font-bold text-xs text-amber-500 truncate mt-0.5 cursor-pointer";
+          } else {
+            dirtyEl.innerHTML = "<span>✅ Keine lokalen Konflikte</span>";
+            dirtyEl.className = "font-mono font-bold text-xs text-emerald-500 truncate mt-0.5";
+          }
+        }
+        const dirtyCard = document.getElementById("update-dirty-card");
+        if (dirtyCard) {
+          if (data.has_local_changes) {
+            dirtyCard.classList.add("cursor-pointer");
+            dirtyCard.title = "Klicken, um modifizierte Dateien im Dialog aufzulisten";
+          } else {
+            dirtyCard.title = "Lokaler Arbeitsstand ist sauber";
+          }
         }
 
         if (data.update_available) {
@@ -2447,9 +2473,9 @@
         });
         const data = await res.json();
         if (data.status === "success") {
-          alert(`Erfolg!\n${data.message}\n\nCommit: ${data.commit}`);
+          alert(`Release ${data.version || ""} erfolgreich auf GitHub veröffentlicht!\n\nCommit: ${data.commit}\nGit-Tag: ${data.version || ""}\n${data.message}`);
           if (badge) {
-            badge.innerText = "Erfolgreich übertragen";
+            badge.innerText = `Release ${data.version || ""} live`;
             badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20";
           }
           if (msgInput) msgInput.value = "";
@@ -2476,10 +2502,103 @@
       } finally {
         if (btn) {
           btn.disabled = false;
-          btn.innerHTML = '<i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> Jetzt zu GitHub pushen';
+          const curNext = document.getElementById("push-next-version-badge")?.innerText || "v0.3.7";
+          btn.innerHTML = `<i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> <span id="btn-push-label">Release <span id="btn-push-version-label">${curNext}</span> zu GitHub pushen</span>`;
+          if (window.lucide) window.lucide.createIcons();
         }
       }
     }
+
+    
+    // --- LOKALE AENDERUNGEN MODAL (GIT STATUS INSPECTOR) ---
+    async function openLocalChangesModal() {
+      const modal = document.getElementById("modal-local-changes");
+      if (!modal) return;
+      modal.classList.remove("hidden");
+      await refreshLocalChangesModal();
+    }
+
+    async function refreshLocalChangesModal() {
+      const listEl = document.getElementById("local-changes-list");
+      const badgeEl = document.getElementById("local-changes-count-badge");
+      if (listEl) {
+        listEl.innerHTML = '<div class="flex items-center justify-center p-6 text-[var(--muted-foreground)] text-xs"><i data-lucide="loader-2" class="w-4 h-4 animate-spin mr-2"></i> Lade geänderte Dateien...</div>';
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      try {
+        const res = await fetch("/api/v1/system/update/local-changes");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        window._localChangesList = data.files || [];
+        renderLocalChangesList(window._localChangesList);
+        if (badgeEl) badgeEl.innerText = `${data.total || window._localChangesList.length} Dateien`;
+      } catch (e) {
+        console.warn("Fehler beim Abrufen der lokalen Änderungen:", e);
+        renderLocalChangesList(window._localChangesList || []);
+      }
+    }
+
+    function renderLocalChangesList(files) {
+      const listEl = document.getElementById("local-changes-list");
+      const searchInput = document.getElementById("local-changes-search");
+      const query = (searchInput ? searchInput.value : "").trim().toLowerCase();
+      if (!listEl) return;
+
+      const filtered = query 
+        ? files.filter(f => (f.path || "").toLowerCase().includes(query) || (f.code || "").toLowerCase().includes(query))
+        : files;
+
+      if (!filtered || filtered.length === 0) {
+        if (query) {
+          listEl.innerHTML = `<div class="p-6 text-center text-[var(--muted-foreground)]">Keine Dateien passend zu "${escapeHtml(query)}" gefunden.</div>`;
+        } else {
+          listEl.innerHTML = '<div class="p-6 text-center text-emerald-500 font-bold">✅ Keine ungespeicherten lokalen Änderungen vorhanden. Der Stand ist sauber.</div>';
+        }
+        return;
+      }
+
+      const badgeStyles = {
+        amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
+        sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30",
+        emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+        rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30",
+        purple: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
+      };
+
+      listEl.innerHTML = filtered.map(f => {
+        const style = badgeStyles[f.color] || "bg-neutral-500/10 text-[var(--foreground)] border-[var(--border)]";
+        return `
+          <div class="flex items-center justify-between gap-3 py-2 px-2.5 rounded-lg hover:bg-[var(--secondary)] transition group">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border shrink-0 ${style}">
+                ${escapeHtml(f.code || "M")}
+              </span>
+              <span class="truncate text-xs font-mono text-[var(--foreground)]" title="${escapeHtml(f.path)}">
+                ${escapeHtml(f.path)}
+              </span>
+            </div>
+            <span class="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0">${escapeHtml(f.label || "Geändert")}</span>
+          </div>
+        `;
+      }).join("");
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function filterLocalChangesList() {
+      renderLocalChangesList(window._localChangesList || []);
+    }
+
+    function closeLocalChangesModal() {
+      const modal = document.getElementById("modal-local-changes");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    window.openLocalChangesModal = openLocalChangesModal;
+    window.closeLocalChangesModal = closeLocalChangesModal;
+    window.refreshLocalChangesModal = refreshLocalChangesModal;
+    window.filterLocalChangesList = filterLocalChangesList;
 
     window.pushChangesToGitHub = pushChangesToGitHub;
 

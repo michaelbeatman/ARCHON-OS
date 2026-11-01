@@ -1,0 +1,18 @@
+{
+  "version": "v0.3.7",
+  "codename": "Sentinel",
+  "released_at": "2026-11-01 10:36",
+  "previous_version": "v0.3.6",
+  "commit": "974ce15b7310",
+  "features": [
+    "Revisionssicheres GoBD & ISO 27001 Audit-Log mit SHA-256 Hashkette",
+    "Datenschutz-Routing (Zero Egress) fuer sensible Daten mit DSGVO-Statusleuchten",
+    "Dual-LLM Guard gegen Prompt Injection mit [T]-Trusted Badges",
+    "Verschluesselter Notfallzugang (Break-Glass Protocol)",
+    "API-Tokens mit Scopes und Token-Bucket Rate-Limiting",
+    "E-Mail-Freigabe-Queue vor SMTP-Versand",
+    "Kanban-Mehrfachaktionen mit 10-Minuten-Undo Puffer",
+    "Agent-Scorecards & Obsidian-Synchronisation in der Personalakte",
+    "Inspektor fuer ungespeicherte lokale Aenderungen"
+  ]
+}

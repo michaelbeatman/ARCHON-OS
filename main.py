@@ -9010,6 +9010,13 @@ def api_system_update_check():
     importlib.reload(system_updater)
     return system_updater.get_update_status()
 
+@app.get("/api/v1/system/update/local-changes")
+def api_system_update_local_changes():
+    import importlib
+    from backend import system_updater
+    importlib.reload(system_updater)
+    return system_updater.get_local_changes()
+
 @app.post("/api/v1/system/update/push")
 def api_system_update_push(payload: dict = Body(default={})):
     import importlib
@@ -9050,6 +9057,284 @@ def api_system_update_backup(payload: dict = Body(default={})):
     importlib.reload(system_updater)
     tag = payload.get("tag", "manual").strip() or "manual"
     return system_updater.create_snapshot(tag=tag)
+
+# --- VERTRAGS- & FRISTENMANAGEMENT (t-0a2171) ---
+@app.get("/api/contracts")
+@app.get("/api/v1/contracts")
+def api_list_contracts(category: Optional[str] = None, status: Optional[str] = None, sort_by: str = "deadline"):
+    from backend.contract_manager import ContractManager
+    return {"status": "success", "contracts": ContractManager.list_contracts(category=category, status=status, sort_by=sort_by)}
+
+
+@app.get("/api/contracts/stats")
+@app.get("/api/v1/contracts/stats")
+def api_contract_stats():
+    from backend.contract_manager import ContractManager
+    return {"status": "success", "stats": ContractManager.get_stats()}
+
+
+@app.get("/api/contracts/{contract_id}")
+@app.get("/api/v1/contracts/{contract_id}")
+def api_get_contract(contract_id: str):
+    from backend.contract_manager import ContractManager
+    c = ContractManager.get(contract_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Vertrag nicht gefunden.")
+    return {"status": "success", "contract": c}
+
+
+@app.post("/api/contracts")
+@app.post("/api/v1/contracts")
+def api_save_contract(payload: dict = Body(...)):
+    from backend.contract_manager import ContractManager
+    saved = ContractManager.create_or_update(payload)
+    return {"status": "success", "contract": saved}
+
+
+@app.delete("/api/contracts/{contract_id}")
+@app.delete("/api/v1/contracts/{contract_id}")
+def api_delete_contract(contract_id: str):
+    from backend.contract_manager import ContractManager
+    deleted = ContractManager.delete(contract_id)
+    return {"status": "success" if deleted else "not_found", "deleted": deleted}
+
+
+@app.post("/api/contracts/parse")
+@app.post("/api/v1/contracts/parse")
+def api_parse_contract(payload: dict = Body(...)):
+    from backend.contract_manager import ContractParser
+    text = payload.get("text", "")
+    parsed = ContractParser.parse(text)
+    return {"status": "success", "parsed": parsed}
+
+
+@app.post("/api/contracts/scan-deadlines")
+@app.post("/api/v1/contracts/scan-deadlines")
+def api_scan_contract_deadlines(payload: dict = Body(default={})):
+    from backend.contract_manager import ContractManager
+    send_telegram = payload.get("send_telegram", True)
+    create_kanban = payload.get("create_kanban_task", True)
+    alerts = ContractManager.scan_and_alert_deadlines(send_telegram=send_telegram, create_kanban_task=create_kanban)
+    return {"status": "success", "alerts_triggered": alerts, "count": len(alerts)}
+
+
+@app.post("/api/contracts/{contract_id}/renew")
+@app.post("/api/v1/contracts/{contract_id}/renew")
+def api_renew_contract(contract_id: str):
+    from backend.contract_manager import ContractManager
+    renewed = ContractManager.renew_contract(contract_id)
+    if not renewed:
+        raise HTTPException(status_code=404, detail="Vertrag konnte nicht verlängert werden.")
+    return {"status": "success", "contract": renewed}
+
+
+# --- SAUBERES HERUNTERFAHREN & TASK-DRAINING (t-12113b) ---
+@app.on_event("startup")
+def on_startup_drain_recovery():
+    try:
+        from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+        res = graceful_shutdown_coordinator.auto_resume_on_startup()
+        print(f"[Archon] Startup Recovery: {res}")
+    except Exception as e:
+        print(f"[Archon] Startup Recovery Fehler: {e}", file=sys.stderr)
+
+
+@app.on_event("shutdown")
+def on_shutdown_graceful():
+    try:
+        from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+        res = graceful_shutdown_coordinator.execute_graceful_shutdown_sync(reason="Server shutdown / restart")
+        print(f"[Archon] Graceful Shutdown ausgeführt: {res}")
+    except Exception as e:
+        print(f"[Archon] Graceful Shutdown Fehler: {e}", file=sys.stderr)
+
+
+@app.get("/api/system/drain/status")
+@app.get("/api/v1/system/drain/status")
+def api_drain_status():
+    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+    return {"status": "success", "drain_status": graceful_shutdown_coordinator.get_status()}
+
+
+@app.post("/api/system/drain/start")
+@app.post("/api/v1/system/drain/start")
+def api_start_drain(payload: dict = Body(default={})):
+    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+    reason = payload.get("reason", "Manuell angefordertes Draining")
+    grace = payload.get("grace_seconds", 15.0)
+    res = graceful_shutdown_coordinator.start_draining(reason=reason, grace_seconds=grace)
+    return {"status": "success", "result": res}
+
+
+@app.post("/api/system/drain/cancel")
+@app.post("/api/v1/system/drain/cancel")
+def api_cancel_drain():
+    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+    res = graceful_shutdown_coordinator.cancel_draining()
+    return {"status": "success", "result": res}
+
+
+@app.post("/api/system/drain/execute-shutdown")
+@app.post("/api/v1/system/drain/execute-shutdown")
+def api_execute_shutdown(payload: dict = Body(default={})):
+    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+    reason = payload.get("reason", "API-gesteuerter Shutdown")
+    grace = payload.get("grace_seconds", 5.0)
+    res = graceful_shutdown_coordinator.execute_graceful_shutdown_sync(reason=reason, grace_seconds=grace)
+    return {"status": "success", "result": res}
+
+
+# --- EU AI ACT COMPLIANCE & KI-INVENTAR (t-1aa5e9) ---
+@app.get("/api/governance/ai-act/inventory")
+@app.get("/api/v1/governance/ai-act/inventory")
+def api_ai_act_inventory():
+    from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
+    return {"status": "success", "inventory": eu_ai_act_inventory_manager.get_inventory()}
+
+
+@app.get("/api/governance/ai-act/stats")
+@app.get("/api/v1/governance/ai-act/stats")
+def api_ai_act_stats():
+    from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
+    return {"status": "success", "stats": eu_ai_act_inventory_manager.get_stats()}
+
+
+@app.post("/api/governance/ai-act/reclassify/{agent_id}")
+@app.post("/api/v1/governance/ai-act/reclassify/{agent_id}")
+def api_ai_act_reclassify(agent_id: str, payload: dict = Body(...)):
+    from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
+    updated = eu_ai_act_inventory_manager.set_manual_override(agent_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' nicht gefunden.")
+    return {"status": "success", "agent": updated}
+
+
+@app.get("/api/governance/ai-act/export")
+@app.get("/api/v1/governance/ai-act/export")
+def api_ai_act_export():
+    from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
+    return {"status": "success", "markdown_report": eu_ai_act_inventory_manager.export_report_markdown()}
+
+
+# --- AUTOMATISCHE DATENKLASSIFIZIERUNG (t-53315b) ---
+@app.post("/api/governance/data-classification/classify")
+@app.post("/api/v1/governance/data-classification/classify")
+def api_classify_content(payload: dict = Body(...)):
+    from backend.data_classifier import DataClassifier
+    text = payload.get("text", "")
+    filename = payload.get("filename")
+    res = DataClassifier.classify(text, filename=filename)
+    return {"status": "success", "classification": res}
+
+
+@app.get("/api/governance/data-classification/taxonomy")
+@app.get("/api/v1/governance/data-classification/taxonomy")
+def api_classification_taxonomy():
+    from backend.data_classifier import CLASSIFICATION_METADATA
+    tax = {lvl.value: meta for lvl, meta in CLASSIFICATION_METADATA.items()}
+    return {"status": "success", "taxonomy": tax}
+
+
+@app.post("/api/governance/data-classification/tag")
+@app.post("/api/v1/governance/data-classification/tag")
+def api_tag_classification(payload: dict = Body(...)):
+    from backend.data_classifier import DataClassifier
+    item_id = payload.get("item_id", "")
+    item_type = payload.get("item_type", "task")
+    text = payload.get("text", "")
+    filename = payload.get("filename")
+    if not item_id:
+        raise HTTPException(status_code=400, detail="item_id erforderlich.")
+    res = DataClassifier.tag_item(item_id, item_type, text, filename=filename)
+    return {"status": "success", "tagged_item": res}
+
+
+@app.get("/api/governance/data-classification/items")
+@app.get("/api/v1/governance/data-classification/items")
+def api_list_classifications(item_type: Optional[str] = None):
+    from backend.data_classifier import DataClassifier
+    items = DataClassifier.get_classifications(item_type=item_type)
+    return {"status": "success", "items": items, "count": len(items)}
+
+
+# --- DOKUMENTEN-PARSING & TABELLENEXTRAKTION (t-539b65) ---
+@app.post("/api/documents/parse")
+@app.post("/api/v1/documents/parse")
+def api_parse_document(payload: dict = Body(...)):
+    from backend.document_parser import DocumentParserEngine
+    filepath = payload.get("filepath", "")
+    if not filepath or not os.path.exists(filepath):
+        raise HTTPException(status_code=400, detail="Gültiger 'filepath' erforderlich.")
+    res = DocumentParserEngine.parse_file(filepath)
+    return {"status": "success", "result": res}
+
+
+@app.post("/api/documents/extract-tables")
+@app.post("/api/v1/documents/extract-tables")
+def api_extract_tables(payload: dict = Body(...)):
+    from backend.document_parser import DocumentParserEngine
+    filepath = payload.get("filepath", "")
+    if not filepath or not os.path.exists(filepath):
+        raise HTTPException(status_code=400, detail="Gültiger 'filepath' erforderlich.")
+    res = DocumentParserEngine.parse_file(filepath)
+    tables = res.get("tables") or res.get("tables_by_sheet") or []
+    return {"status": "success", "tables": tables, "format": res.get("format")}
+
+
+# --- DEAL-PIPELINE & FORECAST-ENGINE (t-5b159d) ---
+@app.get("/api/deals")
+@app.get("/api/v1/deals")
+def api_list_deals(stage: Optional[str] = None, partner: Optional[str] = None, assigned_agent: Optional[str] = None):
+    from backend.deal_pipeline import DealPipelineManager
+    return {"status": "success", "deals": DealPipelineManager.list_deals(stage=stage, partner=partner, assigned_agent=assigned_agent)}
+
+
+@app.get("/api/deals/forecast")
+@app.get("/api/v1/deals/forecast")
+def api_deal_forecast():
+    from backend.deal_pipeline import DealPipelineManager
+    return {"status": "success", "forecast": DealPipelineManager.get_forecast()}
+
+
+@app.get("/api/deals/{deal_id}")
+@app.get("/api/v1/deals/{deal_id}")
+def api_get_deal(deal_id: str):
+    from backend.deal_pipeline import DealPipelineManager
+    deal = DealPipelineManager.get(deal_id)
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal nicht gefunden.")
+    return {"status": "success", "deal": deal}
+
+
+@app.post("/api/deals")
+@app.post("/api/v1/deals")
+def api_save_deal(payload: dict = Body(...)):
+    from backend.deal_pipeline import DealPipelineManager
+    saved = DealPipelineManager.create_or_update(payload)
+    return {"status": "success", "deal": saved}
+
+
+@app.post("/api/deals/{deal_id}/move-stage")
+@app.post("/api/v1/deals/{deal_id}/move-stage")
+def api_move_deal_stage(deal_id: str, payload: dict = Body(...)):
+    from backend.deal_pipeline import DealPipelineManager
+    new_stage = payload.get("stage", "")
+    notes = payload.get("notes")
+    if not new_stage:
+        raise HTTPException(status_code=400, detail="'stage' erforderlich.")
+    moved = DealPipelineManager.move_stage(deal_id, new_stage, notes=notes)
+    if not moved:
+        raise HTTPException(status_code=404, detail="Deal oder Phase ungültig.")
+    return {"status": "success", "deal": moved}
+
+
+@app.delete("/api/deals/{deal_id}")
+@app.delete("/api/v1/deals/{deal_id}")
+def api_delete_deal(deal_id: str):
+    from backend.deal_pipeline import DealPipelineManager
+    deleted = DealPipelineManager.delete(deal_id)
+    return {"status": "success" if deleted else "not_found", "deleted": deleted}
+
 
 
 # --- PLUGIN SYSTEM & EXTENSIBILITY (MEILENSTEIN 5) ---
@@ -14453,3 +14738,49 @@ def api_spawn_ephemeral_team(payload: Dict = Body(...)):
 def api_check_resource_backpressure(simulate_overload: bool = False):
     from backend.resource_backpressure import resource_backpressure_protector
     return resource_backpressure_protector.check_health_and_backpressure(simulate_overload=simulate_overload)
+
+
+# --- CORPORATE MANAGER & MULTI-COMPANY HUB ---
+@app.get("/api/corporate/companies")
+def api_list_corporate_companies():
+    from backend.corporate_manager import corporate_manager
+    return {"companies": corporate_manager.list_companies()}
+
+@app.get("/api/corporate/companies/{company_id}")
+def api_get_corporate_company(company_id: str):
+    from backend.corporate_manager import corporate_manager
+    comp = corporate_manager.get_company(company_id)
+    if not comp:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return comp
+
+@app.post("/api/corporate/companies")
+def api_save_corporate_company(payload: Dict = Body(...)):
+    from backend.corporate_manager import corporate_manager
+    saved = corporate_manager.save_company(payload)
+    return {"success": True, "company": saved}
+
+@app.post("/api/corporate/companies/{company_id}/set-active")
+def api_set_active_corporate_company(company_id: str):
+    from backend.corporate_manager import corporate_manager
+    success = corporate_manager.set_active_company(company_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return {"success": True, "active_company_id": company_id}
+
+@app.delete("/api/corporate/companies/{company_id}")
+def api_delete_corporate_company(company_id: str):
+    from backend.corporate_manager import corporate_manager
+    success = corporate_manager.delete_company(company_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot delete active or only existing company")
+    return {"success": True, "deleted_id": company_id}
+
+@app.post("/api/corporate/render-template")
+def api_render_corporate_template(payload: Dict = Body(...)):
+    from backend.corporate_manager import corporate_manager
+    template_type = payload.get("template_type", "letterhead")
+    company_id = payload.get("company_id")
+    custom = payload.get("custom", {})
+    result = corporate_manager.render_template(template_type=template_type, company_id=company_id, custom=custom)
+    return result

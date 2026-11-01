@@ -18,7 +18,7 @@ import sqlite3
 import shutil
 import datetime
 import subprocess
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SNAPSHOT_DIR = os.path.join(WORKSPACE_DIR, "data", "snapshots")
@@ -47,6 +47,13 @@ def _run_git(args: List[str], timeout: int = 60) -> Dict[str, Any]:
         env = os.environ.copy()
         env["GIT_TERMINAL_PROMPT"] = "0"
         env["GIT_ASKPASS"] = ""
+        # Sicherstellen, dass Git-Hooks den laufenden Python-Interpreter priorisieren
+        if sys.executable:
+            env["ARCHON_PYTHON"] = sys.executable
+            env["PYTHON_EXE"] = sys.executable
+            py_dir = os.path.dirname(sys.executable)
+            if py_dir:
+                env["PATH"] = py_dir + os.pathsep + env.get("PATH", "")
         base_cmd = [
             "git",
             "-c", "safe.directory=*",
@@ -136,8 +143,122 @@ def _read_git_head_native() -> Dict[str, str]:
         return {"commit": "unknown", "branch": "unknown", "error": str(e)}
 
 
+def parse_porcelain_status(stdout: str) -> List[Dict[str, str]]:
+    """Parst die Ausgabe von `git status --porcelain` in strukturierte Datei-Objekte."""
+    import re
+    files = []
+    for line in (stdout or "").splitlines():
+        if not line.strip():
+            continue
+        m = re.match(r"^([ MADRCU?!]{1,2})\s+(.+)$", line)
+        if m:
+            code = m.group(1).strip()
+            path = m.group(2).strip()
+        else:
+            parts = line.split(maxsplit=1)
+            code = parts[0] if parts else "M"
+            path = parts[1] if len(parts) > 1 else line.strip()
+
+        if path.startswith('"') and path.endswith('"'):
+            path = path[1:-1]
+        
+        label = "Geändert"
+        color = "amber"
+        if "??" in code:
+            label = "Neu / Ungetrackt"
+            color = "sky"
+        elif "A" in code:
+            label = "Hinzugefügt"
+            color = "emerald"
+        elif "D" in code:
+            label = "Gelöscht"
+            color = "rose"
+        elif "R" in code:
+            label = "Umbenannt"
+            color = "purple"
+        elif "M" in code:
+            label = "Geändert"
+            color = "amber"
+            
+        files.append({
+            "code": code,
+            "path": path,
+            "label": label,
+            "color": color
+        })
+    return files
+
+
+def get_local_changes() -> Dict[str, Any]:
+    """Gibt detaillierte Informationen zu allen ungespeicherten lokalen Änderungen zurück."""
+    status_check = _run_git(["status", "--porcelain"])
+    dirty = bool(status_check["stdout"].strip()) if status_check["success"] else False
+    changed_files = parse_porcelain_status(status_check["stdout"]) if dirty and status_check["success"] else []
+    return {
+        "status": "success",
+        "has_local_changes": dirty,
+        "total": len(changed_files),
+        "files": changed_files
+    }
+
+
+def get_system_version_info() -> Dict[str, Any]:
+    """Liest Versionsdaten aus config/version.json."""
+    vpath = os.path.join(WORKSPACE_DIR, "config", "version.json")
+    if os.path.exists(vpath):
+        try:
+            with open(vpath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"version": "v0.3.6", "codename": "Sentinel"}
+
+
+def get_next_patch_version(current_ver: str) -> str:
+    """Berechnet die naechste Patch-Version (z. B. v0.3.6 -> v0.3.7)."""
+    import re
+    m = re.match(r"^v?(\d+)\.(\d+)\.(\d+)(.*)$", (current_ver or "").strip())
+    if m:
+        maj, minr, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        suffix = m.group(4) or ""
+        return f"v{maj}.{minr}.{patch + 1}{suffix}"
+    return "v0.3.7"
+
+
+def bump_version_patch(reason: str = "") -> Tuple[str, str]:
+    """Inkrementiert die Patch-Version in config/version.json und speichert die Datei."""
+    vpath = os.path.join(WORKSPACE_DIR, "config", "version.json")
+    vdata = {}
+    if os.path.exists(vpath):
+        try:
+            with open(vpath, "r", encoding="utf-8") as f:
+                vdata = json.load(f)
+        except Exception:
+            pass
+    
+    cur_version = vdata.get("version", "v0.3.6")
+    new_version = get_next_patch_version(cur_version)
+
+    vdata["previous_version"] = cur_version
+    vdata["version"] = new_version
+    vdata["released_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    if reason:
+        vdata["last_bump_reason"] = reason
+
+    os.makedirs(os.path.dirname(vpath), exist_ok=True)
+    with open(vpath, "w", encoding="utf-8") as f:
+        json.dump(vdata, f, indent=2, ensure_ascii=False)
+
+    return cur_version, new_version
+
+
 def get_update_status() -> Dict[str, Any]:
     """Prüft, ob auf dem Remote-Repository (GitHub) neue Commits vorliegen."""
+    vinfo = get_system_version_info()
+    sys_version = vinfo.get("version", "v0.3.6")
+    sys_codename = vinfo.get("codename", "Sentinel")
+    next_version = get_next_patch_version(sys_version)
+
     native = _read_git_head_native()
     current_commit = native.get("commit", "unknown")
     branch = native.get("branch", "main")
@@ -153,19 +274,24 @@ def get_update_status() -> Dict[str, Any]:
     # Git Status (Ungespeicherte lokale Änderungen?)
     status_check = _run_git(["status", "--porcelain"])
     dirty = bool(status_check["stdout"].strip()) if status_check["success"] else False
-    changed_files_count = len(status_check["stdout"].splitlines()) if dirty else 0
+    changed_files = parse_porcelain_status(status_check["stdout"]) if dirty and status_check["success"] else []
+    changed_files_count = len(changed_files)
 
     # Remote Fetch ausführen
     fetch_res = _run_git(["fetch", "origin", "main"], timeout=30)
     if not fetch_res["success"]:
         return {
             "status": "offline_or_error",
+            "version": sys_version,
+            "version_codename": sys_codename,
+            "next_version": next_version,
             "update_available": False,
             "current_commit": current_commit,
             "branch": branch,
             "last_commit_info": last_commit_info,
             "has_local_changes": dirty,
             "changed_files_count": changed_files_count,
+            "changed_files": changed_files,
             "commits_behind": 0,
             "incoming_commits": [],
             "message": f"Konnte GitHub nicht abfragen: {fetch_res['stderr'] or 'Netzwerk/Auth-Problem'}"
@@ -188,6 +314,9 @@ def get_update_status() -> Dict[str, Any]:
 
     return {
         "status": "success",
+        "version": sys_version,
+        "version_codename": sys_codename,
+        "next_version": next_version,
         "update_available": commits_behind > 0,
         "current_commit": current_commit,
         "remote_commit": remote_commit,
@@ -197,6 +326,7 @@ def get_update_status() -> Dict[str, Any]:
         "incoming_commits": incoming,
         "has_local_changes": dirty,
         "changed_files_count": changed_files_count,
+        "changed_files": changed_files,
         "message": f"{commits_behind} neue Commits verfügbar." if commits_behind > 0 else "System ist auf dem neuesten Stand."
     }
 
@@ -355,7 +485,8 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
 
 def push_changes(commit_message: Optional[str] = None) -> Dict[str, Any]:
     """
-    Sammelt alle lokalen Änderungen ein, committet sie und pusht sie zu GitHub origin/main.
+    Sammelt alle lokalen Aenderungen ein, inkrementiert die Patch-Version (Option A),
+    committet und pusht zu GitHub origin/main inklusive Release-Tag.
     """
     status_chk = _run_git(["status", "--porcelain"])
     if not status_chk["success"]:
@@ -363,37 +494,56 @@ def push_changes(commit_message: Optional[str] = None) -> Dict[str, Any]:
 
     dirty = bool(status_chk["stdout"].strip())
     if not dirty:
-        return {"status": "nothing_to_commit", "message": "Keine neuen lokalen Änderungen zum Veröffentlichen vorhanden."}
+        return {"status": "nothing_to_commit", "message": "Keine neuen lokalen Aenderungen zum Veroeffentlichen vorhanden."}
 
-    # 1. git add -A
+    # 1. Automatischer Patch-Bump (Option A)
+    user_note = commit_message.strip() if commit_message else ""
+    old_ver, new_ver = bump_version_patch(reason=user_note)
+
+    # 2. git add -A (inklusive aktualisierter config/version.json)
     add_res = _run_git(["add", "-A"])
     if not add_res["success"]:
         return {"status": "error", "message": f"Git Add fehlgeschlagen: {add_res['stderr']}"}
 
-    # 2. git commit -m
+    # 3. git commit -m
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    msg = commit_message.strip() if commit_message and commit_message.strip() else f"Dev-Sync: {ts}"
+    if user_note:
+        msg = f"Release {new_ver}: {user_note}"
+    else:
+        msg = f"Release {new_ver}: Dev-Sync {ts}"
+
     commit_res = _run_git(["commit", "-m", msg])
     if not commit_res["success"]:
-        return {"status": "error", "message": f"Git Commit fehlgeschlagen: {commit_res['stderr']}"}
+        return {"status": "error", "message": f"Git Commit fehlgeschlagen: {commit_res['stderr'] or commit_res['stdout']}"}
 
-    # 3. Pull rebase to ensure clean linear history
+    # 4. Release-Tag setzen
+    tag_res = _run_git(["tag", "-a", new_ver, "-m", f"Release {new_ver}: {msg}"])
+    if not tag_res["success"]:
+        _run_git(["tag", "-f", "-a", new_ver, "-m", f"Release {new_ver}: {msg}"])
+
+    # 5. Pull rebase to ensure clean linear history
     pull_res = _run_git(["pull", "origin", "main", "--rebase"], timeout=60)
     if not pull_res["success"]:
         _run_git(["rebase", "--abort"], timeout=30)
-        return {"status": "error", "message": f"Git Pull Rebase vor Push fehlgeschlagen: {pull_res['stderr']}"}
+        return {"status": "error", "message": f"Git Pull Rebase vor Push fehlgeschlagen: {pull_res['stderr'] or pull_res['stdout']}"}
 
-    # 4. Git Push
-    push_res = _run_git(["push", "origin", "main"], timeout=60)
+    # 6. Git Push mit Tags
+    push_res = _run_git(["push", "origin", "main", "--tags"], timeout=60)
     if not push_res["success"]:
-        return {"status": "error", "message": f"Git Push fehlgeschlagen: {push_res['stderr']}"}
+        # Fallback: Push Branch zuerst, dann Tag einzeln
+        push_branch = _run_git(["push", "origin", "main"], timeout=60)
+        if not push_branch["success"]:
+            return {"status": "error", "message": f"Git Push fehlgeschlagen: {push_branch['stderr']}"}
+        _run_git(["push", "origin", new_ver], timeout=30)
 
     new_head = _read_git_head_native().get("commit", "unknown")
     return {
         "status": "success",
         "commit": new_head,
+        "version": new_ver,
+        "previous_version": old_ver,
         "commit_message": msg,
-        "message": f"Änderungen erfolgreich zu GitHub hochgeladen (Commit {new_head})!"
+        "message": f"Release {new_ver} erfolgreich zu GitHub hochgeladen (Commit {new_head})!"
     }
 
 

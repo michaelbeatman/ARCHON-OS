@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,8 +390,8 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
-        "last_status": "OK (8 Einträge)"
+        "last_check": "2026-11-01T10:17:31.772616",
+        "last_status": "OK (0 Einträge)"
       },
       {
         "id": "src-tagesschau",
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,319 +410,327 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-10-31T10:40:50.351704",
+        "last_check": "2026-11-01T10:17:31.772616",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-10-31T10:40:50.351704",
+    "last_run": "2026-11-01T10:17:31.772616",
     "recent_findings": [
       {
-        "id": "f3a3354ba9f050b0",
+        "id": "3db5079d5c744984",
         "target_id": "src-bmwk",
         "target_name": "BMWK (Wirtschaft & Industrie)",
         "category": "Investitionen & Geopolitik",
-        "title": "NRW: Warum Verteidigung erstmals ein Hauptthema in der Innovationstrategie 2028–2034 ist - Table.Briefings",
-        "link": "https://news.google.com/rss/articles/CBMivgFBVV95cUxQQk0zVl85SmJfSmM3WEtHcHllejNDdV9fMUdPUlNrLUFsM2FUN0xkM0hOdWJYUXVTSnF4N1ZzS3BMd2M3VHRScHJNb3NER3pnaHRxTDZLbzQtaTNlWGlOUW81LUFsZGQ5bHh5b0VFaG5PNWsxcWNTNThJWXBwWnRXa2J3UUpFalVlRF9nMUdYNEk1VGlsMEltblBXOUU4NmFHaGxWblVCOGlZb3hTY0hYNGNiQXBadm04LW5UZ0VB?oc=5",
-        "published": "Wed, 28 Oct 2026 17:17:44 GMT",
-        "detected_at": "31.10.2026 10:40"
+        "title": "Bayerische Wirtschaftsrepräsentanzen - Bayerische Staatsregierung",
+        "link": "https://news.google.com/rss/articles/CBMioAFBVV95cUxPNzVaM3JSdFFneG5EbmlGSk1LNW03WXVCQ0FRU2N2VTdYQ3NoNC1RcGQxX1VYVk80MVdQa1R3TEtPZVVCbG1NQk0wWTlmakF5QlFRb0ZOeVRKYlZUSlZHdTQ4bzc5NVk2Mm9SR2R1X285bjNoLTMxcWhmVWduOG8xaDBCbUZLeTRRMFpzR0RWSGJ0SVBOYUNKbmVzODUtZ1dU?oc=5",
+        "published": "Wed, 05 Aug 2026 11:27:38 GMT",
+        "detected_at": "01.11.2026 10:17"
       },
       {
-        "id": "b8d9fd62d8b2d972",
+        "id": "dd64cdf90f2c5cc0",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "UN: Türkei nominiert Chef der OSZE für Nachfolge von Guterres",
-        "link": "https://www.handelsblatt.com/politik/international/un-tuerkei-nominiert-chef-der-osze-fuer-nachfolge-von-guterres/100266310.html",
-        "published": "Sat, 31 Oct 2026 10:19:17 GMT",
-        "detected_at": "31.10.2026 10:40"
+        "title": "Gen Z-Proteste: Ausschreitungen in mehreren deutschen Städten: Gewaltexzesse wie in Paris laut Dobrindt verhindert",
+        "link": "https://www.handelsblatt.com/politik/deutschland/gen-z-proteste-gewaltausschreitungen-in-mehreren-deutschen-staedten/100266421.html",
+        "published": "Sun, 01 Nov 2026 10:08:11 GMT",
+        "detected_at": "01.11.2026 10:17"
       },
       {
-        "id": "a792bede768c64f2",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Polen: Krise um Verfassungsgericht in Polen spitzt sich zu",
-        "link": "https://www.handelsblatt.com/politik/international/polen-krise-um-verfassungsgericht-in-polen-spitzt-sich-zu/100266281.html",
-        "published": "Sat, 31 Oct 2026 10:05:47 GMT",
-        "detected_at": "31.10.2026 10:40"
-      },
-      {
-        "id": "95a0b7ec5f58900f",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "MacBook Pro mit Touch: Fünf interessante technische Kleinigkeiten",
-        "link": "https://www.heise.de/news/MacBook-Pro-mit-Touch-Fuenf-interessante-technische-Kleinigkeiten-11506972.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-10-31T11:26:00+01:00",
-        "detected_at": "31.10.2026 10:40"
-      },
-      {
-        "id": "6a4a7fc52f9a32df",
+        "id": "d82b2524dc3ca4a5",
         "target_id": "src-finanzen-boerse",
         "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
         "category": "Wirtschaft & Finanzen",
-        "title": "So viel Wert wäre mit einer Investition in Internet Computer von vor 1 Jahr verloren gegangen - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMi3wFBVV95cUxObVlzT3JTZXRTaEtHc0VsOXdaNXJwMEhodlpjc2duN2dzYjl6ejJJNWFyY2NGSk5XYkROS0FMTzJWRU9UaVB3UHpzd0p0Sk1ERm80OEd3NkJXZEdKOFdTanBpUTlDeldKeHhMc2hrX0JGUEhZUGhRZUVUWm5leEsyLVQyTnppU2lTNVNlREFsQklLNkYtOFBqbmxYOTRlUWtRYjVRX0xKUFRFY3Q4RlRaNmlCdmJsQ3g2ZEowd3hVVURDUEpGVWZ2RHYxSFlHNmtiQnJiU3ptdHhLYWNiMDJn?oc=5",
-        "published": "Sat, 31 Oct 2026 10:03:03 GMT",
-        "detected_at": "31.10.2026 10:10",
+        "title": "Wie viel Wert mit einer Investition in Sui von vor 1 Jahr verloren gegangen wäre - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMizgFBVV95cUxORS1UZUF6QmJIZDhJaEpsUGZKd2JvcFFpU292Mjd2VHY4SU1jUU1zelFvSUdoTEdub0dBa29waGp0Unh0dkNLOWFOSzVMalZ2dENfdXhCUGNySEN5emRTdldXQjRJZlRNaUZkQmY0NEZBUVYwbkhTdjQ4LUZOZVZlS0wtcnNhQUVGMnFMSXBPX2JUOHZHZHcyT0tqVFFGSHc4NzB5bm11OWdxMDcyNFlIRUg2TXg2VUpDSHk2bjd1bDByeWg3VjlyYm9ZVnBTdw?oc=5",
+        "published": "Sun, 01 Nov 2026 10:03:03 GMT",
+        "detected_at": "01.11.2026 10:17",
         "is_priority": true,
         "matched_keywords": [
           "geg"
         ]
       },
       {
-        "id": "88e6b56fbaa7e652",
+        "id": "848ed52e20d207dc",
         "target_id": "src-finanzen-boerse",
         "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
         "category": "Wirtschaft & Finanzen",
-        "title": "2 DAX-Aktien gelingt der Ausbruch: Kaufchance für Anleger mit 88 Prozent Renditechance? - Börse Online",
-        "link": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxQcFJPYU9QZ0ZubGhaaTBMUkZfRXVmbS1qakJ5QzNIWF82a2NkcWZiN2ZQMzFkTlByU3ROWHM5eC13dktBdHctRUZEbVlwX3AyZW5CNHg5TGJVQU1xQ1ZORlg2SHFoZW5QYzZvSDVJRUo0ZkUzUnd2Y1lnMHpTOEpwMXY0VXZnUzhtdzhRQUNxSlNzTEQyYXJWN3VFNHd2YzJ5bjhjRC13YWFoWXFTYzlpVVYwTkNBOTI4YmR0ZGk4MWVrU2lNNmVkUU9yZU5xaUNLd2ZGVkNVNmtVZGh5T1htSS01U1JBdlVz?oc=5",
-        "published": "Sat, 31 Oct 2026 10:00:00 GMT",
-        "detected_at": "31.10.2026 10:10"
+        "title": "So viel hätte eine Aptos-Investition von vor 1 Jahr gekostet - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMiswFBVV95cUxNczIwY3d6aTRZRXRvSmhHUi05OURjSjdFV0YxZ0hjUm1pZzlSNG14UDNabmd4QU13cnQwLW5DN2ZBaGQ1N2RoQ25LVldieDZEVmxMSk5iQjN4QjEtdXQtVU5zcC1xdnpIdFJDUTF6LXA4ZUdzeHBjOFlBUElSUzZmNktsaTJDcC0yU3BHYmJwTWpENUZhazJPR3NHRlVYT0hON3YtcWF6Y0ZhU3hjTXNwQkI3RQ?oc=5",
+        "published": "Sun, 01 Nov 2026 10:03:03 GMT",
+        "detected_at": "01.11.2026 10:17"
       },
       {
-        "id": "d04146a5c1dce95a",
+        "id": "93eea048ecfaaf97",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise+ | HP Elitedesk 8 Mini G2i im Test: Sparsamer Mini-PC mit moderner Intel-CPU",
+        "link": "https://www.heise.de/tests/HP-Elitedesk-8-Mini-G2i-im-Test-Sparsamer-Mini-PC-mit-moderner-Intel-CPU-11502960.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
+        "published": "2026-11-01T11:00:00+01:00",
+        "detected_at": "01.11.2026 10:17"
+      },
+      {
+        "id": "7d0c2098bd381ec2",
         "target_id": "src-tagesschau",
         "target_name": "Tagesschau (Eilmeldungen & Politik)",
         "category": "Politik & Wissenschaft",
-        "title": "Gen-Z-Proteste: Was die Bundesregierung für die Jugend macht",
-        "link": "https://www.tagesschau.de/inland/innenpolitik/jugendproteste-bundesregierung-100.html",
-        "published": "Sat, 31 Oct 2026 11:09:19 +0100",
-        "detected_at": "31.10.2026 10:10"
-      },
-      {
-        "id": "67728ff77b5fffb0",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ Iran-Krieg +++: Behörde – Öltanker bei Ausfahrt aus Straße von Hormus beschossen",
-        "link": "https://www.handelsblatt.com/politik/international/iran-krieg-behoerde-oeltanker-bei-ausfahrt-aus-strasse-von-hormus-beschossen/100136895.html",
-        "published": "Sat, 31 Oct 2026 09:42:58 GMT",
-        "detected_at": "31.10.2026 10:00"
-      },
-      {
-        "id": "b91c5aa18e57be00",
-        "target_id": "src-bundesbank",
-        "target_name": "Deutsche Bundesbank (Presse & Daten)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Livestream: Itay Goldstein – AI Trading in Financial Markets - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMirgFBVV95cUxOTzJxQVMzVTlCSVlmSjhzb2tHYnlWdlFTZ2JOc250SlhxcnNiNUQ3QlRmVUlkR0VTdVFCZ1QwSW9HUkpMVTVXZ2JPb3l2X3JlTGpzcHVTVUNmZW5VWlNFcG54dmVZVFRvWVRHWXhsMWdrRy13VHNVT0xSRF9wdHM1WmJ6eTlsYV9oWjllQjlkLWlIU0dlZ0VRZUhycjNqa2VYVVdmX1BUVFo5a2RSUWc?oc=5",
-        "published": "Fri, 30 Oct 2026 10:55:07 GMT",
-        "detected_at": "31.10.2026 10:00"
-      },
-      {
-        "id": "b0f194a3fb5b31f8",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Kommentar: Gegen Trump und Xi hilft kein Anbiedern, sondern Verbündete",
-        "link": "https://www.handelsblatt.com/meinung/kommentare/kommentar-gegen-trump-und-xi-hilft-kein-anbiedern-sondern-verbuendete/100266175.html",
-        "published": "Sat, 31 Oct 2026 09:33:55 GMT",
-        "detected_at": "31.10.2026 09:40",
+        "title": "Demos gegen Wohnungsnot in Portugal - Protestcamps geräumt",
+        "link": "https://www.tagesschau.de/ausland/portugal-protest-100.html",
+        "published": "Sun, 01 Nov 2026 10:46:44 +0100",
+        "detected_at": "01.11.2026 10:00",
         "is_priority": true,
         "matched_keywords": [
           "geg"
         ]
       },
       {
-        "id": "9e0c0eac8939ee02",
+        "id": "c5a524a6ce59457d",
+        "target_id": "src-bmwk",
+        "target_name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "title": "Regionalförderung - Bayerisches Wirtschaftsministerium",
+        "link": "https://news.google.com/rss/articles/CBMibEFVX3lxTE41UTB4SEhCMFBpNEN3WFFTcld5eDY4R2k5MEdIbGpoT0xwX3BsX2l2ZkY3TU1tb21FQUJUbjJPbUNqSEtpbDNJLUVlTzNPeURvZHFXMHBRMmpLNHVJQlFUTmtDZnI4Wm54ZlFfRA?oc=5",
+        "published": "Fri, 10 Dec 2021 00:46:31 GMT",
+        "detected_at": "01.11.2026 09:47"
+      },
+      {
+        "id": "00f7d1cc99b66230",
         "target_id": "src-handelsblatt-top",
         "target_name": "Handelsblatt (Top-Themen)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Handelskonflikt: Steinmeier in Peking: „Nicht zulassen, dass die industrielle Basis verloren geht“",
-        "link": "https://www.handelsblatt.com/politik/international/handelskonflikt-nicht-zulassen-dass-die-industrielle-basis-verloren-geht/100265455.html",
-        "published": "Sat, 31 Oct 2026 08:58:46 GMT",
-        "detected_at": "31.10.2026 09:40"
+        "title": "Kommentar: Lawrows Gebaren ist unerträglich – Trump macht’s möglich",
+        "link": "https://www.handelsblatt.com/meinung/kommentare/kommentar-lawrows-gebaren-ist-unertraeglich-trump-machts-moeglich/100266363.html",
+        "published": "Sun, 01 Nov 2026 02:37:51 GMT",
+        "detected_at": "01.11.2026 09:47"
       },
       {
-        "id": "e243a5bce2b62d93",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ Ukraine-Krieg +++: USA genehmigen Verkauf von 500 Patriot-Raketen an die Ukraine",
-        "link": "https://www.handelsblatt.com/politik/international/ukraine-usa-genehmigen-verkauf-von-500-patriot-raketen-an-die-ukraine/27982126.html",
-        "published": "Sat, 31 Oct 2026 09:19:35 GMT",
-        "detected_at": "31.10.2026 09:40"
-      },
-      {
-        "id": "faf15c8315f576a9",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "US-Anwälte zu „Audio Intelligence“ auf der Apple Watch: Möglicherweise strafbar",
-        "link": "https://www.heise.de/news/US-Anwaelte-zu-Audio-Intelligence-auf-der-Apple-Watch-Moeglicherweise-strafbar-11489722.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-10-31T10:21:00+01:00",
-        "detected_at": "31.10.2026 09:40"
-      },
-      {
-        "id": "abdb45a9412cef1e",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Chip im Kopf: Wenn Computer Gedanken verstehen lernen",
-        "link": "https://www.tagesschau.de/wissen/computer-chip-gehirn-100.html",
-        "published": "Sat, 31 Oct 2026 10:17:08 +0100",
-        "detected_at": "31.10.2026 09:40"
-      },
-      {
-        "id": "4be9832209455a12",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Evakuierungsaktion im ukrainischen Oleschky abgeschlossen",
-        "link": "https://www.tagesschau.de/ausland/europa/ukraine-evakuierung-oleschky-100.html",
-        "published": "Sat, 31 Oct 2026 10:14:41 +0100",
-        "detected_at": "31.10.2026 09:40"
-      },
-      {
-        "id": "ac64ee121d31f9e2",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "heise-Angebot: iX-Workshop: Multiagentensysteme entwickeln und in eigene Software integrieren",
-        "link": "https://www.heise.de/news/iX-Workshop-Multiagentensysteme-entwickeln-und-in-eigene-Software-integrieren-11480248.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-10-31T10:00:00+01:00",
-        "detected_at": "31.10.2026 09:10"
-      },
-      {
-        "id": "a6f397affd4d0933",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "KI verdrängt Fotostudios, Canon warnt vor Preisanstieg – News der Woche 44/2026",
-        "link": "https://www.heise.de/news/KI-verdraengt-Fotostudios-Canon-warnt-vor-Preisanstieg-News-der-Woche-44-2026-11506308.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-10-31T10:00:00+01:00",
-        "detected_at": "31.10.2026 09:10"
-      },
-      {
-        "id": "5f9e46f7fe36bcdd",
+        "id": "12373f37afa578e7",
         "target_id": "src-handelsblatt-top",
         "target_name": "Handelsblatt (Top-Themen)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Italien: Erneut protestiert die Jugend: „Italien ist ein Land für Alte“",
-        "link": "https://www.handelsblatt.com/politik/international/italien-erneut-protestiert-die-jugend-italien-ist-ein-land-fuer-alte/100265636.html",
-        "published": "Sat, 31 Oct 2026 08:34:30 GMT",
-        "detected_at": "31.10.2026 09:00"
+        "title": "Hackerangriff: FBI: Nordkoreanische Hacker stecken hinter milliardenschwerem Krypto-Diebstahl",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/devisen-rohstoffe/binance-fbi-nordkorea-hinter-milliardenschwerem-krypto-diebstahl/100266403.html",
+        "published": "Sun, 01 Nov 2026 06:33:08 GMT",
+        "detected_at": "01.11.2026 09:47"
       },
       {
-        "id": "a94a5e1e7153cb8f",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Italien: Erneut protestiert die Jugend: „Italien ist ein Land für Alte“",
-        "link": "https://www.handelsblatt.com/politik/international/italien-erneut-protestiert-die-jugend-italien-ist-ein-land-fuer-alte/100265636.html",
-        "published": "Sat, 31 Oct 2026 08:34:30 GMT",
-        "detected_at": "31.10.2026 09:00"
-      },
-      {
-        "id": "7ab493dd888a4eb6",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Jugendprotest: Diffuse Ziele, unklare Organisation, Sorge vor Gewalt – wie läuft die Gen-Z-Demo ab?",
-        "link": "https://www.handelsblatt.com/politik/deutschland/jugendprotest-diffuse-ziele-sorge-vor-gewalt-wie-laeuft-die-gen-z-demo-ab/100265923.html",
-        "published": "Sat, 31 Oct 2026 08:33:46 GMT",
-        "detected_at": "31.10.2026 09:00"
-      },
-      {
-        "id": "c49b839a0433ae39",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Arabische Parteien in Israel stecken in einem Dilemma",
-        "link": "https://www.tagesschau.de/ausland/asien/israel-wahl-arabische-parteien-100.html",
-        "published": "Sat, 31 Oct 2026 09:49:15 +0100",
-        "detected_at": "31.10.2026 09:00"
-      },
-      {
-        "id": "dc6e5cb420711144",
+        "id": "75b5d878fdb6977e",
         "target_id": "src-spektrum",
         "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
         "category": "Politik & Wissenschaft",
-        "title": "detektor.fm: Wie fährt Sachsen-Anhalt in Zukunft? - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMiggFBVV95cUxQNVlGYWtYS2VwM2ZpTmxiT2lDa1U0M2dTUHRaNGdiYnF3V1YyaWFramE4c1NBVDJQT2g0a2pwZGdERFFFbS1pd0tBaXlLejZscndvaEdkRy1lS2tydm5sbUsxV1NOcktzcDdJbE45cDFsSUl3NlI2a1o5UVJlck96SVhB?oc=5",
-        "published": "Sat, 31 Oct 2026 06:21:12 GMT",
-        "detected_at": "31.10.2026 09:00"
+        "title": "Hemmes mathematische Rätsel: Wie lang ist die Strecke x? - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMickFVX3lxTE5ERUpXTXZIYnFHaUlHLUhUUFZuZDIyOWpjNTR1QmZqajlBVng5NmVwbWV2bUdNVHJwMkk1N2F6S2VUOWQwN3VEbHhTMzBFVnZmS0NmMGh1T2IySG1wOVNsc0Z6VVFaYTRmQzNWdEpub2IwQQ?oc=5",
+        "published": "Wed, 28 Oct 2026 07:00:00 GMT",
+        "detected_at": "01.11.2026 09:47"
       },
       {
-        "id": "b2879f318046da26",
+        "id": "aab49e0ed5c58f03",
         "target_id": "src-handelsblatt-top",
         "target_name": "Handelsblatt (Top-Themen)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Jugendproteste: Jugendforscher über Proteste der Gen Z: „Sauer sein allein reicht nicht“",
-        "link": "https://www.handelsblatt.com/politik/deutschland/jugendproteste-wird-die-gen-z-immer-radikaler/100265361.html",
-        "published": "Sat, 31 Oct 2026 08:19:00 GMT",
-        "detected_at": "31.10.2026 08:40"
+        "title": "+++ Iran-Krieg +++: Israelischer Oppositionspolitiker warnt vor neuem Krieg mit Iran unter Netanjahu",
+        "link": "https://www.handelsblatt.com/politik/international/iran-krieg-israelische-opposition-warnt-vor-neuem-krieg-mit-iran/100136895.html",
+        "published": "Sun, 01 Nov 2026 09:13:09 GMT",
+        "detected_at": "01.11.2026 09:17"
       },
       {
-        "id": "2d5564ba37185ba0",
+        "id": "6f4362f3af153101",
         "target_id": "src-handelsblatt-top",
         "target_name": "Handelsblatt (Top-Themen)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Jugendprotest: Diffuse Ziele, unklare Organisation, Sorge vor Gewalt – wie läuft die Gen-Z-Demo ab?",
-        "link": "https://www.handelsblatt.com/politik/deutschland/jugendprotest-diffuse-ziele-sorge-vor-gewalt-wie-laeuft-die-gen-z-demo-ab/100265923.html",
-        "published": "Sat, 31 Oct 2026 08:33:46 GMT",
-        "detected_at": "31.10.2026 08:40"
+        "title": "Midterms: Mehr als 440 Millionen Dollar: So prägte Elon Musk mit Rekordspenden die nächste US-Wahl",
+        "link": "https://www.handelsblatt.com/politik/international/midterms-wie-elon-musk-mit-rekordspenden-die-naechste-us-wahl-praegt/100266417.html",
+        "published": "Sun, 01 Nov 2026 08:57:49 GMT",
+        "detected_at": "01.11.2026 09:17"
       },
       {
-        "id": "6b3aef4275eef912",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "US-Raketenabwehr: Alphabet verhandelt über Einstieg bei Trumps Abwehr Golden Dome",
-        "link": "https://www.handelsblatt.com/technik/it-internet/us-raketenabwehr-alphabet-verhandelt-ueber-einstieg-bei-trumps-abwehr-golden-dome/100266283.html",
-        "published": "Sat, 31 Oct 2026 02:31:22 GMT",
-        "detected_at": "31.10.2026 08:40"
-      },
-      {
-        "id": "6d6e206fe75cff03",
+        "id": "24e978ad0ad0b267",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Jugendproteste: Jugendforscher über Proteste der Gen Z: „Sauer sein allein reicht nicht“",
-        "link": "https://www.handelsblatt.com/politik/deutschland/jugendproteste-wird-die-gen-z-immer-radikaler/100265361.html",
-        "published": "Sat, 31 Oct 2026 08:19:00 GMT",
-        "detected_at": "31.10.2026 08:40"
+        "title": "+++ Iran-Krieg +++: Israelischer Oppositionspolitiker warnt vor neuem Krieg mit Iran unter Netanjahu",
+        "link": "https://www.handelsblatt.com/politik/international/iran-krieg-israelische-opposition-warnt-vor-neuem-krieg-mit-iran/100136895.html",
+        "published": "Sun, 01 Nov 2026 09:13:09 GMT",
+        "detected_at": "01.11.2026 09:17"
       },
       {
-        "id": "d537215142f8dacc",
+        "id": "65d4a7f43f19fb4d",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Midterms: Mehr als 440 Millionen Dollar: So prägte Elon Musk mit Rekordspenden die nächste US-Wahl",
+        "link": "https://www.handelsblatt.com/politik/international/midterms-wie-elon-musk-mit-rekordspenden-die-naechste-us-wahl-praegt/100266417.html",
+        "published": "Sun, 01 Nov 2026 08:57:49 GMT",
+        "detected_at": "01.11.2026 09:17"
+      },
+      {
+        "id": "d47fb8650bb30195",
         "target_id": "src-heise",
         "target_name": "Heise Online (IT-Leitmedium DACH)",
         "category": "Technologie & KI",
-        "title": "30 Jahre „Command & Conquer: Alarmstufe Rot“: Liebesgrüße aus Neu Moskau",
-        "link": "https://www.heise.de/hintergrund/30-Jahre-Command-Conquer-Alarmstufe-Rot-Liebesgruesse-aus-Neu-Moskau-11504542.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-10-31T09:00:00+01:00",
-        "detected_at": "31.10.2026 08:10"
+        "title": "heise-Angebot: iX-Workshop: Aufgaben eines Informationssicherheitsbeauftragten",
+        "link": "https://www.heise.de/news/iX-Workshop-Aufgaben-eines-Informationssicherheitsbeauftragten-11480254.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-01T10:00:00+01:00",
+        "detected_at": "01.11.2026 09:17"
       },
       {
-        "id": "141b6b85cf4331f9",
+        "id": "21e1f66bdf664349",
+        "target_id": "src-spektrum",
+        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "title": "Leibniz' Esel im Welfenschloss: Calculemus oder emovemus? » Medicine & More » SciLogs - Wissenschaftsblogs - SciLogs",
+        "link": "https://news.google.com/rss/articles/CBMiowFBVV95cUxPdFRpSF9BVUIwT0JEeGJLaTFXbHdRWlJBM3psUUtEcDIzWnY5V1U4bi1ldlRyc1QtLWdvdzZubENIdlNlejhfTnY3Z09aaE1abnJPU2lENmhTTVpkZ0FyR1RXeEFtU0JPZlpVdkpoQkE4WjJWZjRKNGdSeC02OWtOM1ZEczBUby1Qc1lMYlFENXVLakN1bUVESnpBaTNGRmFEaDdr?oc=5",
+        "published": "Fri, 30 Oct 2026 22:48:24 GMT",
+        "detected_at": "01.11.2026 09:00"
+      },
+      {
+        "id": "5976a0d4944c2616",
         "target_id": "src-handelsblatt-top",
         "target_name": "Handelsblatt (Top-Themen)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Morning Briefing Plus: Wenn das Private öffentlich werden darf",
-        "link": "https://www.handelsblatt.com/meinung/morningbriefing/morning-briefing-plus-wenn-das-private-oeffentlich-werden-darf/100266157.html",
-        "published": "Sat, 31 Oct 2026 07:46:45 GMT",
-        "detected_at": "31.10.2026 08:00"
+        "title": "Robert Habeck: „China hat den Freihandel zu einer Falle gemacht“",
+        "link": "https://www.handelsblatt.com/politik/deutschland/robert-habeck-china-hat-den-freihandel-zu-einer-falle-gemacht/100265339.html",
+        "published": "Sun, 01 Nov 2026 07:01:35 GMT",
+        "detected_at": "01.11.2026 08:47"
       },
       {
-        "id": "469d48ed71524512",
+        "id": "21ec5a6f5dbad0e9",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Außenpolitik: Trump: Bolsonaro kann in USA bleiben",
+        "link": "https://www.handelsblatt.com/politik/international/brasilien-trump-bolsonaro-kann-in-usa-bleiben/100266404.html",
+        "published": "Sun, 01 Nov 2026 06:53:24 GMT",
+        "detected_at": "01.11.2026 08:47"
+      },
+      {
+        "id": "bd183243c485bb3b",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ Ukraine-Krieg +++: Russische Industrieanlage durch ukrainischen Drohnenangriff beschädigt",
+        "link": "https://www.handelsblatt.com/politik/international/ukraine-russische-industrieanlage-bei-drohnenangriff-beschaedigt/27982126.html",
+        "published": "Sun, 01 Nov 2026 08:41:31 GMT",
+        "detected_at": "01.11.2026 08:47"
+      },
+      {
+        "id": "bd8537eb9f8b798e",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Israel: Protest gegen Netanjahu bringt arabische Israelis an die Wahlurne",
+        "link": "https://www.handelsblatt.com/politik/international/israel-protest-gegen-netanjahu-bringt-arabische-israelis-an-die-wahlurne/100266412.html",
+        "published": "Sun, 01 Nov 2026 08:21:24 GMT",
+        "detected_at": "01.11.2026 08:47",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
+      },
+      {
+        "id": "619b5a842d67ff8c",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Robert Habeck: „China hat den Freihandel zu einer Falle gemacht“",
+        "link": "https://www.handelsblatt.com/politik/deutschland/robert-habeck-china-hat-den-freihandel-zu-einer-falle-gemacht/100265339.html",
+        "published": "Sun, 01 Nov 2026 07:01:35 GMT",
+        "detected_at": "01.11.2026 08:47"
+      },
+      {
+        "id": "bc35364f8c17d28e",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Außenpolitik: Trump: Bolsonaro kann in USA bleiben",
+        "link": "https://www.handelsblatt.com/politik/international/brasilien-trump-bolsonaro-kann-in-usa-bleiben/100266404.html",
+        "published": "Sun, 01 Nov 2026 06:53:24 GMT",
+        "detected_at": "01.11.2026 08:47"
+      },
+      {
+        "id": "0c0830e375e116c3",
         "target_id": "src-tagesschau",
         "target_name": "Tagesschau (Eilmeldungen & Politik)",
         "category": "Politik & Wissenschaft",
-        "title": "KI bei der Geldanlage: Wie sicher sind ChatGPT-Anlagetipps?",
-        "link": "https://www.tagesschau.de/wirtschaft/finanzen/ki-geldanlage-chatgpt-anlagetipps-risiken-100.html",
-        "published": "Sat, 31 Oct 2026 08:45:19 +0100",
-        "detected_at": "31.10.2026 08:00"
+        "title": "Ukraine: Zehn Tage gegen den Krieg im Kopf",
+        "link": "https://www.tagesschau.de/ausland/europa/ukraine-erholung-soldaten-100.html",
+        "published": "Sun, 01 Nov 2026 09:43:57 +0100",
+        "detected_at": "01.11.2026 08:47",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
       },
       {
-        "id": "a1c4e87bce3d47fc",
+        "id": "fe849e799b8eca21",
         "target_id": "src-tagesschau",
         "target_name": "Tagesschau (Eilmeldungen & Politik)",
         "category": "Politik & Wissenschaft",
-        "title": "Die Linke in Berlin: Aus dem Trubel in die Koalition?",
-        "link": "https://www.tagesschau.de/inland/innenpolitik/linke-berlin-parteitag-eralp-100.html",
-        "published": "Sat, 31 Oct 2026 08:43:12 +0100",
-        "detected_at": "31.10.2026 08:00"
+        "title": "Microcars boomen - aber wie sicher sind sie?",
+        "link": "https://www.tagesschau.de/inland/gesellschaft/microcars-sicherheit-100.html",
+        "published": "Sun, 01 Nov 2026 09:41:59 +0100",
+        "detected_at": "01.11.2026 08:47"
+      },
+      {
+        "id": "d33717a1da2c4431",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Innenpolitik: Würde das Leben vieler Menschen verändern: Kramp-Karrenbauer warnt vor Bündnissen mit Linken oder AfD",
+        "link": "https://www.handelsblatt.com/politik/deutschland/innenpolitik-kramp-karrenbauer-warnt-vor-buendnissen-mit-linken-oder-der-afd/100266411.html",
+        "published": "Sun, 01 Nov 2026 08:03:22 GMT",
+        "detected_at": "01.11.2026 08:17"
+      },
+      {
+        "id": "0416ad7d2beb32cb",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Steinmeier zu KI: \"Nicht das Ob steht zur Frage, sondern das Wie\"",
+        "link": "https://www.tagesschau.de/inland/innenpolitik/steinmeier-ki-100.html",
+        "published": "Sun, 01 Nov 2026 09:01:11 +0100",
+        "detected_at": "01.11.2026 08:17"
+      },
+      {
+        "id": "fa4ae0b5b13f85f9",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Wie KI Entwicklung und Alltag verändert - kreativ auf Knopfdruck?",
+        "link": "https://www.tagesschau.de/wirtschaft/technologie/ki-veraenderung-wirtschaft-alltag-100.html",
+        "published": "Sun, 01 Nov 2026 09:00:49 +0100",
+        "detected_at": "01.11.2026 08:17"
+      },
+      {
+        "id": "5f8b216f94bf6f3b",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Industrie: Erste Warnstreiks der Industrie: Das ist neben größeren Demonstrationen geplant",
+        "link": "https://www.handelsblatt.com/politik/deutschland/industrie-erste-warnstreiks-der-industrie-groessere-demonstrationen-geplant/100266409.html",
+        "published": "Sun, 01 Nov 2026 07:48:23 GMT",
+        "detected_at": "01.11.2026 08:00"
+      },
+      {
+        "id": "d60c38a9a40d2c6c",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Bunte \"Tag der Toten\"-Parade zieht durch Mexiko-Stadt",
+        "link": "https://www.tagesschau.de/ausland/mexiko-feierlichkeiten-november-100.html",
+        "published": "Sun, 01 Nov 2026 08:57:56 +0100",
+        "detected_at": "01.11.2026 08:00"
+      },
+      {
+        "id": "d34f55bbb57764d3",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Trump lädt Flávio Bolsonaro zum Bleiben ein",
+        "link": "https://www.tagesschau.de/ausland/amerika/trump-bolsonaro-usa-100.html",
+        "published": "Sun, 01 Nov 2026 08:45:02 +0100",
+        "detected_at": "01.11.2026 08:00"
       }
     ]
   }

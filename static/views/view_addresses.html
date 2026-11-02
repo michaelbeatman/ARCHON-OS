@@ -360,32 +360,93 @@
           </div>
         </div>
 
-        <!-- Center: Icon-Tabs for Adresse Teilansichten (VARIO 8 Standard) -->
-        <div class="flex items-center gap-1.5 overflow-x-auto py-1 shrink-0">
-          <button type="button" onclick="crmStudio.switchDrawerTab('uebersicht')" id="cd-tabbtn-uebersicht" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs cursor-pointer">
-            <span>👤</span>
-            <span>Übersicht</span>
+        <!-- Center: Cadre Icon-Tabs for Adresse Teilansichten (Identisch zu Hauptansichten) -->
+        <div class="flex items-center gap-1 sm:gap-2 overflow-x-auto overflow-y-hidden py-0.5 shrink-0 custom-scrollbar h-full">
+          
+          <!-- TAB 1: ÜBERSICHT -->
+          <button
+            type="button"
+            id="cd-tabbtn-uebersicht"
+            onclick="crmStudio.switchDrawerTab('uebersicht')"
+            class="cd-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Übersicht"
+          >
+            <div class="tile-icon-wrap active-tile w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_uebersicht.png" alt="Übersicht" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Übersicht</span>
           </button>
-          <button type="button" onclick="crmStudio.switchDrawerTab('nachrichten')" id="cd-tabbtn-nachrichten" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
-            <span>💬</span>
-            <span>Nachrichten</span>
+
+          <!-- TAB 2: NACHRICHTEN -->
+          <button
+            type="button"
+            id="cd-tabbtn-nachrichten"
+            onclick="crmStudio.switchDrawerTab('nachrichten')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Nachrichten"
+          >
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_nachrichten.png" alt="Nachrichten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Nachrichten</span>
           </button>
-          <button type="button" onclick="crmStudio.switchDrawerTab('kaufmaennisch')" id="cd-tabbtn-kaufmaennisch" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
-            <span>💳</span>
-            <span>Kaufmännisch</span>
+
+          <!-- TAB 3: KAUFMÄNNISCH -->
+          <button
+            type="button"
+            id="cd-tabbtn-kaufmaennisch"
+            onclick="crmStudio.switchDrawerTab('kaufmaennisch')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Kaufmännisch"
+          >
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_kaufmaennisch.png" alt="Kaufmännisch" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Kaufmännisch</span>
           </button>
-          <button type="button" onclick="crmStudio.switchDrawerTab('vorgaenge')" id="cd-tabbtn-vorgaenge" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
-            <span>📄</span>
-            <span>Belege &amp; Vorgänge</span>
+
+          <!-- TAB 4: BELEGE & VORGÄNGE -->
+          <button
+            type="button"
+            id="cd-tabbtn-vorgaenge"
+            onclick="crmStudio.switchDrawerTab('vorgaenge')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Belege &amp; Vorgänge"
+          >
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_vorgaenge.png" alt="Belege &amp; Vorgänge" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Belege &amp; Vorgänge</span>
           </button>
-          <button type="button" onclick="crmStudio.switchDrawerTab('ansprechpartner')" id="cd-tabbtn-ansprechpartner" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
-            <span>👥</span>
-            <span>Ansprechpartner</span>
+
+          <!-- TAB 5: ANSPRECHPARTNER -->
+          <button
+            type="button"
+            id="cd-tabbtn-ansprechpartner"
+            onclick="crmStudio.switchDrawerTab('ansprechpartner')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Ansprechpartner"
+          >
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_ansprechpartner.png" alt="Ansprechpartner" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Ansprechpartner</span>
           </button>
-          <button type="button" onclick="crmStudio.switchDrawerTab('dsgvo')" id="cd-tabbtn-dsgvo" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
-            <span>🛡️</span>
-            <span>DSGVO</span>
+
+          <!-- TAB 6: DSGVO -->
+          <button
+            type="button"
+            id="cd-tabbtn-dsgvo"
+            onclick="crmStudio.switchDrawerTab('dsgvo')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="DSGVO"
+          >
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_dsgvo.png" alt="DSGVO" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">DSGVO</span>
           </button>
+
         </div>
 
         <!-- Right: Prominent Close Button -->

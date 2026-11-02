@@ -828,6 +828,14 @@ window.crmStudio = (function() {
 
     drawer.classList.remove('hidden');
 
+    if (initialTab === 'messages' || initialTab === 'nachrichten') {
+      activeDrawerTab = 'nachrichten';
+    } else if (initialTab && initialTab !== 'form') {
+      activeDrawerTab = initialTab;
+    } else {
+      activeDrawerTab = 'uebersicht';
+    }
+
     // Reset drawer state
     setDrawerLoading(true);
 
@@ -851,13 +859,31 @@ window.crmStudio = (function() {
 
   function switchDrawerTab(tabId) {
     activeDrawerTab = tabId || 'uebersicht';
-    const tabBtns = document.querySelectorAll('.cd-tab-btn');
-    tabBtns.forEach(btn => {
-      btn.className = 'cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer';
+
+    // Update active state on top cadre icon buttons (Identisch zu den Hauptansichten)
+    document.querySelectorAll('.cd-header-tile').forEach(btn => {
+      btn.classList.remove('active-cadre-tab');
+      btn.style.opacity = '0.75';
+      const wrap = btn.querySelector('.tile-icon-wrap');
+      if (wrap) wrap.classList.remove('active-tile');
+      const label = btn.querySelector('.cd-tab-label');
+      if (label) {
+        label.classList.remove('text-red-600', 'font-bold');
+        label.classList.add('text-[var(--muted-foreground)]', 'font-medium');
+      }
     });
+
     const activeBtn = document.getElementById(`cd-tabbtn-${activeDrawerTab}`);
     if (activeBtn) {
-      activeBtn.className = 'cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs cursor-pointer';
+      activeBtn.classList.add('active-cadre-tab');
+      activeBtn.style.opacity = '1.0';
+      const wrap = activeBtn.querySelector('.tile-icon-wrap');
+      if (wrap) wrap.classList.add('active-tile');
+      const label = activeBtn.querySelector('.cd-tab-label');
+      if (label) {
+        label.classList.remove('text-[var(--muted-foreground)]', 'font-medium');
+        label.classList.add('text-red-600', 'font-bold');
+      }
     }
 
     const subviews = document.querySelectorAll('.cd-subview');

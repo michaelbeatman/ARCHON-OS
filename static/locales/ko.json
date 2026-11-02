@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "operations": "운영 (Operations)",
+    "inbox": "받은편지함 및 트리아지",
+    "org": "조직도",
+    "cadre": "에이전트 편제",
+    "crm": "연락처 및 CRM",
+    "items": "품목 및 서비스",
+    "operations_erp": "업무 및 계약",
+    "finance": "재무 및 영수증",
+    "showroom": "쇼룸",
+    "boardroom": "AI 마스터마인드",
+    "watchdog": "인터넷 감시 레이더",
+    "library": "중앙 지식도서관",
+    "brain": "지식 그래프",
+    "plugins": "플러그인",
+    "guardian": "토큰 가드",
+    "chat": "마스터 채팅",
+    "settings": "설정",
+    "logs": "실시간 로그 스트림",
+    "design_lab": "디자인 시스템 랩",
+    "css_studio": "CSS 라이브 스튜디오"
+  },
+  "common": {
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "edit": "편집",
+    "new_task": "새 작업",
+    "search": "검색...",
+    "filter": "필터",
+    "close": "닫기",
+    "bake_permanent": "영구 적용",
+    "loading": "로딩 중...",
+    "success": "성공",
+    "actions": "작업",
+    "refresh": "새로고침"
+  },
+  "status": {
+    "online": "온라인",
+    "busy": "작업 중",
+    "ready": "대기",
+    "in_progress": "진행 중",
+    "review": "검토 중",
+    "done": "완료",
+    "local_dsgvo": "로컬 / GDPR",
+    "cloud": "클라우드"
+  },
+  "header": {
+    "operations": "운영 (Operations)",
+    "active_tasks": "활성 작업",
+    "fleet_load": "플릿 부하",
+    "telemetry": "원격 측정"
+  },
+  "drawer": {
+    "overview": "개요",
+    "messages": "메시지",
+    "commercial": "상업/재무",
+    "receipts_ops": "전표 및 업무",
+    "contacts": "담당자",
+    "gdpr": "GDPR"
+  },
+  "settings": {
+    "title": "시스템 설정",
+    "language": "시스템 언어",
+    "language_desc": "UI 및 에이전트 소통을 위한 기본 언어를 선택하세요.",
+    "save_btn": "설정 저장"
+  }
+}

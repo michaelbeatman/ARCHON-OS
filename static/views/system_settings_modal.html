@@ -659,10 +659,17 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
               <div>
-                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1">Systemsprache</label>
-                <select id="hermes-cfg-language" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono">
-                  <option value="de">Deutsch (de)</option>
-                  <option value="en">English (en)</option>
+                <label class="block text-[10px] font-mono uppercase font-bold text-[var(--muted-foreground)] mb-1" data-i18n="settings.language">Systemsprache</label>
+                <select id="hermes-cfg-language" onchange="window.archonI18n && window.archonI18n.setLanguage(this.value)" class="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-medium shadow-xs">
+                  <option value="de">🇩🇪 Deutsch (de)</option>
+                  <option value="en">🇺🇸 English (en)</option>
+                  <option value="es">🇪🇸 Español (es)</option>
+                  <option value="fr">🇫🇷 Français (fr)</option>
+                  <option value="pt">🇵🇹 Português (pt)</option>
+                  <option value="ru">🇷🇺 Русский (ru)</option>
+                  <option value="ja">🇯🇵 日本語 (ja)</option>
+                  <option value="ko">🇰🇷 한국어 (ko)</option>
+                  <option value="zh">🇨🇳 简体中文 (zh)</option>
                 </select>
               </div>
               <div>

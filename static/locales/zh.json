@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "operations": "运营管理",
+    "inbox": "收件箱与分流",
+    "org": "组织架构",
+    "cadre": "智能体花名册",
+    "crm": "联系人与CRM",
+    "items": "商品与服务",
+    "operations_erp": "业务与合同",
+    "finance": "财务与单据",
+    "showroom": "展厅中心",
+    "boardroom": "AI决策智囊团",
+    "watchdog": "互联网监视雷达",
+    "library": "中央知识库",
+    "brain": "知识图谱",
+    "plugins": "插件系统",
+    "guardian": "Token守卫",
+    "chat": "主控对话",
+    "settings": "系统设置",
+    "logs": "实时日志流",
+    "design_lab": "设计系统实验室",
+    "css_studio": "CSS实时工作室"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "new_task": "新建任务",
+    "search": "搜索...",
+    "filter": "筛选",
+    "close": "关闭",
+    "bake_permanent": "永久固化",
+    "loading": "加载中...",
+    "success": "成功",
+    "actions": "操作",
+    "refresh": "刷新"
+  },
+  "status": {
+    "online": "在线",
+    "busy": "忙碌",
+    "ready": "就绪",
+    "in_progress": "进行中",
+    "review": "待审核",
+    "done": "已完成",
+    "local_dsgvo": "本地 / GDPR合规",
+    "cloud": "云端"
+  },
+  "header": {
+    "operations": "运营管理",
+    "active_tasks": "进行中任务",
+    "fleet_load": "集群负载",
+    "telemetry": "遥测监控"
+  },
+  "drawer": {
+    "overview": "概览",
+    "messages": "消息",
+    "commercial": "商务财务",
+    "receipts_ops": "单据与业务",
+    "contacts": "联系人",
+    "gdpr": "数据保护(GDPR)"
+  },
+  "settings": {
+    "title": "系统设置",
+    "language": "系统语言",
+    "language_desc": "选择用户界面与智能体对话的系统主语言。",
+    "save_btn": "保存设置"
+  }
+}

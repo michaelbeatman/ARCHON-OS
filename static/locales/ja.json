@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "operations": "オペレーション",
+    "inbox": "受信トレイとトリアージ",
+    "org": "組織図",
+    "cadre": "エージェント幹部",
+    "crm": "連絡先とCRM",
+    "items": "品目とサービス",
+    "operations_erp": "取引と契約",
+    "finance": "財務と領収書",
+    "showroom": "ショールーム",
+    "boardroom": "AIマスターマインド",
+    "watchdog": "インターネット・ウォッチドッグ",
+    "library": "中央図書館",
+    "brain": "ナレッジグラフ",
+    "plugins": "プラグイン",
+    "guardian": "トークンガード",
+    "chat": "マスターチャット",
+    "settings": "設定",
+    "logs": "ライブログストリーム",
+    "design_lab": "デザインシステム・ラボ",
+    "css_studio": "CSSライブスタジオ"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "new_task": "新しいタスク",
+    "search": "検索...",
+    "filter": "フィルター",
+    "close": "閉じる",
+    "bake_permanent": "恒久的に適用",
+    "loading": "読み込み中...",
+    "success": "成功",
+    "actions": "操作",
+    "refresh": "更新"
+  },
+  "status": {
+    "online": "オンライン",
+    "busy": "ビジー",
+    "ready": "待機中",
+    "in_progress": "進行中",
+    "review": "レビュー中",
+    "done": "完了",
+    "local_dsgvo": "ローカル / GDPR",
+    "cloud": "クラウド"
+  },
+  "header": {
+    "operations": "オペレーション",
+    "active_tasks": "進行中タスク",
+    "fleet_load": "フリート負荷",
+    "telemetry": "テレメトリ"
+  },
+  "drawer": {
+    "overview": "概要",
+    "messages": "メッセージ",
+    "commercial": "商業・取引",
+    "receipts_ops": "領収書と取引",
+    "contacts": "担当者",
+    "gdpr": "GDPR"
+  },
+  "settings": {
+    "title": "システム設定",
+    "language": "システム言語",
+    "language_desc": "UIおよびエージェント通信の主言語を選択してください。",
+    "save_btn": "設定を保存"
+  }
+}

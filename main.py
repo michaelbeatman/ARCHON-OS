@@ -8104,7 +8104,7 @@ def api_save_hermes_raw_config(payload: dict = Body(...)):
 
 HELP_CONTEXT_DATA = {
     "operations": {
-        "title": "Operations & Mission Control",
+        "title": "Operations",
         "subtitle": "Echtzeit-Leitstand und Flotten-Überwachung",
         "purpose": "Hier steuerst du den operativen Betrieb aller 56 Spezial-Agenten. Du siehst aktuelle System-KPIs, laufende Hintergrundprozesse, aktive Container und den Ticker.",
         "top_actions": [
@@ -8181,7 +8181,7 @@ HELP_CONTEXT_DATA = {
         "starter_prompt": "Wie synchronisiere ich neue Dokumente in den RAG-Index, damit die Agenten das Wissen sofort abrufen können?"
     },
     "mission_control": {
-        "title": "Mission Control (Cockpit)",
+        "title": "Operations",
         "subtitle": "Echtzeit-Monitoring, System-KPIs & HITL-Freigaben",
         "purpose": "Mission Control dient als übersichtlicher Leitstand zur Überwachung des Gesamtsystems. Hier werden KPIs (Flottenlast, TPM, Latenz) angezeigt und die Aufgaben aus dem Operations-Kanban in 5 Spalten gespiegelt. Operative Änderungen und neue Aufgaben werden direkt im Operations-Kanban oder im Agenten-Kader verwaltet.",
         "top_actions": [
@@ -8412,6 +8412,29 @@ HELP_CONTEXT_DATA = {
         "starter_prompt": "Wie filtere ich im Log-Stream nach Fehlern eines bestimmten Agenten?"
     }
 }
+
+@app.get("/api/system/language")
+def get_system_language():
+    s = _load_json(SETTINGS_FILE, {})
+    lang = s.get("system_language") or s.get("language") or "de"
+    return {
+        "status": "success",
+        "language": lang,
+        "supported": ["de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"]
+    }
+
+@app.post("/api/system/language")
+def set_system_language(payload: dict = Body(...)):
+    lang = (payload.get("language") or "de").strip().lower()
+    supported = ["de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"]
+    if lang not in supported:
+        raise HTTPException(status_code=400, detail=f"Nicht unterstützte Sprache: {lang}")
+    s = _load_json(SETTINGS_FILE, {})
+    s["system_language"] = lang
+    s["language"] = lang
+    s["default_language"] = lang
+    _save_json(SETTINGS_FILE, s)
+    return {"status": "success", "language": lang}
 
 @app.get("/api/help/context/{view_id}")
 def api_get_help_context(view_id: str):

@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "operations": "Operations",
+    "inbox": "Inbox & Triage",
+    "org": "Organization Chart",
+    "cadre": "Agent Cadre",
+    "crm": "Contacts & CRM",
+    "items": "Items & Services",
+    "operations_erp": "Operations & Contracts",
+    "finance": "Finance & Receipts",
+    "showroom": "Showroom",
+    "boardroom": "AI Mastermind",
+    "watchdog": "Internet Watchdog",
+    "library": "Central Library",
+    "brain": "Knowledge Graph",
+    "plugins": "Plugins",
+    "guardian": "Token Guard",
+    "chat": "Master Chat",
+    "settings": "Settings",
+    "logs": "Live Log Stream",
+    "design_lab": "Design System Lab",
+    "css_studio": "CSS Live Studio"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "new_task": "New Task",
+    "search": "Search...",
+    "filter": "Filter",
+    "close": "Close",
+    "bake_permanent": "Bake Permanently",
+    "loading": "Loading...",
+    "success": "Success",
+    "actions": "Actions",
+    "refresh": "Refresh"
+  },
+  "status": {
+    "online": "Online",
+    "busy": "Busy",
+    "ready": "Ready",
+    "in_progress": "In Progress",
+    "review": "Review",
+    "done": "Done",
+    "local_dsgvo": "LOCAL / GDPR",
+    "cloud": "Cloud"
+  },
+  "header": {
+    "operations": "Operations",
+    "active_tasks": "Active Tasks",
+    "fleet_load": "Fleet Load",
+    "telemetry": "Telemetry"
+  },
+  "drawer": {
+    "overview": "Overview",
+    "messages": "Messages",
+    "commercial": "Commercial",
+    "receipts_ops": "Receipts & Operations",
+    "contacts": "Contact Persons",
+    "gdpr": "GDPR"
+  },
+  "settings": {
+    "title": "System Settings",
+    "language": "System Language",
+    "language_desc": "Choose primary language for UI and agent communication.",
+    "save_btn": "Save Settings"
+  }
+}

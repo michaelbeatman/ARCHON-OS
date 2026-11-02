@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "operations": "Operations",
+    "inbox": "Posteingang & Triage",
+    "org": "Organigramm",
+    "cadre": "Agentenkader",
+    "crm": "Kontakte & CRM",
+    "items": "Artikel & Leistungen",
+    "operations_erp": "Vorgänge & Verträge",
+    "finance": "Finanzen & Belege",
+    "showroom": "Showroom",
+    "boardroom": "AI Mastermind",
+    "watchdog": "Internet-Watchdog",
+    "library": "Zentralbibliothek",
+    "brain": "Wissensgraph",
+    "plugins": "Plugins",
+    "guardian": "Token Guard",
+    "chat": "Master Chat",
+    "settings": "Einstellungen",
+    "logs": "Live Log-Stream",
+    "design_lab": "Design System Lab",
+    "css_studio": "CSS Live Studio"
+  },
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "new_task": "Neuer Task",
+    "search": "Suchen...",
+    "filter": "Filter",
+    "close": "Schließen",
+    "bake_permanent": "Permanent einbrennen",
+    "loading": "Lädt...",
+    "success": "Erfolgreich",
+    "actions": "Aktionen",
+    "refresh": "Aktualisieren"
+  },
+  "status": {
+    "online": "Online",
+    "busy": "Beschäftigt",
+    "ready": "Bereit",
+    "in_progress": "In Bearbeitung",
+    "review": "Prüfung / Review",
+    "done": "Erledigt",
+    "local_dsgvo": "LOKAL / DSGVO",
+    "cloud": "Cloud"
+  },
+  "header": {
+    "operations": "Operations",
+    "active_tasks": "Aktive Tasks",
+    "fleet_load": "Flottenlast",
+    "telemetry": "Telemetrie"
+  },
+  "drawer": {
+    "overview": "Übersicht",
+    "messages": "Nachrichten",
+    "commercial": "Kaufmännisch",
+    "receipts_ops": "Belege & Vorgänge",
+    "contacts": "Ansprechpartner",
+    "gdpr": "DSGVO"
+  },
+  "settings": {
+    "title": "Systemeinstellungen",
+    "language": "Systemsprache",
+    "language_desc": "Wähle die primäre Sprache für UI und Agenten-Kommunikation.",
+    "save_btn": "Einstellungen speichern"
+  }
+}

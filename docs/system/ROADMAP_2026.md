@@ -5,7 +5,7 @@
 | **0** | **AI Boardroom finalisieren** | Hoch | Abgeschlossen | Polishing UI, Reset-Logik, PDF-Parsing via pypdf, Client-Disconnect-Handling, strukturierter Markdown-Export |
 | **1** | **Updatesystem erarbeiten** | Hoch | Abgeschlossen | Versionierung, Git-Sync, automatisierte Pre-Update-Snapshots (SQLite & Configs), In-App 1-Klick Update & Rollback-Fähigkeit |
 | **2** | **Steuerapp für Android** | Mittel | Geplant | PWA vs. Native Kotlin/Flutter-Client, Endpunkt-Sicherheit, Push-Benachrichtigungen, Dynamic DNS/Tailscale-Tunneling |
-| **3** | **Multilingualität (i18n)** | Mittel | Geplant | Mehrsprachigkeit für UI-Strings, lokalisierte System-Prompts, Sprachumschaltung de/en |
+| **3** | **Multilingualität (i18n)** | Mittel | Abgeschlossen | 9 Weltsprachen (de, en, es, fr, pt, ru, ja, ko, zh), Locale-JSONs, dynamische DOM-Engine & Settings-Selector |
 | **4** | **Multi-User & Kollaboration** | Mittel | Geplant | RBAC-Rollenmodell, Benutzer-Authentifizierung (JWT/OAuth), Sitzungs- und Workspace-Isolation |
 | **5** | **Funktionserweiterung / Pluginsystem** | Mittel | Abgeschlossen | Standardisierte Plugin-Schnittstelle (`backend/plugin_manager.py`), Manifeste (`plugin.json`), Lifecycle-Hooks, Registry-Integration & 3 Starter-Plugins |
 | **6** | **Designkonzept-Überarbeitung** | Hoch | Geplant | Ergonomisches Designsystem, konsistente Typografie, modernisiertes UI-Layout, Dark/Light-Mode-Verfeinerung |

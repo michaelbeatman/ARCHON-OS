@@ -22,6 +22,10 @@ DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 class NotificationHub:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
+        except Exception:
+            pass
         self._init_db()
 
     def _get_conn(self):

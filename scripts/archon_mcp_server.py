@@ -29,7 +29,12 @@ def _resolve_kanban_db() -> str:
     for c in candidates:
         if os.path.exists(c):
             return c
-    return candidates[0]
+    fallback = os.path.join(WORKSPACE_DIR, "data", "kanban.db")
+    try:
+        os.makedirs(os.path.dirname(fallback), exist_ok=True)
+    except Exception:
+        pass
+    return fallback
 
 
 def _resolve_inbox_dir() -> str:
@@ -41,7 +46,12 @@ def _resolve_inbox_dir() -> str:
     for c in candidates:
         if os.path.exists(c):
             return c
-    return candidates[0]
+    fallback = os.path.join(WORKSPACE_DIR, "data", "inbox")
+    try:
+        os.makedirs(fallback, exist_ok=True)
+    except Exception:
+        pass
+    return fallback
 
 
 class ArchonMcpServer:

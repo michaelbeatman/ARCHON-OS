@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +390,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,12 +410,72 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-02T08:08:33.369386",
+        "last_check": "2026-11-02T08:38:39.861788",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-02T08:08:33.369386",
+    "last_run": "2026-11-02T08:38:39.861788",
     "recent_findings": [
+      {
+        "id": "5fcce65de36de932",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Dax aktuell: Dax öffnet unverändert – Nervosität vor den US-Midterms",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/dax-aktuell-dax-oeffnet-unveraendert-nervositaet-vor-den-us-midterms/100266531.html",
+        "published": "Mon, 02 Nov 2026 08:12:10 GMT",
+        "detected_at": "02.11.2026 08:38"
+      },
+      {
+        "id": "32b3dfe4e9d996b3",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Nikkei, Yen, Hang Seng: Hoffnung auf Konjunkturmaßnahmen stützt Chinas Börsen",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/nikkei-yen-hang-seng-hoffnung-auf-konjunkturmassnahmen-stuetzt-chinas-boersen/100266505.html",
+        "published": "Mon, 02 Nov 2026 08:29:25 GMT",
+        "detected_at": "02.11.2026 08:38"
+      },
+      {
+        "id": "784bdd16ad4a0657",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Angespannte Stimmung in Frankfurt: DAX startet mit Verlusten - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMirwFBVV95cUxORkUtd0xMUms5R1d5MWUxWXVzWTduUGllYUlvZlZNeHJEVmdrY0hZS3J1QUJqZDh2cDAzZmpxN1RXSUpzZVNvTzZmZlpDWVhPb3NwdlVESklxb2JubXJwdGFTR2JLNnFCR1hBMnc2UEd5Zi1jZFF2S2JiSVpOdEYtWWFsZVhUZkdBb09iSzBVUmVGUk5VZ2xOVExfYnFxV2VoeTl3dDRVNVRsajhKNEln?oc=5",
+        "published": "Mon, 02 Nov 2026 08:28:56 GMT",
+        "detected_at": "02.11.2026 08:38"
+      },
+      {
+        "id": "919e93c67cd0d8b8",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Schwache Performance in Frankfurt: LUS-DAX beginnt die Sitzung mit Verlusten - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMixAFBVV95cUxNVVNZcFAzSFBjZ3Z6eGRkZHFKUzBsV1hrcU1ZYWxGWURXVjJmdzBCN2lHTmxzcndRY0hWU1J2SGlONmUwbTRiX0NBMk0yN1ZxbUo3bTB3UzNHU1hyVURMM0JseWRYNmxhME5oU1hCRF91eS1sanAwY3JkcUpzNDVIcE92RkwxdGEzVGZVQldPVlJIRl9iQk5rNWl3cVkzcmtSSEl6U1FLMDcxaGVHLTgtaDNoZ2ljY3lLbGVVRlA5NjdUM2tr?oc=5",
+        "published": "Mon, 02 Nov 2026 08:27:42 GMT",
+        "detected_at": "02.11.2026 08:38"
+      },
+      {
+        "id": "f90d2b7ef5a582e4",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Neun Tote bei Flugzeugabsturz in Florida",
+        "link": "https://www.tagesschau.de/ausland/amerika/flugzeugabsturz-usa-florida-100.html",
+        "published": "Mon, 02 Nov 2026 09:13:47 +0100",
+        "detected_at": "02.11.2026 08:38"
+      },
+      {
+        "id": "bcfe763a5526a3bd",
+        "target_id": "src-spektrum",
+        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "title": "Schlafstörungen: Durchwachte Nächte hinterlassen Spuren im Speichel - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMipwFBVV95cUxQdno4cTlkVjdBY2NwSHlYTDItX2xuRnBEZWxDSk9ldW1LUk9SS090NXhRM2RKVDZXdzVtM3BFU21FekdNVWV5emU2NS1YWmZOX2Fjb19LX21yRVpXdDBjSktPRksxNTZuUjNsY3JhajhxTW92R1VuRnFJaFJhc0FzbnRwZi1TQ3Jta3h0RlhEbWFySlNqZlh4aTVNVGVlb2pncndkYnlCWQ?oc=5",
+        "published": "Mon, 02 Nov 2026 08:00:00 GMT",
+        "detected_at": "02.11.2026 08:38"
+      },
       {
         "id": "bdd8b131cb13f3b8",
         "target_id": "src-handelsblatt-politik",
@@ -658,66 +718,6 @@
         "title": "Morning Briefing: Hilft Unternehmen nur die Rückkehr der Deutschland AG?",
         "link": "https://www.handelsblatt.com/meinung/morningbriefing/morning-briefing-hilft-unternehmen-nur-die-rueckkehr-der-deutschland-ag/100266479.html",
         "published": "Mon, 02 Nov 2026 04:50:17 GMT",
-        "detected_at": "02.11.2026 06:38"
-      },
-      {
-        "id": "efd49b51b267eb06",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Energiepolitik: USA drängen auf russische Gaslieferungen durch die Ukraine nach Europa",
-        "link": "https://www.handelsblatt.com/politik/international/energiepolitik-usa-draengen-auf-russische-gaslieferungen-nach-europa/100266530.html",
-        "published": "Mon, 02 Nov 2026 05:47:06 GMT",
-        "detected_at": "02.11.2026 06:38"
-      },
-      {
-        "id": "282bc1abbcae9e6c",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Börse am 2. November: Sechs Punkte, die für Anleger heute wichtig sind",
-        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/dax-und-boerse-aktuell-sechs-punkte-die-fuer-anleger-heute-wichtig-sind/100002161.html",
-        "published": "Mon, 02 Nov 2026 05:14:00 GMT",
-        "detected_at": "02.11.2026 06:38"
-      },
-      {
-        "id": "1ee3e12b517e1784",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Nikkei, Yen, Hang Seng: Asiens Börsen stabilisieren sich – Ölpreise geben nach",
-        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/nikkei-yen-hang-seng-asiens-boersen-stabilisieren-sich-oelpreise-geben-nach/100266505.html",
-        "published": "Mon, 02 Nov 2026 04:30:57 GMT",
-        "detected_at": "02.11.2026 06:38"
-      },
-      {
-        "id": "6a1184ecf28fbbff",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Militär: Deutschland und Großbritannien sollen bei militärischer KI kooperieren",
-        "link": "https://www.handelsblatt.com/politik/international/militaer-deutschland-und-grossbritannien-sollen-bei-militaerischer-ki-kooperieren/100266534.html",
-        "published": "Mon, 02 Nov 2026 06:00:31 GMT",
-        "detected_at": "02.11.2026 06:38"
-      },
-      {
-        "id": "aa32bd7b07927ed1",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Energiepolitik: USA drängen auf russische Gaslieferungen durch die Ukraine nach Europa",
-        "link": "https://www.handelsblatt.com/politik/international/energiepolitik-usa-draengen-auf-russische-gaslieferungen-nach-europa/100266530.html",
-        "published": "Mon, 02 Nov 2026 05:47:06 GMT",
-        "detected_at": "02.11.2026 06:38"
-      },
-      {
-        "id": "13e4b1a230ce413e",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Wahl: Sozialistische Amtsinhaberin siegt bei Stichwahl in Bulgarien",
-        "link": "https://www.handelsblatt.com/politik/international/bulgarien-sozialistische-amtsinhaberin-siegt-bei-stichwahl/100266529.html",
-        "published": "Mon, 02 Nov 2026 05:12:52 GMT",
         "detected_at": "02.11.2026 06:38"
       }
     ]

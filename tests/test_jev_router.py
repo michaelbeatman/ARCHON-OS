@@ -79,6 +79,20 @@ class TestJevRouterUnit(unittest.TestCase):
 class TestJevAPIIntegration(unittest.TestCase):
     BASE_URL = "http://localhost:8501"
 
+    @classmethod
+    def setUpClass(cls):
+        cls.server_available = False
+        try:
+            req = urllib.request.Request(f"{cls.BASE_URL}/api/health")
+            with urllib.request.urlopen(req, timeout=1):
+                cls.server_available = True
+        except Exception:
+            cls.server_available = False
+
+    def setUp(self):
+        if not getattr(self, "server_available", False):
+            self.skipTest("Archon OS Live-Server (localhost:8501) nicht aktiv - ueberspringe HTTP-Integrationstest.")
+
     def test_settings_get_and_post_jev(self):
         # 1. Fetch current settings
         req = urllib.request.Request(f"{self.BASE_URL}/api/settings")

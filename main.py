@@ -8300,12 +8300,123 @@ HELP_CONTEXT_DATA = {
             "Passe den System-Prompt an, um das Verhalten der Rolle zu verfeinern."
         ],
         "starter_prompt": "Welches Sprachmodell eignet sich am besten für anspruchsvolle Programmier- oder Analyseaufgaben?"
+    },
+    "finance": {
+        "title": "Finanzen & Belegwesen",
+        "subtitle": "Kaufmännische Vorgänge, Rechnungen & Buchhaltung",
+        "purpose": "Zentrale Erfassung und Auswertung aller kaufmännischen Belege, Rechnungsstellungen, Zahlungsflüsse und Buchungsdaten.",
+        "top_actions": [
+            "Erfasse oder importiere kaufmännische Belege und Eingangsrechnungen.",
+            "Überprüfe Zahlungsstatus und offene Posten im Rechnungsjournal.",
+            "Lass Rechnungen automatisiert durch den Buchhaltungs-Agenten vorkontieren."
+        ],
+        "starter_prompt": "Wie erstelle ich einen neuen Beleg oder lasse eine Eingangsrechnung durch den Finance-Agenten prüfen?"
+    },
+    "approvals": {
+        "title": "Freigabe-Richtlinien & HITL",
+        "subtitle": "Compliance-Regeln & Governance-Schwellenwerte",
+        "purpose": "Definition von Governance-Regeln, Finanz-Schwellenwerten und Sicherheitsleitplanken, ab wann ein Agent menschliche Freigabe (HITL) einholen muss.",
+        "top_actions": [
+            "Passe Euro-Schwellenwerte für automatische Budgetfreigaben an.",
+            "Definiere Rollenberechtigungen für kritische Systemeingriffe.",
+            "Überprüfe das Audit-Log aller bisher erteilten Freigaben."
+        ],
+        "starter_prompt": "Wie konfiguriere ich eine neue Freigaberegel für Zahlungen über 500 Euro?"
+    },
+    "items": {
+        "title": "Artikel & Leistungen",
+        "subtitle": "ERP-Gesamtkatalog für Produkte, Dienstleistungen & Konditionen",
+        "purpose": "Verwaltung des gesamten Artikelstamms, Dienstleistungs-Katalogs, Preise, Steuersätze und SKU-Einheiten für automatisierte Angebotserstellung.",
+        "top_actions": [
+            "Lege neue Artikel, Stundensätze oder Service-Pakete an.",
+            "Pflege Einkaufs- und Verkaufspreise inklusive Rabattstaffeln.",
+            "Synchronisiere Artikeldaten mit externen Warenwirtschaftssystemen."
+        ],
+        "starter_prompt": "Wie lege ich eine neue Dienstleistungsposition für automatische Angebote an?"
+    },
+    "operations_erp": {
+        "title": "Vorgänge & Verträge",
+        "subtitle": "ERP-Auftragsabwicklung, Angebote & Projektverträge",
+        "purpose": "End-to-End-Abwicklung kaufmännischer Geschäftsvorgänge von der Anfrage über das Angebot bis zum rechtsgültigen Auftrag und Leistungsnachweis.",
+        "top_actions": [
+            "Erstelle aus einer CRM-Anfrage ein vollständiges Angebot.",
+            "Wandle freigegebene Angebote per Klick in Verträge und Aufträge um.",
+            "Verfolge den Bearbeitungs- und Lieferstatus laufender Kundenprojekte."
+        ],
+        "starter_prompt": "Wie erstelle ich aus einem Kontakt einen neuen Geschäftsvorgang mit Angebot?"
+    },
+    "corporate": {
+        "title": "Corporate & Mandanten",
+        "subtitle": "Multi-Company Struktur, Unternehmensstamm & Beteiligungen",
+        "purpose": "Verwaltung rechtlicher Entitäten, Firmenstammdaten, Steuernummern, Bankverbindungen und Mandantentrennung im Agentic OS.",
+        "top_actions": [
+            "Wechsle zwischen aktiven Mandanten und Tochtergesellschaften.",
+            "Pflege Unternehmensstammdaten, Briefköpfe und IBANs je Mandant.",
+            "Weise Agenten und Budgets spezifischen Firmenentitäten zu."
+        ],
+        "starter_prompt": "Wie richte ich einen neuen Mandanten ein und hinterlege dessen Stammdaten?"
+    },
+    "boardroom": {
+        "title": "AI Mastermind · Boardroom",
+        "subtitle": "Strategische Multi-Agenten-Debatten & Entscheidungsfindung",
+        "purpose": "Führt strukturierte C-Level-Debatten mit gegnerischen Perspektiven (Red Team / Blue Team) durch und destilliert revisionssichere Entscheidungs-Memos.",
+        "top_actions": [
+            "Starte eine neue Fragestellung mit Rollenverteilung (z. B. CEO vs. CFO vs. Legal).",
+            "Wähle ein Framework (Pre-Mortem, 6 Thinking Hats, SWOT-Stresstest).",
+            "Exportiere das finale Konsens-Memo direkt ins Knowledge-System."
+        ],
+        "starter_prompt": "Wie starte ich eine kontroverse Boardroom-Debatte zu einer strategischen Investition?"
+    },
+    "watchdog": {
+        "title": "Internet-Watchdog · Radar",
+        "subtitle": "Kontinuierliches Markt-, Wettbewerbs- & Bedrohungs-Monitoring",
+        "purpose": "Autonomes Radar, das Web-Quellen, Nachrichten, Marktbegleiter und Sicherheits-Feeds scannt und relevante Signale direkt in den Posteingang triagiert.",
+        "top_actions": [
+            "Trage Suchbegriffe, URLs oder RSS-Feeds für das Dauermonitoring ein.",
+            "Definiere Alarm-Schwellenwerte für automatische Benachrichtigungen.",
+            "Lass Zusammenfassungen neuer Marktbewegungen durch den Research-Agenten erstellen."
+        ],
+        "starter_prompt": "Wie richte ich einen neuen Radar-Watcher für Wettbewerber-Aktivitäten ein?"
+    },
+    "design_system": {
+        "title": "Design System Lab",
+        "subtitle": "UI-Tokens, Komponenten & interaktive Schnittstellen-Vorschau",
+        "purpose": "Entwicklungsumgebung für UI-Tokens, Farbpaletten, Typografie und standardisierte Tailwind-Komponenten des Archon-Design-Systems.",
+        "top_actions": [
+            "Prüfe Farbkontraste und Dark-Mode-Verhalten aller Kern-Komponenten.",
+            "Kopiere vorgefertigte HTML- und Tailwind-Codeblöcke für neue Ansichten.",
+            "Teste Buttons, Modals, Tabellen und Badges interaktiv im Sandkasten."
+        ],
+        "starter_prompt": "Wie übernehme ich eine Komponente aus dem Design System Lab in eine neue Ansicht?"
+    },
+    "css_studio": {
+        "title": "Archon CSS Live Studio",
+        "subtitle": "Echtzeit-Stilinspektor, Visual-Editor & Style-Override-Manager",
+        "purpose": "Erlaubt das direkte Anpassen, Vermessen und persistente Speichern von CSS-Regeln und Layout-Größen auf der Live-Oberfläche.",
+        "top_actions": [
+            "Klicke auf den Inspektieren-Modus, um ein UI-Element direkt auf dem Bildschirm anzuwählen.",
+            "Passe Abstände, Farben und Schriftarten im visuellen Inspector an.",
+            "Speichere Regeln temporär oder übernehme sie dauerhaft in das Theme."
+        ],
+        "starter_prompt": "Wie nutze ich den CSS Studio Inspector, um Abstände eines Elements live anzupassen?"
+    },
+    "log_stream": {
+        "title": "Live Log-Stream",
+        "subtitle": "Echtzeit-Telemetrie & System-Audit-Trail",
+        "purpose": "Zentraler Stream aller Kernel-Ereignisse, Agenten-Ausführungen, Tool-Calls und Fehlermeldungen in Echtzeit mit Filter- und Suchfunktion.",
+        "top_actions": [
+            "Filtere nach Loglevel (DEBUG, INFO, WARNING, ERROR).",
+            "Suche nach spezifischen Task-IDs oder Agenten-Namen.",
+            "Pausiere den Stream für eine detaillierte Ursachenanalyse."
+        ],
+        "starter_prompt": "Wie filtere ich im Log-Stream nach Fehlern eines bestimmten Agenten?"
     }
 }
 
 @app.get("/api/help/context/{view_id}")
 def api_get_help_context(view_id: str):
-    ctx = HELP_CONTEXT_DATA.get(view_id)
+    normalized = (view_id or "").strip().lower().replace("-", "_")
+    ctx = HELP_CONTEXT_DATA.get(view_id) or HELP_CONTEXT_DATA.get(normalized)
     if not ctx:
         ctx = {
             "title": f"Ansicht: {view_id}",

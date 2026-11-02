@@ -569,6 +569,9 @@
             <h2 id="mc-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
               Mission Control
             </h2>
+            <button type="button" onclick="openContextHelp('mission_control')" title="Hilfe zu Mission Control" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+            </button>
             <span id="mc-total-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
               Nominal
             </span>
@@ -1389,6 +1392,9 @@
             <div class="min-w-0">
               <div class="flex items-center gap-2">
                 <h2 id="boardroom-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">Decision Engine · Übersicht</h2>
+                <button type="button" onclick="openContextHelp('boardroom')" title="Hilfe zum AI Mastermind Boardroom" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+                  <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                </button>
                 <span id="boardroom-total-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">Bereit</span>
               </div>
               <p id="boardroom-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">Historie, frühere Debatten &amp; strategische Konsens-Ergebnisse</p>

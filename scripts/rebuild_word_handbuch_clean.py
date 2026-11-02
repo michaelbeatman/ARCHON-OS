@@ -24,9 +24,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 sys.stdout.reconfigure(encoding="utf-8")
 
 DOCS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCRATCH_BACKUP = r"C:\Users\micha\.gemini\antigravity\brain\efaf2cb2-3cad-4959-82eb-00332c4c9566\scratch\ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage_ORIGINAL_BACKUP.docx"
-LOCAL_BACKUP = os.path.join(DOCS_DIR, "docs", "system", "backup -ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx")
-BACKUP_DOCX = SCRATCH_BACKUP if os.path.exists(SCRATCH_BACKUP) else (LOCAL_BACKUP if os.path.exists(LOCAL_BACKUP) else (os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage_NEU.docx") if os.path.exists(os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage_NEU.docx")) else os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx")))
+BASE_PRISTINE = os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_BASE_PRISTINE.docx")
+BACKUP_DOCX = BASE_PRISTINE
 TARGET_DOCX = os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx")
 IMG_DIR = os.path.join(DOCS_DIR, "docs", "system", "screenshots")
 
@@ -68,6 +67,7 @@ def rebuild_clean_docx():
     body = doc.element.body
     orig = list(body)
     print(f"Original body element count: {len(orig)}")
+    assert len(orig) == 1329, f"FATAL ERROR: BACKUP_DOCX must have exactly 1329 elements! Got {len(orig)}. Refusing to build on corrupt base."
 
     para_map = {p._element: p for p in doc.paragraphs}
 
@@ -322,7 +322,7 @@ def rebuild_clean_docx():
     # Update metadata line in frontmatter (Child 6)
     set_el_text(
         orig[6],
-        "Stand: 1. November 2026  |  Release: 0.3.7 Enterprise (4-Säulen-ERP)  |  57 Autonome Spezialisten-Rollen  |  19 Fachmodule"
+        "Stand: 2. November 2026  |  Release: v0.3.9 Enterprise (4-Säulen-ERP)  |  57 Autonome Spezialisten-Rollen  |  19 Fachmodule"
     )
 
     # Clean internal headings in original slices before re-slicing

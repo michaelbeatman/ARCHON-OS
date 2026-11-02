@@ -797,8 +797,7 @@
     "model": "google/gemini-3.1-flash-image",
     "reasoning_level": "high",
     "status": "active",
-    "is_favorite": true,
-    "runtime_status": "active"
+    "is_favorite": true
   },
   {
     "id": "executive_decision_architect",
@@ -864,7 +863,8 @@
     "model": "z-ai/glm-5.3-flash",
     "reasoning_level": "high",
     "status": "active",
-    "is_favorite": true
+    "is_favorite": true,
+    "runtime_status": "active"
   },
   {
     "id": "analyze_claims",

@@ -8413,6 +8413,105 @@ HELP_CONTEXT_DATA = {
     }
 }
 
+# --- MEILENSTEIN 4: MULTI-USER & RBAC ENDPOINTS ---
+from backend.auth_service import auth_service
+
+def get_current_user_from_request(request: Request) -> dict:
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    elif "x-archon-session" in request.headers:
+        token = request.headers.get("x-archon-session", "").strip()
+    elif "archon_session" in request.cookies:
+        token = request.cookies.get("archon_session", "").strip()
+
+    if token:
+        user = auth_service.verify_session(token)
+        if user:
+            return user
+
+    return auth_service.get_fallback_admin()
+
+@app.get("/api/auth/me")
+def api_auth_me(request: Request):
+    user = get_current_user_from_request(request)
+    return {"status": "success", "user": user}
+
+@app.post("/api/auth/login")
+def api_auth_login(request: Request, payload: dict = Body(...)):
+    username = payload.get("username", "")
+    password = payload.get("password", "")
+    client_ip = request.client.host if request.client else ""
+    user_agent = request.headers.get("user-agent", "")
+    session = auth_service.authenticate(username, password, ip_address=client_ip, user_agent=user_agent)
+    if not session:
+        raise HTTPException(status_code=401, detail="Ungültiger Benutzername oder falsches Passwort.")
+    res = JSONResponse(content={"status": "success", **session})
+    res.set_cookie(key="archon_session", value=session["token"], max_age=86400 * 30, httponly=True, samesite="lax")
+    return res
+
+@app.post("/api/auth/logout")
+def api_auth_logout(request: Request):
+    token = request.cookies.get("archon_session") or request.headers.get("x-archon-session", "")
+    if token:
+        auth_service.logout(token)
+    res = JSONResponse(content={"status": "success", "message": "Erfolgreich abgemeldet."})
+    res.delete_cookie(key="archon_session")
+    return res
+
+@app.get("/api/auth/users")
+def api_auth_list_users(request: Request):
+    curr = get_current_user_from_request(request)
+    if curr.get("role") not in ("admin", "operator"):
+        return {"status": "success", "users": [curr]}
+    return {"status": "success", "users": auth_service.list_users()}
+
+@app.post("/api/auth/users")
+def api_auth_create_user(request: Request, payload: dict = Body(...)):
+    curr = get_current_user_from_request(request)
+    if curr.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen neue Benutzer anlegen.")
+    try:
+        new_u = auth_service.create_user(
+            username=payload.get("username"),
+            password=payload.get("password"),
+            role=payload.get("role", "operator"),
+            display_name=payload.get("display_name", ""),
+            email=payload.get("email", "")
+        )
+        return {"status": "success", "user": new_u}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.patch("/api/auth/users/{user_id}")
+def api_auth_update_user(user_id: str, request: Request, payload: dict = Body(...)):
+    curr = get_current_user_from_request(request)
+    if curr.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Benutzerrollen anpassen.")
+    try:
+        updated = auth_service.update_user(
+            user_id=user_id,
+            role=payload.get("role"),
+            display_name=payload.get("display_name"),
+            email=payload.get("email"),
+            is_active=payload.get("is_active")
+        )
+        return {"status": "success", "user": updated}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/auth/users/{user_id}")
+def api_auth_delete_user(user_id: str, request: Request):
+    curr = get_current_user_from_request(request)
+    if curr.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Benutzer löschen.")
+    try:
+        auth_service.delete_user(user_id)
+        return {"status": "success", "message": "Benutzer gelöscht."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.get("/api/system/language")
 def get_system_language():
     s = _load_json(SETTINGS_FILE, {})

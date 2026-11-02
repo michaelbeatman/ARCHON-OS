@@ -29,10 +29,102 @@
         <button onclick="setSettingsTab('plugins')" id="btn-tab-plugins" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">PLUGINS</button>
         <button onclick="setSettingsTab('comm')" id="btn-tab-comm" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">KOMMUNIKATION</button>
         <button onclick="setSettingsTab('design')" id="btn-tab-design" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)]" style="bottom: -1px; border-color: transparent; background-color: transparent;">DESIGN</button>
+        <button onclick="setSettingsTab('users')" id="btn-tab-users" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)] flex items-center gap-1.5" style="bottom: -1px; border-color: transparent; background-color: transparent;"><i data-lucide="users" class="w-3 h-3"></i> BENUTZER &amp; ROLLEN</button>
         <button onclick="setSettingsTab('update')" id="btn-tab-update" class="py-2 px-3 text-xs font-normal border border-b-0 rounded-t-md transition-all cursor-pointer relative text-[var(--muted-foreground)] flex items-center gap-1.5" style="bottom: -1px; border-color: transparent; background-color: transparent;"><i data-lucide="refresh-cw" class="w-3 h-3"></i> SYSTEM-UPDATE</button>
       </div>
       <!-- Tab Content Area -->
       <div id="system-settings-modal-content-area" class="flex-1 overflow-y-auto py-4 pr-2 space-y-4 custom-scrollbar">
+
+        <!-- Tab: Benutzerverwaltung & RBAC (Meilenstein 4) -->
+        <div id="settings-tab-users" class="hidden space-y-4 text-xs p-1">
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-sky-600/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 flex items-center justify-center shrink-0">
+                <i data-lucide="shield-check" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs uppercase font-mono tracking-wider text-[var(--foreground)]">Benutzer &amp; Rollen (RBAC)</h4>
+                <p class="text-[11px] text-[var(--muted-foreground)]">Verwalte Benutzerkonten mit 3-Stufen-Rollenmodell: Admin (Vollzugriff), Operator (Tasks &amp; CRM), Viewer (Nur-Lesen).</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="window.authManager.renderSettingsUsersTable()" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Aktualisieren
+              </button>
+              <button type="button" onclick="document.getElementById('new-user-modal').classList.remove('hidden')" class="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-sky-600 hover:bg-sky-700 text-white transition cursor-pointer flex items-center gap-1.5 shadow-xs">
+                <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> + Neuen Benutzer anlegen
+              </button>
+            </div>
+          </div>
+
+          <!-- Benutzer-Tabelle -->
+          <div class="border border-[var(--border)] rounded-xl bg-[var(--card)] overflow-hidden shadow-xs">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-[var(--secondary)]/60 border-b border-[var(--border)] text-[11px] font-mono uppercase text-[var(--muted-foreground)]">
+                  <th class="p-3">Benutzer</th>
+                  <th class="p-3">E-Mail</th>
+                  <th class="p-3">Rolle</th>
+                  <th class="p-3">Status</th>
+                  <th class="p-3 text-right">Aktionen</th>
+                </tr>
+              </thead>
+              <tbody id="settings-users-table-body" class="divide-y divide-[var(--border)]">
+                <tr><td colspan="5" class="p-4 text-center text-xs text-[var(--muted-foreground)] font-mono">Lädt Benutzerliste...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- MODAL: NEUEN BENUTZER ANLEGEN -->
+        <div id="new-user-modal" class="hidden fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div class="w-full max-w-md bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 text-sans text-[var(--foreground)] space-y-4">
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <h4 class="text-sm font-black flex items-center gap-2">
+                <i data-lucide="user-plus" class="w-4 h-4 text-sky-500"></i> Neuen Benutzer anlegen
+              </h4>
+              <button onclick="document.getElementById('new-user-modal').classList.add('hidden')" class="w-7 h-7 rounded-lg hover:bg-[var(--secondary)] flex items-center justify-center text-[var(--muted-foreground)] cursor-pointer">✕</button>
+            </div>
+            <form onsubmit="window.authManager.handleCreateUserSubmit(event)" class="space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Benutzername *</label>
+                  <input type="text" id="new-user-username" required placeholder="z. B. lisa" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-sky-500">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Anzeigename *</label>
+                  <input type="text" id="new-user-displayname" required placeholder="z. B. Lisa Schmidt" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-sky-500">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">E-Mail</label>
+                <input type="email" id="new-user-email" placeholder="lisa@unternehmen.de" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-sky-500">
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Passwort * (min. 6)</label>
+                  <input type="password" id="new-user-password" required minlength="6" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-sky-500">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Rolle *</label>
+                  <select id="new-user-role" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-sky-500">
+                    <option value="operator" selected>Operator (Operativ)</option>
+                    <option value="admin">Admin (Vollzugriff)</option>
+                    <option value="viewer">Viewer (Nur-Lesen)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="pt-3 flex items-center justify-end gap-2 border-t border-[var(--border)]">
+                <button type="button" onclick="document.getElementById('new-user-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-mono font-bold text-[var(--muted-foreground)] hover:bg-[var(--secondary)] cursor-pointer">
+                  Abbrechen
+                </button>
+                <button type="submit" class="px-4 py-2 rounded-xl text-xs font-mono font-bold bg-sky-600 hover:bg-sky-500 text-white transition cursor-pointer">
+                  Benutzer erstellen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
 
         <!-- Tab: API-Keys & Zugriffsverwaltung (t-6fad7a) -->
         <div id="settings-tab-keys" class="hidden space-y-4 text-xs p-1">

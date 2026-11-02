@@ -6,7 +6,7 @@
 | **1** | **Updatesystem erarbeiten** | Hoch | Abgeschlossen | Versionierung, Git-Sync, automatisierte Pre-Update-Snapshots (SQLite & Configs), In-App 1-Klick Update & Rollback-Fähigkeit |
 | **2** | **Steuerapp für Android** | Mittel | Geplant | PWA vs. Native Kotlin/Flutter-Client, Endpunkt-Sicherheit, Push-Benachrichtigungen, Dynamic DNS/Tailscale-Tunneling |
 | **3** | **Multilingualität (i18n)** | Mittel | Abgeschlossen | 9 Weltsprachen (de, en, es, fr, pt, ru, ja, ko, zh), Locale-JSONs, dynamische DOM-Engine & Settings-Selector |
-| **4** | **Multi-User & Kollaboration** | Mittel | Geplant | RBAC-Rollenmodell, Benutzer-Authentifizierung (JWT/OAuth), Sitzungs- und Workspace-Isolation |
+| **4** | **Multi-User & Kollaboration** | Mittel | Abgeschlossen | 3-Stufen-Rollenmodell (Admin, Operator, Viewer), PBKDF2-Auth, Sessions, Settings-Verwaltung & Topbar-Badge |
 | **5** | **Funktionserweiterung / Pluginsystem** | Mittel | Abgeschlossen | Standardisierte Plugin-Schnittstelle (`backend/plugin_manager.py`), Manifeste (`plugin.json`), Lifecycle-Hooks, Registry-Integration & 3 Starter-Plugins |
 | **6** | **Designkonzept-Überarbeitung** | Hoch | Geplant | Ergonomisches Designsystem, konsistente Typografie, modernisiertes UI-Layout, Dark/Light-Mode-Verfeinerung |
 | **7** | **LinkedIn-Import im CRM (Bugfix & Dedup)** | Dringend | Abgeschlossen | 1.722 Duplikate bei 908 Kontakten bereinigt, CRM-Route & Import-Dedupe zeitzonen- und sender-unabhängig gehärtet |
@@ -54,10 +54,10 @@
 - **Prompt-Lokalisierung:** Sprachunabhängige oder zweisprachig optimierte System-Prompts für alle 56 Agenten-Rollen.
 - **Dynamische Erkennung:** Automatische Spracherkennung der Benutzereingaben mit adäquater Antwortsprache.
 
-### Meilenstein 4: Multi-User-Architektur
-- **Identitäts- & Sitzungsmanagement:** Benutzerkonten mit sicherer Authentifizierung (Session-Tokens, 2FA-Option).
-- **Rechte & Rollen (RBAC):** Unterscheidung zwischen Admin-, Operator- und Viewer-Rechten.
-- **Daten-Isolation:** Benutzerbezogene Chats, Gedächtnisspeicher und History-Filterung bei gemeinsamen Ressourcen.
+### Meilenstein 4: Multi-User-Architektur (Abgeschlossen)
+- **Identitäts- & Sitzungsmanagement:** Benutzerkonten mit sicherer Authentifizierung (PBKDF2-HMAC-SHA256, 100k Runden, 30-Tage Session-Tokens).
+- **Rechte & Rollen (RBAC):** 3-Stufen-Modell (Admin, Operator, Viewer) mit Schutz des letzten Administrators.
+- **UI-Integration:** Profil-Badge in der Seitenleiste, interaktiver Benutzer- und Rollen-Manager im System Control Center.
 
 ### Meilenstein 5: Funktionserweiterung & Pluginsystem (Abgeschlossen)
 - **Plugin-Architektur:** Zentraler `PluginManager` (`backend/plugin_manager.py`) mit standardisierten Manifesten (`plugin.json`), dynamischem Import via `importlib` und Exception-Isolation.

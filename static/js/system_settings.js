@@ -193,7 +193,7 @@
       }
 
       activeSettingsTab = targetTab;
-      const tabs = ["kernel", "autonomy", "services", "routing", "keys", "frameworks", "plugins", "comm", "design", "update"];
+      const tabs = ["kernel", "autonomy", "services", "routing", "keys", "frameworks", "plugins", "comm", "design", "update", "users"];
       tabs.forEach(t => {
         const pane = document.getElementById(`settings-tab-${t}`);
         const btn = document.getElementById(`btn-tab-${t}`);
@@ -217,6 +217,11 @@
         }
       });
 
+      if (targetTab === "users") {
+        if (window.authManager) {
+          window.authManager.renderSettingsUsersTable();
+        }
+      }
       if (targetTab === "keys") {
         if (typeof loadApiKeys === "function") {
           loadApiKeys();

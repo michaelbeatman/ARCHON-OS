@@ -8426,17 +8426,68 @@ def get_current_user_from_request(request: Request) -> dict:
     elif "archon_session" in request.cookies:
         token = request.cookies.get("archon_session", "").strip()
 
+    is_enabled = auth_service.is_auth_enabled()
+
     if token:
         user = auth_service.verify_session(token)
         if user:
+            user["auth_enabled"] = is_enabled
             return user
 
-    return auth_service.get_fallback_admin()
+    fb = auth_service.get_fallback_admin()
+    fb["auth_enabled"] = is_enabled
+    return fb
+
+@app.get("/api/auth/status")
+def api_auth_status():
+    return {
+        "status": "success",
+        "auth_enabled": auth_service.is_auth_enabled()
+    }
+
+@app.post("/api/auth/toggle")
+def api_auth_toggle(request: Request, payload: dict = Body(...)):
+    curr = get_current_user_from_request(request)
+    if curr.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen den Authentifizierungsmodus ändern.")
+    enabled = bool(payload.get("enabled", False))
+    s = _load_json(SETTINGS_FILE, {})
+    if "auth" not in s or not isinstance(s["auth"], dict):
+        s["auth"] = {}
+    s["auth"]["enabled"] = enabled
+    s["auth"]["mode"] = "multi_user" if enabled else "single_user"
+    _save_json(SETTINGS_FILE, s)
+
+    alt_paths = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json"),
+        "/app/settings.json"
+    ]
+    for alt in alt_paths:
+        try:
+            if os.path.exists(alt) and os.path.abspath(alt) != os.path.abspath(SETTINGS_FILE):
+                alt_s = _load_json(alt, {})
+                if "auth" not in alt_s or not isinstance(alt_s["auth"], dict):
+                    alt_s["auth"] = {}
+                alt_s["auth"]["enabled"] = enabled
+                alt_s["auth"]["mode"] = s["auth"]["mode"]
+                _save_json(alt, alt_s)
+        except Exception:
+            pass
+    return {
+        "status": "success",
+        "auth_enabled": enabled,
+        "mode": s["auth"]["mode"],
+        "message": "Multi-User-Modus aktiviert." if enabled else "Einzelplatz-Modus aktiviert (keine Anmeldung erforderlich)."
+    }
 
 @app.get("/api/auth/me")
 def api_auth_me(request: Request):
     user = get_current_user_from_request(request)
-    return {"status": "success", "user": user}
+    return {
+        "status": "success",
+        "user": user,
+        "auth_enabled": auth_service.is_auth_enabled()
+    }
 
 @app.post("/api/auth/login")
 def api_auth_login(request: Request, payload: dict = Body(...)):

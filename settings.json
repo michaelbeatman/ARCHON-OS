@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +390,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,12 +410,32 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-02T08:38:39.861788",
+        "last_check": "2026-11-02T22:21:40.741807",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-02T08:38:39.861788",
+    "last_run": "2026-11-02T22:21:40.741807",
     "recent_findings": [
+      {
+        "id": "5060e4d0c116c788",
+        "target_id": "src-bundesbank",
+        "target_name": "Deutsche Bundesbank (Presse & Daten)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Itay Goldstein – AI Trading in Financial Markets - Deutsche Bundesbank",
+        "link": "https://news.google.com/rss/articles/CBMinwFBVV95cUxNMl9STWFrU1dscS16WThoRkdLc2RMNndraVFWb3ViNW5aaXdKUTlYUnd5LVZaWUV1SXcwenRrMFRWTWxlWmZCRlI0WURtSk9JdGJBZF8xNUNnNFZabVdHX3BQVVoyUUt5a0hTSUxlRVBVdTliX3BIZXc3RlBSYndubzhIVnZmRmQ5M19aOGhFeVVYd05zZVRsTnZ1WEdKaUE?oc=5",
+        "published": "Mon, 02 Nov 2026 12:53:25 GMT",
+        "detected_at": "02.11.2026 22:21"
+      },
+      {
+        "id": "5078cd5224748ebf",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "Anthropic warns that it’s very close to RSI capability, aka self-building AI",
+        "link": "https://techcrunch.com/2026/11/02/anthropic-warns-that-its-very-close-to-rsi-capability-aka-self-building-ai/",
+        "published": "Mon, 02 Nov 2026 22:14:50 +0000",
+        "detected_at": "02.11.2026 22:21"
+      },
       {
         "id": "5fcce65de36de932",
         "target_id": "src-handelsblatt-top",
@@ -699,27 +719,12 @@
         "link": "https://www.handelsblatt.com/politik/deutschland/robert-habeck-china-hat-den-freihandel-zu-einer-falle-gemacht-01/100265339.html",
         "published": "Mon, 02 Nov 2026 06:40:00 GMT",
         "detected_at": "02.11.2026 06:54"
-      },
-      {
-        "id": "bc70fe3fe31fb458",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Marktbericht: DAX dürfte mit Gewinnen in den November starten",
-        "link": "https://www.tagesschau.de/wirtschaft/finanzen/marktberichte/marktbericht-dax-dow-geldanlage-168.html",
-        "published": "Mon, 02 Nov 2026 07:39:47 +0100",
-        "detected_at": "02.11.2026 06:54"
-      },
-      {
-        "id": "8955cdce0b2fbaea",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Morning Briefing: Hilft Unternehmen nur die Rückkehr der Deutschland AG?",
-        "link": "https://www.handelsblatt.com/meinung/morningbriefing/morning-briefing-hilft-unternehmen-nur-die-rueckkehr-der-deutschland-ag/100266479.html",
-        "published": "Mon, 02 Nov 2026 04:50:17 GMT",
-        "detected_at": "02.11.2026 06:38"
       }
     ]
+  },
+  "auth": {
+    "enabled": false,
+    "mode": "single_user",
+    "allow_guest_viewer": false
   }
 }

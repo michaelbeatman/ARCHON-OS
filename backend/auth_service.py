@@ -40,6 +40,28 @@ class AuthService:
         self._init_tables()
         self._seed_default_admin()
 
+    @staticmethod
+    def is_auth_enabled() -> bool:
+        possible_paths = [
+            os.path.join(WORKSPACE_DIR, "agent_workspace", "settings.json"),
+            "/app/agent_workspace/settings.json",
+            os.path.join(WORKSPACE_DIR, "settings.json"),
+            "/app/settings.json",
+            os.path.join(os.getcwd(), "agent_workspace", "settings.json"),
+            os.path.join(os.getcwd(), "settings.json")
+        ]
+        import json
+        for p in possible_paths:
+            if os.path.exists(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        s = json.load(f)
+                        if isinstance(s, dict) and "auth" in s:
+                            return bool(s.get("auth", {}).get("enabled", False))
+                except Exception:
+                    pass
+        return False
+
     def _init_tables(self):
         with _get_db() as conn:
             conn.execute("""

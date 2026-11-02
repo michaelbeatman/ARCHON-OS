@@ -95,6 +95,15 @@ class TestAuthRBAC(unittest.TestCase):
         self.assertTrue(logged_out)
         self.assertIsNone(self.auth.verify_session(token))
 
+    def test_07_auth_enabled_check(self):
+        # By default in settings.json, auth.enabled is False (Single-User Mode)
+        enabled = AuthService.is_auth_enabled()
+        self.assertIsInstance(enabled, bool)
+        fallback = self.auth.get_fallback_admin()
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback["role"], "admin")
+
+
 
 if __name__ == "__main__":
     unittest.main()

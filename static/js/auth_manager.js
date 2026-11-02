@@ -2,11 +2,13 @@
  * static/js/auth_manager.js
  * Meilenstein 4: Multi-User-Architektur & Rollenbasierte Zugriffskontrolle (RBAC).
  * Client-seitiges Identitäts-, Session- und Rollenmanagement.
+ * Unterstützt Zero-Disruption Einzelplatz-Modus und Multi-User-Modus.
  */
 
 class AuthManager {
   constructor() {
     this.currentUser = null;
+    this.authEnabled = false;
     this.users = [];
   }
 
@@ -25,6 +27,7 @@ class AuthManager {
       const data = await res.json();
       if (data.status === 'success' && data.user) {
         this.currentUser = data.user;
+        this.authEnabled = typeof data.auth_enabled !== 'undefined' ? !!data.auth_enabled : !!data.user.auth_enabled;
         window.currentUser = data.user;
         this.applyRoleRestrictions(data.user);
         this.renderTopbarBadge();
@@ -48,9 +51,11 @@ class AuthManager {
 
     const roleBadgeClass = roleColors[this.currentUser.role] || roleColors.operator;
     const initial = (this.currentUser.display_name || this.currentUser.username || 'U')[0].toUpperCase();
+    const roleLabel = !this.authEnabled ? 'Admin · Einzelplatz' : this.currentUser.role;
+    const title = !this.authEnabled ? 'Einzelplatz-Modus: Volle Admin-Rechte ohne Login-Zwang' : `Angemeldet als ${this.currentUser.role}`;
 
     badge.innerHTML = `
-      <div onclick="window.authManager.openProfileModal()" class="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 border border-[var(--border)] transition cursor-pointer select-none shadow-2xs">
+      <div onclick="window.authManager.openProfileModal()" title="${title}" class="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 border border-[var(--border)] transition cursor-pointer select-none shadow-2xs">
         <div class="w-5 h-5 rounded-full bg-zinc-800 text-white flex items-center justify-center font-mono font-bold text-[10px]">
           ${initial}
         </div>
@@ -58,7 +63,7 @@ class AuthManager {
           ${this.currentUser.display_name || this.currentUser.username}
         </span>
         <span class="text-[9.5px] font-mono px-1.5 py-0.2 rounded-full border ${roleBadgeClass} uppercase font-bold tracking-wider">
-          ${this.currentUser.role}
+          ${roleLabel}
         </span>
       </div>
     `;
@@ -88,6 +93,52 @@ class AuthManager {
     });
   }
 
+  syncAuthModeUI() {
+    const toggle = document.getElementById('auth-mode-toggle');
+    const badge = document.getElementById('auth-mode-badge');
+    const toggleText = document.getElementById('auth-mode-toggle-text');
+    if (toggle) {
+      toggle.checked = this.authEnabled;
+    }
+    if (badge) {
+      if (this.authEnabled) {
+        badge.className = 'px-2 py-0.5 rounded text-[10.5px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30';
+        badge.textContent = 'Multi-User aktiv (Login erforderlich)';
+      } else {
+        badge.className = 'px-2 py-0.5 rounded text-[10.5px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30';
+        badge.textContent = 'Einzelplatz (Keine Anmeldung nötig)';
+      }
+    }
+    if (toggleText) {
+      toggleText.textContent = this.authEnabled ? 'Multi-User aktiv' : 'Multi-User aktivieren';
+    }
+  }
+
+  async handleToggleAuth(enabled) {
+    try {
+      const res = await fetch('/api/auth/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !!enabled })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || 'Fehler beim Ändern des Authentifizierungsmodus.');
+        this.syncAuthModeUI();
+        return;
+      }
+      this.authEnabled = !!data.auth_enabled;
+      if (this.currentUser) {
+        this.currentUser.auth_enabled = this.authEnabled;
+      }
+      this.syncAuthModeUI();
+      this.renderTopbarBadge();
+    } catch (e) {
+      alert('Netzwerkfehler beim Umschalten des Modus.');
+      this.syncAuthModeUI();
+    }
+  }
+
   openProfileModal() {
     let modal = document.getElementById('auth-profile-modal');
     if (!modal) {
@@ -115,6 +166,12 @@ class AuthManager {
 
         <div class="bg-[var(--secondary)]/40 p-3 rounded-xl border border-[var(--border)] text-xs font-mono space-y-1.5">
           <div class="flex justify-between">
+            <span class="text-[var(--muted-foreground)]">Betriebsmodus:</span>
+            <span class="font-bold ${this.authEnabled ? 'text-emerald-500' : 'text-amber-500'}">
+              ${this.authEnabled ? 'Multi-User (Login aktiv)' : 'Einzelplatz (Offen)'}
+            </span>
+          </div>
+          <div class="flex justify-between">
             <span class="text-[var(--muted-foreground)]">Rolle:</span>
             <span class="font-bold uppercase text-sky-500">${u.role}</span>
           </div>
@@ -126,8 +183,8 @@ class AuthManager {
 
         <div class="pt-2 flex items-center gap-2">
           ${u.role === 'admin' ? `
-            <button onclick="document.getElementById('auth-profile-modal').classList.add('hidden'); openSystemSettingsModal(); setTimeout(() => switchSettingsSubTab('users'), 200);" class="flex-1 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-mono font-bold transition cursor-pointer">
-              Benutzer verwalten
+            <button onclick="document.getElementById('auth-profile-modal').classList.add('hidden'); openSystemSettingsModal(); setTimeout(() => setSettingsTab('users'), 200);" class="flex-1 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-mono font-bold transition cursor-pointer">
+              Benutzer & RBAC
             </button>
           ` : ''}
           <button onclick="window.authManager.openLoginDialog()" class="flex-1 py-2 rounded-xl bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 text-[var(--foreground)] text-xs font-mono font-bold border border-[var(--border)] transition cursor-pointer">
@@ -193,6 +250,7 @@ class AuthManager {
   }
 
   async renderSettingsUsersTable(containerId = 'settings-users-table-body') {
+    this.syncAuthModeUI();
     const tbody = document.getElementById(containerId);
     if (!tbody) return;
 

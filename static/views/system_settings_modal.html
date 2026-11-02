@@ -37,6 +37,28 @@
 
         <!-- Tab: Benutzerverwaltung & RBAC (Meilenstein 4) -->
         <div id="settings-tab-users" class="hidden space-y-4 text-xs p-1">
+          <!-- Einzelplatz- vs Multi-User Schalter -->
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--card)] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-xs font-mono uppercase tracking-wider text-[var(--foreground)]">Authentifizierungs-Modus</span>
+                <span id="auth-mode-badge" class="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                  Einzelplatz (Keine Anmeldung nötig)
+                </span>
+              </div>
+              <p class="text-[11px] text-[var(--muted-foreground)]">
+                Im Einzelplatz-Modus startet Archon OS direkt mit vollen Administrator-Rechten ohne Passwort-Sperre. Erst bei Aktivierung wird das Login-System scharf geschaltet.
+              </p>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="auth-mode-toggle" class="sr-only peer" onchange="window.authManager.handleToggleAuth(this.checked)">
+                <div class="w-11 h-6 bg-zinc-300 dark:bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                <span id="auth-mode-toggle-text" class="ml-2.5 text-xs font-mono font-semibold text-[var(--foreground)]">Multi-User aktivieren</span>
+              </label>
+            </div>
+          </div>
+
           <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
             <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-xl bg-sky-600/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 flex items-center justify-center shrink-0">

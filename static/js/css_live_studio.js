@@ -48,6 +48,7 @@
     window.onStudioFontFamilySelect = onStudioFontFamilySelect;
     window.applyStudioGlobalFont = applyStudioGlobalFont;
     window.saveStudioOverrides = saveStudioOverrides;
+    window.bakeStudioIntoMainDesign = bakeStudioIntoMainDesign;
     window.exportStudioCss = exportStudioCss;
     window.resetAllStudioStyles = resetAllStudioStyles;
     window.resetSelectedElementStyles = resetSelectedElementStyles;
@@ -1614,6 +1615,106 @@
         }
       }
     }
+    async function bakeStudioIntoMainDesign() {
+      const activeCount = Object.values(studioRules).reduce((acc, props) => acc + Object.keys(props || {}).length, 0);
+      const selCount = Object.keys(studioRules).length;
+      if (activeCount === 0) {
+        if (typeof showNotification === "function") {
+          showNotification("Keine Live-Änderungen", "Es gibt aktuell keine aktiven Studio-Regeln zum Einbrennen (Zähler ist bereits 0).", "info");
+        } else {
+          alert("Es gibt aktuell keine aktiven Live-Regeln (Zähler ist bereits 0).");
+        }
+        return;
+      }
+
+      const confirmMsg = `Möchtest du alle ${activeCount} aktiven CSS-Regeln (${selCount} Selektoren) dauerhaft in das Hauptdesign (custom_studio.css) einbrennen?\n\nDadurch werden die Regeln fest ins System übernommen und der Live-Zähler wird auf 0 zurückgesetzt.`;
+      if (!confirm(confirmMsg)) return;
+
+      const payload = {
+        rules: studioRules,
+        textOverrides: studioTextOverrides,
+        htmlOverrides: studioHtmlOverrides
+      };
+
+      try {
+        const res = await fetch("/api/theme/bake-into-main-design", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          throw new Error(`Server-Fehler HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        const bakedCount = data.baked_rules_count || activeCount;
+
+        // 1. Entferne injizierte Inline-Styles von betroffenen Elementen im DOM,
+        // da diese ab sofort direkt über custom_studio.css geladen werden
+        for (const [sel, props] of Object.entries(studioRules)) {
+          try {
+            const els = document.querySelectorAll(sel);
+            els.forEach(el => {
+              if (el instanceof HTMLElement) {
+                for (const p of Object.keys(props || {})) {
+                  el.style.removeProperty(p);
+                }
+              }
+            });
+          } catch (e) {}
+        }
+
+        // 2. Leere temporären Runtime-<style> Tag
+        const liveStyleTag = document.getElementById("archon-live-custom-styles");
+        if (liveStyleTag) {
+          liveStyleTag.textContent = "/* Archon CSS Live Studio Overrides — Reset after bake */";
+        }
+
+        // 3. Leere interne Studio-Regeln
+        studioRules = {};
+
+        // 4. Speicherzustand bereinigen
+        localStorage.removeItem("archon_theme_live_overrides");
+        localStorage.setItem("archon_theme_live_overrides", JSON.stringify({
+          rules: {},
+          textOverrides: studioTextOverrides,
+          htmlOverrides: studioHtmlOverrides
+        }));
+
+        // 5. Aktualisiere den Link-Tag im Head, um die neu eingebrannte custom_studio.css sofort frisch zu laden
+        const studioCssLink = document.getElementById("archon-custom-studio-css") || document.querySelector('link[href*="custom_studio.css"]');
+        if (studioCssLink) {
+          const baseHref = studioCssLink.href.split("?")[0];
+          studioCssLink.href = `${baseHref}?v=${Date.now()}`;
+        }
+
+        // 6. Zähler und UI aktualisieren
+        updateStudioActiveRulesCounters();
+        renderStudioRulesList();
+        if (studioSelectedElement && studioSelectedSelector) {
+          populateVisualControlsFromElement(studioSelectedElement, studioSelectedSelector);
+        }
+
+        if (typeof showNotification === "function") {
+          showNotification(
+            "Permanent ins Hauptdesign übernommen",
+            `Alle ${bakedCount} CSS-Regeln wurden dauerhaft in custom_studio.css eingebrannt. Der Live-Zähler steht jetzt wieder auf 0.`,
+            "success"
+          );
+        } else {
+          alert(`Erfolg: ${bakedCount} CSS-Regeln wurden dauerhaft ins Hauptdesign eingebrannt. Der Zähler steht wieder auf 0.`);
+        }
+      } catch (err) {
+        console.error("[CSS Studio] Fehler beim Einbrennen ins Hauptdesign:", err);
+        if (typeof showNotification === "function") {
+          showNotification("Fehler beim Einbrennen", `Konnte nicht gespeichert werden: ${err.message}`, "error");
+        } else {
+          alert(`Fehler beim Einbrennen ins Hauptdesign: ${err.message}`);
+        }
+      }
+    }
+
     function resetSelectedElementStyles() {
       if (!studioSelectedSelector) return;
       const oldProps = studioRules[studioSelectedSelector];

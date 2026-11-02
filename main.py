@@ -681,6 +681,69 @@ def api_save_theme_live_overrides(payload: Dict = Body(...)):
     # der zentralen 15-Bausteine-Engine (/api/design/themes).
     return {"status": "success"}
 
+@app.post("/api/theme/bake-into-main-design")
+def api_bake_theme_into_main_design(payload: Dict = Body(None)):
+    """
+    Kompiliert alle Live-Studio-Regeln direkt in static/custom_studio.css,
+    leert die temporären Overrides auf Server und Client und setzt den Zähler auf 0 zurück.
+    """
+    data = payload or _load_json(THEME_LIVE_FILE, {})
+    rules = data.get("rules", {})
+    if not rules:
+        live = _load_json(THEME_LIVE_FILE, {})
+        rules = live.get("rules", {})
+
+    css_lines = []
+    prop_count = 0
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    css_lines.append("/* ========================================================================= */")
+    css_lines.append(f"/* ARCHON STUDIO BAKED CSS — Eingebrannt am: {now_str}               */")
+    css_lines.append("/* ========================================================================= */\n")
+
+    for sel, props in rules.items():
+        if not props or not isinstance(props, dict):
+            continue
+        clean_props = []
+        for p, v in props.items():
+            if v is not None and str(v).strip() != "":
+                clean_val = str(v).replace("!important", "").strip()
+                clean_props.append(f"  {p}: {clean_val} !important;")
+                prop_count += 1
+        if clean_props:
+            css_lines.append(f"{sel} {{")
+            css_lines.extend(clean_props)
+            css_lines.append("}\n")
+
+    compiled_css = "\n".join(css_lines)
+
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    studio_css_path = os.path.join(root_dir, "static", "custom_studio.css")
+    try:
+        with open(studio_css_path, "w", encoding="utf-8") as f:
+            f.write(compiled_css)
+    except Exception as e:
+        print(f"[ThemeBake] Fehler beim Schreiben in custom_studio.css: {e}")
+
+    # Setze theme_live_overrides.json zurück
+    reset_data = {
+        "rules": {},
+        "rawCss": "",
+        "textOverrides": data.get("textOverrides", {}),
+        "htmlOverrides": data.get("htmlOverrides", {}),
+        "migration_version": f"baked_{int(time.time())}",
+        "reset_all": True,
+        "updated_at": datetime.datetime.now().isoformat(timespec="seconds")
+    }
+    _save_json(THEME_LIVE_FILE, reset_data)
+
+    return {
+        "status": "success",
+        "baked_rules_count": prop_count,
+        "selectors_count": len(rules),
+        "version": reset_data["migration_version"],
+        "message": f"{prop_count} Regeln erfolgreich ins permanente Hauptdesign eingebrannt."
+    }
+
 @app.delete("/api/theme/live-overrides")
 def api_delete_theme_live_overrides():
     _save_json(THEME_LIVE_FILE, {

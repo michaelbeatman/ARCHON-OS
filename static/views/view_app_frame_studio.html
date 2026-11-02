@@ -53,9 +53,13 @@
         <span id="studio-active-rules-count" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 font-bold">0 Regeln</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <button type="button" id="btn-studio-header-save" onclick="saveStudioOverrides()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="Alle Änderungen (CSS, HTML & Text) dauerhaft speichern (Strg + S)">
+        <button type="button" id="btn-studio-header-save" onclick="saveStudioOverrides()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="Live-Änderungen als temporäre Overrides speichern (Strg + S)">
           <i data-lucide="save" class="w-3.5 h-3.5"></i>
           <span>Speichern</span>
+        </button>
+        <button type="button" id="btn-studio-header-bake" onclick="bakeStudioIntoMainDesign()" class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="Permanent ins Hauptdesign (custom_studio.css) einbrennen & Zähler auf 0 setzen">
+          <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-300"></i>
+          <span>Permanent einbrennen</span>
         </button>
         <button type="button" onclick="minimizeCssStudio()" class="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer" title="Minimieren">
           <i data-lucide="minus" class="w-3.5 h-3.5"></i>
@@ -867,9 +871,13 @@
     <!-- ACTION FOOTER BAR -->
     <div class="p-3 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between gap-2 shrink-0">
       <div class="flex items-center gap-1.5">
-        <button type="button" id="btn-studio-footer-save" onclick="saveStudioOverrides()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Alle Overrides dauerhaft auf dem Server speichern (Strg + S)">
+        <button type="button" id="btn-studio-footer-save" onclick="saveStudioOverrides()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Live-Änderungen speichern (Strg + S)">
           <i data-lucide="save" class="w-3.5 h-3.5"></i>
           <span>💾 Speichern</span>
+        </button>
+        <button type="button" id="btn-studio-footer-bake" onclick="bakeStudioIntoMainDesign()" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Alle Live-Regeln dauerhaft ins Hauptdesign (custom_studio.css) übertragen und den Zähler auf 0 zurücksetzen">
+          <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-300"></i>
+          <span>🔥 Permanent übernehmen (Zähler 0)</span>
         </button>
         <button type="button" onclick="exportStudioCss()" class="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition flex items-center gap-1 cursor-pointer" title="Als CSS-Datei herunterladen">
           <i data-lucide="download" class="w-3.5 h-3.5"></i>

@@ -1059,7 +1059,10 @@
       }
       const countBadge = document.getElementById("studio-active-rules-count");
       const minBadge = document.getElementById("studio-min-badge");
-      if (countBadge) countBadge.innerText = `${count} ${count === 1 ? 'Regel' : 'Regeln'}`;
+      if (countBadge) {
+        countBadge.innerText = `${count} aktive ${count === 1 ? 'Regel' : 'Regeln'}`;
+        countBadge.title = `${count} aktive CSS-Regeln auf dem Server gespeichert`;
+      }
       if (minBadge) minBadge.innerText = count;
       const textCountBadge = document.getElementById("studio-text-count");
       if (textCountBadge) textCountBadge.innerText = Object.keys(studioTextOverrides).length;
@@ -1591,10 +1594,17 @@
           body: JSON.stringify(payload)
         });
         if (res.ok && !silent) {
-          // 11.10.2026: alert() blockierte den Browser-Thread ("haengt beim
-          // Speichern") -> nicht-blockierende Notification.
+          ['btn-studio-header-save', 'btn-studio-ribbon-save', 'btn-studio-footer-save'].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) {
+              const prevText = b.innerHTML;
+              b.innerHTML = '<span>✓ Auf Server gesichert</span>';
+              setTimeout(() => { b.innerHTML = prevText; if (window.lucide && lucide.createIcons) lucide.createIcons(); }, 2500);
+            }
+          });
           if (typeof showNotification === "function") {
-            showNotification("Gespeichert", "CSS-, Text- & HTML-Overrides dauerhaft auf dem Server gespeichert.", "success");
+            const totalCount = Object.values(studioRules).reduce((a, c) => a + Object.keys(c).length, 0);
+            showNotification("Gespeichert", `Alle ${totalCount} aktiven CSS-Regeln dauerhaft auf dem Server gesichert.`, "success");
           }
         }
       } catch (e) {

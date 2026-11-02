@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,8 +390,8 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
-        "last_status": "OK (0 Einträge)"
+        "last_check": "2026-11-02T07:08:21.631256",
+        "last_status": "OK (8 Einträge)"
       },
       {
         "id": "src-tagesschau",
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,327 +410,311 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-01T10:17:31.772616",
+        "last_check": "2026-11-02T07:08:21.631256",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-01T10:17:31.772616",
+    "last_run": "2026-11-02T07:08:21.631256",
     "recent_findings": [
       {
-        "id": "3db5079d5c744984",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Bayerische Wirtschaftsrepräsentanzen - Bayerische Staatsregierung",
-        "link": "https://news.google.com/rss/articles/CBMioAFBVV95cUxPNzVaM3JSdFFneG5EbmlGSk1LNW03WXVCQ0FRU2N2VTdYQ3NoNC1RcGQxX1VYVk80MVdQa1R3TEtPZVVCbG1NQk0wWTlmakF5QlFRb0ZOeVRKYlZUSlZHdTQ4bzc5NVk2Mm9SR2R1X285bjNoLTMxcWhmVWduOG8xaDBCbUZLeTRRMFpzR0RWSGJ0SVBOYUNKbmVzODUtZ1dU?oc=5",
-        "published": "Wed, 05 Aug 2026 11:27:38 GMT",
-        "detected_at": "01.11.2026 10:17"
-      },
-      {
-        "id": "dd64cdf90f2c5cc0",
+        "id": "7d73b7561eca2df0",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Gen Z-Proteste: Ausschreitungen in mehreren deutschen Städten: Gewaltexzesse wie in Paris laut Dobrindt verhindert",
-        "link": "https://www.handelsblatt.com/politik/deutschland/gen-z-proteste-gewaltausschreitungen-in-mehreren-deutschen-staedten/100266421.html",
-        "published": "Sun, 01 Nov 2026 10:08:11 GMT",
-        "detected_at": "01.11.2026 10:17"
+        "title": "Möglicher Rücktritt: Belgischer Ministerpräsident droht offenbar mit Rücktritt",
+        "link": "https://www.handelsblatt.com/politik/international/moeglicher-ruecktritt-belgischer-ministerpraesident-droht-offenbar-mit-ruecktritt/100266540.html",
+        "published": "Mon, 02 Nov 2026 06:55:04 GMT",
+        "detected_at": "02.11.2026 07:08"
       },
       {
-        "id": "d82b2524dc3ca4a5",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Wie viel Wert mit einer Investition in Sui von vor 1 Jahr verloren gegangen wäre - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMizgFBVV95cUxORS1UZUF6QmJIZDhJaEpsUGZKd2JvcFFpU292Mjd2VHY4SU1jUU1zelFvSUdoTEdub0dBa29waGp0Unh0dkNLOWFOSzVMalZ2dENfdXhCUGNySEN5emRTdldXQjRJZlRNaUZkQmY0NEZBUVYwbkhTdjQ4LUZOZVZlS0wtcnNhQUVGMnFMSXBPX2JUOHZHZHcyT0tqVFFGSHc4NzB5bm11OWdxMDcyNFlIRUg2TXg2VUpDSHk2bjd1bDByeWg3VjlyYm9ZVnBTdw?oc=5",
-        "published": "Sun, 01 Nov 2026 10:03:03 GMT",
-        "detected_at": "01.11.2026 10:17",
-        "is_priority": true,
-        "matched_keywords": [
-          "geg"
-        ]
-      },
-      {
-        "id": "848ed52e20d207dc",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "So viel hätte eine Aptos-Investition von vor 1 Jahr gekostet - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMiswFBVV95cUxNczIwY3d6aTRZRXRvSmhHUi05OURjSjdFV0YxZ0hjUm1pZzlSNG14UDNabmd4QU13cnQwLW5DN2ZBaGQ1N2RoQ25LVldieDZEVmxMSk5iQjN4QjEtdXQtVU5zcC1xdnpIdFJDUTF6LXA4ZUdzeHBjOFlBUElSUzZmNktsaTJDcC0yU3BHYmJwTWpENUZhazJPR3NHRlVYT0hON3YtcWF6Y0ZhU3hjTXNwQkI3RQ?oc=5",
-        "published": "Sun, 01 Nov 2026 10:03:03 GMT",
-        "detected_at": "01.11.2026 10:17"
-      },
-      {
-        "id": "93eea048ecfaaf97",
+        "id": "93799ff04eb2b8f1",
         "target_id": "src-heise",
         "target_name": "Heise Online (IT-Leitmedium DACH)",
         "category": "Technologie & KI",
-        "title": "heise+ | HP Elitedesk 8 Mini G2i im Test: Sparsamer Mini-PC mit moderner Intel-CPU",
-        "link": "https://www.heise.de/tests/HP-Elitedesk-8-Mini-G2i-im-Test-Sparsamer-Mini-PC-mit-moderner-Intel-CPU-11502960.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
-        "published": "2026-11-01T11:00:00+01:00",
-        "detected_at": "01.11.2026 10:17"
+        "title": "heise-Angebot: Last Call: IT-Sicherheitstag Gelsenkirchen am 18. November",
+        "link": "https://www.heise.de/news/Last-Call-IT-Sicherheitstag-Gelsenkirchen-am-18-November-11496846.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-02T08:00:00+01:00",
+        "detected_at": "02.11.2026 07:08"
       },
       {
-        "id": "7d0c2098bd381ec2",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Demos gegen Wohnungsnot in Portugal - Protestcamps geräumt",
-        "link": "https://www.tagesschau.de/ausland/portugal-protest-100.html",
-        "published": "Sun, 01 Nov 2026 10:46:44 +0100",
-        "detected_at": "01.11.2026 10:00",
-        "is_priority": true,
-        "matched_keywords": [
-          "geg"
-        ]
-      },
-      {
-        "id": "c5a524a6ce59457d",
-        "target_id": "src-bmwk",
-        "target_name": "BMWK (Wirtschaft & Industrie)",
-        "category": "Investitionen & Geopolitik",
-        "title": "Regionalförderung - Bayerisches Wirtschaftsministerium",
-        "link": "https://news.google.com/rss/articles/CBMibEFVX3lxTE41UTB4SEhCMFBpNEN3WFFTcld5eDY4R2k5MEdIbGpoT0xwX3BsX2l2ZkY3TU1tb21FQUJUbjJPbUNqSEtpbDNJLUVlTzNPeURvZHFXMHBRMmpLNHVJQlFUTmtDZnI4Wm54ZlFfRA?oc=5",
-        "published": "Fri, 10 Dec 2021 00:46:31 GMT",
-        "detected_at": "01.11.2026 09:47"
-      },
-      {
-        "id": "00f7d1cc99b66230",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Kommentar: Lawrows Gebaren ist unerträglich – Trump macht’s möglich",
-        "link": "https://www.handelsblatt.com/meinung/kommentare/kommentar-lawrows-gebaren-ist-unertraeglich-trump-machts-moeglich/100266363.html",
-        "published": "Sun, 01 Nov 2026 02:37:51 GMT",
-        "detected_at": "01.11.2026 09:47"
-      },
-      {
-        "id": "12373f37afa578e7",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Hackerangriff: FBI: Nordkoreanische Hacker stecken hinter milliardenschwerem Krypto-Diebstahl",
-        "link": "https://www.handelsblatt.com/finanzen/maerkte/devisen-rohstoffe/binance-fbi-nordkorea-hinter-milliardenschwerem-krypto-diebstahl/100266403.html",
-        "published": "Sun, 01 Nov 2026 06:33:08 GMT",
-        "detected_at": "01.11.2026 09:47"
-      },
-      {
-        "id": "75b5d878fdb6977e",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Hemmes mathematische Rätsel: Wie lang ist die Strecke x? - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMickFVX3lxTE5ERUpXTXZIYnFHaUlHLUhUUFZuZDIyOWpjNTR1QmZqajlBVng5NmVwbWV2bUdNVHJwMkk1N2F6S2VUOWQwN3VEbHhTMzBFVnZmS0NmMGh1T2IySG1wOVNsc0Z6VVFaYTRmQzNWdEpub2IwQQ?oc=5",
-        "published": "Wed, 28 Oct 2026 07:00:00 GMT",
-        "detected_at": "01.11.2026 09:47"
-      },
-      {
-        "id": "aab49e0ed5c58f03",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ Iran-Krieg +++: Israelischer Oppositionspolitiker warnt vor neuem Krieg mit Iran unter Netanjahu",
-        "link": "https://www.handelsblatt.com/politik/international/iran-krieg-israelische-opposition-warnt-vor-neuem-krieg-mit-iran/100136895.html",
-        "published": "Sun, 01 Nov 2026 09:13:09 GMT",
-        "detected_at": "01.11.2026 09:17"
-      },
-      {
-        "id": "6f4362f3af153101",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Midterms: Mehr als 440 Millionen Dollar: So prägte Elon Musk mit Rekordspenden die nächste US-Wahl",
-        "link": "https://www.handelsblatt.com/politik/international/midterms-wie-elon-musk-mit-rekordspenden-die-naechste-us-wahl-praegt/100266417.html",
-        "published": "Sun, 01 Nov 2026 08:57:49 GMT",
-        "detected_at": "01.11.2026 09:17"
-      },
-      {
-        "id": "24e978ad0ad0b267",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ Iran-Krieg +++: Israelischer Oppositionspolitiker warnt vor neuem Krieg mit Iran unter Netanjahu",
-        "link": "https://www.handelsblatt.com/politik/international/iran-krieg-israelische-opposition-warnt-vor-neuem-krieg-mit-iran/100136895.html",
-        "published": "Sun, 01 Nov 2026 09:13:09 GMT",
-        "detected_at": "01.11.2026 09:17"
-      },
-      {
-        "id": "65d4a7f43f19fb4d",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Midterms: Mehr als 440 Millionen Dollar: So prägte Elon Musk mit Rekordspenden die nächste US-Wahl",
-        "link": "https://www.handelsblatt.com/politik/international/midterms-wie-elon-musk-mit-rekordspenden-die-naechste-us-wahl-praegt/100266417.html",
-        "published": "Sun, 01 Nov 2026 08:57:49 GMT",
-        "detected_at": "01.11.2026 09:17"
-      },
-      {
-        "id": "d47fb8650bb30195",
+        "id": "1aba3244dcbab8c7",
         "target_id": "src-heise",
         "target_name": "Heise Online (IT-Leitmedium DACH)",
         "category": "Technologie & KI",
-        "title": "heise-Angebot: iX-Workshop: Aufgaben eines Informationssicherheitsbeauftragten",
-        "link": "https://www.heise.de/news/iX-Workshop-Aufgaben-eines-Informationssicherheitsbeauftragten-11480254.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-01T10:00:00+01:00",
-        "detected_at": "01.11.2026 09:17"
+        "title": "KI-generierte Remixe: Spotify-Pläne verzögern sich wohl wegen der Künstler",
+        "link": "https://www.heise.de/news/KI-generierte-Remixe-Spotify-Plaene-verzoegern-sich-wohl-wegen-der-Kuenstler-11507459.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-02T07:54:00+01:00",
+        "detected_at": "02.11.2026 07:08"
       },
       {
-        "id": "21e1f66bdf664349",
+        "id": "41229bf932b42050",
         "target_id": "src-spektrum",
         "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
         "category": "Politik & Wissenschaft",
-        "title": "Leibniz' Esel im Welfenschloss: Calculemus oder emovemus? » Medicine & More » SciLogs - Wissenschaftsblogs - SciLogs",
-        "link": "https://news.google.com/rss/articles/CBMiowFBVV95cUxPdFRpSF9BVUIwT0JEeGJLaTFXbHdRWlJBM3psUUtEcDIzWnY5V1U4bi1ldlRyc1QtLWdvdzZubENIdlNlejhfTnY3Z09aaE1abnJPU2lENmhTTVpkZ0FyR1RXeEFtU0JPZlpVdkpoQkE4WjJWZjRKNGdSeC02OWtOM1ZEczBUby1Qc1lMYlFENXVLakN1bUVESnpBaTNGRmFEaDdr?oc=5",
-        "published": "Fri, 30 Oct 2026 22:48:24 GMT",
-        "detected_at": "01.11.2026 09:00"
+        "title": "Podcasts - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMieEFVX3lxTFBxeDdnT3psQUJQLUJ5M2IxOXdpMVRFWlBsOFRoSHFtZHN4Tk9HOTRwa25BeU9ZLWdZZXpMdWh2Nm9Kd0tjZXl2c1EtY2lNTkVqODE5bU93ak93Nm1teUJqaDRockZxZTQwMF9IZlpUQWZSYWFFem9ZYQ?oc=5",
+        "published": "Mon, 02 Nov 2026 07:04:16 GMT",
+        "detected_at": "02.11.2026 07:08"
       },
       {
-        "id": "5976a0d4944c2616",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
+        "id": "8fff023a98d3f138",
+        "target_id": "src-spektrum",
+        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "title": "»15 Entscheidungen, die dein Leben verlängern«: »Longevity« – was verlängert unser Leben wirklich? - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMiogFBVV95cUxQdDUteGdsSEVUTzlWNGdUdnpOVV8wOEN1N0ZSV0VlX2tjWGhDZTVsM2RBcDBBM0lfRVVnUVRuWlB6U3c4bk90NlF3SXpyNXY5N1hnMXZBOXhGYUlxZ2ZFMHd0cm4taHp2eHg0TVZYeEk2TGlLdGJBN25KQkJELU41LTNmUHJ2ZS1pUF9YWV8tenoxR0lWWHJ1REUyaTk2bzBPWkE?oc=5",
+        "published": "Mon, 02 Nov 2026 07:06:07 GMT",
+        "detected_at": "02.11.2026 07:08"
+      },
+      {
+        "id": "f5fa5dc150437e61",
+        "target_id": "src-reuters",
+        "target_name": "Reuters Business (Globale Märkte)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Robert Habeck: „China hat den Freihandel zu einer Falle gemacht“",
-        "link": "https://www.handelsblatt.com/politik/deutschland/robert-habeck-china-hat-den-freihandel-zu-einer-falle-gemacht/100265339.html",
-        "published": "Sun, 01 Nov 2026 07:01:35 GMT",
-        "detected_at": "01.11.2026 08:47"
+        "title": "Spanische Wirtschaft verliert deutlicher als erwartet an Schwung - Reuters",
+        "link": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxNX0xDajg5anpYazlIU2F4LV90YktLR2tkNklzSjJwVzFjZkd4V3Y4SlExYjNTbjJXSVlvNWlYeVNzZ3c0TkZhN3dQNVlBSlZkUmJBbkNwOF83T2o3TlJhazNxTllxYU0tXzI4YjBZTUlqWFZoOHVhUDFBRFlEV09sM0d4SW5YZFhhdm9BeDFHTjZRS3I2TW0zbTloZl9Oc3Q2UXAtSDlYQVpneGtnQmNyQWlVOWdNNU5PNDNV?oc=5",
+        "published": "Wed, 31 Jul 2019 07:00:00 GMT",
+        "detected_at": "02.11.2026 07:00"
       },
       {
-        "id": "21ec5a6f5dbad0e9",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Außenpolitik: Trump: Bolsonaro kann in USA bleiben",
-        "link": "https://www.handelsblatt.com/politik/international/brasilien-trump-bolsonaro-kann-in-usa-bleiben/100266404.html",
-        "published": "Sun, 01 Nov 2026 06:53:24 GMT",
-        "detected_at": "01.11.2026 08:47"
-      },
-      {
-        "id": "bd183243c485bb3b",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ Ukraine-Krieg +++: Russische Industrieanlage durch ukrainischen Drohnenangriff beschädigt",
-        "link": "https://www.handelsblatt.com/politik/international/ukraine-russische-industrieanlage-bei-drohnenangriff-beschaedigt/27982126.html",
-        "published": "Sun, 01 Nov 2026 08:41:31 GMT",
-        "detected_at": "01.11.2026 08:47"
-      },
-      {
-        "id": "bd8537eb9f8b798e",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Israel: Protest gegen Netanjahu bringt arabische Israelis an die Wahlurne",
-        "link": "https://www.handelsblatt.com/politik/international/israel-protest-gegen-netanjahu-bringt-arabische-israelis-an-die-wahlurne/100266412.html",
-        "published": "Sun, 01 Nov 2026 08:21:24 GMT",
-        "detected_at": "01.11.2026 08:47",
-        "is_priority": true,
-        "matched_keywords": [
-          "geg"
-        ]
-      },
-      {
-        "id": "619b5a842d67ff8c",
+        "id": "0725af5dc162c03c",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
         "title": "Robert Habeck: „China hat den Freihandel zu einer Falle gemacht“",
-        "link": "https://www.handelsblatt.com/politik/deutschland/robert-habeck-china-hat-den-freihandel-zu-einer-falle-gemacht/100265339.html",
-        "published": "Sun, 01 Nov 2026 07:01:35 GMT",
-        "detected_at": "01.11.2026 08:47"
+        "link": "https://www.handelsblatt.com/politik/deutschland/robert-habeck-china-hat-den-freihandel-zu-einer-falle-gemacht-01/100265339.html",
+        "published": "Mon, 02 Nov 2026 06:40:00 GMT",
+        "detected_at": "02.11.2026 06:54"
       },
       {
-        "id": "bc35364f8c17d28e",
+        "id": "bc70fe3fe31fb458",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Marktbericht: DAX dürfte mit Gewinnen in den November starten",
+        "link": "https://www.tagesschau.de/wirtschaft/finanzen/marktberichte/marktbericht-dax-dow-geldanlage-168.html",
+        "published": "Mon, 02 Nov 2026 07:39:47 +0100",
+        "detected_at": "02.11.2026 06:54"
+      },
+      {
+        "id": "8955cdce0b2fbaea",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Morning Briefing: Hilft Unternehmen nur die Rückkehr der Deutschland AG?",
+        "link": "https://www.handelsblatt.com/meinung/morningbriefing/morning-briefing-hilft-unternehmen-nur-die-rueckkehr-der-deutschland-ag/100266479.html",
+        "published": "Mon, 02 Nov 2026 04:50:17 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "efd49b51b267eb06",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Energiepolitik: USA drängen auf russische Gaslieferungen durch die Ukraine nach Europa",
+        "link": "https://www.handelsblatt.com/politik/international/energiepolitik-usa-draengen-auf-russische-gaslieferungen-nach-europa/100266530.html",
+        "published": "Mon, 02 Nov 2026 05:47:06 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "282bc1abbcae9e6c",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Börse am 2. November: Sechs Punkte, die für Anleger heute wichtig sind",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/dax-und-boerse-aktuell-sechs-punkte-die-fuer-anleger-heute-wichtig-sind/100002161.html",
+        "published": "Mon, 02 Nov 2026 05:14:00 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "1ee3e12b517e1784",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Nikkei, Yen, Hang Seng: Asiens Börsen stabilisieren sich – Ölpreise geben nach",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/nikkei-yen-hang-seng-asiens-boersen-stabilisieren-sich-oelpreise-geben-nach/100266505.html",
+        "published": "Mon, 02 Nov 2026 04:30:57 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "6a1184ecf28fbbff",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Außenpolitik: Trump: Bolsonaro kann in USA bleiben",
-        "link": "https://www.handelsblatt.com/politik/international/brasilien-trump-bolsonaro-kann-in-usa-bleiben/100266404.html",
-        "published": "Sun, 01 Nov 2026 06:53:24 GMT",
-        "detected_at": "01.11.2026 08:47"
+        "title": "Militär: Deutschland und Großbritannien sollen bei militärischer KI kooperieren",
+        "link": "https://www.handelsblatt.com/politik/international/militaer-deutschland-und-grossbritannien-sollen-bei-militaerischer-ki-kooperieren/100266534.html",
+        "published": "Mon, 02 Nov 2026 06:00:31 GMT",
+        "detected_at": "02.11.2026 06:38"
       },
       {
-        "id": "0c0830e375e116c3",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Ukraine: Zehn Tage gegen den Krieg im Kopf",
-        "link": "https://www.tagesschau.de/ausland/europa/ukraine-erholung-soldaten-100.html",
-        "published": "Sun, 01 Nov 2026 09:43:57 +0100",
-        "detected_at": "01.11.2026 08:47",
-        "is_priority": true,
-        "matched_keywords": [
-          "geg"
-        ]
-      },
-      {
-        "id": "fe849e799b8eca21",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Microcars boomen - aber wie sicher sind sie?",
-        "link": "https://www.tagesschau.de/inland/gesellschaft/microcars-sicherheit-100.html",
-        "published": "Sun, 01 Nov 2026 09:41:59 +0100",
-        "detected_at": "01.11.2026 08:47"
-      },
-      {
-        "id": "d33717a1da2c4431",
+        "id": "aa32bd7b07927ed1",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Innenpolitik: Würde das Leben vieler Menschen verändern: Kramp-Karrenbauer warnt vor Bündnissen mit Linken oder AfD",
-        "link": "https://www.handelsblatt.com/politik/deutschland/innenpolitik-kramp-karrenbauer-warnt-vor-buendnissen-mit-linken-oder-der-afd/100266411.html",
-        "published": "Sun, 01 Nov 2026 08:03:22 GMT",
-        "detected_at": "01.11.2026 08:17"
+        "title": "Energiepolitik: USA drängen auf russische Gaslieferungen durch die Ukraine nach Europa",
+        "link": "https://www.handelsblatt.com/politik/international/energiepolitik-usa-draengen-auf-russische-gaslieferungen-nach-europa/100266530.html",
+        "published": "Mon, 02 Nov 2026 05:47:06 GMT",
+        "detected_at": "02.11.2026 06:38"
       },
       {
-        "id": "0416ad7d2beb32cb",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Steinmeier zu KI: \"Nicht das Ob steht zur Frage, sondern das Wie\"",
-        "link": "https://www.tagesschau.de/inland/innenpolitik/steinmeier-ki-100.html",
-        "published": "Sun, 01 Nov 2026 09:01:11 +0100",
-        "detected_at": "01.11.2026 08:17"
-      },
-      {
-        "id": "fa4ae0b5b13f85f9",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Wie KI Entwicklung und Alltag verändert - kreativ auf Knopfdruck?",
-        "link": "https://www.tagesschau.de/wirtschaft/technologie/ki-veraenderung-wirtschaft-alltag-100.html",
-        "published": "Sun, 01 Nov 2026 09:00:49 +0100",
-        "detected_at": "01.11.2026 08:17"
-      },
-      {
-        "id": "5f8b216f94bf6f3b",
+        "id": "13e4b1a230ce413e",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Industrie: Erste Warnstreiks der Industrie: Das ist neben größeren Demonstrationen geplant",
-        "link": "https://www.handelsblatt.com/politik/deutschland/industrie-erste-warnstreiks-der-industrie-groessere-demonstrationen-geplant/100266409.html",
-        "published": "Sun, 01 Nov 2026 07:48:23 GMT",
-        "detected_at": "01.11.2026 08:00"
+        "title": "Wahl: Sozialistische Amtsinhaberin siegt bei Stichwahl in Bulgarien",
+        "link": "https://www.handelsblatt.com/politik/international/bulgarien-sozialistische-amtsinhaberin-siegt-bei-stichwahl/100266529.html",
+        "published": "Mon, 02 Nov 2026 05:12:52 GMT",
+        "detected_at": "02.11.2026 06:38"
       },
       {
-        "id": "d60c38a9a40d2c6c",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Bunte \"Tag der Toten\"-Parade zieht durch Mexiko-Stadt",
-        "link": "https://www.tagesschau.de/ausland/mexiko-feierlichkeiten-november-100.html",
-        "published": "Sun, 01 Nov 2026 08:57:56 +0100",
-        "detected_at": "01.11.2026 08:00"
+        "id": "f95a636454a70c9d",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Steinmeier-Nachfolge: SPD nominiert Michel Friedman für die Bundesversammlung",
+        "link": "https://www.handelsblatt.com/politik/deutschland/steinmeier-nachfolge-spd-nominiert-michel-friedman-fuer-die-bundesversammlung/100266516.html",
+        "published": "Mon, 02 Nov 2026 04:20:12 GMT",
+        "detected_at": "02.11.2026 06:38"
       },
       {
-        "id": "d34f55bbb57764d3",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Trump lädt Flávio Bolsonaro zum Bleiben ein",
-        "link": "https://www.tagesschau.de/ausland/amerika/trump-bolsonaro-usa-100.html",
-        "published": "Sun, 01 Nov 2026 08:45:02 +0100",
-        "detected_at": "01.11.2026 08:00"
+        "id": "d593581703c8b269",
+        "target_id": "src-bundesbank",
+        "target_name": "Deutsche Bundesbank (Presse & Daten)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Dr. Philipp Nimmermann - Deutsche Bundesbank",
+        "link": "https://news.google.com/rss/articles/CBMilAFBVV95cUxQX1NUNFZuRW5tdi03eHgxT2FBNEZuempZMGstSVd4ZEVCUEFSdWZ1RDhQUnNDSnhKczNzdmhFT0t2ckQydjhHRVU0V0NNM1IzeURpTnpZLXNFakdIQTlHWE9FV29lSW45YWlFR1F4clZNSWNHUTJaSXpsQzc5RmlPbTE2aElSVDN4Z1M0U3owNlB2b3Zl?oc=5",
+        "published": "Mon, 02 Nov 2026 06:20:59 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "282cef5c168d6ff1",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "DAX-FLASH: Leichtes Plus erwartet - Asien hält sich gut nach Nasdaq-Schwäche - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMixAFBVV95cUxOMS1QTG5CcUhESjBHdzctS2YxcXdSeG1YS0xSdldqSWI5ckotXzNobnVsLWU1cnNmNXMxV0p2ZXdBQjVUc3YtbUdkTGNwYm5lRllLVFZ4c2ZVQTlfeUtMSURHWlJrb1FzX29fU3Q5SVQ3bFFPWGgxODQ3ZVUtWGZCcmhCNF9WWE5rWF9jRUtrVEktSXRPdEdjY3Q5MUs3Y2ozb25EelMxOHhpSzlyemktM2FzZUxRZGZncmFVdVN5bkg5cVBx?oc=5",
+        "published": "Mon, 02 Nov 2026 05:46:38 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "a5615e396d648139",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "EUREX/DAX-Futures im Frühhandel etwas fester - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMinAFBVV95cUxOTjJfSm5FRUJraW1oRDFyaVd2M2dKMnJGczFrRFZ4eklCbFVMekVDRXNpNTc0RHlRclBoQkdsMXRqZzBKVXNGZldVR2Y1TXVmXzdCc2NuTThULTdGTW8yMEI5bzhIWHcwbDdLNUhwdFJIVzdWbWFFcVBlS1F6OVNNLWVvNjR0NTdhUGtYR056OTRnMGUzMUVPQzRpckI?oc=5",
+        "published": "Mon, 02 Nov 2026 05:09:42 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "f4d7466bb603b85f",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "WOCHENAUSBLICK: Weiterer Dax-Anstieg hängt an US-Zwischenwahlen und -Jobdaten - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOcG5XaHppSFc2ZmNHZ1JldWN1akYzczJjM1JDb1hRalRFOFhja3hnd2d1dURBUndGYkUwOFJiYmY5aEY2RTNRQ2VRQWlvQUtaM0VBY2ZrLUhBZmFsYjVsVXoxQm5UWTV1MkFQbmprOUJSb2dHMlVMVXd2Z1diMlJwQlJGZFF2RElKbmlDRTA4WGlpZjNZTW9xQ25LWWg0SlY3OTg3N081R1prV2xtVl9PUm5wdHZxMldNRnlicGo0aXBLbkdPSmc?oc=5",
+        "published": "Mon, 02 Nov 2026 04:49:38 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "e269976b8a236b4c",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Asiens Börsen uneinheitlich -- SMI geht etwas fester ins Wochenende -- DAX schliesst mit Verlusten - Finanzen.ch",
+        "link": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxPdTVzXzZEd250eDdFUlNNbUZYQkdNRnBXZzFmNWwtNEJVUlNDUXI0TFh1SWpVNzBsRmw3M09rZHlkWFB5dDJBbUhjWjBLbFJOS0lEUUE4U3lVT1czMnhMckg3NDcybU1LT3dzOVJkNzAtTUd3Z3BRSUdraGZYalhVanlhRGd5Y0pNWlZTU0lVR0NrNDJVM3BfR2VUVl9wU3c5eWIxVGhXUV9iUmZTN3prNUdsNjRuSHpLb2tkSW5VSGFCUU9HX2d1cnIyVHNMcUZncXRPVkpYSnpmV2pu?oc=5",
+        "published": "Mon, 02 Nov 2026 06:17:59 GMT",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "9fb819d9fe517f1a",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise+ | Home Assistant im Selbstversuch: Vom Smart-Home-Chaos zu voller Flexibilität",
+        "link": "https://www.heise.de/hintergrund/Home-Assistant-im-Selbstversuch-Vom-Smart-Home-Chaos-zu-voller-Flexibilitaet-11431838.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
+        "published": "2026-11-02T07:30:00+01:00",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "2fb7cb0a7db4e7bb",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Absturz bis 2034: NASA prüft jetzt doch die Anhebung des Hubble-Orbits",
+        "link": "https://www.heise.de/news/Absturz-bis-2034-NASA-prueft-jetzt-doch-die-Anhebung-des-Hubble-Orbits-11507444.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-02T07:13:00+01:00",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "3e15adcf16216b68",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "E-Auto Kia EV2 mit 61 kWh im Test: Großer Speicher – ein Gewinn im Alltag?",
+        "link": "https://www.heise.de/tests/E-Auto-Kia-EV2-mit-61-kWh-im-Test-Grosser-Speicher-ein-Gewinn-im-Alltag-11504951.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-02T07:00:00+01:00",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "0e716a952dd7de3f",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Die Hupe: Wie der Irankrieg die Spritpreise und den E-Auto-Markt beeinflusst",
+        "link": "https://www.heise.de/meinung/Die-Hupe-Folge-78-Irankrise-Leapmotor-B03X-und-Ferrari-12Cilindri-Manuale-11504947.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-02T07:00:00+01:00",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "90744825e713e01e",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Apps für Notfall-Warnungen in Ukraine und Russland geknackt",
+        "link": "https://www.heise.de/news/Apps-fuer-Notfall-Warnungen-in-Ukraine-und-Russland-geknackt-11507440.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-02T06:52:00+01:00",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "aa90c5906149e6d0",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Montag: Spyware-Warnung für Bundespolitiker, Meta mit eigenem humanoiden Roboter",
+        "link": "https://www.heise.de/news/Montag-Spyware-Warnung-fuer-Bundespolitiker-Meta-mit-eigenem-humanoiden-Roboter-11507424.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-02T06:15:00+01:00",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "a3cda5eee4ed9da0",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "Borrowed reading: stories from our extended colleagues",
+        "link": "https://techcrunch.com/2026/11/01/borrowed-reading-stories-from-our-extended-colleagues/",
+        "published": "Mon, 02 Nov 2026 04:23:48 +0000",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "4a845b171a1832ac",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "More Rules, Longer Lists? Benchmarking Self-Evolving Agents on a Hidden-Rule Curriculum",
+        "link": "https://arxiv.org/abs/2610.40758",
+        "published": "Mon, 02 Nov 2026 00:00:00 -0500",
+        "detected_at": "02.11.2026 06:38"
+      },
+      {
+        "id": "0e0379c7b4d5cac9",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "Beyond Plausible Prediction: Safety Sufficiency in Web World Models",
+        "link": "https://arxiv.org/abs/2610.40798",
+        "published": "Mon, 02 Nov 2026 00:00:00 -0500",
+        "detected_at": "02.11.2026 06:38"
       }
     ]
   }

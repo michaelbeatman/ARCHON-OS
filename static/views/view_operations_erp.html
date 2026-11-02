@@ -1,0 +1,210 @@
+<!-- VIEW CONTAINER: VORGÄNGE & VERTRÄGE (SÄULE 3: WIRTSCHAFT & ERP) -->
+<div id="view-operations-erp" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+
+  <!-- ========================================================================= -->
+  <!-- 80px HEADER: ANGEBOTE, AUFTRÄGE, DEAL-PIPELINE & VERTRAGS-FRISTENRADAR    -->
+  <!-- ========================================================================= -->
+  <header id="ops-erp-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="relative shrink-0 flex items-center justify-center">
+        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h2 id="ops-erp-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">
+            Vorgänge &amp; Verträge — Angebote &amp; Aufträge
+          </h2>
+          <span id="erp-ops-volume-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 shrink-0">
+            Offene Angebote: 0.00 EUR
+          </span>
+        </div>
+        <p id="ops-erp-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">
+          Nuclos-Belegfluss: Deal-Pipeline &rarr; Angebot (ANG) &rarr; Auftrag (AB) &rarr; 1-Klick-Wandlung in Rechnung (RE) &amp; Vertragsfristen
+        </p>
+      </div>
+    </div>
+
+    <!-- Rechts: 3 Cadre-Subtab-Kacheln (72px) -->
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <button
+        type="button"
+        id="ops-erp-subtab-btn-offers"
+        onclick="switchErpOpsSubTab('offers')"
+        class="ops-erp-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/berichte.png" alt="Angebote" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="ops-erp-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Angebote/AB</span>
+      </button>
+
+      <button
+        type="button"
+        id="ops-erp-subtab-btn-pipeline"
+        onclick="switchErpOpsSubTab('pipeline')"
+        class="ops-erp-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/kanban.png" alt="Pipeline" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="ops-erp-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Pipeline</span>
+      </button>
+
+      <button
+        type="button"
+        id="ops-erp-subtab-btn-contracts"
+        onclick="switchErpOpsSubTab('contracts')"
+        class="ops-erp-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/finance_contracts.png" alt="Verträge" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="ops-erp-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Verträge</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 1: ANGEBOTE (ANG) & AUFTRÄGE (AB) MIT 1-KLICK-RECHNUNGSWANDLUNG  -->
+  <!-- ========================================================================= -->
+  <div id="ops-erp-view-offers" class="flex-1 min-h-0 w-full grid grid-cols-1 lg:grid-cols-12 gap-2 overflow-hidden">
+
+    <!-- LINKS (7 Cols): Liste der Angebote & Aufträge -->
+    <div class="lg:col-span-7 h-full min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 flex flex-col gap-2.5 overflow-hidden shadow-xs">
+      <div class="flex items-center justify-between gap-2 shrink-0">
+        <span class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">Aktuelle Angebote (ANG) &amp; Aufträge (AB)</span>
+        <button
+          type="button"
+          onclick="resetErpOfferBuilder()"
+          class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+        >
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Neues Angebot</span>
+        </button>
+      </div>
+
+      <div id="erp-offers-list-container" class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+        <div class="text-xs text-[var(--muted-foreground)] p-4 text-center font-mono">Lade Vorgänge...</div>
+      </div>
+    </div>
+
+    <!-- RECHTS (5 Cols): Angebots-/Beleg-Konfigurator -->
+    <div class="lg:col-span-5 h-full min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3 overflow-y-auto shadow-xs">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+        <div>
+          <h3 class="text-sm font-black text-[var(--foreground)]">Vorgang / Angebot erstellen</h3>
+          <p class="text-[11px] text-[var(--muted-foreground)]">Kunde &amp; Artikel aus dem Stamm wählen</p>
+        </div>
+        <button
+          type="button"
+          onclick="submitErpOfferDocument()"
+          class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer shadow-xs"
+        >
+          Beleg speichern
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5">
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Belegtyp</label>
+          <select id="erp-doc-type" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-semibold text-[var(--foreground)]">
+            <option value="offer">Angebot (ANG)</option>
+            <option value="order">Auftragsbestätigung (AB)</option>
+            <option value="invoice">Direkt-Rechnung (RE)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Empfänger / Adresse *</label>
+          <select id="erp-doc-entity-select" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-semibold text-[var(--foreground)]"></select>
+        </div>
+
+        <div class="col-span-2 pt-2 border-t border-[var(--border)]">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[10px] font-mono uppercase font-bold text-[var(--foreground)]">Belegpositionen (aus Artikelstamm)</span>
+            <button
+              type="button"
+              onclick="addErpDocBuilderLine()"
+              class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold cursor-pointer"
+            >
+              + Position
+            </button>
+          </div>
+          <div id="erp-doc-lines-builder" class="space-y-2"></div>
+        </div>
+
+        <div class="col-span-2">
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Beleg-Notiz / Konditionen</label>
+          <textarea id="erp-doc-notes" rows="2" placeholder="Angebot gültig für 30 Tage..." class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)]"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 2: DEAL-PIPELINE & GEWICHTETER UMSATZ-FORECAST                   -->
+  <!-- ========================================================================= -->
+  <div id="ops-erp-view-pipeline" class="hidden flex-1 min-h-0 w-full flex flex-col gap-3 overflow-y-auto p-1">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 shrink-0">
+      <div class="rounded-2xl bg-[var(--card)] border border-[var(--border)] p-3.5 shadow-xs">
+        <div class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Lead &amp; Discovery (10–25%)</div>
+        <div class="text-lg font-black text-[var(--foreground)] mt-1">Qualifizierung</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5">LinkedIn-Leads &amp; Erstgespräche</div>
+      </div>
+      <div class="rounded-2xl bg-[var(--card)] border border-[var(--border)] p-3.5 shadow-xs">
+        <div class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Proposal / Angebot (50%)</div>
+        <div id="erp-pipe-offers-count" class="text-lg font-black text-indigo-600 dark:text-indigo-400 mt-1">0 aktive Angebote</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5">Automatisch aus ANG-Belegen</div>
+      </div>
+      <div class="rounded-2xl bg-[var(--card)] border border-[var(--border)] p-3.5 shadow-xs">
+        <div class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Closed Won / Gebucht (100%)</div>
+        <div id="erp-pipe-won-volume" class="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-1">0.00 EUR</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5">Realisierter Rechnungsumsatz</div>
+      </div>
+      <div class="rounded-2xl bg-[var(--card)] border border-[var(--border)] p-3.5 shadow-xs flex flex-col justify-between">
+        <div class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Schnell-Aktion</div>
+        <button type="button" onclick="switchErpOpsSubTab('offers')" class="mt-2 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold cursor-pointer">
+          Angebot kalkulieren &rarr;
+        </button>
+      </div>
+    </div>
+
+    <div id="erp-pipeline-leads-list" class="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 space-y-2 overflow-y-auto"></div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 3: VERTRÄGE & KÜNDIGUNGSFRISTEN-RADAR                            -->
+  <!-- ========================================================================= -->
+  <div id="ops-erp-view-contracts" class="hidden flex-1 min-h-0 w-full bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3 overflow-y-auto">
+    <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+      <div>
+        <h3 class="text-sm font-black text-[var(--foreground)]">Vertrags- &amp; Fristenmanagement (SLA / Abo / NDA)</h3>
+        <p class="text-xs text-[var(--muted-foreground)]">Kündigungsfristen-Überwachung und direkte Dokumentenerstellung mit Adressen aus dem Stamm</p>
+      </div>
+      <button
+        type="button"
+        onclick="setTab('corporate'); if(typeof switchCorporateSubTab==='function') switchCorporateSubTab('templates');"
+        class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer"
+      >
+        NDA / Vertrag im Studio erstellen
+      </button>
+    </div>
+
+    <div id="erp-contracts-overview-box" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 p-3.5 space-y-1">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-[var(--foreground)]">Archon Enterprise Rahmenvertrag (SLA)</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600">AKTIV</span>
+        </div>
+        <div class="text-xs text-[var(--muted-foreground)]">Partner: Nordstern Digital AG (Debitor 10001) · Laufzeit: 12 Monate · Kündigungsfrist: 30 Tage</div>
+      </div>
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 p-3.5 space-y-1">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-[var(--foreground)]">Dedicated Server &amp; GPU Cluster Hosting</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/10 text-sky-600">LIEFERANT</span>
+        </div>
+        <div class="text-xs text-[var(--muted-foreground)]">Partner: Hetzner Cloud Infrastructure GmbH (Kreditor 70001) · Abrechnung: Monatlich</div>
+      </div>
+    </div>
+  </div>
+
+</div>

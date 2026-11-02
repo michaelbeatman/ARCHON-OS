@@ -1,10 +1,10 @@
 # ARCHON AGENTIC OS 2026
 ## Offizielles System-Handbuch, Modul-Referenz & Praxisführer
 
-> **System-Version:** v0.3.6 (Sentinel) / v0.3.7  
-> **Klassifizierung:** Intern / Streng Vertraulich (GoBD & ISO 27001 konform)  
-> **Stand:** 31. Oktober 2026  
-> **Geltungsbereich:** Gesamtes Archon OS Ökosystem (57 Fachagenten, 14 Fachmodule, Daemon-Kernel, Governance & Spezialleitfäden)
+> **System-Version:** v0.3.7 Enterprise (4-Säulen-ERP)  
+> **Klassifizierung:** Intern / Streng Vertraulich (DSGVO, GoBD & ISO 27001 konform)  
+> **Stand:** 1. November 2026  
+> **Geltungsbereich:** Gesamtes Archon OS Ökosystem (4 System-Säulen, 57 Fachagenten, 19 Fachmodule, Physische Mandanten-DB-Isolation, Daemon-Kernel & Spezialleitfäden)
 
 ---
 
@@ -55,39 +55,54 @@
   - 8.1 Übersicht
   - 8.2 Debatte
   - 8.3 Live
-- **9. Rechnungswesen**
-  - 9.1 Belege
-  - 9.2 Analytics
-  - 9.3 Verträge
-  - 9.4 Mahnwesen
-- **10. Approval-Policies**
-  - 10.1 Finanzen
-  - 10.2 E-Mail
-  - 10.3 System & IT
-- **11. Corporate**
-  - 11.1 Stammdaten
-  - 11.2 Formulare & Vorlagen
-- **12. Token Guard**
-  - 12.1 Übersicht
-  - 12.2 Sessions
-  - 12.3 Drosselung
-- **13. Telemetrie & Logs**
-  - 13.1 Container
-  - 13.2 Agenten
-  - 13.3 Audit
-- **14. System Control Center**
-  - 14.1 Hermes Core
-  - 14.2 Autonomie & Module
-  - 14.3 Container & Dienste
-  - 14.4 Provider & Gateway
-  - 14.5 API-Keys & Access
-  - 14.6 Methodik
-  - 14.7 Plugins
-  - 14.8 Kommunikation
-  - 14.9 Design
-  - 14.10 Systemupdate
-- **15. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)**
-- **16. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector**
+- **9. Adressen & CRM (Säule 3: Wirtschaft & ERP)**
+  - 9.1 Alle Adressen & Gesamtübersicht
+  - 9.2 LinkedIn & Netzwerk-Kontakte
+  - 9.3 Kundenstamm (Debitoren 10000+)
+  - 9.4 Lieferantenstamm (Kreditoren 70000+)
+- **10. Artikel & Leistungen (Säule 3: Wirtschaft & ERP)**
+  - 10.1 Gesamtkatalog (Alle Artikel & Leistungen)
+  - 10.2 Zeit / Service & Pauschalen
+  - 10.3 SaaS & Abonnements
+  - 10.4 Produkte & Hardware (inkl. Lagerbestand)
+  - 10.5 Artikel-Drawer & VARIO 8 Stammdaten-Inspektor
+- **11. Vorgänge & Verträge (Säule 3: Wirtschaft & ERP)**
+  - 11.1 Angebote (ANG) & Aufträge (AB)
+  - 11.2 Deal-Pipeline & Gewichteter Umsatz-Forecast
+  - 11.3 Vertrags- & Fristenradar
+- **12. Rechnungswesen (Säule 3: Wirtschaft & ERP)**
+  - 12.1 Belege
+  - 12.2 Analytics
+  - 12.3 Verträge
+  - 12.4 Mahnwesen
+- **13. Corporate & Mandant (Säule 3: Wirtschaft & ERP)**
+  - 13.1 Stammdaten
+  - 13.2 Formulare & Vorlagen
+- **14. Approval-Policies (Säule 4: Infrastruktur & Governance)**
+  - 14.1 Finanzen
+  - 14.2 E-Mail
+  - 14.3 System & IT
+- **15. Token Guard**
+  - 15.1 Übersicht
+  - 15.2 Sessions
+  - 15.3 Drosselung
+- **16. Telemetrie & Logs**
+  - 16.1 Container
+  - 16.2 Agenten
+  - 16.3 Audit
+- **17. System Control Center**
+  - 17.1 Hermes Core
+  - 17.2 Autonomie & Module
+  - 17.3 Container & Dienste
+  - 17.4 Provider & Gateway
+  - 17.5 API-Keys & Access
+  - 17.6 Methodik
+  - 17.7 Plugins
+  - 17.8 Kommunikation
+  - 17.9 Design
+  - 17.10 Systemupdate
+- **18. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)**
+- **19. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector**
 - **Anhang I: 5 Praxis-Use-Cases**
 - **Anhang II: Archon OS Komplett-Glossar (118 Module + Upgrades)**
 - **Anhang III: Decision Engine & Boardroom (55 Lösungs-Frameworks)**
@@ -126,6 +141,7 @@
   - V.19 CI/CD Pipeline & E2E-Testing
   - V.20 Systemarchitektur & Technisches Audit 2026
   - V.21 Archon OS Strategische Roadmap 2026
+  - V.22 Archon ERP & CRM Architektur-Spezifikation (Säule 3)
 
 ---
 
@@ -693,22 +709,132 @@ Praxis-Workflow (Schritt für Schritt):
 
 ---
 
-## 9. Rechnungswesen
+## 9. Adressen & CRM (Säule 3: Wirtschaft & ERP)
+
+Das Modul **Adressen & CRM** bildet den Einstiegspunkt der dritten System-Säule (*Wirtschaft & ERP*). Es vereint ein B2B-CRM (LinkedIn-Netzwerk, E-Mail-Chronik, 360°-KI-Dossiers) mit der buchhalterischen Stammdatenpflege für Kunden (Debitoren 10000+) und Lieferanten (Kreditoren 70000+). Gemäß DSGVO und GoBD speichert Archon OS sämtliche ERP-Daten physisch getrennt je Mandant in einer eigenen SQLite-WAL-Datenbank unter data/tenants/{company_id}/erp.db.
+
+> 📖 **Vertiefender Leitfaden:** Siehe [Anhang V.22: Archon ERP & CRM Architektur-Spezifikation (Säule 3)](#v22-archon-erp--crm-architektur-spezifikation-säule-3).
+
+### 9.1 Kontakte (Haupttabelle & CRM-Adressstamm)
+![Adressen & CRM – Kontakte](system/screenshots/addresses_all.png)
+- **Vollständige CRM-Tabelle:** Darstellung aller 2.331 Kontakte mit Name, Firma, Rolle/Position, Profilbild-Avatar, Rating-Sternen (1–5), Status-Pill (z. B. *Im Dialog*, *Erstnachricht*, *Vernetzt*, *Parkposition*), Nachrichtenverlaufs-Badge, Vernetzungsdatum und Schnellzugriff auf Datensatz-Aktionen.
+- **Multikriterielle Schnellfilter:** Volltextsuche nach Name, Unternehmen oder Position, Schnellfilter nach Status (Vernetzt: 999, Erstnachricht: 70, Im Dialog: 33, Regelmäßiger Kontakt: 12, Parkposition: 21 etc.), Regionenfilter (DACH, International) sowie Zeitbereichs-Eingrenzung.
+- **Performante Paginierung:** Client- und serverseitig paginierte Tabellenansicht mit Checkboxen zur Stapelverarbeitung.
+
+### 9.2 Kundenstamm (Debitoren 10000+)
+![Adressen & CRM – Kundenstamm Debitoren](system/screenshots/addresses_customers.png)
+- **Debitorenverzeichnis:** Gefilterte Ansicht aller Mandanten, Auftraggeber und aktiven Debitoren mit automatischer Vergabe fortlaufender Debitorennummern im Bereich 10000–69999.
+- **Konditionsverwaltung:** Hinterlegung von Zahlungszielen (Netto-Tage), Skonto-Prozentsätzen, USt-IdNr., Rechnungsadressen und verknüpften Belegen (Angebote, Rechnungen).
+
+### 9.3 Lieferantenstamm (Kreditoren 70000+)
+![Adressen & CRM – Lieferantenstamm Kreditoren](system/screenshots/addresses_suppliers.png)
+- **Kreditorenverzeichnis:** Lieferanten-, Dienstleister- und Cloud-Infrastruktur-Stamm im DATEV-konformen Nummernkreis ab 70000.
+- **Zahlungsverkehr:** Hinterlegung von IBAN/BIC, Standard-Aufwandskonten (SKR03/SKR04), Eingangsrechnungs-Prüfpfaden und hinterlegten Einkaufsartikeln.
+
+### 9.4 Alle Nachrichten (Multi-Channel Timeline)
+![Adressen & CRM – Alle Nachrichten](system/screenshots/addresses_messages.png)
+- **Zentrale Kommunikations-Chronik:** Aggregierter chronologischer Feed über alle 2.229 Nachrichten, Interaktionen und Kontaktpunkte hinweg.
+- **Kanal- & Richtungsfilter:** Direkte Filterung nach Übertragungskanal (LinkedIn: 2.220, E-Mail: 3, Persönliches Treffen: 3, Audio-Diktat, Notiz: 3) sowie Richtung (Erhalten: 492 vs. Gesendet: 1.737).
+- **Volltext-Expansion:** Ein-Klick-Umschaltung zwischen kompakter Snippet-Vorschau und vollständiger Nachrichtenanzeige inklusive Datums- und Uhrzeitstempel.
+
+### 9.5 Kalender & Wiedervorlagen
+![Adressen & CRM – Kalender](system/screenshots/addresses_calendar.png)
+- **Terminkoordination:** Kalendarische Übersicht aller anstehenden Termine, Follow-Ups und Wiedervorlagen (`naechster_termin`).
+- **Wiedervorlage-Logik:** Farbcodierte Dringlichkeitsstufen für überfällige, heutige und zukünftige Kontakt-Check-ins.
+
+### 9.6 Bericht (CRM-Missionskontrolle & KPI-Analyse)
+![Adressen & CRM – Bericht Missionskontrolle](system/screenshots/addresses_report.png)
+- **Echtzeit-KPI-Karten:** Sechs Kernmetriken: Aktive Kontakte (1.145), Antwortrate (32 %), Meeting-Rate (0 %), Personalberater / Executive Search (67), Stagnierte Kontakte (1.145) und Nächste Termine.
+- **Rollen-Verteilung:** Regex-basierte Kategorisierung in GF / Inhaber (56 %), Entscheider / Führung (14 %), Personalberater (6 %), Beratung, Finanzen etc. mit horizontalen Prozent-Balken.
+- **Status-Verteilung & Handlungsradar:** Übersicht der Pipeline-Phasen sowie "Was heute tun?"-Aktionslisten mit direkter Kontaktaufnahme.
+
+### 9.7 Datensatzansicht & Kontakt-Drawer (VARIO 8 Standard & 360°-Akte)
+![Adressen & CRM – Datensatzansicht Drawer](system/screenshots/addresses_drawer.png)
+- **80-Pixel-Kopfleiste mit 6 VARIO-Teilansichten:**
+  - **Übersicht:** 50/50 Split-Layout mit Stammdaten links und bilateralem Kommunikationsverlauf rechts (gemäß Port 3005 Referenzdesign).
+  - **Nachrichten:** Vollbreite Kommunikation mit chronologischer Timeline, Direkt-Nachrichtenkomposer und Schnellnotizen/Diktat.
+  - **Kaufmännisch:** Vollständige VARIO-Debitoren- und Kreditorendaten (Debitor 10000+, Kreditor 70000+, Zahlungsziele, Skonto, Kreditlimit, Preisgruppe, Bank/IBAN/BIC, USt-IdNr., Leitweg-ID).
+  - **Belege & Vorgänge:** VARIO-Belegfluss mit 1-Klick DIN-5008 PDF-Belegdruck für Angebote (ANG) und Aufträge (AB).
+  - **Ansprechpartner & Filialen:** Mehrere Personen je Unternehmen und abweichende Lieferadressen.
+  - **DSGVO & Compliance:** 1-Klick JSON-Export (Art. 15/20 DSGVO) sowie rechtssichere Anonymisierung (Art. 17 DSGVO).
+- **Ergonomisches Modal:** Schließen per Klick auf den abgedunkelten Hintergrund (Backdrop), Escape-Taste oder das markante Schließen-Kreuz (✕).
+
+---
+
+## 10. Artikel & Leistungen (Säule 3: Wirtschaft & ERP)
+
+Das Modul **Artikel & Leistungen** verwaltet den gesamten Leistungs-, Produkt- und Lizenzkatalog des aktiven Mandanten. Jede Position kalkuliert in Echtzeit den Deckungsbeitrag in Euro (margin_eur) sowie die prozentuale Handelsspanne (margin_pct) aus Netto-Verkaufspreis (VK) und Einkaufspreis (EK) und lässt sich direkt in Angebote, Auftragsbestätigungen und Rechnungen übernehmen.
+
+### 10.1 Gesamtkatalog (Alle Artikel & Leistungen)
+![Artikel & Leistungen – Gesamtkatalog](system/screenshots/items_all.png)
+- Übersicht aller aktiven Leistungspositionen, Beratungs-Tagessätze, SaaS-Lizenzen und physischen Produkte.
+- Live-Kalkulationskachel im rechten Inspektor: Automatische Berechnung von Rohgewinn (VK - EK) und Marge in Prozent bei jeder Preisänderung.
+- Direkte Zuordnung eines bevorzugten Lieferanten (Kreditor 70000+) inklusive Lieferanten-Artikelnummer.
+
+### 10.2 Zeit / Service & Pauschalen
+![Artikel & Leistungen – Zeit & Service](system/screenshots/items_service.png)
+- Verwaltung von Beratungsleistungen, Architektur-Workshops, Entwicklungs-Stundensätzen und Festpreis-Pauschalen.
+- Flexible Einheiten (Stunde, Tagessatz, Pauschal) mit hinterlegten Leistungsbeschreibungen für Angebote.
+
+### 10.3 SaaS & Abonnements
+![Artikel & Leistungen – SaaS & Abos](system/screenshots/items_saas.png)
+- Wiederkehrende Lizenz-, Hosting-, Wartungs- und Agenten-Infrastruktur-Abonnements (MRR / ARR).
+- Nahtlose Verknüpfung mit Laufzeitverträgen und automatischer Fälligkeitsüberwachung.
+
+### 10.4 Produkte & Hardware (inkl. Lagerbestand)
+![Artikel & Leistungen – Produkte & Hardware](system/screenshots/items_product.png)
+- Physische Produkte, Edge-AI-Workstations, Hardware-Bundles und Handelswaren.
+- Integrierte Bestandsführung mit aktuellem Lagerbestand, Mindestbestand (Meldebestand) und Lagerort.
+
+### 10.5 Artikel-Drawer & VARIO 8 Stammdaten-Inspektor
+![Artikel & Leistungen – Artikel Drawer](system/screenshots/items_drawer.png)
+- **80-Pixel-Kopfleiste mit 4 Teilansichten:**
+  - **Stammdaten:** Artikelnummer, Typ (Service, Pauschale, SaaS, Produkt), EAN/Barcode, Warengruppe, Einheit und Langbeschreibung.
+  - **Preise & Staffeln:** Standard-VK Netto, EK Netto, Fibu-Erlöskonten (SKR03 8400 / SKR04 4400) und VARIO-Mengenstaffelpreise (-5 %, -15 %).
+  - **Bestand & Konditionen:** Physische Bestandsführung (Mindestbestand, Lagerfach) und SaaS-Spezifika (Seats, Kündigungsfrist).
+  - **Verkaufshistorie:** Vollständige Rückverfolgbarkeit aller Belege (ANG, AB, RE), in denen die Position gebucht wurde.
+
+---
+
+## 11. Vorgänge & Verträge (Säule 3: Wirtschaft & ERP)
+
+Das Modul **Vorgänge & Verträge** bildet die operative Klammer zwischen Vertrieb, Projektabwicklung und Rechnungswesen. Nach dem Vorbild moderner ERP-Belegketten (z. B. Nuclos) lassen sich Angebote (ANG) und Auftragsbestätigungen (AB) mit einem Klick verlustfrei in GoBD-konforme Ausgangsrechnungen (RE) oder Gutschriften (GS) überführen.
+
+### 11.1 Angebote (ANG) & Aufträge (AB)
+![Vorgänge & Verträge – Angebote & Aufträge](system/screenshots/ops_erp_offers.png)
+- Beleg-Editor mit direkter Kundenauswahl aus dem Adressstamm und Positionsübernahme aus dem Artikelkatalog.
+- 1-Klick Belegfluss: Umwandlung eines Angebots (ANG) in eine Auftragsbestätigung (AB) oder direkt in eine Ausgangsrechnung (RE) im Modul Rechnungswesen.
+- DIN-5008 Beleg-Druck & PDF-Export: Formale Angebote und Auftragsbestätigungen mit Firmenbriefkopf, Bankverbindung, USt-Ausweis und Annahme-Unterschriftenfeld.
+- Automatische Summierung von Netto-Volumen, Umsatzsteuer und Brutto-Gesamtbetrag.
+
+### 11.2 Deal-Pipeline & Gewichteter Umsatz-Forecast
+![Vorgänge & Verträge – Deal-Pipeline](system/screenshots/ops_erp_pipeline.png)
+- Mehrstufiges Vertriebs-Board über die Phasen Lead, Qualified, Proposal, Negotiation und Closed Won.
+- Echtzeit-Berechnung des ungewichteten Pipeline-Volumens sowie des nach Abschlusswahrscheinlichkeit gewichteten Umsatz-Forecasts.
+
+### 11.3 Vertrags- & Fristenradar
+![Vorgänge & Verträge – Vertragsradar](system/screenshots/ops_erp_contracts.png)
+- Überwachung sämtlicher Kunden- und Lieferantenverträge inklusive Mindestlaufzeiten, Verlängerungsintervallen und Kündigungsfristen.
+- Automatische Fristen-Ampel (Aktiv, Bald fällig <= 30 Tage, Kritisch <= 14 Tage) mit Eskalation an Telegram und Operations.
+
+---
+
+## 12. Rechnungswesen (Säule 3: Wirtschaft & ERP)
 
 Das Modul Rechnungswesen bildet das kaufmännische Fundament von Archon OS.
 
-### 9.1 Belege
+### 12.1 Belege
 - Revisionssichere Erfassung und Digitalisierung von Eingangs- und Ausgangsbelegen nach GoBD-Grundsätzen.
 - Automatische Auslesung von Rechnungsnummer, Ausstellungsdatum, Leistungszeitraum, Netto- und Steuerbeträgen.
 
 > 📖 **Vertiefender Leitfaden:** Siehe die mobile Belegdigitalisierung in [Anhang V.4: Telegram Receipt OCR](#v4-telegram-receipt-ocr--belegdigitalisierung) und die Audit-Spezifikation in [Anhang IV.2: GoBD & ISO 27001 Audit-Logging](#iv2-gobd--iso-27001-revisionssicheres-audit-logging).
 
-### 9.2 Analytics
+### 12.2 Analytics
 - Kaufmännische Kennzahlen: Umsatzentwicklung, operative Ausgaben (OpEx), API-Kosten und Deckungsbeiträge.
 - Budgetüberwachung je Kostenstelle und Projekt.
 - Zur tieferen Metabase-BI-Anbindung siehe [Anhang V.14: Metabase BI-Dashboard](#v14-metabase-bi-dashboard--geschäftsanalytik).
 
-### 9.3 Verträge
+### 12.3 Verträge
 - Automatisches Vertrags- und Fristenmanagement (`t-0a2171`):
   - Heuristisches Parsen von Vertragstexten nach Kündigungsfristen, Verlängerungsklauseln und Zahlungszielen.
   - Automatisches Telegram-Alerting bei Fristen <= 14 Tagen.
@@ -716,7 +842,7 @@ Das Modul Rechnungswesen bildet das kaufmännische Fundament von Archon OS.
 
 > 📖 **Vertiefender Leitfaden:** Zur rechtsverbindlichen digitalen Unterzeichnung siehe [Anhang V.3: DocuSeal E-Signatur](#v3-docuseal-e-signatur--vertragsunterzeichnung).
 
-### 9.4 Mahnwesen
+### 12.4 Mahnwesen
 - Überwachung offener Forderungen mit Fälligkeitsstufen.
 - Automatische Generierung rechtssicherer Zahlungserinnerungen und Mahnungen nach deutschem BGB.
 
@@ -725,39 +851,18 @@ Das Modul Rechnungswesen bildet das kaufmännische Fundament von Archon OS.
 
 ---
 
-## 10. Approval-Policies
-
-Approval-Policies definieren die Governance-Leitplanken und bestimmen, ab welchen Risikoschwellen Agenten eigenständig handeln dürfen oder eine menschliche Freigabe erforderlich ist.
-
-### 10.1 Finanzen
-- Wertgrenzen für autonome Einkäufe, Tool-Subscriptions und Budgetallokationen.
-- Dual-Control (Vier-Augen-Prinzip) für Zahlungsfreigaben über definierten Schwellenbeträgen.
-
-### 10.2 E-Mail
-- Genehmigungspflicht für externe E-Mail-Kommunikation mit Neukontakten, Behörden oder Großkunden.
-- Diff-Prüfung vor dem Absenden zur Verhinderung unbeabsichtigter Zusageerklärungen.
-
-### 10.3 System & IT
-- Schutz vor zerstörerischen Aktionen: Server-Neustarts, Container-Updates, Datenbankschema-Migrationen und Produktiv-Deployments.
-- Integrierte automatische Datenklassifizierung nach ISO 27001 / BSI (`t-53315b`) mit Übertragungsstopp bei streng vertraulichen Daten.
-
-> 📖 **Vertiefender Leitfaden:** Siehe den ungekürzten Leitfaden in [Anhang IV.10: Approval Policies](#iv10-approval-policies--schwellenwert-governance) und [Anhang IV.1: DSGVO Compliance](#iv1-dsgvo--gdpr-compliance-für-agenten-systeme).
-
-
----
-
-## 11. Corporate
+## 13. Corporate & Mandant (Säule 3: Wirtschaft & ERP)
 
 Das Corporate Hub zentralisiert alle rechtlichen, steuerlichen und visuellen Stammdaten des Unternehmens und stellt eine mandantenfähige Vorlagen-Engine bereit.
 
-### 11.1 Stammdaten
+### 13.1 Stammdaten
 - **Multi-Company Management:** Verwalte mehrere Unternehmen oder Tochtergesellschaften über das Dropdown-Menü mit jeweils separaten Stammdaten.
 - **Rechtliche Daten:** Offizieller Firmenname, Rechtsform, Anschrift, Kontaktdaten und vertretungsberechtigte Geschäftsführer.
 - **Register & Steuern:** Registergericht, Handelsregisternummer (HRB), Steuernummer, USt-IdNr. und § 19 UStG-Regelung.
 - **Bankverbindung:** Geschäftskonto (IBAN, BIC, Bankname).
 - **Corporate Design:** Primär- und Sekundärfarben mit Color-Picker, Logo-Pfad und Schriftartenauswahl.
 
-### 11.2 Formulare & Vorlagen
+### 13.2 Formulare & Vorlagen
 - **Interaktives Vorlagen-Studio mit Live-Vorschau:**
   - **DIN 5008 Geschäftsbrief:** Offizieller Briefkopf mit Faltmarken, Anschriftfeld, Bezugszeichenzeile und HGB-Fußzeile.
   - **Ausgangsrechnung (§ 14 UStG):** Automatische Berechnung von Positionen, Nettobetrag, 19% Umsatzsteuer und Bruttoendbetrag sowie Zahlungsziel.
@@ -767,7 +872,28 @@ Das Corporate Hub zentralisiert alle rechtlichen, steuerlichen und visuellen Sta
 
 ---
 
-## 12. Token Guard
+## 14. Approval-Policies (Säule 4: Infrastruktur & Governance)
+
+Approval-Policies definieren die Governance-Leitplanken und bestimmen, ab welchen Risikoschwellen Agenten eigenständig handeln dürfen oder eine menschliche Freigabe erforderlich ist.
+
+### 14.1 Finanzen
+- Wertgrenzen für autonome Einkäufe, Tool-Subscriptions und Budgetallokationen.
+- Dual-Control (Vier-Augen-Prinzip) für Zahlungsfreigaben über definierten Schwellenbeträgen.
+
+### 14.2 E-Mail
+- Genehmigungspflicht für externe E-Mail-Kommunikation mit Neukontakten, Behörden oder Großkunden.
+- Diff-Prüfung vor dem Absenden zur Verhinderung unbeabsichtigter Zusageerklärungen.
+
+### 14.3 System & IT
+- Schutz vor zerstörerischen Aktionen: Server-Neustarts, Container-Updates, Datenbankschema-Migrationen und Produktiv-Deployments.
+- Integrierte automatische Datenklassifizierung nach ISO 27001 / BSI (`t-53315b`) mit Übertragungsstopp bei streng vertraulichen Daten.
+
+> 📖 **Vertiefender Leitfaden:** Siehe den ungekürzten Leitfaden in [Anhang IV.10: Approval Policies](#iv10-approval-policies--schwellenwert-governance) und [Anhang IV.1: DSGVO Compliance](#iv1-dsgvo--gdpr-compliance-für-agenten-systeme).
+
+
+---
+
+## 15. Token Guard
 
 Der Token Guard (Guardian) schützt vor unkontrollierten API-Kosten und überwacht Modell-Quotas in Echtzeit.
 Kosten-Leitplanken, Raten-Limits, Endlosschleifenschutz & Safety Controls
@@ -789,15 +915,15 @@ Praxis-Workflow (Schritt für Schritt):
 4. Klicke bei Bedarf oben rechts auf 'Cache leeren', um gespeicherte Modell-Antworten zu verwerfen.
 💡 Praxistipp & Leitplanke: Lasse Routine-Aufgaben über die 3-Tier-Kategorie 'LOW' oder 'auto/best-free' laufen. Dadurch fängt der kostenlose Docker-Proxy (Port 3002) das Grundrauschen ab, und dein Tagesbudget bleibt für strategische Aufgaben mit Claude 3.5 Sonnet oder GPT-4o reserviert.
 
-### 12.1 Übersicht
+### 15.1 Übersicht
 - Live-Verbrauch nach Agenten, Modellen und Providern im Verhältnis zum Tages- und Monatsbudget.
 - Farbcodierte Budgetampel für rasche Statusbeurteilung.
 
-### 12.2 Sessions
+### 15.2 Sessions
 - Detailanalyse einzelner Aufgaben und Sitzungen mit Token-Aufschlüsselung (Prompt- vs. Completion-Tokens).
 - Identifikation ineffizienter Schleifen oder überlanger Kontextfenster.
 
-### 12.3 Drosselung
+### 15.3 Drosselung
 - Automatische Soft-Limits (Warnung bei 80% Budget) und Hard-Limits (Stop bei 100%).
 - Intelligente Downgrade-Kaskade auf kostenlose Modelle (`auto/best-free`) bei Budgetengpässen.
 
@@ -806,7 +932,7 @@ Praxis-Workflow (Schritt für Schritt):
 
 ---
 
-## 13. Telemetrie & Logs
+## 16. Telemetrie & Logs
 
 Der Telemetrie- und Audit-Stream protokolliert alle Systemvorgänge lückenlos zur Fehlersuche und Compliance-Nachweisführung.
 Sekundengenaues Audit, System-Telemetrie & kryptografischer Trace-Feed
@@ -824,25 +950,25 @@ Praxis-Workflow (Schritt für Schritt):
 4. Nutze die Erkenntnisse, um Prompts oder Tool-Berechtigungen im Kader nachzujustieren.
 💡 Praxistipp & Leitplanke: Nutze den Audit-Trail für die Compliance-Dokumentation. Dank der kryptografischen Verkettung kannst du jederzeit lückenlos nachweisen, wer welche Aktion zu welchem Zeitpunkt freigegeben hat.
 
-### 13.1 Container
+### 16.1 Container
 - Health-Monitoring der 13 Docker-Container mit Latenzen (Ping ms), RAM- und CPU-Auslastung.
 - Live-Log-Stream einzelner Container zur schnellen Diagnose von Verbindungsproblemen.
 
 > 📖 **Vertiefender Leitfaden:** Siehe [Anhang V.12: Prometheus & Grafana](#v12-prometheus--grafana-systemüberwachung) und [Anhang V.13: Central Logging mit Loki](#v13-zentrales-logging-mit-grafana-loki).
 
-### 13.2 Agenten
+### 16.2 Agenten
 - Detailliertes Trace-Logging aller Agentenaktivitäten (Prompt-Eingaben, Denkprozesse, Tool-Aufrufe und Rückmeldungen).
 - Filterbar nach Agent, Log-Level (DEBUG bis CRITICAL) und Zeitfenster.
 - Zur tiefen Tracing-Anbindung siehe [Anhang V.9: LLM Tracing mit Langfuse](#v9-llm-tracing-mit-langfuse).
 
-### 13.3 Audit
+### 16.3 Audit
 - Krypto-verkettetes, manipulationssicheres Audit-Log für alle ausgeführten Systembefehle.
 - Unterstützung für geordneten Server-Shutdown via `GracefulShutdownCoordinator` (`t-12113b`) mit Task-Draining und sicherem WAL-Flush.
 
 
 ---
 
-## 14. System Control Center
+## 17. System Control Center
 
 Das System Control Center (Settings) ist die zentrale Schaltstelle zur Konfiguration aller Basiskomponenten, Schnittstellen und Sicherheitsrichtlinien.
 Zentrale System-Administration, Daemon-Kernel, Multi-Provider-Verwaltung & MCP-Zentrale
@@ -882,54 +1008,54 @@ Die Sprach-Pipeline (backend/voice_pipeline.py) ermöglicht mobile Sprachsteueru
 • Intent-Routing: Rufnamen ('Robert', 'Anwalt', 'Katharina') werden erkannt und leiten die Aufgabe an den passenden Agenten weiter.
 • Edge-TTS Sprachsynthese: Die Agenten-Antwort wird auf Wunsch mit der deutschen neuronalen Stimme 'de-DE-ConradNeural' generiert und als Audioblase an Telegram zurückgesendet.
 
-### 14.1 Hermes Core
+### 17.1 Hermes Core
 - Konfiguration des Hintergrund-Daemons auf Port 8420.
 - Steuerung von Task-Queues, Watchdog-Intervallen (30s) und Event-Loops.
 - Zum Notfallbetrieb siehe [Anhang IV.8: Break-Glass Recovery](#iv8-break-glass-recovery--notfallzugriff) und [Anhang V.17: Chaos Resilience](#v17-chaos-resilience--störungs-simulation).
 
-### 14.2 Autonomie & Module
+### 17.2 Autonomie & Module
 - Aktivierung und Deaktivierung autonomer Hintergrund-Daemons (z. B. nächtliche Speicherkonsolidierung, Standup-Reports).
 - Steuerung flüchtiger Sandbox-Container für Code-Ausführungen (`t-a42e5d`).
 
-### 14.3 Container & Dienste
+### 17.3 Container & Dienste
 - Live-Statusmatrix aller 13 Docker-Container inklusive Neustart-Schaltflächen.
 - Überwachung der internen Docker-Socket-Bridge.
 - Zu Replikation und Reverse-Proxy siehe [Anhang V.15: Litestream](#v15-litestream-sqlite-replikation--disaster-recovery) und [Anhang IV.7: Reverse Proxy & SSO](#iv7-reverse-proxy-ssltls--sso-authentifizierung).
 
-### 14.4 Provider & Gateway
+### 17.4 Provider & Gateway
 - Verwaltung des Multi-Provider LLM-Gateways (OmniRoute auf Port 20128).
 - Konfiguration von Fallback-Kaskaden (Primary -> Secondary -> Local FreeLLM).
 - Zum Fine-Tuning eigener Modelle siehe [Anhang V.11: Modell-Finetuning](#v11-modell-finetuning--lokale-gewichtung).
 
-### 14.5 API-Keys & Access
+### 17.5 API-Keys & Access
 - Verschlüsselter Schlüssel-Tresor für alle externen KI- und Cloud-Anbieter (OpenRouter, Google, OpenAI, Groq).
 - Rechtebeschränkungen und Gültigkeitsprüfungen.
 - Siehe [Anhang IV.5: Secrets Management & Rotation](#iv5-secrets-management--key-rotation).
 
-### 14.6 Methodik
+### 17.6 Methodik
 - Aktivierung und Anpassung der 55 Lösungs-Frameworks für die Decision Engine.
 - Definition standardisierter Argumentationsschemata.
 
-### 14.7 Plugins
+### 17.7 Plugins
 - MCP-Treiberverwaltung (Model Context Protocol) zur Anbindung externer Datenquellen und Werkzeuge.
 - Sandboxed Ausführung externer Erweiterungen.
 - Siehe [Anhang V.1: Archon MCP Server Guide](#v1-archon-mcp-server--tool-treiber-entwicklung).
 
-### 14.8 Kommunikation
+### 17.8 Kommunikation
 - Konfiguration des mobilen Telegram-Bots, Webhook-Endpunkten und Mail-Servern.
 - Sprach-Pipeline für mobile Voice-Nachrichten.
 
-### 14.9 Design
+### 17.9 Design
 - Globale Theme-Steuerung (Dark / Light Mode, Akzentfarben, Typografie und Rahmengrößen).
 
-### 14.10 Systemupdate
+### 17.10 Systemupdate
 - Revisionssicheres Update-System mit GitHub-Sync, Integritätsprüfungen und automatischem Pre-Commit Testlauf.
 - Siehe [Anhang V.18: Ansible Infrastruktur](#v18-ansible-infrastruktur-automatisierung), [Anhang V.19: CI/CD Pipeline](#v19-cicd-pipeline--e2e-testing) und [Anhang V.16: Restore Tests](#v16-automatisierte-restore-tests--integritätsprüfung).
 
 
 ---
 
-## 15. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)
+## 18. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)
 Enterprise Prompt-Engineering, 255+ Fabric Patterns & 5-Felder-Struktur
 Kernkonzept & Architektur:
 Das Archon Prompt Studio ist ein hochkarätiges Prompt-Engineering-Werkzeug direkt im Herzen des Betriebssystems. Es löst das größte Problem bei der Arbeit mit LLMs: vage, unvollständige oder inkonsistente Instruktionen. Das Studio bündelt 824 praxiserprobte Enterprise-Vorlagen (in 16 Fachkategorien) und über 255 Fabric Standard Operating Procedures (SOPs). Seine modulare 5-Felder-Architektur zwingt jede Aufgabenstellung in eine mathematisch präzise Form (Rolle, Kontext, Aufgabe, Ausgabeformat, Restriktionen). Das Modul ist so performant und nützlich konzipiert, dass es als eigenständiges Produkt oder als Chrome-Extension herausgelöst werden könnte.
@@ -955,7 +1081,7 @@ Praxis-Workflow (Schritt für Schritt):
 
 ---
 
-## 16. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector
+## 19. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector
 Echtzeit-Design-Studio, In-Place DOM-Inspector & Design-Token Management
 Kernkonzept & Architektur:
 Das Visual CSS Live Studio (Tastenkürzel: Alt + S) ist das Design- und Anpassungszentrum von Archon OS. Es erlaubt dir, das gesamte Erscheinungsbild der Benutzeroberfläche in Echtzeit direkt im laufenden Betrieb zu inspizieren, zu vermessen und anzupassen – ohne Neustart, ohne Code-Kompilierung und ohne Neuladen der Seite. Änderungen an Farben, Schriften, Abständen oder Rahmen werden sofort sichtbar und im Browser persistent gespeichert.
@@ -4065,3 +4191,236 @@ Die Startseite **Mission Control** dient als reines Monitoring-Cockpit:
 ### Meilenstein 24: Verschlüsselter Notfallzugang (Break-Glass Protocol) (Abgeschlossen)
 - **Katastrophen-Wiederherstellung:** Zero-Dependency Verschlüsselung (PBKDF2-200k, HMAC-SHA256, Keystream) via `scripts/break_glass_recovery.py`.
 - **Notfall-Kit:** Bereitstellung von `data/backups/break_glass_vault.enc` und ausdruckbarer Anleitung `data/backups/BREAK_GLASS_RECOVERY_KIT.md`.
+
+---
+
+## V.22 Archon ERP & CRM Architektur-Spezifikation (Säule 3)
+
+# Archon OS 2026 — Architektur-Spezifikation: Säule 3 „WIRTSCHAFT & ERP“
+
+**Stand:** 01.11.2026  
+**Status:** Verabschiedet (Locked-in nach Architecture Review / Grill-Me)
+
+---
+
+## 1. Leitprinzipien & Grundsatzentscheidungen
+
+1. **Eigene System-Säule in der Hauptnavigation (`WIRTSCHAFT & ERP`):**
+   - Wird als **Säule 3** zwischen *Kognition & Wissen* (Säule 2) und *Infrastruktur & Governance* (Säule 4) in [static/index.html](file:///c:/.Antigravity-projekte/AgenticOS-2026/static/index.html) verankert.
+   - Umfasst 5 eigenständige Hauptansichten mit je eigenem Sidebar-Icon und 80px-Header inkl. 72px-Cadre-Subtab-Kacheln:
+     1. **Adressen & CRM** (`nav-addresses`)
+     2. **Artikel & Leistungen** (`nav-items`)
+     3. **Vorgänge & Verträge** (`nav-operations-erp`)
+     4. **Rechnungswesen** (`nav-finance` – zieht aus Infrastruktur hierher um)
+     5. **Corporate & Vorlagen** (`nav-corporate` – zieht aus Infrastruktur hierher um)
+   - *Infrastruktur & Governance* (Säule 4) enthält künftig ausschließlich technische Governance-Funktionen (`Approval Policies`, `Guardian`, `Log Stream`).
+
+2. **Physische Mandanten-Trennung (DSGVO-Trennungsgebot & GoBD/Z3-Prüfungssicherheit):**
+   - Jede eigene Unternehmung (`company_id` aus [corporate_manager.py](file:///c:/.Antigravity-projekte/AgenticOS-2026/backend/corporate_manager.py)) erhält eine **physisch isolierte SQLite-Datenbank im WAL-Modus**:
+     `data/tenants/{company_id}/erp.db`
+   - Keine Vermischung personenbezogener Daten (`crm_contacts`, Kommunikationsverläufe, DSGVO-Opt-Ins) oder steuerlicher Belege zwischen verschiedenen rechtlichen Einheiten.
+   - Eigene, lückenlose DATEV-Nummernkreise pro Mandant:
+     - **Debitoren (Kunden):** ab `10001`
+     - **Kreditoren (Lieferanten):** ab `70001`
+     - **Artikel & Leistungen:** ab `ART-1001`
+     - **Angebote:** `ANG-{YYYY}-{0001}`
+     - **Aufträge:** `AB-{YYYY}-{0001}`
+     - **Ausgangsrechnungen:** `RE-{YYYY}-{0001}`
+
+3. **Blueprint-Cloning statt monolithischem Fremd-ERP:**
+   - Übernahme des erprobten **Subjekt-/Party-Modells** und des **Zustandsmodells (State-Machine)** aus Systemen wie Nuclos (`draft` -> `approved` -> `booked`/`sent` -> `paid` | `cancelled`), kombiniert mit dem schnellen Look & Feel des bestehenden LinkedIn-CRMs (Progressive Disclosure).
+
+4. **Laptop-PocketBase-Synchronisation:**
+   - Das lokale PocketBase-CRM auf dem Laptop (`Port 8090`, Collection `kontakte`) bleibt als mobiles LinkedIn-Werkzeug bestehen.
+   - Pro Mandant (`company_id`) kann in `Corporate` eine optionale PocketBase-Sync-Quelle konfiguriert werden.
+   - Der Sync gleicht Netzwerk- und Kommunikationsdaten (`name`, `unternehmen`, `rolle`, `rating`, `status`, `tags`, `nachrichtenverlauf`) mit `data/tenants/{company_id}/erp.db` ab, ohne kaufmännische ERP-Felder zu überschreiben.
+
+---
+
+## 2. Relationales Datenbank-Schema pro Mandant (`data/tenants/{company_id}/erp.db`)
+
+### 2.1 Tabelle `crm_entities` (Geschäftspartner: Firmen & Einzelpersonen)
+```sql
+CREATE TABLE IF NOT EXISTS crm_entities (
+    id TEXT PRIMARY KEY,                          -- z.B. 'ent-8f92a1b2'
+    entity_type TEXT NOT NULL DEFAULT 'organization', -- 'organization' | 'person'
+    display_name TEXT NOT NULL,                   -- Firmenname oder Vollname
+    legal_form TEXT DEFAULT '',                   -- GmbH, AG, UG, e.K., Freelancer
+    is_customer INTEGER DEFAULT 0,                -- 1 = Kunde (Debitor)
+    is_supplier INTEGER DEFAULT 0,                -- 1 = Lieferant (Kreditor)
+    is_partner INTEGER DEFAULT 0,                 -- 1 = Netzwerk / Kooperationspartner
+    status TEXT DEFAULT 'lead',                   -- 'lead' | 'active' | 'on_hold' | 'blocked' | 'archived'
+    debtor_no TEXT UNIQUE,                        -- DATEV Debitoren-Nr. (ab 10001)
+    creditor_no TEXT UNIQUE,                      -- DATEV Kreditoren-Nr. (ab 70001)
+    vat_id TEXT DEFAULT '',                       -- USt-IdNr. (z.B. DE123456789)
+    tax_number TEXT DEFAULT '',                   -- Steuernummer
+    tax_regime TEXT DEFAULT 'standard_19',        -- 'standard_19' | 'reverse_charge' | 'intra_eu' | 'export_0' | 'small_business'
+    registry_court TEXT DEFAULT '',               -- Registergericht
+    registry_number TEXT DEFAULT '',              -- HRB / HRA
+    payment_terms_days INTEGER DEFAULT 14,        -- Zahlungsziel in Tagen
+    skonto_pct REAL DEFAULT 0.0,                  -- Skonto %
+    skonto_days INTEGER DEFAULT 0,                -- Skonto-Frist in Tagen
+    currency TEXT DEFAULT 'EUR',
+    credit_limit REAL DEFAULT 0.0,
+    dunning_block INTEGER DEFAULT 0,              -- 1 = Mahnstopp aktiv
+    bank_name TEXT DEFAULT '',
+    iban TEXT DEFAULT '',
+    bic TEXT DEFAULT '',
+    sepa_mandate_ref TEXT DEFAULT '',
+    street TEXT DEFAULT '',
+    postal_code TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    country_code TEXT DEFAULT 'DE',
+    billing_email TEXT DEFAULT '',                -- Rechnungsempfänger E-Mail (ZUGFeRD/PDF)
+    website TEXT DEFAULT '',
+    industry TEXT DEFAULT '',
+    rating INTEGER DEFAULT 0,                     -- 0-5 Sterne (aggregiert oder manuell)
+    tags_json TEXT DEFAULT '[]',
+    notes TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 2.2 Tabelle `crm_contacts` (1:n Ansprechpartner & LinkedIn-Kontakte)
+```sql
+CREATE TABLE IF NOT EXISTS crm_contacts (
+    id TEXT PRIMARY KEY,                          -- z.B. 'cnt-3b19c4d1'
+    entity_id TEXT,                               -- FK -> crm_entities.id (NULL erlaubt für lose Kontakte)
+    salutation TEXT DEFAULT '',                   -- Herr | Frau | Divers | Dr. | Prof.
+    first_name TEXT DEFAULT '',
+    last_name TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role_title TEXT DEFAULT '',                   -- Position / Rolle
+    department TEXT DEFAULT '',
+    is_primary INTEGER DEFAULT 0,                 -- 1 = Hauptansprechpartner
+    is_billing_recipient INTEGER DEFAULT 0,       -- 1 = Rechnungsempfänger
+    email TEXT DEFAULT '',
+    phone_direct TEXT DEFAULT '',
+    phone_mobile TEXT DEFAULT '',
+    linkedin_url TEXT DEFAULT '',
+    connection_status TEXT DEFAULT 'Vernetzt',    -- 'Vernetzt' | 'Unvernetzt' | 'Gesperrt_1Jahr'
+    connected_since TEXT DEFAULT '',              -- YYYY-MM-DD
+    rating INTEGER DEFAULT 0,                     -- 0-5 Sterne (LinkedIn-CRM Score)
+    tags_json TEXT DEFAULT '[]',
+    gdpr_opt_in_status TEXT DEFAULT 'legitimate_interest', -- 'unknown' | 'legitimate_interest' | 'double_opt_in' | 'revoked'
+    gdpr_opt_in_date TEXT DEFAULT '',
+    pocketbase_id TEXT UNIQUE,                    -- Zuordnung für Laptop-PocketBase-Sync
+    notes TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (entity_id) REFERENCES crm_entities(id) ON DELETE SET NULL
+);
+```
+
+### 2.3 Tabelle `crm_interactions` (Nachrichtenverlauf & Kontakt-Timeline)
+```sql
+CREATE TABLE IF NOT EXISTS crm_interactions (
+    id TEXT PRIMARY KEY,
+    entity_id TEXT,
+    contact_id TEXT,
+    channel TEXT NOT NULL DEFAULT 'email_in',     -- 'email_in' | 'email_out' | 'linkedin' | 'telegram' | 'call' | 'note' | 'meeting'
+    direction TEXT DEFAULT 'inbound',             -- 'inbound' | 'outbound' | 'internal'
+    external_msg_id TEXT UNIQUE,                  -- Duplikatsschutz (messageId aus Outlook/LinkedIn)
+    sender_name TEXT DEFAULT '',
+    sender_email TEXT DEFAULT '',
+    subject TEXT DEFAULT '',
+    body_text TEXT DEFAULT '',
+    security_status TEXT DEFAULT 'safe',
+    occurred_at TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (entity_id) REFERENCES crm_entities(id) ON DELETE CASCADE,
+    FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+);
+```
+
+### 2.4 Tabelle `erp_items` (Artikel- & Leistungsstamm)
+```sql
+CREATE TABLE IF NOT EXISTS erp_items (
+    id TEXT PRIMARY KEY,                          -- z.B. 'itm-9a21f0'
+    item_no TEXT UNIQUE NOT NULL,                 -- z.B. 'ART-1001'
+    item_type TEXT NOT NULL DEFAULT 'service',    -- 'service' (Zeit) | 'flat_rate' (Werk) | 'saas' (Abo) | 'product' (Physisch)
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',                  -- Positionstext für Angebote/Rechnungen
+    category TEXT DEFAULT 'Consulting',
+    unit TEXT DEFAULT 'Std.',                     -- 'Std.' | 'Tag' | 'Pauschal' | 'Monat' | 'Stk.'
+    sales_price_net REAL DEFAULT 0.0,             -- VK Netto
+    purchase_price_net REAL DEFAULT 0.0,          -- EK Netto
+    tax_rate_pct REAL DEFAULT 19.0,               -- 19.0 | 7.0 | 0.0
+    currency TEXT DEFAULT 'EUR',
+    billing_interval TEXT DEFAULT 'one_off',      -- 'one_off' | 'monthly' | 'quarterly' | 'yearly'
+    supplier_entity_id TEXT,                      -- FK -> crm_entities.id (Hauptlieferant)
+    track_inventory INTEGER DEFAULT 0,            -- 0 = Nein, 1 = Lagerbestand führen
+    stock_qty REAL DEFAULT 0.0,
+    min_stock_qty REAL DEFAULT 0.0,
+    is_active INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (supplier_entity_id) REFERENCES crm_entities(id) ON DELETE SET NULL
+);
+```
+
+### 2.5 Tabellen `erp_documents` & `erp_document_lines` (Belegfluss: Angebot -> Auftrag -> Rechnung)
+```sql
+CREATE TABLE IF NOT EXISTS erp_documents (
+    id TEXT PRIMARY KEY,
+    doc_type TEXT NOT NULL,                       -- 'offer' (ANG) | 'order' (AB) | 'invoice' (RE) | 'credit_note' (GS)
+    doc_number TEXT UNIQUE NOT NULL,              -- z.B. 'ANG-2026-0001' oder 'RE-2026-0001'
+    status TEXT NOT NULL DEFAULT 'draft',         -- 'draft' | 'sent' | 'accepted' | 'booked' | 'paid' | 'overdue' | 'cancelled'
+    entity_id TEXT NOT NULL,                      -- FK -> crm_entities.id
+    contact_id TEXT,                              -- FK -> crm_contacts.id
+    source_doc_id TEXT,                           -- Vorgänger-Beleg (z.B. Angebot -> Rechnung)
+    deal_id TEXT,                                 -- Referenz auf Deal
+    contract_id TEXT,                             -- Referenz auf Vertrag
+    recipient_snapshot_json TEXT NOT NULL,        -- GoBD-unveränderlicher Adress-Snapshot bei Buchung
+    issue_date TEXT NOT NULL,                     -- YYYY-MM-DD
+    service_date TEXT DEFAULT '',                 -- Leistungsdatum / -zeitraum
+    due_date TEXT DEFAULT '',                     -- Fälligkeitsdatum
+    amount_net REAL DEFAULT 0.0,
+    tax_amount REAL DEFAULT 0.0,
+    amount_gross REAL DEFAULT 0.0,
+    currency TEXT DEFAULT 'EUR',
+    tax_regime TEXT DEFAULT 'standard_19',
+    payment_terms_days INTEGER DEFAULT 14,
+    dunning_level INTEGER DEFAULT 0,
+    dunning_fee REAL DEFAULT 0.0,
+    notes TEXT DEFAULT '',
+    booked_at TEXT,                               -- Zeitpunkt der GoBD-Festschreibung
+    paid_at TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (entity_id) REFERENCES crm_entities(id)
+);
+
+CREATE TABLE IF NOT EXISTS erp_document_lines (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    pos_no INTEGER NOT NULL,
+    item_id TEXT,                                 -- FK -> erp_items.id (optional bei Freitextposition)
+    item_no_snapshot TEXT DEFAULT '',
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    quantity REAL NOT NULL DEFAULT 1.0,
+    unit TEXT DEFAULT 'Stk.',
+    unit_price_net REAL NOT NULL DEFAULT 0.0,
+    discount_pct REAL DEFAULT 0.0,
+    tax_rate_pct REAL NOT NULL DEFAULT 19.0,
+    line_net REAL NOT NULL DEFAULT 0.0,
+    line_tax REAL NOT NULL DEFAULT 0.0,
+    line_gross REAL NOT NULL DEFAULT 0.0,
+    FOREIGN KEY (document_id) REFERENCES erp_documents(id) ON DELETE CASCADE,
+    FOREIGN KEY (item_id) REFERENCES erp_items(id) ON DELETE SET NULL
+);
+```
+
+---
+
+## 3. UI-Aufbau der 5 Ansichten in Säule 3 (`WIRTSCHAFT & ERP`)
+
+| Sidebar-Menüpunkt | Sub-Tabs (72px Cadre-Kacheln im 80px-Header) | Kernfunktionen |
+| :--- | :--- | :--- |
+| **1. Adressen & CRM** (`nav-addresses`) | `Alle` · `Netzwerk (LinkedIn)` · `Kunden (10000+)` · `Lieferanten (70000+)` | Split-View wie im LinkedIn-CRM: Links Filter/Karten mit 0–5 Sternen & Status; Rechts Akte mit *Timeline/Nachrichten*, *1:n Ansprechpartnern*, *BWL-Konditionen* und *PocketBase-Sync*. |
+| **2. Artikel & Leistungen** (`nav-items`) | `Alle Artikel` · `Dienstleistungen` · `SaaS & Abos` · `Produkte` | Verwaltung von `ART-1001+`, VK-Netto, EK-Netto, automatische Margenberechnung (€ / %), Hauptlieferant und optionalem Lagerbestand. |
+| **3. Vorgänge & Verträge** (`nav-operations-erp`) | `Deal-Pipeline` · `Angebote & Aufträge` · `Verträge & Fristen` | Kanban-/Forecast-Pipeline, Angebotserstellung mit Artikel-Auswahl, 1-Klick-Wandlung *Angebot $\rightarrow$ Auftrag $\rightarrow$ Rechnung* sowie Vertrags-Fristenradar. |
+| **4. Rechnungswesen** (`nav-finance`) | `Ausgangsrechnungen` · `Eingangsbelege (OCR)` · `Mahnwesen` · `Analytics & DATEV` | GoBD-konforme Rechnungen, Vision-OCR-Belegimport mit Lieferanten-Matching, 3-stufiges Mahnwesen (respektiert `dunning_block`) und DATEV-Export. |
+| **5. Corporate & Vorlagen** (`nav-corporate`) | `Stammdaten & Design` · `Vorlagen-Studio` · `Mandanten-DB & Sync` | Multi-Company-Umschalter (schaltet aktiv `data/tenants/{company_id}/erp.db` um), DIN 5008 / § 14 UStG Vorlagen mit Live-CRM-Empfänger- und Artikel-Auswahl. |

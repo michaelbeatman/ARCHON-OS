@@ -278,9 +278,18 @@
         </select>
       </div>
 
-      <!-- Empfänger-Angaben -->
+      <!-- Empfänger-Angaben (mit Live-CRM-Stammdaten-Auswahl) -->
       <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/50 space-y-2">
-        <span class="text-[11px] font-bold text-[var(--foreground)]">Empfänger / Vertragspartner</span>
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-[var(--foreground)]">Empfänger / Vertragspartner</span>
+          <span class="text-[9.5px] font-mono text-indigo-500">Live-CRM</span>
+        </div>
+        <div>
+          <label class="block text-[10px] text-[var(--muted-foreground)]">Aus Adressstamm (Mandanten-DB) übernehmen</label>
+          <select id="tmpl-select-crm-entity" onchange="onCorporateCrmEntitySelected(this.value)" class="w-full px-2 py-1 text-xs rounded border border-indigo-500/30 bg-[var(--card)] text-[var(--foreground)] font-semibold cursor-pointer">
+            <option value="">-- Adresse aus CRM wählen --</option>
+          </select>
+        </div>
         <div>
           <label class="block text-[10px] text-[var(--muted-foreground)]">Firma / Name</label>
           <input type="text" id="tmpl-input-rec-name" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]" value="Musterempfänger GmbH">

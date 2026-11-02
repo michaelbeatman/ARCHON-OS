@@ -7,7 +7,7 @@ legal/correspondence templates (DIN 5008, § 14 UStG Invoices, NDAs, Offers).
 import os
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
@@ -219,7 +219,61 @@ class CorporateManager:
         if not company:
             company = DEFAULT_PRIMARY_COMPANY
 
-        custom = custom or {}
+        custom = dict(custom or {})
+        active_cid = company.get("id") or "archon-systems"
+
+        # Falls entity_id oder document_id aus dem ERP übergeben wurde -> Live-Stammdaten auflösen
+        if custom.get("entity_id") or custom.get("document_id"):
+            try:
+                from backend.erp_manager import erp_manager
+                if custom.get("document_id"):
+                    doc = erp_manager.get_document(custom["document_id"], company_id=active_cid)
+                    if doc:
+                        snap = doc.get("recipient_snapshot") or {}
+                        custom.setdefault("recipient_name", snap.get("display_name") or doc.get("entity_name") or "")
+                        if snap.get("contact_name"):
+                            custom.setdefault("recipient_contact", snap["contact_name"])
+                        if snap.get("street"):
+                            custom.setdefault("recipient_street", snap["street"])
+                        if snap.get("postal_code") or snap.get("city"):
+                            custom.setdefault("recipient_city", f"{snap.get('postal_code', '')} {snap.get('city', '')}".strip())
+                        custom.setdefault("invoice_num", doc.get("doc_number"))
+                        custom.setdefault("offer_num", doc.get("doc_number"))
+                        custom.setdefault("order_num", doc.get("doc_number"))
+                        if doc.get("doc_type") in ("offer", "ang") and template_type in ("letterhead", "default"):
+                            template_type = "offer"
+                        elif doc.get("doc_type") in ("order", "order_confirmation", "ab") and template_type in ("letterhead", "default"):
+                            template_type = "order_confirmation"
+                        elif doc.get("doc_type") == "invoice" and template_type in ("letterhead", "default"):
+                            template_type = "invoice"
+                        if doc.get("lines"):
+                            custom["items"] = [
+                                {
+                                    "pos": ln.get("pos_no", idx + 1),
+                                    "desc": ln.get("title", ""),
+                                    "qty": ln.get("quantity", 1),
+                                    "unit": ln.get("unit", "Stk."),
+                                    "price": ln.get("unit_price_net", 0.0)
+                                }
+                                for idx, ln in enumerate(doc["lines"])
+                            ]
+                elif custom.get("entity_id"):
+                    detail = erp_manager.get_entity_detail(custom["entity_id"], company_id=active_cid)
+                    if detail and detail.get("entity"):
+                        ent = detail["entity"]
+                        contacts = detail.get("contacts") or []
+                        prim = contacts[0] if contacts else {}
+                        custom["recipient_name"] = ent.get("display_name", "Musterempfänger GmbH")
+                        if prim.get("full_name"):
+                            sal = prim.get("salutation", "")
+                            custom["recipient_contact"] = f"{sal} {prim['full_name']}".strip()
+                        if ent.get("street"):
+                            custom["recipient_street"] = ent["street"]
+                        if ent.get("postal_code") or ent.get("city"):
+                            custom["recipient_city"] = f"{ent.get('postal_code', '')} {ent.get('city', '')}".strip()
+            except Exception:
+                pass
+
         today_de = datetime.now().strftime("%d.%m.%Y")
         due_date_de = custom.get("due_date") or datetime.now().strftime("%d.%m.%Y")
         
@@ -463,6 +517,304 @@ class CorporateManager:
 
               <!-- Fußzeile -->
               <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; font-size: 9.5px; color: #64748b; line-height: 1.4;">
+                <div>
+                  <div style="font-weight: 700; color: #334155;">{c_name}</div>
+                  <div>{c_street}, {c_zip} {c_city}</div>
+                  <div>Geschäftsführung: {c_directors}</div>
+                  <div>{c_court}, {c_hrb}</div>
+                </div>
+                <div>
+                  <div style="font-weight: 700; color: #334155;">Steuer-Identifikation:</div>
+                  <div>USt-IdNr.: {c_vatid}</div>
+                  <div>Steuernummer: {c_taxnum}</div>
+                  <div>E-Mail: {c_email}</div>
+                </div>
+                <div>
+                  <div style="font-weight: 700; color: #334155;">Bankverbindung:</div>
+                  <div>{c_bankname}</div>
+                  <div>IBAN: <strong>{c_iban}</strong></div>
+                  <div>BIC: <strong>{c_bic}</strong></div>
+                </div>
+              </div>
+            </div>
+            """
+
+        elif template_type in ("offer", "ang", "angebot"):
+            # Angebot nach DIN 5008
+            offer_num = custom.get("offer_num", f"ANG-{datetime.now().strftime('%Y%m')}-001")
+            valid_until_de = custom.get("valid_until_de", (datetime.now() + timedelta(days=30)).strftime("%d.%m.%Y"))
+            items = custom.get("items", [
+                {"pos": 1, "desc": "Archon OS Enterprise Lizenz & KI-Agenten Setup", "qty": 1, "unit": "Pauschal", "price": 4500.00},
+                {"pos": 2, "desc": "Architektur-Consulting & Anbindung Primärsysteme", "qty": 16, "unit": "Std.", "price": 180.00}
+            ])
+
+            net_total = sum(i["qty"] * i["price"] for i in items)
+            tax_rate = 0.0 if is_small else 0.19
+            tax_amount = net_total * tax_rate
+            gross_total = net_total + tax_amount
+
+            items_rows_html = "".join([
+                f"""
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 10px 8px; font-size: 12px; color: #64748b;">{item['pos']}</td>
+                  <td style="padding: 10px 8px; font-size: 12px; font-weight: 600; color: #0f172a;">{item['desc']}</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: center; color: #334155;">{item['qty']} {item.get('unit', 'Stk')}</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; color: #334155;">{item['price']:,.2f} €</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; font-weight: 700; color: #0f172a;">{(item['qty'] * item['price']):,.2f} €</td>
+                </tr>
+                """ for item in items
+            ])
+
+            tax_row_html = (
+                f"""
+                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569;">
+                  <span>Umsatzsteuer (19%):</span>
+                  <span style="font-weight: 600;">{tax_amount:,.2f} €</span>
+                </div>
+                """ if not is_small else
+                """
+                <div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 4px;">
+                  Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.
+                </div>
+                """
+            )
+
+            rendered_html = f"""
+            <div style="font-family: {c_font}; color: #1e293b; max-width: 800px; margin: 0 auto; background: #ffffff; padding: 48px; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); min-height: 1050px; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid {c_primary}; padding-bottom: 20px; margin-bottom: 25px;">
+                  <div>
+                    <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: {c_primary};">{c_name}</h1>
+                    <div style="font-size: 11px; color: #64748b;">{c_slogan}</div>
+                  </div>
+                  <div style="text-align: right; font-size: 11px; color: #475569; line-height: 1.5;">
+                    <div>{c_street}</div>
+                    <div>{c_zip} {c_city}</div>
+                    <div>USt-IdNr.: <strong>{c_vatid}</strong></div>
+                    <div>Steuernummer: <strong>{c_taxnum}</strong></div>
+                  </div>
+                </div>
+
+                <!-- Empfänger & Angebots-Metadaten -->
+                <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
+                  <div style="font-size: 13px; line-height: 1.5; color: #0f172a;">
+                    <div style="font-size: 9px; text-decoration: underline; color: #94a3b8; margin-bottom: 6px;">
+                      {c_name} • {c_street} • {c_zip} {c_city}
+                    </div>
+                    <div style="font-weight: 700;">{recipient_name}</div>
+                    <div>{recipient_contact}</div>
+                    <div>{recipient_street}</div>
+                    <div>{recipient_city}</div>
+                  </div>
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; min-width: 220px; font-size: 11.5px; line-height: 1.6;">
+                    <div style="font-weight: 800; color: {c_primary}; font-size: 13px; margin-bottom: 4px;">ANGEBOT</div>
+                    <div>Angebots-Nr.: <strong>{offer_num}</strong></div>
+                    <div>Angebotsdatum: <strong>{today_de}</strong></div>
+                    <div>Gültig bis: <strong>{valid_until_de}</strong></div>
+                    <div>Kunden-Nr.: <strong>{custom.get('debtor_no', '10001')}</strong></div>
+                  </div>
+                </div>
+
+                <div style="font-size: 12.5px; color: #334155; line-height: 1.6; margin-bottom: 20px;">
+                  Sehr geehrte Damen und Herren,<br>
+                  vielen Dank für Ihr Interesse und die freundlichen Vorgespräche. Gerne unterbreiten wir Ihnen auf Basis Ihrer Anforderungen folgendes freibleibendes Angebot:
+                </div>
+
+                <!-- Positionstabelle -->
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+                  <thead>
+                    <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1; font-size: 11px; text-transform: uppercase; color: #475569; letter-spacing: 0.03em;">
+                      <th style="padding: 10px 8px; text-align: left; width: 40px;">Pos</th>
+                      <th style="padding: 10px 8px; text-align: left;">Bezeichnung / Leistungsumfang</th>
+                      <th style="padding: 10px 8px; text-align: center; width: 100px;">Menge</th>
+                      <th style="padding: 10px 8px; text-align: right; width: 110px;">Einzelpreis</th>
+                      <th style="padding: 10px 8px; text-align: right; width: 110px;">Gesamt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items_rows_html}
+                  </tbody>
+                </table>
+
+                <!-- Summenblock -->
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 25px;">
+                  <div style="width: 280px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569;">
+                      <span>Nettobetrag:</span>
+                      <span style="font-weight: 600;">{net_total:,.2f} €</span>
+                    </div>
+                    {tax_row_html}
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0 0 0; margin-top: 6px; border-top: 2px solid {c_primary}; font-size: 14px; font-weight: 800; color: #0f172a;">
+                      <span>Gesamtangebot:</span>
+                      <span style="color: {c_primary};">{gross_total:,.2f} €</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Konditionen & Annahme -->
+                <div style="font-size: 11.5px; color: #334155; line-height: 1.6; background: #f8fafc; border: 1px solid #e2e8f0; padding: 14px 16px; border-radius: 6px; margin-bottom: 25px;">
+                  <div style="font-weight: 700; color: #0f172a; margin-bottom: 4px;">Konditionen &amp; Zahlungsbedingungen:</div>
+                  <div>• Zahlungsziel: 14 Tage netto nach Rechnungserhalt ohne Abzug.</div>
+                  <div>• Projektstart / Leistungsbereitstellung erfolgt unmittelbar nach Auftragsbestätigung.</div>
+                  <div>• Es gelten unsere Allgemeinen Geschäftsbedingungen (AGB).</div>
+                </div>
+
+                <!-- Annahmeerklärung / Unterschrift -->
+                <div style="border: 1px dashed #cbd5e1; border-radius: 6px; padding: 14px; margin-bottom: 20px;">
+                  <div style="font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Auftragserteilung / Angebotsannahme:</div>
+                  <div style="font-size: 10.5px; color: #64748b; margin-bottom: 25px;">Hiermit nehmen wir das vorstehende Angebot mit der Angebots-Nr. <strong>{offer_num}</strong> verbindlich an.</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; font-size: 11px;">
+                    <div style="border-top: 1px solid #94a3b8; padding-top: 4px; color: #64748b;">Ort, Datum</div>
+                    <div style="border-top: 1px solid #94a3b8; padding-top: 4px; color: #64748b;">Rechtsverbindliche Unterschrift Auftraggeber</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Fußzeile -->
+              <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; font-size: 9.5px; color: #64748b; line-height: 1.4;">
+                <div>
+                  <div style="font-weight: 700; color: #334155;">{c_name}</div>
+                  <div>{c_street}, {c_zip} {c_city}</div>
+                  <div>Geschäftsführung: {c_directors}</div>
+                  <div>{c_court}, {c_hrb}</div>
+                </div>
+                <div>
+                  <div style="font-weight: 700; color: #334155;">Steuer-Identifikation:</div>
+                  <div>USt-IdNr.: {c_vatid}</div>
+                  <div>Steuernummer: {c_taxnum}</div>
+                  <div>E-Mail: {c_email}</div>
+                </div>
+                <div>
+                  <div style="font-weight: 700; color: #334155;">Bankverbindung:</div>
+                  <div>{c_bankname}</div>
+                  <div>IBAN: <strong>{c_iban}</strong></div>
+                  <div>BIC: <strong>{c_bic}</strong></div>
+                </div>
+              </div>
+            </div>
+            """
+
+        elif template_type in ("order_confirmation", "order", "ab", "auftrag"):
+            # Auftragsbestätigung nach DIN 5008
+            order_num = custom.get("order_num", f"AB-{datetime.now().strftime('%Y%m')}-001")
+            items = custom.get("items", [
+                {"pos": 1, "desc": "Archon OS Enterprise Subscription (Q4-2026)", "qty": 1, "unit": "Monat", "price": 490.00},
+                {"pos": 2, "desc": "Autonome Agenten-Workflows & Tool-Integration", "qty": 40, "unit": "Std.", "price": 180.00}
+            ])
+
+            net_total = sum(i["qty"] * i["price"] for i in items)
+            tax_rate = 0.0 if is_small else 0.19
+            tax_amount = net_total * tax_rate
+            gross_total = net_total + tax_amount
+
+            items_rows_html = "".join([
+                f"""
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 10px 8px; font-size: 12px; color: #64748b;">{item['pos']}</td>
+                  <td style="padding: 10px 8px; font-size: 12px; font-weight: 600; color: #0f172a;">{item['desc']}</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: center; color: #334155;">{item['qty']} {item.get('unit', 'Stk')}</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; color: #334155;">{item['price']:,.2f} €</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; font-weight: 700; color: #0f172a;">{(item['qty'] * item['price']):,.2f} €</td>
+                </tr>
+                """ for item in items
+            ])
+
+            tax_row_html = (
+                f"""
+                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569;">
+                  <span>Umsatzsteuer (19%):</span>
+                  <span style="font-weight: 600;">{tax_amount:,.2f} €</span>
+                </div>
+                """ if not is_small else
+                """
+                <div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 4px;">
+                  Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.
+                </div>
+                """
+            )
+
+            rendered_html = f"""
+            <div style="font-family: {c_font}; color: #1e293b; max-width: 800px; margin: 0 auto; background: #ffffff; padding: 48px; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); min-height: 1050px; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid {c_primary}; padding-bottom: 20px; margin-bottom: 25px;">
+                  <div>
+                    <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: {c_primary};">{c_name}</h1>
+                    <div style="font-size: 11px; color: #64748b;">{c_slogan}</div>
+                  </div>
+                  <div style="text-align: right; font-size: 11px; color: #475569; line-height: 1.5;">
+                    <div>{c_street}</div>
+                    <div>{c_zip} {c_city}</div>
+                    <div>USt-IdNr.: <strong>{c_vatid}</strong></div>
+                    <div>Steuernummer: <strong>{c_taxnum}</strong></div>
+                  </div>
+                </div>
+
+                <!-- Empfänger & Auftrags-Metadaten -->
+                <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
+                  <div style="font-size: 13px; line-height: 1.5; color: #0f172a;">
+                    <div style="font-size: 9px; text-decoration: underline; color: #94a3b8; margin-bottom: 6px;">
+                      {c_name} • {c_street} • {c_zip} {c_city}
+                    </div>
+                    <div style="font-weight: 700;">{recipient_name}</div>
+                    <div>{recipient_contact}</div>
+                    <div>{recipient_street}</div>
+                    <div>{recipient_city}</div>
+                  </div>
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; min-width: 220px; font-size: 11.5px; line-height: 1.6;">
+                    <div style="font-weight: 800; color: {c_primary}; font-size: 13px; margin-bottom: 4px;">AUFTRAGSBESTÄTIGUNG</div>
+                    <div>Auftrags-Nr.: <strong>{order_num}</strong></div>
+                    <div>Auftragsdatum: <strong>{today_de}</strong></div>
+                    <div>Ausführung: <strong>Nach Vereinbarung</strong></div>
+                    <div>Kunden-Nr.: <strong>{custom.get('debtor_no', '10001')}</strong></div>
+                  </div>
+                </div>
+
+                <div style="font-size: 12.5px; color: #334155; line-height: 1.6; margin-bottom: 20px;">
+                  Sehr geehrte Damen und Herren,<br>
+                  vielen Dank für Ihren Auftrag. Wir bestätigen die Durchführung der nachfolgend aufgeführten Leistungen und Lieferungen zu den vereinbarten Konditionen:
+                </div>
+
+                <!-- Positionstabelle -->
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+                  <thead>
+                    <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1; font-size: 11px; text-transform: uppercase; color: #475569; letter-spacing: 0.03em;">
+                      <th style="padding: 10px 8px; text-align: left; width: 40px;">Pos</th>
+                      <th style="padding: 10px 8px; text-align: left;">Bezeichnung / Leistungsumfang</th>
+                      <th style="padding: 10px 8px; text-align: center; width: 100px;">Menge</th>
+                      <th style="padding: 10px 8px; text-align: right; width: 110px;">Einzelpreis</th>
+                      <th style="padding: 10px 8px; text-align: right; width: 110px;">Gesamt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items_rows_html}
+                  </tbody>
+                </table>
+
+                <!-- Summenblock -->
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 25px;">
+                  <div style="width: 280px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569;">
+                      <span>Nettobetrag:</span>
+                      <span style="font-weight: 600;">{net_total:,.2f} €</span>
+                    </div>
+                    {tax_row_html}
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0 0 0; margin-top: 6px; border-top: 2px solid {c_primary}; font-size: 14px; font-weight: 800; color: #0f172a;">
+                      <span>Auftragsvolumen:</span>
+                      <span style="color: {c_primary};">{gross_total:,.2f} €</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Bestätigungshinweis -->
+                <div style="font-size: 12px; color: #334155; line-height: 1.6; background: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px 16px; border-radius: 0 4px 4px 0; margin-bottom: 25px;">
+                  Wir sichern Ihnen eine fachgerechte und termingetreue Ausführung zu. Bei Fragen zur Auftragsabwicklung steht Ihnen unser Projektteam jederzeit zur Verfügung.
+                </div>
+              </div>
+
+              <!-- Fußzeile -->
+              <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; font-size: 9.5px; color: #64748b; line-height: 1.4;">
                 <div>
                   <div style="font-weight: 700; color: #334155;">{c_name}</div>
                   <div>{c_street}, {c_zip} {c_city}</div>

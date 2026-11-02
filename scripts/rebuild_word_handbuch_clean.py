@@ -26,7 +26,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 DOCS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRATCH_BACKUP = r"C:\Users\micha\.gemini\antigravity\brain\efaf2cb2-3cad-4959-82eb-00332c4c9566\scratch\ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage_ORIGINAL_BACKUP.docx"
 LOCAL_BACKUP = os.path.join(DOCS_DIR, "docs", "system", "backup -ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx")
-BACKUP_DOCX = SCRATCH_BACKUP if os.path.exists(SCRATCH_BACKUP) else LOCAL_BACKUP
+BACKUP_DOCX = SCRATCH_BACKUP if os.path.exists(SCRATCH_BACKUP) else (LOCAL_BACKUP if os.path.exists(LOCAL_BACKUP) else (os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage_NEU.docx") if os.path.exists(os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage_NEU.docx")) else os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx")))
 TARGET_DOCX = os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx")
 IMG_DIR = os.path.join(DOCS_DIR, "docs", "system", "screenshots")
 
@@ -322,7 +322,7 @@ def rebuild_clean_docx():
     # Update metadata line in frontmatter (Child 6)
     set_el_text(
         orig[6],
-        "Stand: 1. November 2026  |  Release: 0.3.6 Enterprise  |  57 Autonome Spezialisten-Rollen  |  16 Fachmodule"
+        "Stand: 1. November 2026  |  Release: 0.3.7 Enterprise (4-Säulen-ERP)  |  57 Autonome Spezialisten-Rollen  |  19 Fachmodule"
     )
 
     # Clean internal headings in original slices before re-slicing
@@ -332,17 +332,17 @@ def rebuild_clean_docx():
     set_el_text(orig[372], "4.4.1 Interaktive Code-Sandbox & Live-Artefakt-Vorschau", "Heading 3")
     set_el_text(orig[530], "6.1.1 Mehrstufige Reflexions-Schleife (Deep Research v2)", "Heading 3")
 
-    # Clean former 16.x and 17.x headings so they integrate cleanly under 14.2 Autonomie & Module
-    set_el_text(orig[672], "14.2.1 Replay & Time-Travel Debugging (Execution Trace Player & State-Forker)", "Heading 3")
-    set_el_text(orig[680], "14.2.2 Multi-Modell Head-to-Head Benchmark & Eval-Matrix (OmniRoute Arena)", "Heading 3")
-    set_el_text(orig[687], "14.2.3 Dual- & Tri-Agent Konsens-Gate & Schiedsgericht (Debate / Voting Protocol)", "Heading 3")
-    set_el_text(orig[694], "14.2.4 Autonome Task-Selbstheilung mit Git- & Snapshot-Rollback", "Heading 3")
-    set_el_text(orig[701], "14.2.5 Event-Mesh & Webhook-Trigger-Brücke (Inbound Automation & Directory Watcher)", "Heading 3")
-    set_el_text(orig[712], "14.2.6 Flüchtige Code-Sandboxen (Ephemeral Micro-Containers & Runner)", "Heading 3")
-    set_el_text(orig[719], "14.2.7 Nächtliche Gedächtnis-Konsolidierung & Sleep-Cycle Wartung", "Heading 3")
-    set_el_text(orig[726], "14.2.8 Headless-Browser & Visueller Web-Agent (Playwright Screenshot-Audit)", "Heading 3")
-    set_el_text(orig[733], "14.2.9 Virtueller Pre-Mortem Stresstest (War-Room-Simulation)", "Heading 3")
-    set_el_text(orig[740], "14.2.10 SLA- & Übergabe-Verträge zwischen Agenten (Contract Enforcement)", "Heading 3")
+    # Clean former 16.x and 17.x headings so they integrate cleanly under 17.2 Autonomie & Module
+    set_el_text(orig[672], "17.2.1 Replay & Time-Travel Debugging (Execution Trace Player & State-Forker)", "Heading 3")
+    set_el_text(orig[680], "17.2.2 Multi-Modell Head-to-Head Benchmark & Eval-Matrix (OmniRoute Arena)", "Heading 3")
+    set_el_text(orig[687], "17.2.3 Dual- & Tri-Agent Konsens-Gate & Schiedsgericht (Debate / Voting Protocol)", "Heading 3")
+    set_el_text(orig[694], "17.2.4 Autonome Task-Selbstheilung mit Git- & Snapshot-Rollback", "Heading 3")
+    set_el_text(orig[701], "17.2.5 Event-Mesh & Webhook-Trigger-Brücke (Inbound Automation & Directory Watcher)", "Heading 3")
+    set_el_text(orig[712], "17.2.6 Flüchtige Code-Sandboxen (Ephemeral Micro-Containers & Runner)", "Heading 3")
+    set_el_text(orig[719], "17.2.7 Nächtliche Gedächtnis-Konsolidierung & Sleep-Cycle Wartung", "Heading 3")
+    set_el_text(orig[726], "17.2.8 Headless-Browser & Visueller Web-Agent (Playwright Screenshot-Audit)", "Heading 3")
+    set_el_text(orig[733], "17.2.9 Virtueller Pre-Mortem Stresstest (War-Room-Simulation)", "Heading 3")
+    set_el_text(orig[740], "17.2.10 SLA- & Übergabe-Verträge zwischen Agenten (Contract Enforcement)", "Heading 3")
 
     new_body = []
 
@@ -681,16 +681,170 @@ def rebuild_clean_docx():
     new_body.append(make_callout("Zur technischen Echtzeit-Übertragung siehe Anhang V.8: Live Streaming mit SSE & WebSockets."))
 
     # =========================================================================
-    # 9. RECHNUNGSWESEN
+    # 9. ADRESSEN & CRM (SÄULE 3: WIRTSCHAFT & ERP)
     # =========================================================================
-    new_body.append(make_p("9. Rechnungswesen", "Heading 1"))
+    new_body.append(make_p("9. Adressen & CRM (Säule 3: Wirtschaft & ERP)", "Heading 1"))
+    new_body.append(make_p(
+        "Das Modul Adressen & CRM bildet den Einstiegspunkt der dritten System-Säule (Wirtschaft & ERP). "
+        "Es vereint ein vollwertiges B2B-CRM (LinkedIn-Netzwerk, E-Mail-Chronik, 360°-KI-Dossiers) mit der "
+        "buchhalterischen Stammdatenpflege für Kunden (Debitoren 10000+) und Lieferanten (Kreditoren 70000+). "
+        "Gemäß DSGVO und GoBD speichert Archon OS sämtliche ERP-Daten physisch getrennt je Mandant in einer "
+        "eigenen SQLite-WAL-Datenbank unter data/tenants/{company_id}/erp.db.",
+        "Normal"
+    ))
+    new_body.append(make_callout("Zur vollständigen Datenbank- und Belegketten-Architektur siehe Anhang V.22: Archon ERP & CRM Architektur-Spezifikation (Säule 3)."))
+
+    new_body.append(make_p("9.1 Kontakte (Haupttabelle & CRM-Adressstamm)", "Heading 2"))
+    append_img(new_body, "addresses_all")
+    new_body.extend(make_bullets([
+        "Vollständige CRM-Tabelle über alle 2.331 Kontakte mit Name, Firma, Position, Rating-Sternen, Status-Pills und Interaktions-Badges.",
+        "Zweizeiliger Schnellfilter (Volltextsuche nach Name, Firma, Ort oder Nummer sowie Direkt-Sync mit PocketBase Port 8090).",
+        "Performante Paginierung (50 Kontakte pro Seite) mit Checkbox-Stapelverarbeitung und Ein-Klick-Öffnen der Datensatzansicht."
+    ]))
+
+    new_body.append(make_p("9.2 Kundenstamm (Debitoren 10000+)", "Heading 2"))
+    append_img(new_body, "addresses_customers")
+    new_body.extend(make_bullets([
+        "Kunden- und Mandantenverzeichnis mit automatischer Vergabe fortlaufender Debitorennummern im Nummernkreis 10000–69999.",
+        "Pflege von Zahlungszielen (Netto-Tage), Skonto-Konditionen, Umsatzsteuer-ID, Kreditlimit und verknüpften Ausgangsrechnungen."
+    ]))
+
+    new_body.append(make_p("9.3 Lieferantenstamm (Kreditoren 70000+)", "Heading 2"))
+    append_img(new_body, "addresses_suppliers")
+    new_body.extend(make_bullets([
+        "Lieferanten-, Dienstleister- und Cloud-Provider-Stamm im DATEV-konformen Kreditoren-Nummernkreis ab 70000.",
+        "Hinterlegung von IBAN/BIC, Eingangsrechnungs-Workflows, Standard-Aufwandskonten und verknüpften Einkaufsartikeln."
+    ]))
+
+    new_body.append(make_p("9.4 Alle Nachrichten (Multi-Channel Timeline)", "Heading 2"))
+    append_img(new_body, "addresses_messages")
+    new_body.extend(make_bullets([
+        "Aggregierter chronologischer Feed über alle 2.229 Nachrichten und Interaktionsverläufe über alle Kontakte hinweg.",
+        "Kanalfilter für LinkedIn (2.220), E-Mail (3), Persönliche Treffen (3), Audio-Diktate und Notizen (3) sowie Richtungsfilter (Erhalten / Gesendet).",
+        "Volltext-Expansion auf Knopfdruck zur vollständigen Nachverfolgung jedes Dialogverlaufs mit Zeitstempel."
+    ]))
+
+    new_body.append(make_p("9.5 Kalender & Wiedervorlagen", "Heading 2"))
+    append_img(new_body, "addresses_calendar")
+    new_body.extend(make_bullets([
+        "Kalendarische Übersicht aller geplanten Termine, Kontakt-Wiedervorlagen und anstehenden Check-ins.",
+        "Automatische Kennzeichnung dringlicher oder überfälliger Follow-ups zur Vermeidung von Kontaktstagnation."
+    ]))
+
+    new_body.append(make_p("9.6 Bericht (CRM-Missionskontrolle & KPI-Analyse)", "Heading 2"))
+    append_img(new_body, "addresses_report")
+    new_body.extend(make_bullets([
+        "Echtzeit-KPI-Karten: Aktive Kontakte (1.145), Antwortrate (32 %), Meeting-Rate (0 %), Personalberater (67) und stagnierte Kontakte.",
+        "Rollenverteilungs-Diagramme: Automatische Klassifizierung in Geschäftsführer / Inhaber, Entscheider, Investoren, Beratung und Finanzen.",
+        "Statusverteilung der Pipeline-Phasen sowie täglicher Handlungsradar ('Was heute tun?') für proaktives Kontaktmanagement."
+    ]))
+
+    new_body.append(make_p("9.7 Datensatzansicht & Kontakt-Drawer (VARIO 8 Standard & 360°-Akte)", "Heading 2"))
+    append_img(new_body, "addresses_drawer")
+    new_body.extend(make_bullets([
+        "80-Pixel-Kopfleiste mit 6 VARIO-Teilansichten: Übersicht, Nachrichten, Kaufmännisch, Belege & Vorgänge, Ansprechpartner & Filialen sowie DSGVO & Compliance.",
+        "Ergonomische Fenstersteuerung: Schließen über den abgedunkelten Hintergrund (Backdrop-Klick), die Escape-Taste oder das markante Schließen-Kreuz (✕) oben rechts.",
+        "Kaufmännische VARIO-Stammdaten: Debitor- (10000+) und Kreditor-Nummern (70000+), Zahlungsziele, Skonto-Sätze, Kreditlimite, Preisgruppen, Bankdaten (IBAN, BIC) und USt-IdNr.",
+        "Integrierter DIN-5008 Belegfluss: Direktes Einsehen und Drucken von Angeboten (ANG) und Aufträgen (AB) mit Firmenbriefkopf und USt-Ausweis über 1-Klick-Aktionen.",
+        "DSGVO & Compliance: 1-Klick-Datenexport als strukturiertes JSON (Art. 15/20 DSGVO) sowie rechtssichere unwiderrufliche Anonymisierung (Art. 17 DSGVO) bei voller Wahrung der GoBD-Buchhaltungsintegrität."
+    ]))
+
+    # =========================================================================
+    # 10. ARTIKEL & LEISTUNGEN (SÄULE 3: WIRTSCHAFT & ERP)
+    # =========================================================================
+    new_body.append(make_p("10. Artikel & Leistungen (Säule 3: Wirtschaft & ERP)", "Heading 1"))
+    new_body.append(make_p(
+        "Das Modul Artikel & Leistungen verwaltet den gesamten Leistungs-, Produkt- und Lizenzkatalog des aktiven "
+        "Mandanten. Jede Position kalkuliert in Echtzeit den Deckungsbeitrag in Euro sowie die prozentuale "
+        "Handelsspanne aus Netto-Verkaufspreis (VK) und Einkaufspreis (EK) und lässt sich direkt in Angebote, "
+        "Auftragsbestätigungen und Rechnungen übernehmen.",
+        "Normal"
+    ))
+
+    new_body.append(make_p("10.1 Gesamtkatalog (Alle Artikel & Leistungen)", "Heading 2"))
+    append_img(new_body, "items_all")
+    new_body.extend(make_bullets([
+        "Übersicht aller aktiven Leistungspositionen, Beratungs-Tagessätze, SaaS-Lizenzen und physischen Produkte.",
+        "Live-Kalkulationskachel im rechten Inspektor: Automatische Berechnung von Rohgewinn (VK − EK) und Marge in Prozent bei jeder Preisänderung.",
+        "Direkte Zuordnung eines bevorzugten Lieferanten (Kreditor 70000+) inklusive Lieferanten-Artikelnummer."
+    ]))
+
+    new_body.append(make_p("10.2 Zeit / Service & Pauschalen", "Heading 2"))
+    append_img(new_body, "items_service")
+    new_body.extend(make_bullets([
+        "Verwaltung von Beratungsleistungen, Architektur-Workshops, Entwicklungs-Stundensätzen und Festpreis-Pauschalen.",
+        "Flexible Einheiten (Stunde, Tagessatz, Pauschal) mit hinterlegten Leistungsbeschreibungen für Angebote."
+    ]))
+
+    new_body.append(make_p("10.3 SaaS & Abonnements", "Heading 2"))
+    append_img(new_body, "items_saas")
+    new_body.extend(make_bullets([
+        "Wiederkehrende Lizenz-, Hosting-, Wartungs- und Agenten-Infrastruktur-Abonnements (MRR / ARR).",
+        "Nahtlose Verknüpfung mit Laufzeitverträgen und automatischer Fälligkeitsüberwachung."
+    ]))
+
+    new_body.append(make_p("10.4 Produkte & Hardware (inkl. Lagerbestand)", "Heading 2"))
+    append_img(new_body, "items_product")
+    new_body.extend(make_bullets([
+        "Physische Produkte, Edge-AI-Workstations, Hardware-Bundles und Handelswaren.",
+        "Integrierte Bestandsführung mit aktuellem Lagerbestand, Mindestbestand (Meldebestand) und Lagerort."
+    ]))
+
+    new_body.append(make_p("10.5 Artikel-Drawer & VARIO 8 Stammdaten-Inspektor", "Heading 2"))
+    append_img(new_body, "items_drawer")
+    new_body.extend(make_bullets([
+        "80-Pixel-Kopfleiste mit 4 modularen Teilansichten nach VARIO 8 Standard: Stammdaten, Preise & Staffeln, Bestand & Konditionen sowie Verkaufshistorie.",
+        "Kaufmännische Staffelpreise und Fibu-Erlöskonten (SKR03 / SKR04) mit automatischer Live-Margenkalkulation in Euro und Prozent.",
+        "Integrierte Bestandsführung (Mindestbestand, Lagerort, Lieferanten-Kreditorzuordnung) und SaaS-Abo-Konditionen (Seats, Kündigungsfristen, Senioritätsstufen).",
+        "Belegverwendung & Absatzhistorie: Vollständige Rückverfolgbarkeit aller Angebote (ANG) und Aufträge (AB), in denen der Artikel eingesetzt wurde."
+    ]))
+
+    # =========================================================================
+    # 11. VORGÄNGE & VERTRÄGE (SÄULE 3: WIRTSCHAFT & ERP)
+    # =========================================================================
+    new_body.append(make_p("11. Vorgänge & Verträge (Säule 3: Wirtschaft & ERP)", "Heading 1"))
+    new_body.append(make_p(
+        "Das Modul Vorgänge & Verträge bildet die operative Klammer zwischen Vertrieb, Projektabwicklung und "
+        "Rechnungswesen. Nach dem Vorbild moderner ERP-Belegketten (z. B. Nuclos) lassen sich Angebote (ANG) "
+        "und Auftragsbestätigungen (AB) mit einem Klick verlustfrei in GoBD-konforme Ausgangsrechnungen (RE) "
+        "oder Gutschriften (GS) überführen.",
+        "Normal"
+    ))
+
+    new_body.append(make_p("11.1 Angebote (ANG) & Aufträge (AB)", "Heading 2"))
+    append_img(new_body, "ops_erp_offers")
+    new_body.extend(make_bullets([
+        "Beleg-Editor mit direkter Kundenauswahl aus dem Adressstamm und Positionsübernahme aus dem Artikelkatalog.",
+        "1-Klick Belegfluss: Umwandlung eines Angebots (ANG) in eine Auftragsbestätigung (AB) oder direkt in eine Ausgangsrechnung (RE) im Modul Rechnungswesen.",
+        "Automatische Summierung von Netto-Volumen, Umsatzsteuer und Brutto-Gesamtbetrag.",
+        "DIN-5008 Beleg-Druck & PDF-Export: Generierung formaler Angebote und Auftragsbestätigungen mit Mandanten-Briefkopf, Steuernummern, Bankverbindung und Annahme-Unterschriftenfeld."
+    ]))
+
+    new_body.append(make_p("11.2 Deal-Pipeline & Gewichteter Umsatz-Forecast", "Heading 2"))
+    append_img(new_body, "ops_erp_pipeline")
+    new_body.extend(make_bullets([
+        "Mehrstufiges Vertriebs-Board über die Phasen Lead, Qualified, Proposal, Negotiation und Closed Won.",
+        "Echtzeit-Berechnung des ungewichteten Pipeline-Volumens sowie des nach Abschlusswahrscheinlichkeit gewichteten Umsatz-Forecasts."
+    ]))
+
+    new_body.append(make_p("11.3 Vertrags- & Fristenradar", "Heading 2"))
+    append_img(new_body, "ops_erp_contracts")
+    new_body.extend(make_bullets([
+        "Überwachung sämtlicher Kunden- und Lieferantenverträge inklusive Mindestlaufzeiten, Verlängerungsintervallen und Kündigungsfristen.",
+        "Automatische Fristen-Ampel (Aktiv, Bald fällig <= 30 Tage, Kritisch <= 14 Tage) mit Eskalation an Telegram und Operations."
+    ]))
+
+    # =========================================================================
+    # 12. RECHNUNGSWESEN (SÄULE 3: WIRTSCHAFT & ERP)
+    # =========================================================================
+    new_body.append(make_p("12. Rechnungswesen (Säule 3: Wirtschaft & ERP)", "Heading 1"))
     new_body.append(make_p(
         "Das Modul Rechnungswesen bündelt die kaufmännische Belegverarbeitung, Finanzkennzahlen, "
         "Vertragsüberwachung und das Forderungsmanagement.",
         "Normal"
     ))
 
-    new_body.append(make_p("9.1 Belege", "Heading 2"))
+    new_body.append(make_p("12.1 Belege", "Heading 2"))
     append_img(new_body, "finance_receipts")
     new_body.extend(make_bullets([
         "GoBD-konforme Erfassung und Archivierung von Eingangs- und Ausgangsrechnungen sowie Quittungen.",
@@ -698,7 +852,7 @@ def rebuild_clean_docx():
     ]))
     new_body.append(make_callout("Siehe Anhang V.4: Telegram Receipt OCR & Belegdigitalisierung sowie Anhang IV.2: GoBD & ISO 27001 Audit-Logging."))
 
-    new_body.append(make_p("9.2 Analytics", "Heading 2"))
+    new_body.append(make_p("12.2 Analytics", "Heading 2"))
     append_img(new_body, "finance_analytics")
     new_body.extend(make_bullets([
         "Finanz-Cockpit für Einnahmen, laufende Betriebskosten (OpEx), KI-Token-Ausgaben und Projekt-Deckungsbeiträge.",
@@ -706,7 +860,7 @@ def rebuild_clean_docx():
     ]))
     new_body.append(make_callout("Zur Anbindung erweiterter Business-Intelligence-Auswertungen siehe Anhang V.14: Metabase BI-Dashboard."))
 
-    new_body.append(make_p("9.3 Verträge", "Heading 2"))
+    new_body.append(make_p("12.3 Verträge", "Heading 2"))
     append_img(new_body, "finance_contracts")
     new_body.extend(make_bullets([
         "Zentrales Vertragsregister mit automatischem Fristen- und Kündigungsmanagement (t-0a2171).",
@@ -715,7 +869,7 @@ def rebuild_clean_docx():
     ]))
     new_body.append(make_callout("Zur digitalen Vertragsunterzeichnung siehe Anhang V.3: DocuSeal E-Signatur & Vertragsunterzeichnung."))
 
-    new_body.append(make_p("9.4 Mahnwesen", "Heading 2"))
+    new_body.append(make_p("12.4 Mahnwesen", "Heading 2"))
     append_img(new_body, "finance_dunning")
     new_body.extend(make_bullets([
         "Überwachung offener Ausgangsrechnungen und Fälligkeitstermine.",
@@ -724,30 +878,61 @@ def rebuild_clean_docx():
     new_body.append(make_callout("Siehe die vollständige Spezifikation in Anhang V.2: Dunning Engine & Automatisches Mahnwesen."))
 
     # =========================================================================
-    # 10. APPROVAL-POLICIES
+    # 13. CORPORATE & MANDANT (SÄULE 3: WIRTSCHAFT & ERP)
     # =========================================================================
-    new_body.append(make_p("10. Approval-Policies", "Heading 1"))
+    new_body.append(make_p("13. Corporate & Mandant (Säule 3: Wirtschaft & ERP)", "Heading 1"))
+    new_body.append(make_p(
+        "Das Modul Corporate & Mandant verwaltet sämtliche Unternehmensstammdaten (mandantenfähig mit physisch "
+        "getrennter SQLite-Datenbank je Gesellschaft), Corporate-Design-Vorgaben sowie offizielle Geschäftsvorlagen "
+        "für Korrespondenz und Abrechnung.",
+        "Normal"
+    ))
+
+    new_body.append(make_p("13.1 Stammdaten", "Heading 2"))
+    append_img(new_body, "corporate_master")
+    new_body.extend(make_bullets([
+        "Mandantenfähigkeit (Multi-Company): Verwaltung mehrerer Firmen oder Standorte mit schnellem Wechsel über das Kopfzeilen-Dropdown und den globalen Mandanten-Umschalter in der linken Seitenleiste.",
+        "Physische DB-Isolation: Jeder Mandant besitzt eine eigene, strikt getrennte Datenbank (data/tenants/{company_id}/erp.db).",
+        "Rechtliche Angaben & Anschrift: Firmenname, Rechtsform, Geschäftsführung, Straße, PLZ, Ort und Kontaktdaten.",
+        "Handelsregister & Steuern: Registergericht, HRB-/HRA-Nummer, Steuernummer, Umsatzsteuer-Identifikationsnummer (USt-IdNr.) und Kleinunternehmer-Status (§ 19 UStG).",
+        "Bankverbindung & Corporate Design: IBAN, BIC, Kreditinstitut sowie Primär-/Sekundärfarben, Typografie und Firmenlogo."
+    ]))
+
+    new_body.append(make_p("13.2 Formulare & Vorlagen", "Heading 2"))
+    append_img(new_body, "corporate_templates")
+    new_body.extend(make_bullets([
+        "Interaktives Vorlagen-Studio mit Echtzeit-Vorschau, automatischer Einbindung der hinterlegten Firmenstammdaten und Direkt-Auswahl von Empfängern aus dem Adressstamm.",
+        "DIN 5008 Geschäftsbrief: Normgerechtes Briefblatt mit Faltmarken, Anschriftzone, Informationsblock und Pflichtangaben-Fußzeile.",
+        "Ausgangsrechnung (§ 14 UStG): Vollständige Rechnungsvorlage mit Positionsberechnung, Netto-/Umsatzsteuer-Ausweis und Zahlungsziel.",
+        "Geheimhaltungsvereinbarung (NDA): Direkt einsatzbereite Vorlage für beidseitige Vertraulichkeitsvereinbarungen.",
+        "Direktdruck & PDF-Export auf DIN-A4 über die integrierte Druckfunktion."
+    ]))
+
+    # =========================================================================
+    # 14. APPROVAL-POLICIES (SÄULE 4: INFRASTRUKTUR & GOVERNANCE)
+    # =========================================================================
+    new_body.append(make_p("14. Approval-Policies", "Heading 1"))
     new_body.append(make_p(
         "In den Approval-Policies legst du verbindlich fest, welche Aktionen Agenten dunkel (autonom) ausführen "
         "dürfen und wo zwingend eine menschliche Freigabe (Human-in-the-Loop) eingeholt werden muss.",
         "Normal"
     ))
 
-    new_body.append(make_p("10.1 Finanzen", "Heading 2"))
+    new_body.append(make_p("14.1 Finanzen", "Heading 2"))
     append_img(new_body, "approvals_finance")
     new_body.extend(make_bullets([
         "Freigabegrenzen für Ausgaben, Abonnements, Rechnungsfreigaben und Budgetverschiebungen.",
         "Vier-Augen-Prinzip ab frei definierbaren Euro-Schwellenwerten."
     ]))
 
-    new_body.append(make_p("10.2 E-Mail", "Heading 2"))
+    new_body.append(make_p("14.2 E-Mail", "Heading 2"))
     append_img(new_body, "approvals_email")
     new_body.extend(make_bullets([
         "Regelwerk für ausgehende Korrespondenz: Pflichtfreigabe bei externen Empfängern, Behörden oder Vertragsangeboten.",
         "Schutz vor ungeprüften rechtlichen Zusagen im Außenverhältnis."
     ]))
 
-    new_body.append(make_p("10.3 System & IT", "Heading 2"))
+    new_body.append(make_p("14.3 System & IT", "Heading 2"))
     append_img(new_body, "approvals_system")
     new_body.extend(make_bullets([
         "Absicherung kritischer Infrastruktur-Eingriffe (Datenbank-Migrationen, Container-Neustarts, Konfigurationsänderungen).",
@@ -756,56 +941,26 @@ def rebuild_clean_docx():
     new_body.append(make_callout("Siehe Anhang IV.10: Approval Policies & Schwellenwert-Governance sowie Anhang IV.1: DSGVO Compliance."))
 
     # =========================================================================
-    # 11. CORPORATE
+    # 15. TOKEN GUARD
     # =========================================================================
-    new_body.append(make_p("11. Corporate", "Heading 1"))
-    new_body.append(make_p(
-        "Das Modul Corporate verwaltet sämtliche Unternehmensstammdaten (mandantenfähig für mehrere Gesellschaften), "
-        "Corporate-Design-Vorgaben sowie offizielle Geschäftsvorlagen für Korrespondenz und Abrechnung.",
-        "Normal"
-    ))
-
-    new_body.append(make_p("11.1 Stammdaten", "Heading 2"))
-    append_img(new_body, "corporate_master")
-    new_body.extend(make_bullets([
-        "Mandantenfähigkeit (Multi-Company): Verwaltung mehrerer Firmen oder Standorte mit schnellem Wechsel über das Kopfzeilen-Dropdown.",
-        "Rechtliche Angaben & Anschrift: Firmenname, Rechtsform, Geschäftsführung, Straße, PLZ, Ort und Kontaktdaten.",
-        "Handelsregister & Steuern: Registergericht, HRB-/HRA-Nummer, Steuernummer, Umsatzsteuer-Identifikationsnummer (USt-IdNr.) und Kleinunternehmer-Status (§ 19 UStG).",
-        "Bankverbindung: IBAN, BIC und Kreditinstitut für automatische Fußzeilen und Zahlungsanweisungen.",
-        "Corporate Design: Primär- und Sekundärfarben, Typografie und Firmenlogo."
-    ]))
-
-    new_body.append(make_p("11.2 Formulare & Vorlagen", "Heading 2"))
-    append_img(new_body, "corporate_templates")
-    new_body.extend(make_bullets([
-        "Interaktives Vorlagen-Studio mit Echtzeit-Vorschau und automatischer Einbindung der hinterlegten Firmenstammdaten.",
-        "DIN 5008 Geschäftsbrief: Normgerechtes Briefblatt mit Faltmarken, Anschriftzone, Informationsblock und Pflichtangaben-Fußzeile.",
-        "Ausgangsrechnung (§ 14 UStG): Vollständige Rechnungsvorlage mit Positionsberechnung, Netto-/Umsatzsteuer-Ausweis und Zahlungsziel.",
-        "Geheimhaltungsvereinbarung (NDA): Direkt einsatzbereite Vorlage für beidseitige Vertraulichkeitsvereinbarungen.",
-        "Direktdruck & PDF-Export auf DIN-A4 über die integrierte Druckfunktion."
-    ]))
-
-    # =========================================================================
-    # 12. TOKEN GUARD
-    # =========================================================================
-    new_body.append(make_p("12. Token Guard", "Heading 1"))
+    new_body.append(make_p("15. Token Guard", "Heading 1"))
     new_body.extend(orig[491:513])  # Token Guard content + tables (492, 504, 511)
 
-    new_body.append(make_p("12.1 Übersicht", "Heading 2"))
+    new_body.append(make_p("15.1 Übersicht", "Heading 2"))
     append_img(new_body, "guardian_overview")
     new_body.extend(make_bullets([
         "Echtzeit-Überwachung des Token- und Kostenverbrauchs über alle Provider, Modelle und Fachagenten hinweg.",
         "Budget-Ampel für Tages- und Monatslimits."
     ]))
 
-    new_body.append(make_p("12.2 Sessions", "Heading 2"))
+    new_body.append(make_p("15.2 Sessions", "Heading 2"))
     append_img(new_body, "guardian_sessions")
     new_body.extend(make_bullets([
         "Aufschlüsselung des Token-Bedarfs einzelner Sitzungen und Tasks (Input- vs. Output-Tokens).",
         "Erkennung ungewöhnlich großer Kontextfenster oder Endlosschleifen."
     ]))
 
-    new_body.append(make_p("12.3 Drosselung", "Heading 2"))
+    new_body.append(make_p("15.3 Drosselung", "Heading 2"))
     append_img(new_body, "guardian_concurrency")
     new_body.extend(make_bullets([
         "Konfiguration von Soft-Limits (Warnmeldung bei 80 %) und Hard-Limits (Automatischer Stopp oder Fallback auf kostenfreie Modelle bei 100 %)."
@@ -813,12 +968,12 @@ def rebuild_clean_docx():
     new_body.append(make_callout("Siehe Anhang IV.4: API-Keys, Berechtigungs-Scopes & Rate-Limits sowie Anhang IV.6: Lokales Privacy-Routing."))
 
     # =========================================================================
-    # 13. TELEMETRIE & LOGS
+    # 16. TELEMETRIE & LOGS
     # =========================================================================
-    new_body.append(make_p("13. Telemetrie & Logs", "Heading 1"))
+    new_body.append(make_p("16. Telemetrie & Logs", "Heading 1"))
     new_body.extend(orig[538:554])  # Telemetrie intro + screenshot (539) + table (553)
 
-    new_body.append(make_p("13.1 Container", "Heading 2"))
+    new_body.append(make_p("16.1 Container", "Heading 2"))
     append_img(new_body, "logstream_containers")
     new_body.extend(make_bullets([
         "Live-Metriken aller Docker-Container (Latenzen, CPU-/RAM-Auslastung und Health-Checks).",
@@ -826,7 +981,7 @@ def rebuild_clean_docx():
     ]))
     new_body.append(make_callout("Siehe Anhang V.12: Prometheus & Grafana Systemüberwachung sowie Anhang V.13: Zentrales Logging mit Grafana Loki."))
 
-    new_body.append(make_p("13.2 Agenten", "Heading 2"))
+    new_body.append(make_p("16.2 Agenten", "Heading 2"))
     append_img(new_body, "logstream_agents")
     new_body.extend(make_bullets([
         "Chronologischer Trace-Stream sämtlicher Agenten-Überlegungen, Tool-Aufrufe und Modellantworten.",
@@ -834,7 +989,7 @@ def rebuild_clean_docx():
     ]))
     new_body.append(make_callout("Zur tiefgehenden Observability siehe Anhang V.9: LLM Tracing mit Langfuse."))
 
-    new_body.append(make_p("13.3 Audit", "Heading 2"))
+    new_body.append(make_p("16.3 Audit", "Heading 2"))
     append_img(new_body, "logstream_audit")
     new_body.extend(make_bullets([
         "Revisionssicheres, kryptografisch verkettetes Audit-Log aller sicherheitsrelevanten Systemaktionen.",
@@ -842,38 +997,38 @@ def rebuild_clean_docx():
     ]))
 
     # =========================================================================
-    # 14. SYSTEM CONTROL CENTER
+    # 17. SYSTEM CONTROL CENTER
     # =========================================================================
-    new_body.append(make_p("14. System Control Center", "Heading 1"))
+    new_body.append(make_p("17. System Control Center", "Heading 1"))
     new_body.extend(orig[624:626])  # Intro to System Control Center
     new_body.extend(orig[640:650])  # Praxis-Workflow + Overview Table (647) + Prompt Box (649)
 
-    # 14.1 Hermes Core
-    new_body.append(make_p("14.1 Hermes Core", "Heading 2"))
+    # 17.1 Hermes Core
+    new_body.append(make_p("17.1 Hermes Core", "Heading 2"))
     append_img(new_body, "settings_kernel")
     new_body.append(orig[626])      # Hermes Core description
     new_body.append(orig[633])      # Health-Score
     new_body.append(orig[634])      # Master-Dossier-Generator
     new_body.append(make_callout("Zum Notfallzugriff und Resilienz-Tests siehe Anhang IV.8: Break-Glass Recovery und Anhang V.17: Chaos Resilience."))
 
-    # 14.2 Autonomie & Module (includes former Chapters 16 & 17 technical pillars!)
-    new_body.append(make_p("14.2 Autonomie & Module", "Heading 2"))
+    # 17.2 Autonomie & Module (includes former Chapters 16 & 17 technical pillars!)
+    new_body.append(make_p("17.2 Autonomie & Module", "Heading 2"))
     append_img(new_body, "settings_autonomy")
     new_body.append(orig[636])      # Settings-Paket 1
     new_body.append(orig[637])      # Settings-Paket 2
     new_body.append(orig[638])      # Table 15.2 title
     new_body.append(orig[639])      # Table 15.2 (10 steuerable Autonomie-Gruppen)
-    new_body.extend(orig[670:707])  # 14.2.1 to 14.2.5
-    new_body.extend(orig[710:747])  # 14.2.6 to 14.2.10
+    new_body.extend(orig[670:707])  # 17.2.1 to 17.2.5
+    new_body.extend(orig[710:747])  # 17.2.6 to 17.2.10
 
-    # 14.3 Container & Dienste
-    new_body.append(make_p("14.3 Container & Dienste", "Heading 2"))
+    # 17.3 Container & Dienste
+    new_body.append(make_p("17.3 Container & Dienste", "Heading 2"))
     append_img(new_body, "settings_services")
     new_body.append(orig[627])
     new_body.append(make_callout("Siehe Anhang V.15: Litestream SQLite Replikation sowie Anhang IV.7: Reverse Proxy, SSL/TLS & SSO."))
 
-    # 14.4 Provider & Gateway (includes Settings Routing screenshot + OmniRoute LLM Gateway screenshot 470!)
-    new_body.append(make_p("14.4 Provider & Gateway", "Heading 2"))
+    # 17.4 Provider & Gateway (includes Settings Routing screenshot + OmniRoute LLM Gateway screenshot 470!)
+    new_body.append(make_p("17.4 Provider & Gateway", "Heading 2"))
     append_img(new_body, "settings_routing")
     new_body.append(orig[628])
     new_body.append(make_p(
@@ -884,8 +1039,8 @@ def rebuild_clean_docx():
     new_body.extend(orig[469:490])  # OmniRoute screenshot (470) + content + tables (480, 487)
     new_body.append(make_callout("Zum Training eigener lokaler Sprachmodelle siehe Anhang V.11: Modell-Finetuning & Lokale Gewichtung."))
 
-    # 14.5 API-Keys & Access
-    new_body.append(make_p("14.5 API-Keys & Access", "Heading 2"))
+    # 17.5 API-Keys & Access
+    new_body.append(make_p("17.5 API-Keys & Access", "Heading 2"))
     append_img(new_body, "settings_keys")
     new_body.extend(make_bullets([
         "Zentraler, verschlüsselter Tresor für alle API-Schlüssel externer Provider (OpenRouter, Anthropic, OpenAI, Google, Groq).",
@@ -893,46 +1048,46 @@ def rebuild_clean_docx():
     ]))
     new_body.append(make_callout("Siehe Anhang IV.5: Secrets-Management & Key-Rotation sowie Anhang IV.12: Config Validation & Linting."))
 
-    # 14.6 Methodik
-    new_body.append(make_p("14.6 Methodik", "Heading 2"))
+    # 17.6 Methodik
+    new_body.append(make_p("17.6 Methodik", "Heading 2"))
     append_img(new_body, "settings_frameworks")
     new_body.append(orig[629])
 
-    # 14.7 Plugins
-    new_body.append(make_p("14.7 Plugins", "Heading 2"))
+    # 17.7 Plugins
+    new_body.append(make_p("17.7 Plugins", "Heading 2"))
     append_img(new_body, "settings_plugins")
     new_body.append(orig[630])
     new_body.extend(orig[657:661])  # Standardisiertes Pluginsystem & Runtime-Hooks
     new_body.append(make_callout("Siehe Anhang V.1: Archon MCP Server & Tool-Treiber Entwicklung."))
 
-    # 14.8 Kommunikation
-    new_body.append(make_p("14.8 Kommunikation", "Heading 2"))
+    # 17.8 Kommunikation
+    new_body.append(make_p("17.8 Kommunikation", "Heading 2"))
     append_img(new_body, "settings_comm")
     new_body.append(orig[631])
     new_body.extend(orig[663:667])  # Telegram Voice-Pipeline & Sprachausgabe
 
-    # 14.9 Design
-    new_body.append(make_p("14.9 Design", "Heading 2"))
+    # 17.9 Design
+    new_body.append(make_p("17.9 Design", "Heading 2"))
     append_img(new_body, "settings_design")
     new_body.append(orig[632])
 
-    # 14.10 Systemupdate
-    new_body.append(make_p("14.10 Systemupdate", "Heading 2"))
+    # 17.10 Systemupdate
+    new_body.append(make_p("17.10 Systemupdate", "Heading 2"))
     append_img(new_body, "settings_update")
     new_body.extend(orig[652:655])  # Release-Lifecycle, Updatesystem & GitHub-Sync
     new_body.append(make_callout("Siehe Anhang V.18: Ansible Infrastruktur, Anhang V.19: CI/CD Pipeline & E2E-Testing sowie Anhang V.16: Restore-Tests."))
 
     # =========================================================================
-    # 15. SPEZIAL-FEATURE: ARCHON PROMPT STUDIO (824 VORLAGEN & FABRIC SOP)
+    # 18. SPEZIAL-FEATURE: ARCHON PROMPT STUDIO (824 VORLAGEN & FABRIC SOP)
     # =========================================================================
-    new_body.append(make_p("15. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)", "Heading 1"))
+    new_body.append(make_p("18. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)", "Heading 1"))
     new_body.extend(orig[555:580])  # Prompt Studio screenshot (556) + content + table (577)
     new_body.append(make_callout("Zur Versionierung und schrittweisen Freigabe von Prompts siehe Anhang V.10: Prompt Registry & Canary Releases."))
 
     # =========================================================================
-    # 16. SPEZIAL-FEATURE: VISUAL CSS LIVE STUDIO & IN-PLACE INSPECTOR
+    # 19. SPEZIAL-FEATURE: VISUAL CSS LIVE STUDIO & IN-PLACE INSPECTOR
     # =========================================================================
-    new_body.append(make_p("16. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector", "Heading 1"))
+    new_body.append(make_p("19. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector", "Heading 1"))
     new_body.extend(orig[581:601])  # CSS Live Studio screenshot (583) + content + table (598)
 
     # =========================================================================
@@ -1026,11 +1181,11 @@ def rebuild_clean_docx():
         new_body.extend(make_guide_elements(title, rel_path))
 
     # =========================================================================
-    # ANHANG V: TECHNISCHE BETRIEBS- & INTEGRATIONS-HANDBÜCHER (21 Guides)
+    # ANHANG V: TECHNISCHE BETRIEBS- & INTEGRATIONS-HANDBÜCHER (22 Guides)
     # =========================================================================
     new_body.append(make_p("Anhang V: Technische Betriebs- & Integrations-Handbücher", "Heading 1"))
     new_body.append(make_p(
-        "In diesem Anhang sind alle 21 technischen Betriebs-, Infrastruktur- und Integrationshandbücher "
+        "In diesem Anhang sind alle 22 technischen Betriebs-, Infrastruktur-, ERP- und Integrationshandbücher "
         "vollständig und übersichtlich gegliedert enthalten.",
         "Normal"
     ))
@@ -1057,6 +1212,7 @@ def rebuild_clean_docx():
         ("V.19 CI/CD Pipeline & E2E-Testing", "docs/system/CI_PIPELINE_E2E_TESTING_GUIDE.md"),
         ("V.20 Systemarchitektur & Technisches Audit 2026", "docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md"),
         ("V.21 Archon OS Strategische Roadmap 2026", "docs/system/ROADMAP_2026.md"),
+        ("V.22 Archon ERP & CRM Architektur-Spezifikation (Säule 3)", "docs/system/ARCHON_ERP_ARCHITECTURE_SPEC.md"),
     ]
     for title, rel_path in sys_guides:
         new_body.extend(make_guide_elements(title, rel_path))
@@ -1071,9 +1227,17 @@ def rebuild_clean_docx():
     for el in new_body:
         body.append(el)
 
-    print(f"Saving rebuilt Word document to {TARGET_DOCX} (Total elements: {len(new_body)})...")
-    doc.save(TARGET_DOCX)
-    print("SUCCESS: Word document cleanly rebuilt with all screenshots!")
+    target_main = os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026.docx")
+    for out_path in (TARGET_DOCX, target_main):
+        try:
+            print(f"Saving rebuilt Word document to {out_path} (Total elements: {len(new_body)})...")
+            doc.save(out_path)
+            print(f"SUCCESS: Saved {out_path}")
+        except PermissionError:
+            alt_path = out_path.replace(".docx", "_NEU.docx")
+            print(f"[WARN] File locked in Word ({out_path}), saving to {alt_path} instead...")
+            doc.save(alt_path)
+            print(f"SUCCESS: Saved {alt_path}")
 
 
 if __name__ == "__main__":

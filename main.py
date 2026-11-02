@@ -14784,3 +14784,329 @@ def api_render_corporate_template(payload: Dict = Body(...)):
     custom = payload.get("custom", {})
     result = corporate_manager.render_template(template_type=template_type, company_id=company_id, custom=custom)
     return result
+
+
+@app.get("/api/erp/documents/{doc_id}/print", response_class=HTMLResponse)
+def api_erp_document_print(
+    doc_id: str,
+    company_id: Optional[str] = None,
+    autoprint: bool = False,
+    doc_type: Optional[str] = None,
+    entity_name: Optional[str] = None,
+    amount_net: Optional[float] = None
+):
+    from backend.corporate_manager import corporate_manager
+    from backend.erp_manager import erp_manager
+    doc = erp_manager.get_document(doc_id, company_id=company_id)
+    tmpl_type = "invoice"
+    custom: Dict[str, Any] = {"document_id": doc_id}
+    
+    if doc:
+        raw_type = doc.get("doc_type", "invoice")
+        if raw_type in ("offer", "ang"):
+            tmpl_type = "offer"
+        elif raw_type in ("order", "order_confirmation", "ab"):
+            tmpl_type = "order_confirmation"
+        else:
+            tmpl_type = "invoice"
+    else:
+        # Fallback für dynamische / simulierte Belege aus CRM Vorgänge
+        if doc_id.upper().startswith("ANG") or doc_type in ("offer", "ang"):
+            tmpl_type = "offer"
+            custom["offer_num"] = doc_id
+        elif doc_id.upper().startswith("AB") or doc_type in ("order", "order_confirmation", "ab"):
+            tmpl_type = "order_confirmation"
+            custom["order_num"] = doc_id
+        else:
+            tmpl_type = "invoice"
+            custom["invoice_num"] = doc_id
+            
+        if entity_name:
+            custom["recipient_name"] = entity_name
+        if amount_net and amount_net > 0:
+            custom["items"] = [
+                {"pos": 1, "desc": f"Dienstleistung / Projektleistungen gem. Vorgang {doc_id}", "qty": 1, "unit": "Pauschal", "price": float(amount_net)}
+            ]
+
+    rendered = corporate_manager.render_template(template_type=tmpl_type, company_id=company_id, custom=custom)
+    doc_num = custom.get("offer_num") or custom.get("order_num") or custom.get("invoice_num") or doc_id
+    autoprint_script = "<script>window.onload = function() { window.print(); };</script>" if autoprint else ""
+    html_content = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Belegdruck - {doc_num}</title>
+  <style>
+    @page {{ size: A4; margin: 12mm; }}
+    body {{ margin: 0; padding: 24px; background: #f8fafc; display: flex; justify-content: center; font-family: system-ui, -apple-system, sans-serif; }}
+    @media print {{
+      body {{ background: #fff; padding: 0; }}
+      .no-print {{ display: none !important; }}
+    }}
+    .print-bar {{
+      position: fixed; top: 16px; right: 20px; z-index: 9999;
+      background: #0f172a; color: #fff; border-radius: 12px; padding: 10px 18px;
+      display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); font-size: 13px; font-weight: 600;
+    }}
+    .print-btn {{
+      background: #4f46e5; hover:background: #4338ca; color: #fff; border: 0; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px; transition: all 0.2s;
+    }}
+    .print-btn:hover {{ background: #4338ca; }}
+    .close-btn {{
+      background: transparent; color: #94a3b8; border: 1px solid #334155; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px;
+    }}
+    .close-btn:hover {{ color: #fff; background: #1e293b; }}
+  </style>
+</head>
+<body>
+  <div class="print-bar no-print">
+    <span>Archon ERP DIN 5008 Beleg</span>
+    <button class="print-btn" onclick="window.print()">🖨️ Drucken / Als PDF speichern</button>
+    <button class="close-btn" onclick="window.close()">Fenster schließen</button>
+  </div>
+  {rendered.get("html", "")}
+  {autoprint_script}
+</body>
+</html>"""
+    return HTMLResponse(content=html_content)
+
+
+# --- SÄULE 3: WIRTSCHAFT & ERP (MULTI-TENANT CRM, ARTIKEL, BELEGE & POCKETBASE SYNC) ---
+@app.get("/api/erp/overview")
+def api_erp_overview(company_id: Optional[str] = None):
+    from backend.erp_manager import erp_manager
+    return erp_manager.get_tenant_overview(company_id=company_id)
+
+
+@app.get("/api/erp/entities")
+def api_erp_list_entities(
+    company_id: Optional[str] = None,
+    role: str = "all",
+    search: str = "",
+    status: str = ""
+):
+    from backend.erp_manager import erp_manager
+    return erp_manager.list_entities(company_id=company_id, role_filter=role, search=search, status=status)
+
+
+@app.get("/api/erp/entities/{entity_id}")
+def api_erp_get_entity_detail(entity_id: str, company_id: Optional[str] = None):
+    from backend.erp_manager import erp_manager
+    res = erp_manager.get_entity_detail(entity_id=entity_id, company_id=company_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    return res
+
+
+@app.post("/api/erp/entities")
+def api_erp_save_entity(payload: Dict = Body(...)):
+    from backend.erp_manager import erp_manager
+    company_id = payload.get("company_id")
+    saved = erp_manager.save_entity(payload=payload, company_id=company_id)
+    return {"success": True, "data": saved}
+
+
+@app.post("/api/erp/contacts")
+def api_erp_save_contact(payload: Dict = Body(...)):
+    from backend.erp_manager import erp_manager
+    company_id = payload.get("company_id")
+    saved = erp_manager.save_contact(payload=payload, company_id=company_id)
+    return {"success": True, "contact": saved}
+
+
+@app.post("/api/erp/interactions")
+def api_erp_add_interaction(payload: Dict = Body(...)):
+    from backend.erp_manager import erp_manager
+    company_id = payload.get("company_id")
+    saved = erp_manager.add_interaction(payload=payload, company_id=company_id)
+    return {"success": True, "interaction": saved}
+
+
+@app.get("/api/erp/items")
+def api_erp_list_items(
+    company_id: Optional[str] = None,
+    item_type: str = "all",
+    search: str = ""
+):
+    from backend.erp_manager import erp_manager
+    return erp_manager.list_items(company_id=company_id, item_type=item_type, search=search)
+
+
+@app.post("/api/erp/items")
+def api_erp_save_item(payload: Dict = Body(...)):
+    from backend.erp_manager import erp_manager
+    company_id = payload.get("company_id")
+    saved = erp_manager.save_item(payload=payload, company_id=company_id)
+    return {"success": True, "item": saved}
+
+
+@app.get("/api/erp/documents")
+def api_erp_list_documents(
+    company_id: Optional[str] = None,
+    doc_type: Optional[str] = None,
+    status: Optional[str] = None,
+    entity_id: Optional[str] = None
+):
+    from backend.erp_manager import erp_manager
+    return erp_manager.list_documents(
+        company_id=company_id, doc_type=doc_type, status=status, entity_id=entity_id
+    )
+
+
+@app.get("/api/erp/documents/{doc_id}")
+def api_erp_get_document(doc_id: str, company_id: Optional[str] = None):
+    from backend.erp_manager import erp_manager
+    doc = erp_manager.get_document(doc_id=doc_id, company_id=company_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
+
+
+@app.post("/api/erp/documents")
+def api_erp_save_document(payload: Dict = Body(...)):
+    from backend.erp_manager import erp_manager
+    company_id = payload.get("company_id")
+    saved = erp_manager.save_document(payload=payload, company_id=company_id)
+    return {"success": True, "document": saved}
+
+
+@app.post("/api/erp/documents/{doc_id}/convert")
+def api_erp_convert_document(doc_id: str, payload: Dict = Body(default={})):
+    from backend.erp_manager import erp_manager
+    target_type = payload.get("target_doc_type", "invoice")
+    company_id = payload.get("company_id")
+    converted = erp_manager.convert_document(
+        source_doc_id=doc_id, target_doc_type=target_type, company_id=company_id
+    )
+    return {"success": True, "document": converted}
+
+
+@app.post("/api/erp/sync/pocketbase")
+def api_erp_sync_pocketbase(payload: Dict = Body(default={})):
+    from backend.erp_manager import erp_manager
+    company_id = payload.get("company_id")
+    if "pocketbase_url" in payload or "collection_name" in payload:
+        erp_manager.update_sync_config(payload, company_id=company_id)
+    return erp_manager.sync_with_pocketbase(company_id=company_id)
+
+
+# =========================================================================
+# NATIVE POCKETBASE CRM API (KAUFMÄNNISCHES ADRESS- & CRM-ÖKOSYSTEM)
+# =========================================================================
+@app.get("/api/crm/contacts")
+def api_crm_list_contacts(
+    search: str = "",
+    status: str = "",
+    role: str = "all",
+    region: str = "",
+    tag: str = "",
+    sort_by: str = "updated",
+    sort_order: str = "desc",
+    page: int = 1,
+    limit: int = 100
+):
+    from backend.crm_service import crm_service
+    return crm_service.list_contacts(
+        search=search, status=status, role_filter=role, region=region,
+        tag=tag, sort_by=sort_by, sort_order=sort_order, page=page, limit=limit
+    )
+
+
+@app.get("/api/crm/contacts/{contact_id}")
+def api_crm_get_contact(contact_id: str):
+    from backend.crm_service import crm_service
+    contact = crm_service.get_contact_detail(contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="Kontakt nicht gefunden")
+    return contact
+
+
+@app.post("/api/crm/contacts")
+def api_crm_create_contact(payload: Dict = Body(...)):
+    from backend.crm_service import crm_service
+    return crm_service.save_contact(contact_id=payload.get("id"), payload=payload)
+
+
+@app.put("/api/crm/contacts/{contact_id}")
+def api_crm_update_contact(contact_id: str, payload: Dict = Body(...)):
+    from backend.crm_service import crm_service
+    return crm_service.save_contact(contact_id=contact_id, payload=payload)
+
+
+@app.delete("/api/crm/contacts/{contact_id}")
+def api_crm_delete_contact(contact_id: str):
+    from backend.crm_service import crm_service
+    ok = crm_service.delete_contact(contact_id)
+    return {"success": ok}
+
+
+@app.post("/api/crm/contacts/{contact_id}/messages")
+def api_crm_add_message(contact_id: str, payload: Dict = Body(...)):
+    from backend.crm_service import crm_service
+    text = payload.get("text", "")
+    channel = payload.get("channel", "note")
+    direction = payload.get("direction", "outbound")
+    sender = payload.get("sender", "Michael Keller")
+    return crm_service.add_contact_message(
+        contact_id=contact_id, text=text, channel=channel, direction=direction, sender=sender
+    )
+
+
+@app.get("/api/crm/messages")
+def api_crm_list_messages(
+    search: str = "",
+    channel: str = "all",
+    direction: str = "all",
+    sort: str = "newest",
+    page: int = 1,
+    limit: int = 50
+):
+    from backend.crm_service import crm_service
+    return crm_service.list_all_messages(
+        search=search, channel=channel, direction=direction, sort=sort, page=page, limit=limit
+    )
+
+
+@app.get("/api/crm/calendar")
+def api_crm_get_calendar():
+    from backend.crm_service import crm_service
+    return crm_service.get_calendar_events()
+
+
+@app.get("/api/crm/report")
+def api_crm_get_report():
+    from backend.crm_service import crm_service
+    return crm_service.get_report_metrics()
+
+
+@app.get("/api/crm/avatars/{contact_id}/{filename}")
+def api_crm_avatar(contact_id: str, filename: str):
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    avatar_path = os.path.join(root_dir, "pocketbase", "pb_data", "storage", "pbc_1512878646", contact_id, filename)
+    if os.path.exists(avatar_path):
+        return FileResponse(avatar_path)
+    alt_path = os.path.join(root_dir, "static", "avatars", filename)
+    if os.path.exists(alt_path):
+        return FileResponse(alt_path)
+    raise HTTPException(status_code=404, detail="Avatar not found")
+
+
+@app.get("/api/crm/contacts/{contact_id}/gdpr-export")
+def api_crm_gdpr_export(contact_id: str):
+    from backend.crm_service import crm_service
+    res = crm_service.export_gdpr(contact_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return res
+
+
+@app.post("/api/crm/contacts/{contact_id}/gdpr-anonymize")
+def api_crm_gdpr_anonymize(contact_id: str):
+    from backend.crm_service import crm_service
+    ok = crm_service.anonymize_gdpr(contact_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Contact not found or update failed")
+    return {"success": True, "message": "Contact anonymized per Art. 17 GDPR"}
+
+
+

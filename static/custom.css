@@ -866,7 +866,17 @@ div.flex > div.flex > span.w-1\.5 {
 .library-header-tile.active-cadre-tab > div.tile-icon-wrap,
 .library-header-tile > div.tile-icon-wrap.active-tile,
 .showroom-header-tile.active-cadre-tab > div.tile-icon-wrap,
-.showroom-header-tile > div.tile-icon-wrap.active-tile {
+.showroom-header-tile > div.tile-icon-wrap.active-tile,
+.addr-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.addr-header-tile > div.tile-icon-wrap.active-tile,
+.items-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.items-header-tile > div.tile-icon-wrap.active-tile,
+.ops-erp-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.ops-erp-header-tile > div.tile-icon-wrap.active-tile,
+.finance-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.finance-header-tile > div.tile-icon-wrap.active-tile,
+.active-cadre-tab > div.tile-icon-wrap,
+div.tile-icon-wrap.active-tile {
   border: 2px solid #121212 !important;
   border-radius: 6px !important;
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
@@ -881,7 +891,17 @@ div.flex > div.flex > span.w-1\.5 {
 .dark .library-header-tile.active-cadre-tab > div.tile-icon-wrap,
 .dark .library-header-tile > div.tile-icon-wrap.active-tile,
 .dark .showroom-header-tile.active-cadre-tab > div.tile-icon-wrap,
-.dark .showroom-header-tile > div.tile-icon-wrap.active-tile {
+.dark .showroom-header-tile > div.tile-icon-wrap.active-tile,
+.dark .addr-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .addr-header-tile > div.tile-icon-wrap.active-tile,
+.dark .items-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .items-header-tile > div.tile-icon-wrap.active-tile,
+.dark .ops-erp-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .ops-erp-header-tile > div.tile-icon-wrap.active-tile,
+.dark .finance-header-tile.active-cadre-tab > div.tile-icon-wrap,
+.dark .finance-header-tile > div.tile-icon-wrap.active-tile,
+.dark .active-cadre-tab > div.tile-icon-wrap,
+.dark div.tile-icon-wrap.active-tile {
   border-color: #e4e4e7 !important;
   box-shadow: 0 4px 6px -1px rgba(255,255,255,0.12), 0 2px 4px -2px rgba(255,255,255,0.06) !important;
 }

@@ -1,0 +1,1190 @@
+<!-- VIEW CONTAINER: ADRESSEN & CRM (SÄULE 3: WIRTSCHAFT & ERP) -->
+<div id="view-addresses" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+
+  <!-- ========================================================================= -->
+  <!-- 80px HEADER: ADRESSEN, CRM, KUNDEN, LIEFERANTEN, NACHRICHTEN, KALENDER & BERICHT -->
+  <!-- ========================================================================= -->
+  <header id="addresses-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="relative shrink-0 flex items-center justify-center">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h2 id="addresses-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">
+            Kontakte — CRM Adressstamm
+          </h2>
+          <span id="erp-addr-tenant-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25 shrink-0">
+            Mandant: archon-systems
+          </span>
+          <span id="erp-addr-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">
+            2.331 Kontakte
+          </span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>SQLite Engine (WAL)</span>
+          </span>
+        </div>
+        <p id="addresses-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">
+          Vollständige Kontakt- &amp; CRM-Tabelle (High-Performance SQLite)
+        </p>
+      </div>
+    </div>
+
+    <!-- Rechts: 6 Cadre-Subtab-Kacheln (72px) -->
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <!-- TAB 1: KONTAKTE -->
+      <button
+        type="button"
+        id="crm-tab-btn-kontakte"
+        onclick="crmStudio.switchSubTab('kontakte')"
+        class="crm-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap active-tile w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/overview.png" alt="Kontakte" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Kontakte</span>
+      </button>
+
+      <!-- TAB 2: KUNDEN -->
+      <button
+        type="button"
+        id="crm-tab-btn-kunden"
+        onclick="crmStudio.switchSubTab('kunden')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/organisation.png" alt="Kunden" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Kunden</span>
+      </button>
+
+      <!-- TAB 3: LIEFERANTEN -->
+      <button
+        type="button"
+        id="crm-tab-btn-lieferanten"
+        onclick="crmStudio.switchSubTab('lieferanten')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/marketplace.png" alt="Lieferanten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Lieferanten</span>
+      </button>
+
+      <!-- TAB 4: ALLE NACHRICHTEN -->
+      <button
+        type="button"
+        id="crm-tab-btn-nachrichten"
+        onclick="crmStudio.switchSubTab('nachrichten')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/chat.png" alt="Nachrichten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Nachrichten</span>
+      </button>
+
+      <!-- TAB 5: KALENDER -->
+      <button
+        type="button"
+        id="crm-tab-btn-kalender"
+        onclick="crmStudio.switchSubTab('kalender')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/operations.png" alt="Kalender" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Kalender</span>
+      </button>
+
+      <!-- TAB 6: BERICHT (MISSIONSKONTROLLE) -->
+      <button
+        type="button"
+        id="crm-tab-btn-bericht"
+        onclick="crmStudio.switchSubTab('bericht')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/berichte.png" alt="Bericht" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Bericht</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 1: KONTAKTE (Screenshot 1: Vollständige CRM-Tabelle)              -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-kontakte" class="flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 shadow-xs">
+    
+    <!-- Filter Toolbar (Screenshot 1) -->
+    <div class="flex items-center justify-between gap-2.5 flex-wrap shrink-0 pb-2 border-b border-[var(--border)]">
+      <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+        <!-- Hits Badge -->
+        <span id="crm-kontakte-hits-badge" class="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-[var(--foreground)] text-xs font-mono font-bold shrink-0">
+          2331 Treffer
+        </span>
+
+        <!-- Search Input -->
+        <div class="relative min-w-[220px] max-w-sm flex-1">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+            🔍
+          </span>
+          <input
+            type="text"
+            id="crm-search-input"
+            oninput="crmStudio.onSearchInput(this.value)"
+            placeholder="Suchbegriff oder filter..."
+            class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+        </div>
+
+        <!-- Status Filter Dropdown -->
+        <select
+          id="crm-filter-status"
+          onchange="crmStudio.onStatusChange(this.value)"
+          class="px-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs font-medium text-[var(--foreground)] focus:outline-none cursor-pointer shrink-0"
+        >
+          <option value="all">Status (Alle)</option>
+        </select>
+
+        <!-- Region Filter Dropdown -->
+        <select
+          id="crm-filter-region"
+          onchange="crmStudio.onRegionChange(this.value)"
+          class="px-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs font-medium text-[var(--foreground)] focus:outline-none cursor-pointer shrink-0"
+        >
+          <option value="all">Alle Regionen</option>
+        </select>
+
+        <!-- Reset Button -->
+        <button
+          type="button"
+          onclick="crmStudio.resetFilters()"
+          class="p-1.5 rounded-xl bg-[var(--secondary)] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 text-xs transition cursor-pointer"
+          title="Filter zurücksetzen"
+        >
+          🔄
+        </button>
+      </div>
+
+      <!-- Action Button Right -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onclick="crmStudio.createNewContact()"
+          class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+        >
+          <span>+</span>
+          <span>Neuer Kontakt</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Scrollable Table (Screenshot 1) -->
+    <div class="flex-1 min-h-0 overflow-auto border border-[var(--border)] rounded-xl">
+      <table class="w-full border-collapse text-left">
+        <thead class="bg-slate-50 dark:bg-slate-900/80 sticky top-0 z-10 border-b border-[var(--border)] text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">
+          <tr>
+            <th class="p-2.5 w-8 text-center"><input type="checkbox" class="rounded border-slate-300"></th>
+            <th class="p-2.5 whitespace-nowrap text-emerald-600 dark:text-emerald-400">T NAME ↑</th>
+            <th class="p-2.5 whitespace-nowrap">T UNTERNEHMEN</th>
+            <th class="p-2.5 whitespace-nowrap">T ROLLE / POSITION</th>
+            <th class="p-2.5 w-10 text-center">FOTO</th>
+            <th class="p-2.5 whitespace-nowrap text-center"># BEWERTUNG</th>
+            <th class="p-2.5 whitespace-nowrap">≡ STATUS</th>
+            <th class="p-2.5 whitespace-nowrap text-center">{} NACHRICHTEN</th>
+            <th class="p-2.5 whitespace-nowrap">📅 VERNETZT</th>
+            <th class="p-2.5 whitespace-nowrap">T NÄCHSTER SCHRITT</th>
+            <th class="p-2.5 whitespace-nowrap text-right">AKTIONEN</th>
+          </tr>
+        </thead>
+        <tbody id="crm-kontakte-table-body" class="divide-y divide-[var(--border)] bg-[var(--card)]">
+          <!-- Dynamically populated rows -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Table Footer / Pagination -->
+    <div class="flex items-center justify-between gap-3 pt-2 shrink-0 border-t border-[var(--border)]">
+      <div class="flex items-center gap-2 text-xs font-mono text-[var(--muted-foreground)]">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>SQLite WAL Engine · Direkter DB-Zugriff</span>
+      </div>
+      <div id="crm-kontakte-pagination"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 2: KUNDEN (DEBITOREN 10000+)                                      -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-kunden" class="hidden flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 shadow-xs">
+    <div class="px-3 py-2 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-between text-xs font-mono text-sky-700 dark:text-sky-300 shrink-0">
+      <span class="font-bold">Kundenstamm (Debitoren 10000+): Aktive Auftraggeber, Zahlungsziele &amp; Rechnungsbelege</span>
+      <span>GoBD &amp; DATEV synchron</span>
+    </div>
+    <!-- Uses same table component populated via loadKunden() -->
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 3: LIEFERANTEN (KREDITOREN 70000+)                                -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-lieferanten" class="hidden flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 shadow-xs">
+    <div class="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs font-mono text-amber-700 dark:text-amber-300 shrink-0">
+      <span class="font-bold">Lieferantenstamm (Kreditoren 70000+): Externe Partner, SaaS-Tools &amp; Aufwandskonten</span>
+      <span>Eingangsrechnungs-Workflow</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 4: ALLE NACHRICHTEN (Screenshot 2: Timeline)                     -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-nachrichten" class="hidden flex-1 min-h-0 w-full flex flex-col gap-2.5 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 shadow-xs">
+    
+    <!-- Filter Toolbar (Screenshot 2) -->
+    <div class="flex flex-col gap-2.5 shrink-0 pb-3 border-b border-[var(--border)]">
+      <!-- Row 1: Search & Sort -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="relative flex-1 min-w-[260px]">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">🔍</span>
+          <input
+            type="text"
+            oninput="crmStudio.onMsgSearchInput(this.value)"
+            placeholder="Nachrichten durchsuchen (Name, Text...)"
+            class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none"
+          >
+        </div>
+
+        <select class="px-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs font-medium text-[var(--foreground)]">
+          <option value="newest">Neueste zuerst</option>
+          <option value="oldest">Älteste zuerst</option>
+        </select>
+
+        <!-- Inbound / Outbound Direction Pills -->
+        <div class="flex items-center bg-[var(--secondary)] p-0.5 rounded-xl border border-[var(--border)] text-xs font-semibold">
+          <button type="button" id="crm-msg-dir-all" onclick="crmStudio.setMsgDirectionFilter('all')" class="crm-msg-dir-pill px-3 py-1 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 transition">
+            Alle (<span id="crm-msg-cnt-all">2229</span>)
+          </button>
+          <button type="button" id="crm-msg-dir-received" onclick="crmStudio.setMsgDirectionFilter('received')" class="crm-msg-dir-pill px-3 py-1 rounded-lg text-[var(--foreground)] transition">
+            📥 Erhalten (<span id="crm-msg-cnt-inbound">492</span>)
+          </button>
+          <button type="button" id="crm-msg-dir-sent" onclick="crmStudio.setMsgDirectionFilter('sent')" class="crm-msg-dir-pill px-3 py-1 rounded-lg text-[var(--foreground)] transition">
+            📤 Gesendet (<span id="crm-msg-cnt-outbound">1737</span>)
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Channel Filter Pills (Screenshot 2) -->
+      <div class="flex items-center gap-1.5 flex-wrap text-xs">
+        <button type="button" id="crm-msg-ch-all" onclick="crmStudio.setMsgChannelFilter('all')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-bold bg-indigo-600 text-white border border-indigo-600 transition">
+          Alle (2229)
+        </button>
+        <button type="button" id="crm-msg-ch-linkedin" onclick="crmStudio.setMsgChannelFilter('linkedin')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          🔗 LinkedIn (<span id="crm-msg-cnt-linkedin">2220</span>)
+        </button>
+        <button type="button" id="crm-msg-ch-email" onclick="crmStudio.setMsgChannelFilter('email')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          ✉️ E-Mail (<span id="crm-msg-cnt-email">3</span>)
+        </button>
+        <button type="button" id="crm-msg-ch-meeting" onclick="crmStudio.setMsgChannelFilter('meeting')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          👥 Treffen (<span id="crm-msg-cnt-meeting">3</span>)
+        </button>
+        <button type="button" id="crm-msg-ch-audio" onclick="crmStudio.setMsgChannelFilter('audio')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          🎙️ Audio-Diktat (<span id="crm-msg-cnt-audio">0</span>)
+        </button>
+        <button type="button" id="crm-msg-ch-note" onclick="crmStudio.setMsgChannelFilter('note')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          📝 Notiz (<span id="crm-msg-cnt-note">3</span>)
+        </button>
+      </div>
+    </div>
+
+    <!-- Message Feed -->
+    <div id="crm-messages-feed" class="flex-1 min-h-0 overflow-y-auto pr-1">
+      <!-- Populated via renderMessagesFeed() -->
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 5: KALENDER                                                      -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-kalender" class="hidden flex-1 min-h-0 w-full flex flex-col gap-3 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 shadow-xs">
+    <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+      <div class="text-xs font-bold text-[var(--foreground)] flex items-center gap-2">
+        <span>📅</span>
+        <span>Terminübersicht, Google-Kalender Sync &amp; Fristen</span>
+      </div>
+      <button type="button" onclick="crmStudio.loadCalendar()" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] text-xs font-mono hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+        Aktualisieren
+      </button>
+    </div>
+    <div id="crm-calendar-container" class="flex-1 min-h-0 overflow-y-auto">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 6: BERICHT (MISSIONSKONTROLLE - Screenshot 4)                     -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-bericht" class="hidden flex-1 min-h-0 w-full overflow-y-auto p-1">
+    <div id="crm-bericht-container" class="space-y-4">
+      <!-- Populated dynamically via loadReport() -->
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL / DRAWER: ANSICHT EINES DATENSATZES (Screenshot 3: KontaktDrawer)   -->
+  <!-- ========================================================================= -->
+  <div id="crm-contact-drawer" onclick="if(event.target === this) crmStudio.closeContactDrawer()" class="hidden fixed inset-0 z-[999] flex items-stretch justify-center bg-black/70 px-4 md:px-8 font-sans backdrop-blur-sm overflow-hidden py-0 cursor-pointer">
+    <div onclick="event.stopPropagation()" class="w-full max-w-[1350px] h-screen max-h-screen border-x flex flex-col overflow-hidden shadow-2xl relative bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 cursor-default">
+      
+      <!-- Drawer Top Bar (Height 80px) with Navigation Tabs for Adresse (VARIO-Prinzip) -->
+      <div class="h-20 px-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 flex items-center justify-between gap-4 shrink-0">
+        <!-- Contact Meta -->
+        <div class="flex items-center gap-3.5 min-w-0 max-w-[310px] shrink-0">
+          <div id="crm-drawer-avatar-wrap" class="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-500/40 shadow-sm shrink-0 flex items-center justify-center bg-emerald-500/10 text-emerald-600 font-bold font-mono text-base">
+            <img id="crm-drawer-avatar-img" src="" alt="Avatar" class="w-full h-full object-cover hidden" onerror="this.classList.add('hidden')">
+            <span id="crm-drawer-initials">??</span>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <h2 id="crm-drawer-title" class="text-base font-black tracking-tight text-zinc-900 dark:text-zinc-100 truncate">
+                Kontaktname
+              </h2>
+              <a id="crm-drawer-google-search" href="#" target="_blank" rel="noopener noreferrer" class="p-1 rounded-full text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition" title="Auf Google suchen">
+                🔍
+              </a>
+            </div>
+            <p id="crm-drawer-id" class="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate">
+              ID: -
+            </p>
+          </div>
+        </div>
+
+        <!-- Center: Icon-Tabs for Adresse Teilansichten (VARIO 8 Standard) -->
+        <div class="flex items-center gap-1.5 overflow-x-auto py-1 shrink-0">
+          <button type="button" onclick="crmStudio.switchDrawerTab('uebersicht')" id="cd-tabbtn-uebersicht" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs cursor-pointer">
+            <span>👤</span>
+            <span>Übersicht</span>
+          </button>
+          <button type="button" onclick="crmStudio.switchDrawerTab('nachrichten')" id="cd-tabbtn-nachrichten" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
+            <span>💬</span>
+            <span>Nachrichten</span>
+          </button>
+          <button type="button" onclick="crmStudio.switchDrawerTab('kaufmaennisch')" id="cd-tabbtn-kaufmaennisch" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
+            <span>💳</span>
+            <span>Kaufmännisch</span>
+          </button>
+          <button type="button" onclick="crmStudio.switchDrawerTab('vorgaenge')" id="cd-tabbtn-vorgaenge" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
+            <span>📄</span>
+            <span>Belege &amp; Vorgänge</span>
+          </button>
+          <button type="button" onclick="crmStudio.switchDrawerTab('ansprechpartner')" id="cd-tabbtn-ansprechpartner" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
+            <span>👥</span>
+            <span>Ansprechpartner</span>
+          </button>
+          <button type="button" onclick="crmStudio.switchDrawerTab('dsgvo')" id="cd-tabbtn-dsgvo" class="cd-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
+            <span>🛡️</span>
+            <span>DSGVO</span>
+          </button>
+        </div>
+
+        <!-- Right: Prominent Close Button -->
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" onclick="crmStudio.closeContactDrawer()" class="w-9 h-9 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition cursor-pointer text-xl font-bold leading-none shadow-xs border border-zinc-200 dark:border-zinc-700" title="Schließen (Esc oder Klick außerhalb)">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="crm-drawer-loading" class="flex-1 p-12 flex flex-col items-center justify-center text-xs font-mono text-slate-400 gap-2">
+        <span class="animate-spin text-2xl">⏳</span>
+        <span>Lade Kontaktdaten &amp; Nachrichtenverlauf...</span>
+      </div>
+
+      <!-- TEILANSICHT 1: ÜBERSICHT (Side-by-Side: Stammdaten + Verlauf) -->
+      <div id="cd-view-uebersicht" class="cd-subview flex-1 min-h-0 flex flex-row gap-6 p-6 overflow-hidden" style="display: flex; flex-direction: row; height: 100%; min-height: 0;">
+        
+        <!-- LINKE SPALTE: Stammdaten-Formular (50% Breite, eigenständig scrollbar) -->
+        <div class="w-1/2 h-full min-h-0 min-w-0 overflow-y-auto pr-3 space-y-4" style="flex: 0 0 50%; max-width: 50%; width: 50%; height: 100%; min-height: 0;">
+          
+          <!-- Top Row: Name, Firma, Rolle (8 Cols) & Foto-Preview / Rating (4 Cols) -->
+          <div class="grid grid-cols-12 gap-4 items-start pb-1">
+            <div class="col-span-8 space-y-3">
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Name *</label>
+                <input type="text" id="cd-name" placeholder="Vorname Nachname" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Unternehmen</label>
+                <input type="text" id="cd-unternehmen" placeholder="Firma GmbH" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Rolle / Position</label>
+                <input type="text" id="cd-rolle" placeholder="Position / Rolle" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+              </div>
+            </div>
+
+            <!-- Thumbnail & Rating Box (145x145) -->
+            <div class="col-span-4 flex flex-col items-center justify-start pt-1 space-y-2">
+              <div class="w-[145px] h-[145px] rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 overflow-hidden flex flex-col items-center justify-center relative shadow-xs text-center p-2">
+                <img id="cd-box-avatar-img" src="" alt="Profilfoto" class="w-full h-full object-cover hidden" onerror="this.classList.add('hidden')">
+                <div id="cd-box-avatar-placeholder" class="flex flex-col items-center justify-center text-zinc-400 gap-1 select-none">
+                  <span class="text-2xl">🖼️</span>
+                  <span class="text-[11px] font-mono leading-tight">Kein Foto</span>
+                  <span class="text-[9px] font-mono text-emerald-600 dark:text-emerald-400">Strg+V zum Einfügen</span>
+                </div>
+              </div>
+              <div id="crm-drawer-stars" class="flex items-center gap-1 py-1" data-rating="0"></div>
+            </div>
+          </div>
+
+          <!-- Contact Channels Grid (2 Cols) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">E-Mail-Adresse</label>
+              <input type="email" id="cd-email" placeholder="name@firma.de" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">LinkedIn Profil URL</label>
+                <a id="cd-linkedin-open-link" href="#" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer">
+                  <span>🔗</span><span>Öffnen</span>
+                </a>
+              </div>
+              <input type="url" id="cd-linkedin" placeholder="https://www.linkedin.com/in/..." class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Telefon 1 (Hauptnummer)</label>
+              <input type="tel" id="cd-tel1" placeholder="+49 30 123456" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Region</label>
+              <input type="text" id="cd-region" placeholder="DACH / Berlin" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Telefon 2 (Zweitnummer)</label>
+              <input type="tel" id="cd-tel2" placeholder="+49 170 123456" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Webseite</label>
+                <a id="cd-webseite-open-link" href="#" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer">
+                  <span>🔗</span><span>Öffnen</span>
+                </a>
+              </div>
+              <input type="url" id="cd-webseite" placeholder="https://www.firma.de" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+          </div>
+
+          <!-- Status & Rollen-Zuordnung (2 Cols) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Status (Pipeline-Phase)</label>
+              <select id="cd-status" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition font-semibold">
+                <option value="Vernetzt">🟡 Vernetzt</option>
+                <option value="Erstnachricht">Erstnachricht</option>
+                <option value="Im Dialog">Im Dialog</option>
+                <option value="Regelmäßiger Kontakt">Regelmäßiger Kontakt</option>
+                <option value="Interview">Interview vereinbart</option>
+                <option value="Parkposition">Parkposition</option>
+                <option value="Kunde">Kunde (Debitor)</option>
+                <option value="Lieferant">Lieferant (Kreditor)</option>
+                <option value="Kein_Interesse">Kein Interesse</option>
+                <option value="Irrelevant">Irrelevant</option>
+                <option value="Gesperrt_1Jahr">Gesperrt (1 Jahr)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Rollen-Zuordnung (Mission Control)</label>
+              <select id="cd-rollen-zuordnung" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition font-semibold">
+                <option value="">(Automatisch erkennen)</option>
+                <option value="Executive Search">Executive Search</option>
+                <option value="Recruiter / Headhunter">Recruiter / Headhunter</option>
+                <option value="GF / Inhaber / CEO">GF / Inhaber / CEO</option>
+                <option value="Entscheider / Führung">Entscheider / Führung</option>
+                <option value="Private Equity / Investor">Private Equity / Investor</option>
+                <option value="Finance / CFO">Finance / CFO</option>
+                <option value="HR / Personal">HR / Personal</option>
+                <option value="Consulting / Beratung">Consulting / Beratung</option>
+                <option value="Quality / GMP">Quality / GMP</option>
+                <option value="Healthcare / Pharma">Healthcare / Pharma</option>
+                <option value="Interim / Freelance">Interim / Freelance</option>
+                <option value="Sonstige">Sonstige</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Nächster Schritt -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Nächster Schritt</label>
+            <input type="text" id="cd-naechster-schritt" placeholder="zB Erstnachricht auf LinkedIn senden" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+          </div>
+
+          <!-- 3-Column Dates Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Vernetzt seit</label>
+              <input type="date" id="cd-vernetzt-am" class="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Zurückgezogen</label>
+              <input type="date" id="cd-zurueckgezogen" class="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Nächster Termin</label>
+              <input type="text" id="cd-naechster-termin" placeholder="tt.mm.jjjj --:--" class="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition">
+            </div>
+          </div>
+
+          <!-- Textareas: Adresse & Kommentar -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Adresse (Mehrzeilig)</label>
+              <textarea id="cd-adresse" rows="3" placeholder="Musterstraße 123, 10115 Berlin, Deutschland" class="w-full p-2.5 border rounded-lg text-xs font-mono leading-relaxed bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition"></textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Notizen &amp; Kommentar</label>
+              <textarea id="cd-kommentar" rows="3" placeholder="Wichtige Notizen oder Gesprächsprotokoll..." class="w-full p-2.5 border rounded-lg text-xs font-mono leading-relaxed bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition"></textarea>
+            </div>
+          </div>
+
+          <!-- TAGS / SCHLAGWÖRTER (Screenshot) -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Tags / Schlagwörter</label>
+            <div id="cd-tags-container" class="p-2 border rounded-lg transition min-h-[42px] flex flex-wrap items-center gap-1.5 bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus-within:border-emerald-500">
+              <!-- Dynamically populated tags chips -->
+              <input
+                type="text"
+                id="cd-new-tag-input"
+                placeholder="+ Tag..."
+                class="flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs font-mono py-1 px-1"
+                onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();crmStudio.addTagFromInput();}"
+              >
+            </div>
+          </div>
+
+          <!-- LINKEDIN-ÜBERSCHRIFT (Screenshot) -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">LinkedIn-Überschrift</label>
+            <input type="text" id="cd-linkedin-header" placeholder="Consultant &amp; Co-Lead Private Equity..." class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+          </div>
+
+          <!-- LINKEDIN INFO (MEHRZEILIG) (Screenshot) -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">LinkedIn Info (Mehrzeilig)</label>
+            <textarea id="cd-linkedin-info" rows="4" placeholder="Aus LinkedIn kopierter Profiltext..." class="w-full p-2.5 border rounded-lg text-xs font-mono leading-relaxed bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition"></textarea>
+          </div>
+
+        </div>
+
+        <!-- RECHTE SPALTE: Nachrichtenverlauf (50% Breite, eigenständig scrollbar) -->
+        <div class="w-1/2 h-full min-h-0 min-w-0 flex flex-col border-l border-zinc-200 dark:border-zinc-800 pl-6 overflow-hidden" style="flex: 0 0 50%; max-width: 50%; width: 50%; height: 100%; min-height: 0; display: flex; flex-direction: column;">
+          
+          <!-- Header Nachrichtenverlauf & Kanal-Filter Buttons (Screenshot) -->
+          <div class="pb-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 mb-3 gap-2">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold font-sans">Nachrichtenverlauf</h3>
+            </div>
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              <button type="button" id="cd-mf-all" onclick="crmStudio.filterDrawerMessages('all')" class="px-3 py-1 rounded-full text-[11px] font-mono font-bold transition cursor-pointer shrink-0 bg-accent-main text-white border border-accent-main shadow-xs">
+                Alle
+              </button>
+              <button type="button" id="cd-mf-linkedin" onclick="crmStudio.filterDrawerMessages('linkedin')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200">
+                LinkedIn
+              </button>
+              <button type="button" id="cd-mf-email" onclick="crmStudio.filterDrawerMessages('email')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200">
+                E-Mail
+              </button>
+              <button type="button" id="cd-mf-meeting" onclick="crmStudio.filterDrawerMessages('meeting')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200">
+                Treffen
+              </button>
+              <button type="button" id="cd-mf-note" onclick="crmStudio.filterDrawerMessages('note')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200">
+                Notizen
+              </button>
+            </div>
+          </div>
+
+          <!-- Messages Scroll Thread -->
+          <div id="crm-drawer-messages-list" class="flex-1 min-h-0 overflow-y-auto space-y-3 pr-2 font-sans text-xs">
+            <!-- Dynamically populated messages -->
+          </div>
+
+          <!-- Quick Note & Voice Input Actions (Screenshot) -->
+          <div class="pt-3 border-t border-zinc-200 dark:border-zinc-800 shrink-0 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                onclick="crmStudio.promptAddNote()"
+                class="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <span>+</span>
+                <span>Notiz</span>
+              </button>
+              <button
+                type="button"
+                onclick="crmStudio.triggerAudioDictation()"
+                class="py-1.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <span>🎙️</span>
+                <span>Audio-Diktat</span>
+              </button>
+              <button
+                type="button"
+                onclick="crmStudio.triggerMeetingDictation()"
+                class="py-1.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <span>👥</span>
+                <span>Meeting-Diktat</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 2: NACHRICHTEN (Fokussierter Vollbild Kommunikations-Hub) -->
+      <!-- ================================================================= -->
+      <div id="cd-view-nachrichten" class="cd-subview hidden flex-1 min-h-0 flex flex-col p-6 overflow-hidden space-y-4">
+        <!-- Filter Bar -->
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0 gap-3">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-bold font-sans">Vollständiger Kommunikationsverlauf</h3>
+            <span id="cd-full-msg-count" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">0 Nachrichten</span>
+          </div>
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <button type="button" onclick="crmStudio.filterDrawerMessages('all')" class="px-3 py-1 rounded-full text-[11px] font-mono font-bold transition cursor-pointer shrink-0 bg-accent-main text-white shadow-xs">Alle</button>
+            <button type="button" onclick="crmStudio.filterDrawerMessages('linkedin')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200">LinkedIn</button>
+            <button type="button" onclick="crmStudio.filterDrawerMessages('email')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200">E-Mail</button>
+            <button type="button" onclick="crmStudio.filterDrawerMessages('meeting')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200">Treffen</button>
+            <button type="button" onclick="crmStudio.filterDrawerMessages('note')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200">Notizen</button>
+          </div>
+        </div>
+
+        <!-- Scrollable Thread -->
+        <div id="crm-drawer-full-messages-list" class="flex-1 min-h-0 overflow-y-auto space-y-3 pr-2 font-sans text-xs">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Composer Box -->
+        <div class="p-3 border rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 shrink-0 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold font-sans">Neuen Eintrag / Gesprächsprotokoll erfassen:</span>
+            <div class="flex items-center gap-1">
+              <select id="cd-new-msg-channel" class="text-xs font-mono font-semibold px-2 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                <option value="note">📝 Interne Notiz</option>
+                <option value="linkedin">🔗 LinkedIn Nachricht</option>
+                <option value="email">✉️ E-Mail</option>
+                <option value="meeting">👥 Meeting-Protokoll</option>
+                <option value="call">📞 Telefonat</option>
+              </select>
+            </div>
+          </div>
+          <textarea id="cd-new-msg-text" rows="2" placeholder="Gesprächsinhalt, Notiz oder Nachrichtentext eingeben..." class="w-full p-2.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 outline-none focus:border-emerald-500"></textarea>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="crmStudio.triggerAudioDictation()" class="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 text-xs font-bold hover:bg-rose-100 flex items-center gap-1 cursor-pointer">
+                <span>🎙️</span><span>Audio-Diktat</span>
+              </button>
+              <button type="button" onclick="crmStudio.triggerMeetingDictation()" class="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/60 text-xs font-bold hover:bg-blue-100 flex items-center gap-1 cursor-pointer">
+                <span>👥</span><span>Meeting-Diktat</span>
+              </button>
+            </div>
+            <button type="button" onclick="crmStudio.sendComposerMessage()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+              <span>Senden / Speichern</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 3: KAUFMÄNNISCH (VARIO 8 Standard Finanzdaten)           -->
+      <!-- ================================================================= -->
+      <div id="cd-view-kaufmaennisch" class="cd-subview hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Box 1: Konditionen & Debitoren/Kreditoren -->
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+              <span>💳</span><span>Zahlung &amp; Konditionen (VARIO)</span>
+            </h4>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Debitor-Nr.</label>
+                <input type="text" id="cd-debitor-nr" placeholder="D-10042" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Kreditor-Nr.</label>
+                <input type="text" id="cd-kreditor-nr" placeholder="K-70018" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Zahlungsart</label>
+              <select id="cd-zahlungsart" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="Rechnung">Rechnung (Standard)</option>
+                <option value="SEPA-Basislastschrift">SEPA-Basislastschrift</option>
+                <option value="SEPA-Firmenlastschrift">SEPA-Firmenlastschrift B2B</option>
+                <option value="Vorkasse">Vorkasse</option>
+                <option value="Nachnahme">Nachnahme</option>
+                <option value="Kreditkarte">Kreditkarte</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Zahlungsziel</label>
+                <input type="number" id="cd-zahlungsziel-tage" placeholder="14" class="w-full px-2 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Skonto %</label>
+                <input type="number" step="0.1" id="cd-skonto-prozent" placeholder="2.0" class="w-full px-2 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Skonto Tage</label>
+                <input type="number" id="cd-skonto-tage" placeholder="7" class="w-full px-2 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Kreditlimit (€)</label>
+              <input type="number" id="cd-kreditlimit" placeholder="15000" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Preis- &amp; Rabattgruppe</label>
+              <select id="cd-preisgruppe" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="Standard">Standard (Endkunde / Einzelpreise)</option>
+                <option value="Grosskunde A">Großkunde A (-10%)</option>
+                <option value="B2B Fachhandel">B2B Fachhandel (-20%)</option>
+                <option value="Konzernpartner">Konzernpartner / Rahmenvertrag</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Box 2: Bankverbindung & SEPA -->
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+              <span>🏦</span><span>Bankverbindung &amp; SEPA</span>
+            </h4>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Kreditinstitut / Bankname</label>
+              <input type="text" id="cd-bank-name" placeholder="Commerzbank Frankfurt" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">IBAN</label>
+              <input type="text" id="cd-iban" placeholder="DE89 3704 0044 0532 0130 00" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">BIC</label>
+              <input type="text" id="cd-bic" placeholder="COBADEFFXXX" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div class="p-2.5 border rounded-xl bg-white dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-700 text-xs space-y-1.5">
+              <span class="font-bold text-[11px] text-zinc-700 dark:text-zinc-300">SEPA-Lastschriftmandat:</span>
+              <p class="text-[10px] text-zinc-500 font-mono">Mandatsreferenz: <span id="cd-sepa-ref" class="font-bold text-zinc-800 dark:text-zinc-200">SEPA-AUTOGEN</span></p>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/20">Aktiv</span>
+            </div>
+          </div>
+
+          <!-- Box 3: Steuer, E-Rechnung & Mahnwesen -->
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <span>⚖️</span><span>Steuern &amp; E-Rechnung</span>
+            </h4>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Umsatzsteuer-ID (USt-IdNr.)</label>
+              <input type="text" id="cd-ust-id" placeholder="DE 123456789" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Steuernummer</label>
+              <input type="text" id="cd-steuernummer" placeholder="13/815/08152" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Steuergebiet</label>
+              <select id="cd-steuergebiet" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="Inland (19%)">Inland (Regelsteuersatz 19% / 7%)</option>
+                <option value="EU steuerfrei mit USt-Id">Steuerfreie innergem. Lieferung (§ 4 Nr. 1b UStG)</option>
+                <option value="Drittland steuerfrei">Drittland (Ausfuhrlieferung steuerfrei)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Leitweg-ID (XRechnung / ZUGFeRD)</label>
+              <input type="text" id="cd-leitweg-id" placeholder="04011000-12345-67" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 4: BELEGE & VORGÄNGE (VARIO Belege)                    -->
+      <!-- ================================================================= -->
+      <div id="cd-view-vorgaenge" class="cd-subview hidden flex-1 min-h-0 flex flex-col p-6 overflow-hidden space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-bold font-sans">Kaufmännische Vorgänge &amp; Belege</h3>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 border border-indigo-200">VARIO Belegfluss</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="crmStudio.openNewDocBuilder('offer')" class="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5">
+              <span>+</span><span>Neues Angebot</span>
+            </button>
+            <button type="button" onclick="crmStudio.openNewDocBuilder('order')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5">
+              <span>+</span><span>Neuer Auftrag</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- NEUER BELEG BUILDER (Einklappbar) -->
+        <div id="cd-new-doc-panel" class="hidden p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 space-y-3 shrink-0 shadow-2xs">
+          <div class="flex items-center justify-between">
+            <h4 id="cd-new-doc-title" class="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Neues Angebot kalkulieren</h4>
+            <button type="button" onclick="crmStudio.toggleDocBuilder(false)" class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-sm">✕</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+            <div>
+              <label class="block text-[10px] font-bold text-zinc-500 mb-1">Belegnummer</label>
+              <input type="text" id="cd-doc-number" class="w-full px-2.5 py-1.5 border rounded-lg font-mono font-bold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-[10px] font-bold text-zinc-500 mb-1">Artikel / Leistung auswählen</label>
+              <select id="cd-doc-item-select" onchange="crmStudio.onDocItemSelect()" class="w-full px-2.5 py-1.5 border rounded-lg bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="180" data-unit="Std." data-title="Senior AI Architecture Consulting">Senior AI Architecture Consulting (180,00 € / Std.)</option>
+                <option value="4500" data-unit="Pauschal" data-title="Archon OS Enterprise Subscription">Archon OS Enterprise Subscription (4.500,00 € / Pauschal)</option>
+                <option value="950" data-unit="Setup" data-title="Dedizierter Agenten-Cluster &amp; Setup">Dedizierter Agenten-Cluster &amp; Setup (950,00 € / Setup)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-zinc-500 mb-1">Menge / Einheit</label>
+              <div class="flex items-center gap-1.5">
+                <input type="number" id="cd-doc-qty" value="10" oninput="crmStudio.calcDocTotals()" class="w-20 px-2 py-1.5 border rounded-lg font-mono text-center font-bold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <span id="cd-doc-unit" class="text-zinc-500 font-mono text-xs">Std.</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-indigo-200/60 dark:border-indigo-800/60">
+            <div class="text-xs font-mono">
+              Netto: <strong id="cd-doc-sum-net">1.800,00 €</strong> · Brutto: <strong id="cd-doc-sum-gross" class="text-indigo-600 dark:text-indigo-400">2.142,00 €</strong> (inkl. 19% USt)
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="crmStudio.toggleDocBuilder(false)" class="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs cursor-pointer">Abbrechen</button>
+              <button type="button" onclick="crmStudio.submitNewDocument()" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1.5">
+                <span>📄</span><span>Beleg anlegen &amp; DIN-PDF öffnen</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Belege Tabelle -->
+        <div class="flex-1 min-h-0 overflow-y-auto border rounded-xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60">
+          <table class="w-full text-left text-xs font-sans">
+            <thead class="bg-zinc-50 dark:bg-zinc-800/70 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 font-mono text-[10px] uppercase sticky top-0">
+              <tr>
+                <th class="py-2.5 px-3">Belegart</th>
+                <th class="py-2.5 px-3">Beleg-Nr.</th>
+                <th class="py-2.5 px-3">Datum</th>
+                <th class="py-2.5 px-3">Netto</th>
+                <th class="py-2.5 px-3">Brutto</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-right">Aktion</th>
+              </tr>
+            </thead>
+            <tbody id="cd-vorgaenge-tbody" class="divide-y divide-zinc-200 dark:divide-zinc-800 font-mono">
+              <tr>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">Angebot</span></td>
+                <td class="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100">ANG-2026-0842</td>
+                <td class="py-3 px-3 text-zinc-500">24.10.2026</td>
+                <td class="py-3 px-3">12.500,00 €</td>
+                <td class="py-3 px-3 font-bold">14.875,00 €</td>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">In Prüfung</span></td>
+                <td class="py-3 px-3 text-right"><button type="button" onclick="crmStudio.openDocumentPdf('ANG-2026-0842', 'offer', 12500, 'Nordstern Digital AG')" class="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 font-bold text-xs cursor-pointer border border-emerald-200 dark:border-emerald-800 shadow-2xs">📄 DIN-PDF</button></td>
+              </tr>
+              <tr>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Auftrag</span></td>
+                <td class="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100">AB-2026-0199</td>
+                <td class="py-3 px-3 text-zinc-500">12.09.2026</td>
+                <td class="py-3 px-3">34.000,00 €</td>
+                <td class="py-3 px-3 font-bold">40.460,00 €</td>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Bestätigt</span></td>
+                <td class="py-3 px-3 text-right"><button type="button" onclick="crmStudio.openDocumentPdf('AB-2026-0199', 'order_confirmation', 34000, 'Bormann Bioscience LLC')" class="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 font-bold text-xs cursor-pointer border border-emerald-200 dark:border-emerald-800 shadow-2xs">📄 DIN-PDF</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 5: ANSPRECHPARTNER & FILIALEN (VARIO)                  -->
+      <!-- ================================================================= -->
+      <div id="cd-view-ansprechpartner" class="cd-subview hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+          <div>
+            <h3 class="text-sm font-bold font-sans">Zusätzliche Ansprechpartner &amp; Standorte</h3>
+            <p class="text-xs text-zinc-500">Mehrere Personen und abweichende Lieferanschriften dieser Adresse erfassen</p>
+          </div>
+          <button type="button" onclick="crmStudio.promptAddContactPerson()" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5">
+            <span>+</span><span>Ansprechpartner hinzufügen</span>
+          </button>
+        </div>
+
+        <div id="cd-ansprechpartner-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Dr. Markus Weimer</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 font-bold">Einkauf / CPO</span>
+            </div>
+            <p class="text-xs text-zinc-500 font-mono">m.weimer@bormann-bio.de</p>
+            <p class="text-xs text-zinc-500 font-mono">+49 541 98765-22</p>
+          </div>
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Sabine Lindemann</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-50 text-emerald-700 font-bold">Buchhaltung / AP</span>
+            </div>
+            <p class="text-xs text-zinc-500 font-mono">finance@bormann-bio.de</p>
+            <p class="text-xs text-zinc-500 font-mono">+49 541 98765-40</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 6: DSGVO & COMPLIANCE (Art. 6, 7, 15, 17, 20, 21)        -->
+      <!-- ================================================================= -->
+      <div id="cd-view-dsgvo" class="cd-subview hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+        
+        <!-- Status Banner mit Live-Rechtsgrundlage -->
+        <div id="drw-dsgvo-banner" class="p-5 border rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 flex items-start gap-4">
+          <span class="text-3xl" id="drw-dsgvo-banner-icon">🛡️</span>
+          <div class="space-y-1 flex-1">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <h4 id="drw-dsgvo-banner-title" class="text-sm font-bold text-emerald-900 dark:text-emerald-200">Datenschutz-Status: DSGVO-Konform verarbeitet</h4>
+              <span id="drw-dsgvo-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-600 text-white">Rechtsgrundlage validiert</span>
+            </div>
+            <p id="drw-dsgvo-banner-desc" class="text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed">
+              Die Verarbeitung personenbezogener Daten stützt sich auf die nachfolgend dokumentierte Rechtsgrundlage gem. Art. 6 DSGVO und berücksichtigt die aktiven Werbeeinwilligungen.
+            </p>
+          </div>
+        </div>
+
+        <!-- 2 Grid-Spalten: Rechtsgrundlage & Einwilligungen vs. Fristen & Widerspruch -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <!-- Box 1: Rechtsgrundlage & Opt-Ins -->
+          <div class="p-5 border rounded-2xl bg-white dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4 shadow-2xs">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+              <span>⚖️</span><span>Rechtsgrundlage gem. Art. 6 DSGVO</span>
+            </h4>
+            
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Maßgebliche Rechtsgrundlage</label>
+              <select id="drw-dsgvo-legal-basis" onchange="crmStudio.onDsgvoChange()" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="art6_1_f">Art. 6 Abs. 1 lit. f: Berechtigtes Interesse (B2B-Erstkontakt &amp; Direktmarketing)</option>
+                <option value="art6_1_b">Art. 6 Abs. 1 lit. b: Vertragserfüllung &amp; Vorvertragliche Maßnahmen</option>
+                <option value="art6_1_a">Art. 6 Abs. 1 lit. a: Ausdrückliche Einwilligung (Opt-In)</option>
+                <option value="art6_1_c">Art. 6 Abs. 1 lit. c: Rechtliche Verpflichtung (z. B. HGB / AO)</option>
+              </select>
+            </div>
+
+            <div class="pt-2 border-t border-zinc-200 dark:border-zinc-700 space-y-3">
+              <label class="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300">Zulässige Kontaktkanäle (Art. 7 DSGVO / § 7 UWG)</label>
+              <div class="space-y-2">
+                <label class="flex items-center gap-2.5 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                  <input type="checkbox" id="drw-dsgvo-opt-email" class="rounded w-4 h-4 text-indigo-600">
+                  <span>E-Mail-Kommunikation &amp; geschäftliche Korrespondenz gestattet</span>
+                </label>
+                <label class="flex items-center gap-2.5 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                  <input type="checkbox" id="drw-dsgvo-opt-phone" class="rounded w-4 h-4 text-indigo-600">
+                  <span>Telefonische Kontaktaufnahme gestattet</span>
+                </label>
+                <label class="flex items-center gap-2.5 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                  <input type="checkbox" id="drw-dsgvo-opt-postal" class="rounded w-4 h-4 text-indigo-600">
+                  <span>Postalisches Direktmarketing gestattet</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Opt-In Datum</label>
+                <input type="date" id="drw-dsgvo-opt-date" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Nachweis-Quelle</label>
+                <input type="text" id="drw-dsgvo-opt-source" placeholder="z. B. LinkedIn Kontaktaufnahme" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+            </div>
+          </div>
+
+          <!-- Box 2: Fristen & Widerspruch -->
+          <div class="p-5 border rounded-2xl bg-white dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4 shadow-2xs">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <span>⏱️</span><span>Aufbewahrungs- &amp; Löschfristen (GoBD / HGB)</span>
+            </h4>
+
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Aufbewahrungskategorie</label>
+              <select id="drw-dsgvo-retention-category" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="commercial_10y">10 Jahre Aufbewahrung (§ 147 AO / § 257 HGB – Buchungsbelege &amp; Rechnungen)</option>
+                <option value="general_3y">3 Jahre regelmäßige Verjährungsfrist (§ 195 BGB – Geschäftskorrespondenz)</option>
+                <option value="applicant_6m">6 Monate nach Zweckfortfall (Bewerberdaten gem. AGG)</option>
+                <option value="immediate">Sofortige Löschung nach Zweckfortfall</option>
+              </select>
+            </div>
+
+            <!-- Werbewiderspruch Art. 21 -->
+            <div class="p-4 border rounded-xl bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 space-y-3">
+              <div class="flex items-center justify-between">
+                <h5 class="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                  <span>🛑</span><span>Werbewiderspruch (Art. 21 DSGVO)</span>
+                </h5>
+                <span id="drw-dsgvo-optout-pill" class="hidden px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white">Gesperrt</span>
+              </div>
+              <label class="flex items-center gap-2 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                <input type="checkbox" id="drw-dsgvo-opt-out" onchange="crmStudio.onDsgvoChange()" class="rounded w-4 h-4 text-rose-600">
+                <span class="font-bold text-rose-700 dark:text-rose-400">Kontakt hat Werbewiderspruch eingelegt (Werbesperre)</span>
+              </label>
+              <div>
+                <label class="block text-[10.5px] font-mono text-zinc-500 mb-1">Widerspruchsdatum</label>
+                <input type="date" id="drw-dsgvo-opt-out-date" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+              <button
+                type="button"
+                onclick="crmStudio.saveContactFromDrawer()"
+                class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>💾</span><span>DSGVO-Status speichern</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 2 Action Columns: Art. 15/20 Export vs. Art. 17 Deletion -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+          
+          <!-- Box 1: Export -->
+          <div class="p-5 border rounded-2xl bg-white dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4 shadow-2xs">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">📥</span>
+              <div>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">Art. 15 &amp; 20 DSGVO: Datenexport</h4>
+                <p class="text-[11px] text-zinc-500">Auskunftsrecht &amp; Recht auf Datenübertragbarkeit</p>
+              </div>
+            </div>
+            <p class="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              Generieren Sie auf Anfrage der betroffenen Person einen vollständigen, maschinenlesbaren JSON-Auszug aller hinterlegten Stammdaten, Kontaktkanäle, Nachrichten, Einwilligungen und Belege.
+            </p>
+            <button
+              type="button"
+              onclick="crmStudio.exportContactGdpr()"
+              class="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>📥</span>
+              <span>Personenbezogene Daten als JSON exportieren</span>
+            </button>
+          </div>
+
+          <!-- Box 2: Anonymization / Deletion -->
+          <div class="p-5 border rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60 space-y-4 shadow-2xs">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🗑️</span>
+              <div>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Art. 17 DSGVO: Recht auf Vergessenwerden</h4>
+                <p class="text-[11px] text-rose-600 dark:text-rose-500">Datenschutzkonforme Löschung / Anonymisierung</p>
+              </div>
+            </div>
+            <p class="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              Unwiderrufliche Anonymisierung aller personenbezogenen Kennungen (Name, Mail, Telefon, Notizen, Profilfoto). Gesetzliche steuerrechtliche Aufbewahrungsfristen (z. B. Beleg-Buchungen gem. § 147 AO) bleiben unberührt.
+            </p>
+            <button
+              type="button"
+              onclick="crmStudio.anonymizeContactGdpr()"
+              class="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>🗑️</span>
+              <span>Datensatz gemäß Art. 17 DSGVO anonymisieren</span>
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- MODAL FOOTER BAR (Screenshot) -->
+      <div class="p-4 border-t flex-shrink-0 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800">
+        <!-- Left: Delete, Reset Rating, Layout -->
+        <div class="flex items-center gap-1.5">
+          <button
+            type="button"
+            onclick="crmStudio.deleteContactFromDrawer()"
+            class="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-500/10 transition cursor-pointer text-lg leading-none"
+            title="Kontakt löschen"
+          >
+            🗑️
+          </button>
+          <button
+            type="button"
+            onclick="crmStudio.setDrawerRating(0)"
+            class="p-2 rounded-xl text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 transition cursor-pointer text-lg leading-none"
+            title="Sterne-Bewertung auf 0 zurücksetzen"
+          >
+            🔄
+          </button>
+          <button
+            type="button"
+            onclick="alert('Formular-Felder &amp; Layout-Editor aktiv')"
+            class="p-2 rounded-xl text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 transition cursor-pointer text-lg leading-none"
+            title="Formular-Felder anpassen"
+          >
+            ⚙️
+          </button>
+        </div>
+
+        <!-- Middle: Appointment Scheduling -->
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            onclick="crmStudio.scheduleFollowUp()"
+            class="px-3.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+            title="Grünen CRM-Termin zum Nachfassen planen"
+          >
+            <span>📅</span>
+            <span>Nachfassen (CRM)</span>
+          </button>
+          <button
+            type="button"
+            onclick="crmStudio.scheduleGoogleCalendar()"
+            class="px-3.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 hover:bg-blue-100 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+            title="Google-Kalender-Termin eintragen"
+          >
+            <span>📅</span>
+            <span>Termin (Google)</span>
+          </button>
+        </div>
+
+        <!-- Right: Cancel & Save -->
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            onclick="crmStudio.closeContactDrawer()"
+            class="px-4 py-2 rounded-lg text-xs font-mono font-bold border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+          >
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            id="cd-btn-save"
+            onclick="crmStudio.saveContactFromDrawer()"
+            class="px-5 py-2 rounded-lg bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <span>💾</span>
+            <span>Speichern</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>

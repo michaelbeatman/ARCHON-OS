@@ -1,0 +1,539 @@
+<!-- VIEW CONTAINER: ARTIKEL & LEISTUNGEN (SÄULE 3: WIRTSCHAFT & ERP) -->
+<div id="view-items" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+
+  <!-- ========================================================================= -->
+  <!-- 80px HEADER: ARTIKELSTAMM, LEISTUNGEN, SAAS-ABOS & MARGEN-KALKULATION    -->
+  <!-- ========================================================================= -->
+  <header id="items-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="relative shrink-0 flex items-center justify-center">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h2 id="items-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">
+            Artikel &amp; Leistungen — Gesamtkatalog
+          </h2>
+          <span id="erp-items-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">
+            0 Artikel
+          </span>
+        </div>
+        <p id="items-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">
+          Dienstleistungen, Pauschalen, SaaS-Lizenzen &amp; Produkte inkl. VK/EK-Margenkalkulation und Lieferantenzuordnung
+        </p>
+      </div>
+    </div>
+
+    <!-- Rechts: 4 Cadre-Subtab-Kacheln (72px) -->
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <button
+        type="button"
+        id="items-subtab-btn-all"
+        onclick="setItemsTypeFilter('all')"
+        class="items-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/overview.png" alt="Alle" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="items-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Alle</span>
+      </button>
+
+      <button
+        type="button"
+        id="items-subtab-btn-service"
+        onclick="setItemsTypeFilter('service')"
+        class="items-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/skills.png" alt="Services" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="items-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Zeit/Service</span>
+      </button>
+
+      <button
+        type="button"
+        id="items-subtab-btn-saas"
+        onclick="setItemsTypeFilter('saas')"
+        class="items-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/live.png" alt="SaaS" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="items-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">SaaS/Abo</span>
+      </button>
+
+      <button
+        type="button"
+        id="items-subtab-btn-product"
+        onclick="setItemsTypeFilter('product')"
+        class="items-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/endprodukte.png" alt="Produkte" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="items-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Produkte</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- SPLIT-VIEW: ARTIKEL-KATALOG LINKS (7 Cols) | ARTIKEL-INSPEKTOR RECHTS (5) -->
+  <!-- ========================================================================= -->
+  <div class="flex-1 min-h-0 w-full grid grid-cols-1 lg:grid-cols-12 gap-2 overflow-hidden">
+
+    <!-- LINKS: ARTIKEL-TABELLE -->
+    <div class="lg:col-span-7 h-full min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 flex flex-col gap-2.5 overflow-hidden shadow-xs">
+      <!-- Aktiver Sub-Tab Fokus-Banner -->
+      <div id="erp-items-mode-banner" class="px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0">
+        <span id="erp-items-mode-label" class="font-bold text-emerald-700 dark:text-emerald-400">Kategorie: Gesamtkatalog (Alle Typen)</span>
+        <span id="erp-items-mode-kpi" class="text-[var(--muted-foreground)]">Ø Marge &amp; VK-Kalkulation</span>
+      </div>
+      <div class="flex items-center justify-between gap-2 shrink-0">
+        <input
+          type="text"
+          id="erp-items-search"
+          oninput="loadErpItems()"
+          placeholder="Suche nach ART-1001, Bezeichnung, Kategorie..."
+          class="flex-1 px-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        >
+        <button
+          type="button"
+          onclick="createNewErpItem()"
+          class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+        >
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Neuer Artikel</span>
+        </button>
+      </div>
+
+      <div id="erp-items-list-container" class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+        <div class="text-xs text-[var(--muted-foreground)] p-4 text-center font-mono">Lade Artikelstamm...</div>
+      </div>
+    </div>
+
+    <!-- RECHTS: ARTIKEL-FORMULAR & LIVE-MARGENRECHNER -->
+    <div class="lg:col-span-5 h-full min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3 overflow-y-auto shadow-xs">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
+        <div>
+          <h3 id="erp-item-editor-title" class="text-sm font-black text-[var(--foreground)]">Artikel-Details &amp; Kalkulation</h3>
+          <p class="text-[11px] text-[var(--muted-foreground)]">Texte &amp; Preise werden direkt in Angebote/Rechnungen übernommen</p>
+        </div>
+        <button
+          type="button"
+          onclick="saveCurrentErpItem()"
+          class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+        >
+          Speichern
+        </button>
+      </div>
+
+      <input type="hidden" id="erp-itm-id">
+
+      <div class="grid grid-cols-2 gap-2.5">
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Artikel-Nr.</label>
+          <input type="text" id="erp-itm-no" placeholder="Auto (ART-1001+)" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-mono text-[var(--foreground)]">
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Artikel-Typ</label>
+          <select id="erp-itm-type" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)]">
+            <option value="service">Dienstleistung / Zeitsatz</option>
+            <option value="flat_rate">Pauschale / Werkvertrag</option>
+            <option value="saas">SaaS / Wiederkehrendes Abo</option>
+            <option value="product">Physisches Produkt / Hardware</option>
+          </select>
+        </div>
+
+        <div class="col-span-2">
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Bezeichnung / Titel *</label>
+          <input type="text" id="erp-itm-title" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-semibold text-[var(--foreground)]">
+        </div>
+
+        <div class="col-span-2">
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Langbeschreibung (für Angebot &amp; Rechnung)</label>
+          <textarea id="erp-itm-desc" rows="3" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)]"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Kategorie</label>
+          <input type="text" id="erp-itm-category" placeholder="Consulting, SaaS, Hardware..." class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)]">
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Einheit &amp; Intervall</label>
+          <div class="flex gap-1.5">
+            <select id="erp-itm-unit" class="w-1/2 px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)]">
+              <option value="Std.">Std.</option>
+              <option value="Tag">Tag</option>
+              <option value="Pauschal">Pauschal</option>
+              <option value="Monat">Monat</option>
+              <option value="Stk.">Stk.</option>
+            </select>
+            <select id="erp-itm-interval" class="w-1/2 px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)]">
+              <option value="one_off">Einmalig</option>
+              <option value="monthly">Monatlich</option>
+              <option value="yearly">Jährlich</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Preis- & Margen-Block -->
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">VK-Preis Netto (EUR)</label>
+          <input type="number" step="0.01" id="erp-itm-vk" oninput="updateLiveItemMargin()" value="0.00" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-mono font-bold text-[var(--foreground)]">
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">EK-Preis Netto (EUR)</label>
+          <input type="number" step="0.01" id="erp-itm-ek" oninput="updateLiveItemMargin()" value="0.00" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-mono text-[var(--foreground)]">
+        </div>
+
+        <div class="col-span-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-2.5 flex items-center justify-between">
+          <span class="text-xs font-bold text-emerald-700 dark:text-emerald-300">Kalkulierter Deckungsbeitrag (Marge):</span>
+          <span id="erp-itm-margin-display" class="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">0.00 EUR (0.0%)</span>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">USt-Satz (%)</label>
+          <select id="erp-itm-tax" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)]">
+            <option value="19.0">19% Regelsteuersatz</option>
+            <option value="7.0">7% Ermäßigt</option>
+            <option value="0.0">0% Steuerfrei</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Hauptlieferant (Kreditor)</label>
+          <select id="erp-itm-supplier" class="w-full px-2.5 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)]">
+            <option value="">-- Eigenleistung / Kein Lieferant --</option>
+          </select>
+        </div>
+
+        <!-- Optionaler Bestands-Tracker -->
+        <div class="col-span-2 pt-2 border-t border-[var(--border)] flex items-center justify-between gap-2">
+          <label class="flex items-center gap-2 text-xs font-semibold text-[var(--foreground)] cursor-pointer">
+            <input type="checkbox" id="erp-itm-track-inv" class="rounded">
+            <span>Lagerbestand führen</span>
+          </label>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Bestand:</span>
+            <input type="number" step="1" id="erp-itm-stock" value="0" class="w-16 px-2 py-1 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-mono text-[var(--foreground)]">
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL / DRAWER: ARTIKEL-DETAILS (VARIO 8 Standard)                        -->
+  <!-- ========================================================================= -->
+  <div id="erp-item-drawer" onclick="if(event.target === this) closeErpItemDrawer()" class="hidden fixed inset-0 z-[999] flex items-stretch justify-center bg-black/70 px-4 md:px-8 font-sans backdrop-blur-sm overflow-hidden py-0 cursor-pointer">
+    <div onclick="event.stopPropagation()" class="w-full max-w-[1250px] h-screen max-h-screen border-x flex flex-col overflow-hidden shadow-2xl relative bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 cursor-default">
+      
+      <!-- Drawer Top Bar (Height 80px) -->
+      <div class="h-20 px-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 flex items-center justify-between gap-4 shrink-0">
+        <!-- Item Meta -->
+        <div class="flex items-center gap-3.5 min-w-0 max-w-[320px] shrink-0">
+          <div id="erp-item-drawer-icon" class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-indigo-500/40 shadow-sm shrink-0 flex items-center justify-center bg-indigo-500/10 text-indigo-600 font-bold font-mono text-xl">
+            📦
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h2 id="erp-item-drawer-title" class="text-base font-black tracking-tight text-zinc-900 dark:text-zinc-100 truncate">
+                Artikelbezeichnung
+              </h2>
+              <span id="erp-item-drawer-type-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/25 shrink-0">
+                Service
+              </span>
+            </div>
+            <p id="erp-item-drawer-no" class="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate">
+              Art-Nr: ART-1001
+            </p>
+          </div>
+        </div>
+
+        <!-- Center: Icon-Tabs for Artikel Teilansichten (VARIO 8 Standard) -->
+        <div class="flex items-center gap-1.5 overflow-x-auto py-1 shrink-0">
+          <button type="button" onclick="switchItemDrawerTab('stammdaten')" id="itm-tabbtn-stammdaten" class="itm-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs cursor-pointer">
+            <span>📦</span>
+            <span>Stammdaten</span>
+          </button>
+          <button type="button" onclick="switchItemDrawerTab('preise')" id="itm-tabbtn-preise" class="itm-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
+            <span>💰</span>
+            <span>Preise &amp; Staffeln</span>
+          </button>
+          <button type="button" onclick="switchItemDrawerTab('bestand')" id="itm-tabbtn-bestand" class="itm-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
+            <span>⚙️</span>
+            <span>Bestand &amp; Konditionen</span>
+          </button>
+          <button type="button" onclick="switchItemDrawerTab('historie')" id="itm-tabbtn-historie" class="itm-tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 cursor-pointer">
+            <span>📊</span>
+            <span>Verkaufshistorie</span>
+          </button>
+        </div>
+
+        <!-- Right: Prominent Close Button -->
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" onclick="closeErpItemDrawer()" class="w-9 h-9 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition cursor-pointer text-xl font-bold leading-none shadow-xs border border-zinc-200 dark:border-zinc-700" title="Schließen (Esc oder Klick außerhalb)">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Drawer Body Tabs -->
+      <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
+        
+        <!-- TAB 1: STAMMDATEN -->
+        <div id="itm-view-stammdaten" class="itm-subview flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div class="md:col-span-4">
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Artikelnummer *</label>
+              <input type="text" id="drw-itm-no" class="w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800">
+            </div>
+            <div class="md:col-span-4">
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Artikel-Typ</label>
+              <select id="drw-itm-type" onchange="onItemTypeChange(this.value)" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800">
+                <option value="service">💼 Dienstleistung / Zeitsatz</option>
+                <option value="flat_rate">📦 Pauschale / Werkvertrag</option>
+                <option value="saas">☁️ SaaS / Wiederkehrendes Abo</option>
+                <option value="product">🏷️ Physisches Produkt / Hardware</option>
+              </select>
+            </div>
+            <div class="md:col-span-4">
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">EAN / Barcode / GTIN</label>
+              <input type="text" id="drw-itm-ean" placeholder="4260123456789" class="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800">
+            </div>
+            
+            <div class="md:col-span-8">
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Bezeichnung / Artikeltitel *</label>
+              <input type="text" id="drw-itm-title" placeholder="z. B. Senior AI Architecture Consulting" class="w-full px-3 py-2 border rounded-lg text-sm font-bold bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800">
+            </div>
+            <div class="md:col-span-4">
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Warengruppe / Kategorie</label>
+              <input type="text" id="drw-itm-category" placeholder="Consulting, Cloud, Lizenz..." class="w-full px-3 py-2 border rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800">
+            </div>
+
+            <div class="md:col-span-12">
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Langbeschreibung (Belegtext für Angebote &amp; Rechnungen)</label>
+              <textarea id="drw-itm-desc" rows="4" placeholder="Detaillierter Leistungsumfang, der automatisch in Angebote gedruckt wird..." class="w-full p-3 border rounded-lg text-xs leading-relaxed bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 font-mono"></textarea>
+            </div>
+
+            <div class="md:col-span-6">
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Einheit</label>
+              <select id="drw-itm-unit" class="w-full px-3 py-2 border rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800">
+                <option value="Std.">Stunde(n) (Std.)</option>
+                <option value="Tag">Tag(e)</option>
+                <option value="Pauschal">Pauschale</option>
+                <option value="Monat">Monat(e)</option>
+                <option value="Jahr">Jahr(e)</option>
+                <option value="Stk.">Stück (Stk.)</option>
+              </select>
+            </div>
+            <div class="md:col-span-6">
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">Abrechnungs-Intervall</label>
+              <select id="drw-itm-interval" class="w-full px-3 py-2 border rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800">
+                <option value="one_off">Einmalige Leistung</option>
+                <option value="monthly">Wiederkehrend Monatlich</option>
+                <option value="yearly">Wiederkehrend Jährlich</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: PREISE & STAFFELN (VARIO) -->
+        <div id="itm-view-preise" class="itm-subview hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Box 1: VK, EK & Marge -->
+            <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Verkaufspreis &amp; Marge</h4>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Standard-VK Netto (€) *</label>
+                <input type="number" step="0.01" id="drw-itm-vk" oninput="updateDrawerItemMargin()" class="w-full px-3 py-2 border rounded-lg text-sm font-mono font-bold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Einkaufspreis Netto (€)</label>
+                <input type="number" step="0.01" id="drw-itm-ek" oninput="updateDrawerItemMargin()" class="w-full px-3 py-2 border rounded-lg text-sm font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                <span class="block text-[10px] uppercase font-bold text-emerald-800 dark:text-emerald-300">Kalkulierter Rohertrag:</span>
+                <span id="drw-itm-margin-text" class="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400">0.00 € (0.0%)</span>
+              </div>
+            </div>
+
+            <!-- Box 2: Steuern -->
+            <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Umsatzsteuer &amp; Fibu-Konto</h4>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">MwSt-Satz</label>
+                <select id="drw-itm-tax" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                  <option value="19.0">19% Regelsteuersatz</option>
+                  <option value="7.0">7% Ermäßigter Satz</option>
+                  <option value="0.0">0% Steuerbefreit (§ 4 UStG)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Erlöskonto (SKR03 / SKR04)</label>
+                <input type="text" id="drw-itm-account" placeholder="8400 (SKR03) / 4400 (SKR04)" class="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+            </div>
+
+            <!-- Box 3: Preisstaffeln (VARIO) -->
+            <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-3">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Mengen- &amp; Staffelpreise (VARIO)</h4>
+              <div class="space-y-2 text-xs font-mono">
+                <div class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700">
+                  <span>Ab 1 Stk. / Std.</span>
+                  <span id="drw-scale-1" class="font-bold">100 % (Basis)</span>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700">
+                  <span>Ab 5 Stk. / 10 Std.</span>
+                  <span class="font-bold text-emerald-600">- 5 % Rabatt</span>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700">
+                  <span>Ab 20 Stk. / Großkunde</span>
+                  <span class="font-bold text-emerald-600">- 15 % Rabatt</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: BESTAND & LOGISTIK / SAAS-KONDITIONEN -->
+        <div id="itm-view-bestand" class="itm-subview hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Physischer Lagerbestand (VARIO Lagerführung) -->
+            <div class="p-5 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+                <span>📦</span><span>Lagerbestand &amp; Disposition (VARIO)</span>
+              </h4>
+              <div class="flex items-center gap-2">
+                <input type="checkbox" id="drw-itm-track-inv" class="rounded w-4 h-4 text-indigo-600">
+                <label for="drw-itm-track-inv" class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Bestandsführung aktivieren</label>
+              </div>
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Physischer Bestand</label>
+                  <input type="number" id="drw-itm-stock" placeholder="0" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono font-bold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Meldebestand</label>
+                  <input type="number" id="drw-itm-min-stock" placeholder="5" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Lagerort</label>
+                  <input type="text" id="drw-itm-bin" placeholder="Regal A-04" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Hauptlieferant (Kreditor)</label>
+                <select id="drw-itm-supplier" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                  <option value="">-- Eigenleistung / Kein Lieferant --</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- SaaS & Dienstleistungs-Konditionen -->
+            <div class="p-5 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                <span>☁️</span><span>SaaS &amp; Service-Spezifika</span>
+              </h4>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">User- / Seat-Limit</label>
+                  <input type="number" id="drw-itm-seats" placeholder="Unbegrenzt" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Kündigungsfrist (Monate)</label>
+                  <input type="number" id="drw-itm-cancel-months" placeholder="3" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Qualifikationslevel / Berater-Seniorität</label>
+                <select id="drw-itm-seniority" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                  <option value="lead">Principal / Lead Architect</option>
+                  <option value="senior">Senior Engineer / Consultant</option>
+                  <option value="regular">Professional / Developer</option>
+                </select>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- TAB 4: VERKAUFSHISTORIE (VARIO) -->
+        <div id="itm-view-historie" class="itm-subview hidden flex-1 min-h-0 flex flex-col p-6 overflow-hidden space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+            <h3 class="text-sm font-bold font-sans">Belegverwendung dieses Artikels</h3>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600">VARIO Absatzhistorie</span>
+          </div>
+          <div class="flex-1 min-h-0 overflow-y-auto border rounded-xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60">
+            <table class="w-full text-left text-xs font-sans">
+              <thead class="bg-zinc-50 dark:bg-zinc-800/70 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 font-mono text-[10px] uppercase sticky top-0">
+                <tr>
+                  <th class="py-2.5 px-3">Beleg-Nr.</th>
+                  <th class="py-2.5 px-3">Typ</th>
+                  <th class="py-2.5 px-3">Kunde / Empfänger</th>
+                  <th class="py-2.5 px-3">Menge</th>
+                  <th class="py-2.5 px-3">Einzelpreis</th>
+                  <th class="py-2.5 px-3">Gesamt Netto</th>
+                  <th class="py-2.5 px-3">Datum</th>
+                </tr>
+              </thead>
+              <tbody id="drw-itm-history-tbody" class="divide-y divide-zinc-200 dark:divide-zinc-800 font-mono">
+                <tr>
+                  <td class="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100">ANG-2026-0842</td>
+                  <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">Angebot</span></td>
+                  <td class="py-3 px-3">Nordstern Digital AG</td>
+                  <td class="py-3 px-3">10 Std.</td>
+                  <td class="py-3 px-3">180,00 €</td>
+                  <td class="py-3 px-3 font-bold">1.800,00 €</td>
+                  <td class="py-3 px-3 text-zinc-500">24.10.2026</td>
+                </tr>
+                <tr>
+                  <td class="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100">AB-2026-0199</td>
+                  <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">Auftrag</span></td>
+                  <td class="py-3 px-3">Bormann Bioscience</td>
+                  <td class="py-3 px-3">40 Std.</td>
+                  <td class="py-3 px-3">180,00 €</td>
+                  <td class="py-3 px-3 font-bold">7.200,00 €</td>
+                  <td class="py-3 px-3 text-zinc-500">12.09.2026</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- MODAL FOOTER BAR -->
+      <div class="p-4 border-t flex-shrink-0 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800">
+        <button
+          type="button"
+          onclick="deleteCurrentErpItem()"
+          class="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-500/10 transition cursor-pointer text-lg leading-none"
+          title="Artikel archivieren / löschen"
+        >
+          🗑️
+        </button>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            onclick="closeErpItemDrawer()"
+            class="px-4 py-2 rounded-lg text-xs font-mono font-bold border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+          >
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            id="drw-btn-save-item"
+            onclick="saveErpItemFromDrawer()"
+            class="px-5 py-2 rounded-lg bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <span>💾</span>
+            <span>Artikel speichern</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

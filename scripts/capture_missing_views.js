@@ -84,6 +84,35 @@ function startLocalHybridServer(port) {
         return;
       }
 
+      // 1b. Handle /api/crm/* directly from data/crm_cache.json
+      if (pathname.startsWith('/api/crm/')) {
+        if (pathname.startsWith('/api/crm/avatars/')) {
+          const parts = pathname.replace('/api/crm/avatars/', '').split('/');
+          const avatarFile = path.join(ROOT_DIR, 'pocketbase', 'pb_data', 'storage', 'pbc_1512878646', parts[0], parts[1]);
+          if (fs.existsSync(avatarFile)) {
+            res.writeHead(200, { 'Content-Type': 'image/png' });
+            fs.createReadStream(avatarFile).pipe(res);
+            return;
+          }
+        }
+        const crmCache = readJsonSafe(path.join(DATA_DIR, 'crm_cache.json'), {});
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        if (pathname.includes('/api/crm/report')) {
+          res.end(JSON.stringify(crmCache.report || { status: 'success' }));
+        } else if (pathname.includes('/api/crm/calendar')) {
+          res.end(JSON.stringify(crmCache.calendar || { status: 'success', events: [] }));
+        } else if (pathname.includes('/api/crm/messages')) {
+          res.end(JSON.stringify(crmCache.messages || { status: 'success', items: [], total: 0 }));
+        } else if (pathname.match(/\/api\/crm\/contacts\/[^?]+/)) {
+          res.end(JSON.stringify(crmCache.detail_first || { status: 'success' }));
+        } else if (pathname.includes('/api/crm/contacts')) {
+          res.end(JSON.stringify(crmCache.contacts || { status: 'success', items: [], total: 0 }));
+        } else {
+          res.end(JSON.stringify({ status: 'success', items: [] }));
+        }
+        return;
+      }
+
       // 2. Proxy other /api/* requests to 127.0.0.1:8501, with local fallback
       if (pathname.startsWith('/api/')) {
         const proxyReq = http.request({
@@ -142,50 +171,154 @@ function serveApiFallback(pathname, res) {
 }
 
 const VIEWS_TO_CAPTURE = [
-  // 8. Decision Engine (8.2 - 8.3)
+  // 9. Adressen & CRM (9.1 - 9.7)
   {
-    id: "boardroom_debate",
+    id: "addresses_all",
     actionCode: `
-      try { window.setTab("ai-mastermind"); } catch(e) {}
-      try { if (typeof window.setBoardroomTab === 'function') window.setBoardroomTab("debate"); } catch(e) {}
-      try { if (typeof renderBoardroomSlots === 'function') renderBoardroomSlots("Steffi Kieffer Boardroom"); } catch(e) {}
-      const ov = document.getElementById("boardroom-view-overview");
-      const db = document.getElementById("boardroom-view-debate");
-      const lv = document.getElementById("boardroom-view-live");
-      if (ov) { ov.classList.add("hidden"); ov.style.display = "none"; }
-      if (db) { db.classList.remove("hidden"); db.style.display = "flex"; }
-      if (lv) { lv.classList.add("hidden"); lv.style.display = "none"; }
-      const tEl = document.getElementById("boardroom-main-title");
-      const sEl = document.getElementById("boardroom-main-subtitle");
-      if (tEl) tEl.textContent = "Decision Engine · Debatte";
-      if (sEl) sEl.textContent = "Methodik-Auswahl (55 Frameworks), Experten-Zuweisung & Aufgabenstellung";
+      try { window.setTab("addresses"); } catch(e) {}
+      try { if (window.crmStudio) window.crmStudio.switchSubTab("kontakte"); } catch(e) {}
     `,
     waitTime: 1600
   },
   {
-    id: "boardroom_live",
+    id: "addresses_network",
     actionCode: `
-      try { window.setTab("ai-mastermind"); } catch(e) {}
-      try { if (typeof window.setBoardroomTab === 'function') window.setBoardroomTab("live"); } catch(e) {}
-      const ov = document.getElementById("boardroom-view-overview");
-      const db = document.getElementById("boardroom-view-debate");
-      const lv = document.getElementById("boardroom-view-live");
-      if (ov) { ov.classList.add("hidden"); ov.style.display = "none"; }
-      if (db) { db.classList.add("hidden"); db.style.display = "none"; }
-      if (lv) { lv.classList.remove("hidden"); lv.style.display = "flex"; }
-      const tEl = document.getElementById("boardroom-main-title");
-      const sEl = document.getElementById("boardroom-main-subtitle");
-      if (tEl) tEl.textContent = "Decision Engine · Live-Debatte";
-      if (sEl) sEl.textContent = "Transkription, Runden-Ablauf & finale Konsens-Synthese";
-      const thread = document.getElementById("boardroom-thread");
-      if (thread) {
-        thread.innerHTML = '<div class="rounded-lg p-3.5 bg-[var(--card)] border border-[var(--border)] text-xs space-y-1 mb-3 font-mono text-[var(--foreground)] shadow-xs"><div class="flex items-center justify-between font-bold uppercase tracking-wider"><span>📋 BOARDROOM DEBATTE: Sollten wir unsere Microservices-Architektur konsolidieren und kostenfreie OmniRoute-Modelle als zentrales Gateway nutzen?</span><span>CHAIRMAN: Michael Keller (Master System)</span></div><div class="text-[10px] text-[var(--muted-foreground)]">Framework: Steffi Kieffer Boardroom | Runden: 2 | Teilnehmer: 4 Experten | Live-Synthese aktiv</div></div>' +
-        '<div class="rounded-xl p-3.5 bg-[var(--card)] border border-[var(--border)] space-y-2 mb-2.5 shadow-xs"><div class="flex items-center justify-between border-b border-[var(--border)] pb-1.5"><span class="text-xs font-bold text-[var(--foreground)]">Slot 1 · Skeptiker & Risikoprüfer (Red Team Challenger)</span><span class="text-[10px] font-mono text-indigo-500 font-bold">Runde 1/2 · deepseek/deepseek-r1</span></div><div class="text-xs leading-relaxed text-[var(--foreground)]">Eine vollständige Abhängigkeit von einem einzelnen kostenfreien Gateway birgt Rate-Limit-Risiken bei Lastspitzen. Wir benötigen zwingend einen mehrstufigen Circuit-Breaker mit Fallback auf lokale Ollama-Modelle und OpenRouter.</div></div>' +
-        '<div class="rounded-xl p-3.5 bg-[var(--card)] border border-[var(--border)] space-y-2 mb-2.5 shadow-xs"><div class="flex items-center justify-between border-b border-[var(--border)] pb-1.5"><span class="text-xs font-bold text-[var(--foreground)]">Slot 2 · Innovator & Stratege (Executive Decision Architect)</span><span class="text-[10px] font-mono text-indigo-500 font-bold">Runde 1/2 · anthropic/claude-3.7-sonnet</span></div><div class="text-xs leading-relaxed text-[var(--foreground)]">Durch die Konsolidierung über OmniRoute auf Port 20128 senken wir die laufenden Token-Kosten um über 80 % und vereinheitlichen das Telemetrie- und Token-Guard-Monitoring über alle 57 Agentenprofile hinweg.</div></div>' +
-        '<div class="rounded-xl p-4 bg-[var(--card)] border border-amber-500/40 space-y-2 mt-3 shadow-sm"><div class="flex items-center justify-between border-b border-[var(--border)] pb-2"><span class="text-xs font-bold uppercase tracking-wider text-amber-600">🏆 FINALE SYNTHESE & ENTSCHEIDUNGSEMPFEHLUNG (CHAIRMAN KONSENS)</span><span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 font-bold">KONSENS ERREICHT</span></div><div class="text-xs leading-relaxed text-[var(--foreground)] font-medium">1. Konsolidierung der Microservices-Aufrufe über das zentrale OmniRoute-Gateway wird freigegeben.<br>2. Automatischer Failover greift ab > 5.000 ms Latenz nahtlos auf direkte Backup-Provider.<br>3. Produktive Deployments bleiben durch das HITL Approval Gate abgesichert.</div></div>';
-      }
+      try { window.setTab("addresses"); } catch(e) {}
+      try { if (window.crmStudio) window.crmStudio.switchSubTab("kontakte"); } catch(e) {}
     `,
     waitTime: 1600
+  },
+  {
+    id: "addresses_customers",
+    actionCode: `
+      try { window.setTab("addresses"); } catch(e) {}
+      try { if (window.crmStudio) window.crmStudio.switchSubTab("kunden"); } catch(e) {}
+    `,
+    waitTime: 1600
+  },
+  {
+    id: "addresses_suppliers",
+    actionCode: `
+      try { window.setTab("addresses"); } catch(e) {}
+      try { if (window.crmStudio) window.crmStudio.switchSubTab("lieferanten"); } catch(e) {}
+    `,
+    waitTime: 1600
+  },
+  {
+    id: "addresses_messages",
+    actionCode: `
+      try { window.setTab("addresses"); } catch(e) {}
+      try { if (window.crmStudio) window.crmStudio.switchSubTab("nachrichten"); } catch(e) {}
+    `,
+    waitTime: 1600
+  },
+  {
+    id: "addresses_calendar",
+    actionCode: `
+      try { window.setTab("addresses"); } catch(e) {}
+      try { if (window.crmStudio) window.crmStudio.switchSubTab("kalender"); } catch(e) {}
+    `,
+    waitTime: 1600
+  },
+  {
+    id: "addresses_report",
+    actionCode: `
+      try { window.setTab("addresses"); } catch(e) {}
+      try { if (window.crmStudio) window.crmStudio.switchSubTab("bericht"); } catch(e) {}
+    `,
+    waitTime: 1600
+  },
+  {
+    id: "addresses_drawer",
+    actionCode: `
+      try { window.setTab("addresses"); } catch(e) {}
+      try {
+        if (window.crmStudio) {
+          window.crmStudio.openContactDrawer("i16nr1nm9dkkbcq");
+        }
+      } catch(e) {}
+    `,
+    waitTime: 2500,
+    cleanupCode: `
+      try {
+        if (window.crmStudio) window.crmStudio.closeContactDrawer();
+      } catch(e) {}
+    `
+  },
+  // 10. Artikel & Leistungen (10.1 - 10.4)
+  {
+    id: "items_all",
+    actionCode: `
+      try { window.setTab("items"); } catch(e) {}
+      try { if (typeof window.setItemsTypeFilter === 'function') window.setItemsTypeFilter("all"); } catch(e) {}
+    `,
+    waitTime: 1200
+  },
+  {
+    id: "items_service",
+    actionCode: `
+      try { window.setTab("items"); } catch(e) {}
+      try { if (typeof window.setItemsTypeFilter === 'function') window.setItemsTypeFilter("service"); } catch(e) {}
+    `,
+    waitTime: 1200
+  },
+  {
+    id: "items_saas",
+    actionCode: `
+      try { window.setTab("items"); } catch(e) {}
+      try { if (typeof window.setItemsTypeFilter === 'function') window.setItemsTypeFilter("saas"); } catch(e) {}
+    `,
+    waitTime: 1200
+  },
+  {
+    id: "items_product",
+    actionCode: `
+      try { window.setTab("items"); } catch(e) {}
+      try { if (typeof window.setItemsTypeFilter === 'function') window.setItemsTypeFilter("product"); } catch(e) {}
+    `,
+    waitTime: 1200
+  },
+  {
+    id: "items_drawer",
+    actionCode: `
+      try { window.setTab("items"); } catch(e) {}
+      try {
+        if (typeof window.openErpItemDrawer === 'function') {
+          window.openErpItemDrawer(null);
+        }
+      } catch(e) {}
+    `,
+    waitTime: 2000,
+    cleanupCode: `
+      try {
+        if (typeof window.closeErpItemDrawer === 'function') window.closeErpItemDrawer();
+      } catch(e) {}
+    `
+  },
+  // 11. Vorgänge & Verträge (11.1 - 11.3)
+  {
+    id: "ops_erp_offers",
+    actionCode: `
+      try { window.setTab("operations-erp"); } catch(e) {}
+      try { if (typeof window.switchErpOpsSubTab === 'function') window.switchErpOpsSubTab("offers"); } catch(e) {}
+    `,
+    waitTime: 1200
+  },
+  {
+    id: "ops_erp_pipeline",
+    actionCode: `
+      try { window.setTab("operations-erp"); } catch(e) {}
+      try { if (typeof window.switchErpOpsSubTab === 'function') window.switchErpOpsSubTab("pipeline"); } catch(e) {}
+    `,
+    waitTime: 1200
+  },
+  {
+    id: "ops_erp_contracts",
+    actionCode: `
+      try { window.setTab("operations-erp"); } catch(e) {}
+      try { if (typeof window.switchErpOpsSubTab === 'function') window.switchErpOpsSubTab("contracts"); } catch(e) {}
+    `,
+    waitTime: 1200
   }
 ];
 
@@ -322,10 +455,15 @@ async function main() {
 
   await sleep(1200);
 
-  // Remove loading overlays, inject corporate_controller.js & render icons
+  // Remove loading overlays, inject corporate_controller.js & crm_studio.js & render icons
   const corpJsCode = fs.readFileSync(path.join(STATIC_DIR, 'js', 'corporate_controller.js'), 'utf-8');
   await client.send('Runtime.evaluate', {
     expression: corpJsCode
+  });
+
+  const crmJsCode = fs.readFileSync(path.join(STATIC_DIR, 'js', 'crm_studio.js'), 'utf-8');
+  await client.send('Runtime.evaluate', {
+    expression: crmJsCode
   });
 
   await client.send('Runtime.evaluate', {
@@ -339,7 +477,10 @@ async function main() {
 
   await sleep(1000);
 
-  for (const v of VIEWS_TO_CAPTURE) {
+  const targetFilter = process.argv[2];
+  const viewsToRun = targetFilter ? VIEWS_TO_CAPTURE.filter(v => v.id.includes(targetFilter)) : VIEWS_TO_CAPTURE;
+
+  for (const v of viewsToRun) {
     process.stdout.write(`Capture ${v.id}... `);
     await client.send('Runtime.evaluate', {
       expression: `(function() {

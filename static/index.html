@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&family=Julius+Sans+One&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Montserrat:wght@300;400;500;600;700;800&family=Fira+Code:wght@300..700&family=Cinzel:wght@400..900&family=Space+Grotesk:wght@300..700&family=Plus+Jakarta+Sans:wght@300..800&display=swap" rel="stylesheet">
   <!-- Custom Studio CSS Overrides -->
     <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
-  <link rel="stylesheet" href="/static/custom.css?v=1793435849">
+  <link rel="stylesheet" href="/static/custom.css?v=2026110113">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
   <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=202610161325">
   <!-- Tailwind CSS Local Bundle (Offline-fähig & kein CDN Latenz-Overhead) -->
@@ -285,22 +285,68 @@
       </div>
       <!-- VISUELLE TRENNLINIE -->
       <div class="border-t theme-border-strong my-1.5 opacity-60"></div>
-      <!-- SÄULE 3: INFRASTRUKTUR & GOVERNANCE -->
+      <!-- SÄULE 3: WIRTSCHAFT & ERP -->
+      <div class="space-y-1">
+        <div class="px-2 py-1 text-[10px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
+          WIRTSCHAFT &amp; ERP
+        </div>
+        <div class="space-y-0.5">
+          <!-- 1. Adressen & CRM -->
+          <button id="nav-addresses" onclick="setTab('addresses')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="contact-round" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Adressen &amp; CRM</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Kunden, Lieferanten &amp; Netz</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+          <!-- 2. Artikel & Leistungen -->
+          <button id="nav-items" onclick="setTab('items')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="package" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Artikel &amp; Leistungen</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Katalog, Preise &amp; Marge</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+          <!-- 3. Vorgänge & Verträge -->
+          <button id="nav-operations-erp" onclick="setTab('operations-erp')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="briefcase-business" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Vorgänge &amp; Verträge</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Angebote, Pipeline &amp; SLA</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+          <!-- 4. Rechnungswesen -->
+          <button id="nav-finance" onclick="setTab('finance')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="receipt" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Rechnungswesen</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Belege, OCR &amp; Mahnwesen</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+          <!-- 5. Corporate & Mandant -->
+          <button id="nav-corporate" onclick="setTab('corporate')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+            <i data-lucide="building-2" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Corporate &amp; Mandant</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Stammdaten &amp; Vorlagen</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+        </div>
+      </div>
+      <!-- VISUELLE TRENNLINIE -->
+      <div class="border-t theme-border-strong my-1.5 opacity-60"></div>
+      <!-- SÄULE 4: INFRASTRUKTUR & GOVERNANCE -->
       <div class="space-y-1">
         <div class="px-2 py-1 text-[10px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
           INFRASTRUKTUR & GOVERNANCE
         </div>
         <div class="space-y-0.5">
-          <!-- 1. Rechnungswesen -->
-          <button id="nav-finance" onclick="setTab('finance')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
-            <i data-lucide="receipt" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Rechnungswesen</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">Belege & Finanzen</div>
-            </div>
-            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
-          </button>
-          <!-- 2. Approval-Policies -->
+          <!-- 1. Approval-Policies -->
           <button id="nav-approval-policies" onclick="setTab('approval-policies')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
             <i data-lucide="shield-alert" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
@@ -309,16 +355,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <!-- 3. Corporate Hub -->
-          <button id="nav-corporate" onclick="setTab('corporate')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
-            <i data-lucide="building-2" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Corporate</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">Stammdaten &amp; Vorlagen</div>
-            </div>
-            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
-          </button>
-          <!-- 4. Token Guard -->
+          <!-- 2. Token Guard -->
           <button id="nav-guardian" onclick="setTab('guardian')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
             <i data-lucide="gauge" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
@@ -327,7 +364,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <!-- 5. Telemetrie & Logs -->
+          <!-- 3. Telemetrie & Logs -->
           <button id="nav-log-stream" onclick="setTab('log-stream')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
             <i data-lucide="activity" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
@@ -1282,7 +1319,10 @@
       <!-- VIEW: VIEW-GUARDIAN (Extracted) -->
       <div id="view-guardian-mount"></div>
 
-      <!-- VIEW CONTAINER: RECHNUNGSWESEN & BELEGE -->
+      <!-- VIEW CONTAINER: SÄULE 3: WIRTSCHAFT & ERP -->
+      <div id="view-addresses-mount"></div>
+      <div id="view-items-mount"></div>
+      <div id="view-operations-erp-mount"></div>
       <div id="view-finance-mount"></div>
       <div id="view-corporate-mount"></div>
 
@@ -2503,7 +2543,10 @@ print('Ausführung erfolgreich!')</textarea>
           fetch('/static/views/watchdog_view.html?v=202610272200').then(r => r.text()).then(html => { const el = document.getElementById('view-watchdog-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }),
           fetch('/static/views/view_finance.html?v=1793436996').then(r => r.text()).then(html => { const el = document.getElementById('view-finance-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initFinanceView === 'function') initFinanceView(); }),
           fetch('/static/views/view_approval_policies.html?v=1793436996').then(r => r.text()).then(html => { const el = document.getElementById('view-approval-policies-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initApprovalPoliciesView === 'function') initApprovalPoliciesView(); }),
-          fetch('/static/views/view_corporate.html?v=2026103118').then(r => r.text()).then(html => { const el = document.getElementById('view-corporate-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initCorporateView === 'function') initCorporateView(); }),
+          fetch('/static/views/view_addresses.html?v=2026110125').then(r => r.text()).then(html => { const el = document.getElementById('view-addresses-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initAddressesView === 'function') initAddressesView(); }),
+          fetch('/static/views/view_items.html?v=2026110124').then(r => r.text()).then(html => { const el = document.getElementById('view-items-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initItemsView === 'function') initItemsView(); }),
+          fetch('/static/views/view_operations_erp.html?v=2026110124').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-erp-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initOperationsErpView === 'function') initOperationsErpView(); }),
+          fetch('/static/views/view_corporate.html?v=2026110124').then(r => r.text()).then(html => { const el = document.getElementById('view-corporate-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initCorporateView === 'function') initCorporateView(); }),
           fetch('/static/views/view_brain.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; })
         ]);
       } catch(err) {
@@ -2661,6 +2704,9 @@ print('Ausführung erfolgreich!')</textarea>
         "view-brain",
         "view-agent-terminal",
         "view-design-system",
+        "view-addresses",
+        "view-items",
+        "view-operations-erp",
         "view-finance",
         "view-approval-policies",
         "view-corporate"
@@ -2695,7 +2741,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (selectedView) {
         selectedView.classList.remove("hidden");
         selectedView.style.display = (tabId === "kanban" || tabId === "agent-profiles") ? "block" : "flex";
-        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream" || tabId === "finance") {
+        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream" || tabId === "finance" || tabId === "addresses" || tabId === "items" || tabId === "operations-erp") {
           selectedView.style.height = "100%";
           selectedView.style.flex = "1 1 0%";
           selectedView.style.minHeight = "0";
@@ -2737,6 +2783,15 @@ print('Ausführung erfolgreich!')</textarea>
       if (tabId === "guardian") {
         if (typeof setGuardianSubTab === 'function') setGuardianSubTab(typeof guardianCurrentSubTab !== 'undefined' ? guardianCurrentSubTab : 'overview');
         if (shouldFetchTab('guardian')) loadGuardianData();
+      }
+      if (tabId === "addresses") {
+        if (typeof initAddressesView === 'function') initAddressesView();
+      }
+      if (tabId === "items") {
+        if (typeof initItemsView === 'function') initItemsView();
+      }
+      if (tabId === "operations-erp") {
+        if (typeof initOperationsErpView === 'function') initOperationsErpView();
       }
       if (tabId === "finance") {
         if (typeof initFinanceView === 'function') initFinanceView();
@@ -2793,6 +2848,9 @@ print('Ausführung erfolgreich!')</textarea>
         "kanban": "nav-kanban",
         "workspace-gallery": "nav-workspace-gallery",
         "design-system": "nav-design-system",
+        "addresses": "nav-addresses",
+        "items": "nav-items",
+        "operations-erp": "nav-operations-erp",
         "finance": "nav-finance",
         "approval-policies": "nav-approval-policies",
         "corporate": "nav-corporate"
@@ -12962,6 +13020,9 @@ ${logExcerpt}
   </div>
 </div>
 
+  <script src="/static/js/corporate_controller.js?v=2026110113"></script>
+  <script src="/static/erp_studio.js?v=2026110124"></script>
+  <script src="/static/js/crm_studio.js?v=2026110125"></script>
 </body>
 </html>
 

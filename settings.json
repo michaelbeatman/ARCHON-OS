@@ -92,6 +92,32 @@
     "fallback_model": "deepseek/deepseek-chat",
     "max_hedged_calls_per_minute": 20
   },
+  "self_evolving_tooling": {
+    "enabled": true,
+    "max_repair_iterations": 3,
+    "auto_sandbox_verification": true,
+    "auto_register_skills": true
+  },
+  "mcts_reasoning": {
+    "enabled": false,
+    "default_depth": 3,
+    "rollout_budget": 4,
+    "exploration_weight": 1.414,
+    "min_task_complexity_score": 75
+  },
+  "speculative_prefetcher": {
+    "enabled": true,
+    "ttl_seconds": 180,
+    "prefetch_crm": true,
+    "prefetch_erp": true,
+    "prefetch_learnings": true
+  },
+  "jit_persona_induction": {
+    "enabled": true,
+    "ephemeral_lifespan_minutes": 15,
+    "auto_purge_on_completion": true,
+    "allow_graduation_to_cadre": true
+  },
   "context_compactor": {
     "enabled": true,
     "trigger_token_threshold": 6000,
@@ -270,7 +296,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +306,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +316,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +326,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +336,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +346,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +356,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +366,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +376,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +386,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +396,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +406,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +416,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -400,7 +426,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,12 +436,130 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-03T12:00:00.208721",
+        "last_check": "2026-11-03T12:50:32.651905",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-03T12:00:00.208721",
+    "last_run": "2026-11-03T12:50:32.651905",
     "recent_findings": [
+      {
+        "id": "0b6deb7912a13ba2",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Bundesweite Razzia gegen mutmaßliche Linksextremisten",
+        "link": "https://www.tagesschau.de/inland/razzia-linksextremismus-100.html",
+        "published": "Tue, 03 Nov 2026 13:48:39 +0100",
+        "detected_at": "03.11.2026 12:50",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
+      },
+      {
+        "id": "6b8cf677d592e99a",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "So viel Verlust hätte eine Neo-Investition von vor 1 Jahr eingebracht - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMivwFBVV95cUxNOWZna3FTWllkV0FPbVY2NjRhMnVQeTJDV2Z6WmJKTVR3eVIxb1RIOXdOeDJNaWxpb0c5c2FDUjBZOVM0MG1FenhWV3VHcGwxU0Z0YjNQTlotNnkzaF9NVkxHX3lJVjRKcEhZTFhIUHAtQXhKR2FTd3BQcHZiZXkwb3FQSUJVMzZTLWdLamF5RUhyeDYwR0M3QTI5YzlPQm9qWEphVGRLN3hBWjNrRHAyRDBXS1FPNjQ4R1JDOTRvUQ?oc=5",
+        "published": "Tue, 03 Nov 2026 10:03:03 GMT",
+        "detected_at": "03.11.2026 12:48"
+      },
+      {
+        "id": "9799a04fe11b9ea2",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Zahlen, bitte! Über 343,2 Meter pro Sekunde – die Überwindung der Schallmauer",
+        "link": "https://www.heise.de/hintergrund/Zahlen-bitte-Ueber-343-2-Meter-pro-Sekunde-die-Ueberwindung-der-Schallmauer-11508950.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T13:37:00+01:00",
+        "detected_at": "03.11.2026 12:48"
+      },
+      {
+        "id": "7cf83d6b5d9da1b1",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise+ | Digitaler Euro: Wie Europas Geldsystem unabhängiger von den USA werden soll",
+        "link": "https://www.heise.de/hintergrund/Digitaler-Euro-Wie-Europas-Geldsystem-unabhaengiger-von-den-USA-werden-soll-11394112.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
+        "published": "2026-11-03T13:30:00+01:00",
+        "detected_at": "03.11.2026 12:48"
+      },
+      {
+        "id": "3f50b6b1bf0f11cc",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Disney setzt Sparkurs fort: Offenbar Tausende Entlassungen geplant",
+        "link": "https://www.heise.de/news/Disney-setzt-Sparkurs-fort-Offenbar-Tausende-Entlassungen-geplant-11509644.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T13:26:00+01:00",
+        "detected_at": "03.11.2026 12:48"
+      },
+      {
+        "id": "95cd6a92afed0923",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Ukrainische Angriffe: Russische Firmen dürfen ausländische Rechenzentren nutzen",
+        "link": "https://www.heise.de/news/Ukrainische-Angriffe-Russische-Firmen-duerfen-auslaendische-Rechenzentren-nutzen-11509124.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T13:13:00+01:00",
+        "detected_at": "03.11.2026 12:48"
+      },
+      {
+        "id": "affacb61766d046e",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Wahlen in den USA: Wie geht es nach den Midterms weiter? Vier Szenarien",
+        "link": "https://www.tagesschau.de/ausland/amerika/midterms-szenarien-100.html",
+        "published": "Tue, 03 Nov 2026 13:24:53 +0100",
+        "detected_at": "03.11.2026 12:48"
+      },
+      {
+        "id": "8e7598e7f70ec9eb",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "EU genehmigt Übernahme von MediaMarktSaturn – unter Auflagen",
+        "link": "https://www.heise.de/news/EU-genehmigt-Uebernahme-von-MediaMarktSaturn-unter-Auflagen-11509612.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T13:00:00+01:00",
+        "detected_at": "03.11.2026 12:18"
+      },
+      {
+        "id": "b165afb22b12a2de",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Apple-Heimzentrale: Versteckt sich im HomeView eine HomeKit-Secure-Video-Kamera?",
+        "link": "https://www.heise.de/news/HomeView-Apples-Heimzentrale-koennte-Ueberwachungskamera-werden-11508134.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T12:55:00+01:00",
+        "detected_at": "03.11.2026 12:18"
+      },
+      {
+        "id": "5c1ae1fe624dd1b7",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Die Midterms in Zahlen und Karten",
+        "link": "https://www.tagesschau.de/ausland/amerika/midterms-ergebnisse-102.html",
+        "published": "Tue, 03 Nov 2026 13:17:36 +0100",
+        "detected_at": "03.11.2026 12:18"
+      },
+      {
+        "id": "459c1c9f1af936eb",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Krieg gegen die Ukraine: Russland bombardiert Krankenhaus in Charkiw",
+        "link": "https://www.tagesschau.de/ausland/europa/ukraine-russische-angriffe-118.html",
+        "published": "Tue, 03 Nov 2026 13:16:22 +0100",
+        "detected_at": "03.11.2026 12:18",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
+      },
       {
         "id": "6f053f344ea37fe3",
         "target_id": "src-bundesbank",
@@ -609,116 +753,6 @@
         "link": "https://www.heise.de/news/Auch-deutsche-Bundespolitik-Apple-bestaetigt-Spyware-Warnung-11508629.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
         "published": "2026-11-03T11:59:00+01:00",
         "detected_at": "03.11.2026 11:16"
-      },
-      {
-        "id": "bb6538f5ec804995",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Energie: Die meisten Gas-Reservekraftwerke sollen in NRW gebaut werden",
-        "link": "https://www.handelsblatt.com/unternehmen/energie/energie-die-meisten-gas-reservekraftwerke-sollen-in-nrw-gebaut-werden/100266741.html",
-        "published": "Tue, 03 Nov 2026 10:00:19 GMT",
-        "detected_at": "03.11.2026 11:05"
-      },
-      {
-        "id": "90e7b40002c72230",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ Iran-Krieg +++: USA greifen offenbar iranische Ziele in Straße von Hormus an",
-        "link": "https://www.handelsblatt.com/politik/international/iran-krieg-usa-greifen-offenbar-iranische-ziele-in-strasse-von-hormus-an/100136895.html",
-        "published": "Mon, 02 Nov 2026 15:04:00 GMT",
-        "detected_at": "03.11.2026 11:05"
-      },
-      {
-        "id": "897e99f3165a5a8c",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ US-Midterms +++: Erste Wahllokale öffnen – Midterms haben offiziell begonnen",
-        "link": "https://www.handelsblatt.com/politik/international/us-midterms-erste-wahllokale-oeffnen-midterms-haben-offiziell-begonnen/29669594.html",
-        "published": "Tue, 03 Nov 2026 10:41:37 GMT",
-        "detected_at": "03.11.2026 11:05"
-      },
-      {
-        "id": "b506918430a54dba",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "ROUNDUP/Aktien Frankfurt Eröffnung: Dax verliert - 26.000-Punkte nun weiter weg - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMixwFBVV95cUxQYnJFUnZ3M0RGTEdJbWpVV1Bva2FtbVNfeDMtM3ZWdHl6Wk9Lc1RXQkM4SWY4aWNmTkhRZURZaHlhaWlpT0NiRzBIeWlpaHhUZG4taUV2cHh5bDBVZVM1OHhINFRVX0lROEMzLUFfSUJOYlVVUWZrbDVJVWJWUG5jQVQ3WG9kQ2NpTFAwaWNYM0IyTnp2T0Z2OTNyUTlJT0pQbjl4TmRBTDJfN1Y2YjNsa2lrTkxJUUU3S2xiZE96cTNqMkhIY21R?oc=5",
-        "published": "Tue, 03 Nov 2026 09:02:38 GMT",
-        "detected_at": "03.11.2026 11:05"
-      },
-      {
-        "id": "32b9f185340d8dbd",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Anthropic: KI könnte ihre eigene Entwicklung bald drastisch beschleunigen",
-        "link": "https://www.heise.de/news/Anthropic-KI-koennte-ihre-eigene-Entwicklung-bald-drastisch-beschleunigen-11509328.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T11:50:00+01:00",
-        "detected_at": "03.11.2026 11:05"
-      },
-      {
-        "id": "aeb821d1799df923",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Kontaktabbruch: Die stille Buchführung in Freundschaften - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMijgFBVV95cUxOVmNYUkVyNUpReDhDdUdrUUlaaVFINzVpS0lJRXNPaVpNTXd0VHNCb0tQQmNwaFNnMzJvUkdDQXUxWWo4MmlYRnNVY0YyWkZSWHdCQklRYldsOFJUR2V3NG9BQlNVY2tQWDRrWEwwRXZSOE1lTzVoeENXSlRkVHlFTVZWVnZnNk5BQTJlZ2VB?oc=5",
-        "published": "Tue, 03 Nov 2026 09:00:00 GMT",
-        "detected_at": "03.11.2026 11:05"
-      },
-      {
-        "id": "0c2de3a636d39663",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Dax aktuell: Unter 26.000 Punkten – Dax notiert vor US-Midterms im Minus",
-        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/dax-aktuell-unter-26.000-punkten-dax-notiert-vor-us-midterms-im-minus/100266854.html",
-        "published": "Tue, 03 Nov 2026 08:32:04 GMT",
-        "detected_at": "03.11.2026 10:17"
-      },
-      {
-        "id": "6ade2712d72f4f36",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Kommentar: KI ist ein Fiebertraum",
-        "link": "https://www.heise.de/meinung/Kommentar-KI-ist-ein-Fiebertraum-11508391.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T11:08:00+01:00",
-        "detected_at": "03.11.2026 10:17"
-      },
-      {
-        "id": "a149cf680f433c5f",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Apple-Zahlen: Umsatzwachstum, China-Enttäuschung und ein stolzer John Ternus",
-        "link": "https://www.heise.de/news/Apple-Zahlen-Umsatzwachstum-China-Enttaeuschung-und-ein-stolzer-John-Ternus-11508633.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T11:02:00+01:00",
-        "detected_at": "03.11.2026 10:17"
-      },
-      {
-        "id": "309f2df5bf36cbfb",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Neun Orang-Utans nach Waldbränden in Indonesien gerettet",
-        "link": "https://www.tagesschau.de/ausland/asien/indonesien-orang-utans-brand-100.html",
-        "published": "Tue, 03 Nov 2026 11:13:07 +0100",
-        "detected_at": "03.11.2026 10:17"
-      },
-      {
-        "id": "5f78092431972e92",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Sind Männer gesundheitlich schlechter dran als Frauen?",
-        "link": "https://www.tagesschau.de/wissen/gesundheit/maenner-gesundheit-102.html",
-        "published": "Tue, 03 Nov 2026 11:07:38 +0100",
-        "detected_at": "03.11.2026 10:17"
       }
     ]
   },

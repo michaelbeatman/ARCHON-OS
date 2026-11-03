@@ -287,6 +287,36 @@ DEFAULT_AUTONOMY_SETTINGS: Dict[str, Dict[str, Any]] = {
         "digest_enabled": True,
         "digest_delivery_time": "08:00",
         "min_severity": "low"
+    },
+    # Selbst-Evolution & Voyager-Paradigma (Feature 6)
+    "self_evolving_tooling": {
+        "enabled": True,
+        "max_repair_iterations": 3,
+        "auto_sandbox_verification": True,
+        "auto_register_skills": True
+    },
+    # MCTS Action Trajectories & Deep Reasoning Gate (Feature 8)
+    "mcts_reasoning": {
+        "enabled": False,
+        "default_depth": 3,
+        "rollout_budget": 4,
+        "exploration_weight": 1.414,
+        "min_task_complexity_score": 75
+    },
+    # Speculative Action & Resource Pre-fetching (Feature 10)
+    "speculative_prefetcher": {
+        "enabled": True,
+        "ttl_seconds": 180,
+        "prefetch_crm": True,
+        "prefetch_erp": True,
+        "prefetch_learnings": True
+    },
+    # Just-in-Time Ephemeral Persona Induction (Feature 13)
+    "jit_persona_induction": {
+        "enabled": True,
+        "ephemeral_lifespan_minutes": 15,
+        "auto_purge_on_completion": True,
+        "allow_graduation_to_cadre": True
     }
 }
 

@@ -27,6 +27,9 @@
 | **22** | **Datenschutz-Routing (Zero Egress) & Lokales LLM** | Kritisch | Abgeschlossen | Automatisches Routing sensibler Daten an On-Premise LLMs (LM Studio/Ollama), EU-Fallback (Mistral AI), Footer-Statusleuchten `LOKAL`/`DSGVO` |
 | **23** | **Dual-LLM Guard gegen Prompt Injection** | Kritisch | Abgeschlossen | 2-Stufen Quarantäne-Filterung externer Daten vor Übergabe an Werkzeug-Agenten & interaktiver `[T]`-Trusted Source Toggle |
 | **24** | **Verschlüsselter Notfallzugang (Break-Glass Protocol)** | Kritisch | Abgeschlossen | Zero-Dependency PBKDF2-200k/HMAC verschlüsselter Tresor (`break_glass_vault.enc`) für Katastrophen-Wiederherstellung bei Betreiberausfall |
+| **25** | **Operativer Operations-Kalender (ERP, Kanban & Agenten)** | Hoch | Geplant | Integriertes Zeitraster für Kanban-Deadlines, Zahlungsziele/Fristen, n8n-Cronjobs und reale Termine/Geburtstage für automatische Kontaktpflege |
+| **26** | **Autonomous Computer-Use & PbD (Demo-to-Skill)** | Kritisch | Geplant | Vormachen & Lernen per Bot-Screen, Ghost-Cursor Anti-Detection (Bézier-Pfade, Bounding-Box Jitter), SoM-Visual-Grounding und a11y Observation-Pruning |
+| **27** | **MCTS Action Trajectories & Deep Reasoning Gate** | Mittel | Geplant | Optionale Monte-Carlo-Baumsuche in Autonomie-Settings zur Voraus-Simulation heikler Handlungsstränge vor Ausführung |
 
 ---
 
@@ -174,4 +177,20 @@
 ### Meilenstein 24: Verschlüsselter Notfallzugang (Break-Glass Protocol) (Abgeschlossen)
 - **Katastrophen-Wiederherstellung:** Zero-Dependency Verschlüsselung (PBKDF2-200k, HMAC-SHA256, Keystream) via `scripts/break_glass_recovery.py`.
 - **Notfall-Kit:** Bereitstellung von `data/backups/break_glass_vault.enc` und ausdruckbarer Anleitung `data/backups/BREAK_GLASS_RECOVERY_KIT.md`.
+
+### Meilenstein 25: Operativer Operations-Kalender (Geplant)
+- **Aggregierte Zeitprojektion:** Tages-, Wochen- und Monatsraster direkt in Operations.
+- **Automatische Datenquellen:** Kanban-Deadlines (`due_date`), ERP-Vertragsfristen & Zahlungsziele, n8n/Hintergrund-Fahrplan (Wann startet welcher Agenten-Job?).
+- **Reallife-Termine & Kontaktpflege:** Integration wichtiger Termine und Geburtstage aus dem CRM für automatisierte Gratulationen und Beziehungspflege.
+- **Externer Sync:** Optionale ICS/CalDAV-Synchronisation mit Mobilgeräten.
+
+### Meilenstein 26: Autonomous Computer-Use Engine & PbD (In Konzeption / Geplant)
+- **Programming by Demonstration (PbD):** Aufnahme-Button im Bot-Screen (`[ 🔴 Vormachen & Aufnehmen ]`) loggt DOM-Events und transkribiert parallele Sprachbefehle (Whisper) in wiederverwendbare Skills (`SKILL.md`).
+- **Anti-Bot Trajektorien (Ghost-Cursor):** Simulation biomechanischer Mausbewegungen (Bézier-Kurven, Fitts's Law, Geschwindigkeitsvarianz) und Gauss-verteilter Klick-Jitter innerhalb der Ziel-Elemente zur Umgehung von WAFs.
+- **Visual Grounding (Set-of-Marks) & Observation Pruning:** Automatische Ziffern-Markierung auf Screenshots und 90%ige HTML-Reduktion via Accessibility-Tree (a11y) zur massiven Token-Einsparung mit Chat-Toggle.
+
+### Meilenstein 27: MCTS & Heuristik-Tree-Search (Geplant)
+- **Gedankliche Voraus-Simulation:** Optionale Monte-Carlo-Baumsuche für hochriskante Aufgaben vor der ersten Tool-Ausführung.
+- **Konfigurierbar:** Aktivierbar in den System-Einstellungen (`mcts_reasoning_enabled`) zur Schonung von Token-Credits bei Routine-Tasks.
+
 

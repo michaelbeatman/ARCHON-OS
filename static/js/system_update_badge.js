@@ -14,7 +14,7 @@
   /**
    * Prüft den Hermes Agent Core Update-Status im Hintergrund und aktualisiert die Status-LED.
    */
-  async function checkUpdateStatus(silent = false) {
+  async function checkUpdateStatus(silent = false, force = false) {
     if (isChecking) return lastUpdateData;
     isChecking = true;
 
@@ -26,7 +26,8 @@
     }
 
     try {
-      const res = await fetch('/api/v1/hermes/update/check');
+      const url = force ? '/api/v1/hermes/update/check?force=true' : '/api/v1/hermes/update/check';
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       lastUpdateData = data;
@@ -50,8 +51,8 @@
           }
           const label = document.getElementById('label-update-text');
           if (label) {
-            label.innerText = 'Update';
-            label.className = '';
+            label.innerText = `Update (${data.installed_version || 'v0.22.6'})`;
+            label.className = 'text-emerald-500 font-medium';
           }
         }
       }
@@ -77,7 +78,7 @@
     if (modal) {
       modal.classList.remove('hidden');
     }
-    await renderUpdateDialogContent();
+    await renderUpdateDialogContent(true);
   }
 
   function closeSystemUpdateDialog() {
@@ -90,7 +91,7 @@
   /**
    * Lädt und rendert den Inhalt des Update-Dialogs.
    */
-  async function renderUpdateDialogContent() {
+  async function renderUpdateDialogContent(force = false) {
     const verEl = document.getElementById('upd-modal-version');
     const badgeEl = document.getElementById('upd-modal-status-badge');
     const branchEl = document.getElementById('upd-modal-branch');
@@ -100,11 +101,11 @@
     const actionsArea = document.getElementById('upd-modal-actions-area');
 
     if (badgeEl) {
-      badgeEl.innerText = 'Prüfe GitHub...';
+      badgeEl.innerText = 'Prüfe...';
       badgeEl.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-500/15 text-[var(--muted-foreground)] border border-[var(--border)]';
     }
 
-    const data = await checkUpdateStatus(false);
+    const data = await checkUpdateStatus(false, force);
 
     if (!data) {
       if (badgeEl) {
@@ -123,18 +124,25 @@
 
     // Version und Build SHA setzen
     if (verEl) {
-      verEl.innerText = `${data.installed_version || 'v0.20.0'} (${data.installed_codename || '2026.8.3'}) · SHA: ${data.installed_sha_short || '-'}`;
+      verEl.innerText = `${data.installed_version || 'v0.22.6'} (${data.installed_codename || '2026.9.24'}) · SHA: ${data.installed_sha_short || '-'}`;
     }
     if (branchEl) {
       branchEl.innerText = 'NousResearch/hermes-agent (main)';
     }
     if (commitEl) {
       const isRunning = data.container_status === 'running';
-      commitEl.innerHTML = `<span class="${isRunning ? 'text-emerald-500' : 'text-amber-500'} font-bold">${data.container_status || 'exited'}</span> (${data.installed_sha_short || '-'})`;
+      commitEl.innerHTML = `<span class="${isRunning ? 'text-emerald-500' : 'text-amber-500'} font-bold">${data.container_status || 'running'}</span> (${data.installed_sha_short || '-'})`;
     }
     if (lastCommitEl) {
       lastCommitEl.innerText = `Neuester Upstream Commit: ${data.latest_commit_sha_short || '-'} (${data.latest_commit_date || '-'}) · ${data.latest_commit_msg || ''}`;
     }
+
+    const commitsListHtml = (data.incoming_commits || []).map(c => `
+      <div class="flex items-start gap-1.5 text-xs font-mono py-1 border-b border-[var(--border)]/50 last:border-0">
+        <span class="text-sky-500 font-bold shrink-0">›</span>
+        <span class="text-[var(--foreground)] truncate">${escapeHtml(c)}</span>
+      </div>
+    `).join('');
 
     // Status Badge & Updates Liste
     if (data.update_available) {
@@ -142,13 +150,6 @@
         badgeEl.innerText = `${data.latest_release_tag || 'Update verfügbar'}`;
         badgeEl.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30';
       }
-
-      const commitsListHtml = (data.incoming_commits || []).map(c => `
-        <div class="flex items-start gap-1.5 text-xs font-mono py-1 border-b border-[var(--border)]/50 last:border-0">
-          <span class="text-sky-500 font-bold shrink-0">›</span>
-          <span class="text-[var(--foreground)] truncate">${escapeHtml(c)}</span>
-        </div>
-      `).join('');
 
       if (updatesSec) {
         updatesSec.innerHTML = `
@@ -176,19 +177,27 @@
       }
     } else {
       if (badgeEl) {
-        badgeEl.innerText = 'Core ist aktuell';
+        badgeEl.innerText = `${data.installed_version || 'v0.22.6'} · Aktuell`;
         badgeEl.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30';
       }
 
       if (updatesSec) {
         updatesSec.innerHTML = `
-          <div class="border border-emerald-500/20 bg-emerald-500/5 rounded-xl p-3.5 flex items-center gap-2.5 text-xs">
-            <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <i data-lucide="check-circle" class="w-4 h-4"></i>
+          <div class="border border-emerald-500/20 bg-emerald-500/5 rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center gap-2.5 text-xs">
+              <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="font-bold text-[var(--foreground)]">Hermes Agent Core ist auf dem neuesten Stand (${data.installed_version})</div>
+                <div class="text-[11px] text-[var(--muted-foreground)]">Installiertes Release entspricht der neuesten offiziellen Upstream-Version von NousResearch.</div>
+              </div>
             </div>
             <div>
-              <div class="font-bold text-[var(--foreground)]">Hermes Agent Core ist auf dem neuesten Stand</div>
-              <div class="text-[11px] text-[var(--muted-foreground)]">Installierte Version ${data.installed_version} entspricht dem Upstream-Release.</div>
+              <div class="text-[11px] font-bold text-[var(--foreground)] mb-1">Letzte Upstream-Commits auf main:</div>
+              <div class="bg-[var(--card)]/90 rounded-lg p-2 border border-[var(--border)] max-h-36 overflow-y-auto space-y-0.5 custom-scrollbar">
+                ${commitsListHtml || '<div class="text-xs text-[var(--muted-foreground)]">Keine Commits empfangen.</div>'}
+              </div>
             </div>
           </div>
         `;
@@ -204,7 +213,7 @@
           <div class="flex items-center justify-between text-xs font-mono text-[var(--muted-foreground)]">
             <label class="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" id="upd-hermes-auto-restart" checked class="rounded border-zinc-400 text-sky-600 focus:ring-sky-500">
-              <span>Container nach Download neu starten</span>
+              <span>Container nach Download neu instanziieren</span>
             </label>
             <span class="text-[10px] bg-[var(--secondary)] px-2 py-0.5 rounded">Kanal: latest</span>
           </div>
@@ -215,7 +224,7 @@
             class="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-mono font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-xs"
           >
             <i data-lucide="download" class="w-4 h-4"></i>
-            <span>${data.update_available ? 'Hermes Agent Core jetzt aktualisieren' : 'Hermes Docker Image neu laden & starten'}</span>
+            <span>${data.update_available ? 'Hermes Agent Core jetzt aktualisieren' : 'Hermes Docker Image erneut laden (Force Pull)'}</span>
           </button>
           <div id="upd-dialog-progress-msg" class="hidden text-center text-xs font-mono text-sky-500 animate-pulse"></div>
         `;
@@ -245,7 +254,7 @@
 
     const confirmText = 'Hermes Agent Core jetzt aktualisieren?\n\n' +
       'Archon zieht das neueste Docker Image (nousresearch/hermes-agent:latest) vom offiziellen Repository ' +
-      'und startet den Hermes-Container bei Bedarf neu.';
+      'und instanziiert den Hermes-Container neu.';
 
     if (!confirm(confirmText)) return;
 
@@ -255,7 +264,7 @@
     }
     if (progMsg) {
       progMsg.classList.remove('hidden');
-      progMsg.innerText = 'Lade nousresearch/hermes-agent:latest herunter... Das kann je nach Internetverbindung 1-2 Minuten dauern.';
+      progMsg.innerText = 'Lade nousresearch/hermes-agent:latest herunter...';
     }
 
     try {
@@ -275,10 +284,9 @@
           btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> <span>Aktualisierung abgeschlossen</span>';
           btn.className = 'w-full py-2.5 rounded-xl bg-emerald-600 text-white font-mono font-bold text-xs flex items-center justify-center gap-2';
         }
-        setTimeout(() => {
-          checkUpdateStatus(false);
-          renderUpdateDialogContent();
-        }, 2000);
+        setTimeout(async () => {
+          await renderUpdateDialogContent(true);
+        }, 1500);
       } else {
         alert(`Update fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`);
         if (btn) {
@@ -308,9 +316,9 @@
   // Exportiere Funktionen nach window
   window.openSystemUpdateDialog = openSystemUpdateDialog;
   window.closeSystemUpdateDialog = closeSystemUpdateDialog;
-  window.checkSystemUpdateDialogStatus = renderUpdateDialogContent;
+  window.checkSystemUpdateDialogStatus = () => renderUpdateDialogContent(true);
   window.executeHermesUpdateFromDialog = executeHermesUpdateFromDialog;
-  window.executeSystemUpdateFromDialog = executeHermesUpdateFromDialog; // Abwärtskompatibel
+  window.executeSystemUpdateFromDialog = executeHermesUpdateFromDialog;
   window.checkUpdateStatus = checkUpdateStatus;
 
   // Initialer Check nach Start (verzögert um 2 Sekunden)

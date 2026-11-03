@@ -732,6 +732,92 @@ async def get_showroom_apps():
     return {"apps": apps}
 
 
+@router.get("/showroom/preview/app/{app_name}")
+async def get_showroom_app_preview_frame(app_name: str):
+    """
+    Liefert einen interaktiven Responsive-Preview-Frame mit Device-Switcher
+    (Desktop, Tablet, Mobile) für die angegebene lokale Webanwendung.
+    """
+    from fastapi.responses import HTMLResponse
+    apps_dir = get_apps_dir()
+    app_dir = os.path.join(apps_dir, app_name)
+    index_file = os.path.join(app_dir, "index.html")
+    single_file = os.path.join(apps_dir, f"{app_name}.html")
+
+    if os.path.exists(index_file):
+        app_url = f"/builds/apps/{app_name}/index.html"
+    elif os.path.exists(single_file):
+        app_url = f"/builds/apps/{app_name}.html"
+    elif os.path.exists(app_dir) and app_name.endswith(".html"):
+        app_url = f"/builds/apps/{app_name}"
+    else:
+        raise HTTPException(status_code=404, detail=f"Web-App '{app_name}' besitzt keine index.html.")
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="de" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <title>Showroom Preview: {app_name}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {{ background: #09090b; color: #f4f4f5; }}
+    .device-desktop {{ width: 100%; height: 100%; border-radius: 0; }}
+    .device-tablet {{ width: 768px; height: 92%; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }}
+    .device-mobile {{ width: 375px; height: 85%; border-radius: 36px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); border: 8px solid #27272a; }}
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-hidden">
+  <header class="h-12 border-b border-zinc-800 bg-zinc-900/90 px-4 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-3">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span class="font-bold text-xs tracking-tight font-mono text-zinc-200">Showroom Live Preview: <span class="text-sky-400">{app_name}</span></span>
+    </div>
+    <div class="flex items-center bg-zinc-800 p-0.5 rounded-xl border border-zinc-700/60 text-xs">
+      <button onclick="setDevice('desktop')" id="btn-desktop" class="px-2.5 py-1 rounded-lg font-mono font-bold bg-zinc-700 text-white flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-desktop"></i> Desktop
+      </button>
+      <button onclick="setDevice('tablet')" id="btn-tablet" class="px-2.5 py-1 rounded-lg font-mono text-zinc-400 hover:text-white flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-tablet-screen-button"></i> Tablet
+      </button>
+      <button onclick="setDevice('mobile')" id="btn-mobile" class="px-2.5 py-1 rounded-lg font-mono text-zinc-400 hover:text-white flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-mobile-screen"></i> Mobile
+      </button>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="document.getElementById('preview-frame').contentWindow.location.reload()" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition" title="Neu laden">
+        <i class="fa-solid fa-rotate-right"></i>
+      </button>
+      <a href="{app_url}" target="_blank" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs font-bold transition flex items-center gap-1">
+        In neuem Tab <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+      </a>
+    </div>
+  </header>
+  <main class="flex-1 bg-zinc-950 flex items-center justify-center p-2 overflow-hidden relative">
+    <iframe id="preview-frame" src="{app_url}" class="device-desktop bg-white border border-zinc-800 transition-all duration-300"></iframe>
+  </main>
+  <script>
+    function setDevice(mode) {{
+      const frame = document.getElementById('preview-frame');
+      const btns = ['desktop', 'tablet', 'mobile'];
+      btns.forEach(b => {{
+        const btn = document.getElementById('btn-' + b);
+        if (b === mode) {{
+          btn.className = 'px-2.5 py-1 rounded-lg font-mono font-bold bg-zinc-700 text-white flex items-center gap-1.5 transition';
+        }} else {{
+          btn.className = 'px-2.5 py-1 rounded-lg font-mono text-zinc-400 hover:text-white flex items-center gap-1.5 transition';
+        }}
+      }});
+      frame.className = 'device-' + mode + ' bg-white border border-zinc-800 transition-all duration-300';
+    }}
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html_content)
+
+
+
 @router.post("/showroom/archive-to-obsidian")
 async def archive_showroom_report(filename: str = Query(...)):
     """Archiviert einen Bericht nach /opt/data/obsidian/00_Notebook_Synthesen/."""

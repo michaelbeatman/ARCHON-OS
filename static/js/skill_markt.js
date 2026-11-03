@@ -2432,7 +2432,10 @@
             chairman_model: (document.getElementById("boardroom-chair-model-select") && document.getElementById("boardroom-chair-model-select").value) || null,
             framework: frameworkVal,
             slots,
-            reasoning_level: (document.getElementById("boardroom-reasoning-select") && document.getElementById("boardroom-reasoning-select").value) || "profile"
+            reasoning_level: (document.getElementById("boardroom-reasoning-select") && document.getElementById("boardroom-reasoning-select").value) || "profile",
+            use_moa: Boolean(document.getElementById("boardroom-moa-toggle") && document.getElementById("boardroom-moa-toggle").checked),
+            moa_reference_models: (typeof getMoAReferenceModels === "function") ? getMoAReferenceModels() : null,
+            moa_aggregator: (typeof getMoAAggregatorModel === "function") ? getMoAAggregatorModel() : null
           })
         });
         if (!response.ok) {
@@ -2464,7 +2467,40 @@
             const jsonStr = trimmed.replace(/^data:\s*/, "");
             try {
               const ev = JSON.parse(jsonStr);
-              if (ev.type === "start") {
+              if (ev.type === "moa_start") {
+                appendBothBoardroomThreads(() => {
+                  const b = document.createElement("div");
+                  b.className = "rounded-xl p-3 bg-indigo-500/10 border border-indigo-500/30 text-xs mb-3 font-mono text-indigo-700 dark:text-indigo-300 flex items-center justify-between";
+                  b.innerHTML = `
+                    <div class="flex items-center gap-2">
+                      <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                      <span class="font-bold">⚡ MIXTURE OF AGENTS (MoA) AKTIVIERT</span>
+                    </div>
+                    <span class="text-[10px] font-bold">${ev.reference_models ? ev.reference_models.length : 3} Modelle parallel &rarr; Aggregator</span>
+                  `;
+                  return b;
+                });
+              } else if (ev.type === "moa_ref_done") {
+                appendBothBoardroomThreads(() => {
+                  const card = document.createElement("div");
+                  card.className = "rounded-xl p-3 bg-[var(--card)] border border-indigo-500/20 text-xs mb-2.5 shadow-2xs font-sans";
+                  card.innerHTML = `
+                    <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] mb-2 font-mono">
+                      <span class="font-bold text-indigo-600 dark:text-indigo-400">🤖 MoA Layer-1: ${escapeHtml(ev.name || ev.model)}</span>
+                      <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 font-bold uppercase">${ev.status || 'OK'}</span>
+                    </div>
+                    <div class="text-[11.5px] leading-relaxed text-[var(--foreground)] whitespace-pre-wrap select-text">${escapeHtml(ev.content || '')}</div>
+                  `;
+                  return card;
+                });
+              } else if (ev.type === "moa_aggregating") {
+                appendBothBoardroomThreads(() => {
+                  const aggB = document.createElement("div");
+                  aggB.className = "rounded-lg p-2 bg-amber-500/10 border border-amber-500/30 text-xs mb-2 font-mono text-amber-700 dark:text-amber-300 flex items-center gap-2";
+                  aggB.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span><span>🎯 MoA Aggregator synthetisiert Layer-1 Ergebnisse...</span>`;
+                  return aggB;
+                });
+              } else if (ev.type === "start") {
                 boardMeta = ev;
                 appendBothBoardroomThreads(() => {
                   const headerBanner = document.createElement("div");

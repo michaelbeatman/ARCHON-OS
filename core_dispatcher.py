@@ -1266,7 +1266,10 @@ async def stream_boardroom_debate(
     chairman_id: str,
     active_agents: list,
     framework: str = "Steffi Kieffer Boardroom",
-    timeout: int = 30
+    timeout: int = 30,
+    use_moa: bool = False,
+    moa_reference_models: list = None,
+    moa_aggregator: dict = None
 ):
     """
     Asynchroner Generator für Live-Streaming der 'AI Boardroom' Multi-Agenten Debatte:
@@ -1443,17 +1446,117 @@ async def stream_boardroom_debate(
                 }
                 break
 
-    # 4. FINAL SYNTHESIS BY CHAIRMAN
-    synthesis_prompt = (
-        f"Du bist der Chairman ({chairman['name']}).\n"
-        f"Die Debatte zu '{task}' unter Anwendung des Frameworks '{framework}' ist beendet.\n"
-        f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
-        f"Gesamter Diskussionsverlauf:\n{running_transcript}\n\n"
-        f"Erstelle eine finale, strukturierte Synthese im Markdown-Format mit folgenden 3 Abschnitten:\n"
-        f"### 1. Key Consensus Points (Haupt-Konsenspunkte)\n"
-        f"### 2. Unresolved Risks / Counterarguments (Offene Risiken & Gegenargumente)\n"
-        f"### 3. Final Actionable Decision (Finale Entscheidung & konkreter Aktionsplan)"
-    )
+    # 4. FINAL SYNTHESIS (STANDARD ODER MIXTURE OF AGENTS - MoA)
+    synthesis_text = ""
+    if use_moa:
+        # Default Referenz-Modelle falls keine übergeben wurden
+        ref_models = moa_reference_models or [
+            {"model": "deepseek/deepseek-chat", "provider": "openrouter", "name": "DeepSeek V3 (MoA Ref)"},
+            {"model": "anthropic/claude-3.5-sonnet", "provider": "openrouter", "name": "Claude 3.5 Sonnet (MoA Ref)"},
+            {"model": "meta-llama/llama-3.3-70b-instruct", "provider": "openrouter", "name": "Llama 3.3 70B (MoA Ref)"}
+        ]
+        agg_model = moa_aggregator or {
+            "model": chairman.get("model", "deepseek/deepseek-chat"),
+            "provider": chairman.get("provider", "openrouter"),
+            "name": f"{chairman['name']} (MoA Aggregator)"
+        }
+
+        yield {
+            "type": "moa_start",
+            "reference_models": ref_models,
+            "aggregator": agg_model,
+            "message": f"MoA aktiviert: Starte parallele Layer-1 Synthese über {len(ref_models)} Sprachmodelle..."
+        }
+
+        moa_prompt = (
+            f"Du bist ein unabhängiges Referenz-Modell im Mixture-of-Agents (MoA) Verbund.\n"
+            f"Debatten-Aufgabe: '{task}'\n"
+            f"Framework: '{framework}'\n\n"
+            f"Diskussionsprotokoll:\n{running_transcript}\n\n"
+            f"Erstelle eine präzise, eigenständige Entscheidungsvorlage mit Konsenspunkten, offenen Risiken und Empfehlungen."
+        )
+
+        async def _run_moa_ref(m_item):
+            m_id = m_item.get("model", "deepseek/deepseek-chat")
+            m_prov = m_item.get("provider", "openrouter")
+            m_name = m_item.get("name", m_id)
+            try:
+                res = await dispatch_to_external_agent(
+                    agent_id=f"moa_ref_{m_name}",
+                    agent_name=m_name,
+                    prompt=moa_prompt,
+                    role="MoA Reference Model",
+                    system_prompt=f"Du bist {m_name}. Liefere eine objektive, strukturierte Entscheidungsvorlage.",
+                    model=m_id,
+                    provider=m_prov,
+                    timeout=timeout
+                )
+                return {"model": m_id, "provider": m_prov, "name": m_name, "content": res.get("content", ""), "status": "ok"}
+            except Exception as e:
+                return {"model": m_id, "provider": m_prov, "name": m_name, "content": f"Fehler bei {m_name}: {e}", "status": "error"}
+
+        moa_tasks = [asyncio.create_task(_run_moa_ref(m)) for m in ref_models]
+        moa_results = await asyncio.gather(*moa_tasks)
+
+        running_transcript += "\n--- MIXTURE OF AGENTS (MoA) LAYER-1 REFERENZEN ---\n"
+        for r in moa_results:
+            running_transcript += f"[{r['name']}]:\n{r['content']}\n\n"
+            yield {
+                "type": "moa_ref_done",
+                "model": r["model"],
+                "name": r["name"],
+                "status": r["status"],
+                "content": r["content"]
+            }
+
+        # Jetzt der Aggregator
+        agg_prompt = (
+            f"Du bist der MoA-Aggregator (Mixture of Agents) für den AI Boardroom.\n"
+            f"Aufgabe: '{task}' | Framework: '{framework}'\n\n"
+            f"Vorheriger Diskussionsverlauf:\n{running_transcript}\n\n"
+            f"Die folgenden Referenzmodelle haben unabhängig voneinander Analysen geliefert:\n"
+        )
+        for idx, r in enumerate(moa_results):
+            agg_prompt += f"=== MODELL {idx+1}: {r['name']} ({r['model']}) ===\n{r['content']}\n\n"
+        
+        agg_prompt += (
+            f"Synthetisiere als Aggregator alle Perspektiven:\n"
+            f"1. Extrahiere die stärksten Konsenspunkte aller Modelle\n"
+            f"2. Hebe Kontroversen, blinde Flecken oder Risiken hervor\n"
+            f"3. Formuliere die finale verbindliche Entscheidung & Aktionsplan im Markdown-Format:\n"
+            f"### 1. Key Consensus Points (MoA-Konsens)\n"
+            f"### 2. Evaluierte Risiken & Dissenting Opinions\n"
+            f"### 3. Actionable Decision & Umsetzungsschritte"
+        )
+
+        yield {
+            "type": "moa_aggregating",
+            "aggregator": agg_model,
+            "message": f"Aggregator {agg_model.get('name', 'Chair')} synthetisiert alle Layer-1 Ergebnisse..."
+        }
+
+        res_agg = await dispatch_to_external_agent(
+            agent_id=chairman["id"],
+            agent_name=agg_model.get("name", chairman["name"]),
+            prompt=agg_prompt,
+            role="MoA Aggregator",
+            system_prompt=chairman_sys_prompt,
+            model=agg_model.get("model", chairman.get("model", "deepseek/deepseek-chat")),
+            provider=agg_model.get("provider", chairman.get("provider", "openrouter")),
+            timeout=timeout
+        )
+        synthesis_text = res_agg.get("content", "MoA Aggregator konnte keine Synthese erstellen.")
+    else:
+        synthesis_prompt = (
+            f"Du bist der Chairman ({chairman['name']}).\n"
+            f"Die Debatte zu '{task}' unter Anwendung des Frameworks '{framework}' ist beendet.\n"
+            f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
+            f"Gesamter Diskussionsverlauf:\n{running_transcript}\n\n"
+            f"Erstelle eine finale, strukturierte Synthese im Markdown-Format mit folgenden 3 Abschnitten:\n"
+            f"### 1. Key Consensus Points (Haupt-Konsenspunkte)\n"
+            f"### 2. Unresolved Risks / Counterarguments (Offene Risiken & Gegenargumente)\n"
+            f"### 3. Final Actionable Decision (Finale Entscheidung & konkreter Aktionsplan)"
+        )
     
     res_synth = await dispatch_to_external_agent(
         agent_id=chairman["id"],
@@ -1491,7 +1594,10 @@ async def run_boardroom_debate(
     chairman_id: str,
     active_agents: list,
     framework: str = "Steffi Kieffer Boardroom",
-    timeout: int = 30
+    timeout: int = 30,
+    use_moa: bool = False,
+    moa_reference_models: list = None,
+    moa_aggregator: dict = None
 ) -> dict:
     events = []
     task_res = {
@@ -1505,7 +1611,7 @@ async def run_boardroom_debate(
         "synthesis": ""
     }
     
-    async for ev in stream_boardroom_debate(task, max_rounds, chairman_id, active_agents, framework, timeout):
+    async for ev in stream_boardroom_debate(task, max_rounds, chairman_id, active_agents, framework, timeout, use_moa=use_moa, moa_reference_models=moa_reference_models, moa_aggregator=moa_aggregator):
         ev_type = ev.get("type")
         if ev_type == "start":
             task_res["chairman"] = ev.get("chairman", task_res["chairman"])

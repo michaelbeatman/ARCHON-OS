@@ -1,31 +1,45 @@
 /* ========================================================================= */
-/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-03 07:40:00               */
+/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-03 10:00:17               */
 /* ========================================================================= */
 
+aside.flex-shrink-0 > div.px-2\.5 {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+aside.flex-shrink-0 > div.px-3 {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+
+aside.flex-shrink-0 > div.px-3 > div.pt-0\.5 {
+  margin-top: 2px !important;
+}
+
+aside.flex-shrink-0 > div.px-3 > div.pt-1 {
+  margin-top: 2px !important;
+  padding-top: 2px !important;
+}
+
 aside.flex-shrink-0 > nav.flex-1 {
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+  padding-bottom: 0 !important;
+  padding-top: 0 !important;
 }
 
-aside.flex-shrink-0 nav.flex-1 [class*="space-y-"] > * + * {
-  margin-top: 2px !important;
-  margin-bottom: 0px !important;
+#status-badge-local-llm {
+  background-color: #ffffff !important;
+  border-width: 0px !important;
 }
 
-.archon-nav-item {
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
-  margin-top: 1px !important;
-  margin-bottom: 1px !important;
-  min-height: unset !important;
+#status-badge-dsgvo {
+  border-width: 0px !important;
+  background-color: #ffffff !important;
 }
 
-aside .theme-border-strong[class*="my-"] {
-  margin-top: 2px !important;
-  margin-bottom: 2px !important;
+div.w-full > div.p-3\.5 > div.flex {
+  font-size: 11px !important;
 }
 
-#topbar-user-badge > div {
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+#upd-modal-version {
+  font-size: 13px !important;
 }

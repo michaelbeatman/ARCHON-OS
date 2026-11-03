@@ -1181,6 +1181,9 @@ class BoardroomRequest(BaseModel):
     framework: str = "Steffi Kieffer Boardroom"
     slots: Optional[List[BoardroomSlotItem]] = None
     reasoning_level: Optional[str] = "profile"
+    use_moa: bool = False
+    moa_reference_models: Optional[List[dict]] = None
+    moa_aggregator: Optional[dict] = None
 
 def _prepare_boardroom_agents(req: BoardroomRequest):
     roles = load_roles()
@@ -1283,7 +1286,10 @@ async def api_run_boardroom(req: BoardroomRequest):
         max_rounds=req.rounds,
         chairman_id=chairman_agent["id"],
         active_agents=all_debate_agents,
-        framework=req.framework
+        framework=req.framework,
+        use_moa=req.use_moa,
+        moa_reference_models=req.moa_reference_models,
+        moa_aggregator=req.moa_aggregator
     )
     
     # Speichere finales Protokoll im Obsidian Vault
@@ -1314,6 +1320,7 @@ async def api_run_boardroom(req: BoardroomRequest):
                 "task": req.task,
                 "framework": req.framework,
                 "chairman": chairman_agent.get("name", "Moderator"),
+                "use_moa": req.use_moa,
                 "rounds": req.rounds,
                 "slots_count": max(0, len(all_debate_agents) - 1),
                 "slots": [
@@ -1346,7 +1353,10 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
             max_rounds=req.rounds,
             chairman_id=chairman_agent["id"],
             active_agents=all_debate_agents,
-            framework=req.framework
+            framework=req.framework,
+            use_moa=req.use_moa,
+            moa_reference_models=req.moa_reference_models,
+            moa_aggregator=req.moa_aggregator
         ):
             if await request.is_disconnected():
                 print("[AI Boardroom] Client disconnected. Beende Debatten-Stream vorzeitig.")
@@ -1387,6 +1397,7 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                         "task": req.task,
                         "framework": req.framework,
                         "chairman": chairman_agent.get("name", "Moderator"),
+                "use_moa": req.use_moa,
                         "rounds": req.rounds,
                         "slots_count": max(0, len(all_debate_agents) - 1),
                         "slots": [

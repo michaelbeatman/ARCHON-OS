@@ -1592,6 +1592,15 @@
                     </select>
                   </div>
 
+                  <!-- MoA Mode (Mixture of Agents) Toggle -->
+                  <div class="h-10 flex items-center gap-1.5 px-3 bg-[var(--background)] border border-[var(--border)] rounded-xl shrink-0 shadow-2xs cursor-pointer hover:border-indigo-500/50 transition" title="Mixture of Agents (MoA): Parallele Layer-1 Generierung & Aggregator-Synthese">
+                    <input type="checkbox" id="boardroom-moa-toggle" onchange="toggleMoAOptions(this.checked)" class="w-3.5 h-3.5 rounded text-indigo-600 cursor-pointer accent-indigo-600">
+                    <label for="boardroom-moa-toggle" class="text-[10px] uppercase font-bold text-[var(--foreground)] font-mono cursor-pointer select-none">MoA</label>
+                    <button type="button" onclick="openMoAConfigModal()" id="boardroom-moa-config-btn" class="hidden text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/25 font-bold transition flex items-center gap-1 cursor-pointer" title="Modelle konfigurieren">
+                      <i data-lucide="layers" class="w-2.5 h-2.5"></i> Konfig
+                    </button>
+                  </div>
+
                   <!-- Runden (2-zeilig: Label oben, Input unten) -->
                   <div class="h-10 flex flex-col justify-center items-center px-3 bg-[var(--background)] border border-[var(--border)] rounded-xl shrink-0 shadow-2xs">
                     <label class="text-[9px] uppercase font-bold text-[var(--muted-foreground)] font-mono leading-none mb-0.5">Runden</label>
@@ -3105,6 +3114,7 @@ print('Ausführung erfolgreich!')</textarea>
       try {
         const res = await fetch("/api/v1/inbox/emails/sync", { method: "POST" });
         const data = await res.json();
+        await loadShowroomApps();
         await loadInboxView();
       } catch (err) {
         console.error("Fehler beim E-Mail-Abruf:", err);
@@ -4710,6 +4720,99 @@ print('Ausführung erfolgreich!')</textarea>
     let currentShowroomFile = null;
     let showroomMdMode = "render"; // "render" | "raw"
     let showroomOpenFolders = new Set(); // Merkt sich aufgeklappte Ordner
+    
+    // ==========================================
+    // MIXTURE OF AGENTS (MoA) BOARDROOM HELPERS
+    // ==========================================
+    function toggleMoAOptions(enabled) {
+      const btn = document.getElementById("boardroom-moa-config-btn");
+      if (btn) btn.classList.toggle("hidden", !enabled);
+    }
+    function openMoAConfigModal() {
+      const m = document.getElementById("boardroom-moa-modal");
+      if (m) m.classList.remove("hidden");
+    }
+    function closeMoAConfigModal() {
+      const m = document.getElementById("boardroom-moa-modal");
+      if (m) m.classList.add("hidden");
+    }
+    function saveMoAConfig() {
+      const selectedModels = [];
+      document.querySelectorAll(".moa-ref-check:checked").forEach(cb => {
+        selectedModels.push({
+          model: cb.value,
+          provider: "openrouter",
+          name: cb.nextElementSibling ? cb.nextElementSibling.innerText.trim() : cb.value
+        });
+      });
+      const aggVal = document.getElementById("moa-aggregator-select") ? document.getElementById("moa-aggregator-select").value : "deepseek/deepseek-chat";
+      localStorage.setItem("boardroom_moa_models", JSON.stringify(selectedModels));
+      localStorage.setItem("boardroom_moa_aggregator", aggVal);
+      closeMoAConfigModal();
+    }
+    function getMoAReferenceModels() {
+      try {
+        const saved = localStorage.getItem("boardroom_moa_models");
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      return [
+        { model: "deepseek/deepseek-chat", provider: "openrouter", name: "DeepSeek V3 (MoA Ref)" },
+        { model: "anthropic/claude-3.5-sonnet", provider: "openrouter", name: "Claude 3.5 Sonnet (MoA Ref)" },
+        { model: "meta-llama/llama-3.3-70b-instruct", provider: "openrouter", name: "Llama 3.3 70B (MoA Ref)" }
+      ];
+    }
+    function getMoAAggregatorModel() {
+      const saved = localStorage.getItem("boardroom_moa_aggregator") || "deepseek/deepseek-chat";
+      return { model: saved, provider: "openrouter", name: "MoA Aggregator" };
+    }
+
+    // ==========================================
+    // SHOWROOM WEB-APPS & SHOPS INTEGRATION
+    // ==========================================
+    let showroomAppsList = [];
+    let currentShowroomAppId = null;
+
+    async function loadShowroomApps() {
+      try {
+        const res = await fetch("/api/views/showroom/apps");
+        if (res.ok) {
+          const data = await res.json();
+          showroomAppsList = data.apps || [];
+        }
+      } catch (e) {
+        console.warn("Could not load showroom apps:", e);
+      }
+    }
+
+    function openShowroomApp(appId, appName) {
+      currentShowroomAppId = appId;
+      const placeholder = document.getElementById("showroom-viewer-placeholder");
+      const mdView = document.getElementById("showroom-viewer-markdown");
+      const rawView = document.getElementById("showroom-viewer-raw");
+      const imgView = document.getElementById("showroom-viewer-image");
+      const htmlPanel = document.getElementById("showroom-viewer-html-panel");
+      const iframeWrap = document.getElementById("showroom-viewer-iframe-wrap");
+      const iframeElem = document.getElementById("showroom-viewer-iframe");
+      const nameEl = document.getElementById("showroom-file-name");
+      const breadEl = document.getElementById("showroom-file-breadcrumb");
+
+      if (placeholder) placeholder.classList.add("hidden");
+      if (mdView) mdView.classList.add("hidden");
+      if (rawView) rawView.classList.add("hidden");
+      if (imgView) imgView.classList.add("hidden");
+      if (htmlPanel) htmlPanel.classList.add("hidden");
+
+      if (nameEl) nameEl.innerText = `${appName || appId} · Lokale Web-App Live Preview`;
+      if (breadEl) breadEl.innerText = `agent_workspace/builds/apps/${appId} • Live Headless Preview (Desktop / Tablet / Mobile)`;
+
+      if (iframeWrap && iframeElem) {
+        iframeElem.srcdoc = "";
+        iframeElem.src = `/api/views/showroom/preview/app/${encodeURIComponent(appId)}`;
+        iframeWrap.classList.remove("hidden");
+      }
+      renderShowroomTree(showroomProjectsTree);
+    }
+
     async function loadShowroomView(force = false) {
       const container = document.getElementById("showroom-tree-container");
       const badge = document.getElementById("showroom-projects-count-badge");
@@ -4754,6 +4857,34 @@ print('Ausführung erfolgreich!')</textarea>
       }
       window.showroomFilesMap = window.showroomFilesMap || new Map();
       let html = "";
+      if (typeof showroomAppsList !== 'undefined' && showroomAppsList && showroomAppsList.length > 0) {
+        const isAppsOpen = showroomOpenFolders.has('sec_showroom_web_apps');
+        html += `
+          <div class="rounded-xl border border-sky-500/30 bg-sky-500/5 mb-2 overflow-hidden shadow-2xs">
+            <div onclick="toggleShowroomFolder('sec_showroom_web_apps')" class="flex items-center justify-between p-2 rounded cursor-pointer hover:bg-sky-500/10 select-none">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <i data-lucide="${isAppsOpen ? 'chevron-down' : 'chevron-right'}" class="w-3.5 h-3.5 text-sky-500 shrink-0"></i>
+                <i data-lucide="layout-grid" class="w-4 h-4 text-sky-500 shrink-0"></i>
+                <span class="font-bold text-[11px] truncate text-sky-600 dark:text-sky-300">Web-Apps &amp; Shops</span>
+              </div>
+              <span class="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-600 dark:text-sky-300 font-mono font-bold">${showroomAppsList.length}</span>
+            </div>
+            ${isAppsOpen ? `
+              <div class="pl-4 pr-1 py-1 space-y-1 border-l-2 border-sky-500/30 ml-3 mb-1">
+                ${showroomAppsList.map(app => `
+                  <div onclick="openShowroomApp('${escapeHtml(app.id || app.name)}', '${escapeHtml(app.name)}')" class="group flex items-center justify-between p-1 rounded cursor-pointer hover:bg-sky-500/15 text-[11px] ${currentShowroomAppId === app.id ? 'bg-sky-500/20 font-bold border-l-2 border-sky-500 pl-1.5 text-sky-600 dark:text-sky-300' : ''}">
+                    <div class="flex items-center gap-1.5 truncate">
+                      <i data-lucide="shopping-bag" class="w-3.5 h-3.5 text-sky-500 shrink-0"></i>
+                      <span class="truncate font-medium">${escapeHtml(app.name)}</span>
+                    </div>
+                    <span class="text-[8.5px] px-1 py-0.2 rounded bg-sky-500/20 text-sky-600 dark:text-sky-300 font-mono font-bold">Preview</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
       projects.forEach(p => {
         const isProjOpen = showroomOpenFolders.has(`proj_${p.id}`);
         const isTrash = p.id === 'papierkorb' || (p.folder || '').toLowerCase().includes('papierkorb');
@@ -5406,6 +5537,70 @@ print('Ausführung erfolgreich!')</textarea>
 </head>
 <body>
   ${body.innerHTML}
+
+  <!-- MODAL: MIXTURE OF AGENTS (MoA) KONFIGURATION -->
+  <div id="boardroom-moa-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+    <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-5 w-[92vw] max-w-lg shadow-2xl overflow-hidden flex flex-col space-y-4 font-sans">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="layers" class="w-5 h-5 text-indigo-500"></i>
+          <div>
+            <h3 class="text-sm font-bold font-mono uppercase tracking-wider text-[var(--foreground)]">Mixture of Agents (MoA) Konfiguration</h3>
+            <p class="text-[10.5px] text-[var(--muted-foreground)]">NousResearch / Together-AI Architektur</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeMoAConfigModal()" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-mono font-bold text-[11px] uppercase text-[var(--foreground)] mb-1">Layer 1: Parallele Referenzmodelle</label>
+          <p class="text-[10px] text-[var(--muted-foreground)] mb-2">Diese Modelle generieren unabhängig und zeitgleich Lösungsansätze.</p>
+          <div class="space-y-1.5" id="moa-reference-models-list">
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] cursor-pointer hover:border-indigo-500/40">
+              <input type="checkbox" checked value="deepseek/deepseek-chat" class="moa-ref-check accent-indigo-600">
+              <span class="font-mono font-bold text-xs">DeepSeek V3</span>
+              <span class="text-[10px] text-[var(--muted-foreground)] ml-auto font-mono">openrouter</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] cursor-pointer hover:border-indigo-500/40">
+              <input type="checkbox" checked value="anthropic/claude-3.5-sonnet" class="moa-ref-check accent-indigo-600">
+              <span class="font-mono font-bold text-xs">Claude 3.5 Sonnet</span>
+              <span class="text-[10px] text-[var(--muted-foreground)] ml-auto font-mono">openrouter</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] cursor-pointer hover:border-indigo-500/40">
+              <input type="checkbox" checked value="meta-llama/llama-3.3-70b-instruct" class="moa-ref-check accent-indigo-600">
+              <span class="font-mono font-bold text-xs">Llama 3.3 70B Instruct</span>
+              <span class="text-[10px] text-[var(--muted-foreground)] ml-auto font-mono">openrouter</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] cursor-pointer hover:border-indigo-500/40">
+              <input type="checkbox" value="openai/gpt-4o-mini" class="moa-ref-check accent-indigo-600">
+              <span class="font-mono font-bold text-xs">GPT-4o Mini</span>
+              <span class="text-[10px] text-[var(--muted-foreground)] ml-auto font-mono">openrouter</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-[var(--border)]">
+          <label class="block font-mono font-bold text-[11px] uppercase text-[var(--foreground)] mb-1">Layer 2: Aggregator-Modell</label>
+          <p class="text-[10px] text-[var(--muted-foreground)] mb-1.5">Evaluiert alle Layer-1 Entwürfe und filtert Widersprüche für die Synthese.</p>
+          <select id="moa-aggregator-select" class="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded-xl font-mono text-xs text-[var(--foreground)]">
+            <option value="deepseek/deepseek-chat" selected>DeepSeek V3 (Empfohlen)</option>
+            <option value="anthropic/claude-3.7-sonnet">Claude 3.7 Sonnet</option>
+            <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-[var(--border)] flex items-center justify-end gap-2">
+        <button type="button" onclick="closeMoAConfigModal()" class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-mono font-bold hover:bg-[var(--secondary)]">Schließen</button>
+        <button type="button" onclick="saveMoAConfig()" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-mono font-bold">Speichern</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>`;
       const blob = new Blob([htmlFull], { type: "text/html;charset=utf-8" });

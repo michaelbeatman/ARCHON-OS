@@ -296,7 +296,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -306,7 +306,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -316,7 +316,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -326,7 +326,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -336,7 +336,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -346,7 +346,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -356,7 +356,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -366,7 +366,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -376,7 +376,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -386,7 +386,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -396,7 +396,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -406,7 +406,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -416,7 +416,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -426,7 +426,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -436,12 +436,132 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-03T13:00:04.378265",
+        "last_check": "2026-11-03T13:30:04.183561",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-03T13:00:04.378265",
+    "last_run": "2026-11-03T13:30:04.183561",
     "recent_findings": [
+      {
+        "id": "a2f9e8e10627c66c",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Finanzpolitik: Die Plastiksteuer dürfte 2027 wohl doch nicht kommen – mit Folgen für Klingbeils Haushalt",
+        "link": "https://www.handelsblatt.com/politik/deutschland/finanzpolitik-plastiksteuer-duerfte-2027-wohl-doch-nicht-kommen/100266545.html",
+        "published": "Tue, 03 Nov 2026 13:01:59 GMT",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "a468621c59fd3b5b",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Pharma: „Das Letzte, was wir tun werden“: Bayer erteilt Aufspaltung vorerst eine Absage",
+        "link": "https://www.handelsblatt.com/unternehmen/industrie/pharma-bayer-erteilt-aufspaltung-vorerst-eine-absage-und-hebt-prognose-an/100265241.html",
+        "published": "Tue, 03 Nov 2026 13:23:31 GMT",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "82b14e5ee7e6a41a",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Luftfahrt: Premiumkunden retten das Quartal von Lufthansa",
+        "link": "https://www.handelsblatt.com/unternehmen/dienstleister/luftfahrt-premiumkunden-retten-das-quartal-von-lufthansa/100265034.html",
+        "published": "Tue, 03 Nov 2026 10:25:29 GMT",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "07a23ca7e9ebb913",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Midterms: Die Zwischenwahlen in den USA im Überblick  – das müssen Sie wissen",
+        "link": "https://www.handelsblatt.com/politik/international/midterms-was-sie-zu-den-zwischenwahlen-in-den-usa-wissen-muessen/100266607.html",
+        "published": "Tue, 03 Nov 2026 13:27:00 GMT",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "3ffb68b9ab8bbd6b",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Immobilien: 1,35 Millionen Wohnungen fehlen: Was der Bau-Turbo bislang gebracht hat",
+        "link": "https://www.handelsblatt.com/politik/deutschland/immobilien-was-der-bau-turbo-bislang-gebracht-hat/100266659.html",
+        "published": "Tue, 03 Nov 2026 13:03:37 GMT",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "bb7a665484acf36d",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Finanzpolitik: Die Plastiksteuer dürfte 2027 wohl doch nicht kommen – mit Folgen für Klingbeils Haushalt",
+        "link": "https://www.handelsblatt.com/politik/deutschland/finanzpolitik-plastiksteuer-duerfte-2027-wohl-doch-nicht-kommen/100266545.html",
+        "published": "Tue, 03 Nov 2026 13:01:59 GMT",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "1c869cef9d4bc0f2",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Kreisvorsitzendenkonferenz: „Es ging hoch her“ – Merz bekommt Frust der CDU-Basis zu spüren",
+        "link": "https://www.handelsblatt.com/politik/deutschland/cdu-bundeskanzler-friedrich-merz-bekommt-frust-der-basis-zu-spueren/100266778.html",
+        "published": "Tue, 03 Nov 2026 13:01:00 GMT",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "91a5f8f6ccab796e",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Monatlich kündbar: Der beste Handyvertrag im November – 99 GB Vodafone für 10 €",
+        "link": "https://www.heise.de/bestenlisten/ratgeber/monatlich-kuendbar-der-beste-handyvertrag-im-november-99-gb-vodafone-fuer-10-euro/6r7pf35?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T14:00:00+01:00",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "0b1dea7bef6c5d10",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise-Angebot: iX-Workshop: Nach dem Ransomware-Angriff – sicher entscheiden und kommunizieren",
+        "link": "https://www.heise.de/news/iX-Workshop-Nach-dem-Ransomware-Angriff-sicher-entscheiden-und-kommunizieren-11492922.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T14:00:00+01:00",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "ef7e611720a6653a",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Passwort-Manager mSecure: Nach IT-Vorfall Zugangsdaten sichern",
+        "link": "https://www.heise.de/news/Passwort-Manager-mSecure-Nach-IT-Vorfall-Zugangsdaten-sichern-11509717.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T13:57:00+01:00",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "af70c338be530b63",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "EU genehmigt MediaMarktSaturn-Übernahme durch JD.com",
+        "link": "https://www.tagesschau.de/wirtschaft/unternehmen/eu-mediamarkt-saturn-jd-genehmigung-100.html",
+        "published": "Tue, 03 Nov 2026 14:25:20 +0100",
+        "detected_at": "03.11.2026 13:30"
+      },
+      {
+        "id": "e67319aba53b2158",
+        "target_id": "src-spektrum",
+        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "title": "Ungewöhnliches Paar: Forscher rätseln über Sex zwischen Bulle und Esel - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxOdTctb0hDM2x5aDBDRVBxdUhjcVg1VktPa1RPUzFOTDJ1ZHpRTF83UEtBd0RkRHp2SHI2UHNsWEdxNUJJc1pwUzBoX1hUUmkwTmx0MVFhSXlCeXZ0OW1BYXdaUVFld2MtOFhUS0pDaWJJWkh0R0s1U1JvT0dxeEtwQTNYdl83X1o3SnBQWko2eG4wMktVTEFZZ3R1cGdrTkZhSjM1TDNNVU4xMDQ?oc=5",
+        "published": "Tue, 03 Nov 2026 11:00:00 GMT",
+        "detected_at": "03.11.2026 13:30"
+      },
       {
         "id": "b5e2ddbf03f98f69",
         "target_id": "src-invest-radar",
@@ -633,130 +753,6 @@
         "link": "https://www.heise.de/news/Apple-Intelligence-kommt-nach-China-mit-iOS-27-3-11508160.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
         "published": "2026-11-03T12:28:00+01:00",
         "detected_at": "03.11.2026 11:48"
-      },
-      {
-        "id": "3a6dc51ee3b7ddab",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Elektromobilität: Mercedes-Benz verkauft sein Schnellladenetzwerk in Europa",
-        "link": "https://www.handelsblatt.com/unternehmen/industrie/elektromobilitaet-mercedes-benz-verkauft-sein-schnellladenetzwerk-in-europa/100266862.html",
-        "published": "Tue, 03 Nov 2026 07:46:47 GMT",
-        "detected_at": "03.11.2026 11:33"
-      },
-      {
-        "id": "cc302be614f318e8",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Midterms: Die Zwischenwahlen in den USA im Überblick  – das müssen Sie wissen",
-        "link": "https://www.handelsblatt.com/politik/international/midterms-wann-mit-ersten-ergebnissen-zu-rechnen-ist/100266607.html",
-        "published": "Tue, 03 Nov 2026 11:25:18 GMT",
-        "detected_at": "03.11.2026 11:33"
-      },
-      {
-        "id": "c5ce2aca0de3b85c",
-        "target_id": "src-bundesbank",
-        "target_name": "Deutsche Bundesbank (Presse & Daten)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Neue Geschäftsverteilung im Vorstand der Deutschen Bundesbank - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQdXluUDNSdkNNY2J4NGxZQ3l6QzNYNnZrWEdwVC13Uk9rS0RmRVJWUEs3REdRU09jUFdlQVhaejNNOVY1UFkxOFFOYlYxWjlyVkJqS3BPV0U3WVVIYkd0b1JoR2J4SUtYNUNGSWx6blFGLVhJLXNSeGZSdnBLU3l1OW9YTWFmczRCQWxsYUswLU9sX0h4bmtXX3ZwdkkyVVlleDQ4WWRTY1J6SlpSLTZ0UmZieWo5ZGhNRmhGQXB6amw3NTQ?oc=5",
-        "published": "Tue, 03 Nov 2026 11:31:10 GMT",
-        "detected_at": "03.11.2026 11:33"
-      },
-      {
-        "id": "c51b9cb1f52818bc",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "DAX aktuell: DAX mittags in der Verlustzone - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMimAFBVV95cUxONGpXWi1TOEFzX2ViNkFrYndmN2VCQ0RMSWlwSlZ5WHJjRkl0bFpZcWMwQ2tYTDJCQS1DR3BTV2hla09zby10clpQMF9uUkV6ZXkxcGtva25xTmRPQWEwTjF4bkJBN29KUnlkT0tkeTR3dVdJWWtMLU1Gd29yNGxBc0ozN0JINGNQVnFJOVcyM3ZTazg5M2dacg?oc=5",
-        "published": "Tue, 03 Nov 2026 11:25:45 GMT",
-        "detected_at": "03.11.2026 11:33"
-      },
-      {
-        "id": "2aed226c41aeeb88",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Handel in Frankfurt: LUS-DAX verbucht am Dienstagmittag Verluste - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMitAFBVV95cUxObUttdE9lRFNvMzk2QUJkYW0xZzE3dUV6RTNZU2t2RGJFNEs2TGtLZEtzNTdMaU5TbU9ETU11TWlONHpuRVdqOURTNXdSRlZQMjlrLUF0RkZlODZpcVZXNzc1MXpIdXlza2JLYTVMaXZBQ3N1UVFzcS1zZXBCQU50ZHE0UEd3UUdKaHJ0VWNNTXE1ZUxnM0hiNEYyNENjQmwzWjQ1M0hrV2xJa3cxV2lCUFJ4elY?oc=5",
-        "published": "Tue, 03 Nov 2026 11:25:45 GMT",
-        "detected_at": "03.11.2026 11:33"
-      },
-      {
-        "id": "c84675cda6147830",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Cyberangriffe auf Kühlanlagen auch in deutschen Supermärkten",
-        "link": "https://www.tagesschau.de/inland/cyberangriffe-supermarkt-hacker-100.html",
-        "published": "Tue, 03 Nov 2026 12:28:32 +0100",
-        "detected_at": "03.11.2026 11:33"
-      },
-      {
-        "id": "0ace2b9082cff2a0",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Verkehrspolitik: Rechnungshof warnt vor Milliardenrisiken durch Autobahn-Kredite",
-        "link": "https://www.handelsblatt.com/politik/deutschland/autobahn-kredite-rechnungshof-warnt-vor-milliardenrisiken/100266966.html",
-        "published": "Tue, 03 Nov 2026 11:15:46 GMT",
-        "detected_at": "03.11.2026 11:21"
-      },
-      {
-        "id": "9ab39869c865daba",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Ceconomy: EU genehmigt Übernahme von Media Markt Saturn unter Auflagen",
-        "link": "https://www.handelsblatt.com/unternehmen/dienstleister/ceconomy-eu-genehmigt-uebernahme-von-media-markt-saturn-unter-auflagen/100266950.html",
-        "published": "Tue, 03 Nov 2026 10:58:22 GMT",
-        "detected_at": "03.11.2026 11:16"
-      },
-      {
-        "id": "f398d8a91c3b1513",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Energie: IEA erwartet auch 2027 angespannte Lage auf dem Gasmarkt",
-        "link": "https://www.handelsblatt.com/politik/international/energie-iea-erwartet-auch-2027-angespannte-lage-auf-dem-gasmarkt/100266954.html",
-        "published": "Tue, 03 Nov 2026 11:02:48 GMT",
-        "detected_at": "03.11.2026 11:16"
-      },
-      {
-        "id": "27cddd49a27f018f",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Internet of Things: Siemens Simatic IoT2050 angegriffen",
-        "link": "https://www.heise.de/news/Internet-of-Things-Siemens-Simatic-IoT2050-angegriffen-11509246.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T12:09:00+01:00",
-        "detected_at": "03.11.2026 11:16",
-        "is_priority": true,
-        "matched_keywords": [
-          "geg"
-        ]
-      },
-      {
-        "id": "343982591a7aa352",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Affinity kommt für Linux",
-        "link": "https://www.heise.de/news/Affinity-kommt-fuer-Linux-11509360.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T12:02:00+01:00",
-        "detected_at": "03.11.2026 11:16"
-      },
-      {
-        "id": "74885a7289c508a9",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "heise+ | Wissensmanagement: Dokumente auf dem iPad verwalten mit Devonthink To Go 4",
-        "link": "https://www.heise.de/ratgeber/Wissensmanagement-Dokumente-auf-dem-iPad-verwalten-mit-Devonthink-To-Go-4-11498840.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
-        "published": "2026-11-03T12:00:00+01:00",
-        "detected_at": "03.11.2026 11:16"
       }
     ]
   },

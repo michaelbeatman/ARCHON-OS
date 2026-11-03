@@ -1,8 +1,8 @@
 {
-  "version": "v0.3.8.1",
+  "version": "v0.4.0",
   "codename": "Sentinel",
-  "released_at": "2026-11-03 12:35",
-  "previous_version": "v0.3.8",
+  "released_at": "2026-11-03 13:31",
+  "previous_version": "v0.3.8.1",
   "commit": "974ce15b7310",
   "features": [
     "Revisionssicheres GoBD & ISO 27001 Audit-Log mit SHA-256 Hashkette",

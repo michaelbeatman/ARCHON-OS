@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +390,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,12 +410,42 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-03T11:48:36.319243",
+        "last_check": "2026-11-03T12:00:00.208721",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-03T11:48:36.319243",
+    "last_run": "2026-11-03T12:00:00.208721",
     "recent_findings": [
+      {
+        "id": "6f053f344ea37fe3",
+        "target_id": "src-bundesbank",
+        "target_name": "Deutsche Bundesbank (Presse & Daten)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Aufstockung der Bundesobligationen Serie 194 – Tenderergebnis - Deutsche Bundesbank",
+        "link": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxNanozaC1LVW1oRy1wcmFjNEhzSDFSblh0Z3Axb3hNU0ZfYkloTkhudV9LTEJBWG0xUmdHSWZmMlJITVVtWVdBTFJiV0JlNWg5b1lWQklWVkxhTHI5QnJlUEdkN1RETGkzd2psbkZBZzRtVzJJdTZmblowVTVHYl9qcGZuZ1NTcFAxc1VRVEZiaTgtVVBCZTRnSDZMMWlFakJtdV9HbVdqYm9CMXRIbEtCbzdtRDFVaGNKZDdJV2FCWDVlVDRyZ2MxMHlIcDJxc0xRRlYzYUh0U19wUlMzZEluaDJ3OENPUQ?oc=5",
+        "published": "Tue, 03 Nov 2026 11:48:50 GMT",
+        "detected_at": "03.11.2026 12:00"
+      },
+      {
+        "id": "9fb05270e5464ebb",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Digitaler Führerschein kommt Ende November",
+        "link": "https://www.heise.de/news/Digitaler-Fuehrerschein-kommt-Ende-November-11509430.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T12:45:00+01:00",
+        "detected_at": "03.11.2026 12:00"
+      },
+      {
+        "id": "a5a51ac59f1f3d3e",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Humanoide Roboter: Welche sind in Deutschland erhältlich und was kosten sie?",
+        "link": "https://www.heise.de/news/Humanoide-Roboter-Welche-sind-in-Deutschland-erhaeltlich-und-was-kosten-sie-11509312.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T12:42:00+01:00",
+        "detected_at": "03.11.2026 12:00"
+      },
       {
         "id": "57cfe1011e2ef65a",
         "target_id": "src-handelsblatt-politik",
@@ -689,36 +719,6 @@
         "link": "https://www.tagesschau.de/wissen/gesundheit/maenner-gesundheit-102.html",
         "published": "Tue, 03 Nov 2026 11:07:38 +0100",
         "detected_at": "03.11.2026 10:17"
-      },
-      {
-        "id": "3c8a1ab9456beece",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Capacocha-Ritual: Mit diesen Drogen schickten die Inka Kinder in den Opfertod - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMinAFBVV95cUxQdmZJdjhqVmpsMEVwOWstcW0yNkZVdk1IamZlQ2dRUGswRUU0X24zRzYwY0xYUEJ2VmxBUXBHU3FINzBjSUFlUWdjaFhzWURoTWJIa0NaRUFHczVzZE1fMmYzVzNWMFllOFRjUjBtUnJtd3U0cE4xOGtPNjdFNXVMYm5POG9sbi1sYWlPS1IxblBtcmJ1X3BPOHhvcFo?oc=5",
-        "published": "Tue, 03 Nov 2026 10:00:00 GMT",
-        "detected_at": "03.11.2026 10:17"
-      },
-      {
-        "id": "7923d7fc64efdee7",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Energie: Umgerüstete Kohlekraftwerke verteuern den Strom für Verbraucher",
-        "link": "https://www.handelsblatt.com/unternehmen/energie/energie-umgeruestete-kohlekraftwerke-verteuern-den-strom-fuer-verbraucher/100266757.html",
-        "published": "Tue, 03 Nov 2026 09:45:39 GMT",
-        "detected_at": "03.11.2026 10:01"
-      },
-      {
-        "id": "1abc651fbd9edd37",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Gehalt: Einkommensrechner 2026: So viel verdienen Sie im Vergleich",
-        "link": "https://www.handelsblatt.com/politik/deutschland/gehalt-vergleichen-sie-ihr-einkommen-mit-anderen-haushalten/100261943.html",
-        "published": "Tue, 03 Nov 2026 09:54:00 GMT",
-        "detected_at": "03.11.2026 10:01"
       }
     ]
   },

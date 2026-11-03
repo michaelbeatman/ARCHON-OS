@@ -714,12 +714,12 @@ Praxis-Workflow (Schritt für Schritt):
 
 ---
 
-## 8. Decision Engine
+## 8. AI-Boardroom (Decision Engine)
 
-Die Decision Engine (AI Mastermind) ermöglicht strukturierte Vorstandssitzungen, Risikoabwägungen und Meta-Reasoning über C-Level Agententeams.
+Der AI-Boardroom (Decision Engine) ermöglicht strukturierte Vorstandssitzungen, Risikoabwägungen und Meta-Reasoning über C-Level Agententeams.
 Strategische Gremiensitzungen: 3-Tab-Architektur (Übersicht, Debatte, Live-Debatte), 75/25-Split & OpenRouter Live-Pricing ($)
 Kernkonzept & Architektur:
-Das AI Mastermind & Boardroom Studio simuliert hochkarätige Management-, Strategieberatungs- und Gremiensitzungen direkt im Herzen des Betriebssystems. In der Version 0.3.3 wurde das Modul grundlegend auf eine modulare 3-Tab-Architektur (Übersicht, Debatte, Live-Debatte) umgestellt. Statt eine komplexe strategische Weichenstellung einem einzelnen Sprachmodell zu überlassen, erzwingt das Boardroom Studio eine multiperspektivische Debatte: Ein designierter Chairman leitet die Sitzung entlang fundierter Frameworks, während nummerierte Fachagenten-Slots konkrete Analyse-Perspektiven einnehmen. Ein integrierter Red-Team-Challenger unterzieht alle Entwürfe einem ungeschönten Stresstest auf blinde Flecken, bevor der Chairman das verbindliche Board-Memo synthetisiert.
+Das AI-Boardroom Studio simuliert hochkarätige Management-, Strategieberatungs- und Gremiensitzungen direkt im Herzen des Betriebssystems. In der Version 0.3.3 wurde das Modul grundlegend auf eine modulare 3-Tab-Architektur (Übersicht, Debatte, Live-Debatte) umgestellt. Statt eine komplexe strategische Weichenstellung einem einzelnen Sprachmodell zu überlassen, erzwingt das Boardroom Studio eine multiperspektivische Debatte: Ein designierter Chairman leitet die Sitzung entlang fundierter Frameworks, während nummerierte Fachagenten-Slots konkrete Analyse-Perspektiven einnehmen. Ein integrierter Red-Team-Challenger unterzieht alle Entwürfe einem ungeschönten Stresstest auf blinde Flecken, bevor der Chairman das verbindliche Board-Memo synthetisiert.
 Die wichtigsten Steuerelemente & Bereiche im Überblick:
 3-Tab-Architektur (Übersicht, Debatte, Live-Debatte): Der Reiter 'Übersicht' archiviert alle bisherigen Sitzungen in einer durchsuchbaren Historie mit Detail-Popup (Aufgabenstellung & Synthese-Konsens) und Direkt-Sprung ins Transkript. Der Reiter 'Debatte' bildet die ergonomische Arbeitswerkbank im 75/25-Layout. Der Reiter 'Live-Debatte' öffnet sich beim Start als fokussierter Streaming-Dialog zur Echtzeit-Beobachtung des Argumentationsaustauschs.
 Ergonomisches 75/25-Arbeitslayout & Datei-Anhänge: Die linke Spalte (75% Breite) teilt sich 50/50 in die Methodik-Auswahl (34 Frameworks in 7 Kategorien) und die Aufgabenstellung inklusive Datei-Upload für bis zu 5 begleitende Dokumente (PDFs, Bilanzen, Gutachten). Die rechte Spalte (25% Breite, 100% Höhe) bündelt den Chairman und die nummerierten Experten-Slots.

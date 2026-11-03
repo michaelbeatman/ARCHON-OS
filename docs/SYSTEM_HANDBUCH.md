@@ -11,6 +11,11 @@
 ## Inhaltsverzeichnis
 
 - **Vorwort: Was ist Archon OS und wie arbeitet man damit?**
+- **0. Installationshinweise**
+  - 0.1 Systemvoraussetzungen
+  - 0.2 Installation per 1-Click-Installer (setup.bat / setup.ps1)
+  - 0.3 Täglicher Betrieb (start.bat / stop.bat)
+  - 0.4 Installation unter Linux & macOS
 - **1. Operations – Operative Projektsteuerung & Funk**
   - 1.1 Mission Control
   - 1.2 Kanban
@@ -150,29 +155,6 @@
 
 ## Vorwort: Was ist Archon OS und wie arbeitet man damit?
 
-### Schnellstart & 1-Click-Installation (Weg 1)
-
-Archon OS lässt sich auf jedem modernen Rechner (Windows 10/11, macOS, Linux) mit minimalem Aufwand in Betrieb nehmen:
-
-#### 1. Systemvoraussetzungen
-- **Docker Desktop:** Unter Windows mit aktiviertem WSL2-Backend (Linux-Subsystem). Falls noch nicht vorhanden, einfach herunterladen und installieren: [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/).
-- **Hardware-Empfehlung:** Mindestens 8 GB freier RAM und 15 GB Speicherplatz für Docker-Images und lokale SQLite-Datenbanken.
-
-#### 2. Installation per 1-Click-Installer (`setup.bat` / `setup.ps1`)
-- **Unter Windows:** Doppelklick auf die Datei **`setup.bat`** im Hauptverzeichnis (oder Rechtsklick auf `setup.ps1` -> *Mit PowerShell ausführen*).
-- **Automatischer Ablauf des Installers:**
-  1. *Docker-Prüfung:* Erkennt automatisch, ob Docker Desktop installiert ist und läuft. Fehlt Docker, bietet das Skript an, die offizielle Download-Seite im Browser zu öffnen.
-  2. *Initialisierung:* Erstellt notwendige Ordner (`data/`, `logs/`, `.hermes/`) und kopiert bei Bedarf die Standard-`.env`-Konfigurationsdatei.
-  3. *Cluster-Start:* Führt `docker compose up -d` aus und startet die drei Kern-Dienste (`ARCHON-OS` auf Port 8501, `Hermes Core` auf Port 8644, `n8n Automation` auf Port 5678).
-  4. *Healthcheck & Browser-Öffnung:* Prüft die Betriebsbereitschaft des Web-Dashboards und öffnet es automatisch im Standardbrowser unter `http://localhost:8501`.
-
-#### 3. Täglicher Betrieb
-- **Starten:** Ein einfacher Doppelklick auf `start.bat` fährt alle Container hoch und öffnet das Dashboard.
-- **Beenden:** Ein Doppelklick auf `stop.bat` fährt alle Container geordnet herunter und sichert den Datenbankzustand.
-
----
-
-Vorwort: Was ist Archon OS und wie arbeitet man damit?
 Ein Leitfaden für die autonome Wertschöpfung in vernetzten Organisationen
 Wer sich mit Archon OS beschäftigt, blickt nicht auf eine simple Chat-Oberfläche oder ein isoliertes Programmier-Tool. Archon OS ist ein vollwertiges kognitives Betriebssystem für das moderne Unternehmen. Es verbindet 56 spezialisierte Fachagenten, autonome Hintergrunddienste (Daemons), deterministische Workflow-Pipelines und strenge Sicherheits-Gatekeeper zu einer integrierten Arbeitsumgebung. Das erklärte Ziel: Wiederkehrende Grundaufgaben des operativen Alltags vollkommen selbstständig abzuwickeln, während strategische Großaufträge transparent gesteuert, aufgeteilt und überwacht werden.
 Die vier operativen Säulen des Systems im täglichen Einsatz:
@@ -212,6 +194,37 @@ Strg + K (Globale Omnibox): Öffnet die zentrale Befehlszeile, um blitzschnell p
 Alt + S (Visual CSS Live Studio): Aktiviert den In-Place-Inspector, um Farben, Kontraste oder Element-Abstände direkt zur Laufzeit im Browser anzupassen.
 Telegram-Kurzbefehle (/anwalt, /robert): Ermöglicht direkte mobile Fachdelegationen und Statusabfragen direkt vom Smartphone aus.
 
+
+---
+
+## 0. Installationshinweise
+
+Archon OS lässt sich auf jedem modernen Rechner (Windows 10/11, macOS, Linux) mit minimalem Einrichtungsaufwand in Betrieb nehmen:
+
+### 0.1 Systemvoraussetzungen
+- **Docker Desktop:** Unter Windows mit aktiviertem WSL2-Backend (Linux-Subsystem). Falls noch nicht vorhanden, einfach herunterladen und installieren: [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/).
+- **Hardware-Empfehlung:** Mindestens 8 GB freier Arbeitsspeicher (RAM) und 15 GB freier Festplattenspeicher für Docker-Images, lokale Modelle und SQLite-Datenbanken.
+
+### 0.2 Installation per 1-Click-Installer (`setup.bat` / `setup.ps1`)
+- **Unter Windows:** Doppelklick auf die Datei **`setup.bat`** im Hauptverzeichnis (oder Rechtsklick auf `setup.ps1` -> *Mit PowerShell ausführen*).
+- **Automatischer Ablauf des Installers:**
+  1. *Docker-Prüfung:* Erkennt automatisch, ob Docker Desktop installiert ist und läuft. Fehlt Docker, bietet das Skript an, die offizielle Download-Seite im Browser zu öffnen.
+  2. *Initialisierung:* Erstellt notwendige Ordner (`data/`, `logs/`, `.hermes/`) und kopiert bei Bedarf die Standard-`.env`-Konfigurationsdatei.
+  3. *Cluster-Start:* Führt `docker compose up -d` aus und startet die drei Kern-Dienste (`ARCHON-OS` auf Port 8501, `Hermes Core` auf Port 8644, `n8n Automation` auf Port 5678).
+  4. *Healthcheck & Browser-Öffnung:* Prüft die Betriebsbereitschaft des Web-Dashboards und öffnet es automatisch im Standardbrowser unter `http://localhost:8501`.
+
+### 0.3 Täglicher Betrieb
+- **Starten:** Ein einfacher Doppelklick auf `start.bat` fährt alle Container hoch und öffnet das Dashboard.
+- **Beenden:** Ein Doppelklick auf `stop.bat` fährt alle Container geordnet herunter und sichert den Datenbankzustand.
+
+### 0.4 Installation unter Linux & macOS
+```bash
+git clone https://github.com/michaelbeatman/Agentic-Archon-Os.git
+cd Agentic-Archon-Os
+cp .env.example .env
+docker compose up -d
+open http://localhost:8501   # bzw. xdg-open unter Linux
+```
 
 ---
 

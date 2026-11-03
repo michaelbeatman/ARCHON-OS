@@ -3154,3 +3154,154 @@
         clearOpsKanbanSelection();
       }
     });
+
+
+    // =========================================================================
+    // VARIANTE A: KOMMUNIKATION MODE TOGGLE & BOT SCREEN CONTROLLER
+    // =========================================================================
+
+    let currentCommViewMode = "chat"; // "chat" | "screen"
+    let commEventSource = null;
+
+    function setCommViewMode(mode) {
+      currentCommViewMode = mode;
+      const chatView = document.getElementById("ops-comm-chat-view");
+      const screenView = document.getElementById("ops-comm-screen-view");
+      const btnChat = document.getElementById("btn-comm-mode-chat");
+      const btnScreen = document.getElementById("btn-comm-mode-screen");
+      const titleEl = document.getElementById("ops-comm-active-title");
+
+      if (mode === "screen") {
+        if (chatView) chatView.classList.add("hidden");
+        if (screenView) screenView.classList.remove("hidden");
+        if (btnChat) btnChat.className = "px-3 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-1.5 cursor-pointer";
+        if (btnScreen) btnScreen.className = "px-3 py-1 rounded-lg font-bold bg-[var(--card)] text-[var(--foreground)] shadow-xs transition flex items-center gap-1.5 cursor-pointer relative";
+        if (titleEl) titleEl.innerText = "🖥 Hermes Bot Screen (Headless Xfce & Virtual Desktop)";
+        refreshBotScreen();
+      } else {
+        if (chatView) chatView.classList.remove("hidden");
+        if (screenView) screenView.classList.add("hidden");
+        if (btnChat) btnChat.className = "px-3 py-1 rounded-lg font-bold bg-[var(--card)] text-[var(--foreground)] shadow-xs transition flex items-center gap-1.5 cursor-pointer";
+        if (btnScreen) btnScreen.className = "px-3 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-1.5 cursor-pointer relative";
+        if (titleEl) titleEl.innerText = "📡 Gesamt-Funkverkehr aller Agenten";
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function refreshBotScreen() {
+      try {
+        const res = await fetch("/api/operations/bot-screen/status");
+        if (!res.ok) return;
+        const state = await res.json();
+        const banner = document.getElementById("bot-takeover-alert-banner");
+        const reasonEl = document.getElementById("bot-takeover-reason");
+        const badge = document.getElementById("comm-takeover-badge");
+        const urlBar = document.getElementById("bot-screen-url-bar");
+
+        if (urlBar && state.current_url) urlBar.innerText = state.current_url;
+        if (state.takeover_requested) {
+          if (banner) banner.classList.remove("hidden");
+          if (badge) badge.classList.remove("hidden");
+          if (reasonEl) reasonEl.innerText = state.takeover_reason || "Captcha oder 2FA-Schranke erfordert Eingriff";
+        } else {
+          if (banner) banner.classList.add("hidden");
+          if (badge) badge.classList.add("hidden");
+        }
+      } catch (e) {
+        console.warn("Bot screen refresh error:", e);
+      }
+    }
+
+    async function resumeBotTakeover() {
+      try {
+        const res = await fetch("/api/operations/bot-screen/takeover/resume", { method: "POST" });
+        if (res.ok) {
+          const banner = document.getElementById("bot-takeover-alert-banner");
+          const badge = document.getElementById("comm-takeover-badge");
+          if (banner) banner.classList.add("hidden");
+          if (badge) badge.classList.add("hidden");
+          alert("Human Takeover erfolgreich freigegeben! Der Agent setzt seine Arbeit autonom fort.");
+        }
+      } catch (e) {
+        alert("Fehler beim Freigeben des Agenten.");
+      }
+    }
+
+    function solveSimulatedCaptcha() {
+      const cb = document.getElementById("simulated-captcha-check");
+      if (cb) cb.checked = true;
+      const box = document.getElementById("simulated-captcha-box");
+      if (box) {
+        box.className = "p-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 flex items-center justify-between";
+        box.innerHTML = `<span class="text-xs font-bold text-emerald-800 flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i> Verifikation erfolgreich!</span>`;
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+
+    function handleBotScreenClick(e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = Math.round(e.clientX - rect.left);
+      const y = Math.round(e.clientY - rect.top);
+      fetch("/api/operations/bot-screen/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "click", x, y })
+      }).catch(() => {});
+    }
+
+    // =========================================================================
+    // REALTIME SSE STREAM FÜR DEN INTER-AGENTEN FUNKVERKEHR
+    // =========================================================================
+    function initCommRealtimeStream() {
+      if (commEventSource) {
+        commEventSource.close();
+      }
+      try {
+        commEventSource = new EventSource("/api/operations/comm-feed/stream");
+        commEventSource.onmessage = function(e) {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.type === "new_message") {
+              appendRealtimeCommMessage(data);
+              if (data.takeover_requested) {
+                const badge = document.getElementById("comm-takeover-badge");
+                if (badge) badge.classList.remove("hidden");
+              }
+            }
+          } catch (err) {}
+        };
+        commEventSource.onerror = function() {
+          console.warn("[Comm-Feed SSE] Verbindung unterbrochen, erneuter Versuch...");
+        };
+      } catch (err) {
+        console.warn("[Comm-Feed SSE] Nicht unterstützt oder blockiert:", err);
+      }
+    }
+
+    function appendRealtimeCommMessage(item) {
+      const messagesContainer = document.getElementById('ops-comm-messages');
+      if (!messagesContainer) return;
+
+      const card = document.createElement("div");
+      card.className = "p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xs font-sans text-xs flex items-start gap-3 animate-in fade-in duration-150";
+      card.innerHTML = `
+        <img src="${item.author_avatar || '/static/avatars/avatar_001.jpg'}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)] mt-0.5" />
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] mb-1.5">
+            <span class="font-bold text-[var(--foreground)] font-mono">${escapeHtml(item.author_name || item.author_id)}</span>
+            <span class="text-[10px] text-[var(--muted-foreground)] font-mono">${item.timestamp || 'jetzt'}</span>
+          </div>
+          <div class="text-[11.5px] leading-relaxed text-[var(--foreground)] whitespace-pre-wrap select-text">${escapeHtml(item.message || '')}</div>
+          ${item.takeover_requested ? `
+            <div class="mt-2 pt-2 border-t border-rose-500/20 flex items-center justify-between">
+              <span class="text-rose-500 font-bold text-[10.5px]">🚨 Eingriff erforderlich</span>
+              <button onclick="setCommViewMode('screen')" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono font-bold text-[10px] cursor-pointer">
+                🖥 Zum Bot Screen wechseln
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+      messagesContainer.appendChild(card);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }

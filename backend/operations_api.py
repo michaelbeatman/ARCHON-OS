@@ -14,7 +14,7 @@ import subprocess
 import time
 import secrets
 from typing import List, Dict, Optional, Any
-from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File
+from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
@@ -3301,3 +3301,186 @@ def api_download_break_glass_kit():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+# =========================================================================
+# BOT SCREEN & HUMAN TAKEOVER (VIRTUAL DESKTOP INTEGRATION)
+# =========================================================================
+
+_bot_screen_state = {
+    "active": True,
+    "session_id": "hermes-desktop-main",
+    "display": ":99",
+    "resolution": "1920x1080",
+    "agent_name": "Hermes Web & Desktop Agent",
+    "current_url": "https://dashboard.service.internal",
+    "takeover_requested": False,
+    "takeover_reason": "",
+    "takeover_timestamp": None,
+    "last_interaction": None,
+    "mouse_control_enabled": True
+}
+
+@router.get("/comm-feed/stream")
+async def stream_comm_feed(request: Request):
+    """
+    Server-Sent Events (SSE) Stream für Realtime-Inter-Agenten-Kommunikation.
+    Pusht neue Nachrichten aus kanban.db sofort in den Client ohne Polling.
+    """
+    from fastapi.responses import StreamingResponse
+    import asyncio
+
+    async def sse_event_generator():
+        last_seen_time = datetime.datetime.now().isoformat()
+        # Initial handshake
+        yield f"data: {json.dumps({'type': 'init', 'timestamp': last_seen_time, 'message': 'Comm-Feed Stream verbunden'})}\n\n"
+
+        while True:
+            if await request.is_disconnected():
+                break
+
+            try:
+                conn = _get_kanban_connection()
+                cursor = conn.cursor()
+                # Prüfe auf neue Events seit last_seen_time
+                cursor.execute("""
+                    SELECT e.id, e.task_id, e.kind, e.payload, e.created_at, t.title as task_title, t.assignee
+                    FROM task_events e
+                    LEFT JOIN tasks t ON e.task_id = t.id
+                    WHERE e.created_at > ?
+                    ORDER BY e.created_at ASC
+                    LIMIT 20
+                """, (last_seen_time,))
+                new_events = cursor.fetchall()
+                profiles = _load_profiles_map()
+
+                for r in new_events:
+                    row = dict(r)
+                    last_seen_time = max(last_seen_time, row["created_at"])
+                    payload_data = {}
+                    try:
+                        payload_data = json.loads(row["payload"])
+                    except Exception:
+                        pass
+
+                    kind = row.get("kind") or "event"
+                    author_id = payload_data.get("author") or "commander"
+                    prof = profiles.get(author_id, {})
+                    author_name = prof.get("name") or ("Commander (Leitstand)" if author_id == "commander" else author_id)
+                    author_avatar = prof.get("avatar") or ("/static/avatars/avatar_001.jpg" if author_id == "commander" else _get_fallback_avatar(author_id))
+
+                    item = {
+                        "type": "new_message",
+                        "id": f"event_{row['id']}",
+                        "timestamp": row["created_at"],
+                        "author_id": author_id,
+                        "author_name": author_name,
+                        "author_avatar": author_avatar,
+                        "target_id": payload_data.get("target") or row.get("assignee"),
+                        "task_id": row["task_id"],
+                        "task_title": row.get("task_title") or "System",
+                        "kind": kind,
+                        "message": payload_data.get("message") or str(payload_data),
+                        "takeover_requested": kind == "human_takeover_requested"
+                    }
+                    yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+                conn.close()
+            except Exception as e:
+                pass
+
+            await asyncio.sleep(1.2)
+
+    return StreamingResponse(
+        sse_event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+@router.get("/bot-screen/status")
+def get_bot_screen_status():
+    """Liefert den aktuellen Status des virtuellen Desktops & Human Takeover."""
+    return _bot_screen_state
+
+class TakeoverRequestModel(BaseModel):
+    reason: str
+    url: Optional[str] = None
+    agent_name: Optional[str] = None
+
+@router.post("/bot-screen/takeover/request")
+def request_human_takeover(req: TakeoverRequestModel):
+    """Wird von einem Agenten ausgelöst, wenn ein Captcha oder 2FA-Schranke erkannt wird."""
+    _bot_screen_state["takeover_requested"] = True
+    _bot_screen_state["takeover_reason"] = req.reason
+    _bot_screen_state["takeover_timestamp"] = datetime.datetime.now().isoformat()
+    if req.url:
+        _bot_screen_state["current_url"] = req.url
+    if req.agent_name:
+        _bot_screen_state["agent_name"] = req.agent_name
+
+    # Event in comm-feed eintragen
+    conn = _get_kanban_connection()
+    try:
+        now_iso = datetime.datetime.now().isoformat()
+        cur = conn.cursor()
+        payload = json.dumps({
+            "author": "bot_desktop",
+            "message": f"🚨 Human Takeover angefordert: {req.reason} ({_bot_screen_state['current_url']})",
+            "target": "commander",
+            "broadcast": True,
+            "takeover_requested": True,
+            "url": _bot_screen_state["current_url"]
+        }, ensure_ascii=False)
+        cur.execute("""
+            INSERT INTO task_events (task_id, kind, payload, created_at)
+            VALUES ('bot_desktop', 'human_takeover_requested', ?, ?)
+        """, (payload, now_iso))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"status": "takeover_active", "state": _bot_screen_state}
+
+@router.post("/bot-screen/takeover/resume")
+def resume_from_human_takeover():
+    """Wird vom Nutzer per Klick auf 'Agent fortsetzen' aufgerufen."""
+    _bot_screen_state["takeover_requested"] = False
+    _bot_screen_state["takeover_reason"] = ""
+    _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
+
+    conn = _get_kanban_connection()
+    try:
+        now_iso = datetime.datetime.now().isoformat()
+        cur = conn.cursor()
+        payload = json.dumps({
+            "author": "commander",
+            "message": "✅ Human Takeover abgeschlossen: Nutzer hat Freigabe erteilt. Agent setzt Ausführung fort.",
+            "target": "all",
+            "broadcast": True,
+            "takeover_resolved": True
+        }, ensure_ascii=False)
+        cur.execute("""
+            INSERT INTO task_events (task_id, kind, payload, created_at)
+            VALUES ('bot_desktop', 'human_takeover_resolved', ?, ?)
+        """, (payload, now_iso))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"status": "resumed", "state": _bot_screen_state}
+
+class ScreenInteractionModel(BaseModel):
+    action: str = "click"  # click, key, scroll
+    x: Optional[int] = None
+    y: Optional[int] = None
+    text: Optional[str] = None
+
+@router.post("/bot-screen/interact")
+def interact_with_bot_screen(action_data: ScreenInteractionModel):
+    """Nimmt Benutzerinteraktionen (Klick, Tasteneingabe) entgegen."""
+    _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
+    return {"status": "success", "echo": action_data.dict()}

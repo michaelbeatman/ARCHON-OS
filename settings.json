@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,8 +390,8 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
-        "last_status": "OK (0 Einträge)"
+        "last_check": "2026-11-03T09:15:09.183692",
+        "last_status": "OK (8 Einträge)"
       },
       {
         "id": "src-tagesschau",
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,12 +410,252 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-03T08:45:12.170022",
+        "last_check": "2026-11-03T09:15:09.183692",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-03T08:45:12.170022",
+    "last_run": "2026-11-03T09:15:09.183692",
     "recent_findings": [
+      {
+        "id": "e50b9cd576cd9abb",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Reform: Wie viel Netto bleibt Ihnen 2027 vom Gehalt?",
+        "link": "https://www.handelsblatt.com/politik/deutschland/regierung-was-die-reformplaene-fuer-ihr-nettogehalt-2027-bedeuten/100260104.html",
+        "published": "Tue, 03 Nov 2026 09:06:00 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "00c3f8baaad28a00",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Robert Habeck: „China hat den Freihandel zu einer Falle gemacht“",
+        "link": "https://www.handelsblatt.com/politik/deutschland/robert-habeck-china-hat-den-freihandel-zu-einer-falle-gemacht-03/100265339.html",
+        "published": "Tue, 03 Nov 2026 08:53:00 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "7c498c2011a5bea5",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ Bundespolitik +++: Merz: Anti-Enteignungs-Gesetz ist fast fertig",
+        "link": "https://www.handelsblatt.com/politik/deutschland/bundespolitik-merz-anti-enteignungs-gesetz-ist-fast-fertig/100137034.html",
+        "published": "Tue, 03 Nov 2026 08:39:59 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "c7634ed6545d7582",
+        "target_id": "src-bundesbank",
+        "target_name": "Deutsche Bundesbank (Presse & Daten)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Pressenotiz Ausschreibung Multi-ISIN-Auktion Bundesanleihen - Deutsche Bundesbank",
+        "link": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxOVmhZWk52UzYxU2p5U2xLZFZ0a1lrRlB3QkFEdDBIRndFUjBIVWt1bm15T21va3M2M0l1U2ctaF9mbnBONDZ2X2gxYmlCdmwwdTlXaFdoSVlXWGRfdHlFWUhvVGUyc0hpZm03UEtCQ3UwcXBxRnMyREJRMGJnQWt4UVRFb1E0ZmgxVWRmYUhVM0FOUEpEbzlfalpIYVRZS1JmTVdJcXJSVGdWbEZKSjYzVEVrZ3A2VTRMX0tuQ1NHVjUyVVJKUW5zSnZ4Y0tkTWYyQkNpWXdiNnJiU19pNlFVdHpxeVQ?oc=5",
+        "published": "Tue, 03 Nov 2026 09:06:56 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "229126e59a8f8657",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "DAX 40-Papier BMW-Aktie: So viel Verlust hätte ein BMW-Investment von vor 3 Jahren eingebracht - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxPRDU2ZU15MDBnWEx2VXVyT0NsODItX2lhMlNVZ2pySnk2NlJaanBDNzJ3T3dLeHYzSUdSS0o2V2VNcXdhdndlOHkwYTdpSGhmdVh4SmhLNkdfZHNINGVVT2lUVkRYaHNobXZ2ZTRzbEk1cWxIcWxfU3hZSUhFYmFpNjl4elZlQlAtd2FxYnRiZUJoTDRkMm5KMUVwajVEb0ZZNlJINGEzRGdRTW5DQm5oektxcnNGQTFlekk1TER5dDJwSGk2dlpCUHBsdGw0c0VDb1BPLUZqNnYwU1E2d3c?oc=5",
+        "published": "Tue, 03 Nov 2026 09:05:48 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "2fadfdda34ae8870",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "SPI-Titel CPH Group-Aktie: So viel Verlust hätte eine Investition in CPH Group von vor einem Jahr bedeutet - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMi7gFBVV95cUxPUDdwSUdKc3VnVTVfZWpPM3VyQlJVX3NxNkdJMUpTVFJtZmhtQXk4YkNOOVptTHl2Y25Odm1YXzFYMm9kS0ZaVWtFa3pvVDkwNUxUVmNoSTZaR2xPSG80LWxWVFNqcFFMY3cwTDVUZFNld1ZnRHo0WXNNN1dmMXU3UmUxWEJzUmpGc0NJcEZzaVZZNThBUGpISjJqd1Y3RFVNel9JTllSeUt0bER1cjJkMWF1NFFPdUVadVVndURpM001ZzNZQUtKaU5zZVVYOWNDZW1qczVXazkxUGRCQUxPcVEyQVY1VW90UkFxUW53?oc=5",
+        "published": "Tue, 03 Nov 2026 09:00:44 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "e12629b05a0ac196",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "DAX 40-Titel Scout24-Aktie: So viel Verlust hätte ein Scout24-Investment von vor einem Jahr eingefahren - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMi6gFBVV95cUxNMlJ1NTk5OHV6QjdLaU1Qd3BnV1Q2ck9ONzRrY3Y0SFp6Y0tBZ2E1bXV3M1VBeVlqQzFHU3VxcDhadkJPWG9ET0syZEVtYUJpVE5LUVp5N1FUY29Wa0Y5NjB4M1NJWWN0ZE5jTnItWjNybmh1dVFOeFhWenQwcmlJbDh2ZW1SMWRjS1dXQm9JMWRvNHF5Sl9GZUdxZE41MEdya0xGQXFKbnF1UWFsVndLbXQ3cGgyYmpjMmFZWHZsV2FXcWNFX1ZWTW1kMFlQNzhydXFDc2wzQWJkWFE0UEc5ZG9RTHZQT05GVWc?oc=5",
+        "published": "Tue, 03 Nov 2026 09:02:19 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "0466c8b0243bb6a4",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "SPI-Papier BELIMO-Aktie: So viel hätte eine Investition in BELIMO von vor 10 Jahren abgeworfen - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxNR3IwVXZ6V2o2cjNneEROTERpeGpUWmNiOE5UU3Y0RmdGY1dHbzhZX2pLYzZKT3VMNHFlWUVPTkRkZ2NkVWhLRW1uVGZoaVRuTF9QUWVncWNGR3NEanFSaWhXeTJQeHJETUlJa3hXTkNtS3VqWHdlTXluR2gzRldTWm1fVE1laFg1WnJjUnZnXzZoVERJcWZzSTRiMnVjQVlPUnJrS2poRmNoWG1FYUxvN3dUY3ZWd3JOZTFwdDFleXVqZFh5Y21idnI3YWpvQ0piTFdDNDRWNWRweWNvWUE?oc=5",
+        "published": "Tue, 03 Nov 2026 09:02:41 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "f46b88537e1c7535",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "MDAX-Papier LANXESS-Aktie: So viel Verlust hätte eine Investition in LANXESS von vor 10 Jahren bedeutet - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMi6gFBVV95cUxQdlZPRGl2WllZbURyOUVFd2JBRFB1Q1V4aFlJYm9RNXI0UnRUSlZrOWl1MEZ6UmZHcXhYWEszUEotNi1DbURkdWVZWVF5bDN0RTNxNjZ5VGJrNzdCNTRfTXJPaDZ0dXprakp1TWdBcjhsVHQxNWk3WUdCWmdmdV9IR3IyMl95Y3JWcnZGNE1CLWFkbi1fWG0xR3BWdDhmelBQX0Y4RGVhVmR2TW1IalJKSER3UG5HSFFEODFZb0huSjRtdDVMLTlmVWVqS3YwUWtwb0xSYmZHYUg4SnMzNzQ5SVFFa2JWSEZULVE?oc=5",
+        "published": "Tue, 03 Nov 2026 09:03:47 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "56b0322e8f7ca627",
+        "target_id": "src-finanzen-boerse",
+        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "SPI-Titel Zehnder A-Aktie: So viel Verlust hätte eine Zehnder A-Investition von vor 5 Jahren eingebracht - Finanzen.net",
+        "link": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQX0RreHlVWmdWSUtjbWpleXZNNVotaHdrYTZpek81TzR3VzBJb2N5eFFBSjh2SnNTOTRvRjhiLVhpQXk1WjdJeXpiZDVnMUtkNjFQTTl0SERfUGlWNkJiUTdoeTZNOWJQT2tPUFh2MDBGV3FER090T0F5a1dnWlVJbTNnS1R2V3ZJUHVpTHE0dmtmUnAxQVFkZ0EzSDNGb0ZlVG1nbk5kM2NvOUNDQWZLdFlGaEZVNEZNUFVkZDdXTF9VeW45TWNvVE5yeXlIS2ZETGFqOGdMRi0tcFQzZ2hxUTVJQ3hPa1g3UkRj?oc=5",
+        "published": "Tue, 03 Nov 2026 09:00:44 GMT",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "d17b209b9b563372",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise-Angebot: iX-Workshop: Sichere Softwareentwicklung – Schwachstellen erkennen und vermeiden",
+        "link": "https://www.heise.de/news/iX-Workshop-Sichere-Softwareentwicklung-Schwachstellen-erkennen-und-vermeiden-11492992.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T10:00:00+01:00",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "d0002d9bc7d63059",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Android-Patchday: Kritische Lücken ermöglichen Angriffe ohne Nutzerinteraktion",
+        "link": "https://www.heise.de/news/Android-Patchday-Kritische-Luecken-ermoeglichen-Angriffe-ohne-Nutzerinteraktion-11508886.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T09:59:00+01:00",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "e33f659913270636",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Widerstandsfähiger weicher Flugroboter fliegt nach Kollisionen einfach weiter",
+        "link": "https://www.heise.de/news/Widerstandsfaehiger-weicher-Flugroboter-fliegt-nach-Kollisionen-einfach-weiter-11508870.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T09:50:00+01:00",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "9cec885e892416d4",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Astragon Development: Eines der ältesten deutschen Spielestudios schließt",
+        "link": "https://www.heise.de/news/Astragon-schliesst-sein-Entwicklerstudio-Aus-fuer-Seafarer-Macher-aus-Hamm-11508904.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T09:45:00+01:00",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "df993204eb4a66d6",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Schaeffler streicht 3460 Stellen und schließt vier deutsche Standorte",
+        "link": "https://www.heise.de/news/Schaeffler-streicht-3460-Stellen-und-schliesst-vier-deutsche-Standorte-11508878.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T09:41:00+01:00",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "61310a4fcb8a7ccf",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "A Generalized Sparse Fuzzy Clustering Framework with Automated Cluster Cardinality Estimation Ability",
+        "link": "https://arxiv.org/abs/2611.00159",
+        "published": "Tue, 03 Nov 2026 00:00:00 -0500",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "77cf0ff0d935775d",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "Learning to bid and bundle: a posterior-sampling agent for online retail",
+        "link": "https://arxiv.org/abs/2611.00165",
+        "published": "Tue, 03 Nov 2026 00:00:00 -0500",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "5a5f9630f94f2c01",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "Early Stopping in Large Reasoning Models: A Survey and Empirical Audit of Efficiency and Reliability",
+        "link": "https://arxiv.org/abs/2611.00166",
+        "published": "Tue, 03 Nov 2026 00:00:00 -0500",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "0e618bada76f8efe",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "PatchScout: Thematic Web Data Collection via Information Foraging",
+        "link": "https://arxiv.org/abs/2611.00169",
+        "published": "Tue, 03 Nov 2026 00:00:00 -0500",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "2af8df9b3ff0d6a9",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "Reimagining Text-to-SQL: A Survey of Large Language Model Architectures and Strategies",
+        "link": "https://arxiv.org/abs/2611.00171",
+        "published": "Tue, 03 Nov 2026 00:00:00 -0500",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "9ed32d5533f25541",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "AuroraWorld: Structured 4D World Modeling for Exo-to-Ego Video Generation in Robot Manipulation",
+        "link": "https://arxiv.org/abs/2611.00177",
+        "published": "Tue, 03 Nov 2026 00:00:00 -0500",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "c00b4c5a3bf6d69c",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "Neurons Are All You Need",
+        "link": "https://arxiv.org/abs/2611.00186",
+        "published": "Tue, 03 Nov 2026 00:00:00 -0500",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "5ccd220f1a20db8a",
+        "target_id": "src-arxiv-ai",
+        "target_name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "title": "MemU-Bench: Benchmarking GUI Agents on Long-Horizon User Interactions",
+        "link": "https://arxiv.org/abs/2611.00191",
+        "published": "Tue, 03 Nov 2026 00:00:00 -0500",
+        "detected_at": "03.11.2026 09:11"
+      },
+      {
+        "id": "d3c2230cad41a1f5",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Kahlschlag bei Schaeffler: Stellenabbau und Standortschließungen",
+        "link": "https://www.tagesschau.de/wirtschaft/unternehmen/schaeffler-154.html",
+        "published": "Tue, 03 Nov 2026 10:02:12 +0100",
+        "detected_at": "03.11.2026 09:11"
+      },
       {
         "id": "9945d13753a1f0fc",
         "target_id": "src-handelsblatt-top",
@@ -479,246 +719,6 @@
         "matched_keywords": [
           "geg"
         ]
-      },
-      {
-        "id": "d66e7036c259a4f0",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Private Krankenversicherung: Höhere Beiträge für Privatversicherte: So stark unterscheiden sich die Kosten bei den Anbietern",
-        "link": "https://www.handelsblatt.com/politik/deutschland/versicherung-diese-beitragserhoehungen-erwarten-privatversicherte-2027/100263445.html",
-        "published": "Tue, 03 Nov 2026 08:13:00 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "3de2ae85634c2c8e",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "+++ Ukraine-Krieg +++: Nächste Woche laut USA Verhandlungen mit Ukraine und Russland",
-        "link": "https://www.handelsblatt.com/politik/international/ukraine-naechste-woche-laut-usa-verhandlungen-mit-ukraine-und-russland/27982126.html",
-        "published": "Tue, 03 Nov 2026 08:07:58 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "09dd95bd4dc759cd",
-        "target_id": "src-bundesbank",
-        "target_name": "Deutsche Bundesbank (Presse & Daten)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Pressenotiz Ankündigung Multi-ISIN-Auktion Bubills - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxPTFV5ZEFNdXc0TEVBQjJnakpOWFp0STBZOFNjLW5JdzBwRGVYd3VUUmxpcUxNeVNkT3FtajNjV25LZF93WkYweVlYYkxsc2Z6b0JGTTNCeGYxbEM2X1dwV3VMbjlaNVF5Ym5ZUTF1Qm5kRFFrNzJJUF9NWU9mbUt0S3BJbE9sSkoySGlmLWUzMEs4ZlE1bjlQQnJQYXBQQ0tNeGVMQXN6RE05ZlFYYnlaMEhfZnVuMUpuYkZQS1hlVDFUc1NodV9jNUk1Y3FPbm9Ja3dvbU1vRWdUWVRlMC1XYWlmWQ?oc=5",
-        "published": "Tue, 03 Nov 2026 08:40:02 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "1ebb1d3296ff72e7",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "DAX - Innenstäbe als Taktgeber - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMihwFBVV95cUxQVWg1aE1oamZaQjQ0ZFppc0JiUE56TkpmT1RaSlBrMTBSRGlwb1BWSFJZMEhRODZUT0ZKb3hKMHQ4UG1wYzltUTVYZmpHUmIxOGlSS3EzNUk5dmYzYU1CTHBvOEpac29BZ3lHWVF4cE1XTlcxSjlxLW84d1NreEdrSS0tVG5nUHM?oc=5",
-        "published": "Tue, 03 Nov 2026 07:49:09 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "cd67cdd75114126e",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "DAX - Innenstäbe als Taktgeber - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMijgFBVV95cUxPS3NycnhNbm4yYWNjaVRFN0lQMXlLSjBPOHR6NmY3dGNwdm9EVURGbi1rclBvRThneUVRcnBBTnlHWUdzNk9jZUlfbGdhUWx0VWgwWHVZMHpDdXFMblNLNkw0VWJHZUxUR2FReXRhV1U1NFd6QW1qNnBUMmZNdEZmNVlvTnRsZUJfMUZsc0RB?oc=5",
-        "published": "Tue, 03 Nov 2026 07:49:09 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "159555201a450a48",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Handel in Frankfurt: DAX beginnt die Dienstagssitzung im Minus - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMisgFBVV95cUxNaUd5M2NxQjZ1LUl1bjF6V3IxdEU5Mldid2N6Q0Q4Z293MHg0YUVkaEJnMzIyMXdpdE1lMFNIT3hTY05Oa244dy1jbzMtZnhvcGxra2R4QS03Zlp4bFRqTThPbXhtY2Qxem83NVBTbjFOeDBFSW50bWk2TW00QVJaYm94WEJvcnNhRXZqZUxxRkM3Y0ZZSTd6VW1yWjZJM0pDb2ZJeUlrQVBocVpoWkJEZE93?oc=5",
-        "published": "Tue, 03 Nov 2026 08:27:41 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "beaa62afe7e9f335",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "DAX – Vorbörslich schwächer - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxQcmpuNlczYkRTZkFOam5NY2wwUzBHclRuY0ROTWlIM0tIRkltcjVHSmJsTDFpX2RORGxOdFZUM0J0QVhKNjFXdFpNRVM2Q0dzbWJzUU5oS3lzTHRYLUhHdm9fM0t6aC1qYTVLMDFTQWpLVUFsOGdtcG9sSXZVY2JSMjQ1V0gwZFhLMk1n?oc=5",
-        "published": "Tue, 03 Nov 2026 08:30:00 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "bccd52e1843d5e9b",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Schwacher Handel in Frankfurt: LUS-DAX verbucht zum Start Abschläge - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMiugFBVV95cUxNYUZUdnh3Mk9xR2JKZ3M5TzhGMkhySUJ4VlJ5N1JGcEdhVGVGMEhwcjlHUnVIVGEwcEsxeFg4U1NYRVptc09FV3VIamw5RGFlSkFXb0JUcXRiUC1NeFhhdDBucUczaVVJbmluV01sTjVpREVBVzd6UXZ4SHhaYXpJOUI5bElwZ21EX2s1TU1CRGlKZkVwcUdMSVltNWVBTTRuZ3VYSEJGX0lURHFiR2NwcnhnOFJmX3hmN0E?oc=5",
-        "published": "Tue, 03 Nov 2026 08:28:03 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "fe2c0fa2c5e946f9",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Deka DAX® ETF im Minusbereich - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMijAFBVV95cUxPc0xpcmlGTC1NUG1rUS1KZVo5U0tLS2o5OXRSaTlndGdjamY4VXB6WUVqM18xWTc5RkRQWXVFZVRLOUhRZXRrR3hhcHVpMVhKbTdvQTR0OTFRLTdRbmR0a3I5cGVVMzFQNzZLcWc1TEUxTUhBMEhEQUt1NFlHVGllazZXbS1pSVkxMFBHOQ?oc=5",
-        "published": "Tue, 03 Nov 2026 08:09:03 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "aa7d0eb87332d68d",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Amundi Core DAX ETF fällt - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMilgFBVV95cUxOaU5FdjVFQmdOVnpXTnVJRi01Sy1tM25HaXQ0VlgtaUVPX2pqTGYwUTVTQlVfQ2VBV0plZ3VSRU0yWUl0UHVuYmJkVkg3VmFLcjNDcHFKWjh4Qm11bWNLUzZGQ2x3ZmxRclNyZ3dKeEE5dUk5a1NkYWJsOHM4RTZKdUFSdENiN3ZqN2xnMHRaYTFRYkJPTkE?oc=5",
-        "published": "Tue, 03 Nov 2026 08:09:03 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "771545c99607f01d",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Meta Quest 2: Meta stellt Entwicklung neuer Systemfunktionen ein",
-        "link": "https://www.heise.de/news/Meta-Quest-2-Meta-stellt-Entwicklung-neuer-Systemfunktionen-ein-11508836.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T09:19:00+01:00",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "a182bb2c44919c23",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Electra integriert Mercedes-Schnellladeparks und öffnet Netz für MB.Charge",
-        "link": "https://www.heise.de/news/Electra-integriert-Mercedes-Schnellladeparks-und-oeffnet-Netz-fuer-MB-Charge-11508156.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T09:01:00+01:00",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "280e990c17079790",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "heise+ | Vom Testanalysten zum Agententeam: Qualitätssicherung mit klaren Leitplanken",
-        "link": "https://www.heise.de/hintergrund/Vom-Testanalysten-zum-Agententeam-Qualitaetssicherung-mit-klaren-Leitplanken-11502111.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
-        "published": "2026-11-03T09:00:00+01:00",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "3b52e48256a931cd",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Yvonne Bajela is bringing $17M in fresh capital to Europe’s startup scene",
-        "link": "https://techcrunch.com/2026/11/03/yvonne-bajela-is-bringing-17m-in-fresh-capital-to-europes-startup-scene/",
-        "published": "Tue, 03 Nov 2026 08:01:00 +0000",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "e3c643fc67062769",
-        "target_id": "src-techcrunch",
-        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
-        "category": "Technologie & KI",
-        "title": "Apple Watch’s AI features for rewinding and recapping conversations begin beta testing",
-        "link": "https://techcrunch.com/2026/11/02/apple-watchs-ai-features-for-rewinding-and-recapping-conversations-begin-beta-testing/",
-        "published": "Tue, 03 Nov 2026 07:20:00 +0000",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "45210ce8934ba981",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Starkes iPhone-Geschäft sorgt für Rekordumsatz bei Apple",
-        "link": "https://www.tagesschau.de/wirtschaft/unternehmen/apple-rekordumsatz-100.html",
-        "published": "Tue, 03 Nov 2026 09:13:13 +0100",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "a1b2f54e95df78ae",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Midterms: So läuft der Wahltag in den USA ab",
-        "link": "https://www.tagesschau.de/ausland/amerika/midterms-ablauf-100.html",
-        "published": "Tue, 03 Nov 2026 09:06:22 +0100",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "64ba98dd7485a053",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Bilger will sogenannte Handy-Blitzer bundesweit einführen",
-        "link": "https://www.tagesschau.de/inland/bilger-handy-blitzer-100.html",
-        "published": "Tue, 03 Nov 2026 08:39:12 +0100",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "fd7cd1eeab4d2406",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Was Polens Wirtschaft boomen lässt",
-        "link": "https://www.tagesschau.de/wirtschaft/weltwirtschaft/polen-boom-wirtschaftswunder-100.html",
-        "published": "Tue, 03 Nov 2026 08:23:57 +0100",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "ce14a77d5c408c90",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Persönlichkeit: Profile von Hochsensiblen offenbaren Widersprüche - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMikAFBVV95cUxPb0k0ak44dHp2N1l5NUIyQW0ySlBXeTNCM25fQmtUMDZ0Q3dxUmp6anAxNGZ3eFJ2aFRJZmVXT0YyRkgybVRxbjlSOHVyZjZMX2lsSUpzQzM5My1yOXZ2ajVtUHVuMUw4cTZ0LVR4OVAwbjFGM1U1d09qekI4WWpqQnpvQ2lvQ3pJd3RYbElTaEI?oc=5",
-        "published": "Mon, 02 Nov 2026 11:30:55 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "afabde011329a943",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Wie gesund ist mein Gehirn? - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxPWU5aWjNWV1dKRmhPNXh3T0YtQU96MlJWOU1pNmxQQk5FQXA0VUprazZiZDNhMFYyb3BGYU9XbmYwV2VJTld5a3F6M2ZhZlBDZjFPZW5HVkJ4RU8ta0VNbjJpVnNsTkhJSmdRRmlBWWgyUC04RHdrdDFFYzZic05mY1JXODdFQi0zY1lnSmFTbXgtcWtDYlMwYW9pTDVtLUFPTkh0Nm0ya3VtQ2JLdERMSTRnOFRybkJL?oc=5",
-        "published": "Tue, 03 Nov 2026 07:02:37 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "e4dac8fbe2be576a",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Hirnentwicklung: Das Gehirn entsorgt vor der Geburt Milliarden Nervenzellen - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMilgFBVV95cUxPTDB6MEhtLUF3dlItLXpadXZ2X0U4TG1rLWRHd0RWTDJfSVF4MUxCajVsRmNvRXd0VUl4NXBWQnRCX1BGcDFmdWZ6dHk2WnQ0V2l3NU56Q1lFZ0l0cjgtaE1IeW5QRWt0VHkzaHFaTkNqcXlNSUdfcHF0bWE3dDRDbll1b3hGb21SZmI3Y2ZrZnJoX3l6Rnc?oc=5",
-        "published": "Tue, 03 Nov 2026 08:00:00 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "d963f0b1b61d9d29",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Nichtlokalität: Erste Schritte zum Quanteninternet - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMilwFBVV95cUxNbmp6d29qUGZaRmNpQ3lOWWZabk9TQk0yNV9KU0t3TkZadEJhbTloS3NTdHp3ZEtWSzJyeUEtUEpuMi1MVHdCUEFEYVBVVEtHV090bGsxU3hWek1HcUNLaHlTOXZ3V1E1TVpOYzJ4dWN1V0dBc21TeVgzSHVwS216QUs0WU04R1pkT0N4OVNpVnQzRnRHVzV3?oc=5",
-        "published": "Tue, 03 Nov 2026 07:12:49 GMT",
-        "detected_at": "03.11.2026 08:45"
-      },
-      {
-        "id": "94fc64fe8645d2dd",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Industrie: Schaeffler baut Tausende Stellen in Deutschland ab",
-        "link": "https://www.handelsblatt.com/unternehmen/industrie/industrie-schaeffler-baut-tausende-stellen-in-deutschland-ab/100266684.html",
-        "published": "Tue, 03 Nov 2026 06:55:00 GMT",
-        "detected_at": "03.11.2026 07:10"
       }
     ]
   },

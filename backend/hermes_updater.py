@@ -252,12 +252,69 @@ def check_hermes_updates(force_refresh: bool = False) -> Dict[str, Any]:
     return result
 
 
+def recreate_container_with_new_image(docker_cli: DockerSocketClient, container_name: str, new_image: str) -> Tuple[bool, str]:
+    """
+    Erstellt den Docker-Container atomar mit dem neuen Image neu:
+    1. Konfiguration des bestehenden Containers sichern
+    2. Alten Container stoppen & umbenennen (hermes_old_backup)
+    3. Neuen Container aus neuem Image erstellen
+    4. Neuen Container starten
+    5. Alten Backup-Container löschen (bei Fehler automatisches Rollback)
+    """
+    c_data = docker_cli.get_json(f"/containers/{container_name}/json")
+    if not c_data:
+        return False, f"Container '{container_name}' existiert nicht."
+
+    config = c_data.get("Config", {})
+    host_config = c_data.get("HostConfig", {})
+    net_config = c_data.get("NetworkSettings", {}).get("Networks", {})
+    was_running = c_data.get("State", {}).get("Running", False)
+
+    # 1. Stoppen
+    if was_running:
+        docker_cli.post(f"/containers/{container_name}/stop?t=5")
+
+    # 2. Umbenennen als Backup
+    backup_name = f"{container_name}_old_backup"
+    # Sicherstellen, dass kein altes Backup im Weg ist
+    docker_cli._request("DELETE", f"/containers/{backup_name}?v=false")
+    docker_cli.post(f"/containers/{container_name}/rename?name={backup_name}")
+
+    # 3. Create Payload mit neuem Image
+    create_body = {
+        "Image": new_image,
+        "Cmd": config.get("Cmd"),
+        "Env": config.get("Env"),
+        "Entrypoint": config.get("Entrypoint"),
+        "WorkingDir": config.get("WorkingDir"),
+        "Labels": config.get("Labels"),
+        "HostConfig": host_config,
+        "NetworkingConfig": {
+            "EndpointsConfig": net_config
+        }
+    }
+
+    status, resp = docker_cli.post(f"/containers/create?name={container_name}", body=json.dumps(create_body).encode("utf-8"))
+    if status in (200, 201):
+        if was_running:
+            docker_cli.post(f"/containers/{container_name}/start")
+        # Altes Backup löschen
+        docker_cli._request("DELETE", f"/containers/{backup_name}?v=false")
+        return True, f"Container '{container_name}' erfolgreich mit Image {new_image} neu instanziiert."
+    else:
+        # Rollback: Altes Backup wieder aktivieren
+        docker_cli.post(f"/containers/{backup_name}/rename?name={container_name}")
+        if was_running:
+            docker_cli.post(f"/containers/{container_name}/start")
+        return False, f"Fehler bei Neu-Instanziierung ({status}): {resp[:200]}"
+
+
 def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> Dict[str, Any]:
     """
     Führt das Hermes Agent Core Update aus:
     1. Zieht das neueste Docker Image von Docker Hub (nousresearch/hermes-agent:latest)
     2. Kennzeichnet/Taggt das Image als hermes-agent-plus:latest
-    3. Startet den hermes-Container neu, damit die neue Version aktiv wird
+    3. Erstellt den hermes-Container atomar mit dem neuen Image neu
     """
     t0 = time.time()
     docker_cli = DockerSocketClient()
@@ -295,30 +352,21 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
     except Exception as e:
         log_messages.append(f"Tagging-Hinweis: {e}")
 
-    # Schritt 3: Container Neustart
-    restarted = False
+    # Schritt 3: Container atomar neu instanziieren (damit das neue Image greift)
+    recreated = False
     if auto_restart:
         try:
-            c_data = docker_cli.get_json("/containers/hermes/json")
-            if c_data:
-                state = c_data.get("State", {})
-                is_running = state.get("Running", False)
-                if is_running:
-                    log_messages.append("Starte aktiven hermes-Container neu (Restart 10s)...")
-                    status, _ = docker_cli.post("/containers/hermes/restart?t=10")
-                else:
-                    log_messages.append("Starte gestoppten hermes-Container...")
-                    status, _ = docker_cli.post("/containers/hermes/start")
-                
-                if status in (200, 204):
-                    log_messages.append("Hermes Core Container erfolgreich neu gestartet.")
-                    restarted = True
-                else:
-                    log_messages.append(f"Container Start/Restart meldete HTTP {status}.")
-            else:
-                log_messages.append("Container 'hermes' wurde nicht gefunden; Image steht bereit.")
+            ok, msg = recreate_container_with_new_image(docker_cli, "hermes", "hermes-agent-plus:latest")
+            log_messages.append(msg)
+            recreated = ok
         except Exception as e:
-            log_messages.append(f"Container-Neustart fehlgeschlagen: {e}")
+            log_messages.append(f"Container-Recreation fehlgeschlagen: {e}")
+            # Fallback auf reinen Restart
+            try:
+                docker_cli.post("/containers/hermes/restart?t=10")
+                log_messages.append("Fallback: Bestehender hermes-Container neu gestartet.")
+            except Exception as re_err:
+                log_messages.append(f"Fallback-Restart fehlgeschlagen: {re_err}")
 
     duration = round(time.time() - t0, 2)
 
@@ -329,9 +377,9 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
 
     return {
         "status": "success",
-        "message": f"Hermes Agent Core erfolgreich aktualisiert ({duration}s).",
+        "message": f"Hermes Agent Core erfolgreich auf neuestes Docker Image aktualisiert ({duration}s).",
         "duration_seconds": duration,
         "channel": channel,
-        "container_restarted": restarted,
+        "container_restarted": recreated,
         "logs": log_messages
     }

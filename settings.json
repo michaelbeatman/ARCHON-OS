@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +390,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,12 +410,32 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-03T11:33:34.171701",
+        "last_check": "2026-11-03T11:48:36.319243",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-03T11:33:34.171701",
+    "last_run": "2026-11-03T11:48:36.319243",
     "recent_findings": [
+      {
+        "id": "57cfe1011e2ef65a",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Verteidigung: Polen startet Spezialeinsatz an der Grenze zu Kaliningrad",
+        "link": "https://www.handelsblatt.com/politik/international/verteidigung-polen-startet-spezialeinsatz-an-der-grenze-zu-kaliningrad/100266980.html",
+        "published": "Tue, 03 Nov 2026 11:46:28 GMT",
+        "detected_at": "03.11.2026 11:48"
+      },
+      {
+        "id": "e250fbb1b25bb8b5",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Apple Intelligence kommt nach China – mit iOS 27.3",
+        "link": "https://www.heise.de/news/Apple-Intelligence-kommt-nach-China-mit-iOS-27-3-11508160.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T12:28:00+01:00",
+        "detected_at": "03.11.2026 11:48"
+      },
       {
         "id": "3a6dc51ee3b7ddab",
         "target_id": "src-handelsblatt-top",
@@ -698,26 +718,6 @@
         "title": "Gehalt: Einkommensrechner 2026: So viel verdienen Sie im Vergleich",
         "link": "https://www.handelsblatt.com/politik/deutschland/gehalt-vergleichen-sie-ihr-einkommen-mit-anderen-haushalten/100261943.html",
         "published": "Tue, 03 Nov 2026 09:54:00 GMT",
-        "detected_at": "03.11.2026 10:01"
-      },
-      {
-        "id": "1d418376fb8a3ef8",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "DAX - Midterm-Elections - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMigwFBVV95cUxOdUtkX1FabTBhY3BYYWxyZ2Z0emR5TlpSWHRTalFIVzJiWHhEYThYRnVndXBQNUJ3a2lNSmxkeXZ3MTN6emphTGQ5TlJPZDZ0TVZqOUZibk9mc0tWN0Y4LUhyd1Z1VXhHcFJ3ajNwUW9FYW5pRmdKeUJkOUZyX1VWeFdsNA?oc=5",
-        "published": "Tue, 03 Nov 2026 09:54:14 GMT",
-        "detected_at": "03.11.2026 10:01"
-      },
-      {
-        "id": "8dc0807f44781eab",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "27-Jähriger soll Cisco-Code per KI sanieren",
-        "link": "https://www.heise.de/news/27-Jaehriger-soll-Cisco-Code-per-KI-sanieren-11508980.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T10:53:00+01:00",
         "detected_at": "03.11.2026 10:01"
       }
     ]

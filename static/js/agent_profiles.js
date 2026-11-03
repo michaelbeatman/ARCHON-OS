@@ -3098,6 +3098,8 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
     // CADRE BOT SCREEN CONTROLLER (INTERAKTIVER DESKTOP IM AGENTENKADER)
     // =========================================================================
     let cadreBotScreenAuthorized = false;
+    let cadreBotScreenFullscreen = false;
+    let cursorDemoTimer = null;
 
     function navigateCadreBotScreen() {
       const urlInput = document.getElementById("cadre-botscreen-url");
@@ -3118,12 +3120,46 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
       setTimeout(() => { if (titleEl) titleEl.classList.remove("animate-pulse"); }, 600);
     }
 
-    function toggleBotScreenAgentAuthorization() {
-      // Berechtigungsprüfung: Robert, default, Micha
+    function toggleCadreBotScreenFullscreen() {
+      const pane = document.getElementById("agent-pane-botscreen");
+      const icon = document.getElementById("icon-botscreen-fullscreen");
+      const label = document.getElementById("label-botscreen-fullscreen");
+      if (!pane) return;
+
+      cadreBotScreenFullscreen = !cadreBotScreenFullscreen;
+      if (cadreBotScreenFullscreen) {
+        pane.classList.add("botscreen-fullscreen-mode");
+        if (icon) {
+          icon.setAttribute("data-lucide", "minimize-2");
+        }
+        if (label) label.innerText = "Beenden";
+        window.addEventListener("keydown", handleBotScreenEscapeKey);
+      } else {
+        pane.classList.remove("botscreen-fullscreen-mode");
+        if (icon) {
+          icon.setAttribute("data-lucide", "maximize-2");
+        }
+        if (label) label.innerText = "Vollbild";
+        window.removeEventListener("keydown", handleBotScreenEscapeKey);
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function handleBotScreenEscapeKey(e) {
+      if (e.key === "Escape" && cadreBotScreenFullscreen) {
+        toggleCadreBotScreenFullscreen();
+      }
+    }
+
+    function toggleBotScreenAgentAuthorization(forceState) {
       const currentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "default";
-      const allowedControllers = ["orchestrator", "default", "senior_coder", "recruiter_talent_scout", "research_deep_analyst"];
       
-      cadreBotScreenAuthorized = !cadreBotScreenAuthorized;
+      if (typeof forceState === "boolean") {
+        cadreBotScreenAuthorized = forceState;
+      } else {
+        cadreBotScreenAuthorized = !cadreBotScreenAuthorized;
+      }
+
       const btn = document.getElementById("btn-cadre-botscreen-auth");
       const dot = document.getElementById("cadre-botscreen-auth-dot");
       const label = document.getElementById("cadre-botscreen-auth-label");
@@ -3139,6 +3175,7 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
           pill.innerText = "🤖 Agent aktiv (Maus & Tastatur freigegeben)";
         }
         if (hint) hint.innerText = "Jetzt Anweisung eingeben und absenden";
+        setAgentCursorPosition(50, 50, false, `🤖 ${currentId}`);
       } else {
         if (btn) btn.className = "px-3.5 py-1.5 rounded-lg font-bold text-xs font-mono flex items-center gap-2 transition cursor-pointer shadow-xs bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700";
         if (dot) dot.className = "w-2 h-2 rounded-full bg-zinc-500";
@@ -3148,6 +3185,81 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
           pill.innerText = "👤 Manueller Modus (Login aktiv)";
         }
         if (hint) hint.innerText = "Klicke, um Agenten für Maus & Tastatur freizuschalten";
+        hideAgentCursor();
+      }
+    }
+
+    // --- PROMINENTER AGENTEN-MAUSZEIGER CONTROLLER ---
+    function setAgentCursorPosition(xPercent, yPercent, isClick = false, labelText = null) {
+      const cursor = document.getElementById("botscreen-agent-cursor");
+      const ripple = document.getElementById("botscreen-cursor-ripple");
+      const badge = document.getElementById("botscreen-cursor-badge");
+      if (!cursor) return;
+
+      cursor.classList.remove("hidden");
+      cursor.style.left = `${Math.max(5, Math.min(95, xPercent))}%`;
+      cursor.style.top = `${Math.max(5, Math.min(95, yPercent))}%`;
+
+      if (labelText && badge) {
+        badge.innerText = labelText;
+      }
+
+      if (isClick && ripple) {
+        ripple.classList.remove("hidden");
+        setTimeout(() => {
+          ripple.classList.add("hidden");
+        }, 600);
+      }
+    }
+
+    function hideAgentCursor() {
+      const cursor = document.getElementById("botscreen-agent-cursor");
+      if (cursor) cursor.classList.add("hidden");
+    }
+
+    function testCadreAgentCursor() {
+      if (cursorDemoTimer) clearTimeout(cursorDemoTimer);
+      const agentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "Default";
+      
+      setAgentCursorPosition(30, 25, false, `🤖 ${agentId}: Sucht Feld...`);
+      
+      cursorDemoTimer = setTimeout(() => {
+        setAgentCursorPosition(48, 38, true, `🤖 ${agentId}: Klickt`);
+        cursorDemoTimer = setTimeout(() => {
+          setAgentCursorPosition(55, 60, false, `🤖 ${agentId}: Scannt Inhalt`);
+          cursorDemoTimer = setTimeout(() => {
+            setAgentCursorPosition(72, 70, true, `🤖 ${agentId}: Wählt Aktion`);
+            cursorDemoTimer = setTimeout(() => {
+              setAgentCursorPosition(50, 50, false, `🤖 ${agentId}: Bereit`);
+            }, 900);
+          }, 900);
+        }, 900);
+      }, 800);
+    }
+
+    // --- NOTFALL-ABBRUCH ---
+    async function emergencyAbortBotScreen() {
+      toggleBotScreenAgentAuthorization(false);
+      hideAgentCursor();
+      if (cursorDemoTimer) clearTimeout(cursorDemoTimer);
+
+      const titleEl = document.getElementById("cadre-botscreen-title");
+      if (titleEl) {
+        const orig = titleEl.innerText;
+        titleEl.innerText = "🛑 NOTFALL-STOPP AUSGELÖST — Agent gestoppt!";
+        setTimeout(() => { if (titleEl) titleEl.innerText = orig; }, 3000);
+      }
+
+      try {
+        await fetch("/api/operations/bot-screen/abort", { method: "POST" });
+      } catch (e) {
+        console.error("Fehler beim Abort-Call:", e);
+      }
+
+      if (typeof showArchonToast === 'function') {
+        showArchonToast("🛑 Notfall-Abbruch ausgeführt: Agent gestoppt, volle Kontrolle bei dir!", "error");
+      } else {
+        alert("🛑 Notfall-Abbruch ausgeführt!\n\nAlle autonomen Aktionen wurden sofort gestoppt.\nDer Agent hat keinen Zugriff mehr auf Maus und Tastatur.\nDie Steuerung liegt wieder zu 100% bei dir.");
       }
     }
 
@@ -3168,6 +3280,8 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
         sendBtn.innerHTML = `<span class="animate-pulse">Ausführen...</span>`;
       }
 
+      testCadreAgentCursor();
+
       try {
         const agentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "orchestrator";
         const res = await fetch("/api/operations/comm-feed/broadcast", {
@@ -3180,7 +3294,11 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
           })
         });
         promptInput.value = "";
-        alert(`Anweisung an ${agentId} übergeben! Der Agent führt die Schritte jetzt autonom aus und berichtet im Funkverkehr.`);
+        if (typeof showArchonToast === 'function') {
+          showArchonToast(`Anweisung an ${agentId} übergeben! Live-Navigation aktiv.`, "info");
+        } else {
+          alert(`Anweisung an ${agentId} übergeben! Der Agent führt die Schritte jetzt autonom aus und berichtet im Funkverkehr.`);
+        }
       } catch (err) {
         alert("Fehler beim Übergeben der Instruktion: " + err.message);
       } finally {
@@ -3191,3 +3309,13 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
         }
       }
     }
+
+    window.navigateCadreBotScreen = navigateCadreBotScreen;
+    window.refreshCadreBotScreen = refreshCadreBotScreen;
+    window.toggleCadreBotScreenFullscreen = toggleCadreBotScreenFullscreen;
+    window.toggleBotScreenAgentAuthorization = toggleBotScreenAgentAuthorization;
+    window.sendCadreBotScreenInstruction = sendCadreBotScreenInstruction;
+    window.emergencyAbortBotScreen = emergencyAbortBotScreen;
+    window.testCadreAgentCursor = testCadreAgentCursor;
+    window.setAgentCursorPosition = setAgentCursorPosition;
+    window.hideAgentCursor = hideAgentCursor;

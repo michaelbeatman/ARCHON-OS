@@ -393,10 +393,18 @@ Der Agenten-Kader ist die Personalabteilung und das operative Einstellungszentru
 
 ### 3.3 Bot Screen (Desktop & Web-Navigator)
 Der Bot Screen ist als dedizierter Subtab zwischen Chat und Fähigkeiten im Agentenkader integriert. Er ermöglicht die visuelle Überwachung und interaktive Steuerung von Browser- und Desktop-Sitzungen:
-- **Adressleiste oben:** Manuelle Eingabe oder Übergabe einer Ziel-URL. Ermöglicht dem Operator, sich auf Portalen, Jobbörsen oder Webdiensten persönlich einzuloggen und eventuelle 2FA-Challenges (SMS, Authenticator-App, Cloudflare Turnstile) gefahrlos manuell zu überwinden.
-- **Interaktiver Screen-Canvas (Mitte):** Gestreamter oder simulierter Live-Desktop des Chromium-Agenten (CDP Port 9222 / Xfce :99) mit Cursor-Projektion und Klick-Interaktion.
-- **Dual-Control Steuerleiste (Unten):**
+- **Adressleiste mit Avatar-Abstand:** Manuelle Eingabe oder Übergabe einer Ziel-URL. Die Leiste startet ergonomisch versetzt rechts des 110-Pixel-Avatars, sodass Bedienelemente und Textfelder kollisionsfrei bedienbar bleiben. Ermöglicht dem Operator, sich auf Portalen, Jobbörsen oder Webdiensten persönlich einzuloggen und eventuelle 2FA-Challenges (SMS, Authenticator-App, Cloudflare Turnstile) gefahrlos manuell zu überwinden.
+- **Vollbildmodus & Freischwebendes Overlay (`[ ⛶ Vollbild ]` / Esc):**
+  - Schaltet den Bot Screen per Knopfdruck in eine immersive Vollbildansicht (100 % Display-Nutzung).
+  - Die Adressleiste dockt oben an den Rand an.
+  - Das Anweisungs- und Kontrollmodul schwebt als halbtransparente Frosted-Glass-Leiste frei über dem unteren Bildschirmrand.
+- **Prominenter Live-Agenten-Mauszeiger:**
+  - Hochsichtbare, lilafarbene Leucht-Pfeilspitze mit dynamischem Agenten-Namensbadge (`🤖 Default`).
+  - Animierte Radar-Wellen (Click-Ripples) signalisieren Mausklicks in Echtzeit.
+  - Ermöglicht dem Operator, den Bewegungen, Formularfeldern und Klickpfaden des Agenten live und verzögerungsfrei zuzusehen.
+- **Dual-Control Steuerleiste & Notfall-Abbruch:**
   - **Autorisierungs-Schalter (`[ 👤 Dein Zugriff ]` / `[ 🤖 Agent autorisiert ]`):** Nur der Operator oder privilegierte Systemrollen (**Robert**, **default** / Alexander Richter, **Micha**) können den Agenten aktivieren. Solange der Schalter auf `Dein Zugriff` steht, verharrt der Agent im Standby und beobachtet die Sitzung passiv.
+  - **Notfall-Abbruch-Button (`[ 🛑 Notfall-Stopp ]`):** Roter Sofort-Stopp-Knopf. Entzieht dem Agenten augenblicklich alle Zugriffsrechte (`POST /api/operations/bot-screen/abort`), friert die Sitzung ein und übergibt die volle Kontrolle an den Bediener zurück.
   - **Direktiven-Promptfeld:** Eingabefeld mit Sende-Button, um dem Agenten nach erfolgreichem Login präzise Anweisungen zu übermitteln (z. B. *"Lies alle Bewerbungen in der Inbox aus und erstelle eine strukturierte Bewerberliste"* oder *"Fülle das Bewerbungsformular anhand meines Master-Lebenslaufs aus"*).
 - **Skill-Kopplung (`agent-browser-navigator`):** Der Zugriff auf den Bot-Screen ist strikt an den Skill `agent-browser-navigator` gebunden. Nur autorisierte Agenten (Robert, default, HR/Talent Scouts, Deep Analysts) dürfen Browser-Steuerungsbefehle ausführen.
 - **Autonomie-Governance (3-Klassen-Modell):**

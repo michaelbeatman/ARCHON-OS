@@ -3484,3 +3484,32 @@ def interact_with_bot_screen(action_data: ScreenInteractionModel):
     """Nimmt Benutzerinteraktionen (Klick, Tasteneingabe) entgegen."""
     _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
     return {"status": "success", "echo": action_data.dict()}
+
+
+@router.post("/bot-screen/abort")
+def abort_bot_screen_execution():
+    """Notfall-Abbruch: Entzieht dem Agenten sofort alle Rechte und stoppt aktive Browser-Aktionen."""
+    _bot_screen_state["takeover_requested"] = False
+    _bot_screen_state["mouse_control_enabled"] = False
+    _bot_screen_state["agent_authorized"] = False
+    now_iso = datetime.datetime.now().isoformat()
+    try:
+        conn = _get_kanban_connection()
+        cur = conn.cursor()
+        payload = json.dumps({
+            "author": "commander",
+            "message": "🛑 Notfall-Abbruch: Sofortiger Stopp aller Browser- und Desktop-Aktionen. Volle Kontrolle liegt wieder beim Nutzer.",
+            "target": "all",
+            "broadcast": True,
+            "aborted": True
+        }, ensure_ascii=False)
+        cur.execute("""
+            INSERT INTO task_events (task_id, kind, payload, created_at)
+            VALUES ('bot_desktop', 'emergency_abort', ?, ?)
+        """, (payload, now_iso))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    return {"status": "aborted", "state": _bot_screen_state}
+

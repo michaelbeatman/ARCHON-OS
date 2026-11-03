@@ -16,7 +16,7 @@
   - 1.2 Kanban
   - 1.3 Organisation
   - 1.4 n8n Automatisierung
-  - 1.5 Kommunikation
+  - 1.5 Kommunikation & Bot Screen (Human Takeover)
 - **2. Posteingang & Ereignis-Stream**
   - 2.1 Übersicht
   - 2.2 Webhooks
@@ -38,6 +38,7 @@
   - 4.2 Berichte
   - 4.3 Medien
   - 4.4 Endprodukte
+  - 4.5 Web-Apps & Shops (Headless Local Preview)
 - **5. Internet**
   - 5.1 Radar
   - 5.2 Korb
@@ -55,6 +56,7 @@
   - 8.1 Übersicht
   - 8.2 Debatte
   - 8.3 Live
+  - 8.4 Mixture of Agents (MoA) – Multimodale Schichtenarchitektur & Aggregator-Synthese
 - **9. Adressen & CRM (Säule 3: Wirtschaft & ERP)**
   - 9.1 Alle Adressen & Gesamtübersicht
   - 9.2 LinkedIn & Netzwerk-Kontakte
@@ -299,10 +301,22 @@ Die integrierte n8n Workflow-Engine (Port 5678) verbindet deterministische Cron-
 - Automatische Task-Erstellung im Kanban-Board bei externen Webhook-Events.
 - Ausfallsichere Warteschlangen bei temporärer Unerreichbarkeit externer APIs.
 
-### 1.5 Kommunikation
-Der Funkverkehr-Monitor erlaubt die Echtzeit-Einsicht in die interne Agenten-zu-Agenten-Kommunikation:
-- Transparente Verfolgung von Kontextübergaben zwischen Spezialisten.
-- Frühzeitiges Erkennen von Klärungsbedarf oder Widersprüchen ohne manuelles Nachfragen.
+### 1.5 Kommunikation & Bot Screen (Human Takeover)
+Der Funkverkehr- und Desktop-Monitor verbindet die textbasierte Inter-Agenten-Kommunikation mit der visuellen Steuerung autonomer Browser- und Betriebssystem-Sitzungen:
+
+#### 1.5.1 Echtzeit-Funkverkehr (Live SSE-Streaming)
+- **Persistenter Ereignis-Stream (`/api/operations/comm-feed/stream`):** Interne Kontextübergaben, Tool-Aufrufe, Abstimmungen und Statusberichte zwischen Agenten werden per Server-Sent Events ohne Polling-Latenz direkt ins Interface gepusht.
+- **Transparente Rollenverfolgung:** Jede Nachricht weist Absender-Avatar, Rolle, Zeitstempel und Ziel-Agent aus.
+- **Leitstand-Intervention (Commander):** Der Operator kann über das Eingabefeld jederzeit Funksprüche und Kurskorrekturen absenden, die sofort im Kontext der beteiligten Agenten wirksam werden.
+
+#### 1.5.2 Bot Screen: Virtueller Desktop & Human Takeover
+- **Headless Xfce/RFB Desktop (:99):** Über den Umschalter `[ 🖥 Bot Screen (Desktop) ]` öffnet sich die reale grafische Oberfläche des im Hintergrund laufenden Agenten-Browsers (Chromium/CDP Port 9222).
+- **Automatisches Human-Takeover-Signal:** Erkennt ein Web-Agent bei der Recherche oder Formularbearbeitung ein Cloudflare Turnstile Captcha, ein Schiebepuzzle oder eine 2-Faktor-Authentifizierung (SMS/Authenticator), schlägt er Alarm:
+  - Der rote Indikator `Takeover!` leuchtet im Cockpit auf.
+  - Ein Warn-Banner benennt den Grund und die betroffene Ziel-URL.
+  - Im Live-Chat erscheint ein Direktlink `[ 🖥 Zum Bot Screen wechseln ]`.
+- **Interaktive Eingabesteuerung:** Der Operator klickt das Captcha im simulierten oder gestreamten Browserfenster weg oder gibt Einmal-Passwörter ein.
+- **Nahtlose Wiederaufnahme:** Ein Klick auf `Agent fortsetzen` meldet die Freigabe an das System (`POST /api/operations/bot-screen/takeover/resume`), woraufhin der Agent den Workflow autonom zu Ende führt.
 
 
 ---
@@ -542,6 +556,13 @@ Der Showroom (views_core.py & static/views/view_showroom.html) enthält eine int
 - Zur Auslieferung freigegebene Dokumente, Code-Pakete oder exportfähige PDF-Dateien.
 - Isolierte Sandbox-Ausführung für dynamische Web-Apps und Code-Artefakte.
 
+### 4.5 Web-Apps & Shops (Headless Local Preview)
+Der Showroom dient nicht nur statischen Berichten und Dokumenten, sondern fungiert als lokale Staging- und Testumgebung für vollständige Webanwendungen:
+- **5. Cadre-Kachel & Dateibaum-Katalog:** Über den Reiter `Web-Apps` oder den obersten Dateibaumknoten `Web-Apps & Shops (Preview)` werden alle in `agent_workspace/builds/apps/` generierten Projekte automatisch erfasst.
+- **Responsiver Multi-Device-Viewer:** Die Vorschau (`/api/views/showroom/preview/app/{app_name}`) erlaubt das Umschalten zwischen **Desktop (100%)**, **Tablet (768px)** und **Mobile (375px)**, um responsives Verhalten, Breakpoints und Navigation vor der Veröffentlichung zu überprüfen.
+- **Einsatzbereiter Demo-Store:** Standardmäßig liegt der interaktive Store `agentic-store` bereit, inklusive Produktkatalog, Filterung, Warenkorb-Logik und simuliertem Checkout-Prozess.
+- **Direkt-Export:** Über die Schaltfläche `In neuem Tab` kann die generierte Anwendung losgelöst vom Archon-Frame im Vollbild getestet werden.
+
 
 ---
 
@@ -703,6 +724,17 @@ Praxis-Workflow (Schritt für Schritt):
 ### 8.3 Live
 - Modulares Streaming der Debattenrunden mit Thesen, Gegenargumenten und Schiedsgerichtsbeschluss.
 - Automatische Erstellung eines finalen Board-Memos mit Handlungsentscheidung und Aufgabenübernahme in Operations.
+
+### 8.4 Mixture of Agents (MoA) – Multimodale Schichtenarchitektur & Aggregator-Synthese
+Zur Steigerung der Entscheidungsqualität bei komplexen unternehmerischen Fragestellungen verfügt die Decision Engine über einen integrierten Mixture-of-Agents-Modus nach dem NousResearch/Together-AI-Standard:
+- **Aktivierung:** Der Schalter `MoA` in der Boardroom-Steuerungsleiste schaltet das mehrstufige Verfahren scharf.
+- **Layer 1: Parallele Referenzmodelle:**
+  - Anstelle eines einzelnen LLMs erzeugen 2 bis 4 heterogene Spitzenmodelle (z. B. DeepSeek V3, Claude 3.5 Sonnet, Llama 3.3 70B, GPT-4o Mini) zeitgleich unabhängige Lösungskonzepte und Risikoabschätzungen.
+  - Die Zwischenergebnisse werden live im Transkript als `🤖 MoA Layer-1` Karten gestreamt.
+- **Layer 2: Aggregator-Synthese:**
+  - Ein designiertes Aggregator-Modell (z. B. DeepSeek V3 oder Claude 3.7 Sonnet) erhält die ursprüngliche Aufgabenstellung, das Methoden-Framework und alle Layer-1-Entwürfe.
+  - Der Aggregator filtert Widersprüche und Halluzinationen heraus, bündelt übereinstimmende Konsenspunkte und formuliert die finale, verbindliche Entscheidungsvorlage.
+- **Revisionssichere Ablage:** Beide Schichten (die divergenten Layer-1-Analysen und das aggregierte Master-Memo) werden synchron im Obsidian Vault (`/opt/data/obsidian/`) und der Decision-Engine-Historie archiviert.
 
 > 📖 **Vertiefender Leitfaden:** Zur Streaming-Architektur über SSE siehe [Anhang V.8: Live Streaming mit SSE & WebSockets](#v8-live-streaming-mit-sse--websockets).
 
@@ -1008,9 +1040,13 @@ Die Sprach-Pipeline (backend/voice_pipeline.py) ermöglicht mobile Sprachsteueru
 • Intent-Routing: Rufnamen ('Robert', 'Anwalt', 'Katharina') werden erkannt und leiten die Aufgabe an den passenden Agenten weiter.
 • Edge-TTS Sprachsynthese: Die Agenten-Antwort wird auf Wunsch mit der deutschen neuronalen Stimme 'de-DE-ConradNeural' generiert und als Audioblase an Telegram zurückgesendet.
 
-### 17.1 Hermes Core
-- Konfiguration des Hintergrund-Daemons auf Port 8420.
-- Steuerung von Task-Queues, Watchdog-Intervallen (30s) und Event-Loops.
+### 17.1 Hermes Core & Autonome System-Updates
+Der Hermes-Daemon bildet das operative Fundament von Archon OS:
+- **Dynamische Versionserkennung:** Das System ermittelt die laufende Version nicht aus statischen Bildlabels, sondern führt direkt `hermes --version` im Container aus (`v0.22.6 · upstream f0d94882`).
+- **Status-LED in der Fußzeile:** Zeigt den aktuellen Upstream-Abgleich an. Entspricht der lokale Stand dem aktuellen Tag-Release, leuchtet die Status-LED grün (`Update (v0.22.6)`).
+- **Atomare Container-Neuerstellung:** Bei der Installation neuer Core-Releases (`backend/hermes_updater.py`) wird der Container zerstörungsfrei neu erzeugt. Alle Mounts, Volumes, Ports und Netzwerke (`agentic_mesh`) bleiben erhalten.
+- **Rechtebeschränkung:** Das Einleiten von Kern-Updates ist Administratoren vorbehalten.
+- **Daemon & Task-Queues:** Steuerung des Hintergrund-Daemons auf Port 8420, Watchdog-Intervallen (30s) und Event-Loops.
 - Zum Notfallbetrieb siehe [Anhang IV.8: Break-Glass Recovery](#iv8-break-glass-recovery--notfallzugriff) und [Anhang V.17: Chaos Resilience](#v17-chaos-resilience--störungs-simulation).
 
 ### 17.2 Autonomie & Module

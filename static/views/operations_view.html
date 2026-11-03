@@ -238,151 +238,86 @@
           </div>
         </main>
 
-        <!-- SUB-VIEW 4: INTERNE KOMMUNIKATION -->
+        <!-- SUB-VIEW 4: INTERNE KOMMUNIKATION (MULTI-AGENTEN GRUPPENCHAT & LIVE-ARENA) -->
         <main id="ops-view-comm" class="hidden flex-1 w-full flex overflow-hidden min-h-0 rounded-2xl border-0 bg-[var(--card)] shadow-xs os-island">
-          <!-- LINKS: KANÄLE & FILTER -->
+          <!-- LINKS: KANÄLE & THEMEN-STREAM -->
           <aside class="w-72 border-r border-[var(--border)] bg-[var(--card)] flex flex-col shrink-0">
-            <div class="p-3 border-b border-[var(--border)]">
-              <span class="text-[11px] font-mono uppercase font-bold text-[var(--muted-foreground)]">Filter nach Agent / Bereich</span>
+            <div class="p-3 border-b border-[var(--border)] flex items-center justify-between">
+              <span class="text-[11px] font-mono uppercase font-bold text-[var(--muted-foreground)]">Kommunikations-Kanäle</span>
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Live Stream verbunden"></span>
             </div>
-            <div id="ops-comm-channels" class="p-2 space-y-1 overflow-y-auto flex-1">
-              <!-- Kanalliste -->
+            
+            <!-- Standard-Kanäle -->
+            <div class="p-2 space-y-1 shrink-0 border-b border-[var(--border)]">
+              <!-- 1. All-Stream -->
+              <button type="button" onclick="switchCommChannel('all')" id="comm-channel-btn-all" class="w-full px-2.5 py-2 rounded-xl text-left text-xs font-mono transition cursor-pointer flex items-center justify-between bg-indigo-600 text-white font-bold shadow-xs">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                  <span>#all-stream</span>
+                </div>
+                <span class="text-[9.5px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono" id="comm-badge-all">Live</span>
+              </button>
+              
+              <!-- 2. Boardroom Debatten -->
+              <button type="button" onclick="switchCommChannel('boardroom')" id="comm-channel-btn-boardroom" class="w-full px-2.5 py-2 rounded-xl text-left text-xs font-mono transition cursor-pointer flex items-center justify-between hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="landmark" class="w-3.5 h-3.5 text-amber-500"></i>
+                  <span>#boardroom</span>
+                </div>
+                <span class="text-[9.5px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 font-mono font-bold" id="comm-badge-boardroom">Arena</span>
+              </button>
+
+              <!-- 3. Projekte & Tasks -->
+              <button type="button" onclick="switchCommChannel('projects')" id="comm-channel-btn-projects" class="w-full px-2.5 py-2 rounded-xl text-left text-xs font-mono transition cursor-pointer flex items-center justify-between hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="folder-git-2" class="w-3.5 h-3.5 text-sky-500"></i>
+                  <span>#projekte-tasks</span>
+                </div>
+                <span class="text-[9.5px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-600 dark:text-sky-400 font-mono font-bold">Tasks</span>
+              </button>
+            </div>
+
+            <!-- Agenten Filter -->
+            <div class="p-2 pb-1">
+              <span class="text-[9.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] px-1">Teilnehmer-Filter</span>
+            </div>
+            <div id="ops-comm-channels" class="p-2 pt-0 space-y-1 overflow-y-auto flex-1 custom-scrollbar">
+              <!-- Dynamisch mit Agenten befüllt -->
             </div>
           </aside>
-          <!-- RECHTS: NACHRICHTEN FEED -->
+
+          <!-- RECHTS: GRUPPENCHAT NACHRICHTEN FEED -->
           <section class="flex-1 flex flex-col bg-[var(--background)] overflow-hidden">
-            <!-- HEADER MIT INTEGRIERTEM TOGGLE (VARIANTE A: FUNKVERKEHR & BOT SCREEN) -->
+            <!-- Header Bar -->
             <div class="p-3 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between gap-3 shrink-0">
               <div class="flex items-center gap-2.5 min-w-0">
-                <span id="ops-comm-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-                <span id="ops-comm-active-title" class="text-xs font-bold text-[var(--foreground)] font-mono truncate">📡 Gesamt-Funkverkehr aller Agenten</span>
-                <span class="text-[10px] text-[var(--muted-foreground)] font-mono hidden md:inline">· Realtime Streaming aktiv</span>
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                <span id="ops-comm-active-title" class="text-xs font-bold text-[var(--foreground)] font-mono truncate">📡 #all-stream — Gesamt-Funkverkehr aller Agenten</span>
+                <span id="ops-comm-active-desc" class="text-[10px] text-[var(--muted-foreground)] font-mono hidden md:inline">· Echtzeit-Streaming aktiv</span>
               </div>
-              <!-- Toggle Pill: Chat vs. Bot Screen -->
-              <div class="flex items-center gap-1 bg-[var(--secondary)] p-1 rounded-xl border border-[var(--border)] text-xs font-mono shrink-0">
-                <button type="button" id="btn-comm-mode-chat" onclick="setCommViewMode('chat')" class="px-3 py-1 rounded-lg font-bold bg-[var(--card)] text-[var(--foreground)] shadow-xs transition flex items-center gap-1.5 cursor-pointer">
-                  <i data-lucide="message-square" class="w-3.5 h-3.5 text-indigo-500"></i>
-                  <span>Funkverkehr (Live)</span>
-                </button>
-                <button type="button" id="btn-comm-mode-screen" onclick="setCommViewMode('screen')" class="px-3 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-1.5 cursor-pointer relative">
-                  <i data-lucide="monitor" class="w-3.5 h-3.5 text-sky-500"></i>
-                  <span>Bot Screen (Desktop)</span>
-                  <span id="comm-takeover-badge" class="hidden px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[9px] font-bold animate-ping ml-1">Takeover!</span>
+              <div class="flex items-center gap-2 shrink-0">
+                <button type="button" onclick="loadOperationsComm(currentCommFilterAgent)" class="p-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono transition cursor-pointer" title="Feed aktualisieren">
+                  <i data-lucide="refresh-cw" class="w-3 h-3 text-blue-500"></i>
                 </button>
               </div>
             </div>
 
-            <!-- CONTAINER 1: TEXT-CHAT / FUNKVERKEHR VIEW -->
-            <div id="ops-comm-chat-view" class="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <div id="ops-comm-messages" class="flex-1 p-4 overflow-y-auto space-y-3 os-console custom-scrollbar">
-                <!-- Dynamischer Nachrichtenfeed -->
-              </div>
-              <!-- BROADCAST / FUNKSPRUCH EINGABE -->
-              <div class="p-3 border-t border-[var(--border)] bg-[var(--card)] flex items-center gap-2 shrink-0">
-                <select id="ops-comm-sender" class="h-9 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 shrink-0">
-                  <option value="commander">👑 Commander</option>
-                  <option value="system_dispatcher">🤖 Dispatcher</option>
-                </select>
-                <input type="text" id="ops-comm-input" placeholder="Funkspruch oder Anweisung senden (Enter)..." class="flex-1 h-9 px-3 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-sans placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeydown="if(event.key==='Enter') sendOperationsBroadcast()" />
-                <button type="button" onclick="sendOperationsBroadcast()" class="h-9 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
-                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                  <span>Senden</span>
-                </button>
-              </div>
+            <!-- Nachrichtenfeed mit Realtime SSE -->
+            <div id="ops-comm-messages" class="flex-1 p-4 overflow-y-auto space-y-3 os-console custom-scrollbar select-text">
+              <!-- Dynamischer Chat-Feed -->
             </div>
 
-            <!-- CONTAINER 2: BOT SCREEN / VIRTUAL DESKTOP & HUMAN TAKEOVER VIEW -->
-            <div id="ops-comm-screen-view" class="hidden flex-1 flex flex-col min-h-0 overflow-hidden bg-zinc-950 p-3 space-y-2.5 font-mono select-none">
-              <!-- Top Toolbar des Bot Screens -->
-              <div class="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between gap-3 shrink-0 text-xs">
-                <div class="flex items-center gap-2 min-w-0">
-                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span class="font-bold text-zinc-200 truncate">Hermes Virtual Desktop (:99)</span>
-                  <span class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">1920x1080 FHD</span>
-                  <span id="bot-screen-agent-badge" class="text-[10px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-400 font-bold border border-sky-500/30">Browser Agent</span>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <button type="button" onclick="refreshBotScreen()" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs flex items-center gap-1 transition cursor-pointer" title="Bildschirm aktualisieren">
-                    <i data-lucide="refresh-cw" class="w-3 h-3 text-sky-400"></i> Refresh
-                  </button>
-                  <button type="button" onclick="resumeBotTakeover()" id="btn-bot-resume" class="px-3.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer" title="Gibt die Kontrolle zurück an den autonomen Agenten">
-                    <i data-lucide="play" class="w-3.5 h-3.5 fill-white"></i> Agent fortsetzen
-                  </button>
-                </div>
-              </div>
-
-              <!-- Human Takeover Warn-Banner (wird dynamisch eingeblendet bei Captcha/2FA) -->
-              <div id="bot-takeover-alert-banner" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs flex items-center justify-between gap-3 animate-in fade-in shrink-0">
-                <div class="flex items-center gap-2.5">
-                  <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-500 shrink-0"></i>
-                  <div>
-                    <span class="font-bold text-rose-400 uppercase tracking-wider font-mono">Human Takeover angefordert:</span>
-                    <span id="bot-takeover-reason" class="ml-1 text-zinc-200">Cloudflare Turnstile Captcha / 2FA Schranke erkannt!</span>
-                    <div class="text-[10.5px] text-zinc-400">Klicke in den Bildschirm, um das Captcha zu lösen, und klicke oben rechts auf "Agent fortsetzen".</div>
-                  </div>
-                </div>
-                <button type="button" onclick="resumeBotTakeover()" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shrink-0 cursor-pointer">
-                  Jetzt fortsetzen &rarr;
-                </button>
-              </div>
-
-              <!-- Virtuelle Desktop-Leinwand (Interaktives Viewport) -->
-              <div class="flex-1 min-h-0 bg-black rounded-xl border border-zinc-800 overflow-hidden relative flex items-center justify-center group" id="bot-screen-viewport">
-                <!-- Browser-Rahmen Simulation mit Live-Inhalt -->
-                <div class="w-full h-full flex flex-col bg-zinc-900 overflow-hidden rounded-lg border border-zinc-800">
-                  <!-- Browser Adressleiste -->
-                  <div class="h-8 bg-zinc-800/90 border-b border-zinc-700/60 px-3 flex items-center justify-between text-[11px] text-zinc-400 select-none shrink-0">
-                    <div class="flex items-center gap-1.5">
-                      <span class="w-2.5 h-2.5 rounded-full bg-rose-500/80"></span>
-                      <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></span>
-                      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
-                    </div>
-                    <div class="flex-1 max-w-xl mx-4 bg-zinc-950 px-3 py-0.5 rounded-md border border-zinc-700/50 flex items-center gap-1.5 text-zinc-300 truncate font-sans">
-                      <i data-lucide="lock" class="w-3 h-3 text-emerald-400 shrink-0"></i>
-                      <span id="bot-screen-url-bar" class="truncate">https://cloud.internal-service.local/auth/login</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-[10px]">
-                      <span class="text-emerald-400 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> CDP 9222</span>
-                    </div>
-                  </div>
-
-                  <!-- Interaktives Rendering des Agenten-Bildschirms -->
-                  <div class="flex-1 relative overflow-hidden bg-white text-zinc-900 flex flex-col items-center justify-center p-6 cursor-crosshair" onclick="handleBotScreenClick(event)">
-                    <!-- Demo / Simulated Webapp Target mit Captcha -->
-                    <div class="w-full max-w-md p-6 rounded-2xl bg-white border border-zinc-200 shadow-xl space-y-4 font-sans select-none pointer-events-auto">
-                      <div class="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                        <div class="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold">A</div>
-                        <div>
-                          <div class="font-bold text-sm text-zinc-900">Partner Portal Login</div>
-                          <div class="text-[10.5px] text-zinc-500">Autonome Sitzung des Hermes Agents</div>
-                        </div>
-                      </div>
-                      <div class="space-y-2">
-                        <input type="text" value="agent.bot@archon-mesh.local" readonly class="w-full text-xs p-2 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-700 font-mono">
-                        <input type="password" value="••••••••••••••••" readonly class="w-full text-xs p-2 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-700 font-mono">
-                      </div>
-                      
-                      <!-- Cloudflare Turnstile Captcha Simulation -->
-                      <div id="simulated-captcha-box" class="p-3 rounded-xl border-2 border-dashed border-amber-400 bg-amber-50/60 flex items-center justify-between cursor-pointer hover:bg-amber-100/50 transition" onclick="solveSimulatedCaptcha()">
-                        <div class="flex items-center gap-2.5">
-                          <input type="checkbox" id="simulated-captcha-check" class="w-4 h-4 rounded text-sky-600 accent-sky-600 cursor-pointer">
-                          <span class="text-xs font-bold text-zinc-800">Ich bin ein Mensch (Cloudflare Turnstile)</span>
-                        </div>
-                        <i data-lucide="shield-check" class="w-5 h-5 text-amber-600"></i>
-                      </div>
-
-                      <div class="text-[10px] text-zinc-400 text-center font-mono">
-                        Klicke auf das Kontrollkästchen, um das Captcha manuell zu lösen.
-                      </div>
-                    </div>
-
-                    <!-- Fadenkreuz-Hinweis -->
-                    <div class="absolute bottom-3 right-3 px-2 py-1 rounded bg-zinc-900/80 text-zinc-300 text-[10px] font-mono pointer-events-none">
-                      🎮 Maus-Interaktion aktiv (Klick sendet Input an Agent)
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <!-- BROADCAST / FUNKSPRUCH EINGABE -->
+            <div class="p-3 border-t border-[var(--border)] bg-[var(--card)] flex items-center gap-2 shrink-0">
+              <select id="ops-comm-sender" class="h-9 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 shrink-0">
+                <option value="commander">👑 Commander</option>
+                <option value="system_dispatcher">🤖 Dispatcher</option>
+              </select>
+              <input type="text" id="ops-comm-input" placeholder="Funkspruch oder Anweisung an den Kanal senden (Enter)..." class="flex-1 h-9 px-3 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-sans placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeydown="if(event.key==='Enter') sendOperationsBroadcast()" />
+              <button type="button" onclick="sendOperationsBroadcast()" class="h-9 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>Senden</span>
+              </button>
             </div>
           </section>
         </main>

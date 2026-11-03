@@ -16,7 +16,7 @@
   - 1.2 Kanban
   - 1.3 Organisation
   - 1.4 n8n Automatisierung
-  - 1.5 Kommunikation & Bot Screen (Human Takeover)
+  - 1.5 Multi-Agenten-Gruppenchat & Kommunikations-Leitstand
 - **2. Posteingang & Ereignis-Stream**
   - 2.1 Übersicht
   - 2.2 Webhooks
@@ -27,12 +27,13 @@
 - **3. Agenten-Kader**
   - 3.1 Übersicht
   - 3.2 Chat
-  - 3.3 Fähigkeiten
-  - 3.4 Operation
-  - 3.5 Soul
-  - 3.6 Personalakte
-  - 3.7 Marktplatz
-  - 3.8 Der vollständige Flotten-Kader: Alle 57 Spezialisten nach Fachdomänen
+  - 3.3 Bot Screen (Desktop & Web-Navigator)
+  - 3.4 Fähigkeiten
+  - 3.5 Operation
+  - 3.6 Soul
+  - 3.7 Personalakte
+  - 3.8 Marktplatz
+  - 3.9 Der vollständige Flotten-Kader: Alle 57 Spezialisten nach Fachdomänen
 - **4. Showroom**
   - 4.1 Explorer
   - 4.2 Berichte
@@ -301,22 +302,22 @@ Die integrierte n8n Workflow-Engine (Port 5678) verbindet deterministische Cron-
 - Automatische Task-Erstellung im Kanban-Board bei externen Webhook-Events.
 - Ausfallsichere Warteschlangen bei temporärer Unerreichbarkeit externer APIs.
 
-### 1.5 Kommunikation & Bot Screen (Human Takeover)
-Der Funkverkehr- und Desktop-Monitor verbindet die textbasierte Inter-Agenten-Kommunikation mit der visuellen Steuerung autonomer Browser- und Betriebssystem-Sitzungen:
+### 1.5 Multi-Agenten-Gruppenchat & Kommunikations-Leitstand
+Der Kommunikations-Leitstand in Operations bündelt den gesamten team- und systemweiten Funkverkehr der Agentenflotte in einem strukturierten Multi-Channel-Gruppenchat:
 
-#### 1.5.1 Echtzeit-Funkverkehr (Live SSE-Streaming)
-- **Persistenter Ereignis-Stream (`/api/operations/comm-feed/stream`):** Interne Kontextübergaben, Tool-Aufrufe, Abstimmungen und Statusberichte zwischen Agenten werden per Server-Sent Events ohne Polling-Latenz direkt ins Interface gepusht.
-- **Transparente Rollenverfolgung:** Jede Nachricht weist Absender-Avatar, Rolle, Zeitstempel und Ziel-Agent aus.
-- **Leitstand-Intervention (Commander):** Der Operator kann über das Eingabefeld jederzeit Funksprüche und Kurskorrekturen absenden, die sofort im Kontext der beteiligten Agenten wirksam werden.
+#### 1.5.1 Kanal-Struktur & Filterung
+- **`#all-stream` (Gesamt-Feed):** Zeigt alle Inter-Agenten-Ereignisse, automatische Statusmeldungen, Handoffs, System-Broadcasts und Arbeitsnotizen in chronologischer Reihenfolge.
+- **`#boardroom` (AI Boardroom Debatten):** Dedizierter Kanal für strategische C-Level-Debatten. Zeigt die Argumentationsrunden, Kritiker-Voten, Synthesen und Beschlussfassungen aus dem AI Boardroom / Decision Board in Echtzeit an.
+- **`#projekte-tasks` (Aufgaben- & Projektströme):** Nach spezifischer Task-ID oder Projektnummer gefilterte Chats, sodass Abstimmungen zu einzelnen Kanban-Karten isoliert nachvollzogen werden können.
 
-#### 1.5.2 Bot Screen: Virtueller Desktop & Human Takeover
-- **Headless Xfce/RFB Desktop (:99):** Über den Umschalter `[ 🖥 Bot Screen (Desktop) ]` öffnet sich die reale grafische Oberfläche des im Hintergrund laufenden Agenten-Browsers (Chromium/CDP Port 9222).
-- **Automatisches Human-Takeover-Signal:** Erkennt ein Web-Agent bei der Recherche oder Formularbearbeitung ein Cloudflare Turnstile Captcha, ein Schiebepuzzle oder eine 2-Faktor-Authentifizierung (SMS/Authenticator), schlägt er Alarm:
-  - Der rote Indikator `Takeover!` leuchtet im Cockpit auf.
-  - Ein Warn-Banner benennt den Grund und die betroffene Ziel-URL.
-  - Im Live-Chat erscheint ein Direktlink `[ 🖥 Zum Bot Screen wechseln ]`.
-- **Interaktive Eingabesteuerung:** Der Operator klickt das Captcha im simulierten oder gestreamten Browserfenster weg oder gibt Einmal-Passwörter ein.
-- **Nahtlose Wiederaufnahme:** Ein Klick auf `Agent fortsetzen` meldet die Freigabe an das System (`POST /api/operations/bot-screen/takeover/resume`), woraufhin der Agent den Workflow autonom zu Ende führt.
+#### 1.5.2 Echtzeit-Streaming & Decision-Board-Replikation
+- **SSE-Streaming (`/api/operations/comm-feed/stream`):** Nachrichten und Arbeitsübergaben werden ohne Polling-Latenz per Server-Sent Events direkt in den Chatverlauf gestreamt.
+- **Transparente Rollenverfolgung:** Jede Nachricht weist Absender-Avatar, Rolle, Zeitstempel, Ziel-Agent und die zugrunde liegende Task-ID aus.
+- **Echtzeit-Kopplung mit dem Decision Board:** Jede Wortmeldung einer Boardroom-Debatte wird zeitgleich in `task_events` repliziert. Operator können die Debatte somit wahlweise im Decision Board ("LIVE-DEBATTEN-ARENA") oder parallel in Operations Kommunikation verfolgen.
+
+#### 1.5.3 Leitstand-Intervention (Commander)
+- **Direkter Funkspruch:** Über das Eingabefeld am unteren Rand des Chats kann der Operator jederzeit Direktiven an einzelne Agenten oder die gesamte Gruppe funken.
+- **Kontextuelle Priorisierung:** Funksprüche des Operators fließen mit höchster Priorität in die Task-Schleife der betroffenen Agenten ein.
 
 
 ---
@@ -390,30 +391,43 @@ Der Agenten-Kader ist die Personalabteilung und das operative Einstellungszentru
 - 1:1 Direkt-Dialog mit dem ausgewählten Agenten zum Testen und Kalibrieren.
 - Markdown-Rendering, Code-Highlighting und manuelle Schieberegler für Temperature und Top-P.
 
-### 3.3 Fähigkeiten
+### 3.3 Bot Screen (Desktop & Web-Navigator)
+Der Bot Screen ist als dedizierter Subtab zwischen Chat und Fähigkeiten im Agentenkader integriert. Er ermöglicht die visuelle Überwachung und interaktive Steuerung von Browser- und Desktop-Sitzungen:
+- **Adressleiste oben:** Manuelle Eingabe oder Übergabe einer Ziel-URL. Ermöglicht dem Operator, sich auf Portalen, Jobbörsen oder Webdiensten persönlich einzuloggen und eventuelle 2FA-Challenges (SMS, Authenticator-App, Cloudflare Turnstile) gefahrlos manuell zu überwinden.
+- **Interaktiver Screen-Canvas (Mitte):** Gestreamter oder simulierter Live-Desktop des Chromium-Agenten (CDP Port 9222 / Xfce :99) mit Cursor-Projektion und Klick-Interaktion.
+- **Dual-Control Steuerleiste (Unten):**
+  - **Autorisierungs-Schalter (`[ 👤 Dein Zugriff ]` / `[ 🤖 Agent autorisiert ]`):** Nur der Operator oder privilegierte Systemrollen (**Robert**, **default** / Alexander Richter, **Micha**) können den Agenten aktivieren. Solange der Schalter auf `Dein Zugriff` steht, verharrt der Agent im Standby und beobachtet die Sitzung passiv.
+  - **Direktiven-Promptfeld:** Eingabefeld mit Sende-Button, um dem Agenten nach erfolgreichem Login präzise Anweisungen zu übermitteln (z. B. *"Lies alle Bewerbungen in der Inbox aus und erstelle eine strukturierte Bewerberliste"* oder *"Fülle das Bewerbungsformular anhand meines Master-Lebenslaufs aus"*).
+- **Skill-Kopplung (`agent-browser-navigator`):** Der Zugriff auf den Bot-Screen ist strikt an den Skill `agent-browser-navigator` gebunden. Nur autorisierte Agenten (Robert, default, HR/Talent Scouts, Deep Analysts) dürfen Browser-Steuerungsbefehle ausführen.
+- **Autonomie-Governance (3-Klassen-Modell):**
+  - *Generelle Aktionen (vollautonom):* Sichten, Navigieren, Lesen, Extrahieren, Bewerben und Absenden von Standardformularen.
+  - *Sensible Aktionen (HITL-Pflicht):* Bestellen, Kaufen, Bezahlen, Löschen von Accounts oder Signieren von Verträgen erfordern zwingend eine Human-in-the-Loop-Freigabe.
+  - *Verbotene Aktionen (Zero Tolerance):* Exfiltration von Zugangsdaten oder Umgehung von Systemschutzmechanismen werden strikt blockiert.
+
+### 3.4 Fähigkeiten
 - Tool- und Skill-Matrix: Zuweisung konkreter Werkzeuge (Web-Search, PDF-Reader, Code-Sandbox, Terminal, Dateisystem).
 - Rechtevergabe nach dem Prinzip der geringsten Berechtigung (Least Privilege).
 
-### 3.4 Operation
+### 3.5 Operation
 - Übersicht aller aktuell zugewiesenen und historisch erledigten Aufgaben des Agenten.
 - Transparente Leistungshistorie, Token-Verbrauch und Verknüpfung zu erzeugten Showroom-Artefakten.
 - Zur kontinuierlichen Leistungsbewertung siehe [Anhang V.6: Human Feedback Loop](#v6-human-feedback-loop--kontinuierliche-optimierung).
 
-### 3.5 Soul
+### 3.6 Soul
 - Inline-Editor für die System-Prompts (`SOUL.md`) des Agenten.
 - Definition von Tonalität, Verhaltensregeln, ethischen Leitplanken und expliziten Negativ-Regeln (Was darf der Agent keinesfalls tun?).
 
-### 3.6 Personalakte
+### 3.7 Personalakte
 - Formelles HR-Dossier des Agenten mit fachlichem Werdegang, Zertifizierungen und Kompetenzprofil.
 - Hinterlegung firmenspezifischer Standard Operating Procedures (SOPs), an die sich der Agent bei allen Ausführungen halten muss.
 
 > 📖 **Vertiefender Leitfaden:** Siehe den vollständigen Leitfaden zur Personalaktenführung in [Anhang V.5: Agenten-Scorecards & Personalakten](#v5-agenten-scorecards--hr-personalakten).
 
-### 3.7 Marktplatz
+### 3.8 Marktplatz
 - Import und Export vorkonfigurierter Rollen-Pakete als portable JSON/Markdown-Dateien.
 - Schnelle Erweiterung des Kaders bei Erschließung neuer Geschäftsbereiche.
 
-### 3.8 Der vollständige Flotten-Kader: Alle 57 Spezialisten nach Fachdomänen
+### 3.9 Der vollständige Flotten-Kader: Alle 57 Spezialisten nach Fachdomänen
 
 Das Gesamtsystem umfasst 57 spezialisierte Rollenprofile, die nach den 7 strategischen Kernbereichen gegliedert und nach dem EU AI Act klassifiziert sind:
 
@@ -1050,8 +1064,14 @@ Der Hermes-Daemon bildet das operative Fundament von Archon OS:
 - Zum Notfallbetrieb siehe [Anhang IV.8: Break-Glass Recovery](#iv8-break-glass-recovery--notfallzugriff) und [Anhang V.17: Chaos Resilience](#v17-chaos-resilience--störungs-simulation).
 
 ### 17.2 Autonomie & Module
-- Aktivierung und Deaktivierung autonomer Hintergrund-Daemons (z. B. nächtliche Speicherkonsolidierung, Standup-Reports).
-- Steuerung flüchtiger Sandbox-Container für Code-Ausführungen (`t-a42e5d`).
+- **Hintergrund-Daemons:** Aktivierung und Deaktivierung autonomer Hintergrund-Daemons (z. B. nächtliche Speicherkonsolidierung, Standup-Reports).
+- **Flüchtige Sandbox-Container:** Steuerung ephemerer Container für isolierte Code-Ausführungen (`t-a42e5d`).
+- **Autonomie-Governance & Berechtigungsklassen (`settings.json`):**
+  Zentrales Governance-Modul (`autonomy_governance`) zur Regulierung von Agentenaktionen nach standardisierten Branchenregeln:
+  - *Generelle Aktionen (`general_actions` - Vollautonom):* Web-Recherche, Datenextraktion, Formulare ausfüllen, Bewerbungen absenden und Dokumentenanalyse. Werden ohne manuelle Bestätigung direkt ausgeführt.
+  - *Sensible Aktionen (`sensitive_actions` - HITL-Pflicht):* Bestellungen aufgeben, Einkäufe tätigen, Zahlungen auslösen, Verträge unterzeichnen, Benutzerkonten löschen oder Finanzmittel transferieren. Werden durch ein striktes Human-in-the-Loop-Gate blockiert und erst nach persönlicher Freigabe des Operators umgesetzt.
+  - *Verbotene Aktionen (`prohibited_actions` - Zero Tolerance):* Exfiltration von Schlüsseln oder Passwörtern, Systembereinigungen und das Deaktivieren von Sicherheitsmechanismen. Führen zum sofortigen Abbruch der Aufgabe und Sicherheitsalarm.
+  - *Berechtigte Controller (`authorized_controllers`):* Nur explizit benannte Profile (**Robert**, **default** / Root Orchestrator und **Micha**) besitzen die Berechtigung, den Agenten-Autorisierungsschalter im Bot-Screen umzulegen und Browser-Navigationsaufträge zu initiieren.
 
 ### 17.3 Container & Dienste
 - Live-Statusmatrix aller 13 Docker-Container inklusive Neustart-Schaltflächen.

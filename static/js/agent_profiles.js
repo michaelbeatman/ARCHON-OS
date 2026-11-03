@@ -330,7 +330,7 @@
     function switchAgentCadreTab(tabName) {
       activeAgentCadreTab = tabName || 'overview';
       
-      const tabNames = ['overview', 'chat', 'skills', 'operations', 'soul', 'personalakte', 'marketplace'];
+      const tabNames = ['overview', 'chat', 'botscreen', 'skills', 'operations', 'soul', 'personalakte', 'marketplace'];
       tabNames.forEach(t => {
         const btn = document.getElementById(`agent-tab-btn-${t}`);
         const pane = document.getElementById(`agent-pane-${t}`);
@@ -3092,3 +3092,102 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
       }
     };
 
+
+
+    // =========================================================================
+    // CADRE BOT SCREEN CONTROLLER (INTERAKTIVER DESKTOP IM AGENTENKADER)
+    // =========================================================================
+    let cadreBotScreenAuthorized = false;
+
+    function navigateCadreBotScreen() {
+      const urlInput = document.getElementById("cadre-botscreen-url");
+      const titleEl = document.getElementById("cadre-botscreen-title");
+      const url = urlInput ? urlInput.value.trim() : "";
+      if (!url) return;
+      if (titleEl) titleEl.innerText = url + " — Sitzung aktiv";
+      fetch("/api/operations/bot-screen/takeover/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Manuelle Navigation durch Bediener", url: url })
+      }).catch(() => {});
+    }
+
+    function refreshCadreBotScreen() {
+      const titleEl = document.getElementById("cadre-botscreen-title");
+      if (titleEl) titleEl.classList.add("animate-pulse");
+      setTimeout(() => { if (titleEl) titleEl.classList.remove("animate-pulse"); }, 600);
+    }
+
+    function toggleBotScreenAgentAuthorization() {
+      // Berechtigungsprüfung: Robert, default, Micha
+      const currentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "default";
+      const allowedControllers = ["orchestrator", "default", "senior_coder", "recruiter_talent_scout", "research_deep_analyst"];
+      
+      cadreBotScreenAuthorized = !cadreBotScreenAuthorized;
+      const btn = document.getElementById("btn-cadre-botscreen-auth");
+      const dot = document.getElementById("cadre-botscreen-auth-dot");
+      const label = document.getElementById("cadre-botscreen-auth-label");
+      const pill = document.getElementById("cadre-botscreen-mode-pill");
+      const hint = document.getElementById("cadre-botscreen-auth-hint");
+
+      if (cadreBotScreenAuthorized) {
+        if (btn) btn.className = "px-3.5 py-1.5 rounded-lg font-bold text-xs font-mono flex items-center gap-2 transition cursor-pointer shadow-xs bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500";
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-white animate-pulse";
+        if (label) label.innerText = "🤖 Agent autorisiert (Steuerung aktiv)";
+        if (pill) {
+          pill.className = "text-[9.5px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-bold";
+          pill.innerText = "🤖 Agent aktiv (Maus & Tastatur freigegeben)";
+        }
+        if (hint) hint.innerText = "Jetzt Anweisung eingeben und absenden";
+      } else {
+        if (btn) btn.className = "px-3.5 py-1.5 rounded-lg font-bold text-xs font-mono flex items-center gap-2 transition cursor-pointer shadow-xs bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700";
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-zinc-500";
+        if (label) label.innerText = "👤 Dein Zugriff (Agent wartet)";
+        if (pill) {
+          pill.className = "text-[9.5px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 font-bold";
+          pill.innerText = "👤 Manueller Modus (Login aktiv)";
+        }
+        if (hint) hint.innerText = "Klicke, um Agenten für Maus & Tastatur freizuschalten";
+      }
+    }
+
+    async function sendCadreBotScreenInstruction() {
+      const promptInput = document.getElementById("cadre-botscreen-prompt");
+      const urlInput = document.getElementById("cadre-botscreen-url");
+      const prompt = promptInput ? promptInput.value.trim() : "";
+      if (!prompt) return;
+
+      if (!cadreBotScreenAuthorized) {
+        alert("Bitte zuerst links den Button 'Agent autorisieren' umlegen, bevor du die Anweisung sendest.");
+        return;
+      }
+
+      const sendBtn = document.getElementById("btn-cadre-botscreen-send");
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = `<span class="animate-pulse">Ausführen...</span>`;
+      }
+
+      try {
+        const agentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "orchestrator";
+        const res = await fetch("/api/operations/comm-feed/broadcast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "commander",
+            message: `[Bot-Screen Anweisung an ${agentId}]: ${prompt} (Ziel: ${urlInput?.value || 'aktuelle Seite'})`,
+            target: agentId
+          })
+        });
+        promptInput.value = "";
+        alert(`Anweisung an ${agentId} übergeben! Der Agent führt die Schritte jetzt autonom aus und berichtet im Funkverkehr.`);
+      } catch (err) {
+        alert("Fehler beim Übergeben der Instruktion: " + err.message);
+      } finally {
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.innerHTML = `<i data-lucide="send" class="w-3.5 h-3.5"></i><span>Instruieren</span>`;
+          if (window.lucide) lucide.createIcons();
+        }
+      }
+    }

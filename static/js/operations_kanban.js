@@ -3305,3 +3305,97 @@
       messagesContainer.appendChild(card);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
+
+
+    // =========================================================================
+    // MULTI-AGENTEN GRUPPENCHAT KANAL-STEUERUNG (#all-stream, #boardroom, #projekte)
+    // =========================================================================
+    let currentCommChannel = "all"; // "all" | "boardroom" | "projects"
+
+    function switchCommChannel(channel) {
+      currentCommChannel = channel;
+      const btnAll = document.getElementById("comm-channel-btn-all");
+      const btnBoardroom = document.getElementById("comm-channel-btn-boardroom");
+      const btnProjects = document.getElementById("comm-channel-btn-projects");
+      const titleEl = document.getElementById("ops-comm-active-title");
+      const descEl = document.getElementById("ops-comm-active-desc");
+
+      const btns = { all: btnAll, boardroom: btnBoardroom, projects: btnProjects };
+      Object.keys(btns).forEach(k => {
+        const b = btns[k];
+        if (!b) return;
+        if (k === channel) {
+          b.className = "w-full px-2.5 py-2 rounded-xl text-left text-xs font-mono transition cursor-pointer flex items-center justify-between bg-indigo-600 text-white font-bold shadow-xs";
+        } else {
+          b.className = "w-full px-2.5 py-2 rounded-xl text-left text-xs font-mono transition cursor-pointer flex items-center justify-between hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
+        }
+      });
+
+      if (channel === "boardroom") {
+        if (titleEl) titleEl.innerText = "🏛 #boardroom — Live-Debatten & Meta-Reasoning";
+        if (descEl) descEl.innerText = "· Transkripte der Decision Engine";
+      } else if (channel === "projects") {
+        if (titleEl) titleEl.innerText = "📁 #projekte-tasks — Projektbezogene Übergaben";
+        if (descEl) descEl.innerText = "· Tasks nach eindeutigen IDs";
+      } else {
+        if (titleEl) titleEl.innerText = "📡 #all-stream — Gesamt-Funkverkehr aller Agenten";
+        if (descEl) descEl.innerText = "· Echtzeit-Streaming aktiv";
+      }
+
+      // Re-filter feed based on channel
+      if (typeof opsCommData !== "undefined" && opsCommData) {
+        renderOperationsCommFeedFiltered(opsCommData);
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderOperationsCommFeedFiltered(commData) {
+      if (!commData || !commData.feed) return;
+      let items = commData.feed;
+
+      if (currentCommChannel === "boardroom") {
+        items = items.filter(i => (i.task_id && i.task_id.includes("boardroom")) || (i.kind && i.kind.includes("boardroom")) || (i.message && i.message.includes("[BOARDROOM]")));
+      } else if (currentCommChannel === "projects") {
+        items = items.filter(i => i.task_id && !i.task_id.includes("boardroom") && i.task_id !== "system_broadcast");
+      }
+
+      if (currentCommFilterAgent) {
+        items = items.filter(i => i.author_id === currentCommFilterAgent || i.target_id === currentCommFilterAgent);
+      }
+
+      const messagesContainer = document.getElementById('ops-comm-messages');
+      if (!messagesContainer) return;
+
+      if (items.length === 0) {
+        messagesContainer.innerHTML = `
+          <div class="h-64 flex flex-col items-center justify-center text-center p-6 text-[var(--muted-foreground)] font-mono">
+            <i data-lucide="message-square-off" class="w-8 h-8 mb-2 opacity-40"></i>
+            <span class="text-xs">Keine Nachrichten für den Kanal #${currentCommChannel} gefunden.</span>
+          </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+        return;
+      }
+
+      messagesContainer.innerHTML = items.map(item => {
+        const isBoardroom = (item.task_id && item.task_id.includes("boardroom")) || (item.kind && item.kind.includes("boardroom"));
+        return `
+          <div class="p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xs font-sans text-xs flex items-start gap-3">
+            <img src="${item.author_avatar || '/static/avatars/avatar_001.jpg'}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)] mt-0.5" />
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] mb-1.5 font-mono">
+                <div class="flex items-center gap-1.5 truncate">
+                  <span class="font-bold text-[var(--foreground)]">${escapeHtml(item.author_name || item.author_id)}</span>
+                  ${isBoardroom ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-500 font-bold uppercase">Boardroom</span>' : ''}
+                  ${item.task_id ? `<span class="text-[9px] px-1.5 py-0.2 rounded bg-zinc-200 dark:bg-zinc-800 text-[var(--muted-foreground)] font-mono truncate">#${escapeHtml(item.task_id)}</span>` : ''}
+                </div>
+                <span class="text-[10px] text-[var(--muted-foreground)] shrink-0">${item.timestamp || 'jetzt'}</span>
+              </div>
+              <div class="text-[11.5px] leading-relaxed text-[var(--foreground)] whitespace-pre-wrap select-text">${escapeHtml(item.message || '')}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      if (window.lucide) lucide.createIcons();
+    }

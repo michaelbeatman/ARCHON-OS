@@ -1378,6 +1378,28 @@ async def stream_boardroom_debate(
             for coro in asyncio.as_completed(tasks):
                 res_event = await coro
                 running_transcript += f"[{res_event['agent_name']} ({res_event['role']}) - Runde {round_num}]:\n{res_event['content']}\n\n"
+                # Replicate live into task_events for #boardroom and #all-stream in Operations
+                try:
+                    from backend.operations_api import _get_kanban_connection
+                    _k_conn = _get_kanban_connection()
+                    _k_cur = _k_conn.cursor()
+                    _k_now = datetime.datetime.now().isoformat()
+                    _k_payload = json.dumps({
+                        "author": res_event["agent_id"],
+                        "message": f"[BOARDROOM RUNDE {round_num}] {res_event['content']}",
+                        "target": "boardroom",
+                        "broadcast": True,
+                        "framework": framework
+                    }, ensure_ascii=False)
+                    _k_cur.execute("""
+                        INSERT INTO task_events (task_id, kind, payload, created_at)
+                        VALUES (?, 'boardroom_turn', ?, ?)
+                    """, (f"boardroom_{int(time.time())}", _k_payload, _k_now))
+                    _k_conn.commit()
+                    _k_conn.close()
+                except Exception as _e_rep:
+                    pass
+
                 yield res_event
         else:
             for agent in expert_agents:

@@ -398,8 +398,8 @@
           1 Vorfall: telegram_bot ge...
         </div>
       </div>
-      <!-- Mini-Statusleiste: Sync, Lokal, DSGVO -->
-      <div class="pt-1 flex items-center justify-between px-1 text-[10.5px] font-mono text-[var(--muted-foreground)] border-t border-[var(--border)]/60">
+      <!-- Mini-Statusleiste: Sync, Lokal, DSGVO, Update -->
+      <div class="pt-1 flex items-center justify-between px-1 text-[10px] font-mono text-[var(--muted-foreground)] border-t border-[var(--border)]/60">
         <!-- Sync -->
         <button 
           type="button" 
@@ -434,6 +434,18 @@
         >
           <span id="dot-dsgvo" class="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors"></span>
           <span>DSGVO</span>
+        </button>
+        <span class="text-zinc-400 dark:text-zinc-600 select-none">|</span>
+        <!-- Update -->
+        <button 
+          type="button" 
+          id="status-badge-update" 
+          onclick="window.openSystemUpdateDialog && window.openSystemUpdateDialog()" 
+          class="flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5"
+          title="Hermes Core &amp; System-Update einsehen"
+        >
+          <span id="dot-update" class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors"></span>
+          <span id="label-update-text">Update</span>
         </button>
       </div>
 
@@ -2011,6 +2023,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/chat_engine.js?v=202610271358"></script>
   <script src="/static/js/system_settings.js?v=202610311300"></script>
   <script src="/static/js/settings_search.js?v=202611030730"></script>
+  <script src="/static/js/system_update_badge.js?v=202611030945"></script>
   <script src="/static/js/agent_profiles.js?v=202610310900"></script>
   <script src="/static/js/customizer.js?v=202610271358"></script>
   <script src="/static/js/component_design_studio.js?v=202610271358"></script>
@@ -13032,6 +13045,71 @@ ${logExcerpt}
     </div>
   </div>
 </div>
+
+  <!-- MODAL: SYSTEM-UPDATE & RELEASE LIFECYCLE (Dialog) -->
+  <div id="system-update-dialog-modal" class="hidden fixed inset-0 z-[99999] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150" onclick="if(event.target === this) closeSystemUpdateDialog()">
+    <div class="w-full max-w-lg bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl p-5 text-sans text-[var(--foreground)] space-y-4 animate-in zoom-in-95 duration-150">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-[var(--foreground)] flex items-center gap-2">
+              Hermes Core &amp; System-Update
+            </h3>
+            <p class="text-[11px] text-[var(--muted-foreground)] font-mono">Release-Lifecycle, Git-Sync &amp; Version</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeSystemUpdateDialog()" class="w-7 h-7 rounded-lg hover:bg-[var(--secondary)] flex items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer transition">
+          ✕
+        </button>
+      </div>
+
+      <!-- Versions-Übersicht Card -->
+      <div class="bg-[var(--secondary)]/40 p-3.5 rounded-xl border border-[var(--border)] space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-[var(--muted-foreground)]">Hermes Core Version:</span>
+            <span id="upd-modal-version" class="text-xs font-mono font-bold text-[var(--foreground)]">Lädt...</span>
+          </div>
+          <span id="upd-modal-status-badge" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-500/15 text-[var(--muted-foreground)] border border-[var(--border)]">
+            Prüfe...
+          </span>
+        </div>
+        <div class="flex items-center justify-between text-[11px] font-mono text-[var(--muted-foreground)] pt-1 border-t border-[var(--border)]/60">
+          <div>Branch: <strong id="upd-modal-branch" class="text-[var(--foreground)]">-</strong></div>
+          <div>Commit: <strong id="upd-modal-commit" class="text-[var(--foreground)]">-</strong></div>
+        </div>
+        <div class="text-[10.5px] font-mono text-[var(--muted-foreground)] truncate pt-0.5" id="upd-modal-last-commit">
+          -
+        </div>
+      </div>
+
+      <!-- Details zu anstehenden Updates -->
+      <div id="upd-modal-updates-section" class="space-y-2">
+        <!-- Wird dynamisch befüllt -->
+      </div>
+
+      <!-- RBAC Info / Administrator Action Area -->
+      <div id="upd-modal-actions-area" class="pt-2 border-t border-[var(--border)] flex flex-col gap-2.5">
+        <!-- Dynamischer Admin-Button oder Hinweis für Non-Admins -->
+      </div>
+
+      <!-- Footer Links -->
+      <div class="flex items-center justify-between pt-1 text-[11px] font-mono text-[var(--muted-foreground)]">
+        <button type="button" onclick="checkSystemUpdateDialogStatus()" class="hover:text-sky-500 transition cursor-pointer flex items-center gap-1">
+          <i data-lucide="refresh-cw" class="w-3 h-3"></i> Erneut prüfen
+        </button>
+        <button type="button" onclick="closeSystemUpdateDialog(); openSystemSettingsModal('update');" class="hover:text-sky-500 transition cursor-pointer flex items-center gap-1">
+          Erweiterte Git-Verwaltung in Settings →
+        </button>
+      </div>
+
+    </div>
+  </div>
 
   <script src="/static/js/corporate_controller.js?v=2026110113"></script>
   <script src="/static/erp_studio.js?v=2026110124"></script>

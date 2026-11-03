@@ -270,7 +270,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -280,7 +280,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -290,7 +290,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -300,7 +300,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -310,7 +310,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -320,7 +320,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -330,7 +330,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -340,7 +340,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -350,7 +350,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -360,7 +360,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -370,7 +370,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -380,7 +380,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -390,7 +390,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (0 Einträge)"
       },
       {
@@ -400,7 +400,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -410,11 +410,11 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-03T06:31:38.382751",
+        "last_check": "2026-11-03T06:32:38.787461",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-03T06:31:38.382751",
+    "last_run": "2026-11-03T06:32:38.787461",
     "recent_findings": [
       {
         "id": "51e7f8fcb1d07255",

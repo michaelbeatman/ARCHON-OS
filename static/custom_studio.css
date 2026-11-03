@@ -1,5 +1,5 @@
 /* ========================================================================= */
-/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-03 06:21:16               */
+/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-03 07:40:00               */
 /* ========================================================================= */
 
 aside.flex-shrink-0 > nav.flex-1 {
@@ -7,7 +7,25 @@ aside.flex-shrink-0 > nav.flex-1 {
   padding-bottom: 2px !important;
 }
 
+aside.flex-shrink-0 nav.flex-1 [class*="space-y-"] > * + * {
+  margin-top: 2px !important;
+  margin-bottom: 0px !important;
+}
+
 .archon-nav-item {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  margin-top: 1px !important;
+  margin-bottom: 1px !important;
+  min-height: unset !important;
+}
+
+aside .theme-border-strong[class*="my-"] {
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
+}
+
+#topbar-user-badge > div {
   padding-top: 2px !important;
   padding-bottom: 2px !important;
 }

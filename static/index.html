@@ -11,9 +11,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&family=Julius+Sans+One&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Montserrat:wght@300;400;500;600;700;800&family=Fira+Code:wght@300..700&family=Cinzel:wght@400..900&family=Space+Grotesk:wght@300..700&family=Plus+Jakarta+Sans:wght@300..800&display=swap" rel="stylesheet">
   <!-- Custom Studio CSS Overrides -->
     <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
-  <link rel="stylesheet" href="/static/custom.css?v=2026110113">
+  <link rel="stylesheet" href="/static/custom.css?v=202611030740">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
-  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=202610161325">
+  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=202611030740">
   <!-- Tailwind CSS Local Bundle (Offline-fähig & kein CDN Latenz-Overhead) -->
   <script src="/static/js/tailwind.cdn.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -169,14 +169,14 @@
       </div>
     </div>
     <!-- Navigationsbereich: Hierarchische 3-Säulen-Architektur -->
-    <nav class="flex-1 px-2.5 py-2.5 space-y-3">
+    <nav class="flex-1 px-2 py-1 space-y-1">
       <!-- SÄULE 1: OPERATIVE STEUERUNG -->
-      <div class="space-y-1">
-        <div class="px-2 py-1 text-[10px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
+      <div class="space-y-[2px]">
+        <div class="px-2 py-0.5 text-[9.5px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
           OPERATIVE STEUERUNG
         </div>
-        <div class="space-y-0.5">
-          <button id="nav-mission-control" onclick="setTab('mission-control')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+        <div class="space-y-[2px]">
+          <button id="nav-mission-control" onclick="setTab('mission-control')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.operations">Operations</div>
@@ -184,7 +184,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-master-chat" style="display: none;" onclick="setTab('master-chat')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-master-chat" style="display: none;" onclick="setTab('master-chat')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="terminal" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.chat">Master Console</div>
@@ -192,7 +192,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-inbox" onclick="setTab('inbox')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-inbox" onclick="setTab('inbox')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="inbox" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.inbox">Eingang</div>
@@ -200,7 +200,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-agent-profiles" onclick="setTab('agent-profiles')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-agent-profiles" onclick="setTab('agent-profiles')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="users" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.cadre">Agenten-Kader</div>
@@ -208,7 +208,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-operations" style="display: none;" onclick="setTab('operations')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-operations" style="display: none;" onclick="setTab('operations')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="kanban" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Operations</div>
@@ -216,7 +216,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-automation" style="display: none;" onclick="setTab('automation')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-automation" style="display: none;" onclick="setTab('automation')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="workflow" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.automation">Workflow-Engine</div>
@@ -224,7 +224,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-showroom" onclick="setTab('showroom')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-showroom" onclick="setTab('showroom')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="layout" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.showroom">Showroom</div>
@@ -235,15 +235,15 @@
         </div>
       </div>
       <!-- VISUELLE TRENNLINIE -->
-      <div class="border-t theme-border-strong my-1.5 opacity-60"></div>
+      <div class="border-t theme-border-strong my-[2px] opacity-60"></div>
       <!-- SÄULE 2: KOGNITION & WISSEN -->
-      <div class="space-y-1">
-        <div class="px-2 py-1 text-[10px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
+      <div class="space-y-[2px]">
+        <div class="px-2 py-0.5 text-[9.5px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
           KOGNITION & WISSEN
         </div>
-        <div class="space-y-0.5">
+        <div class="space-y-[2px]">
           <!-- 1. Internet-Watchdog (Signal- & Web-Radar) -->
-          <button id="nav-watchdog" onclick="setTab('watchdog')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-watchdog" onclick="setTab('watchdog')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="radar" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.watchdog">Internet-Watchdog</div>
@@ -253,7 +253,7 @@
           </button>
 
           <!-- 2. Research Lab (Deep Search & Recherche) -->
-          <button id="nav-research" onclick="setTab('research')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-research" onclick="setTab('research')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="microscope" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.research">Research Lab</div>
@@ -263,7 +263,7 @@
           </button>
 
           <!-- 3. Zentralbibliothek (RAG & Obsidian Vault) -->
-          <button id="nav-library" onclick="setTab('library')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-library" onclick="setTab('library')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="book-open" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.library">Zentralbibliothek</div>
@@ -273,7 +273,7 @@
           </button>
 
           <!-- 4. Decision Engine (Meta-Reasoning & Boardroom) -->
-          <button id="nav-ai-mastermind" onclick="setTab('ai-mastermind')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-ai-mastermind" onclick="setTab('ai-mastermind')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="brain-circuit" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.boardroom">Decision Engine</div>
@@ -284,15 +284,15 @@
         </div>
       </div>
       <!-- VISUELLE TRENNLINIE -->
-      <div class="border-t theme-border-strong my-1.5 opacity-60"></div>
+      <div class="border-t theme-border-strong my-[2px] opacity-60"></div>
       <!-- SÄULE 3: WIRTSCHAFT & ERP -->
-      <div class="space-y-1">
-        <div class="px-2 py-1 text-[10px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
+      <div class="space-y-[2px]">
+        <div class="px-2 py-0.5 text-[9.5px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
           WIRTSCHAFT &amp; ERP
         </div>
-        <div class="space-y-0.5">
+        <div class="space-y-[2px]">
           <!-- 1. Adressen & CRM -->
-          <button id="nav-addresses" onclick="setTab('addresses')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-addresses" onclick="setTab('addresses')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="contact-round" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.crm">Adressen &amp; CRM</div>
@@ -301,7 +301,7 @@
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
           <!-- 2. Artikel & Leistungen -->
-          <button id="nav-items" onclick="setTab('items')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-items" onclick="setTab('items')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="package" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.items">Artikel &amp; Leistungen</div>
@@ -310,7 +310,7 @@
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
           <!-- 3. Vorgänge & Verträge -->
-          <button id="nav-operations-erp" onclick="setTab('operations-erp')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-operations-erp" onclick="setTab('operations-erp')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="briefcase-business" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.operations_erp">Vorgänge &amp; Verträge</div>
@@ -319,7 +319,7 @@
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
           <!-- 4. Rechnungswesen -->
-          <button id="nav-finance" onclick="setTab('finance')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-finance" onclick="setTab('finance')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="receipt" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.finance">Rechnungswesen</div>
@@ -328,7 +328,7 @@
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
           <!-- 5. Corporate & Mandant -->
-          <button id="nav-corporate" onclick="setTab('corporate')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-corporate" onclick="setTab('corporate')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="building-2" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.corporate">Corporate &amp; Mandant</div>
@@ -339,15 +339,15 @@
         </div>
       </div>
       <!-- VISUELLE TRENNLINIE -->
-      <div class="border-t theme-border-strong my-1.5 opacity-60"></div>
+      <div class="border-t theme-border-strong my-[2px] opacity-60"></div>
       <!-- SÄULE 4: INFRASTRUKTUR & GOVERNANCE -->
-      <div class="space-y-1">
-        <div class="px-2 py-1 text-[10px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
+      <div class="space-y-[2px]">
+        <div class="px-2 py-0.5 text-[9.5px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none">
           INFRASTRUKTUR & GOVERNANCE
         </div>
-        <div class="space-y-0.5">
+        <div class="space-y-[2px]">
           <!-- 1. Approval-Policies -->
-          <button id="nav-approval-policies" onclick="setTab('approval-policies')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-approval-policies" onclick="setTab('approval-policies')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="shield-alert" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.approval_policies">Approval-Policies</div>
@@ -356,7 +356,7 @@
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
           <!-- 2. Token Guard -->
-          <button id="nav-guardian" onclick="setTab('guardian')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-guardian" onclick="setTab('guardian')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="gauge" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.guardian">Token Guard</div>
@@ -365,7 +365,7 @@
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
           <!-- 3. Telemetrie & Logs -->
-          <button id="nav-log-stream" onclick="setTab('log-stream')" class="archon-nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 group">
+          <button id="nav-log-stream" onclick="setTab('log-stream')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="activity" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Telemetrie & Logs</div>
@@ -378,10 +378,10 @@
     </nav>
     <!-- UNTERER BEREICH: DASHBOARD, CRM & SYSTEM-STATUSE -->
     <!-- USER PROFILE BADGE (RBAC) -->
-    <div class="px-2.5 pt-1.5 pb-0.5">
+    <div class="px-2 py-1">
       <div id="topbar-user-badge"></div>
     </div>
-    <div class="px-3 py-2.5 border-t theme-border-strong mt-auto space-y-2.5">
+    <div class="px-2.5 py-1.5 border-t theme-border-strong mt-auto space-y-1.5">
       
       <!-- WATCHDOG KILL-SWITCH ALARM PILL (RED ALERT) -->
       <div id="sidebar-killswitch-alert" class="hidden p-2 rounded-xl border border-rose-500/50 bg-rose-950/40 text-rose-300 select-none shadow-sm">

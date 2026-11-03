@@ -55,14 +55,14 @@ class AuthManager {
     const title = !this.authEnabled ? 'Einzelplatz-Modus: Volle Admin-Rechte ohne Login-Zwang' : `Angemeldet als ${this.currentUser.role}`;
 
     badge.innerHTML = `
-      <div onclick="window.authManager.openProfileModal()" title="${title}" class="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 border border-[var(--border)] transition cursor-pointer select-none shadow-2xs">
-        <div class="w-5 h-5 rounded-full bg-zinc-800 text-white flex items-center justify-center font-mono font-bold text-[10px]">
+      <div onclick="window.authManager.openProfileModal()" title="${title}" class="flex items-center gap-1.5 px-2 py-[2px] rounded-lg bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 border border-[var(--border)] transition cursor-pointer select-none shadow-2xs">
+        <div class="w-4 h-4 rounded-full bg-zinc-800 text-white flex items-center justify-center font-mono font-bold text-[9px] shrink-0">
           ${initial}
         </div>
-        <span class="text-xs font-bold font-sans text-[var(--foreground)] truncate max-w-[110px]">
+        <span class="text-[11px] font-bold font-sans text-[var(--foreground)] truncate flex-1 leading-tight">
           ${this.currentUser.display_name || this.currentUser.username}
         </span>
-        <span class="text-[9.5px] font-mono px-1.5 py-0.2 rounded-full border ${roleBadgeClass} uppercase font-bold tracking-wider">
+        <span class="text-[9px] font-mono px-1 py-0.2 rounded border ${roleBadgeClass} uppercase font-bold tracking-wider shrink-0 leading-tight">
           ${roleLabel}
         </span>
       </div>

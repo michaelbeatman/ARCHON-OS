@@ -173,12 +173,27 @@
       const modal = document.getElementById("system-settings-modal");
       if (modal) {
         modal.classList.remove("hidden");
+        if (window.buildSettingsSearchIndex) {
+          setTimeout(window.buildSettingsSearchIndex, 250);
+        }
       }
     }
     function closeSystemSettingsModal() {
+      if (window.clearSettingsGlobalSearch) {
+        window.clearSettingsGlobalSearch();
+      }
       document.getElementById("system-settings-modal").classList.add("hidden");
     }
     function setSettingsTab(tabName) {
+      // Wenn Suchergebnis aktiv war, beim Tab-Klick Suche sauber zurücksetzen
+      const searchPane = document.getElementById("settings-tab-search-results");
+      if (searchPane && !searchPane.classList.contains("hidden")) {
+        searchPane.classList.add("hidden");
+        const sInput = document.getElementById("settings-global-search-input");
+        if (sInput) sInput.value = "";
+        const sClear = document.getElementById("settings-global-search-clear-btn");
+        if (sClear) sClear.classList.add("hidden");
+      }
       // Normalisiere Legacy- oder Subtab-Namen
       let targetTab = tabName;
       let targetSubTab = null;

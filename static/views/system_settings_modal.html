@@ -2,11 +2,42 @@
   <div id="system-settings-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
     <div id="system-settings-modal-card" class="os-modal bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 w-[96vw] max-w-7xl h-[92vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden transition-all duration-200">
       <!-- Modal Header -->
-      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
-        <h3 class="text-sm font-bold uppercase text-[var(--foreground)] tracking-wider flex items-center gap-2">
-          <i data-lucide="settings" class="w-4 h-4 text-black dark:text-white"></i> System Control Center
-        </h3>
-        <div class="flex items-center gap-2">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3 gap-3">
+        <div class="flex items-center gap-2 shrink-0">
+          <h3 class="text-sm font-bold uppercase text-[var(--foreground)] tracking-wider flex items-center gap-2">
+            <i data-lucide="settings" class="w-4 h-4 text-black dark:text-white"></i> System Control Center
+          </h3>
+        </div>
+
+        <!-- Globale Settings-Live-Suche -->
+        <div class="flex-1 max-w-lg mx-2 relative">
+          <div class="relative flex items-center">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-[var(--muted-foreground)] absolute left-3 pointer-events-none"></i>
+            <input
+              type="text"
+              id="settings-global-search-input"
+              placeholder="Einstellungen durchsuchen... (z. B. Sprache, Auth, Port, Backup, API, Model)"
+              class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl pl-8 pr-16 py-1.5 text-xs text-[var(--foreground)] font-mono placeholder:text-[var(--muted-foreground)]/70 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500 transition shadow-2xs"
+              autocomplete="off"
+              oninput="window.handleSettingsGlobalSearch && window.handleSettingsGlobalSearch(this.value)"
+              onkeydown="window.handleSettingsGlobalSearchKeydown && window.handleSettingsGlobalSearchKeydown(event)"
+            />
+            <div class="absolute right-2.5 flex items-center gap-1.5">
+              <button
+                id="settings-global-search-clear-btn"
+                onclick="window.clearSettingsGlobalSearch && window.clearSettingsGlobalSearch()"
+                type="button"
+                class="hidden text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer text-xs p-0.5 rounded hover:bg-[var(--secondary)]"
+                title="Suche zurücksetzen (Esc)"
+              >
+                ✕
+              </button>
+              <span id="settings-global-search-kbd" class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)] select-none" title="Drücke '/' zum Suchen">/</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
           <button type="button" id="modal-header-dock-btn" onclick="toggleSettingsDockMode()" title="Fenster rechts andocken für freien Live-Blick auf die echte Oberfläche" class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] transition flex items-center gap-1.5 cursor-pointer">
             <i data-lucide="panel-right" class="w-3.5 h-3.5"></i> Live-Dock
           </button>
@@ -34,6 +65,29 @@
       </div>
       <!-- Tab Content Area -->
       <div id="system-settings-modal-content-area" class="flex-1 overflow-y-auto py-4 pr-2 space-y-4 custom-scrollbar">
+
+        <!-- Suchergebnisse (Meilenstein: Settings Live-Suche) -->
+        <div id="settings-tab-search-results" class="hidden space-y-4 text-xs p-1">
+          <div class="border border-[var(--border)] rounded-xl p-3.5 bg-[var(--card)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div class="flex items-center gap-2.5">
+              <span id="settings-search-count-badge" class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                0 Treffer
+              </span>
+              <span class="text-xs text-[var(--muted-foreground)]">
+                Ergebnisse für „<strong class="text-[var(--foreground)] font-mono" id="settings-search-query-text"></strong>“
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-mono text-[var(--muted-foreground)] hidden md:inline">Klick auf Treffer springt direkt zur Einstellung</span>
+              <button type="button" onclick="window.clearSettingsGlobalSearch && window.clearSettingsGlobalSearch()" class="px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5">
+                <span>✕</span> Suche schließen
+              </button>
+            </div>
+          </div>
+          <div id="settings-search-results-list" class="space-y-2.5">
+            <!-- Dynamische Trefferkarten werden hier gerendert -->
+          </div>
+        </div>
 
         <!-- Tab: Benutzerverwaltung & RBAC (Meilenstein 4) -->
         <div id="settings-tab-users" class="hidden space-y-4 text-xs p-1">

@@ -1,15 +1,13 @@
 /* ========================================================================= */
-/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-02 11:29:20               */
+/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-03 06:21:16               */
 /* ========================================================================= */
 
-#help-chat-submit-btn {
-  background-color: #ffffff !important;
-  border-color: #303030 !important;
-  border-width: 2px !important;
+aside.flex-shrink-0 > nav.flex-1 {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
 }
 
-div.border > div.px-5 > button.bg-zinc-900 {
-  border-color: #212121 !important;
-  border-width: 2px !important;
-  background-color: #ffffff !important;
+.archon-nav-item {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
 }

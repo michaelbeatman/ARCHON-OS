@@ -447,6 +447,15 @@
                 <!-- Commits werden hier aufgelistet -->
               </div>
             </div>
+
+            <!-- Fehler-Box bei GitHub-Verbindungsproblemen / fehlendem Token -->
+            <div id="update-error-box" class="hidden p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 space-y-1 text-rose-600 dark:text-rose-400 font-mono text-[11px]">
+              <div class="flex items-center gap-2 font-bold text-xs">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-500"></i>
+                <span id="update-error-title">GitHub-Verbindungsfehler</span>
+              </div>
+              <p id="update-error-hint">Authentifizierung fehlgeschlagen: Private Repositories erfordern ein GITHUB_TOKEN in der .env-Datei auf dem Server.</p>
+            </div>
           </div>
 
           <!-- Entwicklungsrechner: Änderungen nach GitHub übertragen (Push) -->

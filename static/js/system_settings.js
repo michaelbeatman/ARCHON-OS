@@ -2379,6 +2379,27 @@
           }
         }
 
+        const errorBox = document.getElementById("update-error-box");
+        const errorHint = document.getElementById("update-error-hint");
+
+        if (data.status === "offline_or_error" || data.status === "error") {
+          if (badge) {
+            badge.innerText = "GitHub-Verbindungsfehler";
+            badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30";
+            badge.title = data.message || "Authentifizierung oder Netzwerk fehlgeschlagen";
+          }
+          if (incomingBox) incomingBox.classList.add("hidden");
+          if (errorBox) {
+            errorBox.classList.remove("hidden");
+            if (errorHint) {
+              errorHint.innerText = data.message || "Authentifizierung fehlgeschlagen: Private Repositories erfordern ein GITHUB_TOKEN in der .env-Datei.";
+            }
+          }
+          return;
+        }
+
+        if (errorBox) errorBox.classList.add("hidden");
+
         if (data.update_available) {
           if (badge) {
             badge.innerText = `${data.commits_behind} Update(s) verfügbar`;

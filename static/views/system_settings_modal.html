@@ -450,22 +450,59 @@
           </div>
 
           <!-- Entwicklungsrechner: Änderungen nach GitHub übertragen (Push) -->
-          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--card)] space-y-3 shadow-xs">
+          <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--card)] space-y-3.5 shadow-xs">
             <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
               <div>
-                <span class="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Entwicklungsrechner: Sync zu GitHub (Push &amp; Release)</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Entwicklungsrechner: Sync zu GitHub (Push &amp; Release)</span>
+                  <span id="push-role-badge" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">👑 Michael (Master: Push autorisiert)</span>
+                </div>
                 <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
-                  Übertrage Neuerungen mit 1 Klick auf GitHub. Inkrementiert automatisch auf <span id="push-next-version-badge" class="font-mono font-bold text-indigo-500">v0.3.7</span> und setzt den Git-Tag.
+                  Veröffentliche Änderungen gezielt auf GitHub. Du kannst die Versionsnummer frei anpassen oder feine Sub-Steps wählen.
                 </p>
               </div>
               <span id="push-status-badge" class="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-500/10 text-[var(--foreground)] border border-[var(--border)]">Bereit</span>
             </div>
 
+            <!-- Version Steuerung & Steps -->
+            <div class="space-y-2 p-3 rounded-lg border border-[var(--border)] bg-[var(--background)]">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label class="text-[11px] font-bold font-mono text-[var(--foreground)] flex items-center gap-1.5">
+                  <i data-lucide="tag" class="w-3.5 h-3.5 text-indigo-500"></i> Release-Version (frei editierbar):
+                </label>
+                <!-- Quick Step Pills -->
+                <div class="flex flex-wrap items-center gap-1.5" id="version-step-pills">
+                  <button type="button" onclick="selectVersionStep('none')" id="step-btn-none" class="px-2 py-1 rounded text-[10px] font-mono font-semibold border border-[var(--border)] hover:bg-[var(--secondary)] transition cursor-pointer" title="Keine Versionsänderung (nur Code pushen)">
+                    ⚪ Gleichbleibend (<span id="step-label-none">v0.3.8</span>)
+                  </button>
+                  <button type="button" onclick="selectVersionStep('subpatch')" id="step-btn-subpatch" class="px-2 py-1 rounded text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/30 hover:bg-indigo-500/20 transition cursor-pointer" title="Kleiner Subpatch-Schritt (+0.0.0.1)">
+                    🟢 +1 Subpatch (<span id="step-label-subpatch">v0.3.8.1</span>)
+                  </button>
+                  <button type="button" onclick="selectVersionStep('patch')" id="step-btn-patch" class="px-2 py-1 rounded text-[10px] font-mono font-semibold border border-[var(--border)] hover:bg-[var(--secondary)] transition cursor-pointer" title="Regulärer Patch (+0.0.1)">
+                    🔵 +1 Patch (<span id="step-label-patch">v0.3.9</span>)
+                  </button>
+                  <button type="button" onclick="selectVersionStep('minor')" id="step-btn-minor" class="px-2 py-1 rounded text-[10px] font-mono font-semibold border border-[var(--border)] hover:bg-[var(--secondary)] transition cursor-pointer" title="Minor-Sprung (+0.1.0)">
+                    🟣 +1 Minor (<span id="step-label-minor">v0.4.0</span>)
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <input type="text" id="push-target-version" oninput="onCustomVersionInput()" placeholder="z. B. v0.3.8.1 oder freie Kennung..." class="w-48 bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                <span class="text-[10px] text-[var(--muted-foreground)]">Tipp: Du kannst die Versionsnummer jederzeit manuell überschreiben.</span>
+              </div>
+            </div>
+
+            <!-- Commit Message & Push Action -->
             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <input type="text" id="push-commit-message" placeholder="Optionale Release-Notiz (z. B. Neuerungen am Dashboard)..." class="flex-1 bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400">
               <button type="button" onclick="pushChangesToGitHub()" id="btn-push-github" class="px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 shrink-0">
-                <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> <span id="btn-push-label">Release <span id="btn-push-version-label">v0.3.7</span> zu GitHub pushen</span>
+                <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> <span id="btn-push-label">Release <span id="btn-push-version-label">v0.3.8.1</span> zu GitHub pushen</span>
               </button>
+            </div>
+
+            <div id="push-auth-hint" class="hidden text-[11px] font-mono text-amber-600 dark:text-amber-400 p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5">
+              🔒 Diese Instanz ist als Read-Only Client konfiguriert oder besitzt keinen autorisierten Master-Token. Der Push nach GitHub ist gesperrt, um dein zentrales Repository vor fremden Änderungen zu schützen.
             </div>
           </div>
 

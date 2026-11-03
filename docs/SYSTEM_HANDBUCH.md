@@ -1059,7 +1059,16 @@ Der Hermes-Daemon bildet das operative Fundament von Archon OS:
 - **Dynamische Versionserkennung:** Das System ermittelt die laufende Version nicht aus statischen Bildlabels, sondern führt direkt `hermes --version` im Container aus (`v0.22.6 · upstream f0d94882`).
 - **Status-LED in der Fußzeile:** Zeigt den aktuellen Upstream-Abgleich an. Entspricht der lokale Stand dem aktuellen Tag-Release, leuchtet die Status-LED grün (`Update (v0.22.6)`).
 - **Atomare Container-Neuerstellung:** Bei der Installation neuer Core-Releases (`backend/hermes_updater.py`) wird der Container zerstörungsfrei neu erzeugt. Alle Mounts, Volumes, Ports und Netzwerke (`agentic_mesh`) bleiben erhalten.
-- **Rechtebeschränkung:** Das Einleiten von Kern-Updates ist Administratoren vorbehalten.
+- **Rechtebeschränkung & Master-Schutz:** 
+  - Nur autorisierte Administratoren (**Michael**) dürfen Releases und Commits zu GitHub pushen (`github_sync.is_master = true`).
+  - Wird eine Installation an Dritte (z. B. Freunde, Testserver) weitergegeben, verbleibt das System automatisch im **Read-Only Client-Modus** (`[ 🔒 Read-Only Client: Push gesperrt ]`), sodass niemand unbefugt das zentrale GitHub-Repository überschreiben kann.
+- **Feinjustierbare Versionierung & Steps:**
+  - Anstelle starrer Patch-Sprünge kann die Release-Version vor jedem Push im System Control Center frei manuell editiert werden (z. B. `v0.3.8.1` oder individuelle Bezeichnungen).
+  - Vier wählbare Inkrement-Stufen:
+    - `⚪ Gleichbleibend`: Kein Versionssprung (Versionsnummer bleibt identisch, z. B. für reine Dokumentations- oder Konfigurationsupdates).
+    - `🟢 +1 Subpatch`: Mini-Schritt an 4. Stelle (`v0.3.8` $\rightarrow$ `v0.3.8.1`, `v0.3.8.1` $\rightarrow$ `v0.3.8.2`) für kleine Bugfixes und Feinjustierungen.
+    - `🔵 +1 Patch`: Regulärer Schritt (`v0.3.8` $\rightarrow$ `v0.3.9`) für fertige Modulanpassungen.
+    - `🟣 +1 Minor`: Größerer Versionssprung (`v0.3.8` $\rightarrow$ `v0.4.0`) für neue Gesamtreleases.
 - **Daemon & Task-Queues:** Steuerung des Hintergrund-Daemons auf Port 8420, Watchdog-Intervallen (30s) und Event-Loops.
 - Zum Notfallbetrieb siehe [Anhang IV.8: Break-Glass Recovery](#iv8-break-glass-recovery--notfallzugriff) und [Anhang V.17: Chaos Resilience](#v17-chaos-resilience--störungs-simulation).
 

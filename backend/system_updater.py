@@ -214,19 +214,104 @@ def get_system_version_info() -> Dict[str, Any]:
     return {"version": "v0.3.6", "codename": "Sentinel"}
 
 
-def get_next_patch_version(current_ver: str) -> str:
-    """Berechnet die naechste Patch-Version (z. B. v0.3.6 -> v0.3.7)."""
+def get_github_auth_info() -> Dict[str, Any]:
+    """Prüft, ob auf dieser Instanz ein autorisierter GitHub Master-Push-Token vorliegt."""
+    env = os.environ.copy()
+    gh_token = env.get("GITHUB_TOKEN") or env.get("GH_TOKEN")
+    if not gh_token:
+        env_path = os.path.join(WORKSPACE_DIR, ".env")
+        if os.path.exists(env_path):
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("GITHUB_TOKEN=") or line.startswith("GH_TOKEN="):
+                            gh_token = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                            break
+            except Exception:
+                pass
+
+    settings_path = os.path.join(WORKSPACE_DIR, "settings.json")
+    is_master = False
+    allow_push = True
+    owner = "michaelbeatman"
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path, "r", encoding="utf-8") as sf:
+                sdata = json.load(sf)
+                gh_conf = sdata.get("github_sync", {})
+                is_master = gh_conf.get("is_master", False)
+                allow_push = gh_conf.get("allow_push", True)
+                owner = gh_conf.get("owner", "michaelbeatman")
+        except Exception:
+            pass
+
+    has_token = bool(gh_token and len(gh_token) > 8)
+    can_push = bool(has_token and is_master and allow_push)
+    
+    masked = None
+    if has_token:
+        masked = gh_token[:4] + "..." + gh_token[-4:]
+
+    role_label = "👑 Michael (Master: Push autorisiert)" if can_push else "🔒 Read-Only Client (Push gesperrt)"
+    return {
+        "is_master": is_master,
+        "can_push": can_push,
+        "has_token": has_token,
+        "token_masked": masked,
+        "owner": owner,
+        "role_label": role_label
+    }
+
+
+def calculate_next_version(current_ver: str, step: str = "subpatch") -> str:
+    """
+    Berechnet die nächste Version basierend auf dem gewählten Step:
+    - 'none': Aktuelle Version bleibt unverändert
+    - 'subpatch': +0.0.0.1 (z. B. v0.3.8 -> v0.3.8.1, v0.3.8.1 -> v0.3.8.2)
+    - 'patch': +0.0.1 (z. B. v0.3.8 -> v0.3.9)
+    - 'minor': +0.1.0 (z. B. v0.3.8 -> v0.4.0)
+    """
     import re
-    m = re.match(r"^v?(\d+)\.(\d+)\.(\d+)(.*)$", (current_ver or "").strip())
-    if m:
-        maj, minr, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        suffix = m.group(4) or ""
-        return f"v{maj}.{minr}.{patch + 1}{suffix}"
-    return "v0.3.7"
+    cur = (current_ver or "v0.3.8").strip()
+    if not cur.startswith("v"):
+        cur = f"v{cur}"
+
+    if step == "none":
+        return cur
+
+    m4 = re.match(r"^v?(\d+)\.(\d+)\.(\d+)\.(\d+)$", cur)
+    m3 = re.match(r"^v?(\d+)\.(\d+)\.(\d+)$", cur)
+
+    if step == "subpatch":
+        if m4:
+            maj, minr, patch, sub = int(m4.group(1)), int(m4.group(2)), int(m4.group(3)), int(m4.group(4))
+            return f"v{maj}.{minr}.{patch}.{sub + 1}"
+        elif m3:
+            maj, minr, patch = int(m3.group(1)), int(m3.group(2)), int(m3.group(3))
+            return f"v{maj}.{minr}.{patch}.1"
+        return f"{cur}.1"
+
+    if step == "patch":
+        if m4:
+            maj, minr, patch, _ = int(m4.group(1)), int(m4.group(2)), int(m4.group(3)), int(m4.group(4))
+            return f"v{maj}.{minr}.{patch + 1}"
+        elif m3:
+            maj, minr, patch = int(m3.group(1)), int(m3.group(2)), int(m3.group(3))
+            return f"v{maj}.{minr}.{patch + 1}"
+        return "v0.3.9"
+
+    if step == "minor":
+        m = m4 or m3
+        if m:
+            maj, minr = int(m.group(1)), int(m.group(2))
+            return f"v{maj}.{minr + 1}.0"
+        return "v0.4.0"
+
+    return cur
 
 
-def bump_version_patch(reason: str = "") -> Tuple[str, str]:
-    """Inkrementiert die Patch-Version in config/version.json und speichert die Datei."""
+def set_custom_version(target_version: Optional[str] = None, step: str = "custom", reason: str = "") -> Tuple[str, str]:
+    """Setzt oder berechnet die Zielversion in config/version.json."""
     vpath = os.path.join(WORKSPACE_DIR, "config", "version.json")
     vdata = {}
     if os.path.exists(vpath):
@@ -235,9 +320,17 @@ def bump_version_patch(reason: str = "") -> Tuple[str, str]:
                 vdata = json.load(f)
         except Exception:
             pass
-    
-    cur_version = vdata.get("version", "v0.3.6")
-    new_version = get_next_patch_version(cur_version)
+
+    cur_version = vdata.get("version", "v0.3.8")
+
+    if target_version and target_version.strip():
+        new_version = target_version.strip()
+        if not new_version.startswith("v"):
+            new_version = f"v{new_version}"
+    elif step == "none":
+        new_version = cur_version
+    else:
+        new_version = calculate_next_version(cur_version, step=step)
 
     vdata["previous_version"] = cur_version
     vdata["version"] = new_version
@@ -255,9 +348,16 @@ def bump_version_patch(reason: str = "") -> Tuple[str, str]:
 def get_update_status() -> Dict[str, Any]:
     """Prüft, ob auf dem Remote-Repository (GitHub) neue Commits vorliegen."""
     vinfo = get_system_version_info()
-    sys_version = vinfo.get("version", "v0.3.6")
+    sys_version = vinfo.get("version", "v0.3.8")
     sys_codename = vinfo.get("codename", "Sentinel")
-    next_version = get_next_patch_version(sys_version)
+    version_steps = {
+        "none": sys_version,
+        "subpatch": calculate_next_version(sys_version, "subpatch"),
+        "patch": calculate_next_version(sys_version, "patch"),
+        "minor": calculate_next_version(sys_version, "minor")
+    }
+    next_version = version_steps["subpatch"]
+    auth = get_github_auth_info()
 
     native = _read_git_head_native()
     current_commit = native.get("commit", "unknown")
@@ -285,6 +385,8 @@ def get_update_status() -> Dict[str, Any]:
             "version": sys_version,
             "version_codename": sys_codename,
             "next_version": next_version,
+            "version_steps": version_steps,
+            "auth": auth,
             "update_available": False,
             "current_commit": current_commit,
             "branch": branch,
@@ -317,6 +419,8 @@ def get_update_status() -> Dict[str, Any]:
         "version": sys_version,
         "version_codename": sys_codename,
         "next_version": next_version,
+        "version_steps": version_steps,
+        "auth": auth,
         "update_available": commits_behind > 0,
         "current_commit": current_commit,
         "remote_commit": remote_commit,
@@ -483,11 +587,18 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
     }
 
 
-def push_changes(commit_message: Optional[str] = None) -> Dict[str, Any]:
+def push_changes(commit_message: Optional[str] = None, custom_version: Optional[str] = None, version_step: str = "custom") -> Dict[str, Any]:
     """
-    Sammelt alle lokalen Aenderungen ein, inkrementiert die Patch-Version (Option A),
-    committet und pusht zu GitHub origin/main inklusive Release-Tag.
+    Sammelt alle lokalen Änderungen ein, wendet die gewünschte Version an,
+    prüft Master-Autorisierung, committet und pusht zu GitHub origin/main inklusive Release-Tag.
     """
+    auth = get_github_auth_info()
+    if not auth["can_push"]:
+        return {
+            "status": "forbidden",
+            "message": "Push verweigert: Diese Instanz ist als Read-Only Client konfiguriert oder besitzt keinen autorisierten GitHub Master-Token. Nur Michael darf Releases auf GitHub pushen."
+        }
+
     status_chk = _run_git(["status", "--porcelain"])
     if not status_chk["success"]:
         return {"status": "error", "message": f"Git Status fehlgeschlagen: {status_chk['stderr']}"}
@@ -496,9 +607,9 @@ def push_changes(commit_message: Optional[str] = None) -> Dict[str, Any]:
     if not dirty:
         return {"status": "nothing_to_commit", "message": "Keine neuen lokalen Aenderungen zum Veroeffentlichen vorhanden."}
 
-    # 1. Automatischer Patch-Bump (Option A)
+    # 1. Flexible Versionierung (Benutzer-Eingabe oder Step)
     user_note = commit_message.strip() if commit_message else ""
-    old_ver, new_ver = bump_version_patch(reason=user_note)
+    old_ver, new_ver = set_custom_version(target_version=custom_version, step=version_step, reason=user_note)
 
     # 2. git add -A (inklusive aktualisierter config/version.json)
     add_res = _run_git(["add", "-A"])
@@ -517,7 +628,9 @@ def push_changes(commit_message: Optional[str] = None) -> Dict[str, Any]:
         return {"status": "error", "message": f"Git Commit fehlgeschlagen: {commit_res['stderr'] or commit_res['stdout']}"}
 
     # 4. Release-Tag setzen
-    tag_res = _run_git(["tag", "-a", new_ver, "-m", f"Release {new_ver}: {msg}"])
+    tag_res = {"success": True}
+    if new_ver != old_ver:
+        tag_res = _run_git(["tag", "-a", new_ver, "-m", f"Release {new_ver}: {msg}"])
     if not tag_res["success"]:
         _run_git(["tag", "-f", "-a", new_ver, "-m", f"Release {new_ver}: {msg}"])
 

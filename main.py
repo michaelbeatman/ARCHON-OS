@@ -9381,7 +9381,9 @@ def api_system_update_push(payload: dict = Body(default={})):
     from backend import system_updater
     importlib.reload(system_updater)
     msg = payload.get("message")
-    return system_updater.push_changes(commit_message=msg)
+    version = payload.get("version")
+    step = payload.get("step", "custom")
+    return system_updater.push_changes(commit_message=msg, custom_version=version, version_step=step)
 
 @app.post("/api/v1/system/update/apply")
 def api_system_update_apply(payload: dict = Body(default={})):

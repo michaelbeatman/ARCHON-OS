@@ -2302,11 +2302,60 @@
         if (versionBadge && data.version) versionBadge.innerText = data.version;
         if (versionEl && data.version) versionEl.innerText = `${data.version}${data.version_codename ? " · " + data.version_codename : ""}`;
 
-        const nextVer = data.next_version || "v0.3.7";
-        const nextVerBadge = document.getElementById("push-next-version-badge");
+        window._systemVersionSteps = data.version_steps || {
+          none: data.version || "v0.3.8",
+          subpatch: data.next_version || "v0.3.8.1",
+          patch: "v0.3.9",
+          minor: "v0.4.0"
+        };
+        window._activeVersionStep = "subpatch";
+
+        const stepNone = document.getElementById("step-label-none");
+        const stepSub = document.getElementById("step-label-subpatch");
+        const stepPatch = document.getElementById("step-label-patch");
+        const stepMinor = document.getElementById("step-label-minor");
+        if (stepNone && window._systemVersionSteps.none) stepNone.innerText = window._systemVersionSteps.none;
+        if (stepSub && window._systemVersionSteps.subpatch) stepSub.innerText = window._systemVersionSteps.subpatch;
+        if (stepPatch && window._systemVersionSteps.patch) stepPatch.innerText = window._systemVersionSteps.patch;
+        if (stepMinor && window._systemVersionSteps.minor) stepMinor.innerText = window._systemVersionSteps.minor;
+
+        const targetVerInput = document.getElementById("push-target-version");
+        if (targetVerInput && !targetVerInput.dataset.userEdited) {
+          targetVerInput.value = window._systemVersionSteps.subpatch || data.next_version || "v0.3.8.1";
+        }
+
         const btnVerLabel = document.getElementById("btn-push-version-label");
-        if (nextVerBadge) nextVerBadge.innerText = nextVer;
-        if (btnVerLabel) btnVerLabel.innerText = nextVer;
+        if (btnVerLabel) btnVerLabel.innerText = targetVerInput ? targetVerInput.value : (data.next_version || "v0.3.8.1");
+
+        // Auth Role & Master Push Permission
+        const roleBadge = document.getElementById("push-role-badge");
+        const pushBtn = document.getElementById("btn-push-github");
+        const authHint = document.getElementById("push-auth-hint");
+        const isAllowed = data.auth ? data.auth.can_push : true;
+
+        if (roleBadge && data.auth) {
+          roleBadge.innerText = data.auth.role_label;
+          if (data.auth.can_push) {
+            roleBadge.className = "px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
+          } else {
+            roleBadge.className = "px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-500/10 text-neutral-500 border border-neutral-500/20";
+          }
+        }
+        if (pushBtn) {
+          pushBtn.disabled = !isAllowed;
+          if (!isAllowed) {
+            pushBtn.classList.add("opacity-50", "cursor-not-allowed");
+          } else {
+            pushBtn.classList.remove("opacity-50", "cursor-not-allowed");
+          }
+        }
+        if (authHint) {
+          if (!isAllowed) {
+            authHint.classList.remove("hidden");
+          } else {
+            authHint.classList.add("hidden");
+          }
+        }
 
         if (curCommit) curCommit.innerText = `${data.current_commit || "-"} (${data.last_commit_info || ""})`;
         if (branchEl) branchEl.innerText = `${data.branch || "main"} · Remote: ${data.remote_commit || "-"}`;
@@ -2470,6 +2519,47 @@
     window.createManualSnapshot = createManualSnapshot;
     window.loadSystemSnapshots = loadSystemSnapshots;
     window.rollbackSystemSnapshot = rollbackSystemSnapshot;
+        function selectVersionStep(step) {
+      window._activeVersionStep = step;
+      const targetInput = document.getElementById("push-target-version");
+      const btnVerLabel = document.getElementById("btn-push-version-label");
+      const steps = window._systemVersionSteps || {};
+      const val = steps[step] || targetInput.value;
+      if (targetInput) {
+        targetInput.value = val;
+        targetInput.dataset.userEdited = "";
+      }
+      if (btnVerLabel) btnVerLabel.innerText = val;
+
+      const pillIds = ["none", "subpatch", "patch", "minor"];
+      pillIds.forEach(id => {
+        const btn = document.getElementById(`step-btn-${id}`);
+        if (!btn) return;
+        if (id === step) {
+          btn.className = "px-2 py-1 rounded text-[10px] font-mono font-bold bg-indigo-500/15 text-indigo-600 border border-indigo-500/40 shadow-2xs transition cursor-pointer";
+        } else {
+          btn.className = "px-2 py-1 rounded text-[10px] font-mono font-semibold border border-[var(--border)] hover:bg-[var(--secondary)] transition cursor-pointer";
+        }
+      });
+    }
+    window.selectVersionStep = selectVersionStep;
+
+    function onCustomVersionInput() {
+      const targetInput = document.getElementById("push-target-version");
+      const btnVerLabel = document.getElementById("btn-push-version-label");
+      if (!targetInput) return;
+      targetInput.dataset.userEdited = "true";
+      window._activeVersionStep = "custom";
+      if (btnVerLabel) btnVerLabel.innerText = targetInput.value.trim() || "v...";
+
+      const pillIds = ["none", "subpatch", "patch", "minor"];
+      pillIds.forEach(id => {
+        const btn = document.getElementById(`step-btn-${id}`);
+        if (btn) btn.className = "px-2 py-1 rounded text-[10px] font-mono font-semibold border border-[var(--border)] hover:bg-[var(--secondary)] transition cursor-pointer";
+      });
+    }
+    window.onCustomVersionInput = onCustomVersionInput;
+
     async function pushChangesToGitHub() {
       const btn = document.getElementById("btn-push-github");
       const badge = document.getElementById("push-status-badge");
@@ -2486,10 +2576,18 @@
       }
 
       try {
+        const targetInput = document.getElementById("push-target-version");
+        const customVer = targetInput ? targetInput.value.trim() : "";
+        const stepVal = window._activeVersionStep || "custom";
+
         const res = await fetch("/api/v1/system/update/push", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg })
+          body: JSON.stringify({
+            message: msg,
+            version: customVer,
+            step: stepVal
+          })
         });
         const data = await res.json();
         if (data.status === "success") {

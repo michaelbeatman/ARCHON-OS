@@ -1,9 +1,9 @@
 # ARCHON AGENTIC OS 2026
 ## Offizielles System-Handbuch, Modul-Referenz & Praxisführer
 
-> **System-Version:** v0.3.7 Enterprise (4-Säulen-ERP)  
+> **System-Version:** v0.3.8 Enterprise (4-Säulen-ERP)  
 > **Klassifizierung:** Intern / Streng Vertraulich (DSGVO, GoBD & ISO 27001 konform)  
-> **Stand:** 1. November 2026  
+> **Stand:** 3. November 2026  
 > **Geltungsbereich:** Gesamtes Archon OS Ökosystem (4 System-Säulen, 57 Fachagenten, 19 Fachmodule, Physische Mandanten-DB-Isolation, Daemon-Kernel & Spezialleitfäden)
 
 ---
@@ -149,6 +149,28 @@
 ---
 
 ## Vorwort: Was ist Archon OS und wie arbeitet man damit?
+
+### Schnellstart & 1-Click-Installation (Weg 1)
+
+Archon OS lässt sich auf jedem modernen Rechner (Windows 10/11, macOS, Linux) mit minimalem Aufwand in Betrieb nehmen:
+
+#### 1. Systemvoraussetzungen
+- **Docker Desktop:** Unter Windows mit aktiviertem WSL2-Backend (Linux-Subsystem). Falls noch nicht vorhanden, einfach herunterladen und installieren: [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/).
+- **Hardware-Empfehlung:** Mindestens 8 GB freier RAM und 15 GB Speicherplatz für Docker-Images und lokale SQLite-Datenbanken.
+
+#### 2. Installation per 1-Click-Installer (`setup.bat` / `setup.ps1`)
+- **Unter Windows:** Doppelklick auf die Datei **`setup.bat`** im Hauptverzeichnis (oder Rechtsklick auf `setup.ps1` -> *Mit PowerShell ausführen*).
+- **Automatischer Ablauf des Installers:**
+  1. *Docker-Prüfung:* Erkennt automatisch, ob Docker Desktop installiert ist und läuft. Fehlt Docker, bietet das Skript an, die offizielle Download-Seite im Browser zu öffnen.
+  2. *Initialisierung:* Erstellt notwendige Ordner (`data/`, `logs/`, `.hermes/`) und kopiert bei Bedarf die Standard-`.env`-Konfigurationsdatei.
+  3. *Cluster-Start:* Führt `docker compose up -d` aus und startet die drei Kern-Dienste (`ARCHON-OS` auf Port 8501, `Hermes Core` auf Port 8644, `n8n Automation` auf Port 5678).
+  4. *Healthcheck & Browser-Öffnung:* Prüft die Betriebsbereitschaft des Web-Dashboards und öffnet es automatisch im Standardbrowser unter `http://localhost:8501`.
+
+#### 3. Täglicher Betrieb
+- **Starten:** Ein einfacher Doppelklick auf `start.bat` fährt alle Container hoch und öffnet das Dashboard.
+- **Beenden:** Ein Doppelklick auf `stop.bat` fährt alle Container geordnet herunter und sichert den Datenbankzustand.
+
+---
 
 Vorwort: Was ist Archon OS und wie arbeitet man damit?
 Ein Leitfaden für die autonome Wertschöpfung in vernetzten Organisationen
@@ -398,10 +420,21 @@ Der Bot Screen ist als dedizierter Subtab zwischen Chat und Fähigkeiten im Agen
   - Schaltet den Bot Screen per Knopfdruck in eine immersive Vollbildansicht (100 % Display-Nutzung).
   - Die Adressleiste dockt oben an den Rand an.
   - Das Anweisungs- und Kontrollmodul schwebt als halbtransparente Frosted-Glass-Leiste frei über dem unteren Bildschirmrand.
-- **Prominenter Live-Agenten-Mauszeiger:**
+- **Prominenter Live-Agenten-Mauszeiger & Biomechanischer Ghost-Cursor:**
   - Hochsichtbare, lilafarbene Leucht-Pfeilspitze mit dynamischem Agenten-Namensbadge (`🤖 Default`).
   - Animierte Radar-Wellen (Click-Ripples) signalisieren Mausklicks in Echtzeit.
-  - Ermöglicht dem Operator, den Bewegungen, Formularfeldern und Klickpfaden des Agenten live und verzögerungsfrei zuzusehen.
+  - **Bézier-Trajektorien & Fitts's Law:** Der Cursor gleitet auf kubischen Bézier-Kurven mit realistischer Beschleunigung und sanfter Abbremsung vor dem Zielfeld.
+  - **Gauss-verteilter Bounding-Box Jitter:** Klicks treffen nicht starr den geometrischen Mittelpunkt eines Buttons, sondern variieren normalverteilt innerhalb der Schaltfläche, um Anti-Bot-WAFs und Cloudflare Turnstile zu überlisten.
+  - **Menschliche Tastatur-Kadenzen:** Text-Eingaben erfolgen mit natürlich variierenden Intervallen (50–180 ms) inklusive kognitiver Denkpausen bei Satzzeichen.
+- **Programming by Demonstration (PbD) – Vormachen & Aufnehmen (`[ 🔴 Vormachen & Aufnehmen ]`):**
+  - Ermöglicht es dem Bediener, komplexe Web-Workflows (z. B. Bewerber filtern, Belege herunterladen, Datensätze abgleichen) einmalig im Viewport vorzumachen, statt sie in Code zu beschreiben.
+  - Zeichnet Klicks, Scroll-Bewegungen, Formulareingaben und URLs schrittweise auf.
+  - **Sprach- & Absichts-Kommentare:** Über die integrierte Leiste können Einzelschritte mit gesprochenen oder getippten Erklärungen versehen werden (*"Hier filtere ich nach Python-Senioren"*).
+  - **Autonome Skill-Synthese (`[ ⏹️ Aufnahme stoppen & Skill erzeugen ]`):** Generiert auf Knopfdruck ein wiederverwendbares Skill-Manifest (`.agents/skills/<name>/SKILL.md`) und ein lauffähiges Python-Automationsskript (`scripts/dynamic_tools/<name>.py`). Der neu erlernte Skill steht ab sofort allen berechtigten Agenten zur Verfügung.
+- **Observation Pruning & Accessibility-Tree (`[ 🌲 a11y Pruning: -85% ]`):**
+  - Schalter in der oberen Leiste reduziert den rohen HTML-DOM um 85–92 %.
+  - Entfernt SVGs, Stylesheets, Tracking-Skripte und tiefe Div-Verschachtelungen.
+  - Übergibt dem LLM einen kompakten, semantischen Interaktionsbaum (`[@ID] [button] "Absenden"`), was die Token-Kosten drastisch senkt und Halluzinationen verhindert.
 - **Dual-Control Steuerleiste & Notfall-Abbruch:**
   - **Autorisierungs-Schalter (`[ 👤 Dein Zugriff ]` / `[ 🤖 Agent autorisiert ]`):** Nur der Operator oder privilegierte Systemrollen (**Robert**, **default** / Alexander Richter, **Micha**) können den Agenten aktivieren. Solange der Schalter auf `Dein Zugriff` steht, verharrt der Agent im Standby und beobachtet die Sitzung passiv.
   - **Notfall-Abbruch-Button (`[ 🛑 Notfall-Stopp ]`):** Roter Sofort-Stopp-Knopf. Entzieht dem Agenten augenblicklich alle Zugriffsrechte (`POST /api/operations/bot-screen/abort`), friert die Sitzung ein und übergibt die volle Kontrolle an den Bediener zurück.
@@ -412,9 +445,22 @@ Der Bot Screen ist als dedizierter Subtab zwischen Chat und Fähigkeiten im Agen
   - *Sensible Aktionen (HITL-Pflicht):* Bestellen, Kaufen, Bezahlen, Löschen von Accounts oder Signieren von Verträgen erfordern zwingend eine Human-in-the-Loop-Freigabe.
   - *Verbotene Aktionen (Zero Tolerance):* Exfiltration von Zugangsdaten oder Umgehung von Systemschutzmechanismen werden strikt blockiert.
 
-### 3.4 Fähigkeiten
-- Tool- und Skill-Matrix: Zuweisung konkreter Werkzeuge (Web-Search, PDF-Reader, Code-Sandbox, Terminal, Dateisystem).
-- Rechtevergabe nach dem Prinzip der geringsten Berechtigung (Least Privilege).
+### 3.4 Fähigkeiten & Autonomie-Engines
+- **Tool- und Skill-Matrix:** Zuweisung konkreter Werkzeuge (Web-Search, PDF-Reader, Code-Sandbox, Terminal, Dateisystem).
+- **Rechtevergabe nach dem Prinzip der geringsten Berechtigung (Least Privilege).**
+- **Autonome Selbst-Evolution (Voyager-Paradigma, `backend/self_evolving_tooling.py`):**
+  - Agenten können fehlende Werkzeuge zur Laufzeit autonom in Python programmieren.
+  - Automatischer Sandbox-Testlauf mit Assertions. Schlägt ein Test fehl, analysiert die Engine den Traceback und repariert den Code in bis zu 3 Schleifen selbstständig.
+  - Erfolgreich validierte Werkzeuge werden dauerhaft unter `scripts/dynamic_tools/` abgelegt, in `.agents/skills/` registriert und in `agentic_memory.db` geloggt.
+- **MCTS Action Trajectories (`backend/mcts_engine.py`):**
+  - Monte Carlo Tree Search zur gedanklichen Simulation komplexer oder riskanter Handlungsabläufe vor der ersten realen Ausführung.
+  - Bewertet Rollouts anhand von Erfolgswahrscheinlichkeit, Tokenkosten und Risiken ($Q$-Value). In `settings.json` als Option konfigurierbar zur Schonung von Token-Credits.
+- **Speculative Action Pre-fetching (`backend/speculative_prefetcher.py`):**
+  - Analysiert eingehende Benutzereingaben in Echtzeit per Regex auf Kunden-E-Mails, ERP-Belegnummern (`RE-`, `ANG-`) oder Fachbegriffe.
+  - Lädt relevante Stammdaten und Learnings in <5 ms in den RAM-Fast-Cache vor, sodass Agenten ohne Datenbank-Wartezeit antworten.
+- **Just-in-Time (JIT) Persona Induction (`backend/jit_persona_engine.py`):**
+  - Erzeugt bei speziellen Nischenanfragen ad-hoc eine flüchtige Experten-Persona mit eigenem System-Prompt und Modell-Routing.
+  - Führt die Aufgabe isoliert aus und löscht die Persona anschließend rückstandsfrei aus dem RAM, damit der Flottenkader nicht aufbläht. Dauerhafte Beförderung in den Kader (`agent_profiles.json`) jederzeit möglich.
 
 ### 3.5 Operation
 - Übersicht aller aktuell zugewiesenen und historisch erledigten Aufgaben des Agenten.

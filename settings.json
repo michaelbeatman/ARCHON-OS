@@ -296,7 +296,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -306,7 +306,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -316,7 +316,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -326,7 +326,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -336,7 +336,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -346,7 +346,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -356,7 +356,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -366,7 +366,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -376,7 +376,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -386,7 +386,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -396,7 +396,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -406,7 +406,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -416,7 +416,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -426,7 +426,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -436,12 +436,36 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-03T12:50:32.651905",
+        "last_check": "2026-11-03T12:58:22.716871",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-03T12:50:32.651905",
+    "last_run": "2026-11-03T12:58:22.716871",
     "recent_findings": [
+      {
+        "id": "b5e2ddbf03f98f69",
+        "target_id": "src-invest-radar",
+        "target_name": "High-Impact Investitions-Radar",
+        "category": "Investitionen & Geopolitik",
+        "title": "Investitionsgipfel: Deutschland wirbt um private Investoren - ZDFheute",
+        "link": "https://news.google.com/rss/articles/CBMikgFBVV95cUxNbnRZQ0ZraG92N2ZrMHY0cXJZcUdkeUt3QmEybEx1X29ubzluVml1YUhqeTg0S0lqVnZISm5Td3RxaFdaczZVUmhueVBWYXdZSS1pTVB3eGY2NTZTd1BESm82ZG1DTjRoaGVtQmRKd1RVdE9kYVNFZnc4VENIZzBxUEM2dU1kVzJHWVFiUl9sVnNOdw?oc=5",
+        "published": "Tue, 20 Oct 2026 07:00:00 GMT",
+        "detected_at": "03.11.2026 12:58",
+        "is_priority": true,
+        "matched_keywords": [
+          "investitionsgipfel"
+        ]
+      },
+      {
+        "id": "3b7e7c225f1f6492",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Lüfterlose Mini-PC-Barebones mit Intel Core 300 und Thunderbolt 4",
+        "link": "https://www.heise.de/news/Luefterlose-Mini-PC-Barebones-mit-Intel-Core-300-und-Thunderbolt-4-11509687.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-03T13:46:00+01:00",
+        "detected_at": "03.11.2026 12:58"
+      },
       {
         "id": "0b6deb7912a13ba2",
         "target_id": "src-tagesschau",
@@ -732,26 +756,6 @@
         "title": "heise+ | Wissensmanagement: Dokumente auf dem iPad verwalten mit Devonthink To Go 4",
         "link": "https://www.heise.de/ratgeber/Wissensmanagement-Dokumente-auf-dem-iPad-verwalten-mit-Devonthink-To-Go-4-11498840.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
         "published": "2026-11-03T12:00:00+01:00",
-        "detected_at": "03.11.2026 11:16"
-      },
-      {
-        "id": "818595d775cc4cd8",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "heise-Angebot: KI-gestützte Programmierung – vom Feature-Auftrag zum Pull Request",
-        "link": "https://www.heise.de/news/KI-gestuetzte-Programmierung-vom-Feature-Auftrag-zum-Pull-Request-11507480.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T12:00:00+01:00",
-        "detected_at": "03.11.2026 11:16"
-      },
-      {
-        "id": "b7964010bf7052bd",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Auch deutsche Bundespolitik: Apple bestätigt Spyware-Warnung",
-        "link": "https://www.heise.de/news/Auch-deutsche-Bundespolitik-Apple-bestaetigt-Spyware-Warnung-11508629.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T11:59:00+01:00",
         "detected_at": "03.11.2026 11:16"
       }
     ]

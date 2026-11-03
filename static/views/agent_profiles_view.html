@@ -811,6 +811,13 @@
 
                     <!-- Status & Controls Rechts -->
                     <div class="flex items-center gap-2 shrink-0">
+                      <!-- a11y Pruning Toggle -->
+                      <button type="button" id="btn-cadre-botscreen-a11y" onclick="toggleCadreBotScreenA11y()" class="px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-mono text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-2xs" title="a11y Observation Pruning: Filtert 80-90% DOM-Müll heraus und spart Tokens">
+                        <span id="dot-botscreen-a11y" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span class="font-bold">a11y Pruning</span>
+                        <span id="badge-botscreen-a11y" class="text-[9px] px-1 py-0.2 rounded bg-emerald-500/30 text-emerald-300 font-bold">-85%</span>
+                      </button>
+
                       <span class="text-[10.5px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1.5">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Display :99 (CDP 9222)
                       </span>
@@ -898,12 +905,33 @@
 
                   <!-- 3. UNTERE LEISTE / FLOATING OVERLAY: AUTORISIERUNG, NOTFALL-STOPP & PROMPT -->
                   <div id="cadre-botscreen-control-bar" class="p-2.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex flex-col gap-2 shrink-0 transition-all">
+                    
+                    <!-- PbD Aufnahmezustand Banner (wird bei aktiver Aufnahme eingeblendet) -->
+                    <div id="cadre-botscreen-pbd-banner" class="hidden p-2 rounded-lg bg-rose-950/60 border border-rose-500/50 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-rose-200">
+                      <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                        <span class="font-bold">🔴 PbD-Aufnahme aktiv:</span>
+                        <span id="pbd-banner-status" class="text-zinc-300">Bediene den Bildschirm. Aktionen werden gelernt.</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <input type="text" id="pbd-step-commentary" placeholder="Sprach-/Absichts-Kommentar anheften..." class="w-64 px-2 py-1 rounded bg-black/70 border border-rose-500/40 text-xs text-white placeholder:text-zinc-500 outline-none" onkeydown="if(event.key==='Enter') addPbDCommentary()" />
+                        <button type="button" onclick="addPbDCommentary()" class="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold cursor-pointer">Kommentieren</button>
+                      </div>
+                    </div>
+
                     <div class="flex items-center justify-between text-xs font-mono">
-                      <!-- Zweistufiger Autorisierungs-Button + Notfall-Abbruch -->
+                      <!-- Zweistufiger Autorisierungs-Button + PbD Recording + Notfall-Abbruch -->
                       <div class="flex items-center gap-2 flex-wrap">
                         <button type="button" id="btn-cadre-botscreen-auth" onclick="toggleBotScreenAgentAuthorization()" class="px-3.5 py-1.5 rounded-lg font-bold text-xs font-mono flex items-center gap-2 transition cursor-pointer shadow-xs bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700">
                           <span id="cadre-botscreen-auth-dot" class="w-2 h-2 rounded-full bg-zinc-500"></span>
                           <span id="cadre-botscreen-auth-label">👤 Dein Zugriff (Agent wartet)</span>
+                        </button>
+
+                        <!-- PbD Vormachen & Aufnehmen Button -->
+                        <button type="button" id="btn-cadre-botscreen-record" onclick="toggleBotScreenPbDRecording()" class="px-3 py-1.5 rounded-lg border border-purple-500/50 bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs" title="Programming by Demonstration: Zeige dem Agenten den Ablauf durch Vormachen, damit er ihn als Skill lernt">
+                          <span id="dot-botscreen-record" class="w-2 h-2 rounded-full bg-rose-500"></span>
+                          <span id="label-botscreen-record">Vormachen &amp; Aufnehmen</span>
+                          <span id="badge-botscreen-record-count" class="hidden px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9.5px]">0 Steps</span>
                         </button>
                         
                         <!-- Notfall-Abbruch-Button -->

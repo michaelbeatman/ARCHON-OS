@@ -184,13 +184,13 @@
 - **Reallife-Termine & Kontaktpflege:** Integration wichtiger Termine und Geburtstage aus dem CRM für automatisierte Gratulationen und Beziehungspflege.
 - **Externer Sync:** Optionale ICS/CalDAV-Synchronisation mit Mobilgeräten.
 
-### Meilenstein 26: Autonomous Computer-Use Engine & PbD (In Konzeption / Geplant)
-- **Programming by Demonstration (PbD):** Aufnahme-Button im Bot-Screen (`[ 🔴 Vormachen & Aufnehmen ]`) loggt DOM-Events und transkribiert parallele Sprachbefehle (Whisper) in wiederverwendbare Skills (`SKILL.md`).
-- **Anti-Bot Trajektorien (Ghost-Cursor):** Simulation biomechanischer Mausbewegungen (Bézier-Kurven, Fitts's Law, Geschwindigkeitsvarianz) und Gauss-verteilter Klick-Jitter innerhalb der Ziel-Elemente zur Umgehung von WAFs.
-- **Visual Grounding (Set-of-Marks) & Observation Pruning:** Automatische Ziffern-Markierung auf Screenshots und 90%ige HTML-Reduktion via Accessibility-Tree (a11y) zur massiven Token-Einsparung mit Chat-Toggle.
+### Meilenstein 26: Autonomous Computer-Use Engine & PbD (Abgeschlossen)
+- **Programming by Demonstration (PbD):** Aufnahme-Button im Bot-Screen (`[ 🔴 Vormachen & Aufnehmen ]`) zeichnet Bediener-Aktionen und Sprach-/Absichts-Kommentare live auf und synthetisiert sie vollautomatisch in wiederverwendbare Skills (`.agents/skills/<name>/SKILL.md`) und Python-Automationsskripte (`scripts/dynamic_tools/`).
+- **Anti-Bot Trajektorien (Ghost-Cursor):** Biomechanische Bézier-Trajektorien (Cubic Bézier mit Fitts's Law Verzögerung), Gauss-verteilter Bounding-Box Jitter (gegen starre Pixelklicks) und menschliche Tasten-Kadenzen (50-180ms variierend) zur Umgehung von Anti-Bot WAFs und Fingerprinting.
+- **Visual Grounding & a11y Observation Pruning:** Kompakte Extraktion des semantischen Accessibility-Trees mit bis zu 85-92% Token-Reduktion und Chat-/Screen-Toggle (`[ 🌲 a11y Pruning: Aktiv ]`).
 
-### Meilenstein 27: MCTS & Heuristik-Tree-Search (Geplant)
-- **Gedankliche Voraus-Simulation:** Optionale Monte-Carlo-Baumsuche für hochriskante Aufgaben vor der ersten Tool-Ausführung.
-- **Konfigurierbar:** Aktivierbar in den System-Einstellungen (`mcts_reasoning_enabled`) zur Schonung von Token-Credits bei Routine-Tasks.
+### Meilenstein 27: MCTS & Heuristik-Tree-Search (Abgeschlossen)
+- **Gedankliche Voraus-Simulation:** Monte-Carlo-Baumsuche (`backend/mcts_engine.py`) mit UCB1-Exploration, Risiko-Penalties und Rollout-Simulation für hochriskante Aufgaben vor der ersten Tool-Ausführung.
+- **Konfigurierbar:** Verwaltet in `settings.json` (`mcts_reasoning.enabled: false` als Standard) zur Schonung von Token-Credits bei Routine-Tasks.
 
 

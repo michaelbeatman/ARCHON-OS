@@ -3099,7 +3099,279 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
     // =========================================================================
     let cadreBotScreenAuthorized = false;
     let cadreBotScreenFullscreen = false;
+    let cadreBotScreenA11yActive = true;
+    let cadrePbDRecordingActive = false;
+    let cadrePbDRecordedSteps = 0;
     let cursorDemoTimer = null;
+    let cursorCurrentPos = { x: 50, y: 50 };
+
+    function toggleCadreBotScreenA11y() {
+      cadreBotScreenA11yActive = !cadreBotScreenA11yActive;
+      const dot = document.getElementById("dot-botscreen-a11y");
+      const badge = document.getElementById("badge-botscreen-a11y");
+      const btn = document.getElementById("btn-cadre-botscreen-a11y");
+
+      if (cadreBotScreenA11yActive) {
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+        if (badge) {
+          badge.className = "text-[9px] px-1 py-0.2 rounded bg-emerald-500/30 text-emerald-300 font-bold";
+          badge.innerText = "-85%";
+        }
+        if (btn) btn.className = "px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-mono text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-2xs";
+        if (typeof showArchonToast === 'function') {
+          showArchonToast("🌲 a11y Observation Pruning aktiviert: 85% Token-Reduktion!", "info");
+        }
+      } else {
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-zinc-500";
+        if (badge) {
+          badge.className = "text-[9px] px-1 py-0.2 rounded bg-zinc-700 text-zinc-400 font-bold";
+          badge.innerText = "Inaktiv";
+        }
+        if (btn) btn.className = "px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] font-mono text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-2xs";
+        if (typeof showArchonToast === 'function') {
+          showArchonToast("⚠️ a11y Pruning deaktiviert: Roher DOM-Stream aktiv.", "warning");
+        }
+      }
+    }
+
+    // --- PROGRAMMING BY DEMONSTRATION (PbD) RECORDER ---
+    async function toggleBotScreenPbDRecording() {
+      const btn = document.getElementById("btn-cadre-botscreen-record");
+      const dot = document.getElementById("dot-botscreen-record");
+      const label = document.getElementById("label-botscreen-record");
+      const badge = document.getElementById("badge-botscreen-record-count");
+      const banner = document.getElementById("cadre-botscreen-pbd-banner");
+      const urlInput = document.getElementById("cadre-botscreen-url");
+      const currentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "default";
+
+      if (!cadrePbDRecordingActive) {
+        // Start Recording
+        const title = prompt("Titel für diesen Workflow / Skill:", "Bewerber sichten & filtern") || "Demonstration_" + Date.now();
+        try {
+          const res = await fetch("/api/operations/bot-screen/pbd/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: title,
+              target_url: urlInput ? urlInput.value : "",
+              creator_agent: currentId
+            })
+          });
+          const data = await res.json();
+          cadrePbDRecordingActive = true;
+          cadrePbDRecordedSteps = 0;
+
+          if (btn) btn.className = "px-3 py-1.5 rounded-lg border border-rose-500 bg-rose-600 hover:bg-rose-500 text-white font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md animate-pulse";
+          if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-white";
+          if (label) label.innerText = "⏹️ Aufnahme stoppen & Skill erzeugen";
+          if (badge) {
+            badge.classList.remove("hidden");
+            badge.innerText = "0 Steps";
+          }
+          if (banner) banner.classList.remove("hidden");
+
+          attachCanvasDemonstrationListeners();
+
+          if (typeof showArchonToast === 'function') {
+            showArchonToast("🔴 PbD-Aufnahme gestartet! Klicke und bediene nun die Elemente.", "info");
+          }
+        } catch (e) {
+          alert("Fehler beim Starten der PbD-Aufnahme: " + e.message);
+        }
+      } else {
+        // Stop & Synthesize
+        const defaultSlug = "auto_workflow_" + Date.now().toString().slice(-4);
+        const skillSlug = prompt("Eindeutiger Bezeichner für den neuen Skill (z. B. 'auto_job_screener'):", defaultSlug) || defaultSlug;
+
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = `<span class="animate-spin mr-1">⚙️</span> Synthetisiere Skill...`;
+        }
+
+        try {
+          const res = await fetch("/api/operations/bot-screen/pbd/stop-and-synthesize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ skill_slug: skillSlug })
+          });
+          const data = await res.json();
+
+          cadrePbDRecordingActive = false;
+          detachCanvasDemonstrationListeners();
+
+          if (btn) {
+            btn.disabled = false;
+            btn.className = "px-3 py-1.5 rounded-lg border border-purple-500/50 bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs";
+            btn.innerHTML = `<span id="dot-botscreen-record" class="w-2 h-2 rounded-full bg-rose-500"></span><span id="label-botscreen-record">Vormachen &amp; Aufnehmen</span><span id="badge-botscreen-record-count" class="hidden px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9.5px]">0 Steps</span>`;
+          }
+          if (banner) banner.classList.add("hidden");
+
+          if (data.status === "synthesized") {
+            const msg = `🎉 Neuer Skill '${data.skill_name}' erfolgreich gelernt!\n\n` +
+                        `• ${data.steps_count} Aktionen im Ablauf gespeichert\n` +
+                        `• Manifest: ${data.skill_path}\n` +
+                        `• Ghost-Cursor & Gauss-Jitter automatisch integriert.\n\n` +
+                        `Der Skill steht deinen Agenten ab sofort zur Verfügung!`;
+            if (typeof showArchonToast === 'function') {
+              showArchonToast(`Skill '${data.skill_name}' erfolgreich synthetisiert!`, "success");
+            }
+            alert(msg);
+          } else {
+            alert("Synthese-Rückmeldung: " + (data.message || JSON.stringify(data)));
+          }
+        } catch (e) {
+          alert("Fehler bei der Skill-Synthese: " + e.message);
+        }
+      }
+    }
+
+    async function addPbDCommentary() {
+      const input = document.getElementById("pbd-step-commentary");
+      const text = input ? input.value.trim() : "";
+      if (!text || !cadrePbDRecordingActive) return;
+
+      try {
+        await fetch("/api/operations/bot-screen/pbd/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action_type: "voice_instruction",
+            details: { commentary_type: "user_intent" },
+            commentary: text
+          })
+        });
+        cadrePbDRecordedSteps++;
+        const badge = document.getElementById("badge-botscreen-record-count");
+        if (badge) badge.innerText = `${cadrePbDRecordedSteps} Steps`;
+        input.value = "";
+        if (typeof showArchonToast === 'function') {
+          showArchonToast("Kommentar angeheftet: " + text, "info");
+        }
+      } catch (e) {
+        console.error("Kommentar konnte nicht gesendet werden:", e);
+      }
+    }
+
+    function handleCanvasDemonstrationClick(e) {
+      if (!cadrePbDRecordingActive) return;
+      const canvas = document.getElementById("cadre-botscreen-canvas");
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const xPercent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+      const yPercent = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+
+      const targetText = e.target ? (e.target.innerText || e.target.tagName).slice(0, 30) : "Element";
+
+      fetch("/api/operations/bot-screen/pbd/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action_type: "click",
+          details: {
+            x: xPercent,
+            y: yPercent,
+            target: targetText,
+            tag: e.target.tagName.toLowerCase()
+          },
+          commentary: `Klick auf ${targetText}`
+        })
+      }).then(() => {
+        cadrePbDRecordedSteps++;
+        const badge = document.getElementById("badge-botscreen-record-count");
+        if (badge) badge.innerText = `${cadrePbDRecordedSteps} Steps`;
+      }).catch(() => {});
+    }
+
+    function attachCanvasDemonstrationListeners() {
+      const canvas = document.getElementById("cadre-botscreen-canvas");
+      if (canvas) {
+        canvas.addEventListener("click", handleCanvasDemonstrationClick, true);
+      }
+    }
+
+    function detachCanvasDemonstrationListeners() {
+      const canvas = document.getElementById("cadre-botscreen-canvas");
+      if (canvas) {
+        canvas.removeEventListener("click", handleCanvasDemonstrationClick, true);
+      }
+    }
+
+    // --- BIOMECHANISCHE BÉZIER-ANIMATION DES AGENTEN-MAUSZEIGERS ---
+    function animateAgentCursorTrajectory(targetX, targetY, isClick = false, labelText = null, onComplete = null) {
+      const cursor = document.getElementById("botscreen-agent-cursor");
+      const badge = document.getElementById("botscreen-cursor-badge");
+      if (!cursor) return;
+
+      cursor.classList.remove("hidden");
+      if (labelText && badge) badge.innerText = labelText;
+
+      const startX = cursorCurrentPos.x;
+      const startY = cursorCurrentPos.y;
+
+      // Berechne kubische Bézier-Kontrollpunkte mit Fitts's Law
+      const dx = targetX - startX;
+      const dy = targetY - startY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < 2) {
+        setAgentCursorPosition(targetX, targetY, isClick, labelText);
+        cursorCurrentPos = { x: targetX, y: targetY };
+        if (onComplete) onComplete();
+        return;
+      }
+
+      // Gauss-Jitter im Zielpunkt (±1.5%)
+      const jitterX = targetX + (Math.random() - 0.5) * 2.5;
+      const jitterY = targetY + (Math.random() - 0.5) * 2.5;
+
+      // Seitlicher Wölbungs-Versatz für natürliche Bogenform
+      const normX = -dy / dist;
+      const normY = dx / dist;
+      const curvature = (Math.random() - 0.5) * 14;
+
+      const p1x = startX + dx * 0.3 + normX * curvature;
+      const p1y = startY + dy * 0.3 + normY * curvature;
+      const p2x = startX + dx * 0.7 + normX * (curvature * 0.6);
+      const p2y = startY + dy * 0.7 + normY * (curvature * 0.6);
+
+      const totalFrames = Math.max(16, Math.min(32, Math.round(dist * 0.65)));
+      let frame = 0;
+
+      function step() {
+        frame++;
+        const t = frame / totalFrames;
+        // Ease-in-out S-Kurve
+        const eased = t * t * (3 - 2 * t);
+        const omt = 1 - eased;
+        const omt2 = omt * omt;
+        const omt3 = omt2 * omt;
+        const t2 = eased * eased;
+        const t3 = t2 * eased;
+
+        const curX = omt3 * startX + 3 * omt2 * eased * p1x + 3 * omt * t2 * p2x + t3 * jitterX;
+        const curY = omt3 * startY + 3 * omt2 * eased * p1y + 3 * omt * t2 * p2y + t3 * jitterY;
+
+        cursor.style.left = `${Math.max(4, Math.min(96, curX))}%`;
+        cursor.style.top = `${Math.max(4, Math.min(96, curY))}%`;
+
+        if (frame < totalFrames) {
+          requestAnimationFrame(step);
+        } else {
+          cursorCurrentPos = { x: jitterX, y: jitterY };
+          if (isClick) {
+            const ripple = document.getElementById("botscreen-cursor-ripple");
+            if (ripple) {
+              ripple.classList.remove("hidden");
+              setTimeout(() => ripple.classList.add("hidden"), 550);
+            }
+          }
+          if (onComplete) onComplete();
+        }
+      }
+
+      requestAnimationFrame(step);
+    }
 
     function navigateCadreBotScreen() {
       const urlInput = document.getElementById("cadre-botscreen-url");
@@ -3221,20 +3493,27 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
       if (cursorDemoTimer) clearTimeout(cursorDemoTimer);
       const agentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "Default";
       
-      setAgentCursorPosition(30, 25, false, `🤖 ${agentId}: Sucht Feld...`);
-      
-      cursorDemoTimer = setTimeout(() => {
-        setAgentCursorPosition(48, 38, true, `🤖 ${agentId}: Klickt`);
+      // 1. Schwingt biomechanisch zum ersten Feld
+      animateAgentCursorTrajectory(32, 28, false, `🤖 ${agentId}: Scannt Maske...`, () => {
         cursorDemoTimer = setTimeout(() => {
-          setAgentCursorPosition(55, 60, false, `🤖 ${agentId}: Scannt Inhalt`);
-          cursorDemoTimer = setTimeout(() => {
-            setAgentCursorPosition(72, 70, true, `🤖 ${agentId}: Wählt Aktion`);
+          // 2. Gleitet mit Bézier-Kurve zum Button und klickt mit Gauss-Jitter
+          animateAgentCursorTrajectory(48, 38, true, `🤖 ${agentId}: Klickt Filter`, () => {
             cursorDemoTimer = setTimeout(() => {
-              setAgentCursorPosition(50, 50, false, `🤖 ${agentId}: Bereit`);
-            }, 900);
-          }, 900);
-        }, 900);
-      }, 800);
+              // 3. Scannt Zeilen
+              animateAgentCursorTrajectory(58, 62, false, `🤖 ${agentId}: Prüft Profil`, () => {
+                cursorDemoTimer = setTimeout(() => {
+                  // 4. Klickt Ziel-Aktion
+                  animateAgentCursorTrajectory(74, 68, true, `🤖 ${agentId}: Wählt Bewerbung`, () => {
+                    cursorDemoTimer = setTimeout(() => {
+                      animateAgentCursorTrajectory(50, 50, false, `🤖 ${agentId}: Bereit`);
+                    }, 800);
+                  });
+                }, 700);
+              });
+            }, 700);
+          });
+        }, 600);
+      });
     }
 
     // --- NOTFALL-ABBRUCH ---
@@ -3319,3 +3598,7 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
     window.testCadreAgentCursor = testCadreAgentCursor;
     window.setAgentCursorPosition = setAgentCursorPosition;
     window.hideAgentCursor = hideAgentCursor;
+    window.toggleCadreBotScreenA11y = toggleCadreBotScreenA11y;
+    window.toggleBotScreenPbDRecording = toggleBotScreenPbDRecording;
+    window.addPbDCommentary = addPbDCommentary;
+    window.animateAgentCursorTrajectory = animateAgentCursorTrajectory;

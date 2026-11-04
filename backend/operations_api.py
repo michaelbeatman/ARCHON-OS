@@ -149,7 +149,7 @@ def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
     # 2d (12.10.2026): Projektordner + Entscheidungs-Kontext auch LISTEN-seitig,
     # damit die Card das Entscheidungs-Banner und die Projektzeile zeigen kann
     # (der Detail-Dialog liefert weiterhin den vollen Block).
-    task_dict["obsidian"] = tmeta.get("obsidian") or None
+    task_dict["obsidian"] = _resolve_task_obsidian_rel(task_dict.get("id"), meta)
     task_dict["tokens"] = tmeta.get("tokens") or None
     task_dict["cost"] = tmeta.get("cost") or None
     task_dict["quality_review"] = tmeta.get("quality_review") or None
@@ -199,7 +199,7 @@ def get_kanban_tasks(archived: bool = Query(False)):
     profiles = _load_profiles_map()
     meta = _load_kanban_meta()
     base_select = """
-            SELECT id, title, body, assignee, status, priority, created_by,
+            SELECT rowid AS task_num, id, title, body, assignee, status, priority, created_by,
                    created_at, started_at, completed_at, result, model_override, provider_override,
                    (SELECT count(*) FROM task_comments c WHERE c.task_id = tasks.id) AS comment_count,
                    (SELECT count(*) FROM task_links l WHERE l.parent_id = tasks.id) AS subtask_count,
@@ -1381,7 +1381,7 @@ def get_task_details(task_id: str):
     profiles = _load_profiles_map()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+        cursor.execute("SELECT rowid AS task_num, * FROM tasks WHERE id = ?", (task_id,))
         task_row = cursor.fetchone()
         if not task_row:
             raise HTTPException(status_code=404, detail="Task nicht gefunden.")
@@ -1394,7 +1394,7 @@ def get_task_details(task_id: str):
 
         # Obsidian-Projekt-Bruecke (Sidecar config/kanban_meta.json, Option A 11.10.2026)
         _meta_all = _load_kanban_meta()
-        task["obsidian"] = ((_meta_all.get("tasks") or {}).get(task_id) or {}).get("obsidian") or None
+        task["obsidian"] = _resolve_task_obsidian_rel(task_id, _meta_all)
         # 2b (12.10.2026): Entscheidungs-Kontext mitliefern (Sidecar-Block), damit der
         # Detail-Dialog Typ, Status, Kurzfassung und das Bericht-Dossier anzeigen kann.
         task["decision"] = ((_meta_all.get("tasks") or {}).get(task_id) or {}).get("decision") or None

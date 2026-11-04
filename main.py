@@ -5496,48 +5496,218 @@ Regeln:
 - Status-Verfolgung über die Task-ID: Kanban in_progress = läuft, review = Ergebnis da, blocked = Problem.
 === ENDE DELEGATIONSPROTOKOLL ==="""
 
+DELEGATION_ALIAS_MAP = {
+    # Apex / Leitung / Robert
+    "robert": "executive_decision_architect",
+    "ceo": "executive_decision_architect",
+    "apex": "executive_decision_architect",
+    "dr. robert neumann": "system_architect_orchestrator",
+    "robert neumann": "system_architect_orchestrator",
+    "cloud_architect": "system_architect_orchestrator",
+    "system_architect": "system_architect_orchestrator",
+    "system-architect": "system_architect_orchestrator",
+    
+    # Lisa / Aggregation / Synthese
+    "lisa": "aggregation_lisa",
+    "synthese": "aggregation_lisa",
+    "aggregation": "aggregation_lisa",
+    "aggregator": "aggregation_lisa",
+
+    # Product Management / Requirements
+    "cs-product-manager": "product_requirements_engineer",
+    "product-manager": "product_requirements_engineer",
+    "product_manager": "product_requirements_engineer",
+    "produktmanager": "product_requirements_engineer",
+    "product_owner": "product_requirements_engineer",
+    "product-owner": "product_requirements_engineer",
+    "requirements_engineer": "product_requirements_engineer",
+    "tobias": "product_requirements_engineer",
+    "tobias merz": "product_requirements_engineer",
+
+    # Frontend / UI / UX / Design
+    "cs-frontend-engineer": "brand_uiux_director",
+    "frontend-engineer": "brand_uiux_director",
+    "frontend_engineer": "brand_uiux_director",
+    "frontend": "brand_uiux_director",
+    "designer": "brand_uiux_director",
+    "ui_designer": "brand_uiux_director",
+    "ux_designer": "brand_uiux_director",
+    "clara": "brand_uiux_director",
+    "clara moreau": "brand_uiux_director",
+
+    # Tech / Fullstack / Coding / Senior Engineer
+    "cs-senior-engineer": "senior_fullstack_engineer",
+    "senior-engineer": "senior_fullstack_engineer",
+    "senior_engineer": "senior_fullstack_engineer",
+    "fullstack_engineer": "senior_fullstack_engineer",
+    "fullstack-engineer": "senior_fullstack_engineer",
+    "fullstack": "senior_fullstack_engineer",
+    "coder": "senior_fullstack_engineer",
+    "senior_coder": "senior_fullstack_engineer",
+    "niklas": "senior_fullstack_engineer",
+    "niklas dorn": "senior_fullstack_engineer",
+
+    # Scrum / Agile
+    "agile-product-owner": "agile_scrum_master",
+    "agile_product_owner": "agile_scrum_master",
+    "scrum_master": "agile_scrum_master",
+    "scrum-master": "agile_scrum_master",
+    "scrum": "agile_scrum_master",
+    "sarah": "agile_scrum_master",
+    "sarah lindemann": "agile_scrum_master",
+
+    # Compliance / Recht / DSGVO
+    "compliance": "compliance_gdpr_auditor",
+    "dsgvo": "compliance_gdpr_auditor",
+    "compliance_auditor": "compliance_gdpr_auditor",
+    "sabine": "compliance_gdpr_auditor",
+    "sabine becker": "compliance_gdpr_auditor",
+    "jurist": "commercial_jurist_contracts",
+    "vertragspruefer": "commercial_jurist_contracts",
+    "wirtschaftsjurist": "commercial_jurist_contracts",
+    "dr. maximilian von walden": "commercial_jurist_contracts",
+    "maximilian": "commercial_jurist_contracts",
+
+    # Marketing / Sales
+    "copywriter": "direct_response_copywriter",
+    "david stein": "direct_response_copywriter",
+    "david": "direct_response_copywriter",
+    "b2b": "b2b_outreach_specialist",
+    "outreach": "b2b_outreach_specialist",
+    "patrick": "b2b_outreach_specialist",
+    "patrick jensen": "b2b_outreach_specialist"
+}
+
+def _resolve_target_agent_id(ziel_raw: str, profiles: list):
+    """Löst erfundene Namen, Skill-Namen, Rufnamen oder ungenaue IDs fehlertolerant in die echte Agent-ID auf."""
+    raw = (ziel_raw or "").strip().lower()
+    if not raw:
+        return None, ""
+
+    # 1. Exakter ID-Match
+    for p in profiles:
+        if p.get("id", "").lower() == raw:
+            return p["id"], ""
+
+    # 2. Normalisierter ID-Match (_ vs -)
+    raw_norm = raw.replace("-", "_")
+    for p in profiles:
+        if p.get("id", "").lower().replace("-", "_") == raw_norm:
+            return p["id"], f"ID normalisiert von '{ziel_raw}'"
+
+    # 3. Fester Alias-Lookup
+    if raw in DELEGATION_ALIAS_MAP:
+        mapped = DELEGATION_ALIAS_MAP[raw]
+        return mapped, f"Alias '{ziel_raw}' -> '{mapped}'"
+    if raw_norm in DELEGATION_ALIAS_MAP:
+        mapped = DELEGATION_ALIAS_MAP[raw_norm]
+        return mapped, f"Alias '{ziel_raw}' -> '{mapped}'"
+
+    # 4. Personenname / Rufname Match (z.B. 'Robert', 'Tobias', 'Sarah')
+    for p in profiles:
+        pname = (p.get("person_name") or "").strip().lower()
+        if pname:
+            first_name = pname.split()[0]
+            if raw == pname or raw == first_name:
+                pid = p["id"]
+                return pid, f"Personenname '{pname}' -> '{pid}'"
+
+    # 5. Rollen- / Titelsuche (Substring)
+    for p in profiles:
+        role = (p.get("role") or p.get("name") or "").lower()
+        if raw in role or raw_norm in role:
+            pid = p["id"]
+            return pid, f"Rollen-Treffer '{role}' -> '{pid}'"
+
+    return None, ""
+
+def _build_kader_roster_summary():
+    """Erstellt eine lesbare, gegliederte Liste aller real existierenden Agenten für das Delegations-Prompt."""
+    try:
+        profiles = api_get_hermes_profiles()
+        lines = []
+        for p in profiles:
+            pid = p.get("id")
+            if not pid or pid in ("micha", "telegram_bot"):
+                continue
+            pname = p.get("person_name") or p.get("name") or pid
+            role = p.get("role") or p.get("name") or ""
+            lines.append(f"  • {pid} ({pname} | {role})")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
 def _get_delegation_prompt_for(agent_id: str):
     """Liefert das Protokoll-Prompt für Tier 1/2-Agenten, sonst None."""
     try:
         node = _load_org_hierarchy_map().get(agent_id)
         if node and node.get("tier") in (1, 2):
             tier = node["tier"]
-            return DELEGATION_PROTOCOL_PROMPT.replace('{"APEX: an alle Agenten" if TIER==1 else "LEAD: nur an dein eigenes Team"}',
-                                                       ("APEX: an alle Agenten" if tier == 1 else "LEAD: nur an dein eigenes Team"))
+            prompt = DELEGATION_PROTOCOL_PROMPT.replace(
+                '{"APEX: an alle Agenten" if TIER==1 else "LEAD: nur an dein eigenes Team"}',
+                ("APEX: an alle Agenten" if tier == 1 else "LEAD: nur an dein eigenes Team")
+            )
+            roster = _build_kader_roster_summary()
+            if roster:
+                prompt += f"\n\n=== OFFIZIELLES KADER-REGISTER (NUR DIESE ECHTEN IDs IM FELD 'ziel_agent' NUTZEN!) ===\n{roster}\n"
+            return prompt
     except Exception as e:
         logger.warning(f"[Delegation] Protokoll-Prompt-Aufbau fehlgeschlagen: {e}")
     return None
 
 def _parse_delegation_blocks(text: str):
-    """Findet alle ```delegation```-JSON-Blöcke. Rückgabe: (valide_payloads, fehlerhafte_blöcke)."""
+    """Findet alle ```delegation```-JSON-Blöcke sowie Fallback-JSON-Zeilen."""
     valid, invalid = [], []
-    for m in re.finditer(r"```delegation\s*\n(.*?)```", text, re.DOTALL):
+    seen_hashes = set()
+    
+    # 1. Standard: ```delegation ... ``` Blöcke
+    for m in re.finditer(r"```(?:delegation|json)?\s*\n(.*?)```", text, re.DOTALL):
         raw = m.group(1).strip()
+        if '"ziel_agent"' in raw and '"auftrag"' in raw:
+            try:
+                payload = json.loads(raw)
+                if isinstance(payload, dict) and payload.get("ziel_agent") and payload.get("auftrag"):
+                    h = f"{payload.get('ziel_agent')}:{payload.get('auftrag')[:40]}"
+                    if h not in seen_hashes:
+                        valid.append(payload)
+                        seen_hashes.add(h)
+            except Exception as e:
+                invalid.append({"raw": raw[:200], "error": str(e)})
+
+    # 2. Fallback: Ungefenced JSON-Objekte mit "ziel_agent" und "auftrag"
+    for m in re.finditer(r'\{[^{}]*"ziel_agent"\s*:\s*"[^"]+"[^{}]*"auftrag"\s*:\s*"[^"]+"[^{}]*\}', text, re.DOTALL):
+        raw = m.group(0).strip()
         try:
             payload = json.loads(raw)
-            if not payload.get("ziel_agent") or not payload.get("auftrag"):
-                invalid.append({"raw": raw[:200], "error": "Felder 'ziel_agent' oder 'auftrag' fehlen"})
-            else:
-                valid.append(payload)
-        except Exception as e:
-            invalid.append({"raw": raw[:200], "error": str(e)})
+            if isinstance(payload, dict) and payload.get("ziel_agent") and payload.get("auftrag"):
+                h = f"{payload.get('ziel_agent')}:{payload.get('auftrag')[:40]}"
+                if h not in seen_hashes:
+                    valid.append(payload)
+                    seen_hashes.add(h)
+        except Exception:
+            pass
+            
     return valid, invalid
 
 def _execute_delegation(delegator_id, payload, provider, all_keys):
     """Führt eine Delegation aus: Berechtigungsprüfung, Sub-Session, Kanban-Task,
     Hintergrund-Ausführung. Gibt eine Quittung als Text zurück (wird in die
     Delegator-Session geschrieben, damit der Agent sich erinnert)."""
-    ziel = str(payload.get("ziel_agent") or "").strip()
+    ziel_raw = str(payload.get("ziel_agent") or "").strip()
     auftrag = str(payload.get("auftrag") or "").strip()
     modell = str(payload.get("modell") or payload.get("model") or "").strip()
     prioritaet = str(payload.get("prioritaet") or "normal").strip().lower()
     reasoning_lvl = str(payload.get("reasoning_level") or payload.get("reasoning") or "medium").strip().lower()
 
+    profiles = api_get_hermes_profiles()
+    ziel, resolve_note = _resolve_target_agent_id(ziel_raw, profiles)
+    if not ziel:
+        return f"❌ DELEGATION ABGELEHNT — Ziel-Agent '{ziel_raw}' existiert nicht im Agenten-Kader."
+
     allowed, reason = _check_delegation_permission(delegator_id, ziel)
     if not allowed:
-        return f"❌ DELEGATION ABGELEHNT — Ziel: {ziel} | Grund: {reason}"
+        return f"❌ DELEGATION ABGELEHNT — Ziel: {ziel} ({ziel_raw}) | Grund: {reason}"
 
-    profiles = api_get_hermes_profiles()
     t_prof = next((p for p in profiles if p["id"] == ziel), None)
     if not t_prof:
         return f"❌ DELEGATION ABGELEHNT — Ziel-Agent '{ziel}' existiert nicht im Agenten-Kader."
@@ -5842,7 +6012,8 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
             logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 
     asyncio.create_task(_bg_watch_task(task_id, tgt_sess, ziel))
-    return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}) | Kanban-Task: {task_id or 'n/a'} | "
+    resolve_str = f" [aufgelöst von '{ziel_raw}']" if ziel_raw and ziel_raw != ziel else ""
+    return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}{resolve_str}) | Kanban-Task: {task_id or 'n/a'} | "
             f"Sub-Session: {tgt_sess} | Modell (Empfehlung): {t_model} | "
             f"Ausführung: Hermes-Agent-Worker | Ergebnis erscheint im Kanban und wird automatisch in die Sub-Session gespiegelt.")
 

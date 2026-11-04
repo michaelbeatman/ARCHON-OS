@@ -2436,11 +2436,15 @@
         btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Aktualisiere System...';
       }
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
         const res = await fetch("/api/v1/system/update/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ backup: true })
+          body: JSON.stringify({ backup: true }),
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
         const data = await res.json();
         if (data.status === "success") {
           alert(`Update erfolgreich installiert!\nNeuer Commit: ${data.new_commit}\n\nDie Seite wird nun neu geladen.`);

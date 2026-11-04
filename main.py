@@ -11,7 +11,7 @@ import re
 import threading
 import tempfile
 from typing import List, Dict, Optional, Any
-from fastapi import FastAPI, HTTPException, Query, Request, Body, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, Query, Request, Body, File, UploadFile, Form, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel
@@ -9386,12 +9386,15 @@ def api_system_update_push(payload: dict = Body(default={})):
     return system_updater.push_changes(commit_message=msg, custom_version=version, version_step=step)
 
 @app.post("/api/v1/system/update/apply")
-def api_system_update_apply(payload: dict = Body(default={})):
+def api_system_update_apply(payload: dict = Body(default={}), background_tasks: BackgroundTasks = None):
     import importlib
     from backend import system_updater
     importlib.reload(system_updater)
     make_backup = payload.get("backup", True)
-    return system_updater.apply_update(make_backup=make_backup)
+    res = system_updater.apply_update(make_backup=make_backup)
+    if res.get("status") == "success" and background_tasks is not None:
+        background_tasks.add_task(system_updater.schedule_delayed_reload, delay=2.0)
+    return res
 
 @app.get("/api/v1/system/update/snapshots")
 def api_system_update_snapshots():

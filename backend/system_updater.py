@@ -587,13 +587,6 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
     new_native = _read_git_head_native()
     new_commit = new_native.get("commit", "unknown")
 
-    # Code-Reload triggern: main.py anfassen damit uvicorn neu lädt
-    main_file = os.path.join(WORKSPACE_DIR, "main.py")
-    try:
-        os.utime(main_file, None)
-    except Exception:
-        pass
-
     return {
         "status": "success",
         "new_commit": new_commit,
@@ -601,6 +594,17 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
         "git_output": pull_res["stdout"],
         "message": f"Update erfolgreich auf Commit {new_commit} angewendet."
     }
+
+
+def schedule_delayed_reload(delay: float = 2.0):
+    """Führt einen verzögerten Code-Reload durch, damit die HTTP-Response sauber beendet werden kann."""
+    import time
+    time.sleep(delay)
+    main_file = os.path.join(WORKSPACE_DIR, "main.py")
+    try:
+        os.utime(main_file, None)
+    except Exception:
+        pass
 
 
 def push_changes(commit_message: Optional[str] = None, custom_version: Optional[str] = None, version_step: str = "custom") -> Dict[str, Any]:

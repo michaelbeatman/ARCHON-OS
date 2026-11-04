@@ -1017,6 +1017,22 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None) -> Opt
         except Exception:
             pass
 
+    # Fallback 1b: Falls Subtask, erbe Projekt vom Parent aus task_links
+    if not rel:
+        try:
+            conn = _get_kanban_connection()
+            try:
+                r_parent = conn.execute("SELECT parent_id FROM task_links WHERE child_id = ?", (task_id,)).fetchone()
+                parent_id = r_parent[0] if r_parent else None
+            finally:
+                conn.close()
+            if parent_id and parent_id != task_id:
+                parent_rel = _resolve_task_obsidian_rel(parent_id, meta)
+                if parent_rel:
+                    return parent_rel
+        except Exception:
+            pass
+
     # Fallback 2: Pruefe kanban.db nach project_id
     if not rel:
         try:
@@ -1426,17 +1442,17 @@ def get_task_details(task_id: str):
 
 @router.post("/kanban/tasks/{task_id}/comments")
 def add_task_comment(task_id: str, author: str = Body(..., embed=True), body: str = Body(..., embed=True)):
-    """Fügt einem Task einen Kommentar hinzu."""
+    """Fügt einem Task einen Kommentar hinzu (Timestamp als integer Unix-Epoch für Hermes-Kompatibilität)."""
     conn = _get_kanban_connection()
     try:
-        now_iso = datetime.datetime.now().isoformat()
+        now_ts = int(time.time())
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO task_comments (task_id, author, body, created_at)
             VALUES (?, ?, ?, ?)
-        """, (task_id, author, body, now_iso))
+        """, (task_id, author, body, now_ts))
         conn.commit()
-        return {"status": "success", "task_id": task_id, "created_at": now_iso}
+        return {"status": "success", "task_id": task_id, "created_at": now_ts}
     finally:
         conn.close()
 

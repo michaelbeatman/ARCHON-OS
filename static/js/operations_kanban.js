@@ -2409,7 +2409,12 @@
               const datei = (dec.dossier || '').split('/').pop();
               if (!datei) { decReader.textContent = 'Kein Bericht hinterlegt.'; return; }
               try {
-                const rel = '01_Zwischenberichte/' + datei;
+                let subfolder = (dec.dossier || '').includes('03_Endprodukte') ? '03_Endprodukte' : '01_Zwischenberichte';
+                let dateiToFetch = datei;
+                if (/\.pdf$/i.test(datei)) {
+                  dateiToFetch = datei.replace(/\.pdf$/i, '.html');
+                }
+                const rel = subfolder + '/' + dateiToFetch;
                 const fd = await _dj(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}/file?path=${encodeURIComponent(rel)}`);
                 if (/\.html?$/i.test(datei)) {
                   // .html-Dossier RENDERN statt Rohtext auswerfen

@@ -162,16 +162,25 @@
                     <option value="nvidia">NVIDIA NIM</option>
                   </select>
                   <span class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide ml-1">Modell:</span>
-                  <select 
-                    id="master-chat-model-select" 
-                    onchange="onMasterChatModelChanged(this.value)"
-                    class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2.5 py-1 text-[11px] font-mono font-medium text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 cursor-pointer max-w-[240px] truncate"
-                  >
-                    <option value="meta-llama/llama-3.3-70b-instruct" selected>meta-llama/llama-3.3-70b-instruct</option>
-                    <option value="anthropic/claude-3.7-sonnet">anthropic/claude-3.7-sonnet</option>
-                    <option value="deepseek/deepseek-v3">deepseek/deepseek-v3</option>
-                    <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
-                  </select>
+                  <div class="inline-flex items-center gap-1">
+                    <select 
+                      id="master-chat-model-select" 
+                      onchange="onMasterChatModelChanged(this.value)"
+                      class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono font-medium text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 cursor-pointer max-w-[220px] truncate"
+                    >
+                      <option value="meta-llama/llama-3.3-70b-instruct" selected>meta-llama/llama-3.3-70b-instruct</option>
+                      <option value="anthropic/claude-3.7-sonnet">anthropic/claude-3.7-sonnet</option>
+                      <option value="deepseek/deepseek-v3">deepseek/deepseek-v3</option>
+                      <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+                    </select>
+                    <button type="button" onclick="openPriceCatalogForMasterChat()" class="p-1 rounded-md bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-[var(--border)] cursor-pointer transition shrink-0 flex items-center justify-center shadow-2xs" title="Modelle durchsuchen &amp; Preise vergleichen (Lupe)">
+                      <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                  <span id="master-chat-model-cost" class="text-[9.5px] text-amber-500 font-mono font-bold ml-1 bg-amber-500/10 px-1.5 py-0.5 rounded hidden"></span>
+                  <button type="button" id="master-chat-refresh-prices-btn" onclick="refreshMasterChatPrices(this)" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-emerald-500 transition cursor-pointer shrink-0 ml-0.5" title="Tokenpreise jetzt live aktualisieren">
+                    <i data-lucide="rotate-cw" class="w-3 h-3"></i>
+                  </button>
                 </div>
                 <!-- Center: Upload / Status Indicator -->
                 <span id="master-chat-upload-indicator" class="text-[var(--foreground)] font-semibold truncate max-w-[240px]"></span>

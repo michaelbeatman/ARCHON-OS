@@ -2840,11 +2840,22 @@
         );
       }
 
-      // Sort by price ascending, 0 prices first
+      // Sort options: price_asc, price_desc, alpha_asc, context_desc
+      const sortSelect = document.getElementById("llm-price-sort");
+      const sortMode = sortSelect ? sortSelect.value : "price_asc";
       filtered.sort((a, b) => {
-        if (a.prompt_1m === 0 && b.prompt_1m > 0) return -1;
-        if (b.prompt_1m === 0 && a.prompt_1m > 0) return 1;
-        return a.prompt_1m - b.prompt_1m;
+        if (sortMode === "alpha_asc") {
+          return (a.id || "").localeCompare(b.id || "", undefined, { sensitivity: "base" });
+        } else if (sortMode === "price_desc") {
+          return (b.prompt_1m || 0) - (a.prompt_1m || 0);
+        } else if (sortMode === "context_desc") {
+          return (b.context_length || 0) - (a.context_length || 0);
+        } else {
+          // price_asc (0 / Free first)
+          if (a.prompt_1m === 0 && b.prompt_1m > 0) return -1;
+          if (b.prompt_1m === 0 && a.prompt_1m > 0) return 1;
+          return (a.prompt_1m || 0) - (b.prompt_1m || 0);
+        }
       });
 
       if (countEl) {

@@ -296,7 +296,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -306,7 +306,7 @@
         "type": "search_feed",
         "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -316,7 +316,7 @@
         "type": "search_feed",
         "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -326,7 +326,7 @@
         "type": "search_feed",
         "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -336,7 +336,7 @@
         "type": "search_feed",
         "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -346,7 +346,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -356,7 +356,7 @@
         "type": "rss",
         "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -366,7 +366,7 @@
         "type": "search_feed",
         "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -376,7 +376,7 @@
         "type": "search_feed",
         "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -386,7 +386,7 @@
         "type": "search_feed",
         "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -396,7 +396,7 @@
         "type": "rss",
         "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -406,7 +406,7 @@
         "type": "rss",
         "query_or_url": "https://techcrunch.com/feed/",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -416,7 +416,7 @@
         "type": "rss",
         "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -426,7 +426,7 @@
         "type": "rss",
         "query_or_url": "https://www.tagesschau.de/xml/rss2/",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       },
       {
@@ -436,323 +436,315 @@
         "type": "search_feed",
         "query_or_url": "site:spektrum.de",
         "active": true,
-        "last_check": "2026-11-03T13:30:04.183561",
+        "last_check": "2026-11-04T18:03:34.854792",
         "last_status": "OK (8 Einträge)"
       }
     ],
-    "last_run": "2026-11-03T13:30:04.183561",
+    "last_run": "2026-11-04T18:03:34.854792",
     "recent_findings": [
       {
-        "id": "a2f9e8e10627c66c",
+        "id": "3d70861ba4b27da7",
         "target_id": "src-handelsblatt-top",
         "target_name": "Handelsblatt (Top-Themen)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Finanzpolitik: Die Plastiksteuer dürfte 2027 wohl doch nicht kommen – mit Folgen für Klingbeils Haushalt",
-        "link": "https://www.handelsblatt.com/politik/deutschland/finanzpolitik-plastiksteuer-duerfte-2027-wohl-doch-nicht-kommen/100266545.html",
-        "published": "Tue, 03 Nov 2026 13:01:59 GMT",
-        "detected_at": "03.11.2026 13:30"
+        "title": "Rüstungsindustrie: Verzögerungen bei Aufträgen – Rheinmetall senkt Prognose",
+        "link": "https://www.handelsblatt.com/unternehmen/industrie/ruestungsindustrie-verzoegerungen-bei-auftraegen-rheinmetall-senkt-prognose/100267059.html",
+        "published": "Wed, 04 Nov 2026 17:46:34 GMT",
+        "detected_at": "04.11.2026 18:00"
       },
       {
-        "id": "a468621c59fd3b5b",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Pharma: „Das Letzte, was wir tun werden“: Bayer erteilt Aufspaltung vorerst eine Absage",
-        "link": "https://www.handelsblatt.com/unternehmen/industrie/pharma-bayer-erteilt-aufspaltung-vorerst-eine-absage-und-hebt-prognose-an/100265241.html",
-        "published": "Tue, 03 Nov 2026 13:23:31 GMT",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "82b14e5ee7e6a41a",
-        "target_id": "src-handelsblatt-top",
-        "target_name": "Handelsblatt (Top-Themen)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Luftfahrt: Premiumkunden retten das Quartal von Lufthansa",
-        "link": "https://www.handelsblatt.com/unternehmen/dienstleister/luftfahrt-premiumkunden-retten-das-quartal-von-lufthansa/100265034.html",
-        "published": "Tue, 03 Nov 2026 10:25:29 GMT",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "07a23ca7e9ebb913",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Midterms: Die Zwischenwahlen in den USA im Überblick  – das müssen Sie wissen",
-        "link": "https://www.handelsblatt.com/politik/international/midterms-was-sie-zu-den-zwischenwahlen-in-den-usa-wissen-muessen/100266607.html",
-        "published": "Tue, 03 Nov 2026 13:27:00 GMT",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "3ffb68b9ab8bbd6b",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Immobilien: 1,35 Millionen Wohnungen fehlen: Was der Bau-Turbo bislang gebracht hat",
-        "link": "https://www.handelsblatt.com/politik/deutschland/immobilien-was-der-bau-turbo-bislang-gebracht-hat/100266659.html",
-        "published": "Tue, 03 Nov 2026 13:03:37 GMT",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "bb7a665484acf36d",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Finanzpolitik: Die Plastiksteuer dürfte 2027 wohl doch nicht kommen – mit Folgen für Klingbeils Haushalt",
-        "link": "https://www.handelsblatt.com/politik/deutschland/finanzpolitik-plastiksteuer-duerfte-2027-wohl-doch-nicht-kommen/100266545.html",
-        "published": "Tue, 03 Nov 2026 13:01:59 GMT",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "1c869cef9d4bc0f2",
-        "target_id": "src-handelsblatt-politik",
-        "target_name": "Handelsblatt (Politik & Ökonomie)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "Kreisvorsitzendenkonferenz: „Es ging hoch her“ – Merz bekommt Frust der CDU-Basis zu spüren",
-        "link": "https://www.handelsblatt.com/politik/deutschland/cdu-bundeskanzler-friedrich-merz-bekommt-frust-der-basis-zu-spueren/100266778.html",
-        "published": "Tue, 03 Nov 2026 13:01:00 GMT",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "91a5f8f6ccab796e",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Monatlich kündbar: Der beste Handyvertrag im November – 99 GB Vodafone für 10 €",
-        "link": "https://www.heise.de/bestenlisten/ratgeber/monatlich-kuendbar-der-beste-handyvertrag-im-november-99-gb-vodafone-fuer-10-euro/6r7pf35?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T14:00:00+01:00",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "0b1dea7bef6c5d10",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "heise-Angebot: iX-Workshop: Nach dem Ransomware-Angriff – sicher entscheiden und kommunizieren",
-        "link": "https://www.heise.de/news/iX-Workshop-Nach-dem-Ransomware-Angriff-sicher-entscheiden-und-kommunizieren-11492922.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T14:00:00+01:00",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "ef7e611720a6653a",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Passwort-Manager mSecure: Nach IT-Vorfall Zugangsdaten sichern",
-        "link": "https://www.heise.de/news/Passwort-Manager-mSecure-Nach-IT-Vorfall-Zugangsdaten-sichern-11509717.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T13:57:00+01:00",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "af70c338be530b63",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "EU genehmigt MediaMarktSaturn-Übernahme durch JD.com",
-        "link": "https://www.tagesschau.de/wirtschaft/unternehmen/eu-mediamarkt-saturn-jd-genehmigung-100.html",
-        "published": "Tue, 03 Nov 2026 14:25:20 +0100",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "e67319aba53b2158",
-        "target_id": "src-spektrum",
-        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
-        "category": "Politik & Wissenschaft",
-        "title": "Ungewöhnliches Paar: Forscher rätseln über Sex zwischen Bulle und Esel - Spektrum der Wissenschaft",
-        "link": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxOdTctb0hDM2x5aDBDRVBxdUhjcVg1VktPa1RPUzFOTDJ1ZHpRTF83UEtBd0RkRHp2SHI2UHNsWEdxNUJJc1pwUzBoX1hUUmkwTmx0MVFhSXlCeXZ0OW1BYXdaUVFld2MtOFhUS0pDaWJJWkh0R0s1U1JvT0dxeEtwQTNYdl83X1o3SnBQWko2eG4wMktVTEFZZ3R1cGdrTkZhSjM1TDNNVU4xMDQ?oc=5",
-        "published": "Tue, 03 Nov 2026 11:00:00 GMT",
-        "detected_at": "03.11.2026 13:30"
-      },
-      {
-        "id": "b5e2ddbf03f98f69",
-        "target_id": "src-invest-radar",
-        "target_name": "High-Impact Investitions-Radar",
-        "category": "Investitionen & Geopolitik",
-        "title": "Investitionsgipfel: Deutschland wirbt um private Investoren - ZDFheute",
-        "link": "https://news.google.com/rss/articles/CBMikgFBVV95cUxNbnRZQ0ZraG92N2ZrMHY0cXJZcUdkeUt3QmEybEx1X29ubzluVml1YUhqeTg0S0lqVnZISm5Td3RxaFdaczZVUmhueVBWYXdZSS1pTVB3eGY2NTZTd1BESm82ZG1DTjRoaGVtQmRKd1RVdE9kYVNFZnc4VENIZzBxUEM2dU1kVzJHWVFiUl9sVnNOdw?oc=5",
-        "published": "Tue, 20 Oct 2026 07:00:00 GMT",
-        "detected_at": "03.11.2026 12:58",
-        "is_priority": true,
-        "matched_keywords": [
-          "investitionsgipfel"
-        ]
-      },
-      {
-        "id": "3b7e7c225f1f6492",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Lüfterlose Mini-PC-Barebones mit Intel Core 300 und Thunderbolt 4",
-        "link": "https://www.heise.de/news/Luefterlose-Mini-PC-Barebones-mit-Intel-Core-300-und-Thunderbolt-4-11509687.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T13:46:00+01:00",
-        "detected_at": "03.11.2026 12:58"
-      },
-      {
-        "id": "0b6deb7912a13ba2",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Bundesweite Razzia gegen mutmaßliche Linksextremisten",
-        "link": "https://www.tagesschau.de/inland/razzia-linksextremismus-100.html",
-        "published": "Tue, 03 Nov 2026 13:48:39 +0100",
-        "detected_at": "03.11.2026 12:50",
-        "is_priority": true,
-        "matched_keywords": [
-          "geg"
-        ]
-      },
-      {
-        "id": "6b8cf677d592e99a",
-        "target_id": "src-finanzen-boerse",
-        "target_name": "Finanzen & Börse Radar (DAX & Ströme)",
-        "category": "Wirtschaft & Finanzen",
-        "title": "So viel Verlust hätte eine Neo-Investition von vor 1 Jahr eingebracht - Finanzen.net",
-        "link": "https://news.google.com/rss/articles/CBMivwFBVV95cUxNOWZna3FTWllkV0FPbVY2NjRhMnVQeTJDV2Z6WmJKTVR3eVIxb1RIOXdOeDJNaWxpb0c5c2FDUjBZOVM0MG1FenhWV3VHcGwxU0Z0YjNQTlotNnkzaF9NVkxHX3lJVjRKcEhZTFhIUHAtQXhKR2FTd3BQcHZiZXkwb3FQSUJVMzZTLWdLamF5RUhyeDYwR0M3QTI5YzlPQm9qWEphVGRLN3hBWjNrRHAyRDBXS1FPNjQ4R1JDOTRvUQ?oc=5",
-        "published": "Tue, 03 Nov 2026 10:03:03 GMT",
-        "detected_at": "03.11.2026 12:48"
-      },
-      {
-        "id": "9799a04fe11b9ea2",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Zahlen, bitte! Über 343,2 Meter pro Sekunde – die Überwindung der Schallmauer",
-        "link": "https://www.heise.de/hintergrund/Zahlen-bitte-Ueber-343-2-Meter-pro-Sekunde-die-Ueberwindung-der-Schallmauer-11508950.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T13:37:00+01:00",
-        "detected_at": "03.11.2026 12:48"
-      },
-      {
-        "id": "7cf83d6b5d9da1b1",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "heise+ | Digitaler Euro: Wie Europas Geldsystem unabhängiger von den USA werden soll",
-        "link": "https://www.heise.de/hintergrund/Digitaler-Euro-Wie-Europas-Geldsystem-unabhaengiger-von-den-USA-werden-soll-11394112.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
-        "published": "2026-11-03T13:30:00+01:00",
-        "detected_at": "03.11.2026 12:48"
-      },
-      {
-        "id": "3f50b6b1bf0f11cc",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Disney setzt Sparkurs fort: Offenbar Tausende Entlassungen geplant",
-        "link": "https://www.heise.de/news/Disney-setzt-Sparkurs-fort-Offenbar-Tausende-Entlassungen-geplant-11509644.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T13:26:00+01:00",
-        "detected_at": "03.11.2026 12:48"
-      },
-      {
-        "id": "95cd6a92afed0923",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Ukrainische Angriffe: Russische Firmen dürfen ausländische Rechenzentren nutzen",
-        "link": "https://www.heise.de/news/Ukrainische-Angriffe-Russische-Firmen-duerfen-auslaendische-Rechenzentren-nutzen-11509124.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T13:13:00+01:00",
-        "detected_at": "03.11.2026 12:48"
-      },
-      {
-        "id": "affacb61766d046e",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Wahlen in den USA: Wie geht es nach den Midterms weiter? Vier Szenarien",
-        "link": "https://www.tagesschau.de/ausland/amerika/midterms-szenarien-100.html",
-        "published": "Tue, 03 Nov 2026 13:24:53 +0100",
-        "detected_at": "03.11.2026 12:48"
-      },
-      {
-        "id": "8e7598e7f70ec9eb",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "EU genehmigt Übernahme von MediaMarktSaturn – unter Auflagen",
-        "link": "https://www.heise.de/news/EU-genehmigt-Uebernahme-von-MediaMarktSaturn-unter-Auflagen-11509612.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T13:00:00+01:00",
-        "detected_at": "03.11.2026 12:18"
-      },
-      {
-        "id": "b165afb22b12a2de",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Apple-Heimzentrale: Versteckt sich im HomeView eine HomeKit-Secure-Video-Kamera?",
-        "link": "https://www.heise.de/news/HomeView-Apples-Heimzentrale-koennte-Ueberwachungskamera-werden-11508134.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T12:55:00+01:00",
-        "detected_at": "03.11.2026 12:18"
-      },
-      {
-        "id": "5c1ae1fe624dd1b7",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Die Midterms in Zahlen und Karten",
-        "link": "https://www.tagesschau.de/ausland/amerika/midterms-ergebnisse-102.html",
-        "published": "Tue, 03 Nov 2026 13:17:36 +0100",
-        "detected_at": "03.11.2026 12:18"
-      },
-      {
-        "id": "459c1c9f1af936eb",
-        "target_id": "src-tagesschau",
-        "target_name": "Tagesschau (Eilmeldungen & Politik)",
-        "category": "Politik & Wissenschaft",
-        "title": "Krieg gegen die Ukraine: Russland bombardiert Krankenhaus in Charkiw",
-        "link": "https://www.tagesschau.de/ausland/europa/ukraine-russische-angriffe-118.html",
-        "published": "Tue, 03 Nov 2026 13:16:22 +0100",
-        "detected_at": "03.11.2026 12:18",
-        "is_priority": true,
-        "matched_keywords": [
-          "geg"
-        ]
-      },
-      {
-        "id": "6f053f344ea37fe3",
+        "id": "12a0571837ee6736",
         "target_id": "src-bundesbank",
         "target_name": "Deutsche Bundesbank (Presse & Daten)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Aufstockung der Bundesobligationen Serie 194 – Tenderergebnis - Deutsche Bundesbank",
-        "link": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxNanozaC1LVW1oRy1wcmFjNEhzSDFSblh0Z3Axb3hNU0ZfYkloTkhudV9LTEJBWG0xUmdHSWZmMlJITVVtWVdBTFJiV0JlNWg5b1lWQklWVkxhTHI5QnJlUEdkN1RETGkzd2psbkZBZzRtVzJJdTZmblowVTVHYl9qcGZuZ1NTcFAxc1VRVEZiaTgtVVBCZTRnSDZMMWlFakJtdV9HbVdqYm9CMXRIbEtCbzdtRDFVaGNKZDdJV2FCWDVlVDRyZ2MxMHlIcDJxc0xRRlYzYUh0U19wUlMzZEluaDJ3OENPUQ?oc=5",
-        "published": "Tue, 03 Nov 2026 11:48:50 GMT",
-        "detected_at": "03.11.2026 12:00"
+        "title": "Mut zu mehr Europa - Deutsche Bundesbank",
+        "link": "https://news.google.com/rss/articles/CBMid0FVX3lxTFBROWg3VVd5UmRib3pyRWF6WlpqNmlPbnlENldQYnNDamdEUGZ4Wlh5b3hpZGZXOTJSeDBEQ201QnJhRWVWdnhYZl83QTJJM1hfZmF6OGZwRW5TRGdMdzlGRUNpOEk3S0pEUVV2RjVCVnlSY08wS3dr?oc=5",
+        "published": "Tue, 03 Nov 2026 18:00:46 GMT",
+        "detected_at": "04.11.2026 18:00"
       },
       {
-        "id": "9fb05270e5464ebb",
+        "id": "3201a7a3223e71fd",
         "target_id": "src-heise",
         "target_name": "Heise Online (IT-Leitmedium DACH)",
         "category": "Technologie & KI",
-        "title": "Digitaler Führerschein kommt Ende November",
-        "link": "https://www.heise.de/news/Digitaler-Fuehrerschein-kommt-Ende-November-11509430.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T12:45:00+01:00",
-        "detected_at": "03.11.2026 12:00"
+        "title": "EU-Abgeordnete stimmen für Aufweichung des Verbrenner-Aus",
+        "link": "https://www.heise.de/news/EU-Abgeordnete-stimmen-fuer-Aufweichung-des-Verbrenner-Aus-11512661.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T18:43:00+01:00",
+        "detected_at": "04.11.2026 18:00"
       },
       {
-        "id": "a5a51ac59f1f3d3e",
-        "target_id": "src-heise",
-        "target_name": "Heise Online (IT-Leitmedium DACH)",
-        "category": "Technologie & KI",
-        "title": "Humanoide Roboter: Welche sind in Deutschland erhältlich und was kosten sie?",
-        "link": "https://www.heise.de/news/Humanoide-Roboter-Welche-sind-in-Deutschland-erhaeltlich-und-was-kosten-sie-11509312.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T12:42:00+01:00",
-        "detected_at": "03.11.2026 12:00"
+        "id": "8f3af2610b84571c",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Mobilfunk: Telekom-Chef wirbt bei der Bundesregierung für Mega-Fusion",
+        "link": "https://www.handelsblatt.com/technik/it-internet/mobilfunk-telekom-chef-wirbt-bei-der-bundesregierung-fuer-mega-fusion/100265960.html",
+        "published": "Wed, 04 Nov 2026 17:21:01 GMT",
+        "detected_at": "04.11.2026 17:42"
       },
       {
-        "id": "57cfe1011e2ef65a",
+        "id": "f59afb50b1913b99",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Alterssicherung: Koalition verschiebt die neue Kapitalrente ins nächste Jahr",
+        "link": "https://www.handelsblatt.com/politik/deutschland/alterssicherung-koalition-verschiebt-die-neue-kapitalrente-ins-naechste-jahr/100267176.html",
+        "published": "Wed, 04 Nov 2026 16:16:32 GMT",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "2ec2ee248e8d01b8",
         "target_id": "src-handelsblatt-politik",
         "target_name": "Handelsblatt (Politik & Ökonomie)",
         "category": "Wirtschaft & Finanzen",
-        "title": "Verteidigung: Polen startet Spezialeinsatz an der Grenze zu Kaliningrad",
-        "link": "https://www.handelsblatt.com/politik/international/verteidigung-polen-startet-spezialeinsatz-an-der-grenze-zu-kaliningrad/100266980.html",
-        "published": "Tue, 03 Nov 2026 11:46:28 GMT",
-        "detected_at": "03.11.2026 11:48"
+        "title": "Sicherheit: „Wir sind nicht vorbereitet“ – NRW will Infrastruktur gegen hybride Angriffe stärken",
+        "link": "https://www.handelsblatt.com/politik/deutschland/sicherheit-nrw-will-resilienz-gegen-hybride-angriffe-staerken/100267071.html",
+        "published": "Wed, 04 Nov 2026 17:31:19 GMT",
+        "detected_at": "04.11.2026 17:42",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
       },
       {
-        "id": "e250fbb1b25bb8b5",
+        "id": "13ad99ddd8b70c46",
         "target_id": "src-heise",
         "target_name": "Heise Online (IT-Leitmedium DACH)",
         "category": "Technologie & KI",
-        "title": "Apple Intelligence kommt nach China – mit iOS 27.3",
-        "link": "https://www.heise.de/news/Apple-Intelligence-kommt-nach-China-mit-iOS-27-3-11508160.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
-        "published": "2026-11-03T12:28:00+01:00",
-        "detected_at": "03.11.2026 11:48"
+        "title": "Saudi Aramco übernimmt knapp die Hälfte des KI-Unternehmens Humain",
+        "link": "https://www.heise.de/news/Saudi-Aramco-uebernimmt-knapp-die-Haelfte-des-KI-Unternehmens-Humain-11512647.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T18:32:00+01:00",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "c84c19a06b0675c3",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Tesla eröffnet Entwicklungszentrum in Berlin",
+        "link": "https://www.heise.de/news/Tesla-eroeffnet-Entwicklungszentrum-in-Berlin-11512643.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T18:26:00+01:00",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "fa8fe96f3241cfa3",
+        "target_id": "src-spektrum",
+        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "title": "Geschichten aus der Mathematik: John Nash und das Phantom von Fine Hall - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMilwFBVV95cUxOT2VzS1JES2UyX1g2eWVpV0MyZE1Pc2J4NkNNVEhzWkVlblF3OFZFMWZIc1Bvc21Jb2J0T0RGZ1lRX3NqOU9TMlFsUzdXUWRkSFJUNmRaTjJCeXBuelhZMlJfTF9xd3FxWmpjTWZIM2U1Z3pweGYxZTlDRmRfVFFHdUtTTVJWdFluM1V4cUR3M1kwRWpBYU5r?oc=5",
+        "published": "Wed, 04 Nov 2026 10:24:51 GMT",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "e04ab44dbfcb70f9",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Börsen: Midterms lösen Erholungsrally in den USA aus – KI-Aktien fallen trotzdem",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/boersen-midterms-loesenerholungsrally-aus-ki-aktien-fallen-trotzdem/100265439.html",
+        "published": "Wed, 04 Nov 2026 17:11:15 GMT",
+        "detected_at": "04.11.2026 17:12"
+      },
+      {
+        "id": "49c05bf10445cacf",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Dax aktuell: Dax beendet Handel deutlich über 26.000-Punkte-Marke – Ölpreis fällt",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/dax-aktuell-dax-beendet-handel-deutlich-ueber-26.000-punkte-marke/100267175.html",
+        "published": "Wed, 04 Nov 2026 17:04:54 GMT",
+        "detected_at": "04.11.2026 17:12"
+      },
+      {
+        "id": "dedd448bad5b4daf",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "Sequoia hits rewind, undoing 20 years of expansion",
+        "link": "https://techcrunch.com/2026/11/04/sequoia-hits-rewind-undoing-20-years-of-expansion/",
+        "published": "Wed, 04 Nov 2026 17:11:15 +0000",
+        "detected_at": "04.11.2026 17:12"
+      },
+      {
+        "id": "4119b1cbb6048c6b",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ US-Midterms +++: Vance: „Der Grund, weshalb wir verloren haben, ist der Krieg“",
+        "link": "https://www.handelsblatt.com/politik/international/us-midterms-vance-sieht-iran-krieg-als-grund-fuer-wahlniederlage/29669594.html",
+        "published": "Wed, 04 Nov 2026 16:40:00 GMT",
+        "detected_at": "04.11.2026 17:00"
+      },
+      {
+        "id": "a83c726edcab0704",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "I tried Apple’s Siri Recaps. They’re surprisingly useful — and a little unsettling",
+        "link": "https://techcrunch.com/2026/11/04/i-tried-apples-siri-recaps-theyre-surprisingly-useful-and-a-little-unsettling/",
+        "published": "Wed, 04 Nov 2026 16:51:35 +0000",
+        "detected_at": "04.11.2026 17:00"
+      },
+      {
+        "id": "8ec4a948e3ad6b87",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Kommentar zu den Midterms: Hoffentlich vermasseln sie es nicht",
+        "link": "https://www.tagesschau.de/kommentar/usa-midterms-120.html",
+        "published": "Wed, 04 Nov 2026 17:50:16 +0100",
+        "detected_at": "04.11.2026 17:00"
+      },
+      {
+        "id": "94e989b37315b154",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Nach Sieg bei den Midterms: Welche Optionen die Demokraten haben",
+        "link": "https://www.tagesschau.de/ausland/demokraten-optionen-100.html",
+        "published": "Wed, 04 Nov 2026 17:49:39 +0100",
+        "detected_at": "04.11.2026 17:00"
+      },
+      {
+        "id": "9d70837e27f9a9cb",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ US-Midterms +++: Vance: Iran-Krieg ist der Grund für Wahlniederlage der Republikaner bei den Midterms",
+        "link": "https://www.handelsblatt.com/politik/international/us-midterms-vance-sieht-iran-krieg-als-grund-fuer-wahlniederlage/29669594.html",
+        "published": "Wed, 04 Nov 2026 16:40:00 GMT",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "4f63af0ed5ff17ba",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "iPhone Duo: Warum viele Apps noch nicht richtig angepasst sind",
+        "link": "https://www.heise.de/news/iPhone-Duo-Warum-viele-Apps-noch-nicht-richtig-angepasst-sind-11512597.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T17:36:00+01:00",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "4cc8702ee9378cec",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise+ | So hackt sich Google mit KI selbst: Interview mit dem Leiter der Red Teams",
+        "link": "https://www.heise.de/hintergrund/So-hackt-sich-Google-mit-KI-selbst-Interview-mit-dem-Leiter-der-Red-Teams-11471434.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
+        "published": "2026-11-04T17:30:00+01:00",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "8b29c1c3c818b6cc",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Jeder vierte Jugendliche bewegt sich laut WHO kaum",
+        "link": "https://www.tagesschau.de/wissen/gesundheit/kinder-jugendliche-bewegung-100.html",
+        "published": "Wed, 04 Nov 2026 17:37:10 +0100",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "1db0abad9ad24a4c",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Bund fördert Schwimmenlernen mit 20 Millionen Euro",
+        "link": "https://www.tagesschau.de/inland/foerderprogramm-bund-schwimmen-100.html",
+        "published": "Wed, 04 Nov 2026 17:29:29 +0100",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "38be50c78f9ab8e4",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Alterssicherung: Koalition verschiebt die neue Kapitalrente ins nächste Jahr",
+        "link": "https://www.handelsblatt.com/politik/deutschland/alterssicherung-koalition-verschiebt-die-neue-kapitalrente-ins-naechste-jahr/100267176.html",
+        "published": "Wed, 04 Nov 2026 16:16:32 GMT",
+        "detected_at": "04.11.2026 16:27"
+      },
+      {
+        "id": "60f9dc95dd0b4321",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Cybersicherheit: Cyberangriff trifft Kühlsystem der französischen Blutbank",
+        "link": "https://www.handelsblatt.com/politik/international/cybersicherheit-cyberangriff-trifft-kuehlsystem-der-franzoesischen-blutbank/100267325.html",
+        "published": "Wed, 04 Nov 2026 16:15:35 GMT",
+        "detected_at": "04.11.2026 16:27"
+      },
+      {
+        "id": "68a201ab5472aac9",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Berlin-Wahl: Klingbeil fordert Parteiausschluss von Linke-Politikern",
+        "link": "https://www.handelsblatt.com/politik/deutschland/berlin-wahl-klingbeil-fordert-parteiausschluss-von-linke-politikern/100267362.html",
+        "published": "Wed, 04 Nov 2026 16:13:39 GMT",
+        "detected_at": "04.11.2026 16:27"
+      },
+      {
+        "id": "f36f2ad8989c0bc7",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "Google faces backlash for plan that would turn off Search for schools that restrict AI",
+        "link": "https://techcrunch.com/2026/11/04/google-faces-backlash-for-plan-that-would-turn-off-search-for-schools-that-restrict-ai/",
+        "published": "Wed, 04 Nov 2026 16:17:22 +0000",
+        "detected_at": "04.11.2026 16:27"
+      },
+      {
+        "id": "71da81ef6b728101",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Midterms: So treffsicher waren Polymarket und Kalshi – trotzdem unterschätzten sie die Welle der Demokraten",
+        "link": "https://www.handelsblatt.com/politik/international/midterms-wettmaerkte-lagen-richtig-und-unterschaetzten-doch-die-demokraten/100267079.html",
+        "published": "Wed, 04 Nov 2026 15:35:34 GMT",
+        "detected_at": "04.11.2026 16:11"
+      },
+      {
+        "id": "4449886bc9e70173",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Kommentar: Inflation und Schulden werden die Kapitalmarktzinsen hoch halten",
+        "link": "https://www.handelsblatt.com/meinung/kommentare/kommentar-inflation-und-schulden-werden-die-kapitalmarktzinsen-hoch-halten/100267242.html",
+        "published": "Wed, 04 Nov 2026 15:43:51 GMT",
+        "detected_at": "04.11.2026 16:11"
+      },
+      {
+        "id": "237d2b2d70f927ab",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Reform: Wie viel Netto bleibt Ihnen 2027 vom Gehalt?",
+        "link": "https://www.handelsblatt.com/politik/deutschland/regierung-was-bedeuten-die-reformplaene-2027-fuer-ihr-nettogehalt-01/100260104.html",
+        "published": "Wed, 04 Nov 2026 15:57:00 GMT",
+        "detected_at": "04.11.2026 16:11"
+      },
+      {
+        "id": "fd37fb88c694446b",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Gehalt: Einkommensrechner 2026: So viel verdienen Sie im Vergleich",
+        "link": "https://www.handelsblatt.com/politik/deutschland/gehalt-so-vergleichen-sie-ihr-einkommen-mit-anderen-haushalten-01/100261943.html",
+        "published": "Wed, 04 Nov 2026 15:54:00 GMT",
+        "detected_at": "04.11.2026 16:11"
+      },
+      {
+        "id": "fa14d9453de925c3",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Private Krankenversicherung: Höhere Beiträge für Privatversicherte: So stark unterscheiden sich die Kosten bei den Anbietern",
+        "link": "https://www.handelsblatt.com/politik/deutschland/versicherung-welche-beitragserhoehungen-privatversicherte-2027-erwarten-01/100263445.html",
+        "published": "Wed, 04 Nov 2026 15:53:00 GMT",
+        "detected_at": "04.11.2026 16:11"
       }
     ]
   },

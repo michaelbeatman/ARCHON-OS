@@ -1879,6 +1879,12 @@
                   <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] pointer-events-none"></i>
                   <input type="text" id="llm-price-search" oninput="filterPriceModalTable()" placeholder="Modell durchsuchen (z.B. deepseek, claude, gpt-4o, flash, qwen)..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-medium shadow-2xs">
                 </div>
+                <select id="llm-price-sort" onchange="filterPriceModalTable()" class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-medium cursor-pointer shadow-2xs focus:outline-none shrink-0" title="Sortierung w?hlen">
+                  <option value="price_asc" selected>Sortierung: G?nstigste zuerst</option>
+                  <option value="price_desc">Sortierung: Teuerste zuerst</option>
+                  <option value="alpha_asc">Sortierung: Alphabetisch (A - Z)</option>
+                  <option value="context_desc">Sortierung: Gr??ter Kontext</option>
+                </select>
                 <span id="llm-price-modal-count" class="text-xs font-mono text-[var(--muted-foreground)] shrink-0 font-medium">Lade Preise...</span>
               </div>
               <!-- Schnell-Filter Chips -->

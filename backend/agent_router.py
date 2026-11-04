@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import logging
 import asyncio
@@ -397,9 +398,11 @@ class AgentRouter:
         # Reasoning-Konfiguration
         if provider == "openrouter":
             if or_effort == "none" or or_tokens == 0:
-                client_payload["reasoning"] = {"effort": "none", "max_tokens": 0}
+                client_payload["reasoning"] = {"effort": "none"}
+            elif model.lower().startswith("openai/o") or "/o1" in model.lower() or "/o3" in model.lower():
+                client_payload["reasoning"] = {"effort": or_effort}
             else:
-                client_payload["reasoning"] = {"effort": or_effort, "max_tokens": or_tokens}
+                client_payload["reasoning"] = {"max_tokens": or_tokens}
                 if max_tokens <= or_tokens:
                     client_payload["max_tokens"] = or_tokens + 4096
 

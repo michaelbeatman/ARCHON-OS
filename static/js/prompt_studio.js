@@ -1243,6 +1243,12 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMasterChatMessage();
+      } else if (e.key === "ArrowUp" && !e.target.value.trim()) {
+        e.preventDefault();
+        if (window.lastSentUserChatMessage) {
+          e.target.value = window.lastSentUserChatMessage;
+          if (typeof autoResizeMasterChatInput === "function") autoResizeMasterChatInput(e.target);
+        }
       }
     }
     // 12. Senden & SSE Streaming Consumer (/api/chat/stream)
@@ -1290,6 +1296,7 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
         removeMasterChatAttachment();
       }
       const fullUserMessage = (text + attachmentNotice).trim();
+      window.lastSentUserChatMessage = fullUserMessage;
       // User Message sofort anzeigen
       appendMasterChatMessageBubble("user", fullUserMessage);
       // Status aktualisieren

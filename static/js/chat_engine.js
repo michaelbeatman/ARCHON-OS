@@ -722,12 +722,25 @@
       if (isUser) {
         bubbleWrap.className = "flex justify-end";
         bubbleWrap.innerHTML = `
-          <div class="max-w-2xl bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] rounded-xl rounded-tr-xs px-4 py-3 text-xs shadow-xs leading-relaxed space-y-2 min-w-[200px]">
+          <div class="max-w-2xl bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] rounded-xl rounded-tr-xs px-4 py-3 text-xs shadow-xs leading-relaxed space-y-2 min-w-[200px] select-text">
             <div class="font-bold text-[var(--foreground)] text-[10px] uppercase tracking-wider font-mono">Du</div>
-            <div class="whitespace-pre-wrap font-sans text-[var(--foreground)] leading-relaxed">${escapeHtml(safeContent)}</div>
-            <div class="pt-1.5 border-t border-[var(--border)] flex items-center justify-between gap-3 text-[9.5px] font-mono text-[var(--muted-foreground)]">
-              <span class="flex items-center gap-1 shrink-0"><i data-lucide="clock" class="w-3 h-3 text-black dark:text-white"></i>${dateFormatted}</span>
-              <span class="font-mono font-medium text-[var(--muted-foreground)] shrink-0">${displayMsgId}</span>
+            <div class="whitespace-pre-wrap font-sans text-[var(--foreground)] leading-relaxed select-text">${escapeHtml(safeContent)}</div>
+            <div class="pt-1.5 border-t border-[var(--border)] flex items-center justify-between gap-3 text-[9.5px] font-mono text-[var(--muted-foreground)] select-none">
+              <div class="flex items-center gap-2">
+                <button type="button" class="resend-user-btn opacity-60 hover:opacity-100 transition flex items-center gap-1 cursor-pointer text-[9px]" title="Nachricht erneut senden" onclick="retryUserChatMessage(this)" data-msg="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
+                  <i data-lucide="rotate-cw" class="w-2.5 h-2.5"></i>
+                  <span>Erneut senden</span>
+                </button>
+                <button type="button" class="edit-user-btn opacity-60 hover:opacity-100 transition flex items-center gap-1 cursor-pointer text-[9px]" title="Nachricht bearbeiten &amp; neu senden" onclick="editUserChatMessage(this)" data-msg="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
+                  <i data-lucide="pencil" class="w-2.5 h-2.5"></i>
+                  <span>Bearbeiten</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <i data-lucide="clock" class="w-3 h-3 text-black dark:text-white"></i>
+                <span>${dateFormatted}</span>
+                <span class="font-mono font-medium text-[var(--muted-foreground)] ml-1">${displayMsgId}</span>
+              </div>
             </div>
           </div>
         `;
@@ -801,6 +814,9 @@
               <div class="flex items-center justify-between gap-2 mb-1 pb-1 border-b border-[var(--border)]">
                 <span class="font-bold text-[var(--foreground)] text-xs font-mono">${escapeHtml(name)}</span>
                 <div class="flex items-center gap-1.5">
+                  <button type="button" class="retry-assistant-btn text-[var(--muted-foreground)] hover:text-sky-500 transition p-1 rounded cursor-pointer" title="Antwort neu generieren" onclick="regenerateLastAssistantResponse()">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </button>
                                     <button type="button" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-1 rounded cursor-pointer" title="Zitieren / Antworten" onclick="replyToAgentMessage(this)" data-text="${escapeHtml(safeContent).replace(/\"/g, '&quot;')}">
                     <i data-lucide="reply" class="w-3.5 h-3.5 text-black dark:text-white"></i>
                   </button>
@@ -1062,3 +1078,17 @@
       }
     }
     window.onMasterChatReasoningChange = onMasterChatReasoningChange;
+
+    window.openPriceCatalogForMasterChat = function() {
+      const modelSelect = document.getElementById("master-chat-model-select");
+      const provSelect = document.getElementById("master-chat-provider-select");
+      if (typeof window.openPriceCatalogModal === "function") {
+        window.openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+      }
+    };
+
+    window.refreshMasterChatPrices = function(btn) {
+      if (typeof window.refreshAgentTabPrices === "function") {
+        return window.refreshAgentTabPrices(btn);
+      }
+    };

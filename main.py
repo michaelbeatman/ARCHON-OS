@@ -10864,11 +10864,11 @@ _openrouter_price_cache = None
 _openrouter_price_timestamp = 0
 
 @app.get('/api/llm-providers/prices')
-def get_llm_prices():
+def get_llm_prices(refresh: int = 0):
     global _openrouter_price_cache, _openrouter_price_timestamp
     try:
         now = time.time()
-        if _openrouter_price_cache is None or (now - _openrouter_price_timestamp > 3600):
+        if refresh or _openrouter_price_cache is None or (now - _openrouter_price_timestamp > 3600):
             import urllib.request
             import json
             req = urllib.request.Request("https://openrouter.ai/api/v1/models", headers={"User-Agent": "Mozilla/5.0"})
@@ -14142,6 +14142,25 @@ def get_hud_page():
     if os.path.exists(hud_file):
         return FileResponse(hud_file)
     return FileResponse(os.path.join("static", "index.html"))
+
+@app.get("/mobile")
+@app.get("/m")
+def get_mobile_cockpit():
+    return FileResponse(
+        os.path.join("static", "mobile.html"),
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
+
+@app.get("/manifest.json")
+def get_manifest():
+    manifest_path = os.path.join("static", "manifest.json")
+    if os.path.exists(manifest_path):
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    return JSONResponse({"name": "Archon Mobile", "short_name": "Archon", "start_url": "/mobile", "display": "standalone"})
 
 @app.get("/v2")
 def get_index_v2():

@@ -844,9 +844,11 @@
     window.fetchProviderModelsList = loadLlmModelsForProvider;
     function populateModelDropdown(selectEl, models, selectedModel) {
       if (!selectEl) return;
-      const validModels = (Array.isArray(models) && models.length > 0) 
+      const rawModels = (Array.isArray(models) && models.length > 0) 
         ? models 
         : ["google/gemini-2.5-flash-image", "anthropic/claude-3.7-sonnet", "deepseek/deepseek-v3", "meta-llama/llama-3.3-70b-instruct"];
+      // Alphabetisch sortieren f?r ?bersichtliches Pulldown-Men?
+      const validModels = [...rawModels].sort((a, b) => (a || "").localeCompare(b || "", undefined, { sensitivity: "base" }));
       
       // Modus 1: HTML5 Input mit Datalist (wie Hermes Desktop App)
       if (selectEl.tagName === "INPUT") {
@@ -1570,12 +1572,24 @@
       const idStr = msgId ? `#msg-${msgId}` : `#msg-${Math.floor(1000 + Math.random() * 9000)}`;
       if (isUser) {
         div.innerHTML = `
-          <div class="max-w-[85%] bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-2xl rounded-br-xs px-4 py-2.5 shadow-xs min-w-[200px]">
-            <div class="text-xs font-sans whitespace-pre-wrap leading-relaxed">${escapeHtml(safeContent)}</div>
-            <div class="text-[9.5px] opacity-75 font-mono text-right mt-1.5 flex items-center justify-end gap-1.5 border-t border-white/10 dark:border-black/10 pt-1">
-              <i data-lucide="clock" class="w-2.5 h-2.5"></i>
-              <span>${dateFormatted}</span>
-              <span class="opacity-60 ml-1">${idStr}</span>
+          <div class="max-w-[85%] bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-2xl rounded-br-xs px-4 py-2.5 shadow-xs min-w-[200px] select-text">
+            <div class="text-xs font-sans whitespace-pre-wrap leading-relaxed select-text">${escapeHtml(safeContent)}</div>
+            <div class="text-[9.5px] opacity-75 font-mono text-right mt-1.5 flex items-center justify-between gap-1.5 border-t border-white/10 dark:border-black/10 pt-1 select-none">
+              <div class="flex items-center gap-2">
+                <button type="button" class="resend-user-btn hover:opacity-100 opacity-60 p-0.5 rounded cursor-pointer transition flex items-center gap-1 text-[9px]" title="Nachricht erneut senden" onclick="retryUserChatMessage(this)" data-msg="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
+                  <i data-lucide="rotate-cw" class="w-2.5 h-2.5"></i>
+                  <span>Erneut senden</span>
+                </button>
+                <button type="button" class="edit-user-btn hover:opacity-100 opacity-60 p-0.5 rounded cursor-pointer transition flex items-center gap-1 text-[9px]" title="Nachricht bearbeiten &amp; neu senden" onclick="editUserChatMessage(this)" data-msg="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
+                  <i data-lucide="pencil" class="w-2.5 h-2.5"></i>
+                  <span>Bearbeiten</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <i data-lucide="clock" class="w-2.5 h-2.5"></i>
+                <span>${dateFormatted}</span>
+                <span class="opacity-60 ml-1">${idStr}</span>
+              </div>
             </div>
           </div>
         `;
@@ -1583,15 +1597,19 @@
         const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
         const name = prof ? (prof.person_name || prof.name) : "Hermes Agent";
         const avatarUrl = (typeof getProfileAvatarUrl === "function" && prof) ? getProfileAvatarUrl(prof) : (prof && prof.avatar ? prof.avatar : "/static/avatars/hermes_default_avatar.png");
+        const hasError = /verbindungsfehler|connection error|name 're' is not defined|error:/i.test(safeContent);
         div.innerHTML = `
           <div class="flex gap-2.5 max-w-[90%]">
             <div class="w-8 h-8 rounded-lg border border-[var(--border)] overflow-hidden shrink-0 mt-0.5 bg-[var(--secondary)] shadow-2xs">
               <img src="${avatarUrl}" class="w-full h-full object-cover" onerror="this.src='/static/avatars/avatar_001.jpg'">
             </div>
-            <div class="bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] rounded-2xl rounded-tl-xs px-3.5 py-2.5 text-xs shadow-xs leading-relaxed space-y-1.5 flex-1 min-w-0">
-              <div class="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-1">
+            <div class="bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] rounded-2xl rounded-tl-xs px-3.5 py-2.5 text-xs shadow-xs leading-relaxed space-y-1.5 flex-1 min-w-0 select-text">
+              <div class="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-1 select-none">
                 <span class="font-bold text-xs font-mono text-[var(--foreground)] truncate">${escapeHtml(name)}</span>
                 <div class="flex items-center gap-1">
+                  <button type="button" class="retry-assistant-btn text-[var(--muted-foreground)] hover:text-sky-500 transition p-0.5 rounded cursor-pointer" title="Antwort neu generieren" onclick="regenerateLastAssistantResponse()">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </button>
                   <button type="button" class="copy-bubble-btn text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-0.5 rounded cursor-pointer" title="In Zwischenablage kopieren" onclick="copyAgentMessageText(this)" data-text="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
                     <i data-lucide="copy" class="w-3.5 h-3.5 text-black dark:text-white"></i>
                   </button>
@@ -1600,10 +1618,18 @@
                   </button>
                 </div>
               </div>
-              <div class="chat-markdown font-sans leading-relaxed text-[var(--foreground)] break-words">
+              <div class="chat-markdown font-sans leading-relaxed text-[var(--foreground)] break-words select-text">
                 ${typeof formatMarkdownText === "function" ? formatMarkdownText(safeContent) : escapeHtml(safeContent)}
               </div>
-              <div class="pt-1.5 border-t border-[var(--border)] flex items-center justify-between gap-2 text-[9px] font-mono text-[var(--muted-foreground)]">
+              ${hasError ? `
+                <div class="pt-2 select-none">
+                  <button type="button" onclick="retryLastUserChatMessage()" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-500 dark:text-sky-400 font-mono text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs">
+                    <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                    <span>Nachricht erneut versenden</span>
+                  </button>
+                </div>
+              ` : ''}
+              <div class="pt-1.5 border-t border-[var(--border)] flex items-center justify-between gap-2 text-[9px] font-mono text-[var(--muted-foreground)] select-none">
                 <span class="flex items-center gap-1 shrink-0"><i data-lucide="clock" class="w-2.5 h-2.5 text-black dark:text-white"></i>${dateFormatted}</span>
                 <span class="shrink-0 font-medium">${idStr}</span>
               </div>
@@ -1655,6 +1681,7 @@
         removeAgentTabAttachment();
       }
       const fullUserMessage = (text + attachmentNotice).trim();
+      window.lastSentUserChatMessage = fullUserMessage;
       appendAgentTabMessageBubble("user", fullUserMessage);
       const statusSpan = document.getElementById("agent-tab-chat-status");
       const sendBtn = document.getElementById("agent-tab-send-btn");
@@ -1778,6 +1805,17 @@
                 if (bodyEl) {
                   bodyEl.innerHTML = `<span class="text-rose-600 font-semibold">${escapeHtml(fullText)}</span>`;
                 }
+                if (actionCardContainer) {
+                  actionCardContainer.innerHTML = `
+                    <div class="mt-2 select-none">
+                      <button type="button" onclick="retryLastUserChatMessage()" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-500 dark:text-sky-400 font-mono text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs">
+                        <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                        <span>Nachricht erneut versenden</span>
+                      </button>
+                    </div>
+                  `;
+                  if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+                }
               }
             } catch (jsonErr) {
               console.warn("[AgentTabChat SSE] Ungültiges Event:", trimmed, jsonErr);
@@ -1796,6 +1834,17 @@
       } catch (err) {
         if (bodyEl) {
           bodyEl.innerHTML = `<span class="text-rose-600 font-semibold">Verbindungsfehler: ${escapeHtml(err.message)}</span>`;
+        }
+        if (actionCardContainer) {
+          actionCardContainer.innerHTML = `
+            <div class="mt-2 select-none">
+              <button type="button" onclick="retryLastUserChatMessage()" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-500 dark:text-sky-400 font-mono text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs">
+                <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                <span>Nachricht erneut versenden</span>
+              </button>
+            </div>
+          `;
+          if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
         }
       } finally {
         isAgentTabGenerating = false;
@@ -2012,6 +2061,30 @@
       }
     }
     window.loadAgentTabModelPrices = loadAgentTabModelPrices;
+
+    async function refreshAgentTabPrices(btn) {
+      const icon = btn ? (btn.querySelector("svg") || btn.querySelector("i") || btn) : null;
+      if (icon) icon.classList.add("animate-spin");
+      try {
+        const res = await fetch("/api/llm-providers/prices?refresh=1");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.prices) {
+            agentTabModelPrices = data.prices;
+            agentTabModelPricesLoaded = true;
+            window.masterChatModelPrices = data.prices;
+          }
+        }
+        updateAgentTabModelCost();
+        if (typeof updateMasterChatProfileUI === "function") updateMasterChatProfileUI();
+        if (typeof showArchonToast === "function") showArchonToast("Tokenpreise live aktualisiert", "success");
+      } catch (e) {
+        console.warn("Preis-Refresh fehlgeschlagen:", e);
+      } finally {
+        if (icon) setTimeout(() => icon.classList.remove("animate-spin"), 600);
+      }
+    }
+    window.refreshAgentTabPrices = refreshAgentTabPrices;
     function formatPricePer1M(usd) {
       if (usd === undefined || usd === null || isNaN(usd)) return "0.00";
       const num = Number(usd);
@@ -3602,3 +3675,182 @@ window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'un
     window.toggleBotScreenPbDRecording = toggleBotScreenPbDRecording;
     window.addPbDCommentary = addPbDCommentary;
     window.animateAgentCursorTrajectory = animateAgentCursorTrajectory;
+
+
+    // --- CHAT RETRY & SELECTION CONTEXT HELPERS ---
+    window.lastSentUserChatMessage = "";
+
+    function retryUserChatMessage(btn) {
+      const msg = btn ? btn.getAttribute("data-msg") : window.lastSentUserChatMessage;
+      if (!msg) return;
+      const inputEl = document.getElementById("agent-tab-chat-input") || document.getElementById("master-chat-input");
+      if (inputEl) {
+        inputEl.value = msg;
+        if (typeof sendAgentTabChatMessage === "function" && document.getElementById("agent-tab-chat-input")) {
+          sendAgentTabChatMessage();
+        } else if (typeof sendMasterChatMessage === "function") {
+          sendMasterChatMessage();
+        }
+      }
+    }
+    window.retryUserChatMessage = retryUserChatMessage;
+
+    function editUserChatMessage(btn) {
+      const msg = btn ? btn.getAttribute("data-msg") : "";
+      if (!msg) return;
+      const inputEl = document.getElementById("agent-tab-chat-input") || document.getElementById("master-chat-input");
+      if (inputEl) {
+        inputEl.value = msg;
+        inputEl.focus();
+        inputEl.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+    window.editUserChatMessage = editUserChatMessage;
+
+    function retryLastUserChatMessage() {
+      retryUserChatMessage(null);
+    }
+    window.retryLastUserChatMessage = retryLastUserChatMessage;
+
+    function regenerateLastAssistantResponse() {
+      retryLastUserChatMessage();
+    }
+    window.regenerateLastAssistantResponse = regenerateLastAssistantResponse;
+
+    let currentSelectedChatText = "";
+
+    function initChatSelectionToolbar() {
+      let toolbar = document.getElementById("chat-selection-toolbar");
+      if (!toolbar) {
+        toolbar = document.createElement("div");
+        toolbar.id = "chat-selection-toolbar";
+        toolbar.className = "fixed z-[99999] hidden flex items-center gap-1 bg-zinc-900/95 text-white dark:bg-zinc-100/95 dark:text-zinc-900 border border-zinc-700/50 dark:border-zinc-300/50 rounded-xl px-1.5 py-1 shadow-2xl backdrop-blur-md transition-all text-xs font-mono font-medium";
+        toolbar.innerHTML = `
+          <button type="button" onclick="copyChatSelectionText()" class="px-2 py-1 rounded-lg hover:bg-white/10 dark:hover:bg-black/10 flex items-center gap-1.5 cursor-pointer transition">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Kopieren</span>
+          </button>
+          <span class="opacity-30">|</span>
+          <button type="button" onclick="quoteChatSelectionText()" class="px-2 py-1 rounded-lg hover:bg-white/10 dark:hover:bg-black/10 flex items-center gap-1.5 cursor-pointer transition">
+            <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+            <span>Zitieren</span>
+          </button>
+          <span class="opacity-30">|</span>
+          <button type="button" onclick="newSessionFromSelectionText()" class="px-2 py-1 rounded-lg hover:bg-white/10 dark:hover:bg-black/10 flex items-center gap-1.5 cursor-pointer transition">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Neue Session</span>
+          </button>
+        `;
+        document.body.appendChild(toolbar);
+      }
+
+      function handleSelection() {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) {
+          if (toolbar) toolbar.classList.add("hidden");
+          return;
+        }
+        const text = sel.toString().trim();
+        if (text.length < 2) {
+          if (toolbar) toolbar.classList.add("hidden");
+          return;
+        }
+
+        const anchorNode = sel.anchorNode;
+        const chatContainer = anchorNode && (anchorNode.nodeType === 1 ? anchorNode : anchorNode.parentElement)?.closest("#agent-tab-chat-messages, #master-chat-messages, .chat-markdown, .chat-assistant-body");
+        if (!chatContainer) {
+          toolbar.classList.add("hidden");
+          return;
+        }
+
+        currentSelectedChatText = text;
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) {
+          toolbar.classList.add("hidden");
+          return;
+        }
+
+        toolbar.classList.remove("hidden");
+        const top = Math.max(10, rect.top - 46);
+        const left = Math.max(10, Math.min(window.innerWidth - 300, rect.left + (rect.width / 2) - 130));
+        toolbar.style.top = `${top}px`;
+        toolbar.style.left = `${left}px`;
+        if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+      }
+
+      document.addEventListener("selectionchange", () => {
+        setTimeout(handleSelection, 80);
+      });
+      document.addEventListener("mouseup", () => {
+        setTimeout(handleSelection, 50);
+      });
+      document.addEventListener("mousedown", (e) => {
+        if (toolbar && !toolbar.contains(e.target)) {
+          setTimeout(() => {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed) toolbar.classList.add("hidden");
+          }, 100);
+        }
+      });
+    }
+
+    function copyChatSelectionText() {
+      if (!currentSelectedChatText) return;
+      navigator.clipboard.writeText(currentSelectedChatText).then(() => {
+        if (typeof showArchonToast === "function") showArchonToast("In Zwischenablage kopiert", "success");
+        const tb = document.getElementById("chat-selection-toolbar");
+        if (tb) tb.classList.add("hidden");
+      });
+    }
+    window.copyChatSelectionText = copyChatSelectionText;
+
+    function quoteChatSelectionText() {
+      if (!currentSelectedChatText) return;
+      const quote = currentSelectedChatText.split("\n").map(l => "> " + l).join("\n") + "\n\n";
+      const inputEl = document.getElementById("agent-tab-chat-input") || document.getElementById("master-chat-input");
+      if (inputEl) {
+        inputEl.value = quote + inputEl.value;
+        inputEl.focus();
+        inputEl.scrollIntoView({ behavior: "smooth" });
+      }
+      const tb = document.getElementById("chat-selection-toolbar");
+      if (tb) tb.classList.add("hidden");
+      window.getSelection()?.removeAllRanges();
+    }
+    window.quoteChatSelectionText = quoteChatSelectionText;
+
+    function newSessionFromSelectionText() {
+      if (!currentSelectedChatText) return;
+      const text = currentSelectedChatText;
+      if (typeof createNewAgentChatSession === "function" && document.getElementById("agent-tab-chat-input")) {
+        createNewAgentChatSession();
+        setTimeout(() => {
+          const inputEl = document.getElementById("agent-tab-chat-input");
+          if (inputEl) {
+            inputEl.value = text;
+            inputEl.focus();
+          }
+        }, 150);
+      } else if (typeof createNewMasterChatSession === "function") {
+        createNewMasterChatSession();
+        setTimeout(() => {
+          const inputEl = document.getElementById("master-chat-input");
+          if (inputEl) {
+            inputEl.value = text;
+            inputEl.focus();
+          }
+        }, 150);
+      }
+      const tb = document.getElementById("chat-selection-toolbar");
+      if (tb) tb.classList.add("hidden");
+      window.getSelection()?.removeAllRanges();
+    }
+    window.newSessionFromSelectionText = newSessionFromSelectionText;
+
+    // Auto-init on load
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initChatSelectionToolbar);
+    } else {
+      initChatSelectionToolbar();
+    }

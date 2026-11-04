@@ -1653,3 +1653,25 @@ div#agent-pane-overview > div.prof-panel-card {
   border: none !important;
   border-width: 0px !important;
 }
+
+/* --- CHAT TEXT SELECTION & HIGHLIGHTING FIX --- */
+#agent-tab-chat-messages,
+#master-chat-messages,
+.chat-markdown,
+.chat-assistant-body,
+#agent-tab-chat-messages .whitespace-pre-wrap,
+#master-chat-messages .whitespace-pre-wrap {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
+}
+
+#agent-tab-chat-messages button,
+#master-chat-messages button,
+#agent-tab-chat-messages i,
+#master-chat-messages i,
+#agent-tab-chat-messages svg,
+#master-chat-messages svg {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}

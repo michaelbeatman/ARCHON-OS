@@ -60,7 +60,7 @@ def _run_git(args: List[str], timeout: int = 60) -> Dict[str, Any]:
             "-c", "core.fileMode=false",
             "-c", "core.checkstat=minimal",
             "-c", "core.trustctime=false",
-            "-c", "core.autocrlf=true",
+            "-c", "core.autocrlf=" + ("true" if sys.platform == "win32" else "input"),
             "-c", "core.fsmonitor=false",
             "-c", "credential.helper=",
             "-c", "user.name=ArchonOS",
@@ -543,20 +543,27 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
     if make_backup:
         snapshot_info = create_snapshot(tag="pre_update")
 
+    # 0. Temporär --skip-worktree Flags auf Config-Dateien aufheben, damit Stash und Pull greifen
+    config_protect = ["settings.json", "agent_profiles.json"]
+    for cf in config_protect:
+        _run_git(["update-index", "--no-skip-worktree", cf])
+
     # Stash falls lokale temporäre Änderungen existieren
     stash_run = False
     status_chk = _run_git(["status", "--porcelain"])
     if status_chk["success"] and status_chk["stdout"].strip():
-        stash_res = _run_git(["stash", "push", "-m", "Auto-stash vor Archon System-Update"])
+        stash_res = _run_git(["stash", "push", "-u", "-m", "Auto-stash vor Archon System-Update"])
         stash_run = stash_res["success"]
 
     # Git Pull Rebase
-    pull_res = _run_git(["pull", "origin", "main", "--rebase"], timeout=30)
+    pull_res = _run_git(["pull", "origin", "main", "--rebase"], timeout=60)
     if not pull_res["success"]:
         # Rebase abort falls ein Konflikt entstand
         _run_git(["rebase", "--abort"])
         if stash_run:
             _run_git(["stash", "pop"])
+        for cf in config_protect:
+            _run_git(["update-index", "--skip-worktree", cf])
         return {
             "status": "error",
             "step": "git_pull",
@@ -566,7 +573,16 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
 
     # Stash zurückholen falls vorhanden
     if stash_run:
-        _run_git(["stash", "pop"])
+        pop_res = _run_git(["stash", "pop"])
+        if not pop_res["success"]:
+            # Bei Stash-Konflikten in Configs: Snapshot-Stände wiederherstellen
+            for cf in config_protect:
+                _run_git(["checkout", "--theirs", "--", cf])
+                _run_git(["reset", "HEAD", "--", cf])
+
+    # Configs wieder vor versehentlichem Überschreiben schützen
+    for cf in config_protect:
+        _run_git(["update-index", "--skip-worktree", cf])
 
     new_native = _read_git_head_native()
     new_commit = new_native.get("commit", "unknown")

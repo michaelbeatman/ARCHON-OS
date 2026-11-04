@@ -383,6 +383,28 @@ async def _execute_kanban_task_async(task_id: str):
         finally:
             c.close()
             
+        # Obsidian-Dokumentation & Projekt-Artefakte synchronisieren
+        try:
+            from backend.post_task_pipeline import get_vault_dir
+            from pathlib import Path as _P
+            vault = _P(get_vault_dir()).resolve()
+            p_rel = _resolve_task_obsidian_rel(task_id)
+            if p_rel:
+                p_dir = vault / p_rel
+                end_dir = p_dir / "03_Endprodukte"
+                if end_dir.is_dir():
+                    matched = False
+                    for f in end_dir.iterdir():
+                        if task_id in f.name and f.suffix == ".md":
+                            f.write_text(f"# {title}\n\n**Task:** `{task_id}` | **Ziel-Agent:** `@{assignee}` | **Status:** REVIEW\n\n{reply}\n", encoding="utf-8")
+                            matched = True
+                            break
+                    if not matched:
+                        slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in title.lower())[:40].strip("-")
+                        (end_dir / f"{task_id}-{slug}.md").write_text(f"# {title}\n\n**Task:** `{task_id}` | **Ziel-Agent:** `@{assignee}` | **Status:** REVIEW\n\n{reply}\n", encoding="utf-8")
+        except Exception as e_upd:
+            print(f"[OperationsAPI] Could not update obsidian markdown: {e_upd}", file=sys.stderr)
+
         try:
             import main
             if hasattr(main, "broadcast_event"):
@@ -970,13 +992,78 @@ class KanbanPaletteUpdate(BaseModel):
     columns: Optional[Dict[str, Dict[str, str]]] = None
     reset: bool = False
 
+def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None) -> Optional[str]:
+    """Ermittelt den relativen Obsidian-Projektordner fuer eine Task mit automatischer Reparatur/Fallback."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+    if meta is None:
+        meta = _load_kanban_meta()
+    t_entry = (meta.get("tasks") or {}).get(task_id) or {}
+    rel = t_entry.get("obsidian")
+    vault = _P(get_vault_dir()).resolve()
+    if rel and str(rel).strip():
+        cand = (vault / str(rel).strip()).resolve()
+        if str(cand).startswith(str(vault)) and cand.is_dir():
+            return str(rel).strip()
+
+    # Fallback 1: Pruefe ob in decision ein dossier liegt
+    dossier = (t_entry.get("decision") or {}).get("dossier") or ""
+    if "01_PROJEKTE/" in dossier:
+        try:
+            sub = dossier.split("01_PROJEKTE/")[1].split("/")[0]
+            cand = (vault / "01_PROJEKTE" / sub).resolve()
+            if str(cand).startswith(str(vault)) and cand.is_dir():
+                rel = f"01_PROJEKTE/{sub}"
+        except Exception:
+            pass
+
+    # Fallback 2: Pruefe kanban.db nach project_id
+    if not rel:
+        try:
+            conn = _get_kanban_connection()
+            try:
+                r = conn.execute("SELECT project_id FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                pid = r[0] if r else None
+            finally:
+                conn.close()
+            if pid and (vault / "01_PROJEKTE").is_dir():
+                for d in (vault / "01_PROJEKTE").iterdir():
+                    if d.is_dir() and pid in d.name:
+                        rel = f"01_PROJEKTE/{d.name}"
+                        break
+        except Exception:
+            pass
+
+    # Fallback 3: Pruefe ob Ordner mit task_id in 01_PROJEKTE existiert
+    if not rel and (vault / "01_PROJEKTE").is_dir():
+        try:
+            for d in (vault / "01_PROJEKTE").iterdir():
+                if d.is_dir() and task_id in d.name:
+                    rel = f"01_PROJEKTE/{d.name}"
+                    break
+        except Exception:
+            pass
+
+    # Wenn ein Ordner gefunden wurde, automatisch im Sidecar nachpflegen
+    if rel:
+        try:
+            from backend.kanban_sidecar import update_kanban_meta
+            def _heal(m):
+                m.setdefault("tasks", {}).setdefault(task_id, {})["obsidian"] = rel
+            update_kanban_meta(_heal)
+        except Exception:
+            pass
+
+    return rel
+
+
 @router.get("/kanban/projects/{task_id}")
 def get_kanban_project_files(task_id: str):
     """Listet die Dateien des verknuepften Obsidian-Projekts einer Task (Sidecar-Bruecke)."""
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
     meta = _load_kanban_meta()
-    rel = ((meta.get("tasks") or {}).get(task_id) or {}).get("obsidian")
+    rel = _resolve_task_obsidian_rel(task_id, meta)
     if not rel:
         raise HTTPException(status_code=404, detail="Kein Obsidian-Projekt verknuepft.")
     vault = _P(get_vault_dir()).resolve()
@@ -1083,7 +1170,7 @@ def get_kanban_project_file(task_id: str, path: str):
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
     meta = _load_kanban_meta()
-    rel = ((meta.get("tasks") or {}).get(task_id) or {}).get("obsidian")
+    rel = _resolve_task_obsidian_rel(task_id, meta)
     if not rel:
         raise HTTPException(status_code=404, detail="Kein Obsidian-Projekt verknuepft.")
     vault = _P(get_vault_dir()).resolve()
@@ -1205,11 +1292,10 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
         # 12.10.2026 (Decision-Service): Entscheidungs-Metadaten je Task.
         # kanban.db bleibt die Wahrheit (Status), der Sidecar traegt nur Kontext.
         obs_in = payload.get("obsidian")
-        if obs_in is not None:
-            if str(obs_in).strip() == "":
-                tmeta.pop("obsidian", None)
-            else:
-                tmeta["obsidian"] = str(obs_in).strip()
+        if obs_in is not None and str(obs_in).strip() != "":
+            tmeta["obsidian"] = str(obs_in).strip()
+        elif payload.get("clear_obsidian"):
+            tmeta.pop("obsidian", None)
         dec_in = payload.get("decision")
         if isinstance(dec_in, dict):
             if dec_in.get("clear"):

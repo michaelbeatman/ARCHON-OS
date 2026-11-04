@@ -4131,9 +4131,13 @@ def register_decision(task_id: str, typ: str, titel: str, kurzfassung: str = "",
         }
         if extra:
             dec.update(extra)
-        _decision_self_api("POST", "/api/operations/kanban/meta",
-                           {"kind": "task", "task_id": task_id,
-                            "decision": dec, "obsidian": obsidian or ""})
+        _meta_payload = {
+            "kind": "task", "task_id": task_id,
+            "decision": dec
+        }
+        if obsidian and str(obsidian).strip():
+            _meta_payload["obsidian"] = str(obsidian).strip()
+        _decision_self_api("POST", "/api/operations/kanban/meta", _meta_payload)
         markup = {"inline_keyboard": [[
             {"text": "✅ Freigeben", "callback_data": f"app:approve:{task_id}"},
             {"text": "❌ Ablehnen", "callback_data": f"app:reject:{task_id}"},
@@ -5927,7 +5931,8 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
                             logger.warning(f"[Delegation] Dossier fehlgeschlagen: {_de}")
                     await asyncio.to_thread(
                         register_decision, task_id, "delegation_review",
-                        final_title, result, task_id, _doss)
+                        final_title, result, task_id, _doss, "", None,
+                        f"01_PROJEKTE/{obsidian_rel}" if obsidian_rel else None)
                 else:
                     from telegram_notify import notify_task_status
                     notify_task_status(task_id, status, final_title, result, obsidian_rel,

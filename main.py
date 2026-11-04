@@ -9812,6 +9812,24 @@ _VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
 @app.get("/api/llm-providers/models")
 async def api_get_llm_provider_models(provider: str = Query("openrouter")):
     p = (provider or "openrouter").lower().strip()
+    # 1. Vollständiger OpenRouter-Katalog aus Preiscache oder Live-API
+    if p == "openrouter":
+        try:
+            p_res = get_llm_prices(refresh=0)
+            if p_res.get("status") == "ok" and p_res.get("prices"):
+                all_models = sorted(list(p_res["prices"].keys()))
+                if len(all_models) > 10:
+                    return {"status": "ok", "provider": p, "models": all_models}
+        except Exception:
+            pass
+    # 2. Dynamische Modelle aus api_provider
+    try:
+        import api_provider
+        dyn_models = api_provider.list_provider_models(p)
+        if dyn_models and len(dyn_models) > 0:
+            return {"status": "ok", "provider": p, "models": dyn_models}
+    except Exception:
+        pass
     catalog = {
         "openrouter": [
             "deepseek/deepseek-v4.1-flash",

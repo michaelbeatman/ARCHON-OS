@@ -2955,8 +2955,6 @@
     }
     window.openPriceCatalogForAgentTab = openPriceCatalogForAgentTab;
 
-
-    }
     async function handleSidebarPresetSelected(serviceId) {
       if (!serviceId) return;
       const service = servicesList.find(s => s.id === serviceId);

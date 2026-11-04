@@ -842,6 +842,16 @@
     }
     window.loadLlmModelsForProvider = loadLlmModelsForProvider;
     window.fetchProviderModelsList = loadLlmModelsForProvider;
+    window.openPriceCatalogForAgentTab = function() {
+      const modelSelect = document.getElementById('agent-tab-model-select');
+      const provSelect = document.getElementById('agent-tab-provider-select');
+      if (typeof window.openPriceCatalogModal === 'function') {
+        window.openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+      } else {
+        const modal = document.getElementById('llm-price-catalog-modal');
+        if (modal) modal.classList.remove('hidden');
+      }
+    };
     function populateModelDropdown(selectEl, models, selectedModel) {
       if (!selectEl) return;
       const rawModels = (Array.isArray(models) && models.length > 0) 

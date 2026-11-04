@@ -319,7 +319,7 @@
     ],
     "avatar": "/static/avatars/hermes_default_avatar.png",
     "provider": "omniroute",
-    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "model": "anthropic/claude-opus-5.5:batch",
     "reasoning_level": "high",
     "status": "active",
     "is_favorite": true

@@ -181,8 +181,16 @@
           <button id="nav-mission-control" onclick="setTab('mission-control')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.operations">Operations</div>
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Dashboard</div>
               <div class="text-[9.5px] font-mono text-muted-custom truncate">Cockpit, Kanban &amp; Orga</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+          <button id="nav-operations" onclick="setTab('operations')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
+            <i data-lucide="folder-kanban" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Operations</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Projekt-Zentrale &amp; Status</div>
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
@@ -210,14 +218,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-operations" style="display: none;" onclick="setTab('operations')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
-            <i data-lucide="kanban" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]">Operations</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">Kanban, Orga & Funk</div>
-            </div>
-            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
-          </button>
+
           <button id="nav-automation" style="display: none;" onclick="setTab('automation')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="workflow" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
@@ -1132,6 +1133,97 @@
           </div>
         </div>
       </div>
+      <!-- ========================================================================= -->
+      <!-- VIEW CONTAINER: OPERATIONS (PROJEKT-ZENTRALE & STATUS)                   -->
+      <!-- ========================================================================= -->
+      <div id="view-operations" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--page-bg)] overflow-hidden">
+        <!-- Operations Header -->
+        <header class="shrink-0 h-16 border-b border-[var(--border)] bg-[var(--card)] px-4 sm:px-6 flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500/20 to-sky-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+              <i data-lucide="folder-kanban" class="w-5 h-5 text-indigo-500"></i>
+            </div>
+            <div class="min-w-0">
+              <h1 class="text-sm sm:text-base font-bold text-[var(--foreground)] tracking-tight truncate flex items-center gap-2">
+                <span>Operations</span>
+                <span class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]">Projekt-Zentrale</span>
+              </h1>
+              <p class="text-[11px] font-mono text-muted-custom truncate">Alle laufenden, abgeschlossenen &amp; geplanten Projekte</p>
+            </div>
+          </div>
+
+          <!-- Actions & Search -->
+          <div class="flex items-center gap-2 sm:gap-3">
+            <div class="relative w-48 sm:w-64">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-custom pointer-events-none"></i>
+              <input 
+                id="operations-projects-search" 
+                type="text" 
+                placeholder="Projekte durchsuchen..." 
+                oninput="if (window.renderOperationsProjects) renderOperationsProjects();"
+                class="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] focus:outline-hidden focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+            <button 
+              onclick="if (window.loadOperationsProjects) loadOperationsProjects();" 
+              class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5 text-xs shadow-xs"
+              title="Aktualisieren"
+            >
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline font-mono">Sync</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Filter-Leiste -->
+        <div class="shrink-0 px-4 sm:px-6 py-2.5 border-b border-[var(--border)] bg-[var(--card)]/50 flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <button 
+              data-filter="all" 
+              onclick="setProjectsFilter('all')" 
+              class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs transition cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Alle</span>
+              <span id="badge-count-all" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white/20">0</span>
+            </button>
+            <button 
+              data-filter="in_progress" 
+              onclick="setProjectsFilter('in_progress')" 
+              class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5"
+            >
+              <span>In Bearbeitung</span>
+              <span id="badge-count-prog" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-500">0</span>
+            </button>
+            <button 
+              data-filter="completed" 
+              onclick="setProjectsFilter('completed')" 
+              class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Abgeschlossen</span>
+              <span id="badge-count-comp" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-500">0</span>
+            </button>
+            <button 
+              data-filter="planned" 
+              onclick="setProjectsFilter('planned')" 
+              class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Geplant</span>
+              <span id="badge-count-plan" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-sky-500/20 text-sky-500">0</span>
+            </button>
+          </div>
+          <div class="text-[11px] font-mono text-muted-custom hidden md:inline">
+            1 Projekt = 1 Ordner in <code>01_PROJEKTE/</code>
+          </div>
+        </div>
+
+        <!-- Project Cards Grid -->
+        <div class="flex-1 p-4 sm:p-6 overflow-y-auto custom-scrollbar">
+          <div id="operations-projects-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <!-- Dynamisch durch operations_projects.js gerendert -->
+          </div>
+        </div>
+      </div>
+
       <!-- VIEW CONTAINER: DEDICATED AGENT TERMINAL (Single Agent Focus View) -->
       <div id="view-agent-terminal" class="hidden w-full">
         <div class="rounded-lg p-3 theme-card space-y-3 w-full">
@@ -2068,6 +2160,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/mission_control_cockpit.js?v=202610271358"></script>
   <script src="/static/js/research_lab.js?v=202610281420"></script>
   <script src="/static/js/operations_kanban.js?v=202610310838"></script>
+  <script src="/static/js/operations_projects.js?v=20261105"></script>
   <script src="/static/js/appshell_architect.js?v=202610271155"></script>
   <script src="/static/js/css_live_studio.js?v=202610261908"></script>
   <script src="/static/js/guardian.js?v=202610280630"></script>
@@ -2721,7 +2814,7 @@ print('Ausführung erfolgreich!')</textarea>
     function shouldFetchTab(tId) { const now = Date.now(); if (!_tabCacheTimestamps[tId] || (now - _tabCacheTimestamps[tId] > CACHE_TTL_MS)) { _tabCacheTimestamps[tId] = now; return true; } return false; }
     function setTab(tabId) {
       let requestedMcSubtab = null;
-      if (tabId === "paperclip" || tabId === "operations") {
+      if (tabId === "paperclip") {
         requestedMcSubtab = "kanban";
         tabId = "mission-control";
       } else if (tabId === "automation") {
@@ -2820,8 +2913,9 @@ print('Ausführung erfolgreich!')</textarea>
         if (typeof initWatchdogView === 'function') initWatchdogView();
       }
       if (tabId === "operations") {
-        setOperationsTab(currentOpsTab || 'kanban');
-        if (shouldFetchTab('operations')) loadOperationsData(false);
+        if (typeof loadOperationsProjects === 'function') {
+          loadOperationsProjects();
+        }
       }
       if (tabId === "log-stream") {
         if (typeof setLogStreamSourceMode === 'function') setLogStreamSourceMode(typeof currentLogStreamMode !== 'undefined' ? currentLogStreamMode : 'containers');
@@ -2931,7 +3025,8 @@ print('Ausführung erfolgreich!')</textarea>
         "inbox": "Eingang (Triage & Intake)",
         "library": "Zentralbibliothek (RAG, Erfasser & Vault)",
         "showroom": "Showroom (Artefakte & Apps)",
-        "mission-control": "Operations",
+        "mission-control": "Dashboard (Cockpit, Kanban & System)",
+        "operations": "Operations (Projekt-Zentrale & Status)",
         "master-chat": "Master Console",
         "agent-profiles": "Agenten-Kader (Profile & Disposition)",
         "paperclip": "Operations Board (Kanban & Ablauf)",

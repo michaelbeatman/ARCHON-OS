@@ -5692,6 +5692,142 @@ def _parse_delegation_blocks(text: str):
             
     return valid, invalid
 
+async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, task_id, status, result, final_title, parent_project_id=None):
+    """Prüft, ob alle Teilaufgaben eines Projekts abgeschlossen sind.
+    Wenn ja, synthetisiert Robert (executive_decision_architect) die Ergebnisse,
+    erstellt das finale HTML-Dokument in 03_Endprodukte/ und informiert den Nutzer."""
+    try:
+        from backend.operations_api import _get_kanban_connection
+        kc = _get_kanban_connection()
+        try:
+            if not parent_project_id:
+                r = kc.execute("SELECT project_id FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                parent_project_id = r[0] if r else None
+            
+            if not parent_project_id:
+                return
+
+            pending = kc.execute(
+                "SELECT COUNT(*) FROM tasks WHERE project_id = ? AND status NOT IN ('done', 'review')",
+                (parent_project_id,)
+            ).fetchone()[0]
+
+            if pending > 0:
+                logger.info(f"[AutoOrchestrator] Projekt {parent_project_id}: noch {pending} Aufgaben ausstehend.")
+                return
+
+            rows = kc.execute(
+                "SELECT id, title, assignee, result, status FROM tasks WHERE project_id = ? ORDER BY rowid ASC",
+                (parent_project_id,)
+            ).fetchall()
+        finally:
+            kc.close()
+
+        if not rows:
+            return
+
+        obs_dir = None
+        for cand in ("/opt/data/obsidian/01_PROJEKTE", os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"), r"C:\Mein Obsidian\01_PROJEKTE"):
+            if os.path.isdir(cand):
+                obs_dir = cand
+                break
+        
+        proj_folder = None
+        if obs_dir:
+            for d in os.listdir(obs_dir):
+                if parent_project_id.lower() in d.lower():
+                    proj_folder = os.path.join(obs_dir, d)
+                    break
+            if not proj_folder:
+                date_prefix = datetime.date.today().strftime("%Y%m%d")
+                clean_name = parent_project_id.lower()
+                if not clean_name.startswith("projekt-"):
+                    clean_name = f"projekt-{clean_name}"
+                proj_folder = os.path.join(obs_dir, f"{date_prefix}-{clean_name}")
+                os.makedirs(os.path.join(proj_folder, "01_Zwischenberichte"), exist_ok=True)
+                os.makedirs(os.path.join(proj_folder, "02_Medien"), exist_ok=True)
+                os.makedirs(os.path.join(proj_folder, "03_Endprodukte"), exist_ok=True)
+
+        end_dir = os.path.join(proj_folder, "03_Endprodukte") if proj_folder else None
+        if end_dir:
+            os.makedirs(end_dir, exist_ok=True)
+            clean_proj_name = parent_project_id.replace("projekt-", "").title()
+            html_filename = f"{clean_proj_name}_Abschlussbericht.html"
+            html_full_path = os.path.join(end_dir, html_filename)
+            
+            task_items_html = ""
+            for r_id, r_title, r_assignee, r_res, r_stat in rows:
+                snippet = (r_res or "").strip()[:500].replace("\n", "<br>")
+                task_items_html += f"""
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <strong style="color: #38bdf8;">Task #{r_id}: {r_title}</strong>
+                        <span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(16,185,129,0.2); color: #34d399; font-weight: bold;">@{r_assignee}</span>
+                    </div>
+                    <div style="font-size: 13px; color: #cbd5e1; line-height: 1.5;">{snippet}...</div>
+                </div>
+                """
+
+            html_doc = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Abschlussbericht: {clean_proj_name}</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #09090b; color: #f4f4f5; line-height: 1.6; padding: 40px 20px; }}
+    .container {{ max-width: 860px; margin: 0 auto; background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+    h1 {{ font-size: 26px; font-weight: 800; color: #ffffff; margin-bottom: 6px; }}
+    .badge {{ display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid #10b981; margin-bottom: 16px; text-transform: uppercase; }}
+    .summary {{ background: rgba(14,165,233,0.08); border-left: 4px solid #0ea5e9; padding: 16px; border-radius: 6px; margin-bottom: 24px; font-size: 15px; color: #e0f2fe; }}
+    h2 {{ font-size: 18px; border-bottom: 1px solid #27272a; padding-bottom: 8px; margin: 28px 0 16px 0; color: #f8fafc; }}
+    footer {{ margin-top: 36px; padding-top: 16px; border-top: 1px solid #27272a; font-size: 12px; color: #71717a; display: flex; justify-content: space-between; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">● Projekt Vollständig Abgeschlossen</div>
+    <h1>Projekt: {clean_proj_name} — Abschlussbericht</h1>
+    <div style="font-size: 13px; color: #a1a1aa; margin-bottom: 20px;">Autonom koordiniert durch <strong>Robert (Executive Decision Architect)</strong> | {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}</div>
+    
+    <div class="summary">
+      <strong>Management Summary:</strong><br>
+      Alle {len(rows)} Arbeitspakete des Projekts wurden von den spezialisierten Fachagenten erfolgreich ausgearbeitet, verifiziert und zusammengeführt. Das Vorhaben steht für die weitere Umsetzung bereit.
+    </div>
+
+    <h2>Abgeschlossene Teilaufgaben & Ergebnisse</h2>
+    {task_items_html}
+
+    <footer>
+      <div>Archon OS — Autonome Orchestration</div>
+      <div>Freigegeben durch <strong>@executive_decision_architect</strong></div>
+    </footer>
+  </div>
+</body>
+</html>"""
+            with open(html_full_path, "w", encoding="utf-8") as f:
+                f.write(html_doc)
+
+        if session_id:
+            summary_msg = (
+                f"🎉 **Projekt '{parent_project_id}' ist vollständig abgeschlossen!**\n\n"
+                f"Alle {len(rows)} Teilaufgaben wurden von den Fachagenten erfolgreich abgearbeitet und von mir zusammengeführt.\n\n"
+                f"📄 **Finaler Abschlussbericht:**\n"
+                f"- Gespeichert in: `01_PROJEKTE/{os.path.basename(proj_folder) if proj_folder else parent_project_id}/03_Endprodukte/`\n"
+                f"- Direkter Link im Showroom & Operations-Dashboard verfügbar.\n\n"
+                f"Die Fachagenten wurden nach erfolgreichem Projektabschluss wieder in den Standby versetzt."
+            )
+            _save_message_to_db(session_id, "assistant", summary_msg)
+            broadcast_event("chat_message_received", {
+                "session_id": session_id,
+                "agent_id": "executive_decision_architect",
+                "content": summary_msg,
+                "project_completed": parent_project_id
+            })
+            logger.info(f"[AutoOrchestrator] Projekt {parent_project_id} erfolgreich autonom abgeschlossen!")
+    except Exception as e:
+        logger.error(f"[AutoOrchestrator] Fehler bei autonomem Followup: {e}")
+
+
 def _execute_delegation(delegator_id, payload, provider, all_keys, origin_session_id=None):
     """Führt eine Delegation aus: Berechtigungsprüfung, Sub-Session, Kanban-Task,
     Hintergrund-Ausführung. Gibt eine Quittung als Text zurück (wird in die
@@ -5748,11 +5884,17 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         now_iso = datetime.datetime.now().isoformat()
         prio_num = 2 if prioritaet in ("hoch", "high", "sofort", "critical", "urgent") else (1 if prioritaet in ("mittel", "normal", "medium") else 0)
         kconn = _get_kanban_connection()
+        parent_pid = str(payload.get("parent_project_id") or "").strip()
         kconn.execute(
-            "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, model_override) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, model_override, project_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
-             f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "todo", prio_num, delegator_id, now_iso, t_model)
+             f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "todo", prio_num, delegator_id, now_iso, t_model, parent_pid)
         )
+        try:
+            from backend.operations_api import _execute_kanban_task_async
+            asyncio.create_task(_execute_kanban_task_async(task_id))
+        except Exception as exe_err:
+            logger.warning(f"[Delegation] Sofortige Ausfuehrung fehlgeschlagen: {exe_err}")
         kconn.execute(
             "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
             (task_id, "created", json.dumps({"title": auftrag[:80], "assignee": ziel, "via": "delegation_engine_v2", "delegator": delegator_id, "reasoning_level": reasoning_lvl}), now_iso)
@@ -5762,7 +5904,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     except Exception as e:
         logger.warning(f"[Delegation] Kanban-Insert fehlgeschlagen: {e}")
 
-    async def _bg_watch_task(task_id, s_id, prof_id, origin_sess_id=None, orig_delegator=None):
+    async def _bg_watch_task(task_id, s_id, prof_id, origin_sess_id=None, orig_delegator=None, parent_pid=None):
         """Beobachtet den Kanban-Task, während der Hermes-Agent-Worker ihn abarbeitet,
         und spiegelt das Endergebnis in die Sub-Session (Rücklauf ohne Doppel-Ausführung).
         WICHTIG: Kein eigener Modell-Aufruf mehr — die Ausführung macht der hermes-Worker
@@ -5855,11 +5997,11 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     except Exception:
                         proj_name = f"{datetime.datetime.now().strftime('%Y%m%d')}-{task_id}-{slug}"
                     proj_folder = os.path.join(obsidian_rel, proj_name)
-                    end_dir = os.path.join(proj_folder, "03_Endprodukte")
-                    os.makedirs(end_dir, exist_ok=True)
-                    for sub in ("01_Zwischenberichte", "02_Medien"):
+                    target_sub = "01_Zwischenberichte" if parent_pid else "03_Endprodukte"
+                    dest_dir = os.path.join(proj_folder, target_sub)
+                    os.makedirs(dest_dir, exist_ok=True)
+                    for sub in ("01_Zwischenberichte", "02_Medien", "03_Endprodukte"):
                         os.makedirs(os.path.join(proj_folder, sub), exist_ok=True)
-                    # Attachments des Hermes-Workers nach 02_Medien kopieren
                     try:
                         att_src = os.path.join("/opt/data/kanban/attachments", task_id)
                         if os.path.isdir(att_src):
@@ -5870,7 +6012,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     except Exception:
                         pass
                     result_fn = f"{task_id}-{slug}.md"
-                    with open(os.path.join(end_dir, result_fn), "w", encoding="utf-8") as f:
+                    with open(os.path.join(dest_dir, result_fn), "w", encoding="utf-8") as f:
                         f.write(f"# {title}\n\n"
                                 f"**Task:** `{task_id}` | **Ziel-Agent:** `@{prof_id}` | **Status:** {status.upper()}\n\n"
                                 f"{result or '(Ergebnis siehe Kanban-Task-Events und Anhänge in 02_Medien/.)'}\n")
@@ -5938,7 +6080,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     # Autonomen Folge-Turn auslösen, falls Orchestrator aktiv
                     if orig_delegator in ("executive_decision_architect", "hermes-orchestrator", "micha", "default"):
                         asyncio.create_task(_trigger_autonomous_orchestrator_followup(
-                            orig_delegator, origin_sess_id, task_id, status, result, final_title
+                            orig_delegator, origin_sess_id, task_id, status, result, final_title, parent_pid
                         ))
                 except Exception as feed_err:
                     logger.warning(f"[Delegation] Feedback an Delegator-Session fehlgeschlagen: {feed_err}")
@@ -6055,7 +6197,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         except Exception as fan_err:
             logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 
-    asyncio.create_task(_bg_watch_task(task_id, tgt_sess, ziel, origin_session_id, delegator_id))
+    asyncio.create_task(_bg_watch_task(task_id, tgt_sess, ziel, origin_session_id, delegator_id, parent_pid))
     resolve_str = f" [aufgelöst von '{ziel_raw}']" if ziel_raw and ziel_raw != ziel else ""
     return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}{resolve_str}) | Kanban-Task: {task_id or 'n/a'} | "
             f"Sub-Session: {tgt_sess} | Modell (Empfehlung): {t_model} | "

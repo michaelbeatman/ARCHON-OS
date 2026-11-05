@@ -1135,6 +1135,159 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None) -> Opt
     return rel
 
 
+
+@router.get("/projects/overview")
+def get_projects_overview():
+    """Liefert die konsolidierte Projekt-Zentrale fuer Operations:
+    Laufende, abgeschlossene und geplante Projekte mit Unteraufgaben, Status und Direktlinks zu HTML-Berichten."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+    import datetime
+
+    vault = _P(get_vault_dir()).resolve()
+    p_root = vault / "01_PROJEKTE"
+
+    # 1. Hole alle Tasks aus kanban.db gruppiert nach project_id
+    tasks_by_project = {}
+    conn = _get_kanban_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, title, assignee, status, priority, created_at, completed_at, result, project_id FROM tasks ORDER BY rowid ASC")
+        for r in cur.fetchall():
+            tid, title, assignee, status, prio, cat, comp, res, pid = r
+            if not pid:
+                continue
+            tasks_by_project.setdefault(pid, []).append({
+                "id": tid,
+                "title": title,
+                "assignee": assignee,
+                "status": status,
+                "created_at": cat,
+                "completed_at": comp,
+                "result_preview": (res or "")[:200]
+            })
+    finally:
+        conn.close()
+
+    # 2. Scanne Obsidian 01_PROJEKTE
+    projects = []
+    seen_ids = set()
+
+    if p_root.is_dir():
+        for p_dir in sorted(p_root.iterdir(), key=lambda d: d.stat().st_mtime, reverse=True):
+            if not p_dir.is_dir() or p_dir.name.startswith((".", "_")):
+                continue
+
+            folder_name = p_dir.name
+            proj_title = folder_name
+            status = "in_progress"
+            lead_agent = "executive_decision_architect"
+            assignees = set()
+            primary_doc = None
+            has_html = False
+
+            p_md = p_dir / "PROJEKT.md"
+            if p_md.is_file():
+                try:
+                    txt = p_md.read_text(encoding="utf-8")
+                    for line in txt.splitlines():
+                        if line.startswith("title:"):
+                            proj_title = line.replace("title:", "").strip().strip('"').strip("'")
+                        elif line.startswith("# ") and proj_title == folder_name:
+                            proj_title = line.replace("# ", "").replace("📂 Projekt:", "").strip()
+                        elif line.startswith("status:"):
+                            st_val = line.replace("status:", "").strip().strip('"').strip("'").lower()
+                            if "complete" in st_val or "abgeschlossen" in st_val:
+                                status = "completed"
+                            elif "plan" in st_val:
+                                status = "planned"
+                except Exception:
+                    pass
+
+            end_dir = p_dir / "03_Endprodukte"
+            if end_dir.is_dir():
+                for f in sorted(end_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+                    if f.suffix.lower() == ".html":
+                        primary_doc = f"01_PROJEKTE/{folder_name}/03_Endprodukte/{f.name}"
+                        has_html = True
+                        break
+                    elif f.suffix.lower() == ".md" and not primary_doc:
+                        primary_doc = f"01_PROJEKTE/{folder_name}/03_Endprodukte/{f.name}"
+
+            subtasks = []
+            for pid, t_list in tasks_by_project.items():
+                if pid.lower() in folder_name.lower() or any(part in pid.lower() for part in folder_name.lower().split("-") if len(part) >= 4 and part not in ("projekt", "2026")):
+                    subtasks.extend(t_list)
+                    seen_ids.add(pid)
+                    for st in t_list:
+                        if st.get("assignee"):
+                            assignees.add(st["assignee"])
+
+            t_total = len(subtasks)
+            t_done = sum(1 for st in subtasks if st.get("status") in ("done", "review", "completed"))
+            progress = int((t_done / t_total) * 100) if t_total > 0 else (100 if status == "completed" else 0)
+            if t_total > 0 and t_done == t_total:
+                status = "completed"
+
+            z_count = len(list((p_dir / "01_Zwischenberichte").iterdir())) if (p_dir / "01_Zwischenberichte").is_dir() else 0
+            m_count = len(list((p_dir / "02_Medien").iterdir())) if (p_dir / "02_Medien").is_dir() else 0
+            e_count = len(list(end_dir.iterdir())) if end_dir.is_dir() else 0
+
+            if proj_title == folder_name:
+                clean_parts = [p for p in folder_name.split("-") if not p.isdigit() and p not in ("projekt", "delegationsprojekt")]
+                proj_title = " ".join(clean_parts).title() or folder_name
+
+            projects.append({
+                "id": folder_name,
+                "title": proj_title,
+                "status": status,
+                "folder": f"01_PROJEKTE/{folder_name}",
+                "lead_agent": lead_agent,
+                "assignees": sorted(list(assignees)),
+                "progress": progress,
+                "tasks_total": t_total,
+                "tasks_completed": t_done,
+                "subtasks": subtasks,
+                "primary_document": primary_doc,
+                "has_html_report": has_html,
+                "files_summary": {
+                    "zwischenberichte": z_count,
+                    "medien": m_count,
+                    "endprodukte": e_count
+                }
+            })
+
+    for pid, t_list in tasks_by_project.items():
+        if pid not in seen_ids:
+            t_total = len(t_list)
+            t_done = sum(1 for st in t_list if st.get("status") in ("done", "review", "completed"))
+            progress = int((t_done / t_total) * 100) if t_total > 0 else 0
+            projects.append({
+                "id": pid,
+                "title": pid.replace("projekt-", "").replace("-", " ").title(),
+                "status": "planned" if progress == 0 else ("completed" if t_done == t_total else "in_progress"),
+                "folder": f"01_PROJEKTE/{pid}",
+                "lead_agent": "executive_decision_architect",
+                "assignees": sorted(list({st.get("assignee") for st in t_list if st.get("assignee")})),
+                "progress": progress,
+                "tasks_total": t_total,
+                "tasks_completed": t_done,
+                "subtasks": t_list,
+                "primary_document": None,
+                "has_html_report": False,
+                "files_summary": {"zwischenberichte": 0, "medien": 0, "endprodukte": 0}
+            })
+
+    return {
+        "status": "success",
+        "total": len(projects),
+        "in_progress": [p for p in projects if p["status"] == "in_progress"],
+        "completed": [p for p in projects if p["status"] == "completed"],
+        "planned": [p for p in projects if p["status"] == "planned"],
+        "all": projects
+    }
+
+
 @router.get("/kanban/projects/{task_id}")
 def get_kanban_project_files(task_id: str):
     """Listet die Dateien des verknuepften Obsidian-Projekts einer Task (Sidecar-Bruecke)."""

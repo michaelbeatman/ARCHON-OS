@@ -175,17 +175,35 @@ def send_smtp_email(subject: str, text_content: str, html_content: Optional[str]
 
 
 def project_folder_name(task: dict) -> str:
-    """ORDNERNAME-QUELLE DER WAHRHEIT (12.10.2026, User-Fix 'ein Projekt = ein Ordner').
+    """ORDNERNAME-QUELLE DER WAHRHEIT (Ein Projekt = Ein Ordner).
 
     - Delegationskinder MIT parent_project_id TEILEN sich den EINEN
-      Eltern-Ordner (sonst: ein Projektordner pro Subtask -> Ordnerflut).
-    - Ohne parent (Einzel-Delegation): weiterhin eigener Task-Ordner.
+      Eltern-Ordner (keine Datums-Duplikate oder Subtask-Ordner).
+    - Sucht ZUERST in 01_PROJEKTE nach einem existierenden Ordner mit dieser ID / Slug.
     """
-    date_prefix = datetime.date.today().strftime("%Y%m%d")
     parent_pid = str(task.get("parent_project_id") or "").strip()
+    key_slug = slugify(parent_pid) if parent_pid else ""
+
+    # 1. Prüfe, ob in 01_PROJEKTE bereits ein passender Ordner existiert (Vermeidet Duplikate)
+    try:
+        p_root = VAULT_DIR / "01_PROJEKTE"
+        if p_root.is_dir():
+            for d in p_root.iterdir():
+                if not d.is_dir():
+                    continue
+                d_name = d.name.lower()
+                if parent_pid and (parent_pid.lower() in d_name or (key_slug and key_slug in d_name)):
+                    return d.name
+    except Exception:
+        pass
+
+    date_prefix = datetime.date.today().strftime("%Y%m%d")
     if parent_pid:
-        ptitle = str(task.get("parent_project_title") or parent_pid)
-        return f"{date_prefix}-{parent_pid}-{slugify(ptitle)}"
+        clean_pid = parent_pid.lower()
+        if not clean_pid.startswith("projekt-"):
+            clean_pid = f"projekt-{clean_pid}"
+        return f"{date_prefix}-{clean_pid}"
+
     task_id = str(task.get("id") or "task-0").strip()
     raw_title = task.get("title") or "task"
     tid_core = task_id.replace("task-", "")
@@ -258,8 +276,11 @@ status: completed
 [[PROJEKT]] | [[00_VAULT_KNOWLEDGE]]
 """
 
-    end_doc_path = e_dir / file_name
-    end_doc_path.write_text(doc_content, encoding="utf-8")
+    is_subtask = bool(task.get("parent_project_id"))
+    # Subtasks gehören IMMER in 01_Zwischenberichte, nicht in 03_Endprodukte
+    dest_dir = z_dir if is_subtask else e_dir
+    dest_doc_path = dest_dir / file_name
+    dest_doc_path.write_text(doc_content, encoding="utf-8")
 
     # PROJEKT.md anlegen
     proj_md = proj_dir / "PROJEKT.md"

@@ -36,11 +36,148 @@
     "t-c2b384": {
       "tags": []
     },
+    "t-6720ca": {
+      "decision": {
+        "typ": "delegation_review",
+        "ref_id": "t-6720ca",
+        "titel": "Projekt 'Immomeer': Übernimm die Koordination. 1. Erstelle einen Anforderungskat...",
+        "kurzfassung": "Koordination und Anforderungskatalog (DSGVO, GwG, Energieausweis) sowie Datenmodell und Kirby-CMS-Evaluation erfolgreich fertiggestellt.",
+        "dossier": "/opt/data/obsidian/01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer/03_Endprodukte/t-6720ca-projekt-immomeer-bernimm-die-koordination-1-erstel.md",
+        "status": "freigegeben",
+        "kanal": "telegram+kanban",
+        "erstellt": "2026-11-04T20:34:31.254109",
+        "entschieden_von": "operator",
+        "entschieden_am": "2026-11-04T20:47:04.460184"
+      },
+      "quality_review": {
+        "status": "approved",
+        "reviewer": "Operator (Human-in-the-Loop)",
+        "reviewer_id": "operator",
+        "score": 100,
+        "summary": "Manuell freigegeben durch Operator",
+        "critique_points": [
+          "Manuell freigegeben durch Operator"
+        ],
+        "actionable_next_steps": [],
+        "reviewed_at": "2026-11-04T20:47:04.460184"
+      },
+      "obsidian": "01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer"
+    },
+    "t-89ee98": {
+      "decision": {
+        "typ": "delegation_review",
+        "ref_id": "t-89ee98",
+        "titel": "Projekt 'Immomeer' Abschluss: 1. Finale Dokumentation erstellen. 2. Lessons Lear...",
+        "kurzfassung": "Abschluss Immomeer: Projektdokumentation, Lessons Learned, Archivierungsplan und Uebergabeprotokoll vollstaendig ausgearbeitet.",
+        "dossier": "/opt/data/obsidian/01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer/03_Endprodukte/t-89ee98-projekt-immomeer-abschluss-1-finale-dokumentation-.md",
+        "status": "freigegeben",
+        "kanal": "telegram+kanban",
+        "erstellt": "2026-11-04T20:48:53.955155",
+        "entschieden_von": "operator",
+        "entschieden_am": "2026-11-04T21:42:00"
+      },
+      "obsidian": "01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer",
+      "quality_review": {
+        "status": "approved",
+        "reviewer": "Operator (Human-in-the-Loop)",
+        "reviewer_id": "operator",
+        "score": 100,
+        "summary": "Manuell freigegeben durch Operator",
+        "critique_points": [
+          "Manuell freigegeben durch Operator"
+        ],
+        "actionable_next_steps": [],
+        "reviewed_at": "2026-11-04T21:40:09.148446"
+      }
+    },
+    "t_2b983df1": {
+      "quality_review": {
+        "status": "approved",
+        "reviewer": "Operator (Human-in-the-Loop)",
+        "reviewer_id": "operator",
+        "score": 100,
+        "summary": "Manuell freigegeben durch Operator",
+        "critique_points": [
+          "Manuell freigegeben durch Operator"
+        ],
+        "actionable_next_steps": [],
+        "reviewed_at": "2026-11-04T20:53:48.799446"
+      }
+    },
+    "t-a9ea08": {
+      "obsidian": "01_PROJEKTE/20261104-t-a9ea08-projekt-immomeer-setze-task-id-task_immomeer_coord",
+      "decision": {
+        "typ": "delegation_review",
+        "ref_id": "t-a9ea08",
+        "titel": "Projekt 'Immomeer': Setze Task-ID `task_immomeer_coordination_001` auf Status `r...",
+        "kurzfassung": "Task 'task_immomeer_coordination_001' wurde nicht gefunden. Bitte prüfen Sie die Task-ID oder den Board-Slug.",
+        "dossier": "/opt/data/obsidian/01_PROJEKTE/20261104-t-a9ea08-projekt-immomeer-setze-task-id-task_immomeer_coord/01_Zwischenberichte/t-a9ea08_blocked.pdf",
+        "status": "offen",
+        "kanal": "telegram+kanban",
+        "erstellt": "2026-11-04T21:12:39.274627"
+      }
+    },
+    "t_ea59a872": {
+      "quality_review": {
+        "status": "approved",
+        "reviewer": "Operator (Human-in-the-Loop)",
+        "reviewer_id": "operator",
+        "score": 100,
+        "summary": "Manuell freigegeben durch Operator",
+        "critique_points": [
+          "Manuell freigegeben durch Operator"
+        ],
+        "actionable_next_steps": [],
+        "reviewed_at": "2026-11-04T21:43:39.719502"
+      }
+    },
     "projekt-immomeer": {
       "obsidian": "01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer"
     },
-    "t-a9ea08": {
-      "obsidian": "01_PROJEKTE/20261104-t-a9ea08-projekt-immomeer-setze-task-id-task_immomeer_coord"
+    "t-b964cf": {
+      "obsidian": "01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer",
+      "decision": {
+        "typ": "delegation_review",
+        "ref_id": "t-b964cf",
+        "titel": "Projekt 'Immomeer': Konsolidiere die Ergebnisse aller Tasks und erstelle einen A...",
+        "kurzfassung": "Die übergeordnete Task 'projekt-immomeer' konnte nicht gefunden werden, daher kann ich die zu konsolidierenden Sub-Tasks nicht identifizieren. Bitte geben Sie die Task-IDs oder den Ort der Projektergebnisse an.",
+        "dossier": "/opt/data/obsidian/01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer/01_Zwischenberichte/t-b964cf_blocked.pdf",
+        "status": "freigegeben",
+        "kanal": "telegram+kanban",
+        "erstellt": "2026-11-04T21:48:09.322732",
+        "entschieden_von": "mc-startseite",
+        "entschieden_am": "2026-11-04T21:50:48.914259"
+      }
+    },
+    "t-5c342f": {
+      "obsidian": "01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer",
+      "decision": {
+        "typ": "delegation_review",
+        "ref_id": "t-5c342f",
+        "titel": "Projekt 'Immomeer': Freigabe Task-ID `task_immomeer_final_report_005`. Konsolidi...",
+        "kurzfassung": "Die referenzierte Task-ID `task_immomeer_final_report_005` ist im System nicht auffindbar. Benötige Informationen, wo die Ergebnisse liegen oder wo ich die ursprünglichen Daten finde.",
+        "dossier": "/opt/data/obsidian/01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer/01_Zwischenberichte/t-5c342f_blocked.pdf",
+        "status": "freigegeben",
+        "kanal": "telegram+kanban",
+        "erstellt": "2026-11-04T21:49:05.586158",
+        "entschieden_von": "mc-startseite",
+        "entschieden_am": "2026-11-04T21:50:41.753963"
+      }
+    },
+    "t-620dc6": {
+      "obsidian": "01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer",
+      "decision": {
+        "typ": "delegation_review",
+        "ref_id": "t-620dc6",
+        "titel": "Projekt 'Immomeer': Erstelle den Abschlussbericht basierend auf den Ergebnissen ...",
+        "kurzfassung": "# Abschlussbericht Projekt 'Immomeer'\n\n## 1. Zusammenfassung der Ergebnisse\n\nBasierend auf den Ergebnissen aus dem Kanban-Board und den durchgeführten Tests können wir folgende zentrale Erkenntnisse für das Projekt 'Immomeer' festhalten:\n\n1. **Technische Implementierung**:\n   - Erfolgreiche Integration der Wal-Mode-Funktionalität für automatisierte Systemtests\n   - Verifizierte Skalierbarkeit der Archon OS-Infrastruktur für Immobilien-Datenworkloads\n\n2. **Monetarisierung**:\n   - Validierung von drei B2B-Monetarisierungsmodellen für den Immobiliensektor\n   - Bestätigung der Machbarkeit von On-P",
+        "dossier": "/opt/data/obsidian/01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer/01_Zwischenberichte/t-620dc6_review.pdf",
+        "status": "freigegeben",
+        "kanal": "telegram+kanban",
+        "erstellt": "2026-11-04T22:00:42.584132",
+        "entschieden_von": "mc-startseite",
+        "entschieden_am": "2026-11-04T22:01:16.088693"
+      }
     },
     "t_9483301b": {
       "obsidian": "01_PROJEKTE/20261104-t-a9ea08-projekt-immomeer-setze-task-id-task_immomeer_coord"

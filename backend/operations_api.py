@@ -349,6 +349,18 @@ async def _execute_kanban_task_async(task_id: str):
             print(f"[OperationsAPI] DAG Execution error for {task_id}: {e}", file=sys.stderr)
 
     # Fall 2: Einzelaufgabe
+    # Sofort als 'in_progress' markieren, damit im Kanban und UI der aktive Lauf sichtbar ist
+    try:
+        c_start = _get_kanban_connection()
+        now_start_iso = datetime.datetime.now().isoformat()
+        c_start.execute("UPDATE tasks SET status = 'in_progress', started_at = ? WHERE id = ?", (now_start_iso, task_id))
+        c_start.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'started', ?, ?)", 
+                        (task_id, json.dumps({"status": "in_progress", "agent": t_dict.get("assignee")}), now_start_iso))
+        c_start.commit()
+        c_start.close()
+    except Exception:
+        pass
+
     assignee = t_dict.get("assignee") or "hermes-researcher"
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
@@ -388,16 +400,18 @@ async def _execute_kanban_task_async(task_id: str):
             model=model,
             task_id=task_id
         )
+        is_success = res.get("status") == "success" and not (res.get("content") or "").startswith("[FEHLER:")
+        target_status = "done" if is_success else "failed"
         reply = res.get("content", "").strip() or f"Aufgabe '{title}' erfolgreich von {agent_name} abgeschlossen."
         now_iso = datetime.datetime.now().isoformat()
         
         c = _get_kanban_connection()
         try:
-            c.execute("UPDATE tasks SET status = 'review', completed_at = ?, result = ? WHERE id = ?", (now_iso, reply, task_id))
+            c.execute("UPDATE tasks SET status = ?, completed_at = ?, result = ? WHERE id = ?", (target_status, now_iso, reply, task_id))
             c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)", 
-                      (task_id, json.dumps({"status": "review", "summary": reply[:200]}), now_iso))
+                      (task_id, json.dumps({"status": target_status, "summary": reply[:200]}), now_iso))
             c.commit()
-            _sync_to_memory_bridge(task_id, title, assignee, "review", reply)
+            _sync_to_memory_bridge(task_id, title, assignee, target_status, reply)
         finally:
             c.close()
             
@@ -498,8 +512,10 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
         conn.commit()
         _sync_to_memory_bridge(task_id, existing["title"], existing["assignee"], new_status, req.result)
 
-        # Autonome LLM-Ausführung starten, wenn Task auf 'in_progress' gesetzt wurde
+        # Autonome LLM-Ausführung starten, wenn Task auf 'in_progress' oder von 'review'/'failed'/'blocked' auf 'todo' gesetzt wurde
         if new_status == "in_progress" and old_status != "in_progress":
+            asyncio.create_task(_execute_kanban_task_async(task_id))
+        elif new_status == "todo" and old_status in ("review", "failed", "blocked", "done"):
             asyncio.create_task(_execute_kanban_task_async(task_id))
 
         # 12.10.2026 (Decision-Service, Richtung Kanban -> Telegram): Wird ein

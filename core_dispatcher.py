@@ -235,7 +235,7 @@ def _get_dispatcher_http_client() -> httpx.AsyncClient:
     c = _DISPATCHER_HTTP_CLIENTS.get(loop_id)
     if c is None or c.is_closed:
         c = httpx.AsyncClient(
-            timeout=30.0,
+            timeout=90.0,
             limits=httpx.Limits(max_keepalive_connections=25, max_connections=100)
         )
         _DISPATCHER_HTTP_CLIENTS[loop_id] = c
@@ -368,6 +368,16 @@ async def dispatch_to_omniroute_or_container(
             pass
         return res
 
+AUTO_MODEL_MAP = {
+    "auto/best-reasoning": "deepseek/deepseek-r1",
+    "auto/best-coding": "deepseek/deepseek-chat",
+    "auto/best-vision": "google/gemini-2.5-flash",
+    "auto/best-fast": "openai/gpt-4o-mini",
+    "auto/best-free": "google/gemini-2.5-flash",
+    "auto/best-creative": "anthropic/claude-3.5-sonnet",
+}
+
+
 async def _dispatch_to_omniroute_or_container_exec(
     agent_id: str, 
     agent_name: str, 
@@ -433,7 +443,12 @@ async def _dispatch_to_omniroute_or_container_exec(
         timeout = int(provider)
         provider = ""
     prov_lower = (str(provider) if provider else "").strip().lower()
-    selected_model = model.strip() if (model and model not in ("free-forever", "gpt-4o-mini", "default")) else "deepseek/deepseek-chat"
+    if model in AUTO_MODEL_MAP:
+        selected_model = AUTO_MODEL_MAP[model]
+    elif model and model.startswith("auto/"):
+        selected_model = AUTO_MODEL_MAP.get(model, "deepseek/deepseek-chat")
+    else:
+        selected_model = model.strip() if (model and model not in ("free-forever", "gpt-4o-mini", "default")) else "deepseek/deepseek-chat"
 
     # 1. Spezifischer Provider: GROQ
     if prov_lower == "groq" and groq_api_key:
@@ -518,7 +533,7 @@ async def _dispatch_to_omniroute_or_container_exec(
             or_payload = {
                 "model": selected_model,
                 "messages": messages,
-                "max_tokens": 1500,
+                "max_tokens": 4096,
                 "temperature": 0.4
             }
             r_lvl = (reasoning_level or "medium").strip().lower()
@@ -643,16 +658,13 @@ async def _dispatch_to_omniroute_or_container_exec(
             except Exception:
                 continue
 
-    # 5. Robuster In-Character Fallback
-    fallback_text = (
-        f"Hallo! Ich bin **{agent_name}** ({role}).\n\n"
-        f"Deine Anfrage wurde erfolgreich im Agenten-Kontext registriert:\n"
-        f"> *\"{prompt}\"*\n\n"
-        f"Ich habe die SOUL-Direktiven und Skills geladen und stehe bereit für die Ausführung."
-    )
+        # 5. Robuste Fehlerbehandlung (Keine Dummy-Bereitschaftsmeldung vortaeuschen)
+    err_msg = f"[FEHLER: Kein Sprachmodell-Provider erreichbar fuer @{agent_id} ({agent_name}) mit Modell '{selected_model}']"
+    print(f"[DISPATCHER-ERROR] {err_msg}")
     return {
-        "status": "success",
-        "content": fallback_text
+        "status": "error",
+        "content": err_msg,
+        "error": "No LLM provider available"
     }
 
 async def dispatch_to_external_agent(

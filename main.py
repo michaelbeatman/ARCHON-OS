@@ -5886,9 +5886,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         kconn = _get_kanban_connection()
         parent_pid = str(payload.get("parent_project_id") or "").strip()
         kconn.execute(
-            "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, model_override, project_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, started_at, model_override, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
-             f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "todo", prio_num, delegator_id, now_iso, t_model, parent_pid)
+             f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid)
         )
         try:
             from backend.operations_api import _execute_kanban_task_async

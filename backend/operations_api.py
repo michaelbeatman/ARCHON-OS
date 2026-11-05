@@ -4,6 +4,8 @@ Provides Kanban (Hermes kanban.db), Org-Chart, and Inter-Agent Communication Fee
 """
 
 import os
+
+from backend.platform_paths import HERMES_HOME
 import asyncio
 import sys
 import json
@@ -20,7 +22,7 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/operations", tags=["operations"])
 
-KANBAN_DB_PATH = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else "C:\\Users\\micha\\.hermes\\kanban.db"
+KANBAN_DB_PATH = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.join(HERMES_HOME, "kanban.db")
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
 

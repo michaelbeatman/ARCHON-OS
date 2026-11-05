@@ -18,16 +18,9 @@ PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
 
 
 def _resolve_db_path() -> str:
-    candidates = [
-        "/opt/data/agentic_memory.db",
-        os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db"),
-        os.path.join(WORKSPACE_DIR, "agentic_memory.db"),
-        os.path.expanduser("~/.hermes/agentic_memory.db")
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return candidates[1]
+    """Delegiert an die zentrale, validierende Auflösung (backend/db_paths.py)."""
+    from backend.db_paths import resolve_db
+    return resolve_db("agentic_memory.db")
 
 
 class PromptRegistry:

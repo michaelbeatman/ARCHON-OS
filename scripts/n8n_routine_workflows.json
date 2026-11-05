@@ -46,7 +46,16 @@
           "method": "POST",
           "url": "http://ARCHON-OS:8501/api/system/standup/run",
           "sendBody": false,
-          "options": {}
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
         },
         "id": "http-standup",
         "name": "Run Morning Standup",
@@ -71,7 +80,16 @@
               }
             ]
           },
-          "options": {}
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
         },
         "id": "http-telegram",
         "name": "Send Telegram Briefing",
@@ -221,7 +239,16 @@
           "method": "POST",
           "url": "http://ARCHON-OS:8501/api/system/backup-db",
           "sendBody": false,
-          "options": {}
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
         },
         "id": "http-backup",
         "name": "Create DB Backup",
@@ -236,7 +263,16 @@
         "parameters": {
           "method": "GET",
           "url": "http://ARCHON-OS:8501/api/system/health",
-          "options": {}
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
         },
         "id": "http-health",
         "name": "Check System Health",
@@ -386,7 +422,16 @@
           "method": "POST",
           "url": "http://ARCHON-OS:8501/api/inbox-watcher/scan-now",
           "sendBody": false,
-          "options": {}
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
         },
         "id": "http-scan",
         "name": "Scan RSS Feeds",

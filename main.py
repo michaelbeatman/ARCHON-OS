@@ -25,8 +25,21 @@ import core_dispatcher
 import httpx
 import logging
 
+from backend.platform_paths import (
+    OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT, HERMES_HOME,
+    PERSONALAKTEN_DIR, PROJEKTE_DIR, soul_path, profile_dir, agent_log_path,
+)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("archon_os")
+
+# Begrenzter Graceful-Shutdown: sonst blockiert uvicorn --reload bei jeder
+# Code-Änderung unbegrenzt auf offene Streams und der Server friert ein.
+try:
+    from backend.uvicorn_shutdown_guard import install as _install_shutdown_guard
+    _install_shutdown_guard()
+except Exception as _shutdown_guard_err:
+    logger.warning(f"[Startup] Shutdown-Guard nicht aktiv: {_shutdown_guard_err}")
 
 app = FastAPI(title="Agent OS Control Panel")
 
@@ -34,10 +47,21 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8501",
+        "http://127.0.0.1:8501",
+        "http://192.168.0.230:8501",
+        "http://192.168.0.234:8501",
+        "http://localhost:3005",
+        "http://127.0.0.1:3005",
+        "http://localhost:8787",
+        "http://127.0.0.1:8787",
+    ],
+    # LAN-Zugriffe (Handy/Tablet) ohne Wildcard für das ganze Internet
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],
 )
 
 @app.middleware("http")
@@ -49,6 +73,86 @@ async def add_no_cache_for_avatars(request: Request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
+
+
+# --- Auth-Gate (wirkt nur, wenn settings.auth.enabled = true) --------------
+_AUTH_PUBLIC_EXACT = {"/", "/health", "/metrics", "/favicon.ico", "/openapi.json", "/login", "/docs", "/redoc"}
+_AUTH_PUBLIC_PREFIXES = ("/static/", "/api/auth/login", "/api/auth/status", "/docs", "/redoc")
+
+_SERVICE_TOKEN_CACHE = {"ts": 0.0, "token": ""}
+
+
+def _get_service_token() -> str:
+    """Service-Token für interne Automaten (n8n, Adapter). Env hat Vorrang, sonst Datei."""
+    now = time.time()
+    if _SERVICE_TOKEN_CACHE["token"] and (now - _SERVICE_TOKEN_CACHE["ts"]) < 30.0:
+        return _SERVICE_TOKEN_CACHE["token"]
+    tok = (os.environ.get("ARCHON_SERVICE_TOKEN") or "").strip()
+    if not tok:
+        for path in ("/app/data/.archon_service_token", os.path.join(os.getcwd(), "data", ".archon_service_token")):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    tok = f.read().strip()
+                if tok:
+                    break
+            except Exception:
+                continue
+    _SERVICE_TOKEN_CACHE.update({"ts": now, "token": tok})
+    return tok
+
+
+def _request_has_service_token(request: Request) -> bool:
+    expected = _get_service_token()
+    provided = request.headers.get("x-archon-service-token", "")
+    if not expected or not provided:
+        return False
+    import hmac
+    return hmac.compare_digest(provided, expected)
+
+
+@app.middleware("http")
+async def auth_gate(request: Request, call_next):
+    """Blockt API-Aufrufe ohne gültige Session, sobald Multi-User aktiv ist.
+
+    Die HTML-Hülle und /api/auth/* bleiben erreichbar, damit das Frontend den
+    Login zeigen kann. Interne Automaten (n8n, Telegram-Adapter) weisen sich
+    über den Header X-Archon-Service-Token aus.
+    """
+    try:
+        from backend.auth_service import auth_service as _auth
+        if not _auth.is_auth_enabled():
+            return await call_next(request)
+    except Exception:
+        return await call_next(request)
+
+    path = request.url.path
+    if path in _AUTH_PUBLIC_EXACT or path.startswith(_AUTH_PUBLIC_PREFIXES):
+        return await call_next(request)
+
+    if _request_has_service_token(request):
+        return await call_next(request)
+
+    token = ""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    elif "x-archon-session" in request.headers:
+        token = request.headers.get("x-archon-session", "").strip()
+    elif "archon_session" in request.cookies:
+        token = request.cookies.get("archon_session", "").strip()
+
+    try:
+        if token and _auth.verify_session(token):
+            return await call_next(request)
+    except Exception:
+        pass
+
+    if path.startswith("/api/"):
+        return JSONResponse(
+            status_code=401,
+            content={"error": "unauthorized", "detail": "Login erforderlich", "login_url": "/login"},
+        )
+    return await call_next(request)
 
 @app.get("/health")
 async def health_check():
@@ -85,15 +189,15 @@ def resolve_obsidian_vault_path():
         ]
     else:
         candidates = [
-            "C:\\Mein Obsidian",
-            "C:\\.Mein Obsidian",
+            OBSIDIAN_VAULT,
+            OBSIDIAN_VAULT_ALT,
             os.path.expanduser("~/Documents/Obsidian Vault"),
             os.path.join(WORKSPACE_DIR, "obsidian_vault")
         ]
     for candidate in candidates:
         if os.path.exists(candidate) and os.path.isdir(candidate):
             return candidate
-    return "/opt/data/obsidian" if sys.platform != "win32" else "C:\\Mein Obsidian"
+    return "/opt/data/obsidian" if sys.platform != "win32" else OBSIDIAN_VAULT
 
 OBSIDIAN_VAULT_DIR = resolve_obsidian_vault_path()
 os.makedirs(OBSIDIAN_VAULT_DIR, exist_ok=True)
@@ -407,7 +511,7 @@ async def get_settings(request: Request):
         "half_life_days": 14,
         "auto_evict": False,
         "eviction_threshold": 0.1,
-        "vault_path": "C:\\Mein Obsidian",
+        "vault_path": OBSIDIAN_VAULT,
         "daily_consolidation": True,
         "hours_back": 24
     }) if isinstance(s, dict) else {}
@@ -1969,20 +2073,46 @@ async def _email_imap_background_loop():
             print(f"[EmailService] Background sync error: {e}")
         await asyncio.sleep(180)
 
+_BACKGROUND_TASKS: list = []
+
+
+def _spawn_background(coro):
+    """Startet einen Endlos-Task und registriert ihn für einen sauberen Shutdown."""
+    task = asyncio.create_task(coro)
+    _BACKGROUND_TASKS.append(task)
+    return task
+
+
 @app.on_event("startup")
 async def _start_gateway_idle_loop():
-    asyncio.create_task(_gateway_idle_stop_loop())
-    asyncio.create_task(_email_imap_background_loop())
+    _spawn_background(_gateway_idle_stop_loop())
+    _spawn_background(_email_imap_background_loop())
     try:
         from backend.inbox_watcher import inbox_watcher_background_loop
-        asyncio.create_task(inbox_watcher_background_loop())
+        _spawn_background(inbox_watcher_background_loop())
     except Exception as e:
         print(f"[Startup] Inbox Watcher init notice: {e}")
     try:
         from backend.internet_watchdog import internet_watchdog_background_loop
-        asyncio.create_task(internet_watchdog_background_loop())
+        _spawn_background(internet_watchdog_background_loop())
     except Exception as e:
         print(f"[Startup] Internet Watchdog init notice: {e}")
+
+
+@app.on_event("shutdown")
+async def _cancel_background_tasks():
+    """Bricht die Endlos-Loops ab.
+
+    Ohne das wartet `uvicorn --reload` beim Code-Wechsel unbegrenzt auf diese
+    Tasks ("Waiting for connections to close") und der Server bleibt hängen.
+    """
+    pending = [t for t in _BACKGROUND_TASKS if not t.done()]
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+        print(f"[Shutdown] {len(pending)} Hintergrund-Task(s) beendet.")
+    _BACKGROUND_TASKS.clear()
 
 # =====================================================================
 # QUICKCHAT — Persistent Per-Profile Sessions
@@ -2095,21 +2225,6 @@ def api_delete_quickchat_session(profile_id: str):
     if os.path.exists(path):
         os.remove(path)
     return {"ok": True, "profile_id": profile_id}
-
-THEME_WORKSPACE_FILE = os.path.join(WORKSPACE_DIR, "theme_custom.json")
-
-
-@app.get("/api/theme")
-def api_get_theme():
-    if os.path.exists(THEME_WORKSPACE_FILE):
-        return _load_json(THEME_WORKSPACE_FILE, {})
-    return _load_json(THEME_FILE, {})
-
-@app.post("/api/theme")
-def api_save_theme(theme_data: Dict = Body(...)):
-    _save_json(THEME_FILE, theme_data)
-    _save_json(THEME_WORKSPACE_FILE, theme_data)
-    return {"status": "success"}
 
 class TextReplacementItem(BaseModel):
     original: str
@@ -2256,8 +2371,8 @@ def api_brain_galaxy_data():
 
     # 3. Obsidian Vault Notizen & Personalakten
     vault_candidates = [
-        "C:\\Mein Obsidian",
-        "C:\\.Mein Obsidian",
+        OBSIDIAN_VAULT,
+        OBSIDIAN_VAULT_ALT,
         "/opt/data/obsidian",
         OBSIDIAN_VAULT_DIR,
         os.path.join(WORKSPACE_DIR, "agent_workspace", "obsidian_vault"),
@@ -2325,8 +2440,8 @@ def api_brain_galaxy_data():
 @app.get("/api/v1/brain/vault-file")
 def api_brain_vault_file(path: str):
     vault_candidates = [
-        "C:\\Mein Obsidian",
-        "C:\\.Mein Obsidian",
+        OBSIDIAN_VAULT,
+        OBSIDIAN_VAULT_ALT,
         "/opt/data/obsidian",
         OBSIDIAN_VAULT_DIR,
         os.path.join(WORKSPACE_DIR, "agent_workspace", "obsidian_vault"),
@@ -5727,7 +5842,7 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
             return
 
         obs_dir = None
-        for cand in ("/opt/data/obsidian/01_PROJEKTE", os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"), r"C:\Mein Obsidian\01_PROJEKTE"):
+        for cand in ("/opt/data/obsidian/01_PROJEKTE", os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"), PROJEKTE_DIR):
             if os.path.isdir(cand):
                 obs_dir = cand
                 break
@@ -5965,7 +6080,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                 slug = re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")[:50] or "auftrag"
                 for cand in ("/opt/data/obsidian/01_PROJEKTE",
                               os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"),
-                              r"C:\Mein Obsidian\01_PROJEKTE"):
+                              PROJEKTE_DIR):
                     try:
                         os.makedirs(cand, exist_ok=True)
                         obsidian_rel = cand
@@ -6235,7 +6350,7 @@ async def api_chat_stream(req: ChatStreamRequest):
         akte_candidates = [
             os.path.join(OBSIDIAN_VAULT_DIR, "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
             f"/opt/data/obsidian/00_HR_Agenten/Personalakten/{agent_id}.md",
-            f"C:\\Mein Obsidian\\00_HR_Agenten\\Personalakten\\{agent_id}.md"
+            os.path.join(OBSIDIAN_VAULT, "00_HR_Agenten", "Personalakten", f"{agent_id}.md")
         ]
         akte_content = None
         for cand in akte_candidates:
@@ -7786,7 +7901,7 @@ def _get_hermes_config_paths():
     base_dirs = [
         "/opt/data",
         os.path.expanduser("~/.hermes"),
-        "C:\\Users\\micha\\.hermes"
+        HERMES_HOME
     ]
     found_configs = []
     active_path = None
@@ -8825,6 +8940,28 @@ def get_current_user_from_request(request: Request) -> dict:
             user["auth_enabled"] = is_enabled
             return user
 
+    # Multi-User-Modus: ohne gültige Session gibt es KEINE Admin-Rechte.
+    if is_enabled:
+        if _request_has_service_token(request):
+            return {
+                "id": "usr_service",
+                "username": "service",
+                "display_name": "Interner Dienst",
+                "role": "admin",
+                "permissions": ["service"],
+                "is_service": True,
+                "auth_enabled": True,
+            }
+        return {
+            "id": "usr_anonymous",
+            "username": "anonymous",
+            "display_name": "Nicht angemeldet",
+            "role": "anonymous",
+            "permissions": [],
+            "is_fallback": False,
+            "auth_enabled": True,
+        }
+
     fb = auth_service.get_fallback_admin()
     fb["auth_enabled"] = is_enabled
     return fb
@@ -9478,7 +9615,7 @@ def api_get_agent_real_stats(agent_id: str):
     """Liefert echte Leistungsdaten aus der Personalakte und den Datenbanken."""
     import re
     from pathlib import Path
-    vault_dir = Path("/opt/data/obsidian") if Path("/opt/data/obsidian").exists() else Path(r"C:\Mein Obsidian")
+    vault_dir = Path("/opt/data/obsidian") if Path("/opt/data/obsidian").exists() else Path(OBSIDIAN_VAULT)
     akte = vault_dir / "00_HR_Agenten" / "Personalakten" / f"{agent_id}.md"
     tasks_completed = 0
     if akte.exists():
@@ -9673,7 +9810,7 @@ def api_run_research_mission(payload: dict):
     model = payload.get("model", "omniroute/free-forever")
     agent_role = payload.get("agent_role", "Lead Research Analyst")
     settings = _load_json(SETTINGS_FILE, {})
-    vault_path = settings.get("memory", {}).get("vault_path", "C:\\Mein Obsidian")
+    vault_path = settings.get("memory", {}).get("vault_path", OBSIDIAN_VAULT)
     workspace_dir = settings.get("workspace_dir", "/app/agent_workspace")
     # Modus "reflect": Reflexionsschleife + Seiten-Scraper (research_engine_v2). Standard: klassische Pipeline.
     use_reflect = bool(payload.get("reflect")) or payload.get("mode") == "reflect"
@@ -10389,7 +10526,7 @@ KANBAN_CARDS_FILE = os.path.join(DATA_DIR, "kanban_cards.json")
 
 @app.get("/api/kanban")
 def api_get_kanban():
-    kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else "C:\\Users\\micha\\.hermes\\kanban.db"
+    kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.join(HERMES_HOME, "kanban.db")
     if os.path.exists(kanban_db):
         kconn = None
         try:
@@ -11150,14 +11287,15 @@ async def proxy_web_ui(url: str):
     else:
         res_obj = Response(content=resp.content, media_type=content_type, status_code=resp.status_code)
 
-    # Strip frame blocking headers & set open CORS headers
+    # Frame-Blocking entfernen, damit die eingebetteten UIs (n8n, CRM) im
+    # Showroom-iframe laufen. CORS setzt die CORSMiddleware zentral — hier
+    # kein pauschales "*" mehr.
     for hkey in ["x-frame-options", "X-Frame-Options", "frame-options", "content-security-policy", "Content-Security-Policy"]:
         if hkey in res_obj.headers:
             del res_obj.headers[hkey]
     
-    res_obj.headers["Access-Control-Allow-Origin"] = "*"
-    res_obj.headers["Access-Control-Allow-Methods"] = "*"
-    res_obj.headers["Access-Control-Allow-Headers"] = "*"
+    res_obj.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    res_obj.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Requested-With, Accept, Origin"
     
     return res_obj
 
@@ -11572,7 +11710,7 @@ def api_get_personalakte(agent_id: str):
     candidates = [
         os.path.join(vault_dir, "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
         os.path.join("/opt/data/obsidian", "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
-        os.path.join("C:\\Mein Obsidian", "00_HR_Agenten", "Personalakten", f"{agent_id}.md")
+        os.path.join(OBSIDIAN_VAULT, "00_HR_Agenten", "Personalakten", f"{agent_id}.md")
     ]
     file_path = None
     for c in candidates:
@@ -11607,8 +11745,8 @@ def api_save_personalakte(agent_id: str, req: SavePersonalakteReq):
         os.path.join(vault_dir, "00_HR_Agenten", "Personalakten"),
         "/opt/data/obsidian/00_HR_Agenten/Personalakten"
     ]
-    if sys.platform == "win32" or os.path.exists("C:\\Mein Obsidian"):
-        target_dirs.append("C:\\Mein Obsidian\\00_HR_Agenten\\Personalakten")
+    if sys.platform == "win32" or os.path.exists(OBSIDIAN_VAULT):
+        target_dirs.append(PERSONALAKTEN_DIR)
     
     saved_paths = []
     for p_dir in target_dirs:
@@ -11632,7 +11770,7 @@ def api_get_hermes_soul(agent_id: str):
     """Liest die echte SOUL.md Direktive des Hermes-Profils aus."""
     candidates = [
         f"/opt/data/profiles/{agent_id}/SOUL.md",
-        f"C:\\Users\\micha\\.hermes\\profiles\\{agent_id}\\SOUL.md",
+        soul_path(agent_id),
         f"/root/.hermes/profiles/{agent_id}/SOUL.md",
         f"/home/streamlituser/.hermes/profiles/{agent_id}/SOUL.md"
     ]
@@ -11667,7 +11805,7 @@ def api_save_hermes_soul(agent_id: str, req: SaveSoulReq):
     """Speichert die SOUL.md Datei für ein Hermes-Profil."""
     target_dir = f"/opt/data/profiles/{agent_id}"
     if not os.path.exists(target_dir):
-        alt_dir = f"C:\\Users\\micha\\.hermes\\profiles\\{agent_id}"
+        alt_dir = profile_dir(agent_id)
         if os.path.exists(os.path.dirname(alt_dir)):
             target_dir = alt_dir
     os.makedirs(target_dir, exist_ok=True)
@@ -11677,7 +11815,7 @@ def api_save_hermes_soul(agent_id: str, req: SaveSoulReq):
         with open(target_path, "w", encoding="utf-8") as f:
             f.write(req.markdown)
         # Spiegelung auf Host falls vorhanden
-        host_dir = f"C:\\Users\\micha\\.hermes\\profiles\\{agent_id}"
+        host_dir = profile_dir(agent_id)
         if os.path.exists(os.path.dirname(host_dir)):
             try:
                 os.makedirs(host_dir, exist_ok=True)
@@ -11722,8 +11860,8 @@ def api_log_personalakte_activity(agent_id: str, req: LogActivityReq):
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
             
-        if os.path.exists("C:\\Mein Obsidian"):
-            c_dir = os.path.join("C:\\Mein Obsidian", "00_HR_Agenten", "Personalakten")
+        if os.path.exists(OBSIDIAN_VAULT):
+            c_dir = os.path.join(OBSIDIAN_VAULT, "00_HR_Agenten", "Personalakten")
             os.makedirs(c_dir, exist_ok=True)
             with open(os.path.join(c_dir, f"{agent_id}.md"), "w", encoding="utf-8") as f2:
                 f2.write(content)
@@ -11738,7 +11876,7 @@ def api_get_agent_activity(agent_id: str):
     # 1. Prüfe agent.log im Profilordner
     log_candidates = [
         f"/opt/data/profiles/{agent_id}/logs/agent.log",
-        f"C:\\Users\\micha\\.hermes\\profiles\\{agent_id}\\logs\\agent.log"
+        agent_log_path(agent_id)
     ]
     log_lines = []
     for lp in log_candidates:
@@ -11833,7 +11971,7 @@ def api_get_agent_projects(agent_id: str):
     candidate_dirs = [
         "/opt/data/obsidian/01_PROJEKTE",
         os.path.join(OBSIDIAN_VAULT_DIR, "01_PROJEKTE") if OBSIDIAN_VAULT_DIR else None,
-        "C:\\Mein Obsidian\\01_PROJEKTE"
+        PROJEKTE_DIR
     ]
     
     for vault_projects_dir in candidate_dirs:
@@ -11902,7 +12040,7 @@ def api_get_agent_projects(agent_id: str):
     personalakten_dirs = [
         "/opt/data/obsidian/00_HR_Agenten/Personalakten",
         os.path.join(OBSIDIAN_VAULT_DIR, "00_HR_Agenten", "Personalakten") if OBSIDIAN_VAULT_DIR else None,
-        "C:\\Mein Obsidian\\00_HR_Agenten\\Personalakten"
+        PERSONALAKTEN_DIR
     ]
     for pa_dir in personalakten_dirs:
         if not pa_dir or not os.path.exists(pa_dir):

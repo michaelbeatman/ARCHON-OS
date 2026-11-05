@@ -22,16 +22,9 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _resolve_db(name: str) -> str:
-    candidates = [
-        f"/opt/data/{name}",
-        os.path.expanduser(f"~/.hermes/{name}"),
-        os.path.join(WORKSPACE_DIR, "data", name),
-        os.path.join(WORKSPACE_DIR, name)
-    ]
-    for c in candidates:
-        if os.path.exists(c) and os.path.getsize(c) > 0:
-            return c
-    return candidates[0]
+    """Delegiert an die zentrale, validierende Auflösung (backend/db_paths.py)."""
+    from backend.db_paths import resolve_db
+    return resolve_db(name)
 
 
 def _resolve_obsidian_dir() -> str:

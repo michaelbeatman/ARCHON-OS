@@ -8,7 +8,7 @@
   <link rel="shortcut icon" href="/static/favicon.png">
   <link rel="apple-touch-icon" href="/static/favicon.png">
   <!-- Fonts laden -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&family=Julius+Sans+One&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Montserrat:wght@300;400;500;600;700;800&family=Fira+Code:wght@300..700&family=Cinzel:wght@400..900&family=Space+Grotesk:wght@300..700&family=Plus+Jakarta+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link href="/static/vendor/fonts/fonts.css" rel="stylesheet">
   <!-- Custom Studio CSS Overrides -->
     <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
   <link rel="stylesheet" href="/static/custom.css?v=202611030740">
@@ -16,7 +16,7 @@
   <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=202611030740">
   <!-- Tailwind CSS Local Bundle (Offline-fähig & kein CDN Latenz-Overhead) -->
   <script src="/static/js/tailwind.cdn.js"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="/static/vendor/lucide.min.js"></script>
   <script>
     // Performance-Booster: Verhindert, dass lucide.createIcons() bei jedem Aufruf alle 800+ bereits gerenderten SVGs
     // im 11.000-Zeilen-DOM neu erzeugt, und fasst Mehrfach-Aufrufe pro Frame zusammen.
@@ -59,7 +59,7 @@
     })();
   </script>
   <!-- Chart.js for Guardian Token & Cost Trends -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/static/vendor/chart.umd.min.js"></script>
   <!-- Marked.js for fast local Markdown rendering -->
   <script src="/static/marked.min.js"></script>
   
@@ -2127,10 +2127,10 @@ print('Ausführung erfolgreich!')</textarea>
       <!-- VIEW: DESIGN SYSTEM PLAYGROUND / STYLEGUIDE LAB (KITCHEN SINK)            -->
       <!-- ========================================================================= -->
       <!-- VIEW: VIEW-DESIGN-SYSTEM (Extracted) -->
-      <div id="view-design-system-mount"></div>
     </main>
   <script src="/static/js/archon_i18n.js"></script>
   <script src="/static/js/auth_manager.js"></script>
+  <script src="/static/js/auth_gate.js"></script>
   <script src="/static/js/chat_engine.js?v=202610271358"></script>
   <script src="/static/js/system_settings.js?v=202610311300"></script>
   <script src="/static/js/settings_search.js?v=202611030730"></script>
@@ -2854,7 +2854,6 @@ print('Ausführung erfolgreich!')</textarea>
         "view-workspace-gallery",
         "view-brain",
         "view-agent-terminal",
-        "view-design-system",
         "view-addresses",
         "view-items",
         "view-operations-erp",
@@ -2897,18 +2896,6 @@ print('Ausführung erfolgreich!')</textarea>
           selectedView.style.flex = "1 1 0%";
           selectedView.style.minHeight = "0";
           selectedView.style.overflow = "hidden";
-        } else if (tabId === "design-system") {
-          selectedView.style.height = "100%";
-          selectedView.style.width = "100%";
-          selectedView.style.flex = "1 1 0%";
-          selectedView.style.minHeight = "0";
-          selectedView.style.overflow = "hidden";
-          const dsBody = document.getElementById("design-system-body");
-          if (dsBody) {
-            dsBody.style.flex = "1 1 0%";
-            dsBody.style.minHeight = "0";
-            dsBody.style.overflowY = "auto";
-          }
         } else if (tabId === "agent-profiles") {
           selectedView.style.height = "100%";
           selectedView.style.flex = "1 1 0%";
@@ -2999,7 +2986,6 @@ print('Ausführung erfolgreich!')</textarea>
         "watchdog": "nav-watchdog",
         "kanban": "nav-kanban",
         "workspace-gallery": "nav-workspace-gallery",
-        "design-system": "nav-design-system",
         "addresses": "nav-addresses",
         "items": "nav-items",
         "operations-erp": "nav-operations-erp",
@@ -7450,7 +7436,7 @@ ${logExcerpt}
         if (!document.getElementById("script-3d-force-graph")) {
           const s = document.createElement("script");
           s.id = "script-3d-force-graph";
-          s.src = "https://unpkg.com/3d-force-graph";
+          s.src = "/static/vendor/3d-force-graph.min.js";
           s.onload = () => setTimeout(initBrainGalaxyGraph, 100);
           s.onerror = () => {
             container.innerHTML = `<div class="p-8 text-center text-rose-400 font-mono text-xs">Fehler beim Laden des 3D-Graphen.</div>`;

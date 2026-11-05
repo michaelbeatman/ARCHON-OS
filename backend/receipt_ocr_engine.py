@@ -22,17 +22,10 @@ RECEIPTS_DIR = os.path.join(DATA_DIR, "inbox", "receipts")
 os.makedirs(RECEIPTS_DIR, exist_ok=True)
 
 
-def _resolve_db(filename: str) -> str:
-    candidates = [
-        os.path.join(DATA_DIR, filename),
-        os.path.join(DATA_DIR, ".hermes", filename),
-        os.path.join(WORKSPACE_DIR, "data", filename),
-        os.path.expanduser(f"~/.hermes/{filename}")
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return candidates[0]
+def _resolve_db(name: str) -> str:
+    """Delegiert an die zentrale, validierende Auflösung (backend/db_paths.py)."""
+    from backend.db_paths import resolve_db
+    return resolve_db(name)
 
 
 class ReceiptOCREngine:

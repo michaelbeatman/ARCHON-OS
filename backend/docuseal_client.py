@@ -18,17 +18,10 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.getenv("DATA_DIR", "/opt/data" if os.path.exists("/opt/data") else os.path.join(os.path.expanduser("~"), ".hermes"))
 
 
-def _resolve_db(filename: str) -> str:
-    candidates = [
-        os.path.join(DATA_DIR, filename),
-        os.path.join(DATA_DIR, ".hermes", filename),
-        os.path.join(WORKSPACE_DIR, "data", filename),
-        os.path.expanduser(f"~/.hermes/{filename}")
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return candidates[0]
+def _resolve_db(name: str) -> str:
+    """Delegiert an die zentrale, validierende Auflösung (backend/db_paths.py)."""
+    from backend.db_paths import resolve_db
+    return resolve_db(name)
 
 
 class DocuSealClient:

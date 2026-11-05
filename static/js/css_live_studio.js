@@ -1391,20 +1391,25 @@
       }
     }
 
+    // Nur diese Familien liegen lokal unter static/vendor/fonts/fonts.css.
+    // Kein Google-Fonts-Nachladen mehr -> Studio ist offline- und DSGVO-fest.
+    const LOCAL_FONT_FAMILIES = [
+      'inter', 'outfit', 'julius sans one', 'jetbrains mono', 'playfair display',
+      'montserrat', 'fira code', 'cinzel', 'space grotesk', 'plus jakarta sans'
+    ];
+
     function ensureGoogleFontLoaded(fontFamily) {
       if (!fontFamily || fontFamily === 'inherit' || fontFamily === 'none') return;
-      const match = fontFamily.match(/['"]?([^,'"]+)['"]?/);
+      const match = fontFamily.match(/["']?([^,"']+)["']?/);
       if (!match) return;
       const name = match[1].trim();
+      const key = name.toLowerCase();
+      if (LOCAL_FONT_FAMILIES.includes(key)) return;
       const known = ['sans-serif', 'serif', 'monospace', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Arial', 'Georgia', 'inherit'];
-      if (known.includes(name.toLowerCase())) return;
-      const fontId = `gfont-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-      if (document.getElementById(fontId)) return;
-      const link = document.createElement('link');
-      link.id = fontId;
-      link.rel = 'stylesheet';
-      link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:wght@300;400;500;600;700&display=swap`;
-      document.head.appendChild(link);
+      if (known.includes(key)) return;
+      if (typeof showArchonToast === 'function') {
+        showArchonToast(`Schrift '${name}' ist nicht lokal verf\u00fcgbar. Bitte eine der 10 Studio-Schriften w\u00e4hlen.`, "info");
+      }
     }
 
     function onStudioFontFamilySelect(val) {

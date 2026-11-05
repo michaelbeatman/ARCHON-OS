@@ -8,6 +8,8 @@ Stellt Backend-Endpunkte und Datenstrukturen für:
 """
 
 import os
+
+from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
 import sys
 import re
 import shutil
@@ -70,10 +72,10 @@ def resolve_obsidian_vault_dir() -> str:
     if sys.platform != "win32":
         candidates = ["/opt/data/obsidian", "/app/data/obsidian"]
     else:
-        candidates = ["C:\\Mein Obsidian", "C:\\.Mein Obsidian"]
+        candidates = [OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT]
     candidates += [
         "/opt/data/obsidian",
-        "C:\\Mein Obsidian",
+        OBSIDIAN_VAULT,
         os.path.join(WORKSPACE_DIR, "obsidian_vault"),
         "agent_workspace/obsidian_vault"
     ]

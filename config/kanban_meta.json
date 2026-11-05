@@ -194,6 +194,23 @@
         "kanal": "telegram+kanban",
         "erstellt": "2026-11-05T04:13:53.692043"
       }
+    },
+    "t-7f1f07": {
+      "quality_review": {
+        "status": "approved",
+        "reviewer": "Operator (Human-in-the-Loop)",
+        "reviewer_id": "operator",
+        "score": 100,
+        "summary": "Manuell freigegeben durch Operator",
+        "critique_points": [
+          "Manuell freigegeben durch Operator"
+        ],
+        "actionable_next_steps": [],
+        "reviewed_at": "2026-11-05T05:51:22.423688"
+      }
+    },
+    "20261104-projekt-immomeer": {
+      "obsidian": "01_PROJEKTE/20261104-projekt-immomeer"
     }
   },
   "wip": {}

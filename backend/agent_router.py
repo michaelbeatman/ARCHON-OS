@@ -30,6 +30,13 @@ OPENROUTER_FALLBACK_CHAIN = [
     "openai/gpt-4o-mini"
 ]
 
+BUDGET_WARN_MARKER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", ".budget_warn.json")
+
+
+class BudgetExceededError(RuntimeError):
+    """Wird geworfen, wenn das Tagesbudget zu 100% ausgeschöpft ist und kein Override aktiv ist."""
+
+
 class RoutePolicy:
     def __init__(self, requires_high_reasoning: bool = False, max_cost_per_1k: float = 1.0, data_residency_local_only: bool = False):
         self.requires_high_reasoning = requires_high_reasoning
@@ -45,7 +52,83 @@ class AgentRouter:
     def __init__(self):
         self.active_tasks: Dict[str, Any] = {}
         self._guardian_cache: Dict[str, Any] = {"ts": 0.0, "daily_budget": 2.0, "max_context_tokens": 32000}
+        self._spend_cache: Dict[str, Any] = {"ts": 0.0, "spend": 0.0, "ok": False}
         self._http_clients: Dict[int, httpx.AsyncClient] = {}
+
+    # --- Token Guard: Verbrauchsmessung -------------------------------------
+    # Bewusst NICHT über /api/guardian/stats: dieser Endpunkt blockiert bei
+    # 24h-Abfragen den Worker. Hier wird direkt und mit hartem Zeitlimit gelesen.
+    def _daily_spend_usd(self) -> tuple:
+        """Summe der LLM-Kosten der letzten 24h aus allen state.db (max. 2s, read-only)."""
+        now = time.time()
+        if self._spend_cache.get("ok") and (now - self._spend_cache.get("ts", 0.0)) < 60.0:
+            return float(self._spend_cache["spend"]), True
+
+        import glob
+        import sqlite3
+
+        total = 0.0
+        ok = False
+        deadline = now + 2.0
+        dbs = sorted(glob.glob("/opt/data/profiles/*/state.db") + ["/opt/data/state.db"])
+        for db in dbs:
+            if time.time() > deadline:
+                break
+            try:
+                con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=0.4)
+                try:
+                    row = con.execute(
+                        "SELECT COALESCE(SUM(estimated_cost_usd), 0) FROM session_model_usage "
+                        "WHERE COALESCE(last_seen, first_seen, 0) >= ?",
+                        (now - 86400,),
+                    ).fetchone()
+                    if row:
+                        total += float(row[0] or 0.0)
+                        ok = True
+                finally:
+                    con.close()
+            except Exception:
+                continue
+
+        self._spend_cache = {"ts": now, "spend": total, "ok": ok}
+        return total, ok
+
+    def _budget_override(self) -> bool:
+        """Notausstieg: Umgebungsvariable oder cost-budget.json -> "override": true."""
+        if str(os.environ.get("ARCHON_BUDGET_OVERRIDE", "")).lower() in ("1", "true", "yes", "on"):
+            return True
+        cost_file = os.path.expanduser("~/.hermes/cost-budget.json")
+        if not os.path.exists(cost_file):
+            cost_file = "/opt/data/cost-budget.json"
+        try:
+            if os.path.exists(cost_file):
+                with open(cost_file, "r", encoding="utf-8") as f:
+                    return bool(json.load(f).get("override", False))
+        except Exception:
+            pass
+        return False
+
+    def _warn_budget_once(self, spend: float, budget: float) -> None:
+        """Einmal pro Kalendertag Telegram-Warnung bei >= 80% Budget."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        try:
+            state = {}
+            if os.path.exists(BUDGET_WARN_MARKER):
+                with open(BUDGET_WARN_MARKER, "r", encoding="utf-8") as f:
+                    state = json.load(f) or {}
+            if state.get("date") == today:
+                return
+            import telegram_notify
+            telegram_notify.send_telegram_message(
+                f"⚠️ *Token Guard*: Tagesbudget zu {spend / budget * 100:.0f}% verbraucht.\n"
+                f"Verbrauch: *${spend:.2f}* von *${budget:.2f}*.\n"
+                f"Bei 100% werden LLM-Aufrufe blockiert."
+            )
+            os.makedirs(os.path.dirname(BUDGET_WARN_MARKER), exist_ok=True)
+            with open(BUDGET_WARN_MARKER, "w", encoding="utf-8") as f:
+                json.dump({"date": today, "spend": round(spend, 4)}, f)
+        except Exception as e:
+            logger.warning(f"[TokenGuard] Budget-Warnung nicht gesendet: {e}")
 
     def _get_shared_client(self) -> httpx.AsyncClient:
         loop_id = id(asyncio.get_running_loop())
@@ -86,16 +169,7 @@ class AgentRouter:
         except Exception:
             pass
 
-        current_spend = 0.0
-        try:
-            import sys
-            main_mod = sys.modules.get("main")
-            if main_mod and hasattr(main_mod, "_GUARDIAN_STATS_CACHE"):
-                cache_24h = main_mod._GUARDIAN_STATS_CACHE.get("24h") or main_mod._GUARDIAN_STATS_CACHE.get("all")
-                if cache_24h and isinstance(cache_24h.get("data"), dict):
-                    current_spend = float(cache_24h["data"].get("grand_total_cost", 0.0))
-        except Exception:
-            pass
+        current_spend, spend_ok = self._daily_spend_usd()
 
         cb_cfg = {}
         try:
@@ -108,6 +182,7 @@ class AgentRouter:
             "ts": now,
             "daily_budget": daily_budget,
             "current_spend": current_spend,
+            "spend_ok": spend_ok,
             "max_context_tokens": max_context_tokens,
             "loop_detection_enabled": bool(cb_cfg.get("loop_detection_enabled", True)),
             "max_identical_turns": int(cb_cfg.get("max_identical_turns", 3)),
@@ -148,9 +223,14 @@ class AgentRouter:
                 preview = preview[:160] + "..."
             summary_lines.append(f"- [{role}]: {preview}")
 
+        # Kopf (Aufgabenstellung, frühe Regeln) + Schwanz (letzte Entscheidungen)
+        if len(summary_lines) > 18:
+            kept_lines = summary_lines[:3] + ["- [...]"] + summary_lines[-12:]
+        else:
+            kept_lines = summary_lines
         compact_text = (
             "### [KONSOLIDIERTER GESPRÄCHS- & ENTSCHEIDUNGSKONTEXT (AUTOMATISCH KOMPRIMIERT)]:\n"
-            + "\n".join(summary_lines[-15:])
+            + "\n".join(kept_lines)
         )
 
         compact_msg = {
@@ -158,11 +238,19 @@ class AgentRouter:
             "content": compact_text
         }
 
-        compressed = [sys_msg, compact_msg] + recent_msgs
+        # Erste Nutzernachricht unverändert voranstellen (Aufgabenanker)
+        anchor = None
+        for m in older_msgs:
+            if m.get("role") == "user":
+                anchor = {"role": "user", "content": str(m.get("content", ""))[:1500]}
+                break
+        compressed = ([sys_msg, compact_msg] + ([anchor] if anchor else []) + recent_msgs)
         total_len = sum(len(str(m.get("content", ""))) for m in compressed)
         if total_len > max_ctx_chars:
-            trimmed = [sys_msg, compact_msg]
+            trimmed = [sys_msg, compact_msg] + ([anchor] if anchor else [])
             acc = len(str(sys_msg.get("content", ""))) + len(compact_text)
+            if anchor:
+                acc += len(str(anchor.get("content", "")))
             for m in reversed(recent_msgs):
                 m_len = len(str(m.get("content", "")))
                 if acc + m_len <= max_ctx_chars or len(trimmed) < 3:
@@ -259,8 +347,9 @@ class AgentRouter:
                 {"role": "system", "content": f"### [SYSTEM-NOTFALLSTOPP / CIRCUIT BREAKER]:\n{cb_res.get('reason')}\nBreche Ausführung sicher ab und fordere alternative Benutzeranweisung an."}
             ]
 
-        daily_budget = policy.get("daily_budget", 2.0)
-        current_spend = policy.get("current_spend", 0.0)
+        daily_budget = float(policy.get("daily_budget", 2.0) or 0.0)
+        current_spend = float(policy.get("current_spend", 0.0) or 0.0)
+        spend_ok = bool(policy.get("spend_ok", False))
         max_ctx_chars = max(8000, int(policy.get("max_context_tokens", 32000)) * 4)
 
         # 1. Context-Window Cap mit intelligenter Rolling Summarization (Sliding Window Memory Compression)
@@ -279,17 +368,39 @@ class AgentRouter:
                     break
             messages = trimmed
 
-        # 2. Budget-Stufenprüfung (80% Drosselung, 100% Spar-Fallback)
-        if daily_budget > 0 and current_spend > 0:
+        # 1b. Dynamischer Token-Clipper (schützt kleine/lokale Modelle, Pillar 5)
+        if policy.get("token_clipper_enabled", True):
+            try:
+                from backend.token_clipper import clip_messages_to_limit
+                messages, was_clipped, tok_before, tok_after = clip_messages_to_limit(
+                    messages, max_tokens=max(1000, int(policy.get("max_context_tokens", 32000)))
+                )
+                if was_clipped:
+                    logger.info(f"[TokenClipper] {tok_before} -> {tok_after} Tokens (Limit {policy.get('max_context_tokens')})")
+            except Exception as clip_err:
+                logger.warning(f"[TokenClipper] nicht angewendet: {clip_err}")
+
+        # 2. Budget-Stufenprüfung: 80% drosseln + warnen, 100% hart blockieren
+        if daily_budget > 0 and spend_ok:
             ratio = current_spend / daily_budget
             if ratio >= 1.0:
-                if reasoning_level not in ("off", "none"):
-                    logger.warning(f"[TokenGuard] Tagesbudget erreicht (${current_spend:.2f}/${daily_budget:.2f}). Reasoning deaktiviert.")
-                    reasoning_level = "off"
-                if provider == "openrouter" and any(expensive in model.lower() for expensive in ("opus", "sonnet", "gpt-4o", "o1", "o3", "pro")):
-                    logger.warning(f"[TokenGuard] Budget-Limit überschritten: Wechsel von {model} auf deepseek/deepseek-chat.")
-                    model = "deepseek/deepseek-chat"
+                if self._budget_override():
+                    logger.warning(
+                        f"[TokenGuard] Budget überschritten (${current_spend:.2f}/${daily_budget:.2f}), "
+                        f"Override aktiv — Aufruf wird zugelassen."
+                    )
+                else:
+                    logger.error(
+                        f"[TokenGuard] BLOCKIERT: ${current_spend:.2f} von ${daily_budget:.2f} verbraucht."
+                    )
+                    raise BudgetExceededError(
+                        f"Tagesbudget ausgeschöpft: ${current_spend:.2f} von ${daily_budget:.2f} "
+                        f"in den letzten 24 h. LLM-Aufrufe sind blockiert. "
+                        f"Freigabe: in cost-budget.json \"override\": true setzen oder "
+                        f"\"daily_budget\" erhöhen."
+                    )
             elif ratio >= 0.8:
+                self._warn_budget_once(current_spend, daily_budget)
                 if reasoning_level in ("max", "deep", "high", "medium"):
                     logger.info(f"[TokenGuard] Budget bei {ratio*100:.0f}%: Drossele Reasoning von '{reasoning_level}' auf 'low'.")
                     reasoning_level = "low"
@@ -495,7 +606,11 @@ class AgentRouter:
         """
         Stream chat completion via the HAL with Token Guard & Auto-Fallback.
         """
-        messages, model, reasoning_level = self._enforce_token_guard(messages, provider, model, reasoning_level)
+        try:
+            messages, model, reasoning_level = self._enforce_token_guard(messages, provider, model, reasoning_level)
+        except BudgetExceededError as budget_err:
+            yield f"ERROR: [Token Guard] {budget_err}"
+            return
         prov_low = provider.lower().strip()
         candidate_models = [model]
         if prov_low == "openrouter":

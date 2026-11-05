@@ -35,6 +35,28 @@
     },
     "t-c2b384": {
       "tags": []
+    },
+    "projekt-immomeer": {
+      "obsidian": "01_PROJEKTE/20261104-projekt-immomeer-delegationsprojekt-projekt-immomeer"
+    },
+    "t-a9ea08": {
+      "obsidian": "01_PROJEKTE/20261104-t-a9ea08-projekt-immomeer-setze-task-id-task_immomeer_coord"
+    },
+    "t_9483301b": {
+      "obsidian": "01_PROJEKTE/20261104-t-a9ea08-projekt-immomeer-setze-task-id-task_immomeer_coord"
+    },
+    "t-7f64e8": {
+      "obsidian": "01_PROJEKTE/20261105-projekt-immomeer-delegationsprojekt-projekt-immomeer",
+      "decision": {
+        "typ": "delegation_review",
+        "ref_id": "t-7f64e8",
+        "titel": "Überprüfe die Exposé-Akzeptanzkriterien für Projekt Immomeer auf Vollständigkeit...",
+        "kurzfassung": "Hallo! Ich bin **Product Manager / Requirements Engineer** (7. Tech, Software & Data).\n\nDeine Anfrage wurde erfolgreich im Agenten-Kontext registriert:\n> *\"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: Überprüfe die Exposé-Akzeptanzkriterien für Projekt Immomeer auf Vollständigkeit...\nAUFTRAG / DETAILS:\nDelegation von @executive_decision_architect an @product_requirements_engineer:\nÜberprüfe die Exposé-Akzeptanzkriterien für Projekt Immomeer auf Vollständigkeit und Einhaltung der Projektstandards. Stelle sicher, dass alle relevanten baurechtlichen, wirtschaftlichen und gestal",
+        "dossier": "/opt/data/obsidian/01_PROJEKTE/20261105-projekt-immomeer-delegationsprojekt-projekt-immomeer/01_Zwischenberichte/t-7f64e8_review.pdf",
+        "status": "offen",
+        "kanal": "telegram+kanban",
+        "erstellt": "2026-11-05T04:13:53.692043"
+      }
     }
   },
   "wip": {}

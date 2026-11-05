@@ -182,7 +182,7 @@
             <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Dashboard</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">Cockpit, Kanban &amp; Orga</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Mission Control &amp; Cockpit</div>
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
@@ -190,11 +190,11 @@
             <i data-lucide="folder-kanban" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Operations</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate">Projekt-Zentrale &amp; Status</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate">Projekte, Chat &amp; Kanban</div>
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-master-chat" onclick="setTab('master-chat')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
+          <button id="nav-master-chat" style="display: none;" onclick="setTab('master-chat')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="terminal" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="text-xs font-semibold truncate text-[var(--foreground)]">Master Chat</div>
@@ -581,102 +581,32 @@
         <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, DURCHGEHEND)                -->
         <!-- ========================================================================= -->
         <div id="mission-control-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
-
           <!-- LINKSBÜNDIG: ÜBERSCHRIFT DER ANSICHT & STATUS -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
             <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0 animate-pulse"></span>
             <h2 id="mc-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
-              Operations
+              Dashboard
             </h2>
-            <button type="button" onclick="openContextHelp('mission_control')" title="Hilfe zu Operations" data-i18n-title="help.operations" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+            <button type="button" onclick="openContextHelp('mission_control')" title="Hilfe zum Dashboard" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
               <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
             </button>
             <span id="mc-total-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
               Nominal
             </span>
             <span id="mc-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-semibold truncate hidden lg:inline pl-1">
-              · Echtzeit-Telemetrie, Flottenlast, Token-Sparkline &amp; HITL-Freigaben
+              • Mission Control: Echtzeit-Telemetrie, Flottenlast, Token-Sparkline &amp; HITL-Freigaben
             </span>
           </div>
 
-          <!-- RECHTSBÜNDIG: DIE 5 SUBTAB-ICONS (Cockpit, Kanban, Org, Automation, Comm) -->
-          <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 h-full py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
-            
-            <!-- 1. Cockpit -->
-            <button 
-              type="button" 
-              id="ops-subtab-cockpit" 
-              onclick="setOperationsTab('cockpit')" 
-              class="ops-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-              title="Operations"
-            >
-              <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
-                <img src="/static/img/cadre_icons/overview.png" alt="Operations" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
-              </div>
-              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none" data-i18n="header.operations">Operations</span>
+          <!-- RECHTSBÜNDIG: REFRESH -->
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="fetchMissionControlData()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="Telemetrie aktualisieren">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-emerald-500"></i>
+              <span class="hidden sm:inline">Sync</span>
             </button>
-
-            <!-- 2. Kanban -->
-            <button 
-              type="button" 
-              id="ops-subtab-kanban" 
-              onclick="setOperationsTab('kanban')" 
-              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-              title="KANBAN"
-            >
-              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-                <img src="/static/img/cadre_icons/kanban.png?v=3" alt="KANBAN" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
-                <span id="ops-kanban-badge" class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] bg-red-600 text-white font-mono font-bold leading-none hidden shadow-xs">0</span>
-              </div>
-              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">KANBAN</span>
-            </button>
-
-            <!-- 3. Organisation -->
-            <button 
-              type="button" 
-              id="ops-subtab-org" 
-              onclick="setOperationsTab('org')" 
-              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-              title="Organisation"
-            >
-              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-                <img src="/static/img/cadre_icons/organisation.png?v=3" alt="Organisation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
-              </div>
-              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Organisation</span>
-            </button>
-
-            <!-- 4. Automation (n8n) -->
-            <button 
-              type="button" 
-              id="ops-subtab-automation" 
-              onclick="setOperationsTab('automation')" 
-              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-              title="n8n-Automation"
-            >
-              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-                <img src="/static/img/cadre_icons/n8n.png?v=202610171046" alt="n8n-Automation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
-              </div>
-              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">n8n-Automation</span>
-            </button>
-
-            <!-- 5. Kommunikation -->
-            <button 
-              type="button" 
-              id="ops-subtab-comm" 
-              onclick="setOperationsTab('comm')" 
-              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-              title="Kommunikation"
-            >
-              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-                <img src="/static/img/cadre_icons/chat.png" alt="Kommunikation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
-                <span id="ops-comm-badge" class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[var(--card)]"></span>
-              </div>
-              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Kommunikation</span>
-            </button>
-
           </div>
 
-          <!-- Versteckte Kompatibilitätsanker für Skripte -->
+        <!-- Versteckte Kompatibilitätsanker für Skripte -->
           <div class="hidden" aria-hidden="true">
             <img id="mc-main-header-img" src="/static/img/cadre_icons/overview.png" alt="">
             <div id="mc-main-header-avatar"></div>
@@ -1069,19 +999,7 @@
 
             </div>
 
-            <!-- SUB-VIEWS 2, 3, 5: OPERATIONS (KANBAN, ORGANISATION, KOMMUNIKATION) -->
-            <div id="view-operations-mount"></div>
-
-            <!-- SUB-VIEW 4: N8N WORKFLOW ENGINE (AUTOMATION) -->
-            <main id="ops-view-automation" class="hidden flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
-              <iframe
-                id="automation-n8n-iframe"
-                src=""
-                style="width: 100%; height: 100%; border: none;"
-                allow="microphone; camera; clipboard-read; clipboard-write; display-capture; clipboard-share;"
-                class="w-full h-full flex-1 border-none"
-              ></iframe>
-            </main>
+            <!-- Subviews moved to Operations -->
 
           </div>
 
@@ -1136,103 +1054,179 @@
       <!-- ========================================================================= -->
       <!-- VIEW CONTAINER: OPERATIONS (PROJEKT-ZENTRALE & STATUS)                   -->
       <!-- ========================================================================= -->
-      <div id="view-operations" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--page-bg)] overflow-hidden">
-        <!-- Operations Header -->
-        <header class="shrink-0 h-16 border-b border-[var(--border)] bg-[var(--card)] px-4 sm:px-6 flex items-center justify-between gap-4">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500/20 to-sky-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-              <i data-lucide="folder-kanban" class="w-5 h-5 text-indigo-500"></i>
-            </div>
-            <div class="min-w-0">
-              <h1 class="text-sm sm:text-base font-bold text-[var(--foreground)] tracking-tight truncate flex items-center gap-2">
-                <span>Operations</span>
-                <span class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]">Projekt-Zentrale</span>
-              </h1>
-              <p class="text-[11px] font-mono text-muted-custom truncate">Alle laufenden, abgeschlossenen &amp; geplanten Projekte</p>
-            </div>
+      <div id="view-operations" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view" style="height: 100vh !important; max-height: 100vh !important;">
+        <!-- ========================================================================= -->
+        <!-- 1. OPERATIONS HEADER (80px FLUCHTLINIE MIT DEN 6 ICON-TABS)               -->
+        <!-- ========================================================================= -->
+        <div id="operations-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
+
+          <!-- LINKSBÜNDIG: ÜBERSCHRIFT & STATUS -->
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0 animate-pulse"></span>
+            <h2 id="ops-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
+              Operations
+            </h2>
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25 shrink-0">
+              Projekt-Zentrale
+            </span>
+            <span id="ops-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-semibold truncate hidden lg:inline pl-1">
+              • Alle Projekte, Master Chat, Kanban &amp; Workflows
+            </span>
           </div>
 
-          <!-- Actions & Search -->
-          <div class="flex items-center gap-2 sm:gap-3">
+          <!-- RECHTSBÜNDIG: DIE 6 ICON-TABS (Operations, Master Chat, Kanban, Organisation, n8n, Kommunikation) -->
+          <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 h-full py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
+            
+            <!-- 1. Operations (Projekt-Zentrale) -->
             <button 
-              onclick="setTab('master-chat')" 
-              class="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
-              title="Master Chat mit Agenten öffnen"
+              type="button" 
+              id="ops-subtab-projects" 
+              onclick="setOperationsTab('projects')" 
+              class="ops-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Operations (Projekt-Zentrale)"
             >
-              <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
-              <span class="font-medium">Master Chat</span>
+              <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+                <img src="/static/img/cadre_icons/overview.png" alt="Operations" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Operations</span>
             </button>
-            <div class="relative w-48 sm:w-64">
-              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-custom pointer-events-none"></i>
-              <input 
-                id="operations-projects-search" 
-                type="text" 
-                placeholder="Projekte durchsuchen..." 
-                oninput="if (window.renderOperationsProjects) renderOperationsProjects();"
-                class="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] focus:outline-hidden focus:ring-1 focus:ring-sky-500"
-              />
-            </div>
-            <button 
-              onclick="if (window.loadOperationsProjects) loadOperationsProjects();" 
-              class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5 text-xs shadow-xs"
-              title="Aktualisieren"
-            >
-              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-              <span class="hidden sm:inline font-mono">Sync</span>
-            </button>
-          </div>
-        </header>
 
-        <!-- Filter-Leiste -->
-        <div class="shrink-0 px-4 sm:px-6 py-2.5 border-b border-[var(--border)] bg-[var(--card)]/50 flex items-center justify-between gap-2 flex-wrap">
-          <div class="flex items-center gap-1.5 sm:gap-2">
+            <!-- 2. Master Chat (Master Console) -->
             <button 
-              data-filter="all" 
-              onclick="setProjectsFilter('all')" 
-              class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              type="button" 
+              id="ops-subtab-chat" 
+              onclick="setOperationsTab('chat')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Master Chat"
             >
-              <span>Alle</span>
-              <span id="badge-count-all" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white/20">0</span>
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/chat.png" alt="Master Chat" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Master Chat</span>
             </button>
+
+            <!-- 3. KANBAN -->
             <button 
-              data-filter="in_progress" 
-              onclick="setProjectsFilter('in_progress')" 
-              class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5"
+              type="button" 
+              id="ops-subtab-kanban" 
+              onclick="setOperationsTab('kanban')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="KANBAN"
             >
-              <span>In Bearbeitung</span>
-              <span id="badge-count-prog" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-500">0</span>
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/kanban.png?v=3" alt="KANBAN" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+                <span id="ops-kanban-badge" class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] bg-red-600 text-white font-mono font-bold leading-none hidden shadow-xs">0</span>
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">KANBAN</span>
             </button>
+
+            <!-- 4. Organisation -->
             <button 
-              data-filter="completed" 
-              onclick="setProjectsFilter('completed')" 
-              class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5"
+              type="button" 
+              id="ops-subtab-org" 
+              onclick="setOperationsTab('org')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Organisation"
             >
-              <span>Abgeschlossen</span>
-              <span id="badge-count-comp" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-500">0</span>
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/organisation.png?v=3" alt="Organisation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Organisation</span>
             </button>
+
+            <!-- 5. n8n-Automation -->
             <button 
-              data-filter="planned" 
-              onclick="setProjectsFilter('planned')" 
-              class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5"
+              type="button" 
+              id="ops-subtab-automation" 
+              onclick="setOperationsTab('automation')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="n8n-Automation"
             >
-              <span>Geplant</span>
-              <span id="badge-count-plan" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-sky-500/20 text-sky-500">0</span>
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/n8n.png?v=202610171046" alt="n8n-Automation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">n8n-Automation</span>
             </button>
-          </div>
-          <div class="text-[11px] font-mono text-muted-custom hidden md:inline">
-            1 Projekt = 1 Ordner in <code>01_PROJEKTE/</code>
+
+            <!-- 6. Kommunikation -->
+            <button 
+              type="button" 
+              id="ops-subtab-comm" 
+              onclick="setOperationsTab('comm')" 
+              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+              title="Kommunikation"
+            >
+              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+                <img src="/static/img/cadre_icons/contact_nachrichten.png" alt="Kommunikation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+                <span id="ops-comm-badge" class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[var(--card)]"></span>
+              </div>
+              <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Kommunikation</span>
+            </button>
+
           </div>
         </div>
 
-        <!-- Project Cards Grid -->
-        <div class="flex-1 p-4 sm:p-6 overflow-y-auto custom-scrollbar">
-          <div id="operations-projects-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <!-- Dynamisch durch operations_projects.js gerendert -->
+        <!-- ========================================================================= -->
+        <!-- 2. OPERATIONS ARBEITSBEREICH (DIE 6 SUB-VIEWS)                            -->
+        <!-- ========================================================================= -->
+        <div class="flex-1 min-h-0 flex flex-col w-full overflow-hidden p-2.5 pt-3" style="height: calc(100vh - 80px); max-height: calc(100vh - 80px);">
+          
+          <!-- SUB-VIEW 1: PROJEKT-ZENTRALE -->
+          <div id="ops-view-projects" class="flex-1 w-full h-full flex flex-col overflow-hidden bg-[var(--page-bg)] rounded-xl border border-[var(--border)]">
+            <!-- Filter & Suchleiste -->
+            <div class="shrink-0 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--card)]/80 flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex items-center gap-1.5 sm:gap-2">
+                <button data-filter="all" onclick="setProjectsFilter('all')" class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs transition cursor-pointer flex items-center gap-1.5">
+                  <span>Alle</span>
+                  <span id="badge-count-all" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white/20">0</span>
+                </button>
+                <button data-filter="in_progress" onclick="setProjectsFilter('in_progress')" class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5">
+                  <span>In Bearbeitung</span>
+                  <span id="badge-count-prog" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-500">0</span>
+                </button>
+                <button data-filter="completed" onclick="setProjectsFilter('completed')" class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5">
+                  <span>Abgeschlossen</span>
+                  <span id="badge-count-comp" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-500">0</span>
+                </button>
+                <button data-filter="planned" onclick="setProjectsFilter('planned')" class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5">
+                  <span>Geplant</span>
+                  <span id="badge-count-plan" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-sky-500/20 text-sky-500">0</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="relative w-48 sm:w-60">
+                  <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-custom pointer-events-none"></i>
+                  <input id="operations-projects-search" type="text" placeholder="Projekte durchsuchen..." oninput="if (window.renderOperationsProjects) renderOperationsProjects();" class="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] focus:outline-hidden focus:ring-1 focus:ring-sky-500" />
+                </div>
+                <button onclick="if (window.loadOperationsProjects) loadOperationsProjects();" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1 text-xs shadow-2xs" title="Aktualisieren">
+                  <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                  <span class="hidden sm:inline font-mono text-[10px]">Sync</span>
+                </button>
+              </div>
+            </div>
+            <!-- Cards Container -->
+            <div class="flex-1 p-4 sm:p-5 overflow-y-auto custom-scrollbar">
+              <div id="operations-projects-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+            </div>
           </div>
+
+          <!-- SUB-VIEW 2: MASTER CHAT -->
+          <div id="ops-view-chat" class="hidden flex-1 w-full h-full flex flex-col overflow-hidden bg-[var(--background)] rounded-xl border border-[var(--border)]">
+            <div id="view-master-chat-mount"></div>
+          </div>
+
+          <!-- SUB-VIEWS 3, 4, 6: KANBAN, ORGANISATION, KOMMUNIKATION -->
+          <div id="view-operations-mount"></div>
+
+          <!-- SUB-VIEW 5: N8N WORKFLOW ENGINE (AUTOMATION) -->
+          <main id="ops-view-automation" class="hidden flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
+            <iframe id="automation-n8n-iframe" src="" style="width: 100%; height: 100%; border: none;" allow="microphone; camera; clipboard-read; clipboard-write; display-capture; clipboard-share;" class="w-full h-full flex-1 border-none"></iframe>
+          </main>
+
         </div>
       </div>
 
-      <!-- VIEW CONTAINER: DEDICATED AGENT TERMINAL (Single Agent Focus View) -->
+<!-- VIEW CONTAINER: DEDICATED AGENT TERMINAL (Single Agent Focus View) -->
       <div id="view-agent-terminal" class="hidden w-full">
         <div class="rounded-lg p-3 theme-card space-y-3 w-full">
           <!-- Tab Bar (At the Top) -->
@@ -1417,7 +1411,7 @@
       </div>
       <!-- VIEW CONTAINER: MASTER CHAT (NATIVE AGENTIC INTERFACE) -->
       <!-- VIEW: MASTER CHAT (Extracted) -->
-      <div id="view-master-chat-mount"></div>
+      <!-- Master Chat moved inside Operations -->
 
       <!-- VIEW CONTAINER: HERMES DASHBOARD (PORT 9119) -->
       <div id="view-hermes-dashboard" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--page-bg)] overflow-hidden" style="height: 100vh; width: 100%;">
@@ -2821,13 +2815,20 @@ print('Ausführung erfolgreich!')</textarea>
     const CACHE_TTL_MS = 30000; // 30 Sek
     function shouldFetchTab(tId) { const now = Date.now(); if (!_tabCacheTimestamps[tId] || (now - _tabCacheTimestamps[tId] > CACHE_TTL_MS)) { _tabCacheTimestamps[tId] = now; return true; } return false; }
     function setTab(tabId) {
-      let requestedMcSubtab = null;
-      if (tabId === "paperclip") {
-        requestedMcSubtab = "kanban";
-        tabId = "mission-control";
-      } else if (tabId === "automation") {
-        requestedMcSubtab = "automation";
-        tabId = "mission-control";
+      if (tabId === "master-chat") {
+        setTab("operations");
+        if (typeof setOperationsTab === "function") setOperationsTab("chat");
+        return;
+      }
+      if (tabId === "paperclip" || tabId === "kanban") {
+        setTab("operations");
+        if (typeof setOperationsTab === "function") setOperationsTab("kanban");
+        return;
+      }
+      if (tabId === "automation") {
+        setTab("operations");
+        if (typeof setOperationsTab === "function") setOperationsTab("automation");
+        return;
       }
       currentTab = tabId;
       

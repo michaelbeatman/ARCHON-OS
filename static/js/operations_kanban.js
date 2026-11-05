@@ -36,65 +36,76 @@
     }
 
     function setOperationsTab(subtab) {
-      if (!subtab) subtab = 'cockpit';
+      if (!subtab) subtab = 'projects';
+      if (subtab === 'cockpit') subtab = 'projects';
       if (subtab === 'n8n') subtab = 'automation';
+      if (subtab === 'master-chat' || subtab === 'masterchat') subtab = 'chat';
       currentOpsTab = subtab;
-      const tabs = ['cockpit', 'kanban', 'org', 'automation', 'comm'];
+
+      const tabs = ['projects', 'chat', 'kanban', 'org', 'automation', 'comm'];
       const headerMeta = {
-        cockpit: {
-          title: 'Mission Control',
-          subtitle: 'Echtzeit-Telemetrie, Flottenlast, Token-Sparkline & HITL-Freigaben',
+        projects: {
+          title: 'Operations',
+          subtitle: '• Alle Projekte, Master Chat, Kanban & Workflows',
           img: '/static/img/cadre_icons/overview.png'
+        },
+        chat: {
+          title: 'Master Console',
+          subtitle: '• Zentraler Dialog & Direktinteraktion mit Agenten',
+          img: '/static/img/cadre_icons/chat.png'
         },
         kanban: {
           title: 'KANBAN',
-          subtitle: 'Aufgaben-Management, Sprints, WIP-Limits & Zuweisung',
+          subtitle: '• Aufgaben-Management, Sprints, WIP-Limits & Zuweisung',
           img: '/static/img/cadre_icons/kanban.png?v=3'
         },
         org: {
           title: 'Organisation',
-          subtitle: 'Ablaufdiagramm, Hierarchien & Kader-Struktur',
+          subtitle: '• Ablaufdiagramm, Hierarchien & Kader-Struktur',
           img: '/static/img/cadre_icons/organisation.png?v=3'
         },
         automation: {
           title: 'n8n-Automation',
-          subtitle: 'Workflow-Engine, Webhook-Pipelines & Prozess-Ketten',
+          subtitle: '• Workflow-Engine, Webhook-Pipelines & Prozess-Ketten',
           img: '/static/img/cadre_icons/n8n.png?v=202610171046'
         },
         comm: {
           title: 'Kommunikation',
-          subtitle: 'Funkverkehr, Delegationen & Agenten-Nachrichten',
+          subtitle: '• Funkverkehr, Delegationen & Agenten-Nachrichten',
           img: '/static/img/cadre_icons/chat.png'
         }
       };
 
-      // Mittlere Spalte (#mc-catalog-col) nur im Cockpit anzeigen, bei Kanban/Org/Automation/Comm ausblenden
-      const mcCol = document.getElementById('mc-catalog-col');
-      if (mcCol) {
-        if (subtab === 'cockpit') {
-          mcCol.classList.remove('hidden');
-          mcCol.style.display = '';
-        } else {
-          mcCol.classList.add('hidden');
-          mcCol.style.display = 'none';
-        }
-      }
-
-      const meta = headerMeta[subtab] || headerMeta.cockpit;
-      const titleEl = document.getElementById('mc-main-title');
-      const subtitleEl = document.getElementById('mc-main-subtitle');
-      const headerImgEl = document.getElementById('mc-main-header-img');
+      const meta = headerMeta[subtab] || headerMeta.projects;
+      const titleEl = document.getElementById('ops-main-title') || document.getElementById('mc-main-title');
+      const subtitleEl = document.getElementById('ops-main-subtitle') || document.getElementById('mc-main-subtitle');
       if (titleEl) titleEl.textContent = meta.title;
       if (subtitleEl) subtitleEl.textContent = meta.subtitle;
-      if (headerImgEl) headerImgEl.src = meta.img;
 
       tabs.forEach(t => {
         const btn = document.getElementById(`ops-subtab-${t}`);
-        const view = (t === 'cockpit')
-          ? document.getElementById('mc-view-cockpit')
-          : document.getElementById(`ops-view-${t}`);
+        let view = null;
+        if (t === 'projects') {
+          view = document.getElementById('ops-view-projects');
+        } else if (t === 'chat') {
+          view = document.getElementById('ops-view-chat');
+          const vmc = document.getElementById('view-master-chat');
+          if (vmc) {
+            if (subtab === 'chat') {
+              vmc.classList.remove('hidden');
+              vmc.style.display = 'flex';
+            } else {
+              vmc.classList.add('hidden');
+              vmc.style.display = 'none';
+            }
+          }
+        } else {
+          view = document.getElementById(`ops-view-${t}`);
+        }
+
         const label = btn ? btn.querySelector('.ops-tab-label') : null;
         const iconWrap = btn ? btn.querySelector('.tile-icon-wrap') : null;
+
         if (t === subtab) {
           if (btn) {
             btn.className = "ops-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
@@ -103,7 +114,10 @@
           if (label) {
             label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none";
           }
-          if (view) view.classList.remove('hidden');
+          if (view) {
+            view.classList.remove('hidden');
+            view.style.display = 'flex';
+          }
         } else {
           if (btn) {
             btn.className = "ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
@@ -112,19 +126,28 @@
           if (label) {
             label.className = "ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none";
           }
-          if (view) view.classList.add('hidden');
+          if (view) {
+            view.classList.add('hidden');
+            view.style.display = 'none';
+          }
         }
       });
 
-      if (subtab === 'automation') {
+      if (subtab === 'projects') {
+        if (typeof loadOperationsProjects === 'function') loadOperationsProjects();
+      } else if (subtab === 'chat') {
+        if (typeof initMasterChat === 'function') initMasterChat();
+      } else if (subtab === 'automation') {
         const iframe = document.getElementById('automation-n8n-iframe');
         const expectedHost = window.location.hostname || 'localhost';
         const expectedSrc = `http://${expectedHost}:5678`;
         if (iframe && (!iframe.src || iframe.src === 'about:blank' || !iframe.src.includes(':5678'))) {
           iframe.src = expectedSrc;
         }
-      } else if (subtab !== 'cockpit' && !opsKanbanData) {
-        loadOperationsData(false);
+      } else if (subtab === 'kanban') {
+        if (!opsKanbanData && typeof loadOperationsData === 'function') {
+          loadOperationsData(false);
+        }
       }
 
       if (subtab === 'org') {

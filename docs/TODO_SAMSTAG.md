@@ -11,9 +11,16 @@
 - [ ] **Direktzugriff:** 1-Klick-Aktionen für HTML-Endprodukt, Ordner-Explorer und Kontext-Chat.
 
 ## 3. UI-Haptik & Element-Redesign
-- [ ] **Navigation & Rollen:**
-  - *Dashboard:* Cockpit, Live-Telemetrie, Agenten-Flotte und Kanban.
-  - *Operations:* Vollständige Projekt-Zentrale (laufende, abgeschlossene und geplante Vorhaben).
+- [x] **Navigation & Rollen:**
+  - *Dashboard:* Reine Mission Control (Telemetrie, Flotte, Token-Sparkline, HITL-Freigaben, Katalog) ohne störende Subtabs.
+  - *Operations:* Vollständiger operativer Arbeitsbereich mit den 6 Icon-Tabs:
+    1. **Operations** (Projekt-Zentrale)
+    2. **Master Chat** (direkt als 2. Tab zur nahtlosen Agenteninteraktion)
+    3. **KANBAN** (Board & Aufgaben)
+    4. **Organisation** (Organigramm & Kader)
+    5. **n8n-Automation** (Workflow-Engine)
+    6. **Kommunikation** (Funkverkehr)
+  - *Master Chat:* Aus der linken Menüleiste entfernt und in Operations integriert.
 - [ ] **Haptik & Layout-Flow:**
   - Scroll-Verhalten in Containern harmonisieren (keine doppelten Scrollbars).
   - Schaltflächen-Feedbacks (Hover, Focus, Ladezustände) vereinheitlichen.

@@ -104,11 +104,24 @@
 
       const progressColor = isDone ? "bg-emerald-500" : (p.progress > 50 ? "bg-sky-500" : "bg-amber-500");
       
-      const teamChips = (p.assignees || []).map(a => `
-        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
-          <i data-lucide="user" class="w-2.5 h-2.5 opacity-60"></i> @${escapeHtml(a)}
-        </span>
-      `).join("") || `<span class="text-[10px] text-muted-custom italic">Kernteam</span>`;
+      const teamChips = (p.assignee_objects && p.assignee_objects.length > 0)
+        ? p.assignee_objects.map(a => `
+            <button type="button" 
+                    onclick="event.stopPropagation(); openAgentChat('${escapeHtml(a.id)}', '${escapeHtml(a.person_name || a.id)}')" 
+                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-[var(--secondary)] hover:bg-indigo-500/15 text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-500/50 transition cursor-pointer group/chip" 
+                    title="Direktchat mit ${escapeHtml(a.person_name || a.id)} im Master Chat öffnen">
+              <i data-lucide="message-square" class="w-3 h-3 text-indigo-500 group-hover/chip:scale-110 transition-transform"></i>
+              <span class="font-bold text-[var(--foreground)]">${escapeHtml(a.person_name || a.id)}</span>
+              ${a.role ? `<span class="text-[9.5px] text-muted-custom truncate max-w-[130px] font-normal">${escapeHtml(', ' + a.role.split('(')[0].trim())}</span>` : ''}
+            </button>
+          `).join("")
+        : (p.assignees || []).map(a => `
+            <button type="button" 
+                    onclick="event.stopPropagation(); openAgentChat('${escapeHtml(a)}', '${escapeHtml(a)}')" 
+                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+              <i data-lucide="user" class="w-2.5 h-2.5 opacity-60"></i> ${escapeHtml(a)}
+            </button>
+          `).join("") || `<span class="text-[10px] text-muted-custom italic">Kernteam</span>`;
 
       const files = p.files_summary || { zwischenberichte: 0, medien: 0, endprodukte: 0 };
       const totalFiles = (files.zwischenberichte || 0) + (files.medien || 0) + (files.endprodukte || 0);
@@ -151,7 +164,14 @@
               <div class="flex items-start justify-between gap-2 p-1.5 rounded bg-[var(--secondary)]/40 border border-[var(--border)]/50 text-[11px] font-mono">
                 <div class="min-w-0 flex-1">
                   <div class="font-medium text-[var(--foreground)] truncate">${escapeHtml(st.title || st.id)}</div>
-                  <div class="text-[9.5px] text-muted-custom">@${escapeHtml(st.assignee || 'unassigned')}</div>
+                  <button type="button" 
+                          onclick="event.stopPropagation(); openAgentChat('${escapeHtml(st.assignee || '')}', '${escapeHtml(st.assignee_person_name || st.assignee || '')}')" 
+                          class="text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline cursor-pointer inline-flex items-center gap-1 mt-0.5 text-left font-mono" 
+                          title="Direktchat mit Agent öffnen">
+                    <i data-lucide="user" class="w-2.5 h-2.5"></i>
+                    <span class="font-semibold">${escapeHtml(st.assignee_person_name || st.assignee || 'unassigned')}</span>
+                    ${st.assignee_title ? `<span class="text-[9px] text-muted-custom opacity-80 font-normal">${escapeHtml('(' + st.assignee_title.split('(')[0].trim() + ')')}</span>` : ''}
+                  </button>
                 </div>
                 <span class="px-1.5 py-0.5 rounded text-[9px] uppercase font-bold shrink-0 ${st.status === 'done' || st.status === 'review' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}">
                   ${escapeHtml(st.status || 'todo')}
@@ -284,6 +304,18 @@
         input.value = `Status-Update zu Projekt '${title}' (${projId}): Wie ist der aktuelle Umsetzungsstand?`;
         input.focus();
       }
+    }
+  };
+
+  window.openAgentChat = function(agentId, agentName) {
+    if (!agentId) return;
+    if (typeof setTab === "function") {
+      setTab("master-chat");
+      setTimeout(() => {
+        if (typeof switchMasterChatAgent === "function") {
+          switchMasterChatAgent(agentId);
+        }
+      }, 50);
     }
   };
 

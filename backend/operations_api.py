@@ -1136,6 +1136,34 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None) -> Opt
 
 
 
+def _get_agent_cadre_map():
+    """Liest Agenten-Klarnamen und Rollen aus config/org_hierarchy.json."""
+    import json
+    from pathlib import Path
+    mapping = {}
+    cfg = Path("config/org_hierarchy.json")
+    if cfg.is_file():
+        try:
+            data = json.loads(cfg.read_text(encoding="utf-8"))
+            for node in data.get("nodes", []):
+                nid = node.get("id")
+                if not nid:
+                    continue
+                p_name = (node.get("person_name") or "").strip()
+                r_name = (node.get("name") or node.get("role") or "").strip()
+                short_role = r_name.split("(")[0].strip() if r_name else ""
+                display = f"{p_name}, {short_role}" if p_name and short_role and p_name != short_role else (p_name or short_role or nid)
+                mapping[nid] = {
+                    "id": nid,
+                    "person_name": p_name or nid,
+                    "role": short_role,
+                    "display": display
+                }
+        except Exception:
+            pass
+    return mapping
+
+
 @router.get("/projects/overview")
 def get_projects_overview():
     """Liefert die konsolidierte Projekt-Zentrale fuer Operations:
@@ -1146,6 +1174,7 @@ def get_projects_overview():
 
     vault = _P(get_vault_dir()).resolve()
     p_root = vault / "01_PROJEKTE"
+    cadre_map = _get_agent_cadre_map()
 
     # 1. Hole alle Tasks aus kanban.db gruppiert nach project_id
     tasks_by_project = {}
@@ -1237,17 +1266,35 @@ def get_projects_overview():
                 clean_parts = [p for p in folder_name.split("-") if not p.isdigit() and p not in ("projekt", "delegationsprojekt")]
                 proj_title = " ".join(clean_parts).title() or folder_name
 
+            # Enrich assignees & subtasks with Klarnamen + Title
+            assignee_objs = []
+            for a in sorted(list(assignees)):
+                a_info = cadre_map.get(a, {"id": a, "person_name": a, "role": "", "display": a})
+                assignee_objs.append(a_info)
+
+            enriched_subtasks = []
+            for st in subtasks:
+                st_c = dict(st)
+                asg = st_c.get("assignee") or ""
+                a_info = cadre_map.get(asg, {"id": asg, "person_name": asg, "role": "", "display": asg})
+                st_c["assignee_person_name"] = a_info["person_name"]
+                st_c["assignee_title"] = a_info["role"]
+                st_c["assignee_display"] = a_info["display"]
+                enriched_subtasks.append(st_c)
+
             projects.append({
                 "id": folder_name,
                 "title": proj_title,
                 "status": status,
                 "folder": f"01_PROJEKTE/{folder_name}",
                 "lead_agent": lead_agent,
+                "lead_agent_display": cadre_map.get(lead_agent, {}).get("display", lead_agent),
                 "assignees": sorted(list(assignees)),
+                "assignee_objects": assignee_objs,
                 "progress": progress,
                 "tasks_total": t_total,
                 "tasks_completed": t_done,
-                "subtasks": subtasks,
+                "subtasks": enriched_subtasks,
                 "primary_document": primary_doc,
                 "has_html_report": has_html,
                 "files_summary": {
@@ -1262,17 +1309,31 @@ def get_projects_overview():
             t_total = len(t_list)
             t_done = sum(1 for st in t_list if st.get("status") in ("done", "review", "completed"))
             progress = int((t_done / t_total) * 100) if t_total > 0 else 0
+            asg_set = sorted(list({st.get("assignee") for st in t_list if st.get("assignee")}))
+            assignee_objs = [cadre_map.get(a, {"id": a, "person_name": a, "role": "", "display": a}) for a in asg_set]
+            enriched_subtasks = []
+            for st in t_list:
+                st_c = dict(st)
+                asg = st_c.get("assignee") or ""
+                a_info = cadre_map.get(asg, {"id": asg, "person_name": asg, "role": "", "display": asg})
+                st_c["assignee_person_name"] = a_info["person_name"]
+                st_c["assignee_title"] = a_info["role"]
+                st_c["assignee_display"] = a_info["display"]
+                enriched_subtasks.append(st_c)
+
             projects.append({
                 "id": pid,
                 "title": pid.replace("projekt-", "").replace("-", " ").title(),
                 "status": "planned" if progress == 0 else ("completed" if t_done == t_total else "in_progress"),
                 "folder": f"01_PROJEKTE/{pid}",
                 "lead_agent": "executive_decision_architect",
-                "assignees": sorted(list({st.get("assignee") for st in t_list if st.get("assignee")})),
+                "lead_agent_display": cadre_map.get("executive_decision_architect", {}).get("display", "Robert, CEO"),
+                "assignees": asg_set,
+                "assignee_objects": assignee_objs,
                 "progress": progress,
                 "tasks_total": t_total,
                 "tasks_completed": t_done,
-                "subtasks": t_list,
+                "subtasks": enriched_subtasks,
                 "primary_document": None,
                 "has_html_report": False,
                 "files_summary": {"zwischenberichte": 0, "medien": 0, "endprodukte": 0}

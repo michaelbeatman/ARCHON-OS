@@ -10,6 +10,20 @@ from datetime import datetime
 
 logger = logging.getLogger("agent_router")
 
+AUTO_MODEL_MAP = {
+    "auto/best-coding": "deepseek/deepseek-chat",
+    "auto/best-reasoning": "deepseek/deepseek-r1",
+    "auto/best-vision": "google/gemini-2.5-flash",
+    "auto/best-fast": "openai/gpt-4o-mini",
+    "auto/best-free": "google/gemini-2.5-flash",
+    "auto/best-chat": "deepseek/deepseek-chat",
+    "auto/coding": "deepseek/deepseek-chat",
+    "auto/reasoning": "deepseek/deepseek-r1",
+    "auto/vision": "google/gemini-2.5-flash",
+    "auto/claude-opus": "anthropic/claude-3-opus",
+    "auto/claude-sonnet": "anthropic/claude-3.5-sonnet",
+}
+
 OPENROUTER_FALLBACK_CHAIN = [
     "deepseek/deepseek-chat",
     "google/gemini-2.5-flash",
@@ -445,6 +459,8 @@ class AgentRouter:
         """
         messages, model, reasoning_level = self._enforce_token_guard(messages, provider, model, reasoning_level)
         prov_low = provider.lower().strip()
+        if prov_low == "openrouter" and model in AUTO_MODEL_MAP:
+            model = AUTO_MODEL_MAP[model]
         candidate_models = [model]
         if prov_low == "openrouter":
             for fb in OPENROUTER_FALLBACK_CHAIN:

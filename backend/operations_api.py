@@ -361,10 +361,28 @@ async def _execute_kanban_task_async(task_id: str):
     system_prompt = prof.get("prompt") or prof.get("system_prompt") or f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
 
     try:
+        proj_context = ""
+        p_rel = _resolve_task_obsidian_rel(task_id)
+        if p_rel:
+            try:
+                from backend.post_task_pipeline import get_vault_dir
+                from pathlib import Path as _P
+                vault = _P(get_vault_dir()).resolve()
+                p_dir = vault / p_rel
+                proj_context = f"\n\nPROJEKT-ORDNER IM OBSIDIAN VAULT: `{p_rel}`\n"
+                end_dir = p_dir / "03_Endprodukte"
+                if end_dir.is_dir():
+                    files = [f.name for f in end_dir.iterdir() if f.is_file() and not f.name.startswith(".")]
+                    if files:
+                        proj_context += "Bereits vorhandene Projektergebnisse in 03_Endprodukte:\n" + "\n".join(f"- {fn}" for fn in files[:12]) + "\n"
+            except Exception:
+                pass
+
+        task_prompt = f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}{proj_context}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte."
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=assignee,
             agent_name=agent_name,
-            prompt=f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte.",
+            prompt=task_prompt,
             role=role,
             system_prompt=system_prompt,
             model=model,
@@ -1056,6 +1074,50 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None) -> Opt
             for d in (vault / "01_PROJEKTE").iterdir():
                 if d.is_dir() and task_id in d.name:
                     rel = f"01_PROJEKTE/{d.name}"
+                    break
+        except Exception:
+            pass
+
+    # Fallback 4: Durchsuche 01_PROJEKTE nach Dateien mit task_id (in 03_Endprodukte oder 01_Zwischenberichte)
+    if not rel and (vault / "01_PROJEKTE").is_dir():
+        try:
+            for p_dir in (vault / "01_PROJEKTE").iterdir():
+                if not p_dir.is_dir():
+                    continue
+                for sub in ("03_Endprodukte", "01_Zwischenberichte"):
+                    s_dir = p_dir / sub
+                    if s_dir.is_dir():
+                        for f in s_dir.iterdir():
+                            if task_id in f.name:
+                                rel = f"01_PROJEKTE/{p_dir.name}"
+                                break
+                    if rel:
+                        break
+                if rel:
+                    break
+        except Exception:
+            pass
+
+    # Fallback 5: Titel/Body Keyword-Match gegen Ordnernamen in 01_PROJEKTE
+    if not rel and (vault / "01_PROJEKTE").is_dir():
+        try:
+            conn = _get_kanban_connection()
+            try:
+                r_tb = conn.execute("SELECT title, body FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                t_title = (r_tb[0] or "") if r_tb else ""
+                t_body = (r_tb[1] or "") if r_tb else ""
+            finally:
+                conn.close()
+            combined = (t_title + " " + t_body).lower()
+            for p_dir in (vault / "01_PROJEKTE").iterdir():
+                if not p_dir.is_dir():
+                    continue
+                p_slug = p_dir.name.lower()
+                for part in p_slug.split("-"):
+                    if len(part) >= 4 and part in combined and part not in ("projekt", "delegationsprojekt", "2026"):
+                        rel = f"01_PROJEKTE/{p_dir.name}"
+                        break
+                if rel:
                     break
         except Exception:
             pass

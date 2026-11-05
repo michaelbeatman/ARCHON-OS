@@ -597,6 +597,35 @@ async def _dispatch_to_omniroute_or_container_exec(
             except Exception as e:
                 continue
 
+    # 3b. Direkter OpenRouter-Fallback bei OmniRoute-Ausfall / Rate-Limit
+    or_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if or_key:
+        try:
+            or_model = model
+            auto_map = {
+                "auto/best-coding": "deepseek/deepseek-chat",
+                "auto/best-reasoning": "deepseek/deepseek-r1",
+                "auto/best-vision": "google/gemini-2.5-flash",
+                "auto/best-fast": "openai/gpt-4o-mini",
+                "auto/best-free": "google/gemini-2.5-flash"
+            }
+            or_model = auto_map.get(or_model, or_model)
+            if or_model.startswith("auto/") or or_model in ("", "free-forever"):
+                or_model = "deepseek/deepseek-chat"
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
+                    json={"model": or_model, "messages": messages, "max_tokens": 4096}
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+                    if content:
+                        return {"status": "success", "content": content}
+        except Exception:
+            pass
+
     # 4. Direkte Container-Endpunkte
     direct_urls = [
         f"http://{agent_id}:8080/api/chat",

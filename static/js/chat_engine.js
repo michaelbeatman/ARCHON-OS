@@ -84,7 +84,28 @@
     }
     // 1. Initialisierung
     let masterChatInitPromise = null;
-    async function initMasterChat() {
+        let masterChatSSE = null;
+    function initMasterChatLiveStream() {
+      if (masterChatSSE) return;
+      try {
+        masterChatSSE = new EventSource("/api/v1/events/stream");
+        masterChatSSE.onmessage = function(e) {
+          try {
+            if (!e.data || e.data.startsWith(":")) return;
+            const msg = JSON.parse(e.data);
+            if (msg.type === "chat_message_received" && msg.data) {
+              if (msg.data.session_id && msg.data.session_id === currentMasterChatSessionId) {
+                console.log("[MasterChat SSE] Neue Nachricht fuer aktive Session, aktualisiere Verlauf...");
+                selectMasterChatSession(currentMasterChatSessionId);
+              }
+            }
+          } catch(err) {}
+        };
+      } catch(err) {}
+    }
+
+async function initMasterChat() {
+        initMasterChatLiveStream();
       if (masterChatInitPromise) return masterChatInitPromise;
       masterChatInitPromise = (async () => {
         await loadMasterChatProfiles();

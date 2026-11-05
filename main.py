@@ -5489,14 +5489,13 @@ Regeln für reasoning_level:
   * "high": Für fundierte Code-Architektur, Refactoring oder Finanzmodellierung (~8k Tokens).
   * "max": Für hochkritische strategische Memos, Rechtsgutachten oder System-Apex-Entscheidungen (~16k Tokens).
 
-Regeln:
+Wichtige Regeln für Delegation & Berichte:
 - ziel_agent = exakte Agent-ID, nie der Anzeigename. Mehrere Blöcke für Parallelaufträge erlaubt.
-- ZERLEGST du EINEN Auftrag in MEHRERE Teilaufträge: gib in JEDEM Block dieselbe `parent_project_id` an (z.B. "projekt-<kurzname>"). Das löst automatisch die Synthese aus: Alle Teilergebnisse werden gesammelt, Lisa (aggregation_lisa) fügt sie zum Gesamtergebnis zusammen und Robert gibt es frei — du musst nicht selbst nachfragen.
-- Das System führt die Delegation serverseitig aus und schreibt dir eine QUITTUNG in den Chat:
-  "✅ DELEGATION QUITTUNG" (mit Kanban-Task-ID und Sub-Session — merke dir die Task-ID),
-  "❌ DELEGATION ABGELEHNT" (mit Grund) oder "⚠️ DELEGATION-FEHLER" (Block korrigieren und erneut senden).
-- Sage NIE "delegiert/erledigt", bevor eine ✅-Quittung in deinem Chat vorliegt.
-- Hierarchie: Du darfst {"APEX: an alle Agenten" if TIER==1 else "LEAD: nur an dein eigenes Team"} delegieren.
+- KEINE SELBST-DELEGATION: Delegiere NIEMALS an dich selbst (z.B. niemals an deine eigene Agent-ID). Willst du Zwischenergebnisse zusammenfassen, auswerten oder freigeben, mache dies direkt in deiner eigenen Antwort.
+- KEINE EIGENEN QUITTUNGEN TEXTEN: Schreibe nach einem ```delegation ...``` Block NIEMALS selbst eine Quittung wie 'DELEGATION QUITTUNG: Auftrag erfolgreich delegiert...'. Die Quittung wird ausschließlich und automatisch vom Backend erzeugt und eingefügt.
+- KEINE SCHEIN-AUFTRÄGE: Erfinde keine Aufgaben wie 'Registriere Projekt im System' oder 'Parent-Project-ID registrieren'. Projekte existieren automatisch über ihren Ordner in `01_PROJEKTE/`. Wenn ein Agent Kontext benötigt, gib ihm den genauen Projektpfad oder die Quelldateien im Auftrag mit.
+- KEIN ROHES HTML IM CHAT ZUM SELBSTSPEICHERN: Wenn ein Abschlussbericht oder HTML-Dokument erstellt wird, gebe niemals seitenweise rohen HTML-Code im Chat aus mit der Aufforderung, der Nutzer solle diesen manuell in Notepad kopieren! Erstelle stattdessen eine lesbare Zusammenfassung mit Markdown direkt im Chat und speichere die vollwertige HTML-Datei im Projektordner (`01_PROJEKTE/<projekt>/03_Endprodukte/<datei>.html`).
+- ZERLEGST du EINEN Auftrag in MEHRERE Teilaufträge: gib in JEDEM Block dieselbe `parent_project_id` an (z.B. "projekt-<kurzname>"). Das sammelt alle Teilergebnisse automatisch in der Projektstruktur.
 - Status-Verfolgung über die Task-ID: Kanban in_progress = läuft, review = Ergebnis da, blocked = Problem.
 === ENDE DELEGATIONSPROTOKOLL ==="""
 
@@ -5693,7 +5692,7 @@ def _parse_delegation_blocks(text: str):
             
     return valid, invalid
 
-def _execute_delegation(delegator_id, payload, provider, all_keys):
+def _execute_delegation(delegator_id, payload, provider, all_keys, origin_session_id=None):
     """Führt eine Delegation aus: Berechtigungsprüfung, Sub-Session, Kanban-Task,
     Hintergrund-Ausführung. Gibt eine Quittung als Text zurück (wird in die
     Delegator-Session geschrieben, damit der Agent sich erinnert)."""
@@ -5718,7 +5717,22 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
     d_prof = next((p for p in profiles if p["id"] == delegator_id), None)
     t_name = (t_prof.get("person_name") or t_prof.get("name") or ziel)
     d_name = (d_prof.get("person_name") or d_prof.get("name") or delegator_id) if d_prof else delegator_id
-    t_model = modell or ((t_prof.get("model") or "") if (t_prof.get("model") or "") not in ("", "free-forever") else "") or "auto/best-coding"
+    # 3. Compute-optimierte Modell-Zuweisung für den Ziel-Agenten:
+    # Verhindert, dass Subagenten unreflektiert teure Flaggschiff-Modelle (wie Opus) erben.
+    if not modell:
+        cat = (t_prof.get("category") or "").lower()
+        role = (t_prof.get("role") or t_prof.get("name") or "").lower()
+        t_id = ziel.lower()
+        if any(w in t_id or w in role for w in ["vision", "design", "frontend", "ui", "ux"]):
+            modell = "auto/best-vision"
+        elif any(w in t_id or w in role for w in ["engineer", "developer", "coder", "devops", "security"]):
+            modell = "auto/best-coding"
+        elif any(w in t_id or w in role for w in ["strateg", "decision", "legal", "compliance", "law", "finance", "scrum", "board"]):
+            modell = "auto/best-reasoning"
+        else:
+            p_mod = (t_prof.get("model") or "").strip()
+            modell = p_mod if p_mod and p_mod not in ("", "free-forever") else "auto/best-coding"
+    t_model = modell or "auto/best-coding"
 
     tgt_sess = f"mc_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{ziel}"
     msg_text = f"Message from 🤖 {d_name} (@{delegator_id}): {auftrag}"
@@ -5735,9 +5749,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
         prio_num = 2 if prioritaet in ("hoch", "high", "sofort", "critical", "urgent") else (1 if prioritaet in ("mittel", "normal", "medium") else 0)
         kconn = _get_kanban_connection()
         kconn.execute(
-            "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, model_override) VALUES (?,?,?,?,?,?,?,?,?)",
             (task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
-             f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "todo", prio_num, delegator_id, now_iso)
+             f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "todo", prio_num, delegator_id, now_iso, t_model)
         )
         kconn.execute(
             "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
@@ -5748,7 +5762,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
     except Exception as e:
         logger.warning(f"[Delegation] Kanban-Insert fehlgeschlagen: {e}")
 
-    async def _bg_watch_task(task_id, s_id, prof_id):
+    async def _bg_watch_task(task_id, s_id, prof_id, origin_sess_id=None, orig_delegator=None):
         """Beobachtet den Kanban-Task, während der Hermes-Agent-Worker ihn abarbeitet,
         und spiegelt das Endergebnis in die Sub-Session (Rücklauf ohne Doppel-Ausführung).
         WICHTIG: Kein eigener Modell-Aufruf mehr — die Ausführung macht der hermes-Worker
@@ -5903,6 +5917,31 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
                        f"Task-ID: {task_id} | Ggf. Kontextdaten nachliefern oder Aufgabe umformulieren."
                        + (f"\n📁 Dokumentation: `01_PROJEKTE/{obsidian_rel}`" if obsidian_rel else ""))
             _save_message_to_db(s_id, "assistant", msg)
+
+            # --- Feedback an Delegator-Session (Robert / Orchestrator) & Autonomer Trigger ---
+            if origin_sess_id and origin_sess_id != s_id:
+                try:
+                    status_badge = "✅ ERLEDIGT" if status in ("done", "review") else "⛔ BLOCKIERT"
+                    delegator_feedback = (
+                        f"{status_badge}: Der Sub-Agent `@{prof_id}` hat Task `{task_id}` ({final_title}) abgeschlossen.\n\n"
+                        f"**Ergebnis:**\n{result or '(Ergebnis liegt im Projektordner/Kanban)'}\n"
+                        f"{attach_note}\n\n"
+                        f"*(Status im Kanban: `{status}`)*"
+                    )
+                    _save_message_to_db(origin_sess_id, "user", delegator_feedback)
+                    broadcast_event("chat_message_received", {
+                        "session_id": origin_sess_id,
+                        "agent_id": orig_delegator,
+                        "task_id": task_id,
+                        "status": status
+                    })
+                    # Autonomen Folge-Turn auslösen, falls Orchestrator aktiv
+                    if orig_delegator in ("executive_decision_architect", "hermes-orchestrator", "micha", "default"):
+                        asyncio.create_task(_trigger_autonomous_orchestrator_followup(
+                            orig_delegator, origin_sess_id, task_id, status, result, final_title
+                        ))
+                except Exception as feed_err:
+                    logger.warning(f"[Delegation] Feedback an Delegator-Session fehlgeschlagen: {feed_err}")
             # --- Telegram-Push (HITL-Kanal, User-Vorgabe 09.10.2026) ---
             # Ping bei done/blocked/review aufs Handy; Freigabe via Inline-Buttons.
             # Fehlertolerant: darf den Delegations-Fluss nie blockieren, loggt aber sichtbar.
@@ -6016,7 +6055,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys):
         except Exception as fan_err:
             logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 
-    asyncio.create_task(_bg_watch_task(task_id, tgt_sess, ziel))
+    asyncio.create_task(_bg_watch_task(task_id, tgt_sess, ziel, origin_session_id, delegator_id))
     resolve_str = f" [aufgelöst von '{ziel_raw}']" if ziel_raw and ziel_raw != ziel else ""
     return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}{resolve_str}) | Kanban-Task: {task_id or 'n/a'} | "
             f"Sub-Session: {tgt_sess} | Modell (Empfehlung): {t_model} | "
@@ -6202,6 +6241,11 @@ async def api_chat_stream(req: ChatStreamRequest):
             for r in reversed(rows):
                 content_val = r["content"]
                 role_val = r["role"]
+                # Sanitize repetitive metadata footers and system checks from context history to prevent autoregressive feedback loops
+                if role_val == "assistant" and isinstance(content_val, str):
+                    content_val = re.sub(r'(\n|\r\n)*\s*(\*?-?\s*Routed to:[^\n]+|\*?-?\s*🧠 Antwort generiert von[^\n]+)', '', content_val)
+                    content_val = re.sub(r'\(System-Check via mcp__[^\)]+\)\s*[🟢🔴🟡]?', '', content_val).strip()
+
                 # Dateianhänge (bis zu 5 Dateien: Bilder als multimodale Vision-Inhalte, Text/Code als Prompt-Inhalt)
                 if role_val == "user" and "[Datei angehängt:" in content_val:
                     matches = list(re.finditer(r'\[Datei angehängt:\s*([^\]]+)\]', content_val))
@@ -6330,27 +6374,40 @@ async def api_chat_stream(req: ChatStreamRequest):
         # Kosten-Berechnung und Transparenz-Anzeige (Pillar 3/6)
         cost_str = "0.0000"
         try:
-            with _get_state_db() as conn:
-                cur = conn.execute("SELECT value FROM kv_store WHERE key = 'openrouter_prices'")
-                row = cur.fetchone()
-                if row and row[0]:
-                    prices = json.loads(row[0])
-                    m_price = prices.get(model, {})
-                    p_cost = (prompt_tokens / 1_000_000) * m_price.get("prompt_1m", 0.0)
-                    c_cost = (completion_tokens / 1_000_000) * m_price.get("completion_1m", 0.0)
-                    total_cost = p_cost + c_cost
-                    if total_cost > 0:
-                        cost_str = f"{total_cost:.5f}"
+            global _openrouter_price_cache
+            prices = _openrouter_price_cache
+            if not prices:
+                try:
+                    p_res = get_llm_prices()
+                    if isinstance(p_res, dict) and "prices" in p_res:
+                        prices = p_res["prices"]
+                except Exception:
+                    pass
+            m_price = (prices or {}).get(model, {})
+            p_rate = m_price.get("prompt_1m", 0.0)
+            c_rate = m_price.get("completion_1m", 0.0)
+            if p_rate == 0.0 and c_rate == 0.0:
+                m_low = model.lower()
+                if "opus" in m_low:
+                    p_rate, c_rate = (7.50, 37.50) if "batch" in m_low else (15.0, 75.0)
+                elif "sonnet" in m_low:
+                    p_rate, c_rate = (3.0, 15.0)
+                elif "deepseek" in m_low:
+                    p_rate, c_rate = (0.25, 1.0)
+                elif "gpt-4o-mini" in m_low:
+                    p_rate, c_rate = (0.15, 0.60)
+                elif "gpt-4o" in m_low:
+                    p_rate, c_rate = (2.50, 10.0)
+            p_cost = (max(prompt_tokens, 800) / 1_000_000) * p_rate
+            c_cost = (max(completion_tokens, 100) / 1_000_000) * c_rate
+            total_cost = p_cost + c_cost
+            if total_cost > 0:
+                cost_str = f"{total_cost:.5f}"
         except Exception as e:
             logger.error(f"Cost calculation error: {e}")
             
-        # Append transparency tag to the final text
         tier = "High" if provider == "openrouter" else "Low"
-        transparency_tag = f"\n\n*- Routed to: `{model}` | Tier: `{tier}` | Est. Cost: `{cost_str}$`*"
-        
-        payload = json.dumps({"type": "delta", "delta": transparency_tag}, ensure_ascii=False)
-        yield f"data: {payload}\n\n"
-        full_assistant_text += transparency_tag
+        transparency_tag = f"\n\n*- 🧠 Antwort generiert von `@{agent_id}` via `{model}` | Tier: `{tier}` | Est. Cost: `{cost_str}$`*"
 
         # Delegation Engine v2: strukturierte ```delegation```-Blöcke + Legacy-CLI-Interception.
         # Quittungen werden in die Delegator-Session geschrieben -> der Agent "erinnert" sich.
@@ -6368,7 +6425,7 @@ async def api_chat_stream(req: ChatStreamRequest):
                 })
             for payload in payloads:
                 try:
-                    delegation_receipts.append(_execute_delegation(agent_id, payload, provider, all_keys))
+                    delegation_receipts.append(_execute_delegation(agent_id, payload, provider, all_keys, origin_session_id=session_id))
                 except Exception as de:
                     delegation_receipts.append(f"⚠️ DELEGATION-FEHLER — Intern: {de}")
             for bad in invalid_blocks:
@@ -6387,6 +6444,11 @@ async def api_chat_stream(req: ChatStreamRequest):
             full_assistant_text += receipt_text
 
         # Antwort & Metriken in SQLite verbuchen
+        # Transparenz-Tag nach Delegationsquittungen ausgeben
+        payload_trans = json.dumps({"type": "delta", "delta": transparency_tag}, ensure_ascii=False)
+        yield f"data: {payload_trans}\n\n"
+        full_assistant_text += transparency_tag
+
         _save_message_to_db(session_id, "assistant", full_assistant_text, completion_tokens)
         
         # Parse total_cost if possible

@@ -148,7 +148,9 @@
     html, body, button, input, select, textarea, p, h1, h2, h3, h4, h5, h6, label {
       font-family: var(--font-family, 'Outfit', sans-serif) !important;
     }
-  </style>
+  
+    .code-block-wrapper pre, .code-block-wrapper pre code { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; }
+</style>
 </head>
 <body class="h-screen flex overflow-hidden">
       <!-- VIEW: APP FRAME STUDIO (Extracted) -->
@@ -2520,9 +2522,15 @@ print('Ausführung erfolgreich!')</textarea>
           code(token) {
             const rawLang = (token.lang || '').trim();
             const lang = (rawLang.match(/\S*/) || [''])[0] || '';
-            const langLabel = lang 
-              ? `<span class="text-[10px] font-mono uppercase tracking-wider text-zinc-400 select-none">${escapeHtml(lang)}</span>` 
-              : `<span class="text-[10px] font-mono text-zinc-400 select-none">PROMPT / CODE</span>`;
+            const isDelegation = lang.toLowerCase() === 'delegation';
+            const langLabel = isDelegation
+              ? `<span class="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold select-none">⚡ DELEGATION</span>`
+              : (lang 
+                ? `<span class="text-[10px] font-mono uppercase tracking-wider text-zinc-400 select-none">${escapeHtml(lang)}</span>` 
+                : `<span class="text-[10px] font-mono text-zinc-400 select-none">PROMPT / CODE</span>`);
+            const preClasses = isDelegation
+              ? "p-3 text-xs font-mono leading-relaxed whitespace-pre-wrap break-words break-all bg-zinc-950 text-emerald-300 border-l-2 border-emerald-500 select-text"
+              : "p-3 text-xs font-mono leading-relaxed whitespace-pre-wrap break-words select-text custom-scrollbar";
             const escapedCode = escapeHtml(token.text || '');
             return `<div class="code-block-wrapper relative group my-2.5 rounded-xl overflow-hidden border border-[var(--border)] bg-zinc-950 text-zinc-100 shadow-xs">
               <div class="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-800 text-xs select-none">
@@ -2532,7 +2540,7 @@ print('Ausführung erfolgreich!')</textarea>
                   <span>Kopieren</span>
                 </button>
               </div>
-              <pre class="p-3 text-xs font-mono overflow-x-auto custom-scrollbar leading-relaxed"><code>${escapedCode}</code></pre>
+              <pre class="${preClasses}" style="white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; max-width: 100% !important; overflow-x: hidden !important;"><code style="white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; display: block !important;">${escapedCode}</code></pre>
             </div>`;
           }
         }
@@ -10097,6 +10105,7 @@ ${logExcerpt}
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]">
         <div class="flex items-center gap-3">
           <span id="ops-detail-badge-id" class="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">t-000000</span>
+          <span id="ops-detail-badge-date" class="px-2 py-0.5 rounded text-[10.5px] font-mono text-[var(--muted-foreground)] bg-[var(--background)] border border-[var(--border)] hidden"></span>
           <h2 id="ops-detail-title" class="text-base font-bold text-[var(--foreground)] tracking-tight line-clamp-1">Task Details</h2>
         </div>
         <button onclick="closeTaskDetailModal()" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">

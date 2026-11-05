@@ -149,7 +149,7 @@ def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
     # 2d (12.10.2026): Projektordner + Entscheidungs-Kontext auch LISTEN-seitig,
     # damit die Card das Entscheidungs-Banner und die Projektzeile zeigen kann
     # (der Detail-Dialog liefert weiterhin den vollen Block).
-    task_dict["obsidian"] = tmeta.get("obsidian") or None
+    task_dict["obsidian"] = _resolve_task_obsidian_rel(task_dict.get("id"), meta)
     task_dict["tokens"] = tmeta.get("tokens") or None
     task_dict["cost"] = tmeta.get("cost") or None
     task_dict["quality_review"] = tmeta.get("quality_review") or None
@@ -199,7 +199,7 @@ def get_kanban_tasks(archived: bool = Query(False)):
     profiles = _load_profiles_map()
     meta = _load_kanban_meta()
     base_select = """
-            SELECT id, title, body, assignee, status, priority, created_by,
+            SELECT rowid AS task_num, id, title, body, assignee, status, priority, created_by,
                    created_at, started_at, completed_at, result, model_override, provider_override,
                    (SELECT count(*) FROM task_comments c WHERE c.task_id = tasks.id) AS comment_count,
                    (SELECT count(*) FROM task_links l WHERE l.parent_id = tasks.id) AS subtask_count,
@@ -361,10 +361,28 @@ async def _execute_kanban_task_async(task_id: str):
     system_prompt = prof.get("prompt") or prof.get("system_prompt") or f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
 
     try:
+        proj_context = ""
+        p_rel = _resolve_task_obsidian_rel(task_id)
+        if p_rel:
+            try:
+                from backend.post_task_pipeline import get_vault_dir
+                from pathlib import Path as _P
+                vault = _P(get_vault_dir()).resolve()
+                p_dir = vault / p_rel
+                proj_context = f"\n\nPROJEKT-ORDNER IM OBSIDIAN VAULT: `{p_rel}`\n"
+                end_dir = p_dir / "03_Endprodukte"
+                if end_dir.is_dir():
+                    files = [f.name for f in end_dir.iterdir() if f.is_file() and not f.name.startswith(".")]
+                    if files:
+                        proj_context += "Bereits vorhandene Projektergebnisse in 03_Endprodukte:\n" + "\n".join(f"- {fn}" for fn in files[:12]) + "\n"
+            except Exception:
+                pass
+
+        task_prompt = f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}{proj_context}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte."
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=assignee,
             agent_name=agent_name,
-            prompt=f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte.",
+            prompt=task_prompt,
             role=role,
             system_prompt=system_prompt,
             model=model,
@@ -383,6 +401,28 @@ async def _execute_kanban_task_async(task_id: str):
         finally:
             c.close()
             
+        # Obsidian-Dokumentation & Projekt-Artefakte synchronisieren
+        try:
+            from backend.post_task_pipeline import get_vault_dir
+            from pathlib import Path as _P
+            vault = _P(get_vault_dir()).resolve()
+            p_rel = _resolve_task_obsidian_rel(task_id)
+            if p_rel:
+                p_dir = vault / p_rel
+                end_dir = p_dir / "03_Endprodukte"
+                if end_dir.is_dir():
+                    matched = False
+                    for f in end_dir.iterdir():
+                        if task_id in f.name and f.suffix == ".md":
+                            f.write_text(f"# {title}\n\n**Task:** `{task_id}` | **Ziel-Agent:** `@{assignee}` | **Status:** REVIEW\n\n{reply}\n", encoding="utf-8")
+                            matched = True
+                            break
+                    if not matched:
+                        slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in title.lower())[:40].strip("-")
+                        (end_dir / f"{task_id}-{slug}.md").write_text(f"# {title}\n\n**Task:** `{task_id}` | **Ziel-Agent:** `@{assignee}` | **Status:** REVIEW\n\n{reply}\n", encoding="utf-8")
+        except Exception as e_upd:
+            print(f"[OperationsAPI] Could not update obsidian markdown: {e_upd}", file=sys.stderr)
+
         try:
             import main
             if hasattr(main, "broadcast_event"):
@@ -970,13 +1010,138 @@ class KanbanPaletteUpdate(BaseModel):
     columns: Optional[Dict[str, Dict[str, str]]] = None
     reset: bool = False
 
+def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None) -> Optional[str]:
+    """Ermittelt den relativen Obsidian-Projektordner fuer eine Task mit automatischer Reparatur/Fallback."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+    if meta is None:
+        meta = _load_kanban_meta()
+    t_entry = (meta.get("tasks") or {}).get(task_id) or {}
+    rel = t_entry.get("obsidian")
+    vault = _P(get_vault_dir()).resolve()
+    if rel and str(rel).strip():
+        cand = (vault / str(rel).strip()).resolve()
+        if str(cand).startswith(str(vault)) and cand.is_dir():
+            return str(rel).strip()
+
+    # Fallback 1: Pruefe ob in decision ein dossier liegt
+    dossier = (t_entry.get("decision") or {}).get("dossier") or ""
+    if "01_PROJEKTE/" in dossier:
+        try:
+            sub = dossier.split("01_PROJEKTE/")[1].split("/")[0]
+            cand = (vault / "01_PROJEKTE" / sub).resolve()
+            if str(cand).startswith(str(vault)) and cand.is_dir():
+                rel = f"01_PROJEKTE/{sub}"
+        except Exception:
+            pass
+
+    # Fallback 1b: Falls Subtask, erbe Projekt vom Parent aus task_links
+    if not rel:
+        try:
+            conn = _get_kanban_connection()
+            try:
+                r_parent = conn.execute("SELECT parent_id FROM task_links WHERE child_id = ?", (task_id,)).fetchone()
+                parent_id = r_parent[0] if r_parent else None
+            finally:
+                conn.close()
+            if parent_id and parent_id != task_id:
+                parent_rel = _resolve_task_obsidian_rel(parent_id, meta)
+                if parent_rel:
+                    return parent_rel
+        except Exception:
+            pass
+
+    # Fallback 2: Pruefe kanban.db nach project_id
+    if not rel:
+        try:
+            conn = _get_kanban_connection()
+            try:
+                r = conn.execute("SELECT project_id FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                pid = r[0] if r else None
+            finally:
+                conn.close()
+            if pid and (vault / "01_PROJEKTE").is_dir():
+                for d in (vault / "01_PROJEKTE").iterdir():
+                    if d.is_dir() and pid in d.name:
+                        rel = f"01_PROJEKTE/{d.name}"
+                        break
+        except Exception:
+            pass
+
+    # Fallback 3: Pruefe ob Ordner mit task_id in 01_PROJEKTE existiert
+    if not rel and (vault / "01_PROJEKTE").is_dir():
+        try:
+            for d in (vault / "01_PROJEKTE").iterdir():
+                if d.is_dir() and task_id in d.name:
+                    rel = f"01_PROJEKTE/{d.name}"
+                    break
+        except Exception:
+            pass
+
+    # Fallback 4: Durchsuche 01_PROJEKTE nach Dateien mit task_id (in 03_Endprodukte oder 01_Zwischenberichte)
+    if not rel and (vault / "01_PROJEKTE").is_dir():
+        try:
+            for p_dir in (vault / "01_PROJEKTE").iterdir():
+                if not p_dir.is_dir():
+                    continue
+                for sub in ("03_Endprodukte", "01_Zwischenberichte"):
+                    s_dir = p_dir / sub
+                    if s_dir.is_dir():
+                        for f in s_dir.iterdir():
+                            if task_id in f.name:
+                                rel = f"01_PROJEKTE/{p_dir.name}"
+                                break
+                    if rel:
+                        break
+                if rel:
+                    break
+        except Exception:
+            pass
+
+    # Fallback 5: Titel/Body Keyword-Match gegen Ordnernamen in 01_PROJEKTE
+    if not rel and (vault / "01_PROJEKTE").is_dir():
+        try:
+            conn = _get_kanban_connection()
+            try:
+                r_tb = conn.execute("SELECT title, body FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                t_title = (r_tb[0] or "") if r_tb else ""
+                t_body = (r_tb[1] or "") if r_tb else ""
+            finally:
+                conn.close()
+            combined = (t_title + " " + t_body).lower()
+            for p_dir in (vault / "01_PROJEKTE").iterdir():
+                if not p_dir.is_dir():
+                    continue
+                p_slug = p_dir.name.lower()
+                for part in p_slug.split("-"):
+                    if len(part) >= 4 and part in combined and part not in ("projekt", "delegationsprojekt", "2026"):
+                        rel = f"01_PROJEKTE/{p_dir.name}"
+                        break
+                if rel:
+                    break
+        except Exception:
+            pass
+
+    # Wenn ein Ordner gefunden wurde, automatisch im Sidecar nachpflegen
+    if rel:
+        try:
+            from backend.kanban_sidecar import update_kanban_meta
+            def _heal(m):
+                m.setdefault("tasks", {}).setdefault(task_id, {})["obsidian"] = rel
+            update_kanban_meta(_heal)
+        except Exception:
+            pass
+
+    return rel
+
+
 @router.get("/kanban/projects/{task_id}")
 def get_kanban_project_files(task_id: str):
     """Listet die Dateien des verknuepften Obsidian-Projekts einer Task (Sidecar-Bruecke)."""
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
     meta = _load_kanban_meta()
-    rel = ((meta.get("tasks") or {}).get(task_id) or {}).get("obsidian")
+    rel = _resolve_task_obsidian_rel(task_id, meta)
     if not rel:
         raise HTTPException(status_code=404, detail="Kein Obsidian-Projekt verknuepft.")
     vault = _P(get_vault_dir()).resolve()
@@ -1083,7 +1248,7 @@ def get_kanban_project_file(task_id: str, path: str):
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
     meta = _load_kanban_meta()
-    rel = ((meta.get("tasks") or {}).get(task_id) or {}).get("obsidian")
+    rel = _resolve_task_obsidian_rel(task_id, meta)
     if not rel:
         raise HTTPException(status_code=404, detail="Kein Obsidian-Projekt verknuepft.")
     vault = _P(get_vault_dir()).resolve()
@@ -1205,11 +1370,10 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
         # 12.10.2026 (Decision-Service): Entscheidungs-Metadaten je Task.
         # kanban.db bleibt die Wahrheit (Status), der Sidecar traegt nur Kontext.
         obs_in = payload.get("obsidian")
-        if obs_in is not None:
-            if str(obs_in).strip() == "":
-                tmeta.pop("obsidian", None)
-            else:
-                tmeta["obsidian"] = str(obs_in).strip()
+        if obs_in is not None and str(obs_in).strip() != "":
+            tmeta["obsidian"] = str(obs_in).strip()
+        elif payload.get("clear_obsidian"):
+            tmeta.pop("obsidian", None)
         dec_in = payload.get("decision")
         if isinstance(dec_in, dict):
             if dec_in.get("clear"):
@@ -1295,7 +1459,7 @@ def get_task_details(task_id: str):
     profiles = _load_profiles_map()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+        cursor.execute("SELECT rowid AS task_num, * FROM tasks WHERE id = ?", (task_id,))
         task_row = cursor.fetchone()
         if not task_row:
             raise HTTPException(status_code=404, detail="Task nicht gefunden.")
@@ -1308,7 +1472,7 @@ def get_task_details(task_id: str):
 
         # Obsidian-Projekt-Bruecke (Sidecar config/kanban_meta.json, Option A 11.10.2026)
         _meta_all = _load_kanban_meta()
-        task["obsidian"] = ((_meta_all.get("tasks") or {}).get(task_id) or {}).get("obsidian") or None
+        task["obsidian"] = _resolve_task_obsidian_rel(task_id, _meta_all)
         # 2b (12.10.2026): Entscheidungs-Kontext mitliefern (Sidecar-Block), damit der
         # Detail-Dialog Typ, Status, Kurzfassung und das Bericht-Dossier anzeigen kann.
         task["decision"] = ((_meta_all.get("tasks") or {}).get(task_id) or {}).get("decision") or None
@@ -1340,17 +1504,17 @@ def get_task_details(task_id: str):
 
 @router.post("/kanban/tasks/{task_id}/comments")
 def add_task_comment(task_id: str, author: str = Body(..., embed=True), body: str = Body(..., embed=True)):
-    """Fügt einem Task einen Kommentar hinzu."""
+    """Fügt einem Task einen Kommentar hinzu (Timestamp als integer Unix-Epoch für Hermes-Kompatibilität)."""
     conn = _get_kanban_connection()
     try:
-        now_iso = datetime.datetime.now().isoformat()
+        now_ts = int(time.time())
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO task_comments (task_id, author, body, created_at)
             VALUES (?, ?, ?, ?)
-        """, (task_id, author, body, now_iso))
+        """, (task_id, author, body, now_ts))
         conn.commit()
-        return {"status": "success", "task_id": task_id, "created_at": now_iso}
+        return {"status": "success", "task_id": task_id, "created_at": now_ts}
     finally:
         conn.close()
 

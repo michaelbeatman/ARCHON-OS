@@ -1370,7 +1370,7 @@
         const wipLimit = (opsKanbanWip || {})[col.id] || 0;
         const wipOver = wipLimit > 0 && tasks.length > wipLimit;
         const countText = wipLimit > 0 ? `${tasks.length}/${wipLimit}` : String(tasks.length);
-        const taskCards = tasks.map(t => {
+        const taskCards = tasks.map((t, idx) => {
           const priorityLabels = ['P3', 'P2', 'P1', 'P0'];
           const priorityColors = [
             'bg-slate-500/10 text-slate-400 border-slate-500/20',
@@ -1424,6 +1424,37 @@
             qrBadge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold border ${isAppr ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/15 text-amber-600 border-amber-500/40'} shrink-0" title="4-Augen-Review: ${isAppr ? 'Freigegeben' : 'Nachbesserung'} (${t.quality_review.score || 80}%)">${isAppr ? '✓ 4-Augen' : '⚠ 4-Augen'}</span>`;
           }
           const isSelected = selectedOpsTaskIds && selectedOpsTaskIds.has(t.id);
+          
+          // Nummerierung (Laufende Nummer / ID)
+          const numDisplay = t.task_num ? `#${t.task_num}` : `#${t.id}`;
+          const numBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 shrink-0" title="Aufgabe ${numDisplay} (${t.id})">${numDisplay}</span>`;
+
+          // Erstellungsdatum & Uhrzeit
+          let cardDateStr = '';
+          let cardDateFull = '';
+          if (t.created_at) {
+            try {
+              let d;
+              const raw = t.created_at;
+              if (typeof raw === 'number' || (!isNaN(raw) && !isNaN(parseFloat(raw)) && String(raw).trim().length <= 11 && !String(raw).includes('-'))) {
+                d = new Date(parseFloat(raw) * 1000);
+              } else {
+                d = new Date(raw);
+              }
+              if (!isNaN(d.getTime())) {
+                const day = String(d.getDate()).padStart(2, '0');
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const hours = String(d.getHours()).padStart(2, '0');
+                const mins = String(d.getMinutes()).padStart(2, '0');
+                cardDateStr = `${day}.${month}. ${hours}:${mins}`;
+                cardDateFull = `${day}.${month}.${d.getFullYear()} ${hours}:${mins} Uhr`;
+              }
+            } catch (e) {}
+          }
+          const dateBadge = cardDateStr
+            ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono text-muted-custom bg-[var(--secondary)]/70 border border-[var(--border)] shrink-0" title="Erstellt am ${cardDateFull}">🕒 ${cardDateStr}</span>`
+            : '';
+
           const checkboxHtml = `
             <button type="button" 
                     onclick="event.stopPropagation(); toggleOpsTaskSelection('${t.id}');" 
@@ -1442,17 +1473,23 @@
                   <span class="text-[9.5px] font-bold uppercase tracking-wider text-[#8a5d10] truncate">⏳ Offene Entscheidung · ${opsEscapeHtml(decTyp)}</span>
                   <span class="px-1.5 py-0.2 rounded border ${prioClass} text-[9px] shrink-0">${prioText}</span>
                 </div>` : ''}
-                <div class="p-3 space-y-2.5">
+                <div class="p-3 space-y-2">
                   <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
-                    <div class="flex items-center gap-1 min-w-0 truncate">
+                    <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
                       ${checkboxHtml}
-                      ${statusBadge}${qrBadge}${dueBadge}${modelBadge}${tokenBadge}
+                      ${numBadge}
+                      <span class="text-[9.5px] font-mono text-muted-custom opacity-75 shrink-0 select-all" title="System-ID">${opsEscapeHtml(t.id)}</span>
                     </div>
                     <div class="flex items-center gap-1 shrink-0">
+                      ${dateBadge}
                       ${countBadge}
                       ${decOpen ? '' : `<span class="px-1.5 py-0.2 rounded border ${prioClass}">${prioText}</span>`}
                     </div>
                   </div>
+                  ${(statusBadge || qrBadge || dueBadge || modelBadge || tokenBadge) ? `
+                  <div class="flex items-center gap-1 min-w-0 flex-wrap text-[10px] font-mono">
+                    ${statusBadge}${qrBadge}${dueBadge}${modelBadge}${tokenBadge}
+                  </div>` : ''}
                 <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2">${opsEscapeHtml(t.title)}</h4>
                 ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-tight">${opsEscapeHtml(t.body)}</p>` : ''}
                 ${projektName ? `<div class="inline-block max-w-full truncate px-1.5 py-0.5 rounded text-[9px] font-mono text-muted-custom bg-[var(--secondary)] border border-[var(--border)]" title="${opsEscapeHtml(t.obsidian)}">📁 ${opsEscapeHtml(projektName)}</div>` : ''}
@@ -2165,6 +2202,8 @@
       const subtasksCount = document.getElementById('ops-detail-subtasks-count');
 
       if (badgeId) badgeId.textContent = taskId;
+      const dateEl = document.getElementById('ops-detail-badge-date');
+      if (dateEl) dateEl.classList.add('hidden');
       if (titleEl) titleEl.textContent = 'Lade Details...';
 
       try {
@@ -2174,6 +2213,22 @@
         const task = data.task;
         currentOpsDetailTaskAssignee = task.assignee || 'default';
 
+        if (badgeId) badgeId.textContent = task.task_num ? `#${task.task_num} · ${task.id}` : task.id;
+        if (dateEl && task.created_at) {
+          try {
+            const raw = task.created_at;
+            const d = (typeof raw === 'number' || (!isNaN(raw) && !isNaN(parseFloat(raw)) && String(raw).trim().length <= 11 && !String(raw).includes('-'))) ? new Date(parseFloat(raw) * 1000) : new Date(raw);
+            if (!isNaN(d.getTime())) {
+              const day = String(d.getDate()).padStart(2, '0');
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const year = d.getFullYear();
+              const hours = String(d.getHours()).padStart(2, '0');
+              const mins = String(d.getMinutes()).padStart(2, '0');
+              dateEl.textContent = `🕒 ${day}.${month}.${year} ${hours}:${mins} Uhr`;
+              dateEl.classList.remove('hidden');
+            }
+          } catch (e) {}
+        }
         if (titleEl) titleEl.textContent = task.title;
         if (statusSelect) statusSelect.value = (task.status || 'todo').toLowerCase();
         if (bodyEl) bodyEl.textContent = task.body || 'Keine Beschreibung hinterlegt.';
@@ -2354,7 +2409,12 @@
               const datei = (dec.dossier || '').split('/').pop();
               if (!datei) { decReader.textContent = 'Kein Bericht hinterlegt.'; return; }
               try {
-                const rel = '01_Zwischenberichte/' + datei;
+                let subfolder = (dec.dossier || '').includes('03_Endprodukte') ? '03_Endprodukte' : '01_Zwischenberichte';
+                let dateiToFetch = datei;
+                if (/\.pdf$/i.test(datei)) {
+                  dateiToFetch = datei.replace(/\.pdf$/i, '.html');
+                }
+                const rel = subfolder + '/' + dateiToFetch;
                 const fd = await _dj(`/api/operations/kanban/projects/${encodeURIComponent(task.id)}/file?path=${encodeURIComponent(rel)}`);
                 if (/\.html?$/i.test(datei)) {
                   // .html-Dossier RENDERN statt Rohtext auswerfen

@@ -20,30 +20,50 @@ from archon.core.runtime import MEMORY_DIR
 
 MISSION_CONTROL_FILE = os.path.join(MEMORY_DIR, "mission_control_data.json")
 
-_MC_DATA_LOCK = threading.Lock()
+# EIN Lock fuer alle Schreiber. Vorher schuetzten zwei Locks dieselbe Datei:
+# _MC_DATA_LOCK (threading) in _save_mission_control_data und _MC_ASYNC_LOCK
+# (asyncio) in orchestration._fan_in_maybe_start_synthesis. Zwei Locks auf ein
+# Ziel serialisieren nichts — ein Schreiber aus dem Event-Loop konnte sich mit
+# einem aus einem Worker-Thread verzahnen (Audit B1).
+# RLock statt Lock, weil _save_mission_control_data den Lock haelt und
+# _write_mc_atomic ihn ebenfalls nimmt (verschachtelt); ein einfacher Lock
+# wuerde sich dort selbst blockieren.
+_MC_DATA_LOCK = threading.RLock()
+
+# Nur noch fuer Abwaertskompatibilitaet exportiert; die Korrektheit haengt
+# nicht mehr an diesem Lock, weil _write_mc_atomic selbsteinspannend ist.
 _MC_ASYNC_LOCK = asyncio.Lock()
 
 # State-Cache für /api/mission-control/state (3s TTL)
 _MC_STATE_CACHE = {"ts": 0.0, "data": None}
 
+
 def _write_mc_atomic(data: dict):
-    """Atomarer MC-Store-Write. Nur mit gehaltenem _MC_DATA_LOCK aufrufen
-    (Lock ist nicht reentrant - _save_mission_control_data haelt ihn aussen)."""
-    _dir = os.path.dirname(os.path.abspath(MISSION_CONTROL_FILE)) or "."
-    os.makedirs(_dir, exist_ok=True)
-    _fd, _tmp = tempfile.mkstemp(dir=_dir, prefix=".mission_control_", suffix=".tmp")
-    try:
-        with os.fdopen(_fd, "w", encoding="utf-8") as _f:
-            json.dump(data, _f, indent=2, ensure_ascii=False)
-            _f.flush()
-            os.fsync(_f.fileno())
-        os.replace(_tmp, MISSION_CONTROL_FILE)
-    except BaseException:
+    """Atomarer MC-Store-Write (Temp-Datei + fsync + os.replace).
+
+    Nimmt den Lock selbst (RLock, daher auch verschachtelt aufrufbar). Damit
+    ist die Zusicherung "nur mit gehaltenem Lock aufrufen" nicht mehr noetig —
+    ein Aufruf ohne Lock kann die Serialisierung nicht mehr umgehen.
+
+    Achtung: enthaelt fsync und blockiert. Aus async-Handlern deshalb ueber
+    asyncio.to_thread aufrufen, nicht direkt.
+    """
+    with _MC_DATA_LOCK:
+        _dir = os.path.dirname(os.path.abspath(MISSION_CONTROL_FILE)) or "."
+        os.makedirs(_dir, exist_ok=True)
+        _fd, _tmp = tempfile.mkstemp(dir=_dir, prefix=".mission_control_", suffix=".tmp")
         try:
-            os.unlink(_tmp)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(_fd, "w", encoding="utf-8") as _f:
+                json.dump(data, _f, indent=2, ensure_ascii=False)
+                _f.flush()
+                os.fsync(_f.fileno())
+            os.replace(_tmp, MISSION_CONTROL_FILE)
+        except BaseException:
+            try:
+                os.unlink(_tmp)
+            except OSError:
+                pass
+            raise
 
 
 def _load_mission_control_data() -> dict:
@@ -126,14 +146,46 @@ def _load_mission_control_data() -> dict:
     }
 
 def _save_mission_control_data(data: dict):
+    """Schreibt den Store. Serialisiert gegen alle anderen Schreiber.
+
+    Achtung: Das ist ein *Write*, kein Read-Modify-Write. Wer laden, aendern
+    und zurueckschreiben will, muss update_mission_control_data() benutzen —
+    sonst gehen parallele Aenderungen verloren (Lost Update).
+    """
     try:
-        with _MC_DATA_LOCK:
-            _write_mc_atomic(data)
+        _write_mc_atomic(data)
     except Exception as e:
-        print(f"Error saving mission_control_data: {e}")
+        from archon.core.runtime import logger
+        logger.error(f"[MissionControl] Speichern fehlgeschlagen: {e}", exc_info=True)
+
+
+def update_mission_control_data(mutator):
+    """Atomares Read-Modify-Write: Laden, Aendern und Schreiben unter EINEM Lock.
+
+    `mutator` bekommt das geladene dict und gibt den Rueckgabewert der Operation
+    zurueck. Der Lock wird ueber die gesamte Sequenz gehalten, damit parallele
+    Schreiber sich nicht gegenseitig ueberschreiben (Lost Update, Audit B1).
+
+    Blockiert (Datei-I/O + fsync). Aus async-Handlern so aufrufen:
+        await asyncio.to_thread(update_mission_control_data, mutator)
+
+    Beispiel:
+        def _add(task):
+            def mutate(data):
+                data.setdefault("tasks", []).insert(0, task)
+                return task
+            return mutate
+        task = await asyncio.to_thread(update_mission_control_data, _add(new_task))
+    """
+    with _MC_DATA_LOCK:
+        data = _load_mission_control_data()
+        result = mutator(data)
+        _write_mc_atomic(data)
+        return result
+
 
 __all__ = [
     "MISSION_CONTROL_FILE", "_MC_DATA_LOCK", "_MC_ASYNC_LOCK",
     "_write_mc_atomic", "_load_mission_control_data", "_save_mission_control_data",
-    "_MC_STATE_CACHE",
+    "update_mission_control_data", "_MC_STATE_CACHE",
 ]

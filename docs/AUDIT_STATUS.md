@@ -27,7 +27,7 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 
 | # | Punkt | Status | Beleg / Messung |
 |---|---|---|---|
-| B1 | Race Condition MC-Lock | 🔴 | `threading.Lock` **und** `asyncio.Lock` parallel in `archon/core/mission_control.py:23,24` |
+| B1 | Race Condition MC-Lock | 🟡 | **Lock-Duplikat beseitigt + atomare RVW-API** (siehe unten); `capture` migriert, `move` und `_execute_mission_control_task` nutzen noch getrenntes Laden/Speichern |
 | B2 | Doppelte Proxy-Implementierungen | ✅ | `utils/reverse_proxy.py`, eine Klasse für alle Ziele |
 | B3 | Docker-Socket ohne Schutz | 🟡 | `utils/docker_client.py` mit Allowlist; direkte Socket-Connects in `main.py` (920, 1021, 1032) bleiben |
 | B4 | Path Traversal | ✅ | `utils/path_jail.py`, `safe_path` 12× in `main.py` |
@@ -67,6 +67,61 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 | P8 | Cache-Keys ohne ETag | 🔴 |
 
 Gemessener Bezugspunkt für P1–P8: `scripts/bench_routes.py`, 128 Routen, Median 73 ms warm.
+
+---
+
+## B1 — Race Condition im Mission-Control-Store (teilweise behoben 2026-11-06)
+
+**Befund, gemessen.** Zwei unabhängige Defekte:
+
+1. **Zwei Locks auf ein Ziel.** `_MC_DATA_LOCK` (threading) schützte
+   `_save_mission_control_data`, `_MC_ASYNC_LOCK` (asyncio) schützte den
+   Direktschreiber in `_fan_in_maybe_start_synthesis`. Zwei Locks auf dieselbe
+   Datei serialisieren **nicht** gegeneinander.
+2. **Ungeschützte Lese-Ändere-Schreibe-Kette.** `_load` … `_save` hielt keinen
+   Lock über die Sequenz. Gegenprobe mit 20 Threads × 5 Inkrementen:
+
+   ```
+   erwartet:                                    100
+   altes Muster (load/save getrennt):             5  -> LOST UPDATES
+   neues Muster (update_mission_control_data):  100  -> verlustfrei
+   ```
+
+   95 von 100 Änderungen gingen verloren. Das war kein theoretisches Risiko.
+
+**Fix.**
+
+* `_MC_DATA_LOCK` ist jetzt ein `threading.RLock` — verschachtelte Aufrufe
+  blockieren sich nicht mehr selbst.
+* `_write_mc_atomic` nimmt den Lock **selbst**. Die alte Zusicherung „nur mit
+  gehaltenem Lock aufrufen" ist damit nicht mehr umgehbar.
+* Neue API `update_mission_control_data(mutator)`: lädt, ändert und schreibt
+  unter **einem** Lock — der einzige Weg, der Lost Updates ausschließt.
+  Aus async-Handlern über `asyncio.to_thread` (enthält `fsync`).
+* `_save_mission_control_data` loggt Fehler jetzt mit `exc_info` statt sie mit
+  `print` zu verschlucken.
+* `capture_mission_control_task` nutzt die neue API (atomar + im Thread-Pool).
+
+**Verifikation.**
+
+```bash
+.venv/bin/python -m pytest tests/test_mission_control_concurrency.py -q  # 5 passed
+.venv/bin/python -m pytest tests/ -q                                     # 182 passed, 4 skipped
+```
+
+Getestet: 20 Threads × 5 Updates verlustfrei, 25 parallele Task-Anhänge ohne
+Verdrängung, Selbst-Lock beim Direktschreiben, verschachtelter Lock ohne
+Deadlock, keine `.tmp`-Reste.
+
+Live: `state` 200 mit 41 Tasks / 59 Agents, Parität unverändert, keine
+Tracebacks.
+
+**Noch offen.** `move_mission_control_task` und
+`_execute_mission_control_task` laden und speichern weiterhin getrennt. Beim
+Move-Handler liegen `await`-Aufrufe (Synthese-Finalisierung, `create_task`)
+zwischen Laden und Speichern — eine atomare Klammer braucht dort erst eine
+Umstrukturierung, sonst würde ein Thread-Lock über einen `await` den Event-Loop
+blockieren. Das ist der nächste Schritt für diesen Punkt.
 
 ---
 

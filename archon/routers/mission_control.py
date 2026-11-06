@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from archon.core.mission_control import (
     _load_mission_control_data,
     _save_mission_control_data,
+    update_mission_control_data,
     _MC_STATE_CACHE,
 )
 from archon.core.runtime import (
@@ -190,9 +191,7 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
     if not req.title or not req.title.strip():
         raise HTTPException(status_code=400, detail="Aufgabentitel darf nicht leer sein.")
 
-    data = _load_mission_control_data()
     task_id = f"task-{int(time.time()) % 10000}"
-
     # Intelligente Hermes Triage & Schätzung
     title = req.title.strip()
     is_large = any(k in title.lower() for k in ["audit", "refactor", "vollständig", "sicherheit", "pipeline", "db", "analyse"])
@@ -229,18 +228,22 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
         "phase": "execution"
     }
 
-    data.setdefault("tasks", []).insert(0, new_task)
+    # Atomares Read-Modify-Write: laedt, aendert und schreibt unter EINEM Lock.
+    # Vorher wurde data vorab geladen und am Ende separat gespeichert — parallele
+    # Captures ueberschrieben einander (Lost Update, Audit B1). Der Aufruf
+    # blockiert (Datei-I/O + fsync) und laeuft deshalb im Thread-Pool.
+    def _mutate(data: dict) -> dict:
+        data.setdefault("tasks", []).insert(0, new_task)
+        now_t = datetime.datetime.now().strftime("%H:%M:%S")
+        data.setdefault("audit_logs", []).insert(0, {
+            "time": now_t,
+            "source": "Capture",
+            "msg": f"Neuer Task #{task_id} erfasst: '{title[:40]}...'"
+        })
+        data["audit_logs"] = data["audit_logs"][:25]
+        return new_task
 
-    # Audit Log
-    now_t = datetime.datetime.now().strftime("%H:%M:%S")
-    data.setdefault("audit_logs", []).insert(0, {
-        "time": now_t,
-        "source": "Capture",
-        "msg": f"Neuer Task #{task_id} erfasst: '{title[:40]}...'"
-    })
-    data["audit_logs"] = data["audit_logs"][:25]
-
-    _save_mission_control_data(data)
+    await asyncio.to_thread(update_mission_control_data, _mutate)
     _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
     broadcast_event("kanban_updated", {"action": "capture", "task_id": task_id, "status": "backlog"})
     return {"status": "ok", "task": new_task}

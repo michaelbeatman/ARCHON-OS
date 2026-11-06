@@ -223,7 +223,7 @@ def prometheus_metrics():
 from archon.core.runtime import (  # noqa: E402
     WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR,
     resolve_obsidian_vault_path, ticker_entries, add_ticker, broadcast_event,
-    _load_json, _save_json, atomic_write_json,
+    _load_json, _save_json, atomic_write_json, _SSE_SUBSCRIBERS,
 )
 
 from archon.core.cache import ttl_cache  # noqa: E402

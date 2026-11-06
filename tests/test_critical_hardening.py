@@ -155,3 +155,31 @@ def test_hermes_config_jail(client):
     r = client.post("/api/hermes/raw_config", json={"config_path": "/etc/archon_hack.yml", "yaml_content": "a: 1"})
     assert r.status_code == 403
     assert not os.path.exists("/etc/archon_hack.yml")
+
+# ---------------------------------------------------------------- Refactor-Wächter
+
+def test_core_names_are_bound_in_main():
+    """Nach dem Router/Core-Split müssen alle verschobenen Namen in main.py
+    importiert sein. Sonst entstehen NameErrors erst zur Laufzeit
+    (real passiert: _SSE_SUBSCRIBERS fehlte -> SSE-Stream 500)."""
+    import main
+
+    for name in [
+        "ticker_entries", "add_ticker", "broadcast_event", "_SSE_SUBSCRIBERS",
+        "_load_json", "_save_json", "atomic_write_json",
+        "WORKSPACE_DIR", "MEMORY_DIR", "SETTINGS_FILE", "OBSIDIAN_VAULT_DIR",
+        "api_get_hermes_profiles", "invalidate_hermes_profiles_cache",
+        "_load_mission_control_data", "_save_mission_control_data",
+        "_get_state_db", "STATE_DB_PATH",
+    ]:
+        assert hasattr(main, name), f"main.{name} fehlt (Import vergessen?)"
+
+
+def test_sse_stream_opens(client):
+    """/api/v1/events/stream muss das connected-Event liefern."""
+    with client.stream("GET", "/api/v1/events/stream") as r:
+        assert r.status_code == 200
+        for line in r.iter_lines():
+            if line.startswith("data:"):
+                assert "connected" in line
+                break

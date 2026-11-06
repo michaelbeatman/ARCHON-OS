@@ -9,10 +9,10 @@
 ```
 Projekt: Archon OS, /mnt/raid/AgenticOS-2026 (Docker, Port 8501).
 Lies zuerst docs/REFACTOR_STAND_2026-11-06.md — das ist der komplette Stand.
-Branch: refactor/critical-hardening (live deployt, 15 Commits).
+Branch: refactor/critical-hardening (live deployt, **16 Commits**).
 Arbeite auf diesem Branch weiter, niemals direkt auf main.
-Nach jeder Änderung: Routen-Parität prüfen (514), pytest, dann deployen.
-Nächster Punkt: archon/core/orchestration.py (siehe Abschnitt 7 im Dokument).
+Nach jeder Änderung: Routen-Parität prüfen (**Decorator 514 + openapi.json-Snapshot 585 Pfade/861 Ops**), pytest, dann deployen.
+Nächster Punkt: **`archon/core/orchestration.py` neu anlegen durch Extraktion** (siehe Abschnitt 7 im Dokument).
 Sprache: Deutsch. Erst messen, dann behaupten.
 ```
 
@@ -20,16 +20,11 @@ Sprache: Deutsch. Erst messen, dann behaupten.
 
 ## Die 5 Fakten, die man kennen muss
 
-1. **`main.py` = 12.184 Zeilen, 514 Routen.** 202 Routen liegen in
-   `archon/routers/` (19 Module), 7 Core-Module in `archon/core/`.
-2. **Das Paket heißt `archon`** — nicht `app`. `app.py` existiert im Repo
-   (Streamlit) und würde das Paket verschatten.
-3. **Container läuft aus `docker-compose.dev.yml`** (Projekt `archon`,
-   `--reload`). Änderungen an `docker-compose.yml` greifen **nicht**.
-4. **Routen-Parität ist Pflicht.** Skript steht im Dokument (Abschnitt 6):
-   514 vorher = 514 nachher, 0 fehlend, 0 neu.
-5. **`.venv` hat pytest.** `pytest`, `pytest-asyncio`, `httpx` sind dort
-   nachinstalliert. System-Python hat kein pip.
+1. **`main.py` = 12.184 Zeilen, 514 Routen (Decorator-Zählung).** 202 Routen liegen in `archon/routers/` (19 Module), 7 Core-Module in `archon/core/`. **Live-App (openapi.json): 585 Pfade / 861 Operationen** — `views_core` + `backend.operations_api` per `include_router` in try/except (still fail).
+2. **Das Paket heißt `archon`** — nicht `app`. `app.py` existiert im Repo (Streamlit) und würde das Paket verschatten.
+3. **Container läuft aus `docker-compose.dev.yml`** (Projekt `archon`, `--reload`). Änderungen an `docker-compose.yml` greifen **nicht**.
+4. **Routen-Parität ist Pflicht.** Guard: Decorator-Zahl (514) **UND** openapi.json-Snapshot (585/861) vor/nach jedem Schritt vergleichen. Ein defekter Router verschwindet still.
+5. **`.venv` hat pytest.** `pytest`, `pytest-asyncio`, `httpx` sind dort nachinstalliert. System-Python hat kein pip.
 
 ---
 
@@ -47,8 +42,8 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8501/health
 
 | # | Aufgabe | Warum | Aufwand |
 |---|---|---|---|
-| 1 | `archon/core/orchestration.py` | Synthese-/Staffing-Kern (`_execute_mission_control_task` → `_fan_in` → `_run_synthesis_cascade` → `_finalize`) aus `main.py` lösen — **mit Tests**, nicht per Automatik | 1 Tag |
-| 2 | 163× `except Exception: pass` → Logging | Stille Fehler sind der Grund, warum Mechaniken unbemerkt sterben (siehe SSE-Vorfall) | 2–3 h |
+|| 1 | **`archon/core/orchestration.py` neu anlegen (Extraktion)** | Orchestrierungskern (`_execute_mission_control_task` → `_fan_in` → `_run_synthesis_cascade` ~285 Z. bis ~11056 → `_finalize`) aus `main.py:10303–11056` (~754 Z.) lösen — **mit Tests**, nicht per Automatik. **Ab Zeile 11057 beginnt `@app.post("/api/mission-control/tasks/move")` — HTTP-Route, bleibt in main/router.** | 1 Tag |
+| 2 | **2× `except Exception: pass` → Logging** (`backend/system_updater.py:457`, `:460`) | Stille Fehler sind der Grund, warum Mechaniken unbemerkt sterben (siehe SSE-Vorfall) | 15 min |
 | 3 | Hardcodierte Pfade (`/opt/data` …) → Config-Schicht | Voraussetzung für Multi-Tenant/Portabilität (~300 Stellen) | 1–2 Tage |
 | 4 | Type Hints / mypy (~30 % → 80 %) | Absicherung der 19 Router beim weiteren Umbau | 1 Tag |
 

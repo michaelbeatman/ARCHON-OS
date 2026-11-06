@@ -1,6 +1,6 @@
 # Refactor-Stand — Critical Hardening & Modularisierung
 
-**Stand:** 2026-11-06 · **Branch:** `refactor/critical-hardening` · **Status:** live deployt, verifiziert
+**Stand:** 2026-11-06 · **Branch:** `refactor/critical-hardening` · **Status:** live deployt, verifiziert · **Commits main..HEAD:** 16
 
 Dieses Dokument ist der Einstiegspunkt für eine neue Session. Es ersetzt die
 Chat-Historie: wer das hier liest, kann nahtlos weiterarbeiten.
@@ -124,7 +124,7 @@ cd /mnt/raid/AgenticOS-2026
 # Tests
 .venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider
 
-# Routen-Parität gegen das Original
+# Routen-Parität gegen das Original (Decorator-Zählung: 514)
 .venv/bin/python - <<'EOF'
 import ast, glob
 ATTR={"get","post","put","delete","patch","api_route","websocket"}
@@ -141,6 +141,11 @@ for f in glob.glob("archon/routers/*.py"): n|=set(r(f))
 print("Original",len(o),"jetzt",len(n),"fehlend",len(o-n),"neu",len(n-o))
 EOF
 
+# **Paritäts-Guard: openapi.json-Snapshot** (Live-App liefert 585 Pfade / 861 Operationen,
+# weil `views_core` und `backend.operations_api` per `include_router` in try/except eingebunden sind —
+# ein defekter Router verschwindet STILL. Snapshot vor/nach jedem Schritt vergleichen.)
+# docker exec ARCHON-OS curl -s http://127.0.0.1:8501/openapi.json > openapi_snapshot.json
+
 # Live-Benchmark (im Container)
 docker exec ARCHON-OS python /app/scripts/bench_routes.py
 
@@ -153,13 +158,13 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8501/health
 
 ## 7. Offene Punkte (bewusst nicht gemacht)
 
-| Punkt | Umfang | Warum offen |
-|---|---|---|
-| Mission-Control-Routen → Router | ~300 Z. | Ist ein **Dashboard**, kein Orchestrator; Orchestrierung steckt in `_execute_mission_control_task` / `_fan_in_maybe_start_synthesis`. Braucht eigenes `archon/core/orchestration.py` + Tests. |
-| `/api/status` (534 ms) | — | Proxy zum externen Hermes-Gateway, nicht unser Code. |
-| 163× `except Exception: pass` | — | Fehler verschwinden still; schrittweise durch Logging ersetzen. |
-| Hardcodierte Pfade (`/opt/data` …) | 300+ | Portabilität/Multi-Tenant; braucht Config-Schicht. |
-| Type Hints / mypy | — | ~30 % Abdeckung. |
+|| Punkt | Umfang | Warum offen |
+||---|---|---|
+||| **`archon/core/orchestration.py` neu anlegen (Extraktion)** | ~754 Z. in `main.py:10303–11056` | Orchestrierung steckt in `_execute_mission_control_task` / `_fan_in_maybe_start_synthesis` / `_run_synthesis_cascade` (endet **11056**, **285 Z.**) / `_finalize_synthesis_after_approval`. **Ab Zeile 11057 beginnt `@app.post("/api/mission-control/tasks/move")` — HTTP-Route, darf NICHT nach `orchestration.py`.** Braucht eigenes Modul + Tests. |
+|| `/api/status` (534 ms) | — | Proxy zum externen Hermes-Gateway, nicht unser Code. |
+|| **2× `except Exception: pass`** (`backend/system_updater.py:457`, `:460`) | — | Fehler verschwinden still; durch Logging ersetzen. |
+|| Hardcodierte Pfade (`/opt/data` …) | 300+ | Portabilität/Multi-Tenant; braucht Config-Schicht. |
+|| Type Hints / mypy | — | ~30 % Abdeckung. |
 
 ---
 

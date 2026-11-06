@@ -251,65 +251,104 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
 
 @router.post("/api/mission-control/tasks/move")
 async def move_mission_control_task(req: TaskMoveRequest):
-    data = _load_mission_control_data()
-    tasks = data.get("tasks", [])
-    task = next((t for t in tasks if t.get("id") == req.task_id), None)
+    """Verschiebt einen Task. Zustandswechsel atomar, Seiteneffekte danach.
 
-    if not task:
+    Aufbau in zwei Phasen (Audit B1): Phase 1 laedt, aendert und schreibt den
+    Store unter EINEM Lock und laeuft im Thread-Pool (die Datei wird per fsync
+    geschrieben). Phase 2 fuehrt alles aus, was awaiten muss (Synthese-
+    Finalisierung) oder Zeit kostet (execute/fan_in) — NACH dem Schreiben, damit
+    kein Lock ueber einem await gehalten wird und parallele Moves einander
+    nicht mehr ueberschreiben.
+    """
+    # ---------------- Phase 1: atomarer Zustandswechsel ----------------
+    def _apply(data: dict) -> dict:
+        tasks = data.get("tasks", [])
+        task = next((t for t in tasks if t.get("id") == req.task_id), None)
+        if task is None:
+            return {"found": False}
+
+        if req.target_status == "dismissed":
+            tasks.remove(task)
+            return {
+                "found": True,
+                "dismissed": True,
+                "task": task,
+                "ticker": ("Approval Gate", f"Task #{task['id']} wurde verworfen"),
+            }
+
+        task["status"] = req.target_status
+        plan: dict = {"found": True, "task": task}
+
+        if req.target_status == "in_progress":
+            task["started_at"] = time.time()
+            task["active_tool"] = "Tool: web_search & core_dispatcher"
+            plan["ticker"] = ("Approval Gate", f"Task #{task['id']} genehmigt & an {task['agent_name']} übergeben")
+            plan["execute"] = True
+
+        elif req.target_status == "completed":
+            if req.result_summary:
+                task["result_summary"] = req.result_summary
+            elif not task.get("result_summary"):
+                task["result_summary"] = f"Erfolgreich von {task['agent_name']} abgeschlossen. Alle Kriterien erfüllt."
+
+            obs_path = _DEPS["sync_obsidian"](task)
+            task["artifact_path"] = obs_path
+            plan["obs_path"] = obs_path
+
+            # FAN-IN (12.10.2026): Diese Task IST Lisas Entwurf-Freigabe
+            # (synthesis_draft_path) -> beim Approved-Move finalisieren.
+            if task.get("synthesis_draft_path") and not task.get("synthesis_finalized"):
+                task["synthesis_finalized"] = True
+                plan["finalize"] = {
+                    "parent_pid": task.get("parent_project_id") or req.task_id,
+                    "draft_path": task.get("synthesis_draft_path"),
+                    "text": task.get("result_summary") or "",
+                }
+
+            parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
+            if parent_pid and parent_pid != req.task_id:
+                plan["fan_in"] = parent_pid
+
+        data["audit_logs"] = data.get("audit_logs", [])[:25]
+        return plan
+
+    plan = await asyncio.to_thread(update_mission_control_data, _apply)
+
+    if not plan.get("found"):
         raise HTTPException(status_code=404, detail="Task nicht gefunden.")
 
-    prev_status = task.get("status")
-    task["status"] = req.target_status
-    now_t = datetime.datetime.now().strftime("%H:%M:%S")
+    task = plan["task"]
 
-    if req.target_status == "in_progress":
-        task["started_at"] = time.time()
-        task["active_tool"] = "Tool: web_search & core_dispatcher"
-        add_ticker("Approval Gate", f"Task #{task['id']} genehmigt & an {task['agent_name']} übergeben")
-        _save_mission_control_data(data)
+    # ---------------- Phase 2: Seiteneffekte ohne Lock ----------------
+    if plan.get("ticker"):
+        add_ticker(*plan["ticker"])
 
-        # Starte autonome Ausfuehrung im Hintergrund (Wrapper aus main.py)
+    if plan.get("obs_path"):
+        add_ticker("Obsidian", f"Projekt-Dokumentation {os.path.basename(plan['obs_path'])} geschrieben")
+
+    if plan.get("finalize"):
+        fin = plan["finalize"]
+        # Ohne daten-Parameter: die Finalisierung laedt den Store selbst frisch.
+        # Vorher wurde das Handler-dict durchgereicht, damit ein spaeteres
+        # _save_mission_control_data(data) den Update nicht ueberschreibt — der
+        # Zwang entfaellt, weil hier VOR dem await geschrieben wurde.
+        await _DEPS["finalize_approval"](
+            fin["parent_pid"],
+            fin["draft_path"],
+            fin["text"],
+            "Freigabe per Board-Move (Approval-Gate)",
+        )
+
+    if plan.get("execute"):
         asyncio.create_task(_DEPS["execute"](task["id"]))
-        return {"status": "ok", "task": task}
+    if plan.get("fan_in"):
+        asyncio.create_task(_DEPS["fan_in"](plan["fan_in"]))
 
-    elif req.target_status == "completed":
-        if req.result_summary:
-            task["result_summary"] = req.result_summary
-        elif not task.get("result_summary"):
-            task["result_summary"] = f"Erfolgreich von {task['agent_name']} abgeschlossen. Alle Kriterien erfüllt."
-
-        obs_path = _DEPS["sync_obsidian"](task)
-        task["artifact_path"] = obs_path
-        add_ticker("Obsidian", f"Projekt-Dokumentation {os.path.basename(obs_path)} geschrieben")
-
-        # FAN-IN (12.10.2026): Diese Task IST Lisas Entwurf-Freigabe
-        # (synthesis_draft_path) -> beim Approved-Move finalisieren:
-        # finaler Bericht + Parent completed + n8n-Bridge.
-        if task.get("synthesis_draft_path") and not task.get("synthesis_finalized"):
-            task["synthesis_finalized"] = True
-            await _DEPS["finalize_approval"](
-                task.get("parent_project_id") or req.task_id,
-                task.get("synthesis_draft_path"),
-                task.get("result_summary") or "",
-                "Freigabe per Board-Move (Approval-Gate)",
-                daten=data,   # GLEICHES dict wie der Handler - sonst ueberschreibt
-                              # das finale _save_mission_control_data(data) den Update
-            )
-
-        parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
-        if parent_pid and parent_pid != req.task_id:
-            asyncio.create_task(_DEPS["fan_in"](parent_pid))
-
-    elif req.target_status == "dismissed":
-        tasks.remove(task)
-        add_ticker("Approval Gate", f"Task #{task['id']} wurde verworfen")
-        _save_mission_control_data(data)
-        return {"status": "ok", "message": "Task verworfen."}
-
-    data["audit_logs"] = data.get("audit_logs", [])[:25]
-    _save_mission_control_data(data)
     _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
     broadcast_event("kanban_updated", {"action": "move", "task_id": req.task_id, "status": req.target_status})
+
+    if plan.get("dismissed"):
+        return {"status": "ok", "message": "Task verworfen."}
     return {"status": "ok", "task": task}
 
 

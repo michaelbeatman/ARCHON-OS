@@ -27,7 +27,7 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 
 | # | Punkt | Status | Beleg / Messung |
 |---|---|---|---|
-| B1 | Race Condition MC-Lock | 🟡 | **Lock-Duplikat beseitigt + atomare RVW-API** (siehe unten); `capture` migriert, `move` und `_execute_mission_control_task` nutzen noch getrenntes Laden/Speichern |
+| B1 | Race Condition MC-Lock | 🟡 | **Lock-Duplikat beseitigt, atomare RVW-API, `capture` + `move` migriert** (siehe unten); die Orchestrierung (`_execute_mission_control_task`, `_run_synthesis_cascade`) nutzt noch getrenntes Laden/Speichern |
 | B2 | Doppelte Proxy-Implementierungen | ✅ | `utils/reverse_proxy.py`, eine Klasse für alle Ziele |
 | B3 | Docker-Socket ohne Schutz | 🟡 | `utils/docker_client.py` mit Allowlist; direkte Socket-Connects in `main.py` (920, 1021, 1032) bleiben |
 | B4 | Path Traversal | ✅ | `utils/path_jail.py`, `safe_path` 12× in `main.py` |
@@ -116,12 +116,22 @@ Deadlock, keine `.tmp`-Reste.
 Live: `state` 200 mit 41 Tasks / 59 Agents, Parität unverändert, keine
 Tracebacks.
 
-**Noch offen.** `move_mission_control_task` und
-`_execute_mission_control_task` laden und speichern weiterhin getrennt. Beim
-Move-Handler liegen `await`-Aufrufe (Synthese-Finalisierung, `create_task`)
-zwischen Laden und Speichern — eine atomare Klammer braucht dort erst eine
-Umstrukturierung, sonst würde ein Thread-Lock über einen `await` den Event-Loop
-blockieren. Das ist der nächste Schritt für diesen Punkt.
+**Noch offen.** Die Orchestrierung (`_execute_mission_control_task`,
+`_trigger_sandy_staffing_nomination`, `_run_synthesis_cascade`) lädt und
+speichert weiterhin getrennt — vier solcher Paare (u. a. `orchestration.py:84/109`,
+`357/425`, `687/837`). Dort liegen `await`-Aufrufe (Dispatcher, LLM-Calls)
+zwischen Laden und Speichern; eine atomare Klammer braucht erst den Umbau
+„Mutation berechnen, dann per `update_mission_control_data` gezielt schreiben".
+Das ist der nächste Schritt für diesen Punkt.
+
+**Was am Move-Handler geändert wurde.** Der Handler schrieb früher am Ende und
+reichte sein `data`-Dict in `finalize_approval(daten=data)` weiter, damit ein
+späterer `_save` die Finalisierung nicht überschreibt — ein Workaround für
+genau dieses Problem. Jetzt gilt: Phase 1 (Laden, Ändern, Schreiben) atomar im
+Thread-Pool, Phase 2 (Synthese-Finalisierung, `execute`, `fan_in`) danach und
+**ohne** Lock. Der `daten`-Workaround entfällt, weil vor den `await`-Aufrufen
+geschrieben wird. Tests: `tests/test_mission_control_move.py` (6 Tests, alle
+Zweige + parallele Moves).
 
 ---
 

@@ -263,6 +263,7 @@ from archon.core.state_db import (  # noqa: E402
 from archon.core.mission_control import (  # noqa: E402
     MISSION_CONTROL_FILE, _MC_DATA_LOCK, _MC_ASYNC_LOCK,
     _write_mc_atomic, _load_mission_control_data, _save_mission_control_data,
+    update_mission_control_data,
 )
 
 from archon.core.profiles import (  # noqa: E402
@@ -10123,6 +10124,10 @@ async def _execute_mission_control_task(task_id: str):
         dispatcher=core_dispatcher,
         load_mc=_load_mission_control_data,
         save_mc=_save_mission_control_data,
+        # Atomares Read-Modify-Write: schreibt nur die Aenderungen DIESES Tasks
+        # zurueck. Ohne diesen Parameter wuerde der ueber den LLM-Call hinweg
+        # gehaltene Snapshot alle parallelen Aenderungen ueberschreiben (B1).
+        update_mc=update_mission_control_data,
         ticker=add_ticker,
         get_profiles=api_get_hermes_profiles,
         sync_obsidian=_sync_task_to_obsidian,

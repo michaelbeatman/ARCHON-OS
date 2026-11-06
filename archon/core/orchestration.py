@@ -45,12 +45,43 @@ DEFAULT_OBSIDIAN_VAULT_DIR = "/opt/data/obsidian"
 DEFAULT_WORKSPACE_DIR = "/mnt/raid/AgenticOS-2026"
 
 
+def _task_by_id(data: dict, task_id: str):
+    return next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
+
+
+def _merge_task_delta(fresh: dict, local_data: dict, task_id: str, local_tasks: list) -> None:
+    """Uebertraegt nur die Aenderungen DIESES Tasks in den frisch geladenen Store.
+
+    Der Task wird ueber einen langen await (LLM-Dispatch) hinweg als Snapshot
+    gehalten. Ein komplettes `save_mc(data)` am Ende wuerde alles ueberschreiben,
+    was in der Zwischenzeit am Store passiert ist — etwa ein Task, den der Nutzer
+    im Board verschoben hat (Lost Update, Audit B1). Deshalb wird nur der eigene
+    Task ersetzt bzw. eingefuegt und neu angelegte Sub-Tasks ergaenzt.
+    """
+    fresh_tasks = fresh.setdefault("tasks", [])
+    fresh_ids = {t.get("id") for t in fresh_tasks}
+
+    local_task = _task_by_id(local_data, task_id)
+    if local_task is not None:
+        for i, t in enumerate(fresh_tasks):
+            if t.get("id") == task_id:
+                fresh_tasks[i] = local_task
+                break
+        else:
+            fresh_tasks.insert(0, local_task)
+
+    for sub in local_tasks or []:
+        if sub.get("id") not in fresh_ids:
+            fresh_tasks.insert(0, sub)
+
+
 async def _execute_mission_control_task(
     task_id: str,
     *,
     dispatcher: Dispatcher = None,
     load_mc: LoadMC = _default_load_mc,
     save_mc: SaveMC = _default_save_mc,
+    update_mc: Optional[Callable] = None,
     ticker: Ticker = None,
     get_profiles: GetProfiles = None,
     sync_obsidian: SyncObsidian = None,
@@ -80,12 +111,23 @@ async def _execute_mission_control_task(
         trigger_sandy = _trigger_sandy_staffing_nomination
     if fan_in is None:
         fan_in = _fan_in_maybe_start_synthesis
-
     data = load_mc()
     tasks = data.get("tasks", [])
     task = next((t for t in tasks if t.get("id") == task_id), None)
     if not task:
         return
+
+    def _commit() -> None:
+        """Schreibt die Aenderungen dieses Tasks.
+
+        Mit update_mc: gezieltes Merge in den frisch geladenen Store, damit
+        parallele Aenderungen an anderen Tasks nicht ueberschrieben werden.
+        Ohne (Altverhalten/Tests): komplettes save_mc.
+        """
+        if update_mc is not None:
+            update_mc(lambda fresh: _merge_task_delta(fresh, data, task_id, tasks))
+        else:
+            save_mc(data)
 
     agent_id = task.get("agent_id", "micha")
     agent_name = task.get("agent_name", "Michael Keller")
@@ -106,7 +148,7 @@ async def _execute_mission_control_task(
 
     try:
         task["active_tool"] = "Tool: web_search & archon_core"
-        save_mc(data)
+        _commit()
 
         # Echter LLM-Dispatch
         res = await dispatcher.dispatch_to_omniroute_or_container(
@@ -223,7 +265,7 @@ async def _execute_mission_control_task(
         task["result_summary"] = f"Fehler bei Aufgabenausführung: {ex}"
         ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {ex}")
     finally:
-        save_mc(data)
+        _commit()
 
 
 def _paperclip_hire_profile_by_id(

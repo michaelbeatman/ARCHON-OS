@@ -1599,10 +1599,11 @@ async def api_watchdog_dispatch_action(payload: Dict = Body(...)):
 
     task_id = f"task-{int(datetime.now().timestamp())}"
 
-    # Eintragen in kanban.db
-    inserted = False
-    for kanban_db in ["/home/micha/.hermes/kanban.db", "/opt/data/kanban.db"]:
-        if os.path.exists(kanban_db):
+    # Eintragen in kanban.db (SQLite blockiert -> im Thread ausfuehren)
+    def _insert_task() -> bool:
+        for kanban_db in ["/home/micha/.hermes/kanban.db", "/opt/data/kanban.db"]:
+            if not os.path.exists(kanban_db):
+                continue
             try:
                 with sqlite3.connect(kanban_db, timeout=5.0) as kconn:
                     kconn.execute("""
@@ -1610,15 +1611,20 @@ async def api_watchdog_dispatch_action(payload: Dict = Body(...)):
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """, (task_id, title, body, assignee, "ready", "normal", "watchdog_action", now_iso))
                     kconn.commit()
-                    inserted = True
+                    return True
             except Exception as e:
                 print(f"[Watchdog] Action Kanban Insert Fehler: {e}")
+        return False
+
+    inserted = await asyncio.to_thread(_insert_task)
 
     # Fallback MemoryBridge
     if not inserted:
-        try:
+        def _bridge_sync():
             from local_memory_bridge import LocalMemoryBridge
             LocalMemoryBridge().sync_task(task_id=task_id, title=title, role=assignee, status="ready")
+        try:
+            await asyncio.to_thread(_bridge_sync)
         except Exception:
             pass
 
@@ -2481,14 +2487,18 @@ a {{
             
             cmd = f"echo '{b64_yaml}' | base64 -d > /usr/src/app/quartz.config.default.yaml && echo '{b64_scss}' | base64 -d > /usr/src/app/quartz/styles/custom.scss"
             exec_payload = {"AttachStdout": True, "AttachStderr": True, "Tty": False, "Cmd": ["sh", "-c", cmd]}
-            res_exec = docker_socket_request("POST", "/containers/archon-quartz/exec", exec_payload)
+            # Docker-Zugriffe sind blockierend -> aus dem Event-Loop auslagern
+            res_exec = await asyncio.to_thread(
+                docker_socket_request, "POST", "/containers/archon-quartz/exec", exec_payload)
             if res_exec:
                 import json
                 exec_id = json.loads(res_exec.decode('utf-8', errors='ignore')).get("Id")
                 if exec_id:
-                    docker_socket_request("POST", f"/exec/{exec_id}/start", {"Detach": False, "Tty": False})
-            
-            post_docker_container_action("archon-quartz", "restart")
+                    await asyncio.to_thread(
+                        docker_socket_request, "POST", f"/exec/{exec_id}/start",
+                        {"Detach": False, "Tty": False})
+
+            await asyncio.to_thread(post_docker_container_action, "archon-quartz", "restart")
         except Exception as e:
             print(f"Error updating archon-quartz via docker: {e}")
 
@@ -11067,7 +11077,9 @@ async def get_hud_telemetry():
     obs_path = os.path.join(WORKSPACE_DIR, "obsidian_vault")
     if os.path.exists(obs_path):
         try:
-            vault_notes = len([f for f in os.listdir(obs_path) if f.endswith(".md")])
+            # Verzeichnis-Scan blockiert sonst den Event-Loop bei jedem HUD-Poll
+            _files = await asyncio.to_thread(os.listdir, obs_path)
+            vault_notes = len([f for f in _files if f.endswith(".md")])
         except Exception:
             vault_notes = 14
 
@@ -12847,10 +12859,14 @@ async def api_get_latest_morning_standup():
         bridge = LocalMemoryBridge()
         out_dir = os.path.join(bridge.vault_path, "01_PROJEKTE", "Daily_Briefings")
         if os.path.exists(out_dir):
-            files = sorted([f for f in os.listdir(out_dir) if f.startswith("Briefing_") and f.endswith(".md")], reverse=True)
+            _entries = await asyncio.to_thread(os.listdir, out_dir)
+            files = sorted([f for f in _entries if f.startswith("Briefing_") and f.endswith(".md")], reverse=True)
             if files:
-                with open(os.path.join(out_dir, files[0]), "r", encoding="utf-8") as bf:
-                    return {"status": "success", "filename": files[0], "content": bf.read()}
+                def _read_latest():
+                    with open(os.path.join(out_dir, files[0]), "r", encoding="utf-8") as bf:
+                        return bf.read()
+                _content = await asyncio.to_thread(_read_latest)
+                return {"status": "success", "filename": files[0], "content": _content}
     except Exception:
         pass
     from backend.autonomous_standup import generate_morning_standup

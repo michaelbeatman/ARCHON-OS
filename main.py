@@ -9143,10 +9143,25 @@ def clear_chat_history_api(agent_id: str, session_id: Optional[str] = None):
 
 @app.get("/api/proxy")
 async def proxy_web_ui(url: str):
-    """Header-stripping async proxy to bypass X-Frame-Options & CSP for embedded Web UIs."""
+    """Header-stripping async proxy to bypass X-Frame-Options & CSP for embedded Web UIs.
+
+    SSRF-Schutz: Ziele werden vor dem Request gegen utils.egress_guard geprueft.
+    Erlaubt sind lokale Ziele (localhost/127.0.0.1/host.docker.internal) und
+    alles, was per ARCHON_PROXY_ALLOWED_TARGETS explizit freigegeben wurde.
+    """
     import urllib.parse
     from fastapi.responses import HTMLResponse, Response
-    
+    from utils.egress_guard import EgressBlocked, check_target_url
+
+    try:
+        check_target_url(url)
+    except EgressBlocked as blocked:
+        logger.warning(f"[Proxy] SSRF-Ziel blockiert: {blocked.reason} ({url[:120]})")
+        return JSONResponse(
+            status_code=403,
+            content={"error": "Ziel nicht erlaubt", "detail": blocked.reason},
+        )
+
     parsed = urllib.parse.urlparse(url)
     req_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",

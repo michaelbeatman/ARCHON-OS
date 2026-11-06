@@ -13,7 +13,7 @@ import tempfile
 from typing import List, Dict, Optional, Any
 from fastapi import FastAPI, HTTPException, Query, Request, Body, File, UploadFile, Form, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response, StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -33,6 +33,37 @@ from backend.platform_paths import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("archon_os")
 
+# ---------------------------------------------------------------------------
+# Ein einziger, geordneter Startup/Shutdown-Pfad.
+# Vorher: 3x @app.on_event("startup") + 2x ("shutdown") — deprecated und in
+# unbestimmter Reihenfolge ausgefuehrt. Jetzt: explizite Registrierung in
+# _STARTUP_HOOKS / _SHUTDOWN_HOOKS am Dateiende, Ausfuehrung im Lifespan.
+# ---------------------------------------------------------------------------
+_STARTUP_HOOKS: List[Any] = []
+_SHUTDOWN_HOOKS: List[Any] = []
+
+
+async def _archon_lifespan(_app_instance):
+    for hook in list(_STARTUP_HOOKS):
+        name = getattr(hook, "__name__", repr(hook))
+        try:
+            result = hook()
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as e:  # ein defekter Hook darf den Start nicht kippen
+            logger.warning(f"[Lifespan] Startup-Hook '{name}' fehlgeschlagen: {e}")
+    try:
+        yield
+    finally:
+        for hook in reversed(list(_SHUTDOWN_HOOKS)):
+            name = getattr(hook, "__name__", repr(hook))
+            try:
+                result = hook()
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as e:
+                logger.warning(f"[Lifespan] Shutdown-Hook '{name}' fehlgeschlagen: {e}")
+
 # Begrenzter Graceful-Shutdown: sonst blockiert uvicorn --reload bei jeder
 # Code-Änderung unbegrenzt auf offene Streams und der Server friert ein.
 try:
@@ -41,7 +72,7 @@ try:
 except Exception as _shutdown_guard_err:
     logger.warning(f"[Startup] Shutdown-Guard nicht aktiv: {_shutdown_guard_err}")
 
-app = FastAPI(title="Agent OS Control Panel")
+app = FastAPI(title="Agent OS Control Panel", lifespan=_archon_lifespan)
 _APP_START_TS = time.time()
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -79,6 +110,18 @@ async def add_no_cache_for_avatars(request: Request, call_next):
 # --- Auth-Gate (wirkt nur, wenn settings.auth.enabled = true) --------------
 _AUTH_PUBLIC_EXACT = {"/", "/health", "/metrics", "/favicon.ico", "/openapi.json", "/login", "/docs", "/redoc"}
 _AUTH_PUBLIC_PREFIXES = ("/static/", "/api/auth/login", "/api/auth/status", "/docs", "/redoc")
+
+# Nicht-/api-Pfade, die trotzdem geschuetzt sein muessen: eingebettete
+# Admin-Oberflaechen (n8n-Editor, OmniRoute-Konsole) und App-Shells.
+_AUTH_PROTECTED_PREFIXES = (
+    "/omniroute-proxy",
+    "/n8n-proxy",
+    "/rest/",
+    "/hud",
+    "/mobile",
+    "/m",
+    "/v2",
+)
 
 _SERVICE_TOKEN_CACHE = {"ts": 0.0, "token": ""}
 
@@ -153,6 +196,9 @@ async def auth_gate(request: Request, call_next):
             status_code=401,
             content={"error": "unauthorized", "detail": "Login erforderlich", "login_url": "/login"},
         )
+    if path.startswith(_AUTH_PROTECTED_PREFIXES):
+        # Eingebettete Admin-UIs: zur Login-Seite umleiten statt JSON zu liefern
+        return RedirectResponse(url=f"/login?next={path}", status_code=307)
     return await call_next(request)
 
 @app.get("/health")
@@ -172,35 +218,28 @@ def prometheus_metrics():
     except Exception as e:
         return Response(content=f"# Error collecting metrics: {e}\n", status_code=500, media_type="text/plain")
 
-WORKSPACE_DIR = "/app/agent_workspace" if os.path.exists("/app/agent_workspace") or os.path.exists("/.dockerenv") else "./agent_workspace"
-MEMORY_DIR = "/app/data" if os.path.exists("/app/data") else "."
-DATA_DIR = MEMORY_DIR
+# Pfade + Laufzeit-Helfer kommen aus app.core.runtime (gemeinsame Basis für
+# main.py und die ausgelagerten Router; dort zyklenfrei definiert).
+from archon.core.runtime import (  # noqa: E402
+    WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR,
+    resolve_obsidian_vault_path, ticker_entries, add_ticker, broadcast_event,
+    _load_json, _save_json, atomic_write_json,
+)
 
-def resolve_obsidian_vault_path():
-    env_path = os.environ.get("OBSIDIAN_VAULT_PATH")
-    if env_path and os.path.exists(env_path):
-        return env_path
-    
-    # Auf Linux/Docker-Systemen MUSS der Mount /opt/data/obsidian zwingend Vorrang haben
-    if sys.platform != "win32":
-        candidates = [
-            "/opt/data/obsidian",
-            "/app/data/obsidian",
-            os.path.join(WORKSPACE_DIR, "obsidian_vault")
-        ]
-    else:
-        candidates = [
-            OBSIDIAN_VAULT,
-            OBSIDIAN_VAULT_ALT,
-            os.path.expanduser("~/Documents/Obsidian Vault"),
-            os.path.join(WORKSPACE_DIR, "obsidian_vault")
-        ]
-    for candidate in candidates:
-        if os.path.exists(candidate) and os.path.isdir(candidate):
-            return candidate
-    return "/opt/data/obsidian" if sys.platform != "win32" else OBSIDIAN_VAULT
+# --- Pfad-Jail: jeder dateibasierte Endpunkt bleibt in erlaubten Wurzeln ---
+try:
+    from utils.path_jail import safe_path, PathJailError, allowed_roots
+except Exception as _pj_err:  # pragma: no cover - darf den Start nie blockieren
+    print(f"[PathJail] Konnte utils.path_jail nicht laden: {_pj_err}", file=sys.stderr)
 
-OBSIDIAN_VAULT_DIR = resolve_obsidian_vault_path()
+    class PathJailError(PermissionError):
+        pass
+
+    def safe_path(candidate, **kwargs):  # type: ignore[misc]
+        return os.path.realpath(os.path.abspath(os.path.expanduser(str(candidate))))
+
+    def allowed_roots(extra=None):  # type: ignore[misc]
+        return []
 os.makedirs(OBSIDIAN_VAULT_DIR, exist_ok=True)
 os.makedirs(os.path.join(WORKSPACE_DIR, "sandbox"), exist_ok=True)
 os.makedirs(MEMORY_DIR, exist_ok=True)
@@ -225,12 +264,22 @@ except Exception as e:
     print(f"Failed to import local_memory_bridge: {e}", file=sys.stderr)
     memory_bridge = None
 
-try:
-    from watchdog_daemon import start_background_watchdog
-    watchdog_runner = start_background_watchdog()
-except Exception as e:
-    print(f"Failed to start watchdog_daemon: {e}", file=sys.stderr)
-    watchdog_runner = None
+watchdog_runner = None
+
+
+def _start_watchdog_daemon():
+    """Watchdog erst beim App-Start starten - nicht beim Import.
+
+    Vorher lief der Supervisor-Thread bereits bei `import main`, also auch in
+    jedem Test-, CLI- oder Analyseprozess.
+    """
+    global watchdog_runner
+    try:
+        from watchdog_daemon import start_background_watchdog
+        watchdog_runner = start_background_watchdog()
+    except Exception as e:
+        print(f"Failed to start watchdog_daemon: {e}", file=sys.stderr)
+        watchdog_runner = None
 
 MEMORY_FILE = os.path.join(MEMORY_DIR, "agent_memory.json")
 AGENTS_FILE = os.path.join(MEMORY_DIR, "agents.json")
@@ -244,38 +293,8 @@ MISSION_CONTROL_FILE = os.path.join(MEMORY_DIR, "mission_control_data.json")
 QUICKCHAT_SESSIONS_DIR = os.path.join(MEMORY_DIR, "quickchat_sessions")
 os.makedirs(QUICKCHAT_SESSIONS_DIR, exist_ok=True)
 
-# In-Memory Ticker
-ticker_entries = []
+# Ticker/SSE/Broadcast leben in app.core.runtime (siehe Import oben).
 
-# =====================================================================
-# REAL-TIME SSE EVENT BROADCASTER (Pillar 1 & 2 / Event-Driven Push)
-# =====================================================================
-_SSE_SUBSCRIBERS: List[asyncio.Queue] = []
-
-def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None):
-    """
-    Sendet ein typisiertes Server-Sent Event an alle verbundenen Web-Clients.
-    Verhindert langsame Polling-Intervalle bei Kanban-Updates, Telegram-Decisions und Task-Fortschritten.
-    """
-    global _SSE_SUBSCRIBERS
-    payload = json.dumps({"type": event_type, "timestamp": time.time(), "data": data or {}})
-    dead_queues = []
-    for q in _SSE_SUBSCRIBERS:
-        try:
-            q.put_nowait(payload)
-        except Exception:
-            dead_queues.append(q)
-    for dq in dead_queues:
-        if dq in _SSE_SUBSCRIBERS:
-            _SSE_SUBSCRIBERS.remove(dq)
-
-def add_ticker(agent_name: str, message: str):
-    ts = datetime.datetime.now().strftime("%H:%M:%S")
-    ticker_entries.append(f"[{ts}] {agent_name}: {message}")
-    if len(ticker_entries) > 20:
-        ticker_entries.pop(0)
-    # Event direkt per SSE an alle offenen Clients pushen
-    broadcast_event("ticker_update", {"agent": agent_name, "message": message, "time": ts})
 
 # =====================================================================
 # PERSISTENZ-HELFER (Basic UI Configuration State)
@@ -396,21 +415,7 @@ DEFAULT_SERVICES = [
     }
 ]
 
-def _load_json(filepath, default):
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return default
-    return default
-
-def _save_json(filepath, data):
-    try:
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Error saving {filepath}: {e}")
+# _load_json/_save_json -> app.core.runtime
 
 GHOST_AGENT_IDS = {"prime-agent", "autogen-studio", "openhands", "openclaw", "gpt-researcher", "a-01", "a-02"}
 
@@ -550,8 +555,8 @@ def get_ticker():
 
 @app.post("/api/ticker/clear")
 def clear_ticker():
-    global ticker_entries
-    ticker_entries = []
+    # .clear() statt Neuzuweisung: die Liste wird mit archon.core.runtime geteilt
+    ticker_entries.clear()
     return {"status": "cleared"}
 
 @app.get("/api/agents")
@@ -608,38 +613,6 @@ def api_triage_oracle_signal(payload: Dict[str, Any] = Body(...)):
 # APOLLO VOICE AGENT (Hermes Conversational Voice & Execution Bridge)
 # =====================================================================
 
-@app.post("/api/voice/speak")
-async def api_voice_speak(payload: Dict[str, Any] = Body(...)):
-    text = payload.get("text", "")
-    voice = payload.get("voice")
-    if not text:
-        raise HTTPException(status_code=400, detail="Text ist erforderlich")
-    try:
-        from apollo_voice_engine import ApolloVoiceEngine
-        engine = ApolloVoiceEngine()
-        audio_bytes = await engine.synthesize_speech(text, voice)
-        return Response(content=audio_bytes, media_type="audio/mpeg")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/voice/command")
-async def api_voice_command(payload: Dict[str, Any] = Body(...)):
-    transcript = payload.get("transcript", "")
-    if not transcript:
-        raise HTTPException(status_code=400, detail="Transkript ist erforderlich")
-    try:
-        from apollo_voice_engine import ApolloVoiceEngine
-        engine = ApolloVoiceEngine()
-        return await engine.process_voice_command(transcript)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/voice/audio/{filename}")
-def api_get_voice_audio(filename: str):
-    audio_file = os.path.join("data", "audio_cache", filename)
-    if os.path.exists(audio_file):
-        return FileResponse(audio_file, media_type="audio/mpeg")
-    raise HTTPException(status_code=404, detail="Audio-Datei nicht gefunden")
 
 # =====================================================================
 # SEO & EXECUTION AGENT (Programmatic Content & Webhook Pipeline)
@@ -2085,7 +2058,6 @@ def _spawn_background(coro):
     return task
 
 
-@app.on_event("startup")
 async def _start_gateway_idle_loop():
     _spawn_background(_gateway_idle_stop_loop())
     _spawn_background(_email_imap_background_loop())
@@ -2101,7 +2073,6 @@ async def _start_gateway_idle_loop():
         print(f"[Startup] Internet Watchdog init notice: {e}")
 
 
-@app.on_event("shutdown")
 async def _cancel_background_tasks():
     """Bricht die Endlos-Loops ab.
 
@@ -2484,19 +2455,23 @@ def api_brain_vault_file(path: str):
         raise HTTPException(status_code=404, detail="Obsidian Vault Verzeichnis nicht gefunden.")
 
     clean_path = path.lstrip("/\\")
-    safe_path = os.path.abspath(os.path.join(vault_dir, clean_path))
-    if not safe_path.startswith(vault_dir):
-        raise HTTPException(status_code=400, detail="Ungültiger Dateipfad.")
-        
-    if not os.path.exists(safe_path):
-        raise HTTPException(status_code=404, detail=f"Datei '{path}' nicht gefunden.")
-        
+    candidate = os.path.join(vault_dir, clean_path)
     try:
-        with open(safe_path, "r", encoding="utf-8") as f:
+        real_file = safe_path(candidate, must_exist=True, allow_dirs=False)
+    except PathJailError as e:
+        raise HTTPException(status_code=400, detail=f"Ungültiger Dateipfad: {e}")
+
+    # Zusätzlich: muss innerhalb des gewählten Vault-Verzeichnisses liegen
+    real_vault = os.path.realpath(vault_dir)
+    if not (real_file == real_vault or real_file.startswith(real_vault + os.sep)):
+        raise HTTPException(status_code=400, detail="Ungültiger Dateipfad.")
+
+    try:
+        with open(real_file, "r", encoding="utf-8") as f:
             content = f.read()
         return {
             "path": path,
-            "filename": os.path.basename(safe_path),
+            "filename": os.path.basename(real_file),
             "content": content,
             "size": len(content)
         }
@@ -3312,7 +3287,6 @@ def compose_skill_frontmatter(name: str, category: str, tags: List[str], descrip
 
 _SKILLS_CACHE_DISK_PATH = os.path.join(DATA_DIR, "hermes_skills_cache.json")
 
-@app.on_event("startup")
 async def _warm_hermes_skill_caches():
     """Skills-Caches VOR dem ersten Request warm machen (Disk -> Memory).
     Sonst bezahlt der erste Request nach Restart den vollen Kaltbau
@@ -4182,22 +4156,6 @@ async def api_telegram_voice_relay(
     }
 
 
-class VoiceSynthesizePayload(BaseModel):
-    text: str
-    voice: Optional[str] = "de-DE-ConradNeural"
-
-
-@app.post("/api/voice/synthesize")
-async def api_voice_synthesize(payload: VoiceSynthesizePayload):
-    """Generiert eine Audiodatei aus Text via edge-tts."""
-    from backend.voice_pipeline import synthesize_speech
-    try:
-        mp3_path = await synthesize_speech(payload.text, voice=payload.voice or "de-DE-ConradNeural")
-        return FileResponse(mp3_path, media_type="audio/mpeg", filename="voice_output.mp3")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 class TelegramSendPayload(BaseModel):
     text: str
     chat_id: Optional[str] = ""
@@ -4456,7 +4414,6 @@ async def api_decide_decision(body: Dict = Body(...)):
     logger.info(f"[Decision] {task_id} ({typ}) -> {decision}: {ergebnis[:200]}")
     return {"status": "ok", "task_id": task_id, "decision": decision,
             "kanban_status": ziel, "ergebnis": ergebnis}
-
 
 
 def _sync_org_hierarchy_node(p_id: str, name: Optional[str] = None, person_name: Optional[str] = None,
@@ -6892,6 +6849,7 @@ def api_get_guardian_stats(timeframe: str = "all"):
     daily_trend = {}
     all_sessions_list = []
     grand_total_tokens = 0
+    grand_cache_tokens = 0
     grand_total_cost = 0.0
     grand_total_calls = 0
     max_overall_ts = 0
@@ -6923,6 +6881,7 @@ def api_get_guardian_stats(timeframe: str = "all"):
             rows = con.execute(query).fetchall()
             
             p_tokens = 0
+            p_cache = 0
             p_cost = 0.0
             p_calls = 0
             p_models = {}
@@ -6937,11 +6896,12 @@ def api_get_guardian_stats(timeframe: str = "all"):
                 if min_ts > 0 and ts < min_ts:
                     continue
                 
-                tot = inp + out + cache
+                tot = inp + out  # Cache-Lesezugriffe sind keine neuen Tokens
                 # Plausibilitäts-Korrektur: Verhindere 1M-Faktor-Pricing-Bugs (z.B. OpenRouter 0.75$/1M als 0.75$/Token)
                 if tot > 0 and (cost / tot) > 0.001:
                     cost = cost / 1_000_000.0
                 p_tokens += tot
+                p_cache += cache
                 p_cost += cost
                 p_calls += calls
                 
@@ -6992,11 +6952,14 @@ def api_get_guardian_stats(timeframe: str = "all"):
             
             if p_calls > 0:
                 grand_total_tokens += p_tokens
+                grand_cache_tokens += p_cache
                 grand_total_cost += p_cost
                 grand_total_calls += p_calls
                 profiles_stats.append({
                     "profile": prof_name,
                     "total_tokens": p_tokens,
+                    "cache_read_tokens": p_cache,
+                    "total_with_cache": p_tokens + p_cache,
                     "total_cost": round(p_cost, 4),
                     "total_calls": p_calls,
                     "models": list(p_models.values())
@@ -7046,6 +7009,8 @@ def api_get_guardian_stats(timeframe: str = "all"):
         "status": "success",
         "timeframe": timeframe,
         "grand_total_tokens": grand_total_tokens,
+        "grand_cache_read_tokens": grand_cache_tokens,
+        "window_note": "Zeitraum filtert Sitzungen nach letzter Aktivitaet; Token-Summen umfassen die gesamte Sitzung.",
         "grand_total_cost": round(grand_total_cost, 2),
         "grand_total_calls": grand_total_calls,
         "max_last_seen": max_overall_ts,
@@ -8025,6 +7990,25 @@ def _get_hermes_config_paths():
         active_path = found_configs[0]
     return active_path, found_configs
 
+
+def _safe_config_target(path: Optional[str]) -> Optional[str]:
+    """Validiert einen Hermes-Config-Pfad gegen das Konfig-Jail.
+
+    Hermes-Konfigurationen duerfen ausschliesslich unter /opt/data, /app oder
+    ~/.hermes liegen - nie irgendwo sonst im Dateisystem.
+    """
+    if not path:
+        return None
+    try:
+        return safe_path(
+            path,
+            allow_write=True,
+            allow_dirs=False,
+            extra_roots=["/opt/data", "/app", os.path.expanduser("~/.hermes"), "/root/.hermes"],
+        )
+    except PathJailError as e:
+        raise HTTPException(status_code=403, detail=f"Config-Pfad nicht erlaubt: {e}")
+
 @app.get("/api/hermes/settings")
 def api_get_hermes_form_config(path: Optional[str] = None):
     import yaml
@@ -8214,9 +8198,13 @@ def api_save_hermes_form_config(payload: dict = Body(...)):
     if not target_path:
         active_path, _ = _get_hermes_config_paths()
         target_path = active_path
-        
+
     if not target_path:
         raise HTTPException(status_code=400, detail="Kein Pfad für Hermes-Konfiguration gefunden.")
+
+    target_path = _safe_config_target(target_path)
+    if not target_path:
+        raise HTTPException(status_code=400, detail="Ungültiger Konfigurationspfad.")
 
     existing_data = {}
     if os.path.exists(target_path):
@@ -8659,10 +8647,14 @@ def api_save_hermes_raw_config(payload: dict = Body(...)):
     if not target_path:
         active_path, _ = _get_hermes_config_paths()
         target_path = active_path
-        
+
     if not target_path:
         raise HTTPException(status_code=400, detail="Kein Pfad für Hermes-Konfiguration gefunden.")
-        
+
+    target_path = _safe_config_target(target_path)
+    if not target_path:
+        raise HTTPException(status_code=400, detail="Ungültiger Konfigurationspfad.")
+
     # 1. Syntax-Validierung
     try:
         parsed = yaml.safe_load(yaml_content)
@@ -10083,77 +10075,9 @@ def api_hermes_update_apply(request: Request, payload: dict = Body(default={})):
     return hermes_updater.apply_hermes_update(channel=channel, auto_restart=auto_restart)
 
 # --- VERTRAGS- & FRISTENMANAGEMENT (t-0a2171) ---
-@app.get("/api/contracts")
-@app.get("/api/v1/contracts")
-def api_list_contracts(category: Optional[str] = None, status: Optional[str] = None, sort_by: str = "deadline"):
-    from backend.contract_manager import ContractManager
-    return {"status": "success", "contracts": ContractManager.list_contracts(category=category, status=status, sort_by=sort_by)}
-
-
-@app.get("/api/contracts/stats")
-@app.get("/api/v1/contracts/stats")
-def api_contract_stats():
-    from backend.contract_manager import ContractManager
-    return {"status": "success", "stats": ContractManager.get_stats()}
-
-
-@app.get("/api/contracts/{contract_id}")
-@app.get("/api/v1/contracts/{contract_id}")
-def api_get_contract(contract_id: str):
-    from backend.contract_manager import ContractManager
-    c = ContractManager.get(contract_id)
-    if not c:
-        raise HTTPException(status_code=404, detail="Vertrag nicht gefunden.")
-    return {"status": "success", "contract": c}
-
-
-@app.post("/api/contracts")
-@app.post("/api/v1/contracts")
-def api_save_contract(payload: dict = Body(...)):
-    from backend.contract_manager import ContractManager
-    saved = ContractManager.create_or_update(payload)
-    return {"status": "success", "contract": saved}
-
-
-@app.delete("/api/contracts/{contract_id}")
-@app.delete("/api/v1/contracts/{contract_id}")
-def api_delete_contract(contract_id: str):
-    from backend.contract_manager import ContractManager
-    deleted = ContractManager.delete(contract_id)
-    return {"status": "success" if deleted else "not_found", "deleted": deleted}
-
-
-@app.post("/api/contracts/parse")
-@app.post("/api/v1/contracts/parse")
-def api_parse_contract(payload: dict = Body(...)):
-    from backend.contract_manager import ContractParser
-    text = payload.get("text", "")
-    parsed = ContractParser.parse(text)
-    return {"status": "success", "parsed": parsed}
-
-
-@app.post("/api/contracts/scan-deadlines")
-@app.post("/api/v1/contracts/scan-deadlines")
-def api_scan_contract_deadlines(payload: dict = Body(default={})):
-    from backend.contract_manager import ContractManager
-    send_telegram = payload.get("send_telegram", True)
-    create_kanban = payload.get("create_kanban_task", True)
-    alerts = ContractManager.scan_and_alert_deadlines(send_telegram=send_telegram, create_kanban_task=create_kanban)
-    return {"status": "success", "alerts_triggered": alerts, "count": len(alerts)}
-
-
-@app.post("/api/contracts/{contract_id}/renew")
-@app.post("/api/v1/contracts/{contract_id}/renew")
-def api_renew_contract(contract_id: str):
-    from backend.contract_manager import ContractManager
-    renewed = ContractManager.renew_contract(contract_id)
-    if not renewed:
-        raise HTTPException(status_code=404, detail="Vertrag konnte nicht verlängert werden.")
-    return {"status": "success", "contract": renewed}
 
 
 # --- SAUBERES HERUNTERFAHREN & TASK-DRAINING (t-12113b) ---
-@app.on_event("startup")
 def on_startup_drain_recovery():
     try:
         from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
@@ -10163,7 +10087,6 @@ def on_startup_drain_recovery():
         print(f"[Archon] Startup Recovery Fehler: {e}", file=sys.stderr)
 
 
-@app.on_event("shutdown")
 def on_shutdown_graceful():
     try:
         from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
@@ -10360,7 +10283,6 @@ def api_delete_deal(deal_id: str):
     return {"status": "success" if deleted else "not_found", "deleted": deleted}
 
 
-
 # --- PLUGIN SYSTEM & EXTENSIBILITY (MEILENSTEIN 5) ---
 @app.get("/api/v1/plugins")
 def api_list_plugins():
@@ -10445,7 +10367,6 @@ async def api_execute_plugin_tool(payload: dict = Body(...)):
         raise HTTPException(status_code=400, detail=str(e))
 
 _VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
-
 
 
 @app.get("/api/llm-providers/models")
@@ -10568,10 +10489,14 @@ def api_get_vault_list():
 
 @app.get("/api/vault/file")
 def api_read_vault_file_direct(path: str = Query(...)):
-    if not path or not os.path.exists(path):
+    try:
+        real_path = safe_path(path, must_exist=True, allow_dirs=False)
+    except PathJailError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    if not os.path.isfile(real_path):
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
-        return {"status": "success", "path": path, "content": f.read()}
+    with open(real_path, "r", encoding="utf-8", errors="replace") as f:
+        return {"status": "success", "path": real_path, "content": f.read()}
 
 
 @app.post("/api/vault/edit")
@@ -10580,20 +10505,28 @@ def api_edit_vault_file_direct(payload: Dict = Body(...)):
     content = payload.get("content", "")
     if not path:
         raise HTTPException(status_code=400, detail="Pfad fehlt.")
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    try:
+        real_path = safe_path(path, allow_write=True, allow_dirs=False)
+    except PathJailError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    os.makedirs(os.path.dirname(real_path), exist_ok=True)
+    with open(real_path, "w", encoding="utf-8") as f:
         f.write(content)
     _VAULT_FILES_CACHE["ts"] = 0.0
-    return {"status": "success", "path": path}
+    return {"status": "success", "path": real_path}
 
 
 @app.delete("/api/vault")
 def api_delete_vault_file_direct(path: str = Query(...)):
-    if not path or not os.path.exists(path):
+    try:
+        real_path = safe_path(path, must_exist=True, allow_write=True, allow_dirs=False)
+    except PathJailError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    if not os.path.isfile(real_path):
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
-    os.remove(path)
+    os.remove(real_path)
     _VAULT_FILES_CACHE["ts"] = 0.0
-    return {"status": "success", "deleted": path}
+    return {"status": "success", "deleted": real_path}
 
 
 @app.post("/api/sandbox")
@@ -10762,95 +10695,27 @@ def save_agent_config(container_name, config):
     except Exception as e:
         print(f"Error saving config: {e}")
 
-def decode_chunked(data: bytes) -> bytes:
-    result = b''
-    offset = 0
-    while offset < len(data):
-        line_end = data.find(b'\r\n', offset)
-        if line_end == -1:
-            break
-        chunk_size_str = data[offset:line_end].strip()
-        if not chunk_size_str:
-            offset = line_end + 2
-            continue
-        try:
-            chunk_size = int(chunk_size_str, 16)
-        except ValueError:
-            result += data[offset:]
-            break
-        if chunk_size == 0:
-            break
-        offset = line_end + 2
-        result += data[offset:offset+chunk_size]
-        offset += chunk_size + 2
-    return result
-
 def docker_socket_request(method: str, path: str, payload: dict = None, timeout: float = 1.0) -> bytes:
+    """Deprecated-Fassade: leitet auf den abgesicherten DockerClient weiter.
+
+    Behaelt die alte Signatur, damit alle Aufrufstellen unveraendert bleiben.
+    Neu: Transport ueber DOCKER_HOST (docker-socket-proxy) moeglich, Endpunkt-
+    Allowlist, validierte Container-Namen, echte Fehler statt stillem b"".
+    """
     try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(timeout)
-        s.connect('/var/run/docker.sock')
-        
-        body = ""
-        if payload is not None:
-            body = json.dumps(payload)
-            
-        req = f'{method} {path} HTTP/1.1\r\nHost: localhost\r\n'
-        if body:
-            req += f'Content-Type: application/json\r\nContent-Length: {len(body.encode("utf-8"))}\r\n'
-        req += 'Connection: close\r\n\r\n'
-        
-        if body:
-            req += body
-            
-        s.sendall(req.encode('utf-8'))
-        
-        response = b''
-        content_length = None
-        is_chunked = False
-        headers_parsed = False
-        
-        while True:
-            try:
-                chunk = s.recv(65536)
-                if not chunk:
-                    break
-                response += chunk
-                
-                if not headers_parsed and b'\r\n\r\n' in response:
-                    headers_part, body_part = response.split(b'\r\n\r\n', 1)
-                    headers_parsed = True
-                    headers_lower = headers_part.lower()
-                    if b'transfer-encoding: chunked' in headers_lower:
-                        is_chunked = True
-                    for hline in headers_part.split(b'\r\n'):
-                        if hline.lower().startswith(b'content-length:'):
-                            try:
-                                content_length = int(hline.split(b':', 1)[1].strip())
-                            except Exception:
-                                pass
-                
-                if headers_parsed:
-                    body_part = response.split(b'\r\n\r\n', 1)[1]
-                    if content_length is not None and len(body_part) >= content_length:
-                        break
-                    if is_chunked and (body_part.endswith(b'\r\n0\r\n\r\n') or body_part.endswith(b'0\r\n\r\n') or b'\r\n0\r\n\r\n' in body_part):
-                        break
-            except socket.timeout:
-                break
-        s.close()
-        
-        parts = response.split(b'\r\n\r\n', 1)
-        if len(parts) < 2:
-            return b''
-            
-        headers, body_raw = parts[0], parts[1]
-        if is_chunked:
-            return decode_chunked(body_raw)
-        return body_raw
+        from utils.docker_client import docker_client as _dc, DockerError as _DErr
+    except Exception as e:  # pragma: no cover
+        print(f"[Docker] Client nicht verfuegbar: {e}", file=sys.stderr)
+        return b""
+    try:
+        return _dc.request(method, path, payload, timeout=timeout)
+    except _DErr as e:
+        print(f"[Docker] Abgelehnt/fehlgeschlagen: {e}", file=sys.stderr)
+        return b""
     except Exception as e:
-        print(f"Docker Socket Request Error: {e}")
-        return b''
+        print(f"[Docker] Socket-Request Fehler: {e}", file=sys.stderr)
+        return b""
+
 
 def parse_docker_stream(data: bytes) -> str:
     result = ""
@@ -12414,9 +12279,6 @@ async def get_hud_telemetry():
     }
 
 
-
-
-
 # 🚀 MISSION CONTROL 3-ZONEN-COCKPIT & HITL KANBAN API
 # =====================================================================
 
@@ -12431,6 +12293,9 @@ class OSKanbanTaskStatusUpdate(BaseModel):
 # (Temp-Datei + fsync + os.replace). Wer load->aendern->save als SEQUENZ braucht
 # (Fan-in-Check), haelt den Lock ueber alles (s. _fan_in_maybe_start_synthesis).
 _MC_DATA_LOCK = threading.Lock()
+# Async-Pendant: schuetzt Read-Modify-Write-Sequenzen im Event-Loop, ohne den
+# Loop zu blockieren (Datei-I/O laeuft ueber asyncio.to_thread).
+_MC_ASYNC_LOCK = asyncio.Lock()
 
 
 def _write_mc_atomic(data: dict):
@@ -13409,8 +13274,8 @@ async def _fan_in_maybe_start_synthesis(parent_pid: str):
         # laden, pruefen, Flag setzen, speichern). Sonst starten zwei zeitgleiche
         # Fertigmeldungen die Synthese doppelt. _write_mc_atomic direkt: der Lock
         # ist nicht reentrant, _save_mission_control_data wuerde verklemmen.
-        with _MC_DATA_LOCK:
-            data = _load_mission_control_data()
+        async with _MC_ASYNC_LOCK:
+            data = await asyncio.to_thread(_load_mission_control_data)
             siblings = [t for t in data.get("tasks", [])
                         if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
                         and t.get("id") != parent_pid]
@@ -13422,7 +13287,7 @@ async def _fan_in_maybe_start_synthesis(parent_pid: str):
             if not all(s.get("status") == "completed" for s in siblings):
                 return
             parent["synthesis_started"] = True
-            _write_mc_atomic(data)
+            await asyncio.to_thread(_write_mc_atomic, data)
         logger.info(f"[Fan-in] Alle {len(siblings)} Geschwister von '{parent_pid}' fertig -> Synthese starten")
         asyncio.create_task(_run_synthesis_cascade(parent_pid))
     except Exception as e:
@@ -14622,91 +14487,25 @@ def _get_shared_proxy_client() -> httpx.AsyncClient:
         _PROXY_HTTP_CLIENTS[loop_id] = c
     return c
 
+_OMNIROUTE_PROXY = None
+
+
+def _get_omniroute_proxy():
+    global _OMNIROUTE_PROXY
+    if _OMNIROUTE_PROXY is None:
+        from utils.reverse_proxy import ReverseProxy
+        _OMNIROUTE_PROXY = ReverseProxy(
+            name="OmniRoute",
+            target_host="omniroute:20128",
+            mount_prefix="/omniroute-proxy",
+            fallback_host="host.docker.internal:20128",
+        )
+    return _OMNIROUTE_PROXY
+
+
 async def forward_to_omniroute(request: Request, path: str):
-    target_host = "omniroute:20128"
-    url = f"http://{target_host}/{path}"
-    if request.url.query:
-        url += f"?{request.url.query}"
-        
-    client = _get_shared_proxy_client()
-    try:
-        req_headers = dict(request.headers)
-        req_headers.pop("host", None)
-        req_headers.pop("accept-encoding", None)
-        body = await request.body()
-        resp = await client.request(
-            method=request.method,
-            url=url,
-            headers=req_headers,
-            content=body
-        )
-        
-        resp_headers = {}
-        for k, v in resp.headers.items():
-            k_lower = k.lower()
-            if k_lower in ["x-frame-options", "content-security-policy", "content-length", "content-encoding", "transfer-encoding"]:
-                continue
-            if k_lower == "location":
-                loc = v
-                if loc.startswith("/"):
-                    loc = f"/omniroute-proxy{loc}"
-                resp_headers["Location"] = loc
-            else:
-                resp_headers[k] = v
-                
-        resp_headers["Access-Control-Allow-Origin"] = "*"
-        resp_headers["X-Frame-Options"] = "ALLOWALL"
-        
-        content = resp.content
-        # If response is HTML, inject base tag so Next.js assets and API calls resolve correctly
-        c_type = resp.headers.get("content-type", "")
-        if "text/html" in c_type:
-            html_text = content.decode("utf-8", errors="ignore")
-            # Replace absolute root paths in HTML attributes with /omniroute-proxy/
-            # or ensure head has base href
-            if "<head>" in html_text:
-                html_text = html_text.replace("<head>", "<head><base href=\"/omniroute-proxy/\">", 1)
-            content = html_text.encode("utf-8")
-        
-        return Response(
-            content=content,
-            status_code=resp.status_code,
-            headers=resp_headers,
-            media_type=resp.headers.get("content-type")
-        )
-    except Exception as e:
-        try:
-            url_fallback = f"http://host.docker.internal:20128/{path}"
-            if request.url.query:
-                url_fallback += f"?{request.url.query}"
-            body = await request.body()
-            resp = await client.request(method=request.method, url=url_fallback, content=body)
-            resp_headers = {}
-            for k, v in resp.headers.items():
-                k_lower = k.lower()
-                if k_lower in ["x-frame-options", "content-security-policy", "content-length", "content-encoding", "transfer-encoding"]:
-                    continue
-                if k_lower == "location":
-                    loc = v
-                    if loc.startswith("/"):
-                        loc = f"/omniroute-proxy{loc}"
-                    resp_headers["Location"] = loc
-                else:
-                    resp_headers[k] = v
-            resp_headers["Access-Control-Allow-Origin"] = "*"
-            resp_headers["X-Frame-Options"] = "ALLOWALL"
-            
-            content = resp.content
-            c_type = resp.headers.get("content-type", "")
-            if "text/html" in c_type:
-                html_text = content.decode("utf-8", errors="ignore")
-                if "<head>" in html_text:
-                    html_text = html_text.replace("<head>", "<head><base href=\"/omniroute-proxy/\">", 1)
-                content = html_text.encode("utf-8")
-                
-            return Response(content=content, status_code=resp.status_code, headers=resp_headers, media_type=resp.headers.get("content-type"))
-        except Exception as e2:
-            return JSONResponse(status_code=502, content={"error": f"OmniRoute proxy error: {str(e2)}"})
+    return await _get_omniroute_proxy().forward(request, path)
+
 
 @app.api_route("/omniroute-proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 async def omniroute_proxy(request: Request, path: str = ""):
@@ -14719,119 +14518,36 @@ async def omniroute_next_assets(request: Request, path: str = ""):
 # -------------------------------------------------------------
 # N8N AUTOMATION EMBEDDED REVERSE PROXY (STRIPS X-FRAME-OPTIONS & CSP)
 # -------------------------------------------------------------
+_N8N_PROXY = None
+
+
+def _get_n8n_proxy():
+    global _N8N_PROXY
+    if _N8N_PROXY is None:
+        from utils.reverse_proxy import ReverseProxy
+        _N8N_PROXY = ReverseProxy(
+            name="n8n",
+            target_host="n8n:5678",
+            mount_prefix="/n8n-proxy",
+            fallback_host="host.docker.internal:5678",
+            html_replacements=(
+                ('href="/assets/',  'href="/n8n-proxy/assets/'),
+                ('src="/assets/',   'src="/n8n-proxy/assets/'),
+                ('href="/static/',  'href="/n8n-proxy/static/'),
+                ('src="/static/',   'src="/n8n-proxy/static/'),
+                ('data-src="/assets/', 'data-src="/n8n-proxy/assets/'),
+                ('href="/favicon.ico"', 'href="/n8n-proxy/favicon.ico"'),
+            ),
+            static_overrides={
+                "base-path.js": ("window.BASE_PATH = '/n8n-proxy/';", "application/javascript"),
+            },
+        )
+    return _N8N_PROXY
+
+
 async def forward_to_n8n(request: Request, path: str):
-    target_host = "n8n:5678"
-    clean_path = path.lstrip("/")
-    url = f"http://{target_host}/{clean_path}"
-    if request.url.query:
-        url += f"?{request.url.query}"
-        
-    client = _get_shared_proxy_client()
-    try:
-        req_headers = dict(request.headers)
-        req_headers.pop("host", None)
-        req_headers.pop("accept-encoding", None)
-        body = await request.body()
-        resp = await client.request(
-            method=request.method,
-            url=url,
-            headers=req_headers,
-            content=body
-        )
-        
-        resp_headers = {}
-        for k, v in resp.headers.items():
-            k_lower = k.lower()
-            if k_lower in ["x-frame-options", "content-security-policy", "content-length", "content-encoding", "transfer-encoding"]:
-                continue
-            if k_lower == "location":
-                loc = v
-                if loc.startswith("/"):
-                    loc = f"/n8n-proxy{loc}"
-                resp_headers["Location"] = loc
-            else:
-                resp_headers[k] = v
-                
-        resp_headers["Access-Control-Allow-Origin"] = "*"
-        resp_headers["X-Frame-Options"] = "ALLOWALL"
-        
-        content = resp.content
-        c_type = resp.headers.get("content-type", "")
+    return await _get_n8n_proxy().forward(request, path)
 
-        if path.endswith("base-path.js"):
-            return Response(
-                content=b"window.BASE_PATH = '/n8n-proxy/';",
-                status_code=200,
-                headers=resp_headers,
-                media_type="application/javascript"
-            )
-
-        if "text/html" in c_type:
-            html_text = content.decode("utf-8", errors="ignore")
-            if "<head>" in html_text:
-                html_text = html_text.replace("<head>", "<head><base href=\"/n8n-proxy/\">", 1)
-            html_text = html_text.replace('href="/assets/', 'href="/n8n-proxy/assets/')
-            html_text = html_text.replace('src="/assets/', 'src="/n8n-proxy/assets/')
-            html_text = html_text.replace('href="/static/', 'href="/n8n-proxy/static/')
-            html_text = html_text.replace('src="/static/', 'src="/n8n-proxy/static/')
-            html_text = html_text.replace('data-src="/assets/', 'data-src="/n8n-proxy/assets/')
-            html_text = html_text.replace('href="/favicon.ico"', 'href="/n8n-proxy/favicon.ico"')
-            content = html_text.encode("utf-8")
-        
-        return Response(
-            content=content,
-            status_code=resp.status_code,
-            headers=resp_headers,
-            media_type=resp.headers.get("content-type")
-        )
-    except Exception as e:
-        try:
-            url_fallback = f"http://host.docker.internal:5678/{path}"
-            if request.url.query:
-                url_fallback += f"?{request.url.query}"
-            body = await request.body()
-            resp = await client.request(method=request.method, url=url_fallback, headers=req_headers, content=body)
-            resp_headers = {}
-            for k, v in resp.headers.items():
-                k_lower = k.lower()
-                if k_lower in ["x-frame-options", "content-security-policy", "content-length", "content-encoding", "transfer-encoding"]:
-                    continue
-                if k_lower == "location":
-                    loc = v
-                    if loc.startswith("/"):
-                        loc = f"/n8n-proxy{loc}"
-                    resp_headers["Location"] = loc
-                else:
-                    resp_headers[k] = v
-            resp_headers["Access-Control-Allow-Origin"] = "*"
-            resp_headers["X-Frame-Options"] = "ALLOWALL"
-            
-            content = resp.content
-            c_type = resp.headers.get("content-type", "")
-
-            if path.endswith("base-path.js"):
-                return Response(
-                    content=b"window.BASE_PATH = '/n8n-proxy/';",
-                    status_code=200,
-                    headers=resp_headers,
-                    media_type="application/javascript"
-                )
-
-            if "text/html" in c_type:
-                html_text = content.decode("utf-8", errors="ignore")
-                if "<head>" in html_text:
-                    html_text = html_text.replace("<head>", "<head><base href=\"/n8n-proxy/\">", 1)
-                html_text = html_text.replace('href="/assets/', 'href="/n8n-proxy/assets/')
-                html_text = html_text.replace('src="/assets/', 'src="/n8n-proxy/assets/')
-                html_text = html_text.replace('href="/static/', 'href="/n8n-proxy/static/')
-                html_text = html_text.replace('src="/static/', 'src="/n8n-proxy/static/')
-                html_text = html_text.replace('data-src="/assets/', 'data-src="/n8n-proxy/assets/')
-                html_text = html_text.replace('href="/favicon.ico"', 'href="/n8n-proxy/favicon.ico"')
-                content = html_text.encode("utf-8")
-                
-            return Response(content=content, status_code=resp.status_code, headers=resp_headers, media_type=resp.headers.get("content-type"))
-        except Exception as e2:
-            return JSONResponse(status_code=502, content={"error": f"n8n proxy error: {str(e2)}"})
 
 @app.api_route("/n8n-proxy", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 @app.api_route("/n8n-proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
@@ -14921,8 +14637,6 @@ def debug_db():
         return {"error": str(e)}
 
 
-
-
 # =====================================================================
 # PROAKTIVER MORGEN-STANDUP & AUTONOMER WECKDIENST (Pillar 1 & 7)
 # =====================================================================
@@ -15007,14 +14721,6 @@ def api_resolve_tool_proposal(permission_id: str, payload: Dict = Body(...)):
     from backend.tool_permission_manager import tool_permission_manager
     action = payload.get("action", "grant")
     return tool_permission_manager.resolve_proposal(permission_id, action=action)
-
-@app.post("/api/memory/harvest")
-def api_harvest_memory(payload: Dict = Body(...)):
-    from local_memory_bridge import LocalMemoryBridge
-    bridge = LocalMemoryBridge()
-    text = payload.get("text", "")
-    agent_id = payload.get("agent_id", "orchestrator")
-    return bridge.harvest_facts_and_preferences(text, agent_id=agent_id)
 
 
 # --- NEUE AGENTIC OS MECHANIKEN (BATCH 4: AUDIT, SNAPSHOTS, CONSENSUS, BUDGET & TELEGRAM) ---
@@ -15121,15 +14827,6 @@ def api_save_concurrency_config(payload: Dict = Body(...)):
     ok = save_concurrency_config(cfg)
     return {"status": "success" if ok else "error", "concurrency": cfg}
 
-@app.post("/api/router/benchmark")
-async def api_run_model_benchmark(payload: Dict = Body(...)):
-    from backend.model_benchmarker import run_model_benchmark
-    return await run_model_benchmark(
-        prompt=payload.get("prompt", "Erstelle eine strukturierte Zusammenfassung der DSGVO-Kernpflichten."),
-        model_a=payload.get("model_a", "deepseek/deepseek-chat"),
-        model_b=payload.get("model_b", "anthropic/claude-3-5-sonnet"),
-        role=payload.get("role", "Senior Analyst")
-    )
 
 @app.post("/api/vision/analyze")
 def api_analyze_vision(payload: Dict = Body(...)):
@@ -15186,11 +14883,6 @@ def api_list_db_backups():
     from backend.db_backup_manager import db_backup_manager
     return {"status": "success", "backups": db_backup_manager.list_backups()}
 
-@app.post("/api/security/mask-secrets")
-def api_mask_secrets(payload: Dict = Body(...)):
-    from backend.secret_masker import mask_sensitive_text
-    masked, count = mask_sensitive_text(payload.get("text", ""))
-    return {"status": "success", "masked_text": masked, "redacted_count": count}
 
 @app.post("/api/notifications/dispatch")
 def api_dispatch_notification(payload: Dict = Body(...)):
@@ -15210,15 +14902,6 @@ def api_list_recent_notifications(limit: int = 50):
 
 # --- NEUE AGENTIC OS MECHANIKEN (BATCH 8: COST-ESTIMATOR, DB-OPTIMIZER, HEALTH-SCORE, DOSSIER) ---
 
-@app.post("/api/router/estimate-cost")
-def api_estimate_cost(payload: Dict = Body(...)):
-    from backend.cost_estimator import estimate_prompt_cost
-    return estimate_prompt_cost(
-        prompt=payload.get("prompt", ""),
-        model_name=payload.get("model", "deepseek/deepseek-chat"),
-        expected_output_tokens=int(payload.get("expected_output_tokens", 1000)),
-        task_budget_usd=float(payload.get("task_budget_usd", 0.25))
-    )
 
 @app.post("/api/system/optimize-db")
 def api_optimize_db():
@@ -15261,10 +14944,6 @@ def api_rollback_task_trace(task_id: str, payload: Dict = Body(...)):
         to_step=int(payload.get("to_step", 0))
     )
 
-@app.get("/api/router/benchmark/history")
-def api_get_benchmark_history(limit: int = 25):
-    from backend.model_benchmarker import get_benchmark_history
-    return {"status": "success", "benchmarks": get_benchmark_history(limit=limit)}
 
 @app.post("/api/consensus/council-vote")
 async def api_run_council_vote(payload: Dict = Body(...)):
@@ -15363,32 +15042,6 @@ async def api_run_war_room(payload: Dict = Body(...)):
 def api_get_war_room_history(limit: int = 20):
     from backend.war_room_simulator import get_war_room_history
     return {"status": "success", "history": get_war_room_history(limit=limit)}
-
-@app.post("/api/contracts/create")
-def api_create_contract(payload: Dict = Body(...)):
-    from backend.sla_contract_enforcer import sla_contract_enforcer
-    return sla_contract_enforcer.create_contract(
-        task_id=payload.get("task_id", "task-sla"),
-        delegator_agent=payload.get("delegator", "agent-lead"),
-        assignee_agent=payload.get("assignee", "agent-worker"),
-        required_keys=payload.get("required_keys"),
-        min_content_length=int(payload["min_content_length"]) if "min_content_length" in payload else None,
-        acceptance_criteria=payload.get("acceptance_criteria"),
-        max_turnaround_minutes=int(payload["max_turnaround_minutes"]) if "max_turnaround_minutes" in payload else None
-    )
-
-@app.post("/api/contracts/validate")
-def api_validate_contract(payload: Dict = Body(...)):
-    from backend.sla_contract_enforcer import sla_contract_enforcer
-    return sla_contract_enforcer.validate_delivery(
-        contract_id=payload.get("contract_id", ""),
-        delivery_payload=payload.get("delivery", {})
-    )
-
-@app.get("/api/contracts/history")
-def api_get_contracts_history(limit: int = 25):
-    from backend.sla_contract_enforcer import sla_contract_enforcer
-    return {"status": "success", "contracts": sla_contract_enforcer.list_contracts(limit=limit)}
 
 
 # --- ZENTRALE KONFIGURATION ALLER 10 AUTONOMIE- & RESILIENZ-GRUPPEN (SETTINGS-PAKET A & B) ---
@@ -15505,50 +15158,12 @@ def api_semantic_cache_clear():
 
 
 # Feature 2: Paralleles Map-Reduce Sub-Tasking (Fan-Out / Fan-In)
-@app.post("/api/execution/map-reduce")
-async def api_execute_map_reduce(payload: Dict = Body(...)):
-    from backend.map_reduce_executor import map_reduce_executor
-    return await map_reduce_executor.execute_map_reduce(
-        task_title=payload.get("task_title", "Map-Reduce Batch"),
-        items=payload.get("items", []),
-        instruction=payload.get("instruction", "Analysiere und extrahiere Kernergebnisse"),
-        max_workers_override=payload.get("max_parallel_workers")
-    )
-
-@app.get("/api/execution/map-reduce/history")
-def api_map_reduce_history(limit: int = 20):
-    from backend.map_reduce_executor import map_reduce_executor
-    return {"status": "success", "jobs": map_reduce_executor.get_history(limit=limit)}
 
 
 # Feature 3: Speculative Fast-Routing & Latenz-Hedging
-@app.post("/api/router/hedged-completion")
-async def api_hedged_completion(payload: Dict = Body(...)):
-    from backend.speculative_hedger import speculative_hedger
-    return await speculative_hedger.execute_hedged_call(
-        prompt=payload.get("prompt", "Test-Anfrage"),
-        primary_model=payload.get("primary_model", "openai/gpt-4o"),
-        fallback_model_override=payload.get("fallback_model"),
-        hedge_delay_override=payload.get("hedge_delay_seconds"),
-        simulate_primary_latency_sec=payload.get("simulate_primary_latency_sec"),
-        simulate_fallback_latency_sec=float(payload.get("simulate_fallback_latency_sec", 0.05))
-    )
-
-@app.get("/api/router/hedged-stats")
-def api_hedged_stats():
-    from backend.speculative_hedger import speculative_hedger
-    return speculative_hedger.get_stats()
 
 
 # Feature 4: Dynamisches Context-Compaction & Hierarchisches Summarizing
-@app.post("/api/memory/compact-context")
-def api_compact_context(payload: Dict = Body(...)):
-    from backend.context_compactor import context_compactor
-    return context_compactor.compact_messages(
-        messages=payload.get("messages", []),
-        force=bool(payload.get("force", False)),
-        keep_recent_override=payload.get("keep_recent_turns")
-    )
 
 
 # Feature 5: SQLite Connection-Pool & Async Write-Batching
@@ -15575,247 +15190,52 @@ def api_write_batcher_stats():
 # --- TEIL 2 / PAKET 2 (FEATURES 6–10): MODERNE GEDÄCHTNIS- & RAG-ARCHITEKTUR (GRAPH & HYBRID MEMORY) ---
 
 # Feature 6: Hybrid-Search (BM25 SQLite FTS5 + Vektor-RAG + Reciprocal Rank Fusion)
-@app.post("/api/memory/hybrid-index")
-def api_hybrid_index_doc(payload: Dict = Body(...)):
-    from backend.hybrid_search_engine import hybrid_search_engine
-    return hybrid_search_engine.index_document(
-        doc_id=payload.get("doc_id", "DOC-1"),
-        title=payload.get("title", "Unbenanntes Dokument"),
-        content=payload.get("content", ""),
-        source=payload.get("source", "system_docs")
-    )
-
-@app.post("/api/memory/hybrid-search")
-def api_hybrid_search(payload: Dict = Body(...)):
-    from backend.hybrid_search_engine import hybrid_search_engine
-    return hybrid_search_engine.search(
-        query=payload.get("query", ""),
-        top_k_override=payload.get("top_k"),
-        rrf_k_override=payload.get("rrf_k")
-    )
 
 
 # Feature 7: Lokaler Knowledge-Graph (Entitäten- & Beziehungs-Tripel)
-@app.post("/api/memory/knowledge-graph/triple")
-def api_kg_add_triple(payload: Dict = Body(...)):
-    from backend.knowledge_graph_store import knowledge_graph_store
-    return knowledge_graph_store.add_triple(
-        subject=payload.get("subject", ""),
-        predicate=payload.get("predicate", "RELATED_TO"),
-        obj=payload.get("object", ""),
-        confidence=float(payload.get("confidence", 0.90)),
-        source=payload.get("source", "manual")
-    )
-
-@app.post("/api/memory/knowledge-graph/ingest")
-def api_kg_ingest_text(payload: Dict = Body(...)):
-    from backend.knowledge_graph_store import knowledge_graph_store
-    return knowledge_graph_store.ingest_text(
-        text=payload.get("text", ""),
-        source=payload.get("source", "auto_extractor")
-    )
-
-@app.get("/api/memory/knowledge-graph/subgraph")
-def api_kg_subgraph(entity: str, hops: Optional[int] = None):
-    from backend.knowledge_graph_store import knowledge_graph_store
-    return knowledge_graph_store.query_subgraph(entity=entity, hops_override=hops)
 
 
 # Feature 8: Agentic Corrective RAG (CRAG)
-@app.post("/api/memory/crag-retrieve")
-def api_crag_retrieve(payload: Dict = Body(...)):
-    from backend.corrective_rag import corrective_rag_engine
-    return corrective_rag_engine.retrieve_and_verify(
-        query=payload.get("query", ""),
-        threshold_override=payload.get("relevance_threshold")
-    )
 
 
 # Feature 9: 2-Stufen Core-Memory nach MemGPT/Letta-Vorbild (Pinned Working Memory)
-@app.get("/api/memory/core-blocks")
-def api_get_core_memory_blocks():
-    from backend.core_memory_manager import core_memory_manager
-    return core_memory_manager.list_blocks()
-
-@app.post("/api/memory/core-blocks")
-def api_upsert_core_memory_block(payload: Dict = Body(...)):
-    from backend.core_memory_manager import core_memory_manager
-    return core_memory_manager.upsert_block(
-        block_key=payload.get("block_key", "custom_block"),
-        content=payload.get("content", ""),
-        block_title=payload.get("block_title", ""),
-        mode=payload.get("mode", "replace")
-    )
 
 
 # Feature 10: Automatisches Citation- & Quellen-Pinning
-@app.post("/api/memory/pin-citations")
-def api_pin_citations(payload: Dict = Body(...)):
-    from backend.citation_pinner import citation_pinner
-    return citation_pinner.pin_citations(
-        response_text=payload.get("response_text", ""),
-        sources=payload.get("sources", [])
-    )
 
 
 # --- TEIL 2 / PAKET 3 (FEATURES 11–15): ZUVERLÄSSIGE AUSFÜHRUNG & DETERMINISMUS (DURABLE EXECUTION) ---
 
 # Feature 11: Structured Outputs & JSON-Schema-Garantie
-@app.post("/api/execution/structured-output")
-def api_structured_output_validate(payload: Dict = Body(...)):
-    from backend.structured_output_enforcer import structured_output_enforcer
-    return structured_output_enforcer.validate_and_enforce(
-        raw_output=payload.get("raw_output", ""),
-        schema=payload.get("schema")
-    )
 
 
 # Feature 12: Durable Execution Checkpointing (Pause / Resume)
-@app.post("/api/execution/checkpoints/save")
-def api_save_durable_checkpoint(payload: Dict = Body(...)):
-    from backend.durable_checkpoint_manager import durable_checkpoint_manager
-    return durable_checkpoint_manager.save_checkpoint(
-        workflow_id=payload.get("workflow_id", "wf-default"),
-        task_title=payload.get("task_title", "Workflow"),
-        current_step_index=int(payload.get("current_step_index", 1)),
-        total_steps=int(payload.get("total_steps", 5)),
-        state_payload=payload.get("state", {}),
-        completed_steps=payload.get("completed_steps", []),
-        status=payload.get("status", "in_progress")
-    )
-
-@app.get("/api/execution/checkpoints/resume/{workflow_id}")
-def api_resume_durable_checkpoint(workflow_id: str):
-    from backend.durable_checkpoint_manager import durable_checkpoint_manager
-    return durable_checkpoint_manager.resume_checkpoint(workflow_id=workflow_id)
-
-@app.get("/api/execution/checkpoints/list")
-def api_list_durable_checkpoints(status: Optional[str] = None):
-    from backend.durable_checkpoint_manager import durable_checkpoint_manager
-    return {"status": "success", "checkpoints": durable_checkpoint_manager.list_checkpoints(status_filter=status)}
 
 
 # Feature 13: Idempotency-Keys & Tool-Call-Deduplizierung
-@app.post("/api/execution/idempotency/check")
-def api_idempotency_check(payload: Dict = Body(...)):
-    from backend.idempotency_guard import idempotency_guard
-    return idempotency_guard.check_or_register(
-        tool_name=payload.get("tool_name", "send_email"),
-        params=payload.get("params", {}),
-        explicit_key=payload.get("idempotency_key"),
-        execution_result=payload.get("execution_result")
-    )
 
 
 # Feature 14: Dry-Run / Shadow-Mode für Agenten-Aufträge
-@app.post("/api/execution/dry-run")
-def api_dry_run_simulate(payload: Dict = Body(...)):
-    from backend.dry_run_simulator import dry_run_simulator
-    return dry_run_simulator.simulate_task_plan(
-        task_title=payload.get("task_title", "Shadow Simulation"),
-        proposed_actions=payload.get("proposed_actions", [])
-    )
 
 
 # Feature 15: Dead-Letter-Queue (DLQ) mit Auto-Replay-Manager
-@app.post("/api/execution/dlq/enqueue")
-def api_dlq_enqueue(payload: Dict = Body(...)):
-    from backend.dead_letter_queue import dead_letter_queue_manager
-    return dead_letter_queue_manager.enqueue_failed_job(
-        job_type=payload.get("job_type", "webhook_delivery"),
-        source_module=payload.get("source_module", "router"),
-        payload=payload.get("payload", {}),
-        error_message=payload.get("error_message", "Unbekannter Fehler")
-    )
-
-@app.post("/api/execution/dlq/replay")
-def api_dlq_replay(payload: Dict = Body(...)):
-    from backend.dead_letter_queue import dead_letter_queue_manager
-    return dead_letter_queue_manager.replay_job(
-        dlq_id=payload.get("dlq_id", ""),
-        simulate_success=bool(payload.get("simulate_success", True))
-    )
-
-@app.get("/api/execution/dlq/list")
-def api_dlq_list(status: Optional[str] = None):
-    from backend.dead_letter_queue import dead_letter_queue_manager
-    return dead_letter_queue_manager.list_dlq(status_filter=status)
 
 
 # --- TEIL 2 / PAKET 4 (FEATURES 16–20): SICHERHEIT, DATENSCHUTZ & ENTERPRISE-GOVERNANCE (GUARDRAILS) ---
 
 # Feature 16: Bidirektionaler PII-Scrubber & Re-Hydration (DSGVO)
-@app.post("/api/security/pii-scrub")
-def api_pii_scrub(payload: Dict = Body(...)):
-    from backend.pii_scrubber import pii_scrubber
-    return pii_scrubber.scrub_text(
-        text=payload.get("text", ""),
-        session_id=payload.get("session_id", "")
-    )
-
-@app.post("/api/security/pii-rehydrate")
-def api_pii_rehydrate(payload: Dict = Body(...)):
-    from backend.pii_scrubber import pii_scrubber
-    return pii_scrubber.rehydrate_text(
-        response_text=payload.get("response_text", ""),
-        session_id=payload.get("session_id", ""),
-        custom_vault=payload.get("vault_map")
-    )
 
 
 # Feature 17: Egress-Firewall & Domain-Allowlisting
-@app.post("/api/security/egress-check")
-def api_egress_firewall_check(payload: Dict = Body(...)):
-    from backend.egress_firewall import egress_firewall
-    return egress_firewall.check_url(
-        target_url=payload.get("url", ""),
-        agent_id=payload.get("agent_id", "agent-worker")
-    )
-
-@app.get("/api/security/egress-logs")
-def api_egress_firewall_logs(limit: int = 25):
-    from backend.egress_firewall import egress_firewall
-    return {"status": "success", "logs": egress_firewall.get_logs(limit=limit)}
 
 
 # Feature 18: Granulare Agenten-RBAC & Datei-Scope-Jails
-@app.post("/api/security/rbac-check")
-def api_rbac_jail_check(payload: Dict = Body(...)):
-    from backend.agent_rbac_jail import agent_rbac_jail
-    return agent_rbac_jail.check_access(
-        role=payload.get("role", "researcher"),
-        tool_name=payload.get("tool_name", "read_file"),
-        target_path=payload.get("target_path", "")
-    )
 
 
 # Feature 19: Deterministischer Output-Linter & Policy-Checker
-@app.post("/api/security/lint-output")
-def api_lint_agent_output(payload: Dict = Body(...)):
-    from backend.output_policy_linter import output_policy_linter
-    return output_policy_linter.lint_and_clean(
-        output_text=payload.get("output_text", "")
-    )
 
 
 # Feature 20: Manipulationssichere Kosten- & Entscheidungs-Quittungen (Execution Receipts)
-@app.post("/api/security/receipts/issue")
-def api_issue_execution_receipt(payload: Dict = Body(...)):
-    from backend.execution_receipt_ledger import execution_receipt_ledger
-    return execution_receipt_ledger.issue_receipt(
-        task_id=payload.get("task_id", "task-01"),
-        agent_role=payload.get("agent_role", "backend_architect"),
-        model_used=payload.get("model_used", "deepseek/deepseek-chat"),
-        prompt_tokens=int(payload.get("prompt_tokens", 500)),
-        completion_tokens=int(payload.get("completion_tokens", 250)),
-        cost_usd=float(payload.get("cost_usd", 0.0012)),
-        tools_invoked=payload.get("tools_invoked", [])
-    )
-
-@app.get("/api/security/receipts/verify")
-def api_verify_execution_receipts():
-    from backend.execution_receipt_ledger import execution_receipt_ledger
-    return execution_receipt_ledger.verify_chain_integrity()
 
 
 # --- TEIL 2 / PAKET 5 (FEATURES 21–25): SELBST-OPTIMIERUNG, EVALUATION & SCHWARM-INTELLIGENZ (NEXT-GEN) ---
@@ -15842,29 +15262,9 @@ def api_run_eval_regression_suite(payload: Dict = Body(default={})):
 
 
 # Feature 23: Dynamisches Modell-Routing nach Echtzeit-Telemetrie (Bandit-Router)
-@app.post("/api/router/bandit-outcome")
-def api_bandit_record_outcome(payload: Dict = Body(...)):
-    from backend.bandit_model_router import bandit_model_router
-    return bandit_model_router.record_outcome(
-        model_id=payload.get("model_id", "deepseek/deepseek-chat"),
-        success=bool(payload.get("success", True)),
-        latency_ms=float(payload.get("latency_ms", 500.0))
-    )
-
-@app.get("/api/router/bandit-select")
-def api_bandit_select_best():
-    from backend.bandit_model_router import bandit_model_router
-    return bandit_model_router.select_best_model()
 
 
 # Feature 24: Dynamisches Ephemeral-Team-Spawning (Ad-hoc Task-Force)
-@app.post("/api/swarm/spawn-ephemeral-team")
-def api_spawn_ephemeral_team(payload: Dict = Body(...)):
-    from backend.ephemeral_team_spawner import ephemeral_team_spawner
-    return ephemeral_team_spawner.spawn_task_force(
-        mission_title=payload.get("mission_title", "Spezial-Auftrag"),
-        mission_brief=payload.get("mission_brief", "")
-    )
 
 
 # Feature 25: Live-Ressourcen-Protector (Host CPU/RAM/Disk-Backpressure)
@@ -15875,372 +15275,85 @@ def api_check_resource_backpressure(simulate_overload: bool = False):
 
 
 # --- CORPORATE MANAGER & MULTI-COMPANY HUB ---
-@app.get("/api/corporate/companies")
-def api_list_corporate_companies():
-    from backend.corporate_manager import corporate_manager
-    return {"companies": corporate_manager.list_companies()}
-
-@app.get("/api/corporate/companies/{company_id}")
-def api_get_corporate_company(company_id: str):
-    from backend.corporate_manager import corporate_manager
-    comp = corporate_manager.get_company(company_id)
-    if not comp:
-        raise HTTPException(status_code=404, detail="Company not found")
-    return comp
-
-@app.post("/api/corporate/companies")
-def api_save_corporate_company(payload: Dict = Body(...)):
-    from backend.corporate_manager import corporate_manager
-    saved = corporate_manager.save_company(payload)
-    return {"success": True, "company": saved}
-
-@app.post("/api/corporate/companies/{company_id}/set-active")
-def api_set_active_corporate_company(company_id: str):
-    from backend.corporate_manager import corporate_manager
-    success = corporate_manager.set_active_company(company_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Company not found")
-    return {"success": True, "active_company_id": company_id}
-
-@app.delete("/api/corporate/companies/{company_id}")
-def api_delete_corporate_company(company_id: str):
-    from backend.corporate_manager import corporate_manager
-    success = corporate_manager.delete_company(company_id)
-    if not success:
-        raise HTTPException(status_code=400, detail="Cannot delete active or only existing company")
-    return {"success": True, "deleted_id": company_id}
-
-@app.post("/api/corporate/render-template")
-def api_render_corporate_template(payload: Dict = Body(...)):
-    from backend.corporate_manager import corporate_manager
-    template_type = payload.get("template_type", "letterhead")
-    company_id = payload.get("company_id")
-    custom = payload.get("custom", {})
-    result = corporate_manager.render_template(template_type=template_type, company_id=company_id, custom=custom)
-    return result
-
-
-@app.get("/api/erp/documents/{doc_id}/print", response_class=HTMLResponse)
-def api_erp_document_print(
-    doc_id: str,
-    company_id: Optional[str] = None,
-    autoprint: bool = False,
-    doc_type: Optional[str] = None,
-    entity_name: Optional[str] = None,
-    amount_net: Optional[float] = None
-):
-    from backend.corporate_manager import corporate_manager
-    from backend.erp_manager import erp_manager
-    doc = erp_manager.get_document(doc_id, company_id=company_id)
-    tmpl_type = "invoice"
-    custom: Dict[str, Any] = {"document_id": doc_id}
-    
-    if doc:
-        raw_type = doc.get("doc_type", "invoice")
-        if raw_type in ("offer", "ang"):
-            tmpl_type = "offer"
-        elif raw_type in ("order", "order_confirmation", "ab"):
-            tmpl_type = "order_confirmation"
-        else:
-            tmpl_type = "invoice"
-    else:
-        # Fallback für dynamische / simulierte Belege aus CRM Vorgänge
-        if doc_id.upper().startswith("ANG") or doc_type in ("offer", "ang"):
-            tmpl_type = "offer"
-            custom["offer_num"] = doc_id
-        elif doc_id.upper().startswith("AB") or doc_type in ("order", "order_confirmation", "ab"):
-            tmpl_type = "order_confirmation"
-            custom["order_num"] = doc_id
-        else:
-            tmpl_type = "invoice"
-            custom["invoice_num"] = doc_id
-            
-        if entity_name:
-            custom["recipient_name"] = entity_name
-        if amount_net and amount_net > 0:
-            custom["items"] = [
-                {"pos": 1, "desc": f"Dienstleistung / Projektleistungen gem. Vorgang {doc_id}", "qty": 1, "unit": "Pauschal", "price": float(amount_net)}
-            ]
-
-    rendered = corporate_manager.render_template(template_type=tmpl_type, company_id=company_id, custom=custom)
-    doc_num = custom.get("offer_num") or custom.get("order_num") or custom.get("invoice_num") or doc_id
-    autoprint_script = "<script>window.onload = function() { window.print(); };</script>" if autoprint else ""
-    html_content = f"""<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <title>Belegdruck - {doc_num}</title>
-  <style>
-    @page {{ size: A4; margin: 12mm; }}
-    body {{ margin: 0; padding: 24px; background: #f8fafc; display: flex; justify-content: center; font-family: system-ui, -apple-system, sans-serif; }}
-    @media print {{
-      body {{ background: #fff; padding: 0; }}
-      .no-print {{ display: none !important; }}
-    }}
-    .print-bar {{
-      position: fixed; top: 16px; right: 20px; z-index: 9999;
-      background: #0f172a; color: #fff; border-radius: 12px; padding: 10px 18px;
-      display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); font-size: 13px; font-weight: 600;
-    }}
-    .print-btn {{
-      background: #4f46e5; hover:background: #4338ca; color: #fff; border: 0; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px; transition: all 0.2s;
-    }}
-    .print-btn:hover {{ background: #4338ca; }}
-    .close-btn {{
-      background: transparent; color: #94a3b8; border: 1px solid #334155; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px;
-    }}
-    .close-btn:hover {{ color: #fff; background: #1e293b; }}
-  </style>
-</head>
-<body>
-  <div class="print-bar no-print">
-    <span>Archon ERP DIN 5008 Beleg</span>
-    <button class="print-btn" onclick="window.print()">🖨️ Drucken / Als PDF speichern</button>
-    <button class="close-btn" onclick="window.close()">Fenster schließen</button>
-  </div>
-  {rendered.get("html", "")}
-  {autoprint_script}
-</body>
-</html>"""
-    return HTMLResponse(content=html_content)
 
 
 # --- SÄULE 3: WIRTSCHAFT & ERP (MULTI-TENANT CRM, ARTIKEL, BELEGE & POCKETBASE SYNC) ---
-@app.get("/api/erp/overview")
-def api_erp_overview(company_id: Optional[str] = None):
-    from backend.erp_manager import erp_manager
-    return erp_manager.get_tenant_overview(company_id=company_id)
-
-
-@app.get("/api/erp/entities")
-def api_erp_list_entities(
-    company_id: Optional[str] = None,
-    role: str = "all",
-    search: str = "",
-    status: str = ""
-):
-    from backend.erp_manager import erp_manager
-    return erp_manager.list_entities(company_id=company_id, role_filter=role, search=search, status=status)
-
-
-@app.get("/api/erp/entities/{entity_id}")
-def api_erp_get_entity_detail(entity_id: str, company_id: Optional[str] = None):
-    from backend.erp_manager import erp_manager
-    res = erp_manager.get_entity_detail(entity_id=entity_id, company_id=company_id)
-    if not res:
-        raise HTTPException(status_code=404, detail="Entity not found")
-    return res
-
-
-@app.post("/api/erp/entities")
-def api_erp_save_entity(payload: Dict = Body(...)):
-    from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
-    saved = erp_manager.save_entity(payload=payload, company_id=company_id)
-    return {"success": True, "data": saved}
-
-
-@app.post("/api/erp/contacts")
-def api_erp_save_contact(payload: Dict = Body(...)):
-    from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
-    saved = erp_manager.save_contact(payload=payload, company_id=company_id)
-    return {"success": True, "contact": saved}
-
-
-@app.post("/api/erp/interactions")
-def api_erp_add_interaction(payload: Dict = Body(...)):
-    from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
-    saved = erp_manager.add_interaction(payload=payload, company_id=company_id)
-    return {"success": True, "interaction": saved}
-
-
-@app.get("/api/erp/items")
-def api_erp_list_items(
-    company_id: Optional[str] = None,
-    item_type: str = "all",
-    search: str = ""
-):
-    from backend.erp_manager import erp_manager
-    return erp_manager.list_items(company_id=company_id, item_type=item_type, search=search)
-
-
-@app.post("/api/erp/items")
-def api_erp_save_item(payload: Dict = Body(...)):
-    from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
-    saved = erp_manager.save_item(payload=payload, company_id=company_id)
-    return {"success": True, "item": saved}
-
-
-@app.get("/api/erp/documents")
-def api_erp_list_documents(
-    company_id: Optional[str] = None,
-    doc_type: Optional[str] = None,
-    status: Optional[str] = None,
-    entity_id: Optional[str] = None
-):
-    from backend.erp_manager import erp_manager
-    return erp_manager.list_documents(
-        company_id=company_id, doc_type=doc_type, status=status, entity_id=entity_id
-    )
-
-
-@app.get("/api/erp/documents/{doc_id}")
-def api_erp_get_document(doc_id: str, company_id: Optional[str] = None):
-    from backend.erp_manager import erp_manager
-    doc = erp_manager.get_document(doc_id=doc_id, company_id=company_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return doc
-
-
-@app.post("/api/erp/documents")
-def api_erp_save_document(payload: Dict = Body(...)):
-    from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
-    saved = erp_manager.save_document(payload=payload, company_id=company_id)
-    return {"success": True, "document": saved}
-
-
-@app.post("/api/erp/documents/{doc_id}/convert")
-def api_erp_convert_document(doc_id: str, payload: Dict = Body(default={})):
-    from backend.erp_manager import erp_manager
-    target_type = payload.get("target_doc_type", "invoice")
-    company_id = payload.get("company_id")
-    converted = erp_manager.convert_document(
-        source_doc_id=doc_id, target_doc_type=target_type, company_id=company_id
-    )
-    return {"success": True, "document": converted}
-
-
-@app.post("/api/erp/sync/pocketbase")
-def api_erp_sync_pocketbase(payload: Dict = Body(default={})):
-    from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
-    if "pocketbase_url" in payload or "collection_name" in payload:
-        erp_manager.update_sync_config(payload, company_id=company_id)
-    return erp_manager.sync_with_pocketbase(company_id=company_id)
 
 
 # =========================================================================
 # NATIVE POCKETBASE CRM API (KAUFMÄNNISCHES ADRESS- & CRM-ÖKOSYSTEM)
 # =========================================================================
-@app.get("/api/crm/contacts")
-def api_crm_list_contacts(
-    search: str = "",
-    status: str = "",
-    role: str = "all",
-    region: str = "",
-    tag: str = "",
-    sort_by: str = "updated",
-    sort_order: str = "desc",
-    page: int = 1,
-    limit: int = 100
-):
-    from backend.crm_service import crm_service
-    return crm_service.list_contacts(
-        search=search, status=status, role_filter=role, region=region,
-        tag=tag, sort_by=sort_by, sort_order=sort_order, page=page, limit=limit
-    )
 
 
-@app.get("/api/crm/contacts/{contact_id}")
-def api_crm_get_contact(contact_id: str):
-    from backend.crm_service import crm_service
-    contact = crm_service.get_contact_detail(contact_id)
-    if not contact:
-        raise HTTPException(status_code=404, detail="Kontakt nicht gefunden")
-    return contact
+# =========================================================================
+# LIFESPAN-REGISTRIERUNG (ersetzt die frueheren @app.on_event-Handler)
+# Reihenfolge ist explizit und damit reproduzierbar.
+# =========================================================================
+_STARTUP_HOOKS.extend([
+    _start_watchdog_daemon,      # 1. Watchdog/Supervisor
+    on_startup_drain_recovery,   # 2. Task-Recovery nach Absturz
+    _start_gateway_idle_loop,    # 3. IMAP/Inbox/Internet-Watchdog-Loops
+    _warm_hermes_skill_caches,   # 4. Skills-Cache vorwärmen (Thread)
+])
+
+_SHUTDOWN_HOOKS.extend([
+    _cancel_background_tasks,    # laeuft zuletzt (reversed)
+    on_shutdown_graceful,        # laeuft zuerst: Draining
+])
 
 
-@app.post("/api/crm/contacts")
-def api_crm_create_contact(payload: Dict = Body(...)):
-    from backend.crm_service import crm_service
-    return crm_service.save_contact(contact_id=payload.get("id"), payload=payload)
-
-
-@app.put("/api/crm/contacts/{contact_id}")
-def api_crm_update_contact(contact_id: str, payload: Dict = Body(...)):
-    from backend.crm_service import crm_service
-    return crm_service.save_contact(contact_id=contact_id, payload=payload)
-
-
-@app.delete("/api/crm/contacts/{contact_id}")
-def api_crm_delete_contact(contact_id: str):
-    from backend.crm_service import crm_service
-    ok = crm_service.delete_contact(contact_id)
-    return {"success": ok}
-
-
-@app.post("/api/crm/contacts/{contact_id}/messages")
-def api_crm_add_message(contact_id: str, payload: Dict = Body(...)):
-    from backend.crm_service import crm_service
-    text = payload.get("text", "")
-    channel = payload.get("channel", "note")
-    direction = payload.get("direction", "outbound")
-    sender = payload.get("sender", "Michael Keller")
-    return crm_service.add_contact_message(
-        contact_id=contact_id, text=text, channel=channel, direction=direction, sender=sender
-    )
-
-
-@app.get("/api/crm/messages")
-def api_crm_list_messages(
-    search: str = "",
-    channel: str = "all",
-    direction: str = "all",
-    sort: str = "newest",
-    page: int = 1,
-    limit: int = 50
-):
-    from backend.crm_service import crm_service
-    return crm_service.list_all_messages(
-        search=search, channel=channel, direction=direction, sort=sort, page=page, limit=limit
-    )
-
-
-@app.get("/api/crm/calendar")
-def api_crm_get_calendar():
-    from backend.crm_service import crm_service
-    return crm_service.get_calendar_events()
-
-
-@app.get("/api/crm/report")
-def api_crm_get_report():
-    from backend.crm_service import crm_service
-    return crm_service.get_report_metrics()
-
-
-@app.get("/api/crm/avatars/{contact_id}/{filename}")
-def api_crm_avatar(contact_id: str, filename: str):
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    avatar_path = os.path.join(root_dir, "pocketbase", "pb_data", "storage", "pbc_1512878646", contact_id, filename)
-    if os.path.exists(avatar_path):
-        return FileResponse(avatar_path)
-    alt_path = os.path.join(root_dir, "static", "avatars", filename)
-    if os.path.exists(alt_path):
-        return FileResponse(alt_path)
-    raise HTTPException(status_code=404, detail="Avatar not found")
-
-
-@app.get("/api/crm/contacts/{contact_id}/gdpr-export")
-def api_crm_gdpr_export(contact_id: str):
-    from backend.crm_service import crm_service
-    res = crm_service.export_gdpr(contact_id)
-    if not res:
-        raise HTTPException(status_code=404, detail="Contact not found")
-    return res
-
-
-@app.post("/api/crm/contacts/{contact_id}/gdpr-anonymize")
-def api_crm_gdpr_anonymize(contact_id: str):
-    from backend.crm_service import crm_service
-    ok = crm_service.anonymize_gdpr(contact_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Contact not found or update failed")
-    return {"success": True, "message": "Contact anonymized per Art. 17 GDPR"}
-
-
-
+# ==========================================================================
+# AUSGELAGERTE ROUTER (Modularisierung: archon/routers/*.py)
+# Reihenfolge = Registrierungsreihenfolge; entspricht der frueheren
+# Reihenfolge in main.py, damit Pfad-Praezedenz erhalten bleibt.
+# ==========================================================================
+try:
+    from archon.routers.crm import router as _crm_router
+    app.include_router(_crm_router)
+except Exception as _e_crm:
+    logger.warning(f"[Router] crm nicht geladen: {_e_crm}")
+try:
+    from archon.routers.erp import router as _erp_router
+    app.include_router(_erp_router)
+except Exception as _e_erp:
+    logger.warning(f"[Router] erp nicht geladen: {_e_erp}")
+try:
+    from archon.routers.corporate import router as _corporate_router
+    app.include_router(_corporate_router)
+except Exception as _e_corporate:
+    logger.warning(f"[Router] corporate nicht geladen: {_e_corporate}")
+try:
+    from archon.routers.security import router as _security_router
+    app.include_router(_security_router)
+except Exception as _e_security:
+    logger.warning(f"[Router] security nicht geladen: {_e_security}")
+try:
+    from archon.routers.execution import router as _execution_router
+    app.include_router(_execution_router)
+except Exception as _e_execution:
+    logger.warning(f"[Router] execution nicht geladen: {_e_execution}")
+try:
+    from archon.routers.memory import router as _memory_router
+    app.include_router(_memory_router)
+except Exception as _e_memory:
+    logger.warning(f"[Router] memory nicht geladen: {_e_memory}")
+try:
+    from archon.routers.routergate import router as _routergate_router
+    app.include_router(_routergate_router)
+except Exception as _e_routergate:
+    logger.warning(f"[Router] routergate nicht geladen: {_e_routergate}")
+try:
+    from archon.routers.voice import router as _voice_router
+    app.include_router(_voice_router)
+except Exception as _e_voice:
+    logger.warning(f"[Router] voice nicht geladen: {_e_voice}")
+try:
+    from archon.routers.swarm import router as _swarm_router
+    app.include_router(_swarm_router)
+except Exception as _e_swarm:
+    logger.warning(f"[Router] swarm nicht geladen: {_e_swarm}")
+try:
+    from archon.routers.contracts import router as _contracts_router
+    app.include_router(_contracts_router)
+except Exception as _e_contracts:
+    logger.warning(f"[Router] contracts nicht geladen: {_e_contracts}")

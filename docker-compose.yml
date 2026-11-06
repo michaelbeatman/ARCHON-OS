@@ -23,8 +23,12 @@ services:
       # telegram_bot-Gateway im hermes-Container; paralleles Senden ist Telegram-konform)
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      # Docker-Zugriff ueber den Socket-Proxy (Allowlist) statt roher Socket.
+      # utils/docker_client.py faellt automatisch auf /var/run/docker.sock
+      # zurueck, falls der Proxy nicht erreichbar ist.
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
     volumes:
-      - //var/run/docker.sock:/var/run/docker.sock
+      - //var/run/docker.sock:/var/run/docker.sock  # Legacy-Fallback; bevorzugt DOCKER_HOST
       - ./:/app
       - ./data/inbox:/opt/data/inbox
       - ./agent_workspace/builds:/projects/builds
@@ -104,6 +108,10 @@ services:
       - VOLUMES=1
       - POST=1
       - DELETE=0
+      # EXEC=1 noetig fuer /containers/{id}/exec + /exec/{id}/start
+      # (Log-/Datei-/Skill-Ansicht im Panel). Angriffsoberflaeche bleibt
+      # auf die im Proxy aktivierten Endpunkte begrenzt.
+      - EXEC=1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:

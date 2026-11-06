@@ -18,7 +18,8 @@ import tempfile
 from typing import Iterable, List, Tuple
 
 __all__ = ["SECRET_FILE_MODES", "harden_file", "harden_known_secrets",
-           "audit_known_secrets", "write_secret_file", "is_secret_name"]
+           "audit_known_secrets", "write_secret_file", "is_secret_name",
+           "mask_secret", "mask_value", "mask_yaml_secrets", "restore_masked_values"]
 
 # 600 = nur Eigentümer lesen/schreiben
 SAFE_MODE = 0o600
@@ -149,3 +150,87 @@ def mask_secret(value: str, keep: int = 4) -> str:
     if len(v) <= keep * 2:
         return "•" * 8
     return f"{'•' * 8}{v[-keep:]}"
+
+# ---------------------------------------------------------------- YAML-Secrets
+
+import re as _re
+
+_YAML_LINE_RE = _re.compile(
+    r'^(?P<indent>\s*)(?P<key>[A-Za-z0-9_.-]+)\s*:\s*(?P<value>.*)$'
+)
+
+# Nur echte Secret-Schluessel maskieren. "max_tokens" enthaelt zwar "token",
+# ist aber eine Zahl - solche Felder duerfen nicht angefasst werden.
+_SECRET_SUFFIXES = (
+    "api_key", "apikey", "_key", "bot_token", "access_token", "refresh_token",
+    "auth_token", "secret", "client_secret", "password", "passwd", "passphrase",
+)
+_SECRET_EXACT = {"token", "key", "secret", "password"}
+
+
+def is_secret_key(key: str) -> bool:
+    k = (key or "").strip().lower()
+    if k.endswith("key_env") or k.endswith("_tokens") or k.endswith("token_count"):
+        return False
+    if k in _SECRET_EXACT:
+        return True
+    return any(k.endswith(suf) for suf in _SECRET_SUFFIXES)
+
+
+def _match_secret_line(line: str):
+    m = _YAML_LINE_RE.match(line)
+    if not m:
+        return None
+    return m if is_secret_key(m.group("key")) else None
+
+
+def mask_value(value: str) -> str:
+    """Maskiert einen Wert und behaelt Form (Quotes) bei."""
+    v = value.strip()
+    if not v or v in ("''", '""', "null", "~", "[]", "{}"):
+        return value
+    quoted = len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"')
+    core = v[1:-1] if quoted else v
+    if not core:
+        return value
+    masked = mask_secret(core)
+    return f'"{masked}"' if quoted else masked
+
+
+def mask_yaml_secrets(text: str) -> str:
+    """Maskiert secret-tragende Werte in einem YAML-Text (Zeilenweise)."""
+    out = []
+    for line in (text or "").splitlines():
+        m = _match_secret_line(line)
+        if m:
+            out.append(f'{m.group("indent")}{m.group("key")}: {mask_value(m.group("value"))}')
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def restore_masked_values(original_text: str, new_text: str) -> str:
+    """Ersetzt maskierte Werte im neuen YAML durch die echten aus dem Original.
+
+    Notwendig, weil der Live-Editor die maskierte Fassung zurueckschickt -
+    ohne diesen Schritt wuerde das Speichern die echten Keys ueberschreiben.
+    """
+    orig = {}
+    for line in (original_text or "").splitlines():
+        m = _match_secret_line(line)
+        if m:
+            orig[m.group("key").strip()] = m.group("value").strip()
+
+    out = []
+    for line in (new_text or "").splitlines():
+        m = _match_secret_line(line)
+        if m:
+            key = m.group("key").strip()
+            val = m.group("value").strip()
+            if "\u2022" in val or "•" in val:
+                real = orig.get(key)
+                if real is not None:
+                    out.append(f'{m.group("indent")}{m.group("key")}: {real}')
+                    continue
+        out.append(line)
+    return "\n".join(out)

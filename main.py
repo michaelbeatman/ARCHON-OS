@@ -6450,12 +6450,18 @@ def api_get_hermes_form_config(path: Optional[str] = None):
         "updates_local_changes": upd_obj.get("non_interactive_local_changes", "stash")
     }
 
+    try:
+        from utils.secret_files import mask_yaml_secrets
+        _masked_raw = mask_yaml_secrets(content)
+    except Exception:
+        _masked_raw = content
     return {
         "active_path": active_path,
         "loaded_path": target_path,
         "available_configs": all_configs,
         "settings": settings,
-        "raw_yaml": content
+        "raw_yaml": _masked_raw,
+        "secrets_masked": _masked_raw != content
     }
 
 @app.post("/api/hermes/settings")
@@ -6899,12 +6905,19 @@ def api_get_hermes_raw_config(path: Optional[str] = None):
         except Exception as e:
             content = f"# Fehler beim Lesen von {target_path}:\n# {str(e)}"
             
+    # Secrets nie im Klartext ausliefern: API-Keys/Tokens in der YAML maskieren
+    try:
+        from utils.secret_files import mask_yaml_secrets
+        _masked_content = mask_yaml_secrets(content)
+    except Exception:
+        _masked_content = content
     return {
         "active_path": active_path,
         "loaded_path": target_path,
         "available_configs": all_configs,
-        "yaml_content": content,
-        "parsed": parsed
+        "yaml_content": _masked_content,
+        "parsed": parsed,
+        "secrets_masked": _masked_content != content
     }
 
 @app.post("/api/hermes/raw_config")
@@ -6932,6 +6945,16 @@ def api_save_hermes_raw_config(payload: dict = Body(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"YAML-Syntaxfehler: {str(e)}")
         
+    # 1b. Vom Editor zurueckgeschickte Masken durch die echten Werte ersetzen
+    try:
+        from utils.secret_files import restore_masked_values
+        if os.path.exists(target_path):
+            with open(target_path, "r", encoding="utf-8") as _f_orig:
+                _orig_yaml = _f_orig.read()
+            yaml_content = restore_masked_values(_orig_yaml, yaml_content)
+    except Exception as _restore_err:
+        logger.warning(f"[Hermes Settings] Masken-Restore fehlgeschlagen: {_restore_err}")
+
     # 2. Backup erstellen
     try:
         if os.path.exists(target_path):

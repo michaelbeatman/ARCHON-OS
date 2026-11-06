@@ -66,7 +66,16 @@ async def _execute_mission_control_task(
     if get_profiles is None:
         from archon.core.profiles import api_get_hermes_profiles as get_profiles
     if sync_obsidian is None:
-        from archon.core.runtime import _sync_task_to_obsidian as sync_obsidian
+        # Bewusst KEIN Fallback: die einzige korrekte Implementierung lebt in
+        # main.py. Die frueher hier benutzte Kopie in archon.core.runtime war
+        # nicht verhaltensgleich (eigene _slugify(), andere Dateinamen) und
+        # haette still andere Ablagepfade erzeugt. Lieber ein bemerkter Fehler
+        # als eine stille Abweichung.
+        raise RuntimeError(
+            "_execute_mission_control_task: Parameter 'sync_obsidian' fehlt. "
+            "main.py injiziert _sync_task_to_obsidian; Aufrufer muessen die "
+            "Abhaengigkeit explizit uebergeben."
+        )
     if trigger_sandy is None:
         trigger_sandy = _trigger_sandy_staffing_nomination
     if fan_in is None:

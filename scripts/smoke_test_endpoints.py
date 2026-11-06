@@ -4,6 +4,7 @@ Usage (inside container):  python scripts/smoke_test_endpoints.py [base_url]
 Writes docs/system/smoke_test_results.json
 """
 import json, sys, time, os, urllib.request
+from _archon_auth import headers as _archon_headers
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8501"
 SKIP = ("stream", "sse", "events", "download", "logout", "restart", "shutdown", "reset", "sync", "run", "trigger", "fetch")
@@ -11,7 +12,7 @@ SKIP = ("stream", "sse", "events", "download", "logout", "restart", "shutdown", 
 def get(path, timeout=15):
     t = time.time()
     try:
-        with urllib.request.urlopen(BASE + path, timeout=timeout) as r:
+        with urllib.request.urlopen(urllib.request.Request(BASE + path, headers=_archon_headers()), timeout=timeout) as r:
             body = r.read()
             return r.status, round((time.time() - t) * 1000), len(body), None
     except urllib.error.HTTPError as e:

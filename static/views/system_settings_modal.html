@@ -599,6 +599,43 @@
               Wähle und verwalte die LLM-Provider aus dem Hermes-Katalog (OpenRouter, Google AI/Gemini, OmniRoute, Groq, OpenAI). Aktiviere den gewünschten Provider für den Livebetrieb deiner Agenten.
             </p>
           </div>
+          <!-- Modell-Routing pro Aufgabe: Eigentümer-Entscheidung -->
+          <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h5 class="text-xs font-bold text-[var(--foreground)]">Modell-Routing pro Aufgabe</h5>
+                <p class="text-[10px] text-[var(--muted-foreground)] leading-snug">Du entscheidest, welches Modell eine Aufgabe bekommt — nicht der Orchestrator. Gilt für Operations und Orchestrator, sobald aktiv.</p>
+              </div>
+              <label class="flex items-center gap-2 text-[11px] font-mono whitespace-nowrap">
+                <input type="checkbox" id="mr-enabled" class="accent-sky-600"> aktiv
+              </label>
+            </div>
+            <div class="grid grid-cols-12 gap-2 text-[9px] font-mono uppercase text-[var(--muted-foreground)] px-1">
+              <span class="col-span-3">Aufgabe</span><span class="col-span-2">Key</span><span class="col-span-2">Anbieter</span><span class="col-span-4">Modell</span><span class="col-span-1"></span>
+            </div>
+            <div id="mr-rows" class="space-y-2"></div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button type="button" onclick="addModelRouteRow()" class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-[11px] font-mono hover:bg-[var(--secondary)] cursor-pointer">+ Aufgabe</button>
+              <button type="button" onclick="saveModelRoutingSettings()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold cursor-pointer">Speichern</button>
+              <span id="mr-status" class="text-[10px] font-mono text-[var(--muted-foreground)]"></span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-[var(--border)]">
+              <label class="text-[11px] font-mono text-[var(--muted-foreground)]">Operations-Autonomie
+                <select id="mr-autonomy-operations" class="mt-1 w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-[11px] font-mono text-[var(--foreground)]">
+                  <option value="manual">manual — nur Vorschläge</option>
+                  <option value="approval">approval — Freigabe nötig</option>
+                  <option value="autonomous">autonomous — handelt selbst</option>
+                </select>
+              </label>
+              <label class="text-[11px] font-mono text-[var(--muted-foreground)]">Orchestrator-Autonomie
+                <select id="mr-autonomy-orchestrator" class="mt-1 w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-[11px] font-mono text-[var(--foreground)]">
+                  <option value="manual">manual — nur Vorschläge</option>
+                  <option value="approval">approval — Freigabe nötig</option>
+                  <option value="autonomous">autonomous — handelt selbst</option>
+                </select>
+              </label>
+            </div>
+          </div>
           <!-- Active Provider Live Banner -->
           <div id="llm-active-provider-banner">
             <!-- Dynamisch über loadLLMProvidersSettings() gefüllt -->

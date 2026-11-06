@@ -4,7 +4,7 @@
 ## 1. 🧭 System-Identität, Topologie & Laufzeitumgebung
 - **Aktives Projekt:** `archon os 2026 enterprise edition`
 - **Betriebssystem & Host:** `Windows 11 (Archon OS Runtime)`
-- **FastAPI Steuerzentrale:** `Port 8501` (368 Backend-Routen, 238 Frontend-Calls verifiziert)
+- **FastAPI Steuerzentrale:** `Port 8501` (585 registrierte API-Pfade / 664 eindeutige Routen, 282 Frontend-Calls verifiziert)
 - **Primäres Modell:** `claude-3-5-sonnet`
 - **System Health Score:** `100% (Optimal)`
 - **Kommunikationsstil:** *Praezise, faktenbasiert, aktiv, keine Floskeln*
@@ -20,7 +20,7 @@
 | `CRM` | `:3005` | Dediziertes Web-Frontend für Vertrieb & Leads |
 | `n8n` | `:5678` | Event-Trigger & Low-Code Workflow-Automatisierung |
 | `docker-socket-proxy` | `:2375` (intern) | Zero-Trust Proxy für geschützte Docker-Befehle |
-| `anything-llm` | `:3001` | RAG-Vektorspeicher (Workspace ARCHON: 6.478 Docs) |
+| `anything-llm` | `:3001` | RAG-Vektorspeicher (Workspace ARCHON) |
 | `freellmapi` | `:3002` | Fallback-Proxy für kostenfreie LLM-Endpunkte |
 | `hermes-dashboard` | `:9119` | Visualisierungs-Dashboard für Agenten-Sitzungen |
 
@@ -36,7 +36,7 @@
 ## 3. 🧠 2nd Brain & Speicher-Hierarchie (Pillar 4)
 - **Obsidian Vault:** `C:\Mein Obsidian`
 - **RAG-Vektor-Engine:** `AnythingLLM (Port 3001, Workspace ARCHON)`
-- **Indexierte Dokumente:** `6.478 Dokumente im Vektorspeicher`
+- **Indexierte Dokumente:** `5.068 Vault-Notizen (gemessen 05.11.2026)`
 - **Dokumenten-Erfasser:** *Auto-OCR (Docling) für PDFs und Fachbücher in 02_Wissensbibliothek/*
 - **Transaktionale Persistenz:** *SQLite WAL-Modus auf allen Datenbanken (Memory, Kanban, State)*
 - **Undo-Puffer:** *Atomare Pre-Write-Snapshots in `.hermes/snapshots/` mit 1-Klick-Rollback*
@@ -70,7 +70,7 @@
 3. **Operations (Organigramm):** Interaktiver 2D-Hierarchiebaum (56 Knoten, 55 Berichtswege)
 4. **Operations (Funkverkehr):** Inter-Agenten-Kommunikationskanäle (#tech, #legal etc.)
 5. **Eingang & Triage:** HITL-Freigabekarten, IMAP-Mailpostfach und Telegram-Stream
-6. **Agenten-Kader:** 57 Spezialisten, Modell-Hot-Swap, 8 Fach-Reiter inkl. Personalakten
+6. **Agenten-Kader:** 59 Spezialisten, Modell-Hot-Swap, 8 Fach-Reiter inkl. Personalakten
 7. **Master Chat:** Dual-Mode ('Direkt' vs. 'Mission'), Multi-File, Vision-Capture, Diktat
 8. **AI Mastermind:** 55 Methodik-Frameworks in 9 Kategorien mit Red-Team-Challenger
 9. **Showroom:** Projekt-Explorer, Markdown/HTML-Previews, isolierte Python-Sandbox
@@ -81,7 +81,7 @@
 14. **Erweiterungen:** Modul-Zentrale für 34 steuerbare Evey-Plugins in 8 Fachkategorien
 15. **Research Lab:** Mehrstufige Webrecherche, Evidenz-Score, Triangulation & Synthese
 16. **Telemetrie & Logs:** 3-Quellen-Stream (Container-Logs, Agenten-Logs, Audit-Trail)
-17. **Prompt Studio:** 1.079 Enterprise-Vorlagen, 255+ Fabric SOPs, 5-Felder-Struktur
+17. **Prompt Studio:** 832 Enterprise-Vorlagen, 255+ Fabric SOPs, 5-Felder-Struktur
 18. **Visual CSS Live Studio:** In-Place DOM-Inspektor, Transform-Gizmo (Alt + S), CSS-Export
 19. **Design System Lab:** AppShell-Architekt (56px Header-Flucht) & 15-Komponenten-Studio
 20. **System Control Center & Omnibox:** 7 Einstellungs-Tabs mit Live-Dock und Strg+K Omnibox

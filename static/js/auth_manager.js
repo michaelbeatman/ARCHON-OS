@@ -249,6 +249,67 @@ class AuthManager {
     }
   }
 
+  openPasswordDialog(userId, username, isSelf) {
+    const old = document.getElementById('archon-pw-modal');
+    if (old) old.remove();
+    const modal = document.createElement('div');
+    modal.id = 'archon-pw-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.88);backdrop-filter:blur(4px)';
+    modal.innerHTML = `
+      <form id="archon-pw-form" style="width:340px;max-width:92vw;background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:13px;font-weight:800;color:#e2e8f0">Passwort ändern</div>
+        <div style="font-size:11px;color:#94a3b8;font-family:monospace">@${username}</div>
+        ${isSelf ? '<input id="archon-pw-current" type="password" placeholder="Aktuelles Passwort" required style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:9px 11px;color:#e2e8f0;font-size:12px">' : ''}
+        <input id="archon-pw-new" type="password" placeholder="Neues Passwort (min. 8 Zeichen)" required style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:9px 11px;color:#e2e8f0;font-size:12px">
+        <input id="archon-pw-new2" type="password" placeholder="Neues Passwort wiederholen" required style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:9px 11px;color:#e2e8f0;font-size:12px">
+        <div id="archon-pw-error" style="display:none;color:#f87171;font-size:11px;font-family:monospace"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button type="button" onclick="document.getElementById('archon-pw-modal').remove()" style="background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:10px;padding:8px 12px;font-size:12px;cursor:pointer">Abbrechen</button>
+          <button type="submit" style="background:#0284c7;border:0;color:#fff;border-radius:10px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer">Speichern</button>
+        </div>
+      </form>`;
+    document.body.appendChild(modal);
+    modal.querySelector('#archon-pw-form').addEventListener('submit', (ev) => this.handlePasswordChange(ev, userId, isSelf));
+  }
+
+  async handlePasswordChange(ev, userId, isSelf) {
+    ev.preventDefault();
+    const err = document.getElementById('archon-pw-error');
+    const pw = document.getElementById('archon-pw-new').value;
+    const pw2 = document.getElementById('archon-pw-new2').value;
+    err.style.display = 'none';
+    if (pw !== pw2) {
+      err.textContent = 'Die Passwörter stimmen nicht überein.';
+      err.style.display = 'block';
+      return;
+    }
+    const body = { user_id: userId, new_password: pw };
+    if (isSelf) body.current_password = document.getElementById('archon-pw-current').value;
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        err.textContent = data.detail || 'Passwort konnte nicht geändert werden.';
+        err.style.display = 'block';
+        return;
+      }
+      document.getElementById('archon-pw-modal').remove();
+      if (data.relogin_required) {
+        alert('Passwort geändert. Bitte melde dich neu an.');
+        window.location.reload();
+      } else {
+        alert('Passwort geändert.');
+      }
+    } catch (e) {
+      err.textContent = 'Netzwerkfehler.';
+      err.style.display = 'block';
+    }
+  }
+
   async renderSettingsUsersTable(containerId = 'settings-users-table-body') {
     this.syncAuthModeUI();
     const tbody = document.getElementById(containerId);
@@ -289,6 +350,7 @@ class AuthManager {
               </span>
             </td>
             <td class="p-3 text-right">
+              <button onclick="window.authManager.openPasswordDialog('${u.id}','${u.username}', ${u.id === ((this.currentUser && this.currentUser.id) || '')})" class="p-1 text-zinc-400 hover:text-sky-500 transition cursor-pointer" title="Passwort ändern">🔑</button>
               ${u.role !== 'admin' ? `
                 <button onclick="window.authManager.handleDeleteUser('${u.id}', '${u.username}')" class="p-1 text-zinc-400 hover:text-rose-500 transition cursor-pointer" title="Benutzer löschen">
                   🗑️

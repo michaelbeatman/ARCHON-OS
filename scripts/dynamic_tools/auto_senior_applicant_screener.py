@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Autonome Ausführung für Skill: auto_senior_applicant_screener
 Synthetisiert aus Demonstration: Bewerbungen Prüfen und Senior Coder Selektieren
-Erstellt am: 2026-11-03T12:55:40.197072
+Erstellt am: 2026-11-05T14:06:05.936541
 Enthält biomechanische Bézier-Trajektorien und Bounding-Box Jitter.
 """
 

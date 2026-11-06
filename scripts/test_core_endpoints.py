@@ -1,6 +1,7 @@
 import urllib.request
 import json
 import time
+from _archon_auth import headers as _archon_headers
 
 endpoints = [
     '/health',
@@ -24,7 +25,7 @@ for ep in endpoints:
     url = f'http://127.0.0.1:8501{ep}'
     t0 = time.time()
     try:
-        req = urllib.request.Request(url)
+        req = urllib.request.Request(url, headers=_archon_headers())
         with urllib.request.urlopen(req, timeout=5) as res:
             status = res.status
             size = len(res.read())

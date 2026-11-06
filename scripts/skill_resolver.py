@@ -249,9 +249,9 @@ def resolve_and_prepare_skill_context(
         obsidian_docs = []
         doc_paths = [
             "/opt/data/obsidian/Bewerbung/Vorlagen/Bewerbungsprotokoll.md",
-            "C:\\Mein Obsidian\\Bewerbung\\Vorlagen\\Bewerbungsprotokoll.md",
+            "/mnt/raid/Mein Obsidian/Bewerbung\\Vorlagen\\Bewerbungsprotokoll.md",
             "/opt/data/obsidian/Bewerbung/Vorlagen/Operator-One-Pager-Final.md",
-            "C:\\Mein Obsidian\\Bewerbung\\Vorlagen\\Operator-One-Pager-Final.md"
+            "/mnt/raid/Mein Obsidian/Bewerbung\\Vorlagen\\Operator-One-Pager-Final.md"
         ]
         for dp in doc_paths:
             if os.path.exists(dp) and os.path.isfile(dp):

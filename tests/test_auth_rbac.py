@@ -13,6 +13,10 @@ if BASE_DIR not in sys.path:
 
 from backend.auth_service import AuthService
 
+# Passwort kommt aus der Umgebung — niemals im Test hartkodieren.
+ADMIN_PW = os.environ.get("ARCHON_TEST_ADMIN_PASSWORD", "")
+SKIP_PW = "ARCHON_TEST_ADMIN_PASSWORD nicht gesetzt"
+
 
 class TestAuthRBAC(unittest.TestCase):
     def setUp(self):
@@ -25,8 +29,9 @@ class TestAuthRBAC(unittest.TestCase):
         self.assertEqual(admin["username"], "admin")
         self.assertEqual(admin["display_name"], "Michael Keller")
 
+    @unittest.skipUnless(ADMIN_PW, SKIP_PW)
     def test_02_authenticate_success_and_session(self):
-        session = self.auth.authenticate("admin", "archon2026")
+        session = self.auth.authenticate("admin", ADMIN_PW)
         self.assertIsNotNone(session)
         self.assertTrue(session["token"].startswith("tok_"))
         self.assertEqual(session["user"]["role"], "admin")
@@ -86,8 +91,9 @@ class TestAuthRBAC(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.auth.update_user(admin_id, role="operator")
 
+    @unittest.skipUnless(ADMIN_PW, SKIP_PW)
     def test_06_logout_invalidates_session(self):
-        session = self.auth.authenticate("admin", "archon2026")
+        session = self.auth.authenticate("admin", ADMIN_PW)
         token = session["token"]
         self.assertIsNotNone(self.auth.verify_session(token))
 

@@ -32,7 +32,7 @@ fi
 echo "🩺 [3/3] Prüfe System-Gesundheit..."
 sleep 3
 if command -v curl &> /dev/null; then
-    curl -sSf http://localhost:8501/api/v1/research/providers > /dev/null && echo "✅ Archon OS ist online!" || echo "⚠️ Container startet noch..."
+    curl -sSf -H "X-Archon-Service-Token: $(cat /mnt/raid/AgenticOS-2026/data/.archon_service_token 2>/dev/null)" http://localhost:8501/api/v1/research/providers > /dev/null && echo "✅ Archon OS ist online!" || echo "⚠️ Container startet noch..."
 fi
 
 echo "=============================================================================="

@@ -47,7 +47,7 @@ def _init_db() -> None:
             now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             defaults = [
                 ("deepseek/deepseek-chat", 10, 10, 0, 620.0, now_iso),
-                ("google/gemini-2.5-flash", 10, 9, 1, 540.0, now_iso),
+                ("nvidia/nemotron-3-ultra-550b-a55b:free", 10, 9, 1, 540.0, now_iso),
                 ("openai/gpt-4o-mini", 10, 9, 1, 790.0, now_iso)
             ]
             conn.executemany("INSERT INTO bandit_model_stats VALUES (?, ?, ?, ?, ?, ?)", defaults)

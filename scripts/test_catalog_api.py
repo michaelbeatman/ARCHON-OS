@@ -1,10 +1,11 @@
 import urllib.request
 import json
 import time
+from _archon_auth import headers as _archon_headers
 
 for attempt in range(10):
     try:
-        req = urllib.request.urlopen("http://localhost:8501/api/templates/catalog", timeout=5)
+        req = urllib.request.urlopen(urllib.request.Request("http://localhost:8501/api/templates/catalog", headers=_archon_headers()), timeout=5)
         raw = req.read().decode("utf-8")
         data = json.loads(raw)
         templates = data.get("templates", [])

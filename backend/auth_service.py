@@ -328,6 +328,20 @@ class AuthService:
 
         return self.get_user_by_id(user_id)
 
+    def verify_password(self, username: str, password: str) -> bool:
+        """Prüft ein Passwort, ohne eine Session anzulegen."""
+        username = (username or "").strip().lower()
+        if not username or not password:
+            return False
+        with _get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT password_hash, salt, is_active FROM users WHERE username = ?", (username,))
+            user = cur.fetchone()
+            if not user or not user["is_active"]:
+                return False
+            check_hash, _ = _hash_password(password, user["salt"])
+            return hmac.compare_digest(check_hash, user["password_hash"])
+
     def change_password(self, user_id: str, new_password: str) -> bool:
         if len(new_password or "") < 6:
             raise ValueError("Das neue Passwort muss mindestens 6 Zeichen lang sein.")
@@ -335,10 +349,11 @@ class AuthService:
         with _get_db() as conn:
             cur = conn.cursor()
             cur.execute("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", (pwd_hash, salt, user_id))
+            updated = cur.rowcount
             # Alle bestehenden Sessions dieses Nutzers invalidieren
             cur.execute("DELETE FROM user_sessions WHERE user_id = ?", (user_id,))
             conn.commit()
-            return cur.rowcount > 0
+            return updated > 0
 
     def delete_user(self, user_id: str) -> bool:
         with _get_db() as conn:

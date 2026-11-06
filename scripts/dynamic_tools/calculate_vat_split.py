@@ -1,4 +1,4 @@
-# Autonom synthetisiert von tax_holding_advisor am 2026-11-03T12:50:54.917139
+# Autonom synthetisiert von tax_holding_advisor am 2026-11-05T14:06:02.969035
 
 def calculate_vat_split(gross_amount: float, tax_rate: float = 0.19):
     net = round(gross_amount / (1.0 + tax_rate), 2)

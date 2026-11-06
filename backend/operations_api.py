@@ -202,7 +202,7 @@ def get_kanban_tasks(archived: bool = Query(False)):
     meta = _load_kanban_meta()
     base_select = """
             SELECT rowid AS task_num, id, title, body, assignee, status, priority, created_by,
-                   created_at, started_at, completed_at, result, model_override, provider_override,
+                   created_at, started_at, completed_at, result, model_override, provider_override, block_kind,
                    (SELECT count(*) FROM task_comments c WHERE c.task_id = tasks.id) AS comment_count,
                    (SELECT count(*) FROM task_links l WHERE l.parent_id = tasks.id) AS subtask_count,
                    (SELECT count(*) FROM task_links l WHERE l.child_id = tasks.id) AS parent_count
@@ -237,6 +237,10 @@ def get_kanban_tasks(archived: bool = Query(False)):
                 # 2-Stufen-Archiv (10.10.2026): archiviert gehoert nicht aufs Board
                 # (vorher fiel archived still in den todo-Bucket)
                 continue
+            # Freigabe-Status ist verbindlich: unabhaengig davon, was ein fremder
+            # Schreiber (Hermes-Kanban-Worker teilt dieselbe DB) am Status aendert.
+            if (task_dict.get("block_kind") or "").lower() == "approval":
+                st = "blocked"
             _enrich_task(task_dict, profiles, meta)
             if st in columns:
                 columns[st].append(task_dict)
@@ -333,7 +337,7 @@ async def _execute_kanban_task_async(task_id: str):
     conn = _get_kanban_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT id, title, body, assignee, status, model_override FROM tasks WHERE id = ?", (task_id,))
+        cur.execute("SELECT id, title, body, assignee, status, model_override, provider_override, task_type, block_kind FROM tasks WHERE id = ?", (task_id,))
         row = cur.fetchone()
         if not row:
             return
@@ -350,6 +354,49 @@ async def _execute_kanban_task_async(task_id: str):
         except Exception as e:
             print(f"[OperationsAPI] DAG Execution error for {task_id}: {e}", file=sys.stderr)
 
+    # Autonomie-Gate: der Eigentümer entscheidet, ob Operations selbst handeln dürfen.
+    try:
+        from backend.model_routing import autonomy_level
+        _autonomy = autonomy_level("operations")
+    except Exception:
+        _autonomy = "approval"
+
+    if _autonomy != "autonomous":
+        _gate = _get_kanban_connection()
+        try:
+            _now = datetime.datetime.now().isoformat()
+            _row = _gate.execute("SELECT block_kind FROM tasks WHERE id = ?", (task_id,)).fetchone()
+            _block_kind = _row["block_kind"] if _row is not None and hasattr(_row, "keys") else (_row[0] if _row else None)
+            if _autonomy == "manual":
+                _gate.execute("UPDATE tasks SET status = 'todo' WHERE id = ?", (task_id,))
+                _gate.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'autonomy_manual', ?, ?)",
+                    (task_id, json.dumps({"level": "manual", "reason": "Nur Vorschlag — Ausführung gesperrt"}), _now),
+                )
+                _gate.commit()
+                print(f"[Autonomy] Task {task_id} nicht gestartet (manual).")
+                return
+            if _block_kind != "approval_granted":
+                _gate.execute("UPDATE tasks SET status = 'blocked', block_kind = 'approval' WHERE id = ?", (task_id,))
+                _gate.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'awaiting_approval', ?, ?)",
+                    (task_id, json.dumps({"level": "approval", "reason": "Freigabe erforderlich"}), _now),
+                )
+                # Hermes-Kanban-Protokoll: ein 'blocked'-Event macht die Sperre "sticky",
+                # sonst hebt promote_ready_tasks den Task wieder auf 'ready'.
+                _gate.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'blocked', ?, ?)",
+                    (task_id, json.dumps({"reason": "approval_required"}), _now),
+                )
+                _gate.commit()
+                print(f"[Autonomy] Task {task_id} wartet auf Freigabe.")
+                return
+            # Freigabe erteilt: Marker löschen und weiterlaufen
+            _gate.execute("UPDATE tasks SET block_kind = NULL WHERE id = ?", (task_id,))
+            _gate.commit()
+        finally:
+            _gate.close()
+
     # Fall 2: Einzelaufgabe
     # Sofort als 'in_progress' markieren, damit im Kanban und UI der aktive Lauf sichtbar ist
     try:
@@ -363,10 +410,25 @@ async def _execute_kanban_task_async(task_id: str):
     except Exception:
         pass
 
-    assignee = t_dict.get("assignee") or "hermes-researcher"
+    from backend.agent_aliases import resolve_agent_id
+    assignee = resolve_agent_id(t_dict.get("assignee") or "hermes-researcher")
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
-    model = t_dict.get("model_override") or "deepseek/deepseek-chat"
+    model = (t_dict.get("model_override") or "").strip()
+    provider_override = (t_dict.get("provider_override") or "").strip()
+    if not model:
+        try:
+            from backend.model_routing import is_enabled, resolve, classify_task
+            if is_enabled():
+                _task_type = (t_dict.get("task_type") or "").strip() or classify_task(f"{title} {body}")
+                _route = resolve(_task_type)
+                if _route:
+                    model = _route["model"]
+                    provider_override = provider_override or _route["provider"]
+                    print(f"[ModelRouting] Task {task_id}: '{_task_type}' -> {model} ({provider_override})")
+        except Exception as _mr_err:
+            print(f"[ModelRouting] Fallback auf Profilmodell: {_mr_err}")
+    model = model or "deepseek/deepseek-chat"
 
     profiles = _load_profiles_map()
     prof = profiles.get(assignee, {})
@@ -400,6 +462,7 @@ async def _execute_kanban_task_async(task_id: str):
             role=role,
             system_prompt=system_prompt,
             model=model,
+            provider=provider_override,
             task_id=task_id
         )
         is_success = res.get("status") == "success" and not (res.get("content") or "").startswith("[FEHLER:")
@@ -788,6 +851,32 @@ async def api_kanban_bulk_undo(req: KanbanBulkUndoRequest):
         conn.close()
 
 
+@router.post("/kanban/tasks/{task_id}/approve")
+async def approve_kanban_task(task_id: str):
+    """Erteilt die Autonomie-Freigabe (approval) und startet die Aufgabe."""
+    conn = _get_kanban_connection()
+    try:
+        row = conn.execute("SELECT id, status, block_kind FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Task nicht gefunden.")
+        now_iso = datetime.datetime.now().isoformat()
+        conn.execute("UPDATE tasks SET status = 'todo', block_kind = 'approval_granted' WHERE id = ?", (task_id,))
+        conn.execute(
+            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'approved', ?, ?)",
+            (task_id, json.dumps({"by": "owner", "previous_status": row["status"] if hasattr(row, "keys") else row[1]}), now_iso),
+        )
+        # Sticky-Sperre aufheben (Hermes-Protokoll: 'unblocked' muss das letzte Block-Event sein)
+        conn.execute(
+            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'unblocked', ?, ?)",
+            (task_id, json.dumps({"by": "owner", "reason": "approval_granted"}), now_iso),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    asyncio.create_task(_execute_kanban_task_async(task_id))
+    return {"status": "success", "task_id": task_id, "message": "Freigegeben und gestartet."}
+
+
 @router.post("/kanban/tasks/{task_id}/quality-review")
 async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(default=QualityReviewRequest())):
     """
@@ -808,7 +897,8 @@ async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(
 
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
-    assignee = t_dict.get("assignee") or "hermes-researcher"
+    from backend.agent_aliases import resolve_agent_id
+    assignee = resolve_agent_id(t_dict.get("assignee") or "hermes-researcher")
     result = t_dict.get("result") or ""
     now_iso = datetime.datetime.now().isoformat()
 

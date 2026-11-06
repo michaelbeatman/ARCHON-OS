@@ -132,7 +132,7 @@ class DunningEngine:
         candidates = []
 
         try:
-            with sqlite3.connect(f"file:{self.memory_db}?mode=ro&immutable=1", uri=True, timeout=5.0) as conn:
+            with sqlite3.connect(f"file:{self.memory_db}?mode=ro", uri=True, timeout=5.0) as conn:
                 conn.row_factory = sqlite3.Row
                 cur = conn.cursor()
                 cur.execute("""
@@ -172,7 +172,7 @@ class DunningEngine:
         if not os.path.exists(self.memory_db):
             raise ValueError("Datenbank nicht erreichbar.")
 
-        with sqlite3.connect(f"file:{self.memory_db}?mode=ro&immutable=1", uri=True, timeout=5.0) as conn:
+        with sqlite3.connect(f"file:{self.memory_db}?mode=ro", uri=True, timeout=5.0) as conn:
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
             cur.execute("SELECT * FROM invoices WHERE invoice_id = ?", (invoice_id,))

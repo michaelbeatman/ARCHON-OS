@@ -51,7 +51,7 @@ Nach dem Start laufen drei koordinierte Container:
 
 ## Kern-Module & System-Säulen
 
-### 1. Agentenkader: 57 Spezialisten in 11 Domänen
+### 1. Agentenkader: 59 Spezialisten in 11 Domänen
 Das Gesamtsystem deckt alle Unternehmensbereiche mit festen Profilen und System-Prompts (`SOUL.md`) ab:
 - **Geschäftsführung & Strategie:** Master Orchestrator (Default), Robert (Strategic Copilot), Micha (Owner), Board Secretary
 - **Recht, Finanzen & Steuern:** Tax & Holding Advisor, General Counsel, Compliance Guardian, Liquiditätsplaner
@@ -124,7 +124,7 @@ AgenticOS-2026/
 
 ## System-Handbuch & Weiterführende Dokumentation
 
-Die vollständige Dokumentation mit detaillierten Anleitungen zu allen 19 Modulen, API-Endpunkten und SOPs befindet sich unter:
+Die vollständige Dokumentation mit detaillierten Anleitungen zu allen dokumentierten Modulen, API-Endpunkten und SOPs befindet sich unter:
 
 * **[Offizielles System-Handbuch](docs/SYSTEM_HANDBUCH.md)**
 * **[Entwicklungs-Roadmap 2026](docs/system/ROADMAP_2026.md)**

@@ -270,6 +270,9 @@
         if (typeof loadLLMProvidersSettings === "function") {
           loadLLMProvidersSettings();
         }
+        if (typeof loadModelRoutingSettings === "function") {
+          loadModelRoutingSettings();
+        }
       } else if (targetTab === "plugins") {
         if (targetSubTab) {
           setPluginSubTab(targetSubTab);
@@ -2975,4 +2978,106 @@
     window.copyNewGeneratedKey = copyNewGeneratedKey;
     window.revokeApiKey = revokeApiKey;
     window.deleteApiKey = deleteApiKey;
-    
+
+// ---------------------------------------------------------------------------
+// Modell-Routing pro Aufgabe (Eigentümer-Entscheidung)
+// ---------------------------------------------------------------------------
+let _mrConfig = { enabled: false, routes: [], autonomy: { operations: "approval", orchestrator: "approval" } };
+const MR_PROVIDERS = ["openrouter", "omniroute", "google", "openai", "groq", "mistral", "nvidia"];
+
+function _mrEsc(v) {
+  return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+async function loadModelRoutingSettings() {
+  try {
+    const res = await fetch("/api/settings/model-routing");
+    const data = await res.json();
+    if (data && data.config) {
+      _mrConfig = data.config;
+      renderModelRoutingRows();
+    }
+  } catch (e) {
+    console.warn("[ModelRouting] load failed", e);
+  }
+}
+
+function renderModelRoutingRows() {
+  const box = document.getElementById("mr-rows");
+  if (!box) return;
+  const en = document.getElementById("mr-enabled");
+  if (en) en.checked = !!_mrConfig.enabled;
+  const ao = document.getElementById("mr-autonomy-operations");
+  const ar = document.getElementById("mr-autonomy-orchestrator");
+  if (ao) ao.value = (_mrConfig.autonomy || {}).operations || "approval";
+  if (ar) ar.value = (_mrConfig.autonomy || {}).orchestrator || "approval";
+
+  box.innerHTML = (_mrConfig.routes || []).map((r, i) => `
+    <div class="grid grid-cols-12 gap-2 items-center" data-mr-row="${i}">
+      <input class="col-span-3 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-[11px] font-mono" data-field="label" value="${_mrEsc(r.label)}" placeholder="Aufgabe">
+      <input class="col-span-2 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-[10px] font-mono" data-field="task" value="${_mrEsc(r.task)}" placeholder="key">
+      <select class="col-span-2 bg-[var(--background)] border border-[var(--border)] rounded-lg px-1 py-1.5 text-[10px] font-mono" data-field="provider">
+        ${MR_PROVIDERS.map(p => `<option value="${p}" ${p === r.provider ? "selected" : ""}>${p}</option>`).join("")}
+      </select>
+      <input class="col-span-4 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-[10px] font-mono" data-field="model" value="${_mrEsc(r.model)}" placeholder="provider/model">
+      <button type="button" class="col-span-1 text-[var(--muted-foreground)] hover:text-rose-500" onclick="removeModelRouteRow(${i})" title="Entfernen">✕</button>
+    </div>`).join("");
+}
+
+function addModelRouteRow() {
+  _mrConfig.routes = _mrConfig.routes || [];
+  _mrConfig.routes.push({ task: "", label: "", provider: "openrouter", model: "" });
+  renderModelRoutingRows();
+}
+
+function removeModelRouteRow(index) {
+  if (!_mrConfig.routes) return;
+  _mrConfig.routes.splice(index, 1);
+  renderModelRoutingRows();
+}
+
+function collectModelRoutingRows() {
+  return Array.from(document.querySelectorAll("[data-mr-row]")).map(el => {
+    const get = f => {
+      const node = el.querySelector('[data-field="' + f + '"]');
+      return node ? node.value.trim() : "";
+    };
+    return { task: get("task"), label: get("label") || get("task"), provider: get("provider"), model: get("model") };
+  }).filter(r => r.task && r.model);
+}
+
+async function saveModelRoutingSettings() {
+  const status = document.getElementById("mr-status");
+  const payload = {
+    enabled: !!(document.getElementById("mr-enabled") || {}).checked,
+    routes: collectModelRoutingRows(),
+    autonomy: {
+      operations: (document.getElementById("mr-autonomy-operations") || {}).value || "approval",
+      orchestrator: (document.getElementById("mr-autonomy-orchestrator") || {}).value || "approval"
+    }
+  };
+  try {
+    const res = await fetch("/api/settings/model-routing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (status) status.textContent = "Fehler: " + (data.detail || res.status);
+      return;
+    }
+    _mrConfig = data.config;
+    renderModelRoutingRows();
+    if (status) status.textContent = "Gespeichert " + new Date().toLocaleTimeString();
+  } catch (e) {
+    if (status) status.textContent = "Netzwerkfehler";
+  }
+}
+
+window.loadModelRoutingSettings = loadModelRoutingSettings;
+window.renderModelRoutingRows = renderModelRoutingRows;
+window.addModelRouteRow = addModelRouteRow;
+window.removeModelRouteRow = removeModelRouteRow;
+window.collectModelRoutingRows = collectModelRoutingRows;
+window.saveModelRoutingSettings = saveModelRoutingSettings;

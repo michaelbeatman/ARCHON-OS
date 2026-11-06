@@ -46,7 +46,7 @@ def _has_tables(path: str) -> bool:
     if not os.path.isfile(path):
         return False
     try:
-        con = sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True, timeout=3.0)
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3.0)
         try:
             rows = con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             return len(rows) > 0

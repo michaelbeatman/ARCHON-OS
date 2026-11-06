@@ -1369,6 +1369,22 @@
       if (!isFinite(n)) return `rgba(128,128,128,${alpha})`;
       return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
     }
+    // Autonomie-Freigabe: gibt eine blockierte Aufgabe frei und startet sie.
+    async function approveKanbanTask(taskId) {
+      try {
+        const res = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(taskId)}/approve`, { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (typeof showNotification === 'function') showNotification('Freigabe', data.detail || 'Freigabe fehlgeschlagen', 'error');
+          return;
+        }
+        if (typeof showNotification === 'function') showNotification('Freigabe', data.message || 'Freigegeben und gestartet.', 'success');
+        await loadOperationsData(false);
+      } catch (e) {
+        if (typeof showNotification === 'function') showNotification('Freigabe', 'Netzwerkfehler bei der Freigabe', 'error');
+      }
+    }
+
     function renderOperationsKanban(data) {
       const container = document.getElementById('ops-kanban-columns-container');
       const badge = document.getElementById('ops-kanban-badge');
@@ -1516,6 +1532,9 @@
                 <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2">${opsEscapeHtml(t.title)}</h4>
                 ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-tight">${opsEscapeHtml(t.body)}</p>` : ''}
                 ${projektName ? `<div class="inline-block max-w-full truncate px-1.5 py-0.5 rounded text-[9px] font-mono text-muted-custom bg-[var(--secondary)] border border-[var(--border)]" title="${opsEscapeHtml(t.obsidian)}">📁 ${opsEscapeHtml(projektName)}</div>` : ''}
+                ${(t.block_kind === 'approval') ? `<button type="button" onclick="event.stopPropagation(); approveKanbanTask('${t.id}')"
+                  class="w-full mt-1 px-2 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-[10px] font-bold transition cursor-pointer"
+                  title="Autonomie-Freigabe erteilen und Aufgabe starten">🔓 Freigeben &amp; starten</button>` : ''}
                 <div class="pt-1 flex items-center justify-between border-t border-[var(--border)]/50 text-[10px]">
                   <div class="flex items-center gap-1.5 min-w-0">
                     <img src="${avatar}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)]" style="width:28px;height:28px;min-width:28px;max-width:28px;min-height:28px;max-height:28px;" />

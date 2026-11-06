@@ -224,7 +224,7 @@ class DocuSealClient:
         if not os.path.exists(self.memory_db):
             return []
         try:
-            with sqlite3.connect(f"file:{self.memory_db}?mode=ro&immutable=1", uri=True, timeout=5.0) as conn:
+            with sqlite3.connect(f"file:{self.memory_db}?mode=ro", uri=True, timeout=5.0) as conn:
                 conn.row_factory = sqlite3.Row
                 cur = conn.cursor()
                 cur.execute("""

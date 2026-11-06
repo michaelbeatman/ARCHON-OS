@@ -8,7 +8,7 @@ Vollstaendiges Release- und Backup-Skript fuer Archon OS v0.3.8 (Enterprise ERP 
 1. Erstellt ein vollstaendiges Tages-Backup:
    - Online-Backup aller SQLite-Datenbanken (kanban.db, agent_os.db, agentic_memory.db, data.db)
    - settings.json, agent_profiles.json, config/, data/snapshots/
-   - Ziel: Y:\\_ARCHON Backups\\daily\\archon_YYYYMMDD_HHMM (wenn verbunden)
+   - Ziel: /mnt/raid/_ARCHON Backups/daily\\archon_YYYYMMDD_HHMM (wenn verbunden)
      sowie data/backups/daily/archon_YYYYMMDD_HHMM (lokal)
 
 2. Baut das vollstaendige Release-Paket v0.3.8:
@@ -18,7 +18,7 @@ Vollstaendiges Release- und Backup-Skript fuer Archon OS v0.3.8 (Enterprise ERP 
    - docker-compose.yml, Dockerfile, setup_homeserver.ps1, setup_homeserver.sh
    - Installationsanweisung fuer Menschen.txt
    - SERVER_HANDOVER.md
-   - Ziel: Y:\\_ARCHON Backups\\releases\\Archon v0.3.8 (wenn verbunden)
+   - Ziel: /mnt/raid/_ARCHON Backups/releases\\Archon v0.3.8 (wenn verbunden)
      sowie backups/Archon_v0.3.8 (lokal)
 """
 
@@ -320,7 +320,7 @@ echo =======================================================
 echo.
 
 if exist "Y:\\_ARCHON Backups" (
-    set "DEST=Y:\\_ARCHON Backups\\releases\\Archon {VERSION}"
+    set "DEST=/mnt/raid/_ARCHON Backups/releases\\Archon {VERSION}"
 ) else (
     echo [WARNUNG] Laufwerk Y: ist nicht verbunden!
     echo Versuche Netzwerkpfad \\\\nasdc73fa.local\\home\\_ARCHON Backups ...

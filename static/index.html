@@ -2161,7 +2161,7 @@ print('Ausführung erfolgreich!')</textarea>
   </script>
   <script src="/static/js/mission_control_cockpit.js?v=202610271358"></script>
   <script src="/static/js/research_lab.js?v=202610281420"></script>
-  <script src="/static/js/operations_kanban.js?v=202610310838"></script>
+  <script src="/static/js/operations_kanban.js?v=202611051300"></script>
   <script src="/static/js/operations_projects.js?v=20261105"></script>
   <script src="/static/js/appshell_architect.js?v=202610271155"></script>
   <script src="/static/js/css_live_studio.js?v=202610261908"></script>
@@ -2814,6 +2814,44 @@ print('Ausführung erfolgreich!')</textarea>
     const _tabCacheTimestamps = {};
     const CACHE_TTL_MS = 30000; // 30 Sek
     function shouldFetchTab(tId) { const now = Date.now(); if (!_tabCacheTimestamps[tId] || (now - _tabCacheTimestamps[tId] > CACHE_TTL_MS)) { _tabCacheTimestamps[tId] = now; return true; } return false; }
+    // Operations-Subnavigation. Die Funktion fehlte komplett — alle sechs
+    // Kacheln riefen ins Leere, deshalb blieb auch der n8n-Wrapper leer.
+    const OPS_TABS = ["projects", "chat", "kanban", "org", "automation", "comm"];
+    function setOperationsTab(tab) {
+      if (OPS_TABS.indexOf(tab) === -1) tab = "projects";
+      OPS_TABS.forEach(function (t) {
+        const btn = document.getElementById("ops-subtab-" + t);
+        const view = document.getElementById("ops-view-" + t);
+        const isActive = (t === tab);
+        if (btn) {
+          btn.classList.toggle("active-cadre-tab", isActive);
+          btn.style.opacity = isActive ? "1" : "0.8";
+          const tile = btn.querySelector(".tile-icon-wrap");
+          if (tile) tile.classList.toggle("active-tile", isActive);
+          const label = btn.querySelector(".ops-tab-label");
+          if (label) {
+            label.classList.toggle("text-red-600", isActive);
+            label.classList.toggle("font-bold", isActive);
+            label.classList.toggle("font-medium", !isActive);
+          }
+        }
+        if (view) view.classList.toggle("hidden", !isActive);
+      });
+      if (tab === "automation") {
+        const iframe = document.getElementById("automation-n8n-iframe");
+        const extLink = document.getElementById("n8n-external-link");
+        // Gleiche Origin: n8n laeuft hinter dem Archon-Proxy, damit es auch von
+        // anderen Rechnern im LAN erreichbar ist (vorher hart localhost:5678).
+        if (extLink) extLink.href = "/n8n-proxy/";
+        if (iframe && (!iframe.src || iframe.src === "about:blank" || iframe.src.indexOf("/n8n-proxy") === -1)) {
+          iframe.src = "/n8n-proxy/";
+        }
+      }
+      window.currentOpsTab = tab;
+      try { localStorage.setItem("archon_ops_tab", tab); } catch (e) {}
+    }
+    window.setOperationsTab = setOperationsTab;
+
     function setTab(tabId) {
       if (tabId === "master-chat") {
         setTab("operations");
@@ -2943,13 +2981,12 @@ print('Ausführung erfolgreich!')</textarea>
       }      if (tabId === "automation") {
         const iframe = document.getElementById("automation-n8n-iframe");
         const extLink = document.getElementById("n8n-external-link");
-        const expectedHost = window.location.hostname || "localhost";
         if (extLink) {
-          extLink.href = `http://${expectedHost}:5678`;
+          extLink.href = "/n8n-proxy/";
         }
         if (iframe) {
-          const expectedSrc = `http://${expectedHost}:5678`;
-          if (!iframe.src || iframe.src === "about:blank" || !iframe.src.includes(":5678")) {
+          const expectedSrc = "/n8n-proxy/";
+          if (!iframe.src || iframe.src === "about:blank" || !iframe.src.includes("/n8n-proxy")) {
             iframe.src = expectedSrc;
           }
         }

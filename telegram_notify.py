@@ -38,9 +38,37 @@ _TELEGRAM_TIMEOUT = 10.0
 _TELEGRAM_DOC_MAX_BYTES = 45 * 1024 * 1024
 
 
+_ENABLED_CACHE = {"ts": 0.0, "value": False}
+_WARNED_ONCE = {"done": False}
+
+
 def telegram_enabled() -> bool:
-    """Deaktiviert auf Nutzeranweisung (Server bleibt ohne Telegram aktiv)."""
-    return False
+    """Liest settings.json -> telegram.enabled (Standard: aus).
+
+    Früher hart auf False; jetzt konfigurierbar, damit n8n-Routinen und
+    Alarme wieder senden können, sobald der Eigentümer es einschaltet.
+    """
+    import json as _json
+    import time as _time
+
+    now = _time.time()
+    if now - _ENABLED_CACHE["ts"] < 30:
+        return _ENABLED_CACHE["value"]
+
+    enabled = False
+    for path in ("/app/settings.json", "/app/agent_workspace/settings.json"):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = _json.load(fh)
+            tg = data.get("telegram")
+            if isinstance(tg, dict) and "enabled" in tg:
+                enabled = bool(tg.get("enabled"))
+                break
+        except Exception:
+            continue
+
+    _ENABLED_CACHE.update({"ts": now, "value": enabled})
+    return enabled
 
 
 # --- 2d (12.10.2026, User-Entscheidung): HTML statt Markdown ---------------
@@ -100,7 +128,9 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
     Fehlschläge werden als WARNING geloggt (nie still) und geben False zurück.
     """
     if not telegram_enabled():
-        logger.warning("[Telegram] Ping übersprungen: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID nicht konfiguriert.")
+        if not _WARNED_ONCE["done"]:
+            logger.info("[Telegram] Versand deaktiviert (settings.json -> telegram.enabled = false).")
+            _WARNED_ONCE["done"] = True
         return False
     payload = {
         "chat_id": _TELEGRAM_CHAT_ID,

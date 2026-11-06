@@ -2,7 +2,7 @@
 name: auto_senior_applicant_screener
 description: Bewerbungen Prüfen und Senior Coder Selektieren (Autonom erzeugt via Programming by Demonstration / PbD)
 author: recruiter_specialist
-created_at: 2026-11-03T12:55:40.197072
+created_at: 2026-11-05T14:06:05.936541
 ---
 
 # Bewerbungen Prüfen und Senior Coder Selektieren

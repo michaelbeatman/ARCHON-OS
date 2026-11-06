@@ -15,4 +15,4 @@ Berechnet Netto und USt aus Bruttobetrag
 Pfad: `scripts/dynamic_tools/calculate_vat_split.py`
 
 ## 3. Verifikation
-Sandbox-Selbsttest erfolgreich bestanden am 2026-11-03 12:50.
+Sandbox-Selbsttest erfolgreich bestanden am 2026-11-05 14:06.

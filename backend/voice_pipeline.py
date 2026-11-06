@@ -87,8 +87,9 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
         except Exception as e:
             logger.warning(f"[Voice] OpenAI Whisper fehlgeschlagen: {e}")
 
-    # 3. Google Gemini Audio-Inferenz (wenn GOOGLE_API_KEY vorhanden)
-    if GOOGLE_API_KEY:
+    # 3. Google Gemini Audio-Inferenz — nur wenn ausdrücklich freigeschaltet.
+    # Standard aus, weil jeder Aufruf das Google-Kontingent des Eigentümers belastet.
+    if GOOGLE_API_KEY and _google_voice_allowed():
         try:
             import httpx
             b64_audio = base64.b64encode(data).decode("utf-8")

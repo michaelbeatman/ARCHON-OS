@@ -339,7 +339,7 @@ echo =======================================================
 echo.
 
 if exist "Y:\\_ARCHON Backups" (
-    set "DEST=Y:\\_ARCHON Backups\\releases\\Archon {VERSION}"
+    set "DEST=/mnt/raid/_ARCHON Backups/releases\\Archon {VERSION}"
 ) else (
     echo [WARNUNG] Laufwerk Y: ist nicht verbunden!
     echo Versuche Netzwerkpfad \\\\nasdc73fa.local\\home\\_ARCHON Backups ...

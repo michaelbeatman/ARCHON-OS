@@ -603,7 +603,7 @@
       "role": "1. Strategie, Führung & Lebensplanung",
       "category": "1. Strategie, Führung & Lebensplanung",
       "avatar": "/static/avatars/avatar_131.jpg?v=20260913_rev4",
-      "model": "google/gemini-3.1-flash-image",
+      "model": "nvidia/nemotron-3.5-super-vl:free",
       "active_tasks": 0,
       "status": "standby",
       "person_name": "Clara Moreau",

@@ -42,6 +42,7 @@ except Exception as _shutdown_guard_err:
     logger.warning(f"[Startup] Shutdown-Guard nicht aktiv: {_shutdown_guard_err}")
 
 app = FastAPI(title="Agent OS Control Panel")
+_APP_START_TS = time.time()
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
@@ -469,9 +470,10 @@ async def forward_to_hermes(request: Request) -> Response:
         f"http://127.0.0.1:9119{path_to_use}{query_str}",
     ]
         
-    fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length", "authorization", "cookie"]}
+    fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length", "authorization"]}
     fwd_headers["Host"] = "localhost:8787"
-    _hermes_tok = os.getenv("HERMES_SESSION_TOKEN") or os.getenv("OMNIROUTE_API_KEY") or "sk-archon-session-dev"
+    _hermes_tok = (os.getenv("HERMES_SESSION_TOKEN") or os.getenv("HERMES_DASHBOARD_SESSION_TOKEN")
+                   or os.getenv("OMNIROUTE_API_KEY") or "sk-archon-session-dev")
     fwd_headers["X-Hermes-Session-Token"] = _hermes_tok
     fwd_headers["Authorization"] = f"Bearer {_hermes_tok}"
     
@@ -2142,7 +2144,25 @@ def _save_quickchat_session(session: Dict):
 
 @app.get("/api/v1/quickchat/session/{profile_id}")
 def api_get_quickchat_session(profile_id: str):
-    return _load_quickchat_session(profile_id)
+    """Verlauf aus state.db (identisch mit Master-/Agentenchat)."""
+    sid = _quickchat_state_session_id(profile_id)
+    msgs = []
+    try:
+        with _get_state_db() as conn:
+            rows = conn.execute(
+                "SELECT role, content, timestamp FROM messages WHERE session_id = ? AND active = 1 "
+                "ORDER BY timestamp ASC LIMIT 200",
+                (sid,),
+            ).fetchall()
+        for role, content, ts in rows:
+            msgs.append({
+                "role": "user" if role == "user" else "agent",
+                "text": content,
+                "ts": datetime.datetime.fromtimestamp(float(ts or 0)).isoformat() if ts else None,
+            })
+    except Exception as e:
+        logger.warning(f"[QuickChat] Verlauf laden fehlgeschlagen: {e}")
+    return {"profile_id": profile_id, "session_id": sid, "messages": msgs}
 
 class QuickchatSendRequest(BaseModel):
     profile_id: str
@@ -2152,13 +2172,11 @@ class QuickchatSendRequest(BaseModel):
 
 @app.post("/api/v1/quickchat/send")
 async def api_quickchat_send(req: QuickchatSendRequest):
+    # Gemeinsamer Verlauf mit Master-/Agentenchat: state.db statt JSON-Schatulle.
+    state_sid = _quickchat_state_session_id(req.profile_id)
+    _ensure_state_session(state_sid, source="quickchat", profile_name=req.profile_id, title=req.message)
+    history = _load_state_history(state_sid, limit=12)
     session = _load_quickchat_session(req.profile_id)
-
-    # Build history for context (last 12 turns = 6 back-and-forth)
-    history = []
-    for msg in session["messages"][-12:]:
-        role = "user" if msg.get("role") == "user" else "assistant"
-        history.append({"role": role, "content": msg.get("text", "")})
 
     # Update last_used for idle-stop tracking
     cfg = _load_gateway_config()
@@ -2200,6 +2218,14 @@ async def api_quickchat_send(req: QuickchatSendRequest):
         reply_text = f"⚠ Fehler: {str(e)}"
 
     duration = round(time.time() - start_t, 2)
+
+    # Gemeinsamer Verlauf (state.db) — identisch mit Master-/Agentenchat
+    try:
+        _save_message_to_db(state_sid, "user", req.message)
+        if reply_text:
+            _save_message_to_db(state_sid, "assistant", str(reply_text))
+    except Exception as _pc_err:
+        logger.warning(f"[QuickChat] Speichern im gemeinsamen Verlauf fehlgeschlagen: {_pc_err}")
 
     # Append to persistent session
     session["messages"].append({"role": "user", "text": req.message, "ts": datetime.datetime.now().isoformat()})
@@ -3760,6 +3786,7 @@ def api_get_hermes_profiles():
             "skills": active_skills,
             "tools": tools,
             "avatar": avatar_val,
+            "avatar_url": avatar_val,
             "provider": provider,
             "model": model,
             "reasoning_level": reasoning_level,
@@ -3808,6 +3835,9 @@ def api_get_agents_profiles():
         p = dict(p)
         file_status = p.get("status", "active")
         p["runtime_status"] = file_status if file_status in ("active", "standby", "inactive") else "standby"
+        # Frontend liest avatar_url — immer mitliefern, sonst springt das Bild zurueck
+        if not p.get("avatar_url"):
+            p["avatar_url"] = p.get("avatar") or ""
         enriched.append(p)
     return enriched
 
@@ -4183,9 +4213,16 @@ async def api_telegram_send(payload: TelegramSendPayload):
     import telegram_notify
     if not payload.text:
         raise HTTPException(status_code=400, detail="Text darf nicht leer sein.")
+    if not telegram_notify.telegram_enabled():
+        # Ehrlich melden statt still zu verwerfen: n8n sieht, dass nichts rausging.
+        return {
+            "status": "disabled",
+            "result": False,
+            "detail": "Telegram-Versand ist aus (settings.json -> telegram.enabled = false).",
+        }
     try:
-        res = telegram_notify.send_telegram_message(payload.text, parse_mode=payload.parse_mode)
-        return {"status": "success", "result": res}
+        res = telegram_notify.send_telegram_message(payload.text)
+        return {"status": "success" if res else "failed", "result": res}
     except Exception as e:
         logger.warning(f"[TelegramSend] Fehler: {e}")
         return {"status": "error", "message": str(e)}
@@ -5133,6 +5170,43 @@ class ClosingConnection(sqlite3.Connection):
         finally:
             self.close()
 
+def _quickchat_state_session_id(profile_id: str) -> str:
+    """QuickChat teilt sich den Verlauf mit Master-/Agentenchat (state.db)."""
+    return f"quickchat_{profile_id}"
+
+
+def _ensure_state_session(session_id: str, source: str = "quickchat", profile_name: str = "", title: str = "", model: str = ""):
+    """Legt die Sitzung in state.db an, falls sie noch nicht existiert."""
+    try:
+        with _get_state_db() as conn:
+            row = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if row:
+                return
+            now = time.time()
+            conn.execute(
+                "INSERT INTO sessions (id, source, started_at, message_count, last_activity_at, profile_name, title, model) "
+                "VALUES (?, ?, ?, 0, ?, ?, ?, ?)",
+                (session_id, source, now, now, profile_name, title[:120] if title else None, model or None),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"[QuickChat] Session-Anlage fehlgeschlagen: {e}")
+
+
+def _load_state_history(session_id: str, limit: int = 12) -> List[Dict[str, str]]:
+    """Liest die letzten Nachrichten einer Sitzung aus state.db als Chat-Historie."""
+    try:
+        with _get_state_db() as conn:
+            rows = conn.execute(
+                "SELECT role, content FROM messages WHERE session_id = ? AND active = 1 "
+                "ORDER BY timestamp DESC LIMIT ?",
+                (session_id, limit),
+            ).fetchall()
+        return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+    except Exception:
+        return []
+
+
 def _get_state_db():
     os.makedirs(os.path.dirname(STATE_DB_PATH), exist_ok=True)
     conn = sqlite3.connect(STATE_DB_PATH, timeout=15.0, factory=ClosingConnection)
@@ -5251,6 +5325,7 @@ class ChatStreamRequest(BaseModel):
     model: Optional[str] = None
     provider: Optional[str] = None
     reasoning_level: Optional[str] = None
+    task_type: Optional[str] = None
 
 class SetProfileModelRequest(BaseModel):
     provider: str
@@ -6389,6 +6464,20 @@ async def api_chat_stream(req: ChatStreamRequest):
             model = "evey-session-guard:"
         else:
             model = "auto/best-coding"
+
+    # Modell-Routing (Eigentümer-Tabelle): überschreibt das Profilmodell, wenn aktiv.
+    try:
+        from backend.model_routing import is_enabled as _mr_enabled, resolve as _mr_resolve, classify_task as _mr_classify
+        if _mr_enabled():
+            _task_type = (getattr(req, "task_type", None) or "").strip()
+            if not _task_type:
+                _task_type = _mr_classify(user_msg)
+            _route = _mr_resolve(_task_type)
+            if _route:
+                provider, model = _route["provider"], _route["model"]
+                logger.info(f"[ModelRouting] Chat '{_task_type}' -> {provider}/{model}")
+    except Exception as _mr_err:
+        logger.warning(f"[ModelRouting] Chat-Fallback: {_mr_err}")
 
     # 1. MISSIONS-MODUS: Task erzeugen & HITL Approval-Gate aktivieren
     if mode == "mission":
@@ -9080,6 +9169,39 @@ def api_auth_update_user(user_id: str, request: Request, payload: dict = Body(..
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.post("/api/auth/change-password")
+def api_auth_change_password(request: Request, payload: dict = Body(...)):
+    """Passwort ändern: eigener Account (mit aktuellem Passwort) oder als Admin für andere."""
+    curr = get_current_user_from_request(request)
+    if not curr or curr.get("id") in (None, "", "usr_anonymous"):
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+
+    target_id = str(payload.get("user_id") or curr.get("id")).strip()
+    new_pw = str(payload.get("new_password") or "")
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="Das neue Passwort muss mindestens 8 Zeichen haben.")
+
+    is_self = (target_id == curr.get("id"))
+    if is_self:
+        current_pw = str(payload.get("current_password") or "")
+        if not auth_service.verify_password(curr.get("username", ""), current_pw):
+            raise HTTPException(status_code=400, detail="Das aktuelle Passwort ist falsch.")
+    elif curr.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen fremde Passwörter ändern.")
+
+    try:
+        ok = auth_service.change_password(target_id, new_pw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not ok:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden.")
+
+    return {
+        "status": "success",
+        "message": "Passwort geändert.",
+        "relogin_required": is_self,
+    }
+
 @app.delete("/api/auth/users/{user_id}")
 def api_auth_delete_user(user_id: str, request: Request):
     curr = get_current_user_from_request(request)
@@ -10560,13 +10682,63 @@ async def api_save_kanban(request: Request):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+_TELEMETRY_CACHE = {"ts": 0.0, "containers": 0}
+
+
+def _count_running_containers() -> int:
+    """Echte Zahl laufender Container (60 s gecacht, damit der Endpunkt billig bleibt)."""
+    now = time.time()
+    if now - _TELEMETRY_CACHE["ts"] < 60 and _TELEMETRY_CACHE["ts"]:
+        return _TELEMETRY_CACHE["containers"]
+    count = 0
+    try:
+        import subprocess
+        out = subprocess.run(["docker", "ps", "-q"], capture_output=True, text=True, timeout=3)
+        count = len([x for x in out.stdout.splitlines() if x.strip()]) if out.returncode == 0 else 0
+    except Exception:
+        count = 0
+    if count == 0:
+        # Fallback: docker-socket-proxy im Docker-Netz
+        try:
+            import json as _json
+            import urllib.request as _url
+            for host in ("http://docker-socket-proxy:2375", "http://host.docker.internal:2375"):
+                try:
+                    with _url.urlopen(f"{host}/containers/json", timeout=3) as resp:
+                        count = len(_json.loads(resp.read()))
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+    _TELEMETRY_CACHE.update({"ts": now, "containers": count})
+    return count
+
+
 @app.get("/api/v1/telemetry/dashboard")
 def api_telemetry_dashboard():
+    """Live-Kennzahlen. Keine festen Werte — alles wird zur Laufzeit ermittelt."""
+    tasks_running = 0
+    try:
+        import sqlite3 as _sql
+        _conn = _sql.connect("file:/opt/data/kanban.db?mode=ro", uri=True, timeout=2)
+        tasks_running = _conn.execute(
+            "SELECT count(*) FROM tasks WHERE status = 'in_progress'"
+        ).fetchone()[0]
+        _conn.close()
+    except Exception:
+        tasks_running = 0
+
+    uptime_seconds = max(0, int(time.time() - _APP_START_TS))
+    hours, rest = divmod(uptime_seconds, 3600)
+    minutes = rest // 60
+
     return {
         "active_agents": len(load_agents()),
-        "tasks_running": 0,
-        "network_ops": 42,
-        "avg_uptime": "99.9%"
+        "tasks_running": tasks_running,
+        "network_ops": _count_running_containers(),
+        "avg_uptime": f"{hours}h {minutes}m",
+        "uptime_seconds": uptime_seconds,
     }
 
 # Helper to read/write persistent agent settings in main.py
@@ -15220,6 +15392,28 @@ def api_get_contracts_history(limit: int = 25):
 
 
 # --- ZENTRALE KONFIGURATION ALLER 10 AUTONOMIE- & RESILIENZ-GRUPPEN (SETTINGS-PAKET A & B) ---
+
+@app.get("/api/settings/model-routing")
+def api_get_model_routing():
+    from backend.model_routing import load_config
+    return {"status": "success", "config": load_config()}
+
+
+@app.post("/api/settings/model-routing")
+def api_save_model_routing(payload: Dict = Body(...)):
+    from backend.model_routing import save_config
+    try:
+        cfg = save_config(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"status": "success", "config": cfg}
+
+
+@app.get("/api/settings/model-routing/resolve")
+def api_resolve_model_routing(task: str = Query("")):
+    from backend.model_routing import resolve, is_enabled
+    return {"status": "success", "enabled": is_enabled(), "route": resolve(task)}
+
 
 @app.get("/api/settings/autonomy-modules")
 def api_get_autonomy_modules_settings():

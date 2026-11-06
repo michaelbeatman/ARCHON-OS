@@ -11,6 +11,7 @@ import json
 import argparse
 import urllib.request
 import urllib.error
+from _archon_auth import headers as _archon_headers
 
 FRAMEWORK_DEFAULTS = {
     "Steffi Kieffer Boardroom": [
@@ -115,7 +116,7 @@ def run_debate(task: str, framework: str = None, budget: str = "balanced", round
     req = urllib.request.Request(
         url,
         data=req_data,
-        headers={"Content-Type": "application/json"}
+        headers=_archon_headers({"Content-Type": "application/json"}),
     )
     
     try:

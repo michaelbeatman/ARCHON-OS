@@ -1,0 +1,31 @@
+services:
+  archon:
+    image: archon-os-dev:latest
+    container_name: ARCHON-OS
+    user: "1000:1000"
+    group_add:
+      - "973"
+    working_dir: /app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8501", "--reload"]
+    env_file:
+      - .env.archon
+    environment:
+      HOME: /tmp
+      ENVIRONMENT: development
+    ports:
+      - "8501:8501"
+    volumes:
+      - /mnt/raid/AgenticOS-2026:/app
+      - /mnt/raid/AgenticOS-2026/agent_workspace:/app/agent_workspace
+      - /mnt/raid/AgenticOS-2026/data:/app/data
+      - /home/micha/.hermes:/opt/data
+      - /mnt/raid/Mein Obsidian:/opt/data/obsidian
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    networks:
+      - agents_net
+
+networks:
+  agents_net:
+    external: true
+    name: archon-os-dev_agents_net

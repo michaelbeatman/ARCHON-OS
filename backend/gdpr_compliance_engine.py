@@ -51,7 +51,7 @@ class GDPRComplianceEngine:
 
     def _get_conn(self, db_path: str, readonly: bool = False) -> sqlite3.Connection:
         if readonly and os.path.exists(db_path):
-            uri = f"file:{db_path}?mode=ro&immutable=1"
+            uri = f"file:{db_path}?mode=ro"
             return sqlite3.connect(uri, uri=True, timeout=10.0)
         return sqlite3.connect(db_path, timeout=10.0)
 

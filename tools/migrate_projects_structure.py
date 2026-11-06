@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 tools/migrate_projects_structure.py
-Migriert bestehende Einzelfiles in C:\\Mein Obsidian\\Projects in die neue
+Migriert bestehende Einzelfiles in /mnt/raid/Mein Obsidian/Projects in die neue
 Standard-3-Ordner-Projektstruktur:
 - 01_Zwischenberichte/
 - 02_Medien/

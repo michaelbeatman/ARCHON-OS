@@ -38,7 +38,7 @@
   - 3.6 Soul
   - 3.7 Personalakte
   - 3.8 Marktplatz
-  - 3.9 Der vollständige Flotten-Kader: Alle 57 Spezialisten nach Fachdomänen
+  - 3.9 Der vollständige Flotten-Kader: Alle 59 Spezialisten nach Fachdomänen
 - **4. Showroom**
   - 4.1 Explorer
   - 4.2 Berichte
@@ -109,7 +109,7 @@
   - 17.8 Kommunikation
   - 17.9 Design
   - 17.10 Systemupdate
-- **18. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)**
+- **18. Spezial-Feature: Archon Prompt Studio (832 Vorlagen & Fabric SOP)**
 - **19. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector**
 - **Anhang I: 5 Praxis-Use-Cases**
 - **Anhang II: Archon OS Komplett-Glossar (118 Module + Upgrades)**
@@ -160,7 +160,7 @@ Wer sich mit Archon OS beschäftigt, blickt nicht auf eine simple Chat-Oberfläc
 Die vier operativen Säulen des Systems im täglichen Einsatz:
 Das mobile Steuerpult (Telegram / Messenger): Unterwegs agiert dein Smartphone als Funkgerät. Über persönliche Rufnamen (z. B. '/robert', '/anwalt', '/micha') gibst du Direktbefehle an einzelne Fachleute oder beauftragst Robert mit umfassenden Projekten. Das System antwortet binnen Sekunden, schlägt Zwischenschritte vor und spiegelt alle Dialoge zur revisionssicheren Dokumentation synchron in die Zentrale.
 Der visuelle Leitstand (Web-Browser Cockpit): Am Desktop hast du über 15 spezialisierte Ansichten und Studios die volle Kontrolle. Du verfolgst den Lebenszyklus von Aufgaben im Kanban-Board, überwachst Kosten und Token-Verbrauch in Echtzeit in Mission Control, sichtet E-Mails im Eingang und gibst kritische Aktionen vor ihrer tatsächlichen Ausführung über das Human-in-the-Loop-Verfahren (HITL) frei.
-Das physische Langzeitgedächtnis (Obsidian Vault & Zentralbibliothek): Alle Arbeitsergebnisse, Notizen, Gutachten und Protokolle werden nicht in proprietären Cloud-Silos weggesperrt, sondern als offene, zukunftssichere Markdown-Dateien direkt auf deiner lokalen Festplatte abgelegt. Du kannst jede Notiz jederzeit parallel in der nativen Obsidian-Desktop-App bearbeiten. Ein 80-seitiges PDF-Gutachten wird per Auto-OCR in Sekunden erfasst und steht sofort allen 56 Agenten als Vektor-Wissen zur Verfügung.
+Das physische Langzeitgedächtnis (Obsidian Vault & Zentralbibliothek): Alle Arbeitsergebnisse, Notizen, Gutachten und Protokolle werden nicht in proprietären Cloud-Silos weggesperrt, sondern als offene, zukunftssichere Markdown-Dateien direkt auf deiner lokalen Festplatte abgelegt. Du kannst jede Notiz jederzeit parallel in der nativen Obsidian-Desktop-App bearbeiten. Ein 80-seitiges PDF-Gutachten wird per Auto-OCR in Sekunden erfasst und steht sofort allen 59 Agenten als Vektor-Wissen zur Verfügung.
 Der Maschinenraum (Docker & Daemon-Architektur): Unter der Haube arbeiten elf robuste Container im Verbund: Der Asyncio-Kernel (Port 8420) koordiniert die Prozesse, der Watchdog beendet blockierte Tasks, n8n triggert zeitgesteuerte Cron-Workflows, OmniRoute fängt Modell-Ausfälle automatisch per Failover ab, und der Guardian stellt sicher, dass kein Budget überschritten wird.
 Wie liest man dieses Handbuch?
 Jedes der 15 Kapitel widmet sich einer dezidierten Bedienoberfläche oder einem Spezial-Studio. Alle Kapitel folgen einer einheitlichen Struktur: Kernkonzept, Steuerelemente im Detail, Schritt-für-Schritt-Workflow, Praxistipp und konkreter Muster-Prompt. Komplexe Oberflächen mit mehreren Reitern (wie der Agenten-Kader, Operations oder die Zentralbibliothek) sind in feingliedrige Unterkapitel unterteilt, jeweils illustriert mit einem hochauflösenden Screenshot des jeweiligen Subtabs. Wer das Zusammenspiel in der Praxis erleben möchte, findet im Anhang fünf detailliert durchgerechnete Use Cases von der einfachen Rechtsauskunft bis zur 24/7-Hintergrundüberwachung.
@@ -415,7 +415,7 @@ Dedizierte Ansicht für genehmigungspflichtige Aktionen (Human-in-the-Loop):
 
 ## 3. Agenten-Kader
 
-Der Agenten-Kader ist die Personalabteilung und das operative Einstellungszentrum deines Systems. Hier verwaltest du alle 57 Spezialisten-Profile (inklusive Root-Orchestrator), weist Sprachmodelle dynamisch zu, bearbeitest Verhaltensrichtlinien in der SOUL.md und konfigurierst persönliche Rufnamen für den direkten Messenger-Zugriff via Telegram.
+Der Agenten-Kader ist die Personalabteilung und das operative Einstellungszentrum deines Systems. Hier verwaltest du alle 59 Spezialisten-Profile (inklusive Root-Orchestrator), weist Sprachmodelle dynamisch zu, bearbeitest Verhaltensrichtlinien in der SOUL.md und konfigurierst persönliche Rufnamen für den direkten Messenger-Zugriff via Telegram.
 
 ### 3.1 Übersicht
 - Vollständiger Katalog aller Fachagenten mit Suchleiste, Domänen-Filter und Statusanzeige (Aktiv, Favoriten, Alle).
@@ -494,7 +494,7 @@ Der Bot Screen ist als dedizierter Subtab zwischen Chat und Fähigkeiten im Agen
 - Import und Export vorkonfigurierter Rollen-Pakete als portable JSON/Markdown-Dateien.
 - Schnelle Erweiterung des Kaders bei Erschließung neuer Geschäftsbereiche.
 
-### 3.9 Der vollständige Flotten-Kader: Alle 57 Spezialisten nach Fachdomänen
+### 3.9 Der vollständige Flotten-Kader: Alle 59 Spezialisten nach Fachdomänen
 
 Das Gesamtsystem umfasst 57 spezialisierte Rollenprofile, die nach den 7 strategischen Kernbereichen gegliedert und nach dem EU AI Act klassifiziert sind:
 
@@ -714,7 +714,7 @@ Das Research Lab (backend/research_engine.py) führt mehrstufige wissenschaftlic
 Die Zentralbibliothek ist das Wissensgedächtnis von Archon OS. Sie kombiniert semantische Vektorsuche, automatische Dokumenten-Ingestion und den lokalen Obsidian Vault.
 RAG-Index (AnythingLLM), Dokumenten-Erfasser (Auto-OCR) & Obsidian-Vault
 Kernkonzept & Architektur:
-Die Zentralbibliothek ist das kollektive Gedächtnis deiner Organisation. Sie vereint semantische Vektorsuche (RAG), automatisierte Dokumenten-Ingestion mit OCR und die Verwaltung deines lokalen Obsidian-Vaults unter einer konsistenten Oberfläche. Hier abgelegtes Wissen steht allen 56 Agenten sofort für fundierte Antworten zur Verfügung.
+Die Zentralbibliothek ist das kollektive Gedächtnis deiner Organisation. Sie vereint semantische Vektorsuche (RAG), automatisierte Dokumenten-Ingestion mit OCR und die Verwaltung deines lokalen Obsidian-Vaults unter einer konsistenten Oberfläche. Hier abgelegtes Wissen steht allen 59 Agenten sofort für fundierte Antworten zur Verfügung.
 Die wichtigsten Steuerelemente & Bereiche im Überblick:
 Drei integrierte Sub-Tabs (Header): RAG Index, Dokumenten-Erfasser und Obsidian Vault.
 Hilfe- & Sync-Schalter: Kontext-Hilfe und manuelle Synchronisation des Dokumentenbestands.
@@ -1094,7 +1094,7 @@ Das System Control Center (aufrufbar über das Zahnrad-Symbol oben rechts in Mis
 15.6 Kommunikation (Telegram, CRM-Mail & Webhooks):Konfiguriert alle mobilen und externen Kommunikationskanäle: Hinterlegung des Telegram-Bot-Tokens und autorisierter Chat-IDs für den Fernzugriff, Einrichtung des E-Mail-Abgleichs für das integrierte CRM (IMAP/SMTP) sowie Bereitstellung eingehender Webhook-Endpunkte für externe Drittsysteme.
 15.7 Design (Theme-Engine & Corporate Identity):Steuert das visuelle Erscheinungsbild von Archon OS: Umschaltung zwischen Dark- und Light-Theme, Upload des Firmenlogos (für Kopfzeile und PDF-Exporte) sowie Definition der Primär- und Akzentfarben. Änderungen synchronisieren sich nahtlos mit dem Visual CSS Live Studio.
 15.8 System-Diagnostik & 360°-Health-Score (GET /api/system/health-score):Aggregiert kontinuierlich alle Vitalparameter des Systems in eine transparente Gesamtnote von 0 bis 100%: Docker Core-Flotte (35% Gewicht), Concurrency-Warteschlange (20%), kryptografische Audit-Integrität (20%), Deadlock- und Stagnations-Freiheit (15%) sowie AnythingLLM RAG-Erreichbarkeit (10%). Liefert bei Abweichungen sofortige operative Handlungsempfehlungen.
-15.9 Autonomer Master-Dossier-Generator (POST /api/system/generate-dossier):Generiert auf Knopfdruck oder via API das vollständige, strukturierte System-Architektur-Dossier. Erfasst alle 11 Docker-Dienste, Concurrency-Slots, 14 FinOps-Mechanismen, 57 Spezialisten-Profile und Sicherheits-Gatekeeper und synchronisiert die Markdown-Datei simultan in den Projektordner und in das Obsidian-Verzeichnis (00_DOKUMENTATION/SYSTEM_ARCHITEKTUR_MASTER.md).
+15.9 Autonomer Master-Dossier-Generator (POST /api/system/generate-dossier):Generiert auf Knopfdruck oder via API das vollständige, strukturierte System-Architektur-Dossier. Erfasst alle 15 Docker-Dienste, Concurrency-Slots, 14 FinOps-Mechanismen, 59 Spezialisten-Profile und Sicherheits-Gatekeeper und synchronisiert die Markdown-Datei simultan in den Projektordner und in das Obsidian-Verzeichnis (00_DOKUMENTATION/SYSTEM_ARCHITEKTUR_MASTER.md).
 Tabelle 15.1: Übersicht der 7 Einstellungsbereiche im System Control Center
 15.10 Autonome Kernel-, Resilienz-, Sandbox- & Debugger-Steuerung (Settings-Paket A: Gruppen 1–5):Im Reiter 'Hermes Core' (Abschnitt 7) lassen sich alle Hintergrund-Wächter der Ausführungs-Engine einzeln ein-/ausschalten und über Schwellenwerte kalibrieren: (1) Concurrency & Deadlock-Wächter (Max Worker 1–16, Queue-Timeout, Stagnations-Limit in Sekunden, Auto-Recovery), (2) Loop-Killer, Circuit-Breaker & Token-Clipper (Max identische Runden, Jaccard-Ähnlichkeitsschwelle 0.70–0.99, Max Schritte pro Task), (3) Autonome Task-Selbstheilung & Git-Rollback (Hauptschalter, Auto-Git-Rollback bei Crash, Max Reparaturversuche 1–10, Reparatur-Modell), (4) Ephemeral Docker Sandbox (Isolations-Zwang, RAM-Limit in MB, CPU-Kerne, Timeout in Sekunden, Netzwerksperre) sowie (5) Time-Travel Debugger & Pre-Write Snapshots (Step-Tracing aktiv, automatische Gzip-Snapshots vor Schreibzugriffen, Ringpuffer-Größe).
 15.11 Governance, Schiedsgericht, War-Room, SLAs & Flotten-Hygiene (Settings-Paket B: Gruppen 6–10):Abschnitt 8 im Reiter 'Hermes Core' bündelt alle Zero-Trust- und Qualitäts-Gates: (6) Konsens-Gate & Schiedsgericht (Freigabe-Pflicht ab Priorität P1–P3, Modus Dual-Critic vs. 3er-Rat, 2/3-Mehrheit vs. Einstimmigkeit), (7) Virtueller War-Room & Pre-Mortem (Hauptschalter, automatischer Stresstest vor P3-Releases, Blockade-Schwelle MEDIUM/HIGH/CRITICAL), (8) SLA-Verträge & Handoff-Desk (Mindest-Lieferlänge in Zeichen, Max Turnaround in Minuten, Auto-Reject bei unvollständigen Pflichtfeldern), (9) Inbox-Watcher & Proaktives Morgen-Standup (Scan-Intervall in Sekunden, tägliche Briefing-Uhrzeit) sowie (10) Flotten-Selbstheilung, DB-Backups, Secret-Masker & Browser-Audit (Auto-Container-Restart, Echtzeit-Secret-Schwärzung, Playwright Screenshot-Beweissicherung, SQLite-Backup-Rotation in Tagen).
@@ -1187,12 +1187,12 @@ Der Hermes-Daemon bildet das operative Fundament von Archon OS:
 
 ---
 
-## 18. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)
+## 18. Spezial-Feature: Archon Prompt Studio (832 Vorlagen & Fabric SOP)
 Enterprise Prompt-Engineering, 255+ Fabric Patterns & 5-Felder-Struktur
 Kernkonzept & Architektur:
 Das Archon Prompt Studio ist ein hochkarätiges Prompt-Engineering-Werkzeug direkt im Herzen des Betriebssystems. Es löst das größte Problem bei der Arbeit mit LLMs: vage, unvollständige oder inkonsistente Instruktionen. Das Studio bündelt 824 praxiserprobte Enterprise-Vorlagen (in 16 Fachkategorien) und über 255 Fabric Standard Operating Procedures (SOPs). Seine modulare 5-Felder-Architektur zwingt jede Aufgabenstellung in eine mathematisch präzise Form (Rolle, Kontext, Aufgabe, Ausgabeformat, Restriktionen). Das Modul ist so performant und nützlich konzipiert, dass es als eigenständiges Produkt oder als Chrome-Extension herausgelöst werden könnte.
 Die wichtigsten Steuerelemente & Bereiche im Überblick:
-Katalog & Kategorien-Filter (824 Vorlagen in 16 Kategorien): Filtert nach Fachdisziplinen wie Strategie, Recht, Coding, Marketing, Datenanalyse und Fabric-Mustern.
+Katalog & Kategorien-Filter (832 Vorlagen in 16 Kategorien): Filtert nach Fachdisziplinen wie Strategie, Recht, Coding, Marketing, Datenanalyse und Fabric-Mustern.
 Die 5-Felder-Formel für perfekte Prompts:
 1. Rolle (Wer agiert?): z. B. 'Senior Compliance Officer'.
 2. Kontext (Was ist die Ausgangslage?): Firmenhintergrund, Stakeholder, Zielgruppe.
@@ -1264,7 +1264,7 @@ Beteiligte System-Module: Eingang & Triage (IMAP/SMTP) ➔ Email-Guard Plugin �
 Use Case 3: Wissensaufbau: 80-seitiges PDF-Gutachten per Auto-OCR ins Zentralbibliothek & RAG
 ⚡ Komplexitätsstufe 3: Gehoben (Wissens-Ingestion & OCR)
 Ausgangslage & Zielsetzung:
-Du erhältst ein neues technisches Gutachten oder einen Bebauungsplan als 80-seitiges PDF. Du möchtest, dass alle 56 Agenten dieses Spezialwissen sofort beherrschen, ohne dass du ihnen die Fakten jedes Mal manuell in den Prompt kopieren musst.
+Du erhältst ein neues technisches Gutachten oder einen Bebauungsplan als 80-seitiges PDF. Du möchtest, dass alle 59 Agenten dieses Spezialwissen sofort beherrschen, ohne dass du ihnen die Fakten jedes Mal manuell in den Prompt kopieren musst.
 Ablauf im System (Schritt für Schritt):
 1. Du öffnest die Ansicht 'Zentralbibliothek' (Sub-Tab: Dokumenten-Erfasser) und ziehst das PDF per Drag & Drop in den Upload-Bereich.
 2. Die integrierte Auto-OCR-Pipeline (Docling) extrahiert vollautomatisch Fließtexte, Tabellen und Überschriften und übersetzt sie in sauberes Markdown.
@@ -4200,7 +4200,7 @@ Die Startseite **Mission Control** dient als reines Monitoring-Cockpit:
 
 ### Meilenstein 3: Multilingualität (i18n)
 - **Frontend-Lokalisierung:** Trennung von UI-Texten in strukturierte Lokalisierungsdateien (JSON/YAML).
-- **Prompt-Lokalisierung:** Sprachunabhängige oder zweisprachig optimierte System-Prompts für alle 56 Agenten-Rollen.
+- **Prompt-Lokalisierung:** Sprachunabhängige oder zweisprachig optimierte System-Prompts für alle 59 Agenten-Rollen.
 - **Dynamische Erkennung:** Automatische Spracherkennung der Benutzereingaben mit adäquater Antwortsprache.
 
 ### Meilenstein 4: Multi-User-Architektur

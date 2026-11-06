@@ -142,11 +142,17 @@ class EUAIActInventoryManager:
         return inventory
 
     def get_inventory(self) -> List[Dict[str, Any]]:
-        """Gibt das aktuelle KI-Inventar zurück (lädt aus Datei oder generiert neu)."""
+        """Gibt das aktuelle KI-Inventar zurück (lädt aus Datei oder generiert neu).
+
+        Ist die Inventardatei älter als die Profildatei, wird neu generiert —
+        sonst zeigt das Dashboard dauerhaft einen veralteten Kader.
+        """
         if os.path.exists(INVENTORY_FILE):
             try:
-                with open(INVENTORY_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                if (not os.path.exists(PROFILES_FILE)
+                        or os.path.getmtime(INVENTORY_FILE) >= os.path.getmtime(PROFILES_FILE)):
+                    with open(INVENTORY_FILE, "r", encoding="utf-8") as f:
+                        return json.load(f)
             except Exception:
                 pass
         return self.generate_inventory(save=True)

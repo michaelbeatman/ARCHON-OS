@@ -108,6 +108,18 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],
 )
 
+# Rate-Limiting (S8 aus dem Audit): bremst teure/gefaehrliche Pfade eng und
+# alles andere grosszuegig. Kein neuer Endpunkt, daher Routen-Paritaet unberuehrt.
+# Notaus: ARCHON_RATE_LIMIT_ENABLED=0
+try:
+    from utils.rate_limit import RateLimitMiddleware, _env_int as _rl_env_int
+    app.add_middleware(RateLimitMiddleware)
+    logger.info("[RateLimit] aktiv (Standard %s/min, strikt %s/min)",
+                _rl_env_int("ARCHON_RATE_LIMIT_DEFAULT", 600),
+                _rl_env_int("ARCHON_RATE_LIMIT_STRICT", 20))
+except Exception as _err_rl:
+    logger.warning(f"[RateLimit] nicht aktiv: {_err_rl}")
+
 @app.middleware("http")
 async def add_no_cache_for_avatars(request: Request, call_next):
     response = await call_next(request)

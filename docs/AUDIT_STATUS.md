@@ -45,11 +45,11 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 | S1 | Docker-Socket | 🟡 | siehe B3 |
 | S2 | Path Traversal | ✅ | Path-Jail aktiv, 403 außerhalb der Wurzeln |
 | S3 | Keys in Env/Logs | 🟡 | 117 Dateien auf 600, Maskierung im Live-Editor; kein Secret-Manager |
-| S4 | Schwache Admin-Auth | ⚪ | in `main.py` keine Rollenprüfung mehr gefunden — verlagert, muss verifiziert werden |
+| S4 | Schwache Admin-Auth | 🟡 | Rollenprüfung vorhanden (`main.py:7376`, `/api/auth/toggle` prüft `role == "admin"`), aber kein MFA/2FA und keine systematische Prüfung aller Admin-Endpunkte |
 | S5 | CORS mit `*` | ✅ | explizite Origin-Liste + LAN-Regex statt Wildcard |
 | S6 | Sandbox-Escape | 🔴 | `api_run_python_sandbox` unverändert |
 | S7 | YAML-Deserialisierung | ⚪ | `safe_load` verwendet, `!!python`-Tags nicht geprüft |
-| S8 | Kein Rate-Limiting | 🔴 | kein `slowapi`/Middleware vorhanden; 200+ Endpunkte ungebremst |
+| S8 | **Kein Rate-Limiting** | ✅ | **siehe unten — behoben am 2026-11-06** |
 | S9 | Telegram-Token im Klartext | 🟡 | Rechte gehärtet, Klartext in `.env` bleibt |
 | S10 | **SSRF im Proxy** | ✅ | **siehe unten — behoben am 2026-11-06** |
 
@@ -67,6 +67,48 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 | P8 | Cache-Keys ohne ETag | 🔴 |
 
 Gemessener Bezugspunkt für P1–P8: `scripts/bench_routes.py`, 128 Routen, Median 73 ms warm.
+
+---
+
+## S8 — Kein Rate-Limiting (behoben 2026-11-06)
+
+**Befund.** 200+ Endpunkte ohne jede Bremse, darunter `/api/sandbox`,
+`/api/v1/container/exec`, die Update-Endpunkte und die Proxy-Pfade.
+
+**Fix.** `utils/rate_limit.py` als ASGI-Middleware (Token-Bucket, In-Memory):
+
+* **Standard 600/min** pro Client — die UI pollt legitim alle 10–30 s, ein
+  hartes Limit würde das Dashboard treffen.
+* **Strikt 20/min** für teure/gefährliche Pfade: `/api/sandbox`,
+  `/api/v1/container/exec`, `/api/hermes/update`, `/api/system/update`,
+  `/api/proxy`, `/api/router/hedged`, `/api/auth`.
+* **Ausgenommen:** `/health`, `/metrics`, `/static/`, SSE-Stream, OpenAPI,
+  CORS-Preflight (`OPTIONS`).
+* **Kein neuer Endpunkt** → Routen-Parität bleibt 585/861.
+* Notaus: `ARCHON_RATE_LIMIT_ENABLED=0`. Limits per
+  `ARCHON_RATE_LIMIT_DEFAULT` / `ARCHON_RATE_LIMIT_STRICT` einstellbar.
+* Bewusst **kein** Zusatzpaket (`slowapi`/`limits` nicht installiert; ein
+  Paket-Nachinstall im laufenden Container wäre das größere Risiko).
+
+**Verifikation.**
+
+```bash
+.venv/bin/python -m pytest tests/test_rate_limit.py -q   # 10 passed
+.venv/bin/python -m pytest tests/ -q                     # 177 passed, 4 skipped
+
+# live: strikter Pfad, 26 Anfragen gegen Limit 20/min
+for i in $(seq 26); do curl -s -H "X-Archon-Service-Token: $T" -o /dev/null \
+  -w "%{http_code}\n" "http://127.0.0.1:8501/api/proxy?url=http://169.254.169.254/"; done \
+  | sort | uniq -c        # → 20×403, 6×429
+curl ... "…/api/proxy?url=http://127.0.0.1:8501/health"
+# → {"error":"Zu viele Anfragen","detail":"Limit: 20 Anfragen/Minute auf diesem Pfad","retry_after_s":3}
+
+# /health 30× hintereinander → 30× 200 (ausgenommen)
+# UI-Pfade (/ , /api/ticker, /api/mission-control/state, /api/hermes/profiles,
+# /metrics) je 3× → durchgehend 200
+```
+
+Log-Bremse: ein 429-Eintrag pro Client und Minute statt pro Request.
 
 ---
 
@@ -111,15 +153,17 @@ curl -H "X-Archon-Service-Token: $T" \
 
 ## Nächste Schritte (priorisiert)
 
-1. **S8 Rate-Limiting** — 200+ Endpunkte ohne Bremse, darunter `/api/sandbox`
-   und Container-Exec. Höchster verbleibender Hebel.
-2. **B1 Race Condition MC-Lock** — der einzige Punkt, der Daten beschädigen kann
-   statt nur zu stören: `threading.Lock` + `asyncio.Lock` parallel.
-3. **S4/S7/B5/B8 verifizieren** — ungeprüft; erst messen, dann einordnen.
-4. **S6 Sandbox-Escape**, **B3 Docker-Socket-Reste** in `main.py`.
+1. **B1 Race Condition MC-Lock** — der einzige verbleibende Punkt, der Daten
+   beschädigen kann: `threading.Lock` und `asyncio.Lock` liegen parallel im
+   Store (`archon/core/mission_control.py:23,24`).
+2. **S6 Sandbox-Escape** — `api_run_python_sandbox` führt Code mit Host-Python
+   aus; Rate-Limiting entschärft die Ausnutzbarkeit, nicht das Prinzip.
+3. **B3 Docker-Socket-Reste** — direkte Socket-Connects in `main.py` (920,
+   1021, 1032) neben dem abgesicherten `utils/docker_client.py`.
+4. **S7/B5/B8 verifizieren** — ungeprüft; erst messen, dann einordnen.
 5. **A5/A7/A8** — Globals, FastAPI-DI, Config-Schicht (großer Umbau).
 6. **B10 Pfad-Config-Schicht** — 169 Stellen, eigener Tag mit eigener Baseline.
 
 ## Was nachweislich erledigt ist
 
-A2, B2, B4, B6, S2, S5, **S10** — sieben Punkte, jeder mit Messbefehl oben.
+A2, B2, B4, B6, S2, S5, **S8**, **S10** — acht Punkte, jeder mit Messbefehl oben.

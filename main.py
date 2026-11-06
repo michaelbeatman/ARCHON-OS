@@ -9299,23 +9299,17 @@ def api_get_research_sources():
 # --- SYSTEM UPDATE & RELEASE-LIFECYCLE (MEILENSTEIN 1) ---
 @app.get("/api/v1/system/update/check")
 def api_system_update_check():
-    import importlib
-    from backend import system_updater
-    importlib.reload(system_updater)
+    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     return system_updater.get_update_status()
 
 @app.get("/api/v1/system/update/local-changes")
 def api_system_update_local_changes():
-    import importlib
-    from backend import system_updater
-    importlib.reload(system_updater)
+    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     return system_updater.get_local_changes()
 
 @app.post("/api/v1/system/update/push")
 def api_system_update_push(payload: dict = Body(default={})):
-    import importlib
-    from backend import system_updater
-    importlib.reload(system_updater)
+    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     msg = payload.get("message")
     version = payload.get("version")
     step = payload.get("step", "custom")
@@ -9323,9 +9317,7 @@ def api_system_update_push(payload: dict = Body(default={})):
 
 @app.post("/api/v1/system/update/apply")
 def api_system_update_apply(payload: dict = Body(default={}), background_tasks: BackgroundTasks = None):
-    import importlib
-    from backend import system_updater
-    importlib.reload(system_updater)
+    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     make_backup = payload.get("backup", True)
     res = system_updater.apply_update(make_backup=make_backup)
     if res.get("status") == "success" and background_tasks is not None:
@@ -9334,16 +9326,12 @@ def api_system_update_apply(payload: dict = Body(default={}), background_tasks: 
 
 @app.get("/api/v1/system/update/snapshots")
 def api_system_update_snapshots():
-    import importlib
-    from backend import system_updater
-    importlib.reload(system_updater)
+    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     return {"status": "success", "snapshots": system_updater.list_snapshots()}
 
 @app.post("/api/v1/system/update/rollback")
 def api_system_update_rollback(payload: dict = Body(...)):
-    import importlib
-    from backend import system_updater
-    importlib.reload(system_updater)
+    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     snapshot_id = payload.get("snapshot_id", "").strip()
     if not snapshot_id:
         raise HTTPException(status_code=400, detail="Snapshot-ID erforderlich.")
@@ -9351,9 +9339,7 @@ def api_system_update_rollback(payload: dict = Body(...)):
 
 @app.post("/api/v1/system/update/backup")
 def api_system_update_backup(payload: dict = Body(default={})):
-    import importlib
-    from backend import system_updater
-    importlib.reload(system_updater)
+    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     tag = payload.get("tag", "manual").strip() or "manual"
     return system_updater.create_snapshot(tag=tag)
 
@@ -9361,9 +9347,7 @@ def api_system_update_backup(payload: dict = Body(default={})):
 # --- HERMES AGENT CORE UPDATE (NousResearch/hermes-agent) ---
 @app.get("/api/v1/hermes/update/check")
 def api_hermes_update_check(force: bool = False):
-    import importlib
-    from backend import hermes_updater
-    importlib.reload(hermes_updater)
+    from backend import hermes_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     return hermes_updater.check_hermes_updates(force_refresh=force)
 
 
@@ -9372,9 +9356,7 @@ def api_hermes_update_apply(request: Request, payload: dict = Body(default={})):
     curr_user = get_current_user_from_request(request)
     if curr_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Hermes Core Updates einleiten.")
-    import importlib
-    from backend import hermes_updater
-    importlib.reload(hermes_updater)
+    from backend import hermes_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     channel = payload.get("channel", "latest")
     auto_restart = payload.get("restart", True)
     return hermes_updater.apply_hermes_update(channel=channel, auto_restart=auto_restart)

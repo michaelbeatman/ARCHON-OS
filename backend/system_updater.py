@@ -20,6 +20,8 @@ import datetime
 import subprocess
 from typing import Dict, Any, List, Optional, Tuple
 
+from archon.core.cache import ttl_cache, invalidate  # noqa: E402
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SNAPSHOT_DIR = os.path.join(WORKSPACE_DIR, "data", "snapshots")
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
@@ -189,6 +191,7 @@ def parse_porcelain_status(stdout: str) -> List[Dict[str, str]]:
     return files
 
 
+@ttl_cache(seconds=120)
 def get_local_changes() -> Dict[str, Any]:
     """Gibt detaillierte Informationen zu allen ungespeicherten lokalen Änderungen zurück."""
     status_check = _run_git(["status", "--porcelain"])
@@ -345,6 +348,7 @@ def set_custom_version(target_version: Optional[str] = None, step: str = "custom
     return cur_version, new_version
 
 
+@ttl_cache(seconds=60)
 def get_update_status() -> Dict[str, Any]:
     """Prüft, ob auf dem Remote-Repository (GitHub) neue Commits vorliegen."""
     vinfo = get_system_version_info()

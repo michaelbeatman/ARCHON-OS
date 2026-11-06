@@ -33,10 +33,10 @@ DEFAULT_INSTALLED_VERSION = "v0.22.6"
 DEFAULT_INSTALLED_CODENAME = "2026.9.24"
 DEFAULT_INSTALLED_SHA = "f0d94882"
 
-# In-Memory Cache gegen GitHub API Rate-Limits (60 Sekunden TTL)
+# In-Memory Cache gegen GitHub API Rate-Limits (15 Minuten TTL)
 _cache_lock_time = 0
 _cached_update_data: Optional[Dict[str, Any]] = None
-CACHE_TTL_SECONDS = 60
+CACHE_TTL_SECONDS = 900
 
 
 class DockerSocketClient:

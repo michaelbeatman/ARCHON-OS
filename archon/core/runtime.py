@@ -22,6 +22,14 @@ from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
 # --------------------------------------------------------------------------
 # Pfade
 # --------------------------------------------------------------------------
+import logging
+
+logger = logging.getLogger("archon_os")
+
+# Wurzel des Projekts (archon/core/runtime.py -> ../..) - Ersatz fuer das
+# frueher verwendete os.path.dirname(__file__) aus main.py.
+APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
 WORKSPACE_DIR = "/app/agent_workspace" if (
     os.path.exists("/app/agent_workspace") or os.path.exists("/.dockerenv")
 ) else "./agent_workspace"
@@ -129,7 +137,7 @@ def atomic_write_json(filepath: str, data: Any, indent: int = 2) -> None:
 
 
 __all__ = [
-    "WORKSPACE_DIR", "MEMORY_DIR", "DATA_DIR", "SETTINGS_FILE", "OBSIDIAN_VAULT_DIR",
+    "APP_ROOT", "logger", "WORKSPACE_DIR", "MEMORY_DIR", "DATA_DIR", "SETTINGS_FILE", "OBSIDIAN_VAULT_DIR",
     "resolve_obsidian_vault_path", "ticker_entries", "add_ticker", "broadcast_event",
     "_SSE_SUBSCRIBERS", "_load_json", "_save_json", "atomic_write_json",
 ]

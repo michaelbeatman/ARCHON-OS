@@ -226,6 +226,11 @@ from archon.core.runtime import (  # noqa: E402
     _load_json, _save_json, atomic_write_json, _SSE_SUBSCRIBERS,
 )
 
+from archon.core.permissions import (  # noqa: E402
+    PERMISSION_GATES_FILE, load_permission_gates as _load_permission_gates,
+    save_permission_gates as _save_permission_gates, create_permission_gate as _create_permission_gate,
+    set_decision_factory as _set_decision_factory,
+)
 from archon.core.cache import ttl_cache  # noqa: E402
 from archon.core.state_db import (  # noqa: E402
     ClosingConnection, STATE_DB_PATH, _get_state_db, _get_profile_state_db,
@@ -1950,7 +1955,8 @@ def api_save_full_html(req: FullHtmlSaveRequest):
 
 @app.get("/api/v1/brain/galaxy-data")
 @ttl_cache(seconds=60)
-def api_brain_galaxy_data():
+def api_brain_galaxy_data(vault_limit: int = Query(600, description="Max. Vault-Notizen (0 = alle)"),
+                          include_vault: bool = Query(True)):
     nodes = []
     links = []
     node_ids = set()
@@ -2075,6 +2081,29 @@ def api_brain_galaxy_data():
                         if not matched_agent:
                             links.append({"source": core_id, "target": note_id, "relationship": "stores", "color": "rgba(6, 182, 212, 0.3)"})
 
+    # --- Payload-Begrenzung -------------------------------------------------
+    # 5050 Vault-Notizen machten 2,5 MB von 3,8 MB aus und sind in einem
+    # Force-Graph ohnehin nicht lesbar. Personalakten bleiben immer drin,
+    # reine Vault-Notizen werden auf `vault_limit` begrenzt (0 = alle).
+    if not include_vault:
+        _drop = {n["id"] for n in nodes if n["group"] in ("vault_note", "personalakte")}
+    elif vault_limit and vault_limit > 0:
+        _notes = [n for n in nodes if n["group"] == "vault_note"]
+        _pa = [n for n in nodes if n["group"] == "personalakte"]
+        _keep_pa = set()
+        _keep_notes = set()
+        for n in _pa:
+            _keep_pa.add(n["id"])
+        for n in _notes[:max(0, vault_limit - len(_keep_pa))]:
+            _keep_notes.add(n["id"])
+        _drop = {n["id"] for n in _notes if n["id"] not in _keep_notes}
+    else:
+        _drop = set()
+
+    if _drop:
+        nodes = [n for n in nodes if n["id"] not in _drop]
+        links = [l for l in links if l.get("source") not in _drop and l.get("target") not in _drop]
+
     return {
         "nodes": nodes,
         "links": links,
@@ -2083,7 +2112,8 @@ def api_brain_galaxy_data():
             "total_links": len(links),
             "agents_count": len([n for n in nodes if n["group"] == "agent"]),
             "skills_count": len([n for n in nodes if n["group"] == "skill"]),
-            "vault_notes_count": len([n for n in nodes if "note" in n["group"] or "personalakte" in n["group"]])
+            "vault_notes_count": len([n for n in nodes if "note" in n["group"] or "personalakte" in n["group"]]),
+            "vault_notes_truncated": len(_drop)
         }
     }
 
@@ -3156,26 +3186,6 @@ ALL_HERMES_TOOLS = [
 
 # Hermes-Profil-Registry -> archon.core.profiles (Import weiter unten)
 
-@app.get("/api/hermes/profiles")
-def api_get_hermes_profiles_route():
-    """Duenne Huelle: Logik lebt in archon.core.profiles."""
-    return api_get_hermes_profiles()
-
-@app.get("/api/agents/profiles")
-def api_get_agents_profiles():
-    """Liefert die Agenten-Profile mit Runtime-Status (active/standby) aus agent_profiles.json."""
-    profiles = list(api_get_hermes_profiles())  # liefert cached list
-    enriched = []
-    for p in profiles:
-        p = dict(p)
-        file_status = p.get("status", "active")
-        p["runtime_status"] = file_status if file_status in ("active", "standby", "inactive") else "standby"
-        # Frontend liest avatar_url — immer mitliefern, sonst springt das Bild zurueck
-        if not p.get("avatar_url"):
-            p["avatar_url"] = p.get("avatar") or ""
-        enriched.append(p)
-    return enriched
-
 
 class AgentProfileValidationSchema(BaseModel):
     id: str
@@ -3231,82 +3241,6 @@ def save_all_agent_profiles(profiles_list):
 # (NEUE TOOLS im Profil, Profil-LOESCHEN) brauchen IMMER die Owner-
 # Bestaetigung per Telegram. Erst nach 'approve' wird gespeichert/loescht.
 # =========================================================================
-PERMISSION_GATES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                      "config", "permission_gates.json")
-
-
-def _load_permission_gates() -> dict:
-    try:
-        if os.path.exists(PERMISSION_GATES_FILE):
-            with open(PERMISSION_GATES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception as e:
-        logger.warning(f"[Gate] Konnte permission_gates nicht laden: {e}")
-    return {"gates": []}
-
-
-def _save_permission_gates(data: dict) -> None:
-    try:
-        os.makedirs(os.path.dirname(PERMISSION_GATES_FILE), exist_ok=True)
-        with open(PERMISSION_GATES_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        logger.warning(f"[Gate] Konnte permission_gates nicht speichern: {e}")
-
-
-def _create_permission_gate(kind: str, detail: str, requested_by: str, payload: dict) -> dict:
-    """Legt einen Pending-Gate an und pingt den Owner per Telegram
-    (Inline-Buttons gate:approve/reject:<id> + Text-Fallback)."""
-    gates = _load_permission_gates()
-    gate_id = f"gate-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2)}"
-    gate = {
-        "id": gate_id,
-        "kind": kind,
-        "detail": detail,
-        "requested_by": requested_by,
-        "payload": payload,
-        "status": "pending",
-        "created_at": datetime.datetime.now().isoformat(),
-    }
-    gates.setdefault("gates", []).append(gate)
-    _save_permission_gates(gates)
-
-    knopf_text = {"tools_erweiterung": "🧰 Neue Tools vergeben",
-                  "profil_loeschen": "🗑️ Profil löschen"}.get(kind, "Rechte-Erweiterung")
-    text = (f"🔐 RECHTE-FREIGABE NÖTIG\n\n"
-            f"{knopf_text}\n"
-            f"Details: {detail}\n"
-            f"Angefordert von: {requested_by}\n"
-            f"Gate-ID: {gate_id}\n\n"
-            f"Text-Fallback: \"Erlauben {gate_id}\" oder \"Verbieten {gate_id}\"")
-    reply_markup = {"inline_keyboard": [[
-        {"text": "✅ Erlauben", "callback_data": f"gate:approve:{gate_id}"},
-        {"text": "❌ Verbieten", "callback_data": f"gate:reject:{gate_id}"},
-    ]]}
-    # 12.10.2026 (2c): Freigabe laeuft ueber den ZENTRALEN Entscheidungs-Service —
-    # eine echte Kanban-Entscheidung (Status 'review') mit ✅/❌-Buttons. Der
-    # Service ruft bei Freigabe diesen Gate-Endpoint auf: EIN Schreibpfad fuer
-    # Telegram UND Kanban. Der frueher eigene gate:-Ping ist nur noch Fallback.
-    try:
-        _dec = create_decision(
-            "permission_gate",
-            f"{knopf_text}: {str(detail)[:90]}",
-            kurzfassung=detail,
-            ref_id=gate_id,
-            body=(f"Gate-ID: {gate_id}\n{detail}\nAngefordert von: {requested_by}\n\n"
-                  f"Text-Fallback: \"Erlauben {gate_id}\" oder \"Verbieten {gate_id}\""),
-            extra={"gate_id": gate_id, "requested_by": requested_by,
-                   "von": requested_by, "projekt": str(detail)[:60]},
-        )
-        if not _dec:
-            logger.warning("[Gate] Entscheidungs-Task nicht anlegbar — Fallback auf eigenen Ping.")
-            from telegram_notify import send_telegram_message
-            send_telegram_message(text, reply_markup=reply_markup)
-    except Exception as tg_err:
-        logger.warning(f"[Gate] Entscheidungs-Ping fehlgeschlagen: {tg_err}")
-    add_ticker("Rechte-Gate", f"Owner-Bestätigung offen: {knopf_text} ({gate_id})")
-    logger.info(f"[Gate] {kind} fuer '{detail}' -> Warte auf Telegram-Bestätigung ({gate_id})")
-    return gate
 
 
 @app.post("/api/permission-gates/{gate_id}/decide")
@@ -3653,6 +3587,13 @@ def create_decision(typ: str, titel: str, kurzfassung: str = "", ref_id: str = "
     return register_decision(task_id, typ, titel, kurzfassung, ref_id, dossier, body, extra, obsidian)
 
 
+# Decision-Subsystem in den Permission-Gates bekannt machen (späte Bindung)
+try:
+    _set_decision_factory(create_decision)
+except Exception as _pdm_err:
+    logger.warning(f"[Permissions] Decision-Factory nicht registriert: {_pdm_err}")
+
+
 async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
     """Fuehrt nach der Statusaenderung die typ-spezifische Folgeaktion aus."""
     ref = dec.get("ref_id") or ""
@@ -3785,419 +3726,10 @@ def _sync_org_hierarchy_node(p_id: str, name: Optional[str] = None, person_name:
     except Exception as e:
         logger.warning(f"[SSOT] Could not sync org_hierarchy.json for {p_id}: {e}")
 
-@app.post("/api/hermes/profiles")
-def api_save_hermes_profile(profile_data: Dict = Body(...)):
-    p_id = profile_data.get("id")
-    if not p_id:
-        p_id = re.sub(r'[^a-zA-Z0-9_]', '_', profile_data.get("name", "custom_agent").lower())
-        profile_data["id"] = p_id
-
-    person_name = profile_data.get("person_name") or profile_data.get("name", p_id)
-    profile_data["person_name"] = person_name
-    avatar_val = profile_data.get("avatar") or profile_data.get("avatar_url") or f"https://api.dicebear.com/7.x/notionists/svg?seed={p_id}&backgroundColor=3b82f6"
-    profile_data["avatar"] = avatar_val
-    # --- PERMISSION-GATE: NEUE TOOLS = Rechte-Erweiterung -> Owner per Telegram ---
-    incoming_tools = profile_data.get("tools")
-    _gate_ok = bool(profile_data.get("_approved_gate_id"))
-    if isinstance(incoming_tools, list) and not _gate_ok:
-        _alt_tools = []
-        for p_base in get_hermes_profiles_base_dirs():
-            yml = os.path.join(p_base, p_id, "profile.yaml")
-            if os.path.exists(yml):
-                try:
-                    import yaml as _yaml
-                    with open(yml, "r", encoding="utf-8") as _fy:
-                        _alt_tools = (_yaml.safe_load(_fy) or {}).get("tools") or []
-                    break
-                except Exception:
-                    pass
-        _neue = [t for t in incoming_tools if t not in _alt_tools]
-        if _neue:
-            detail = (f"Profil '{p_id}' bekommt neue Tools: {', '.join(_neue[:8])}"
-                      + (f" (+{len(_neue)-8} weitere)" if len(_neue) > 8 else ""))
-            gate = _create_permission_gate(
-                "tools_erweiterung", detail,
-                f"agent:{profile_data.get('requested_by') or 'ui-owner'}",
-                {k: v for k, v in profile_data.items() if k != "_approved_gate_id"})
-            return {"status": "pending_owner_approval", "gate_id": gate["id"],
-                    "message": "Rechte-Erweiterung erkannt: Warte auf deine Telegram-Bestätigung. "
-                               f"Antworte dort: 'Erlauben {gate['id']}' oder 'Verbieten {gate['id']}'."}
-    assigned_tools = profile_data.get("tools", DEFAULT_HERMES_TOOLS)
-    profile_data["tools"] = assigned_tools
-    assigned_skills = profile_data.get("skills", [])
-    provider_val = profile_data.get("provider", "openrouter")
-    model_val = profile_data.get("model", "deepseek/deepseek-v4-flash-0731")
-    reasoning_val = str(profile_data.get("reasoning_level") or "high").strip().lower()
-    if reasoning_val not in ("off", "minimal", "low", "medium", "high", "max"):
-        reasoning_val = "high"
-    profile_data["reasoning_level"] = reasoning_val
-    status_val = profile_data.get("status", "active")
-    is_fav = bool(profile_data.get("is_favorite", (p_id in ["default", "micha"])))
-
-    # Prompt robust auflösen: Payload -> SOUL.md auf Disk -> Fallback
-    prompt_val = (profile_data.get("prompt") or profile_data.get("system_prompt") or "").strip()
-    if not prompt_val:
-        for p_base in get_hermes_profiles_base_dirs():
-            sf = os.path.join(p_base, p_id, "SOUL.md")
-            if os.path.exists(sf):
-                try:
-                    with open(sf, "r", encoding="utf-8") as f_soul:
-                        content = f_soul.read().strip()
-                        if content:
-                            prompt_val = content
-                            break
-                except Exception:
-                    pass
-        if not prompt_val:
-            prompt_val = f"Du bist {person_name} ({profile_data.get('name', p_id)}). {profile_data.get('description', '')}".strip()
-
-    profile_data["prompt"] = prompt_val
-    profile_data["system_prompt"] = prompt_val
-    profile_data["model"] = model_val
-
-    # Pydantic-Schema-Validierung
-    try:
-        validated_profile = AgentProfileValidationSchema(
-            id=str(p_id).strip(),
-            name=str(profile_data.get("name", p_id)).strip(),
-            person_name=str(person_name).strip(),
-            category=str(profile_data.get("category", "1. Strategie, Führung & Lebensplanung")).strip(),
-            model=str(model_val).strip(),
-            prompt=profile_data.get("prompt"),
-            system_prompt=profile_data.get("system_prompt"),
-            tools=list(assigned_tools) if isinstance(assigned_tools, list) else []
-        )
-        prompt_text = validated_profile.get_prompt_text()
-        if not validated_profile.name or not validated_profile.person_name or not validated_profile.category or not validated_profile.model:
-            raise ValueError("All fields (id, name, person_name, category, model) are required and must be non-empty.")
-    except Exception as val_err:
-        logger.warning(f"[Profile Validation Failed] Rejecting profile save for '{p_id}': {val_err}")
-        raise HTTPException(
-            status_code=422,
-            detail=f"Schema-Validierungsfehler für Profil: {str(val_err)}"
-        )
-
-    # In allen aktiven Profil-Ordnern anlegen/schreiben
-    av_blob = None
-    av_mime = "image/jpeg"
-    clean_avatar = avatar_val
-
-    if avatar_val and avatar_val.startswith("data:image"):
-        try:
-            import base64
-            header, b64 = avatar_val.split(",", 1)
-            av_mime = header.split(";")[0].replace("data:", "")
-            ext = ".png" if "png" in av_mime else (".webp" if "webp" in av_mime else (".gif" if "gif" in av_mime else ".jpg"))
-            av_blob = base64.b64decode(b64)
-            
-            _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-            avatars_dir = os.path.join(_static_dir, "avatars")
-            os.makedirs(avatars_dir, exist_ok=True)
-            
-            filename = f"custom_{p_id}{ext}"
-            file_path = os.path.join(avatars_dir, filename)
-            with open(file_path, "wb") as f_img:
-                f_img.write(av_blob)
-            
-            clean_avatar = f"/static/avatars/{filename}"
-            avatar_val = clean_avatar
-            profile_data["avatar"] = clean_avatar
-            profile_data["avatar_url"] = clean_avatar
-            logger.info(f"[Profiles] Saved custom avatar for '{p_id}' to {file_path}")
-        except Exception as e_av:
-            logger.error(f"[Profiles] Error decoding/saving base64 avatar for {p_id}: {e_av}")
-            clean_avatar = "/static/avatars/avatar_001.jpg"
-    elif avatar_val and len(avatar_val) < 500:
-        clean_avatar = avatar_val
-    else:
-        _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-        found_custom = False
-        for test_ext in [".png", ".jpg", ".jpeg", ".webp"]:
-            c_path = os.path.join(_static_dir, "avatars", f"custom_{p_id}{test_ext}")
-            if os.path.exists(c_path):
-                clean_avatar = f"/static/avatars/custom_{p_id}{test_ext}"
-                found_custom = True
-                break
-        if not found_custom:
-            clean_avatar = "/static/avatars/avatar_001.jpg"
-
-    for p_base in get_hermes_profiles_base_dirs():
-        try:
-            target_pdir = os.path.join(p_base, p_id)
-            os.makedirs(target_pdir, exist_ok=True)
-            os.makedirs(os.path.join(target_pdir, "skills"), exist_ok=True)
-            os.makedirs(os.path.join(target_pdir, "memories"), exist_ok=True)
-            os.makedirs(os.path.join(target_pdir, "sessions"), exist_ok=True)
-
-            soul_path = os.path.join(target_pdir, "SOUL.md")
-            create_rolling_backup(soul_path, max_backups=3)
-            with open(soul_path, "w", encoding="utf-8") as f:
-                f.write(prompt_text + "\n")
-
-            yaml_path = os.path.join(target_pdir, "profile.yaml")
-            create_rolling_backup(yaml_path, max_backups=3)
-            
-            y_payload = {
-                "name": profile_data.get("name", p_id),
-                "person_name": person_name,
-                "callsign": str(profile_data.get("callsign", "")).strip().lower(),
-                "category": profile_data.get("category", "1. Strategie, Führung & Lebensplanung"),
-                "description": profile_data.get("description", ""),
-                "role_id": p_id,
-                "avatar": clean_avatar,
-                "avatar_url": clean_avatar,
-                "tools": assigned_tools,
-                "skills": assigned_skills,
-                "status": status_val,
-                "is_favorite": is_fav,
-                "provider": provider_val,
-                "model": model_val,
-                "reasoning_level": reasoning_val,
-                "llm": {
-                    "provider": provider_val,
-                    "model": model_val,
-                    "reasoning_level": reasoning_val
-                }
-            }
-            with open(yaml_path, "w", encoding="utf-8") as f:
-                yaml.dump(y_payload, f, allow_unicode=True, sort_keys=False)
-
-            # Hermes config.yaml anlegen ODER Modell/Provider aktualisieren
-            config_path = os.path.join(target_pdir, "config.yaml")
-            if not os.path.exists(config_path):
-                default_cfg = {
-                    "platforms": {"api_server": {"enabled": False}},
-                    "model": {
-                        "default": model_val,
-                        "provider": provider_val,
-                        "base_url": "http://omniroute:20128/v1",
-                        "api_key": os.getenv("OMNIROUTE_API_KEY", "sk-archon-local-dev")
-                    },
-                    "providers": {
-                        "omniroute": {
-                            "name": "OmniRoute",
-                            "base_url": "http://omniroute:20128/v1",
-                            "api_key": os.getenv("OMNIROUTE_API_KEY", "sk-archon-local-dev"),
-                            "key_env": "OMNIROUTE_API_KEY"
-                        }
-                    }
-                }
-                with open(config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(default_cfg, f, allow_unicode=True, sort_keys=False)
-            else:
-                try:
-                    with open(config_path, "r", encoding="utf-8") as f:
-                        existing_cfg = yaml.safe_load(f) or {}
-                    if not isinstance(existing_cfg.get("model"), dict):
-                        existing_cfg["model"] = {}
-                    existing_cfg["model"]["default"] = model_val
-                    existing_cfg["model"]["provider"] = provider_val
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        yaml.dump(existing_cfg, f, allow_unicode=True, sort_keys=False)
-                except Exception as cfg_err:
-                    logger.warning(f"[Profiles] Could not sync config.yaml for {p_id}: {cfg_err}")
-
-            # Skills synchronisieren
-            skills_sub = os.path.join(target_pdir, "skills")
-            global_skills_dir = os.path.join(MEMORY_DIR, "hermes_skills")
-            if not os.path.exists(global_skills_dir):
-                global_skills_dir = os.path.expanduser("~/.hermes/skills")
-            if os.path.exists(global_skills_dir):
-                for sk_id in assigned_skills:
-                    sk_src = os.path.join(global_skills_dir, sk_id)
-                    sk_dst = os.path.join(skills_sub, sk_id)
-                    if os.path.exists(sk_src) and not os.path.exists(sk_dst):
-                        try:
-                            if os.path.isdir(sk_src):
-                                shutil.copytree(sk_src, sk_dst)
-                            else:
-                                shutil.copy2(sk_src, sk_dst)
-                        except Exception as e:
-                            logger.warning(f"Error copying skill {sk_id}: {e}")
-        except Exception as e:
-            logger.error(f"[Profiles] Error writing profile to {p_base}: {e}")
-
-    # Synchronisiere agent_profiles.json für Operations-Kanban & Org-Chart
-    try:
-        ap_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
-        if os.path.exists(ap_file):
-            with open(ap_file, "r", encoding="utf-8") as f:
-                ap_list = json.load(f)
-            if isinstance(ap_list, list):
-                updated_ap = False
-                for item in ap_list:
-                    if isinstance(item, dict) and item.get("id") == p_id:
-                        item["name"] = profile_data.get("name", p_id)
-                        item["person_name"] = person_name
-                        item["category"] = profile_data.get("category", item.get("category", ""))
-                        item["description"] = profile_data.get("description", item.get("description", ""))
-                        item["avatar"] = clean_avatar
-                        item["model"] = model_val
-                        item["provider"] = provider_val
-                        item["reasoning_level"] = reasoning_val
-                        item["status"] = status_val
-                        updated_ap = True
-                        break
-                if not updated_ap:
-                    ap_list.append({
-                        "id": p_id,
-                        "name": profile_data.get("name", p_id),
-                        "person_name": person_name,
-                        "category": profile_data.get("category", ""),
-                        "description": profile_data.get("description", ""),
-                        "avatar": clean_avatar,
-                        "model": model_val,
-                        "provider": provider_val,
-                        "status": status_val
-                    })
-                with open(ap_file, "w", encoding="utf-8") as f:
-                    json.dump(ap_list, f, indent=2, ensure_ascii=False)
-    except Exception as ap_err:
-        logger.warning(f"[Profiles] Could not sync agent_profiles.json for {p_id}: {ap_err}")
-
-    # Synchronisiere Avatar in avatars.db für Hermes WebUI
-    try:
-        import sqlite3, hashlib, time
-        avatars_db_path = os.path.expanduser("~/.hermes/webui/avatars.db")
-        if not os.path.exists(avatars_db_path):
-            avatars_db_path = "/opt/data/webui/avatars.db"
-        if os.path.exists(os.path.dirname(avatars_db_path)):
-            with sqlite3.connect(avatars_db_path) as av_conn:
-                if not av_blob and clean_avatar and clean_avatar.startswith("/static/avatars/"):
-                    fname = os.path.basename(clean_avatar.split("?")[0])
-                    _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-                    loc_img = os.path.join(_static_dir, "avatars", fname)
-                    if os.path.exists(loc_img):
-                        with open(loc_img, "rb") as img_f:
-                            av_blob = img_f.read()
-                        av_mime = "image/png" if fname.endswith(".png") else "image/jpeg"
-                if av_blob:
-                    av_etag = '"' + hashlib.sha256(av_blob).hexdigest()[:32] + '"'
-                    av_conn.execute(
-                        "INSERT OR REPLACE INTO avatars (profile, mime, bytes, etag, updated_at) VALUES (?, ?, ?, ?, ?)",
-                        (p_id, av_mime, av_blob, av_etag, time.time())
-                    )
-                    av_conn.commit()
-    except Exception as e:
-        logger.warning(f"[Profiles] Error syncing avatar to avatars.db: {e}")
-
-    _sync_org_hierarchy_node(
-        p_id,
-        name=profile_data.get("name", p_id),
-        person_name=person_name,
-        avatar=clean_avatar,
-        provider=provider_val,
-        model=model_val,
-        reasoning_level=reasoning_val
-    )
-    # Cache invalidieren und neu aufbauen
-    invalidate_hermes_profiles_cache()
-    api_get_hermes_profiles()
-    add_ticker("Hermes Profiles", f"Profil '{person_name}' ({profile_data.get('name', p_id)}) gespeichert.")
-    return {"status": "success", "profile": profile_data}
-
-@app.post("/api/hermes/profiles/{profile_id}/avatar")
-def api_upload_hermes_profile_avatar(profile_id: str, data: Dict = Body(...)):
-    try:
-        import base64, hashlib, time
-        data_url = (data.get("image") or data.get("avatar") or "").strip()
-        if not data_url.startswith("data:image"):
-            raise HTTPException(status_code=400, detail="Ungültiges Bilddaten-Format (muss data:image/... sein).")
-        
-        header, b64 = data_url.split(",", 1)
-        mime = header.split(";")[0].replace("data:", "")
-        ext = ".png" if "png" in mime else (".webp" if "webp" in mime else (".gif" if "gif" in mime else ".jpg"))
-        raw_bytes = base64.b64decode(b64)
-        
-        _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-        avatars_dir = os.path.join(_static_dir, "avatars")
-        os.makedirs(avatars_dir, exist_ok=True)
-        
-        filename = f"custom_{profile_id}{ext}"
-        file_path = os.path.join(avatars_dir, filename)
-        with open(file_path, "wb") as f_img:
-            f_img.write(raw_bytes)
-        
-        avatar_url = f"/static/avatars/{filename}"
-        
-        # In profile.yaml aller aktiven Profile-Verzeichnisse aktualisieren
-        for p_base in get_hermes_profiles_base_dirs():
-            py_path = os.path.join(p_base, profile_id, "profile.yaml")
-            if os.path.exists(py_path):
-                try:
-                    with open(py_path, "r", encoding="utf-8") as f:
-                        ydata = yaml.safe_load(f) or {}
-                    ydata["avatar"] = avatar_url
-                    ydata["avatar_url"] = avatar_url
-                    with open(py_path, "w", encoding="utf-8") as f:
-                        yaml.dump(ydata, f, allow_unicode=True, sort_keys=False)
-                except Exception as py_err:
-                    logger.warning(f"Could not update profile.yaml avatar for {profile_id}: {py_err}")
-        
-        # avatars.db aktualisieren
-        try:
-            import sqlite3
-            avatars_db_path = os.path.expanduser("~/.hermes/webui/avatars.db")
-            if not os.path.exists(avatars_db_path):
-                avatars_db_path = "/opt/data/webui/avatars.db"
-            if os.path.exists(os.path.dirname(avatars_db_path)):
-                with sqlite3.connect(avatars_db_path) as av_conn:
-                    av_etag = '"' + hashlib.sha256(raw_bytes).hexdigest()[:32] + '"'
-                    av_conn.execute(
-                        "INSERT OR REPLACE INTO avatars (profile, mime, bytes, etag, updated_at) VALUES (?, ?, ?, ?, ?)",
-                        (profile_id, mime, raw_bytes, av_etag, time.time())
-                    )
-                    av_conn.commit()
-        except Exception as e_db:
-            logger.warning(f"[upload_avatar] avatars.db sync warning: {e_db}")
-            
-        invalidate_hermes_profiles_cache()
-        api_get_hermes_profiles()
-        
-        return {
-            "status": "success",
-            "profile_id": profile_id,
-            "avatar_url": avatar_url,
-            "revision": int(time.time())
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[upload_avatar] Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 class ProfileStatusUpdate(BaseModel):
     status: Optional[str] = "active"
 
-@app.post("/api/hermes/profiles/{profile_id}/status")
-def api_update_hermes_profile_status(profile_id: str, body: Optional[ProfileStatusUpdate] = None):
-    roles_list = api_get_hermes_profiles()
-    prof = next((r for r in roles_list if r["id"] == profile_id), None)
-    if not prof:
-        return {"status": "error", "message": f"Profil '{profile_id}' nicht gefunden."}
-    
-    new_status = (body.status if body and body.status else "active").lower().strip()
-    if new_status not in ("active", "inactive", "standby"):
-        new_status = "active"
-        
-    prof["status"] = new_status
-    prof["runtime_status"] = new_status
-    save_all_agent_profiles(roles_list)
-    invalidate_paperclip_agents_cache()
-    
-    agent_label = prof.get('person_name', prof.get('name', profile_id)) if prof else profile_id
-    action_text = "aktiviert" if new_status == "active" else "deaktiviert"
-    add_ticker("Agenten-Kader", f"Agent '{agent_label}' {action_text}.")
-    return {"status": "success", "profile_id": profile_id, "new_status": new_status}
-
-@app.post("/api/hermes/profiles/{profile_id}/hire-paperclip")
-def api_hire_hermes_profile_paperclip(profile_id: str):
-    return api_update_hermes_profile_status(profile_id, ProfileStatusUpdate(status="active"))
-
-@app.post("/api/hermes/profiles/{profile_id}/fire-paperclip")
-def api_fire_hermes_profile_paperclip(profile_id: str):
-    return api_update_hermes_profile_status(profile_id, ProfileStatusUpdate(status="inactive"))
 
 # 
 # SYSTEM HEALTH, HERMES CONFIG & CONTAINER LIFECYCLE MANAGEMENT
@@ -4594,67 +4126,6 @@ class SetProfileModelRequest(BaseModel):
     model: str
     reasoning_level: Optional[str] = None
 
-@app.post("/api/hermes/profiles/{profile_id}/model")
-def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
-    try:
-        import api_provider
-        prov = req.provider.strip().lower()
-        mod = req.model.strip()
-        reas = (req.reasoning_level or "").strip().lower()
-        res = api_provider.set_profile_model(profile_id, mod, provider=prov)
-        for p_base in get_hermes_profiles_base_dirs():
-            py_path = os.path.join(p_base, profile_id, "profile.yaml")
-            if os.path.exists(py_path):
-                try:
-                    with open(py_path, "r", encoding="utf-8") as f:
-                        p_data = yaml.safe_load(f) or {}
-                    p_data["provider"] = prov
-                    p_data["model"] = mod
-                    if reas:
-                        p_data["reasoning_level"] = reas
-                    with open(py_path, "w", encoding="utf-8") as f:
-                        yaml.dump(p_data, f, allow_unicode=True, sort_keys=False)
-                except Exception as py_err:
-                    logger.warning(f"Could not update profile.yaml for {profile_id}: {py_err}")
-            cfg_path = os.path.join(p_base, profile_id, "config.yaml")
-            if os.path.exists(cfg_path):
-                try:
-                    with open(cfg_path, "r", encoding="utf-8") as f:
-                        c_data = yaml.safe_load(f) or {}
-                    if not isinstance(c_data.get("model"), dict):
-                        c_data["model"] = {}
-                    c_data["model"]["default"] = mod
-                    c_data["model"]["provider"] = prov
-                    with open(cfg_path, "w", encoding="utf-8") as f:
-                        yaml.dump(c_data, f, allow_unicode=True, sort_keys=False)
-                except Exception as cfg_err:
-                    logger.warning(f"Could not update config.yaml for {profile_id}: {cfg_err}")
-
-        try:
-            ap_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
-            if os.path.exists(ap_file):
-                with open(ap_file, "r", encoding="utf-8") as f:
-                    ap_list = json.load(f)
-                if isinstance(ap_list, list):
-                    for item in ap_list:
-                        if isinstance(item, dict) and item.get("id") == profile_id:
-                            item["model"] = mod
-                            item["provider"] = prov
-                            if reas:
-                                item["reasoning_level"] = reas
-                            break
-                    with open(ap_file, "w", encoding="utf-8") as f:
-                        json.dump(ap_list, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
-
-        global _HERMES_PROFILES_CACHE
-        _HERMES_PROFILES_CACHE = None
-
-        return {"status": "ok", "provider": prov, "model": mod, "result": res}
-    except Exception as e:
-        logger.error(f"[set_profile_model] Error: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
 
 @app.get("/api/chat/sessions")
 def api_get_chat_sessions(profile_id: Optional[str] = None):
@@ -8647,81 +8118,6 @@ async def api_studio_upload_bg(file: UploadFile = File(...)):
     add_ticker("CSS Studio", f"Hintergrundbild hochgeladen: {out_name}")
     return {"status": "success", "url": f"/static/uploads/{out_name}", "filename": out_name, "size": len(content)}
 
-@app.delete("/api/hermes/profiles/{profile_id}")
-def api_delete_hermes_profile(profile_id: str, gate_approved_id: str = ""):
-    if profile_id in ["default", "hermes_default", "micha"]:
-        raise HTTPException(status_code=400, detail=f"System-Profil '{profile_id}' kann nicht gelöscht werden.")
-    # --- PERMISSION-GATE: Loeschen = Rechte-Entzug -> Owner per Telegram ---
-    if not gate_approved_id:
-        _gates = _load_permission_gates().get("gates", [])
-        _pend = [g for g in _gates if g.get("status") == "pending"
-                 and g.get("kind") == "profil_loeschen"
-                 and (g.get("payload") or {}).get("profile_id") == profile_id]
-        if not _pend:
-            gate = _create_permission_gate(
-                "profil_loeschen", f"Profil '{profile_id}' soll Dauerhaft geloescht werden (Archiv)",
-                "agent:ui-owner", {"profile_id": profile_id})
-            return {"status": "pending_owner_approval", "gate_id": gate["id"],
-                    "message": "Loeschen braucht deine Telegram-Bestätigung. "
-                               f"Antworte: 'Erlauben {gate['id']}' oder 'Verbieten {gate['id']}'."}
-
-    archived_locations = []
-    for p_base in get_hermes_profiles_base_dirs():
-        src_dir = os.path.join(p_base, profile_id)
-        if os.path.exists(src_dir):
-            archive_dir = os.path.join(p_base, ".archive")
-            os.makedirs(archive_dir, exist_ok=True)
-            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            dst_dir = os.path.join(archive_dir, f"{profile_id}_deleted_{ts}")
-            try:
-                shutil.move(src_dir, dst_dir)
-                archived_locations.append(dst_dir)
-            except Exception as e:
-                logger.error(f"[Profiles] Error archiving {src_dir} to {dst_dir}: {e}")
-
-    # Sofort aus agent_profiles.json entfernen
-    _APP_ROOT = os.path.dirname(os.path.abspath(__file__))
-    for cand in [os.path.join(_APP_ROOT, "agent_profiles.json"), "agent_profiles.json"]:
-        if os.path.exists(cand):
-            try:
-                with open(cand, "r", encoding="utf-8") as f:
-                    j_data = json.load(f)
-                if isinstance(j_data, list):
-                    filtered = [p for p in j_data if p.get("id") != profile_id]
-                    create_rolling_backup(cand, max_backups=3)
-                    with open(cand, "w", encoding="utf-8") as f:
-                        json.dump(filtered, f, indent=2, ensure_ascii=False)
-            except Exception as e:
-                logger.warning(f"[Profiles] Error removing deleted profile from {cand}: {e}")
-
-    invalidate_hermes_profiles_cache()
-    # Aktualisierte Profil-Liste neu laden & spiegeln
-    api_get_hermes_profiles()
-    add_ticker("Hermes Profiles", f"Profil '{profile_id}' archiviert und entfernt.")
-    return {"status": "success", "profile_id": profile_id, "archived_to": archived_locations}
-
-@app.post("/api/hermes/profiles/{profile_id}/favorite")
-def api_toggle_hermes_profile_favorite(profile_id: str, is_fav: Optional[bool] = None):
-    new_fav_state = None
-    for p_base in get_hermes_profiles_base_dirs():
-        yaml_path = os.path.join(p_base, profile_id, "profile.yaml")
-        if os.path.exists(yaml_path):
-            try:
-                with open(yaml_path, "r", encoding="utf-8") as f:
-                    ydata = yaml.safe_load(f) or {}
-                if is_fav is not None:
-                    ydata["is_favorite"] = is_fav
-                else:
-                    ydata["is_favorite"] = not ydata.get("is_favorite", False)
-                new_fav_state = ydata["is_favorite"]
-                with open(yaml_path, "w", encoding="utf-8") as f:
-                    yaml.dump(ydata, f, allow_unicode=True, sort_keys=False)
-            except Exception as e:
-                logger.warning(f"[Profiles] Error updating favorite in {yaml_path}: {e}")
-
-    invalidate_hermes_profiles_cache()
-    api_get_hermes_profiles()
-    return {"status": "success", "profile_id": profile_id, "is_favorite": new_fav_state if new_fav_state is not None else False}
 
 # --- TALENT- & SKILL-MARKTPLATZ ENDPOINTS ---
 try:
@@ -13579,3 +12975,9 @@ try:
     app.include_router(_llm_providers_r)
 except Exception as _err_llmp:
     logger.warning(f"[Router] llm_providers nicht geladen: {_err_llmp}")
+
+try:
+    from archon.routers.hermes_profiles import router as _hermes_profiles_r
+    app.include_router(_hermes_profiles_r)
+except Exception as _err_hp:
+    logger.warning(f"[Router] hermes_profiles nicht geladen: {_err_hp}")

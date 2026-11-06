@@ -44,6 +44,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from typing import Any, Dict, Iterable, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -113,15 +114,34 @@ ENV_PATH = _active_env_path()
 # 1. Hermes Caches lesen (Provider-Definitionen & Modelllisten)
 # ---------------------------------------------------------------------------
 
+_JSON_CACHE: Dict[str, tuple] = {}
+
+
 def _load_json(path: str) -> Dict[str, Any]:
+    """JSON-Cache mit mtime-Invalidierung.
+
+    Vorher wurde models_dev_cache.json (~190 Provider) bei JEDEM Aufruf neu
+    geparst. find_default_model_for_provider() rief das 10x pro Seitenaufbau
+    auf -> ~2,7 s pro /api/llm-providers-Request. Jetzt: Parse nur bei
+    geaenderter Datei.
+    """
     if not path or not os.path.exists(path):
         return {}
     try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return {}
+    cached = _JSON_CACHE.get(path)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
         with open(path, "r", encoding="utf-8") as f:
             d = json.load(f)
-        return d if isinstance(d, dict) else {}
+        d = d if isinstance(d, dict) else {}
     except Exception:
         return {}
+    _JSON_CACHE[path] = (mtime, d)
+    return d
 
 
 def load_provider_catalog() -> Dict[str, Any]:
@@ -158,9 +178,26 @@ def list_providers(limit: Optional[int] = None) -> List[Dict[str, Any]]:
     return out
 
 
+_MODELS_TTL_CACHE: Dict[str, tuple] = {}
+_MODELS_TTL_SECONDS = 120.0
+
+
 def list_provider_models(pid: str) -> List[str]:
-    """Gib dynamische oder gecachte Modelllisten für den ausgewählten Provider zurück."""
+    """Gib dynamische oder gecachte Modelllisten für den ausgewählten Provider zurück.
+
+    Ergebnis wird 120 s gecacht: die OmniRoute-Variante macht einen HTTP-Call
+    (2 s Timeout) und wurde vorher pro Aufruf mehrfach ausgeloest.
+    """
     norm_pid = (pid or "").strip().lower()
+    _cached = _MODELS_TTL_CACHE.get(norm_pid)
+    if _cached and (time.time() - _cached[0]) < _MODELS_TTL_SECONDS:
+        return list(_cached[1])
+    _result = _list_provider_models_uncached(norm_pid)
+    _MODELS_TTL_CACHE[norm_pid] = (time.time(), list(_result))
+    return _result
+
+
+def _list_provider_models_uncached(norm_pid: str) -> List[str]:
 
     if norm_pid == "omniroute":
         # 1. Live-Abfrage an lokalen OmniRoute-Container

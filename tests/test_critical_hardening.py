@@ -183,3 +183,44 @@ def test_sse_stream_opens(client):
             if line.startswith("data:"):
                 assert "connected" in line
                 break
+
+# ---------------------------------------------------------------- Secrets
+
+def test_mask_secret_never_leaks():
+    from utils.secret_files import mask_secret
+
+    masked = mask_secret("123456789:AAF-super-geheimer-token")
+    assert "AAF" not in masked
+    assert masked.endswith("oken")
+    assert masked.startswith("•")
+
+
+def test_secret_file_written_with_600(tmp_path=None):
+    import os
+    import tempfile
+
+    from utils.secret_files import write_secret_file
+
+    d = tempfile.mkdtemp()
+    path = os.path.join(d, ".env.test")
+    assert write_secret_file(path, "TOKEN=abc\n")
+    assert (os.stat(path).st_mode & 0o777) == 0o600
+    with open(path, encoding="utf-8") as f:
+        assert f.read() == "TOKEN=abc\n"
+
+
+def test_audit_reports_open_secret(tmp_path=None):
+    import os
+    import tempfile
+
+    from utils.secret_files import audit_known_secrets, harden_file
+
+    d = tempfile.mkdtemp()
+    path = os.path.join(d, ".env.audit")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("X=1\n")
+    os.chmod(path, 0o755)
+    offenders = dict(audit_known_secrets(extra_roots=[path]))
+    assert path in offenders and offenders[path] == 0o755
+    assert harden_file(path)
+    assert not dict(audit_known_secrets(extra_roots=[path]))

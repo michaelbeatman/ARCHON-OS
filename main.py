@@ -5940,7 +5940,15 @@ def api_get_plugin_config(plugin_id: str):
                 with open(tg_env, "r", encoding="utf-8") as f:
                     for line in f:
                         if line.startswith("TELEGRAM_BOT_TOKEN="):
-                            data["bot_token"] = line.split("=", 1)[1].strip()
+                            # Niemals im Klartext ans Frontend: maskiert anzeigen,
+                            # beim Speichern wird der Maskenwert als "unveraendert" behandelt.
+                            _tok = line.split("=", 1)[1].strip()
+                            try:
+                                from utils.secret_files import mask_secret
+                                data["bot_token"] = mask_secret(_tok)
+                            except Exception:
+                                data["bot_token"] = "••••••••" if _tok else ""
+                            data["bot_token_set"] = bool(_tok)
                         elif line.startswith("TELEGRAM_ALLOWED_USERS="):
                             data["allowed_chat_ids"] = line.split("=", 1)[1].strip()
             except Exception:
@@ -6122,13 +6130,21 @@ def api_save_plugin_config(plugin_id: str, payload: dict):
                     new_lines = []
                     for l in lines:
                         if l.startswith("TELEGRAM_BOT_TOKEN=") and "bot_token" in cfg and cfg["bot_token"]:
-                            new_lines.append(f"TELEGRAM_BOT_TOKEN={cfg['bot_token'].strip()}\n")
+                            _new = str(cfg["bot_token"]).strip()
+                            if "•" in _new:  # maskierter Platzhalter -> alten Wert behalten
+                                new_lines.append(l)
+                            else:
+                                new_lines.append(f"TELEGRAM_BOT_TOKEN={_new}\n")
                         elif l.startswith("TELEGRAM_ALLOWED_USERS=") and "allowed_chat_ids" in cfg and cfg["allowed_chat_ids"]:
                             new_lines.append(f"TELEGRAM_ALLOWED_USERS={cfg['allowed_chat_ids'].strip()}\n")
                         else:
                             new_lines.append(l)
-                    with open(tg_env, "w", encoding="utf-8") as f:
-                        f.writelines(new_lines)
+                    try:
+                        from utils.secret_files import write_secret_file
+                        write_secret_file(tg_env, "".join(new_lines))
+                    except Exception:
+                        with open(tg_env, "w", encoding="utf-8") as f:
+                            f.writelines(new_lines)
                 except Exception as ex:
                     print(f"Failed to sync telegram .env: {ex}")
 
@@ -12068,10 +12084,32 @@ def api_run_eval_regression_suite(payload: Dict = Body(default={})):
 # LIFESPAN-REGISTRIERUNG (ersetzt die frueheren @app.on_event-Handler)
 # Reihenfolge ist explizit und damit reproduzierbar.
 # =========================================================================
+def _harden_secret_permissions():
+    """Setzt 600 auf Secret-Dateien (.env, Tokens) und meldet Verstoss-Funde.
+
+    Fund im Review: .env.backup_pre_v02 war 755, profiles/telegram_bot/.env im
+    Container ebenfalls 755 -> Bot-Token war fuer jeden Prozess lesbar.
+    """
+    try:
+        from utils.secret_files import audit_known_secrets, harden_known_secrets
+        _offenders = audit_known_secrets()
+        _fixed = harden_known_secrets()
+        if _fixed:
+            logger.warning(f"[Secrets] Rechte gehaertet (600): {', '.join(_fixed[:6])}"
+                           + (" ..." if len(_fixed) > 6 else ""))
+        if _offenders:
+            add_ticker("Security", f"{len(_offenders)} Secret-Datei(en) waren zu offen - Rechte korrigiert")
+        else:
+            logger.info("[Secrets] Alle Secret-Dateien haben korrekte Rechte (600).")
+    except Exception as e:
+        logger.warning(f"[Secrets] Rechte-Pruefung fehlgeschlagen: {e}")
+
+
 _STARTUP_HOOKS.extend([
     _start_watchdog_daemon,      # 1. Watchdog/Supervisor
     on_startup_drain_recovery,   # 2. Task-Recovery nach Absturz
-    _start_gateway_idle_loop,    # 3. IMAP/Inbox/Internet-Watchdog-Loops
+    _harden_secret_permissions,  # 3. Secret-Dateien auf 600 setzen
+    _start_gateway_idle_loop,    # 4. IMAP/Inbox/Internet-Watchdog-Loops
     _warm_hermes_skill_caches,   # 4. Skills-Cache vorwärmen (Thread)
 ])
 

@@ -2756,224 +2756,16 @@ DEFAULT_ROLES = [
     }
 ]
 
-GLOBAL_HERMES_SKILLS = [
-    # 1. Immobilien & Bau
-    {"id": "skill-baugb-checker", "name": "BauGB & B-Plan Prüfer", "category": "Immobilien & Bau", "description": "Prüft Zulässigkeit nach § 30, § 34, § 35 BauGB, GRZ/GFZ und Nachverdichtung.", "tags": ["BauGB", "B-Plan", "§34"]},
-    {"id": "skill-lbo-standards", "name": "LBO Abstandsflächen-Rechner", "category": "Immobilien & Bau", "description": "Berechnet Abstandsflächen, Stellplatzschlüssel und Brandschutz nach LBO.", "tags": ["LBO", "Abstandsflächen", "Stellplätze"]},
-    {"id": "skill-realestate-dcf", "name": "Immobilien-DCF & Rendite-Modell", "category": "Immobilien & Bau", "description": "Erstellt Cashflow-Projektionen, Vervielfältiger, IRR, ROI und Zins-Stresstests.", "tags": ["DCF", "Rendite", "IRR", "Cashflow"]},
-    {"id": "skill-bki-cost-estimator", "name": "Baukosten-Kalkulator (DIN 276)", "category": "Immobilien & Bau", "description": "Schätzt Baukosten nach Kostengruppen 100-700 und BKI-Kennwerten.", "tags": ["DIN276", "BKI", "Baukosten"]},
-    {"id": "skill-hoai-workflow", "name": "HOAI & VOB Bauleiter-Toolkit", "category": "Immobilien & Bau", "description": "Prüft HOAI Leistungsphasen 1-9 und VOB/B-konforme Nachträge.", "tags": ["HOAI", "VOB", "Bauleitung"]},
-    {"id": "skill-esg-realestate", "name": "ESG & KfW-Effizienz-Check", "category": "Immobilien & Bau", "description": "Prüft ESG-Kriterien, GEG und KfW-Förderstufen für Gebäude.", "tags": ["ESG", "KfW", "GEG", "Nachhaltigkeit"]},
-
-    # 2. Recht & Steuern
-    {"id": "skill-contract-redline", "name": "Vertrags-Redlining & Klausel-Prüfer", "category": "Recht & Steuern", "description": "Analysiert BGB-Kaufverträge, NDAs, Dienstbarkeiten und AGB auf Fallstricke.", "tags": ["BGB", "Verträge", "Redline"]},
-    {"id": "skill-tax-structure-optimizer", "name": "Holding- & Steuer-Strukturierer", "category": "Recht & Steuern", "description": "Modelliert § 8b KStG, vermögensverwaltende GmbH und Grunderwerbsteuer.", "tags": ["Steuern", "Holding", "GmbH", "KStG"]},
-    {"id": "skill-gdpr-audit", "name": "DSGVO / GDPR Compliance Auditor", "category": "Recht & Steuern", "description": "Artikel-genaue DSGVO-Prüfung, AVV-Erstellung und PII-Schutz.", "tags": ["DSGVO", "GDPR", "Datenschutz", "AVV"]},
-    {"id": "skill-liability-scanner", "name": "Haftungs- & Risiko-Scanner", "category": "Recht & Steuern", "description": "Erkennt Freistellungs- und Haftungsrisiken in Geschäftsverträgen.", "tags": ["Haftung", "Compliance", "Risiko"]},
-
-    # 3. Finanzen & M&A
-    {"id": "skill-dcf-valuation", "name": "Unternehmensbewertung (DCF/WACC)", "category": "Finanzen & M&A", "description": "Berechnet Multiples, Discounted Cash Flow und Enterprise Value.", "tags": ["DCF", "WACC", "Valuation"]},
-    {"id": "skill-ma-playbook", "name": "M&A Due Diligence Playbook", "category": "Finanzen & M&A", "description": "Strukturierte Due-Diligence-Listen für Finance, Legal, Tech & HR.", "tags": ["M&A", "Due Diligence", "Transaktionen"]},
-    {"id": "skill-saas-metrics", "name": "SaaS Health & Unit Economics", "category": "Finanzen & M&A", "description": "Kalkuliert ARR, MRR, CAC, LTV, Magic Number und Rule of 40.", "tags": ["SaaS", "ARR", "CAC", "LTV"]},
-    {"id": "skill-grant-matcher", "name": "Fördermittel- & Grant-Scout", "category": "Finanzen & M&A", "description": "Sucht nach ZIM-, BAFA-, KfW- und Horizon-Europe-Förderungen.", "tags": ["Grants", "Förderung", "KfW", "BAFA"]},
-
-    # 4. Vertrieb & Marketing
-    {"id": "skill-cold-outreach", "name": "B2B Cold Outreach & LinkedIn Sequencer", "category": "Vertrieb & Marketing", "description": "Erstellt konversionsstarke Anspracheskripte und E-Mail-Sequenzen.", "tags": ["B2B", "Outreach", "LinkedIn", "Sales"]},
-    {"id": "skill-pricing-calculator", "name": "Pricing & Packaging Strategist", "category": "Vertrieb & Marketing", "description": "Führt Van-Westendorp-Preissensitivitäts- & Feature-Tier-Analysen durch.", "tags": ["Pricing", "Packaging", "Funnels"]},
-    {"id": "skill-competitive-matrix", "name": "Competitor Intelligence & Feature Matrix", "category": "Vertrieb & Marketing", "description": "Erstellt radar-basierte Wettbewerbsmatrizen und Gap-Analysen.", "tags": ["Competitor", "Matrix", "Research"]},
-    {"id": "skill-seo-audit", "name": "High-Intent SEO & Content Pipeline", "category": "Vertrieb & Marketing", "description": "Analysiert SERP-Intents, Keyword-Cluster und Content-Architektur.", "tags": ["SEO", "Content", "SERP"]},
-
-    # 5. Software, KI & Tech
-    {"id": "skill-karpathy-coder", "name": "Karpathy Clean Coder (Minimal Complexity)", "category": "Software & Tech", "description": "Schreibt sauberen, modularen Code ohne Over-Engineering.", "tags": ["CleanCode", "Python", "TypeScript"]},
-    {"id": "skill-docker-generator", "name": "Docker & Container Hardening", "category": "Software & Tech", "description": "Generiert gehärtete Multi-Stage Dockerfiles und Compose-Setups.", "tags": ["Docker", "Containers", "DevOps"]},
-    {"id": "skill-database-designer", "name": "Database Schema & Migration Architect", "category": "Software & Tech", "description": "Designt SQL/NoSQL Schemas, Indizes und optimierte Queries.", "tags": ["SQL", "Postgres", "Database"]},
-    {"id": "skill-cloud-security", "name": "Cloud Security & IAM Privilege Auditor", "category": "Software & Tech", "description": "Scannt AWS/GCP/Azure-Setups auf Schwachstellen und Least-Privilege.", "tags": ["Cloud", "Security", "AWS", "GCP"]},
-
-    # 6. Quality & Healthcare
-    {"id": "skill-iso13485-prep", "name": "ISO 13485 & MDR Audit-Kit", "category": "Quality & Healthcare", "description": "Prüft Design Controls, CAPA und technische Dokumentation.", "tags": ["ISO13485", "MDR", "QMS"]},
-    {"id": "skill-pubmed-fetch", "name": "PubMed & Clinical Evidence Fetcher", "category": "Quality & Healthcare", "description": "Extrahiert Evidenz, Studiendaten und Fachliteratur aus NCBI/PubMed.", "tags": ["PubMed", "Medical", "Evidence"]}
-]
 
 HERMES_PROFILES_DIR = os.path.join(MEMORY_DIR, "hermes_profiles")
 os.makedirs(HERMES_PROFILES_DIR, exist_ok=True)
 _HERMES_SKILLS_CACHE = None
 _HERMES_SKILLS_CACHE_TIME = 0
 _HERMES_SKILLS_CACHE_TTL = 300.0
-_SKILL_FILE_INDEX = {}
-_SKILL_FILE_INDEX_TIME = 0
 
-def get_all_skill_search_roots():
-    return [
-        os.path.join(WORKSPACE_DIR, "data", "hermes_skills"),
-        os.path.join(WORKSPACE_DIR, "templates", "skills"),
-        os.path.join(WORKSPACE_DIR, ".agents", "skills"),
-        os.path.join(WORKSPACE_DIR, "config", "skills"),
-        os.path.join(WORKSPACE_DIR, "antigravity_complete_skills_package"),
-        os.path.join(WORKSPACE_DIR, "data", "hermes_profiles"),
-        os.path.join(MEMORY_DIR, "hermes_skills"),
-        os.path.expanduser("~/.hermes/skills"),
-        "/app/skills",
-        "/opt/data/skills"
-    ]
 
 _SKILL_INDEX_DISK_PATH = os.path.join(DATA_DIR, "hermes_skills_index.json")
 
-def build_skills_file_index(force: bool = False):
-    global _SKILL_FILE_INDEX, _SKILL_FILE_INDEX_TIME
-    now = time.time()
-    if not force and _SKILL_FILE_INDEX and (now - _SKILL_FILE_INDEX_TIME) < 300.0:
-        return _SKILL_FILE_INDEX
-    
-    if not force and not _SKILL_FILE_INDEX and os.path.exists(_SKILL_INDEX_DISK_PATH):
-        try:
-            with open(_SKILL_INDEX_DISK_PATH, "r", encoding="utf-8") as f:
-                _SKILL_FILE_INDEX = json.load(f)
-                _SKILL_FILE_INDEX_TIME = now
-                return _SKILL_FILE_INDEX
-        except Exception:
-            pass
-    
-    index = {}
-    search_dirs = get_all_skill_search_roots()
-    for s_dir in search_dirs:
-        if not os.path.exists(s_dir):
-            continue
-        try:
-            for root, dirs, files in os.walk(s_dir):
-                # PRUNING (10.10.2026): Ausschluesse VOR dem Betreten abschneiden
-                # (top-down-Walk). Vorher wurde z.B. der komplette .git-Baum
-                # traversiert und erst pro Knoten per continue verworfen -
-                # gemessen: 10.2s Walk ueber 1671 Verzeichnisse / 4 .git-Baeume.
-                dirs[:] = [d for d in dirs if d not in
-                           ("node_modules", ".git", "backups", "__pycache__", ".venv", "venv")]
-                if "node_modules" in root or ".git" in root or "backups" in root:
-                    continue
-                if "SKILL.md" in files:
-                    folder_name = os.path.basename(root)
-                    skill_path = os.path.join(root, "SKILL.md")
-                    if folder_name not in index:
-                        index[folder_name] = skill_path
-                    if folder_name.startswith("skill-"):
-                        stripped = folder_name[6:]
-                        if stripped not in index:
-                            index[stripped] = skill_path
-                    else:
-                        prefixed = f"skill-{folder_name}"
-                        if prefixed not in index:
-                            index[prefixed] = skill_path
-        except Exception as e:
-            print(f"[Skills Indexer] Error walking {s_dir}: {e}")
-            
-    _SKILL_FILE_INDEX = index
-    _SKILL_FILE_INDEX_TIME = now
-    try:
-        with open(_SKILL_INDEX_DISK_PATH, "w", encoding="utf-8") as f:
-            json.dump(index, f)
-    except Exception:
-        pass
-    return index
-
-def find_skill_file(skill_id: str) -> Optional[str]:
-    index = build_skills_file_index()
-    if skill_id in index and os.path.exists(index[skill_id]):
-        return index[skill_id]
-    
-    variations = [skill_id]
-    if skill_id.startswith("skill-"):
-        variations.append(skill_id[6:])
-    else:
-        variations.append(f"skill-{skill_id}")
-        
-    for var in variations:
-        if var in index and os.path.exists(index[var]):
-            return index[var]
-            
-    for root in get_all_skill_search_roots():
-        if not os.path.exists(root):
-            continue
-        for var in variations:
-            direct = os.path.join(root, var, "SKILL.md")
-            if os.path.exists(direct):
-                index[skill_id] = direct
-                return direct
-            try:
-                for sub in os.listdir(root):
-                    sub_path = os.path.join(root, sub)
-                    if os.path.isdir(sub_path):
-                        target = os.path.join(sub_path, var, "SKILL.md")
-                        if os.path.exists(target):
-                            index[skill_id] = target
-                            return target
-            except Exception:
-                pass
-    return None
-
-def parse_skill_frontmatter_and_content(raw_content: str, default_id: str):
-    name = default_id.replace("-", " ").title()
-    category = "Allgemein"
-    description = ""
-    tags = []
-    
-    lines = raw_content.splitlines()
-    in_frontmatter = False
-    fm_lines = []
-    body_lines = []
-    
-    for i, line in enumerate(lines):
-        line_str = line.strip()
-        if i == 0 and line_str == "---":
-            in_frontmatter = True
-            continue
-        if in_frontmatter:
-            if line_str == "---":
-                in_frontmatter = False
-                continue
-            fm_lines.append(line)
-            if line_str.startswith("name:"):
-                name = line_str.split("name:", 1)[1].strip().strip('"\'')
-            elif line_str.startswith("category:"):
-                category = line_str.split("category:", 1)[1].strip().strip('"\'')
-            elif line_str.startswith("description:"):
-                description = line_str.split("description:", 1)[1].strip().strip('"\'|')
-            elif line_str.startswith("tags:"):
-                raw_tags = line_str.split("tags:", 1)[1].strip().strip("[]")
-                tags = [t.strip().strip('"\'') for t in raw_tags.split(",") if t.strip()]
-        else:
-            body_lines.append(line)
-            if not description and line_str and not line_str.startswith("#"):
-                description = line_str[:120]
-                
-    return {
-        "name": name,
-        "category": category,
-        "description": description,
-        "tags": tags,
-        "content": raw_content
-    }
-
-def compose_skill_frontmatter(name: str, category: str, tags: List[str], description: str, body_or_full_content: str) -> str:
-    content = body_or_full_content.strip()
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            body = parts[2].strip()
-        else:
-            body = content
-    else:
-        body = content
-
-    tags_json = json.dumps(tags, ensure_ascii=False) if tags else "[]"
-    frontmatter = (
-        f"---\n"
-        f"name: \"{name}\"\n"
-        f"category: \"{category}\"\n"
-        f"description: \"{description}\"\n"
-        f"tags: {tags_json}\n"
-        f"---\n\n"
-    )
-    return frontmatter + body + "\n"
-
-_SKILLS_CACHE_DISK_PATH = os.path.join(DATA_DIR, "hermes_skills_cache.json")
 
 async def _warm_hermes_skill_caches():
     """Skills-Caches VOR dem ersten Request warm machen (Disk -> Memory).
@@ -2982,6 +2774,7 @@ async def _warm_hermes_skill_caches():
     def _warm():
         t0 = time.time()
         try:
+            from archon.routers.skills import build_skills_file_index, api_get_hermes_skills
             build_skills_file_index()
             api_get_hermes_skills()
             print(f"[Skills-Warmup] caches warm after {time.time() - t0:.1f}s")
@@ -2989,192 +2782,6 @@ async def _warm_hermes_skill_caches():
             print(f"[Skills-Warmup] failed: {e}")
     threading.Thread(target=_warm, daemon=True, name="skills-warmup").start()
 
-@app.get("/api/hermes/skills")
-def api_get_hermes_skills():
-    global _HERMES_SKILLS_CACHE, _HERMES_SKILLS_CACHE_TIME
-    now = time.time()
-    if _HERMES_SKILLS_CACHE is not None and (now - _HERMES_SKILLS_CACHE_TIME) < _HERMES_SKILLS_CACHE_TTL:
-        return _HERMES_SKILLS_CACHE
-
-    if not _HERMES_SKILLS_CACHE and os.path.exists(_SKILLS_CACHE_DISK_PATH):
-        try:
-            with open(_SKILLS_CACHE_DISK_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if data and isinstance(data, list) and len(data) > 0:
-                    _HERMES_SKILLS_CACHE = data
-                    _HERMES_SKILLS_CACHE_TIME = now
-                    return data
-        except Exception:
-            pass
-
-    index = build_skills_file_index()
-    discovered_skills = []
-    seen_ids = set()
-
-    for skill_id, file_path in index.items():
-        if skill_id in seen_ids:
-            continue
-        try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                raw = f.read()
-            parsed = parse_skill_frontmatter_and_content(raw, skill_id)
-            seen_ids.add(skill_id)
-            discovered_skills.append({
-                "id": skill_id,
-                "name": parsed["name"],
-                "category": parsed["category"],
-                "description": parsed["description"] or f"Hermes Agent Skill ({skill_id})",
-                "tags": parsed["tags"] or [parsed["category"].split(" ")[0]],
-                "file_path": file_path
-            })
-        except Exception:
-            pass
-
-    if not discovered_skills:
-        discovered_skills = GLOBAL_HERMES_SKILLS
-
-    _HERMES_SKILLS_CACHE = discovered_skills
-    _HERMES_SKILLS_CACHE_TIME = now
-    try:
-        with open(_SKILLS_CACHE_DISK_PATH, "w", encoding="utf-8") as f:
-            json.dump(discovered_skills, f)
-    except Exception:
-        pass
-    return discovered_skills
-
-@app.get("/api/hermes/skills/{skill_id}")
-def api_get_single_hermes_skill(skill_id: str):
-    file_path = find_skill_file(skill_id)
-    if file_path and os.path.exists(file_path):
-        try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            parsed = parse_skill_frontmatter_and_content(content, skill_id)
-            orig_path = os.path.join(os.path.dirname(file_path), ".SKILL.md.orig")
-            has_backup = os.path.exists(orig_path)
-            return {
-                "id": skill_id,
-                "name": parsed["name"],
-                "category": parsed["category"],
-                "description": parsed["description"],
-                "tags": parsed["tags"],
-                "content": content,
-                "file_path": file_path,
-                "has_original_backup": has_backup
-            }
-        except Exception as e:
-            print(f"[Skills API] Error reading {file_path}: {e}")
-
-    # Fallback to Global Hermes skills
-    for item in GLOBAL_HERMES_SKILLS:
-        if item.get("id") == skill_id or item.get("id") == f"skill-{skill_id}":
-            return {
-                **item,
-                "content": f"---\nname: \"{item.get('name')}\"\ncategory: \"{item.get('category')}\"\ndescription: \"{item.get('description')}\"\ntags: {json.dumps(item.get('tags', []))}\n---\n\n# {item.get('name')}\n{item.get('description')}\n\n## Parameter & Ausführung\nFühre diesen Skill im Kontext des übergeordneten Agenten aus.",
-                "file_path": "",
-                "has_original_backup": False
-            }
-            
-    return {
-        "id": skill_id,
-        "name": skill_id.replace("-", " ").title(),
-        "category": "Allgemein",
-        "description": f"Hermes Skill {skill_id}",
-        "tags": ["Allgemein"],
-        "content": f"# Skill: {skill_id}\n\nAutomatisch registrierter Hermes-Skill.",
-        "file_path": "",
-        "has_original_backup": False
-    }
-
-@app.post("/api/hermes/skills/{skill_id}")
-async def api_save_single_hermes_skill(skill_id: str, request: Request):
-    global _HERMES_SKILLS_CACHE
-    data = await request.json()
-    file_path = find_skill_file(skill_id)
-    
-    if not file_path:
-        skills_dir = os.path.join(MEMORY_DIR, "hermes_skills", skill_id)
-        os.makedirs(skills_dir, exist_ok=True)
-        file_path = os.path.join(skills_dir, "SKILL.md")
-    else:
-        skills_dir = os.path.dirname(file_path)
-        
-    orig_path = os.path.join(skills_dir, ".SKILL.md.orig")
-    
-    # Create original snapshot backup if this is the first edit
-    if os.path.exists(file_path) and not os.path.exists(orig_path):
-        try:
-            shutil.copy2(file_path, orig_path)
-            print(f"[Skills API] Created original backup snapshot at {orig_path}")
-        except Exception as e:
-            print(f"[Skills API] Failed to create backup: {e}")
-            
-    name = data.get("name", skill_id)
-    category = data.get("category", "Allgemein")
-    tags = data.get("tags", [])
-    if isinstance(tags, str):
-        tags = [t.strip() for t in tags.split(",") if t.strip()]
-    description = data.get("description", "")
-    content = data.get("content", "")
-    
-    composed_content = compose_skill_frontmatter(name, category, tags, description, content)
-    
-    try:
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(composed_content)
-        print(f"[Skills API] Saved skill {skill_id} to {file_path}")
-    except Exception as e:
-        print(f"[Skills API] Error writing skill {skill_id}: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-        
-    # Invalidate caches
-    _HERMES_SKILLS_CACHE = None
-    build_skills_file_index(force=True)
-    
-    return {
-        "status": "ok", 
-        "id": skill_id, 
-        "file_path": file_path, 
-        "has_original_backup": os.path.exists(orig_path)
-    }
-
-@app.post("/api/hermes/skills/{skill_id}/reset")
-async def api_reset_single_hermes_skill(skill_id: str):
-    global _HERMES_SKILLS_CACHE
-    file_path = find_skill_file(skill_id)
-    if not file_path or not os.path.exists(file_path):
-        return JSONResponse(status_code=404, content={"error": f"Skill {skill_id} nicht gefunden."})
-        
-    skills_dir = os.path.dirname(file_path)
-    orig_path = os.path.join(skills_dir, ".SKILL.md.orig")
-    
-    if not os.path.exists(orig_path):
-        return JSONResponse(status_code=400, content={"error": "Keine Original-Sicherung (.SKILL.md.orig) für diesen Skill vorhanden."})
-        
-    try:
-        shutil.copy2(orig_path, file_path)
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            restored_content = f.read()
-        parsed = parse_skill_frontmatter_and_content(restored_content, skill_id)
-        
-        # Invalidate cache
-        _HERMES_SKILLS_CACHE = None
-        build_skills_file_index(force=True)
-        
-        return {
-            "status": "ok",
-            "id": skill_id,
-            "message": "Skill erfolgreich auf Originalzustand zurückgesetzt.",
-            "content": restored_content,
-            "name": parsed["name"],
-            "category": parsed["category"],
-            "description": parsed["description"],
-            "tags": parsed["tags"],
-            "has_original_backup": True
-        }
-    except Exception as e:
-        print(f"[Skills API] Error resetting skill {skill_id}: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 ALL_HERMES_TOOLS = [
     "web_search", "browser", "terminal", "filesystem", "execute_code", "vision_analyze",
@@ -3735,87 +3342,6 @@ class ProfileStatusUpdate(BaseModel):
 # SYSTEM HEALTH, HERMES CONFIG & CONTAINER LIFECYCLE MANAGEMENT
 # 
 
-async def _check_service_health(name: str, url_candidates: List[str], client: httpx.AsyncClient) -> Dict[str, Any]:
-    for url in url_candidates:
-        t0 = time.time()
-        try:
-            resp = await client.get(url, timeout=3.0)
-            latency = round((time.time() - t0) * 1000, 1)
-            if resp.status_code in [200, 204, 301, 302, 307, 308]:
-                return {"status": "up", "latency_ms": latency, "endpoint": url}
-            elif resp.status_code == 404 and name == "hermes_core":
-                # Hermes root returns 404 on / if no static handler, but server is actively UP
-                return {"status": "up", "latency_ms": latency, "endpoint": url}
-            elif resp.status_code < 500:
-                return {"status": "up", "latency_ms": latency, "endpoint": url}
-        except Exception:
-            continue
-    return {"status": "down", "latency_ms": 0.0}
-
-@app.get("/api/system/health")
-async def api_system_health():
-    """
-    Returns latency and operational status for all 4 core components:
-    - hermes_core
-    - omniroute
-    - hermes_dashboard
-    - docker_proxy
-    """
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        t_core = _check_service_health(
-            "hermes_core",
-            ["http://hermes:8642", "http://hermes:8644", "http://host.docker.internal:8644"],
-            client
-        )
-        t_omni = _check_service_health(
-            "omniroute",
-            ["http://omniroute:20128/v1/models", "http://omniroute:20128", "http://host.docker.internal:20128"],
-            client
-        )
-        t_dash = _check_service_health(
-            "hermes_dashboard",
-            ["http://hermes-dashboard:9119", "http://hermes-dashboard:9120", "http://host.docker.internal:9119"],
-            client
-        )
-        t_docker = _check_service_health(
-            "docker_proxy",
-            ["http://docker-socket-proxy:2375/_ping", "http://docker-socket-proxy:2375/version"],
-            client
-        )
-        core_res, omni_res, dash_res, docker_res = await asyncio.gather(
-            t_core, t_omni, t_dash, t_docker
-        )
-
-    all_up = (
-        core_res["status"] == "up" and
-        omni_res["status"] == "up" and
-        dash_res["status"] == "up" and
-        docker_res["status"] == "up"
-    )
-    max_latency = max(
-        core_res.get("latency_ms", 0),
-        omni_res.get("latency_ms", 0),
-        dash_res.get("latency_ms", 0),
-        docker_res.get("latency_ms", 0)
-    )
-
-    if not all_up:
-        overall_status = "unhealthy"
-    elif max_latency > 500:
-        overall_status = "degraded"
-    else:
-        overall_status = "healthy"
-
-    return {
-        "status": overall_status,
-        "timestamp": time.time(),
-        "services": {
-            "hermes_core": core_res,
-            "omniroute": omni_res,
-            "hermes_dashboard": dash_res,
-            "docker_proxy": docker_res
-        }
-    }
 
 def _get_hermes_config_path() -> str:
     candidates = [
@@ -3881,55 +3407,6 @@ def api_save_hermes_config(payload: Dict = Body(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern der Konfiguration: {e}")
 
-@app.post("/api/system/hermes/restart")
-async def api_system_hermes_restart():
-    """
-    Triggers container restart for Hermes Core via docker-socket-proxy.
-    Logs event into SQLite state.db.
-    """
-    t0 = time.time()
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "http://docker-socket-proxy:2375/containers/hermes/restart?t=10",
-                timeout=15.0
-            )
-            duration = round(time.time() - t0, 2)
-            if resp.status_code in [204, 200]:
-                # Log in SQLite
-                try:
-                    with _get_state_db() as conn:
-                        conn.execute("""
-                            CREATE TABLE IF NOT EXISTS system_restart_logs (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                target TEXT,
-                                initiated_at REAL,
-                                duration_seconds REAL,
-                                status TEXT
-                            )
-                        """)
-                        conn.execute("""
-                            INSERT INTO system_restart_logs (target, initiated_at, duration_seconds, status)
-                            VALUES (?, ?, ?, ?)
-                        """, ("hermes", t0, duration, "success"))
-                        conn.commit()
-                except Exception as log_err:
-                    logger.warning(f"[Restart Log Error]: {log_err}")
-
-                add_ticker("Hermes System", "Hermes Core Container erfolgreich neu gestartet.")
-                return {
-                    "status": "success",
-                    "message": "Hermes Core erfolgreich neu gestartet.",
-                    "duration_seconds": duration
-                }
-            else:
-                raise HTTPException(
-                    status_code=resp.status_code,
-                    detail=f"Docker API antwortete mit Status {resp.status_code}: {resp.text}"
-                )
-    except Exception as e:
-        logger.error(f"[Hermes Restart Failed]: {e}")
-        raise HTTPException(status_code=500, detail=f"Hermes Neustart fehlgeschlagen: {str(e)}")
 
 @app.post("/api/hermes/memory/purge")
 def api_hermes_memory_purge(purge_options: Dict = Body(default={})):
@@ -7981,28 +7458,6 @@ def api_auth_delete_user(user_id: str, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/api/system/language")
-def get_system_language():
-    s = _load_json(SETTINGS_FILE, {})
-    lang = s.get("system_language") or s.get("language") or "de"
-    return {
-        "status": "success",
-        "language": lang,
-        "supported": ["de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"]
-    }
-
-@app.post("/api/system/language")
-def set_system_language(payload: dict = Body(...)):
-    lang = (payload.get("language") or "de").strip().lower()
-    supported = ["de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"]
-    if lang not in supported:
-        raise HTTPException(status_code=400, detail=f"Nicht unterstützte Sprache: {lang}")
-    s = _load_json(SETTINGS_FILE, {})
-    s["system_language"] = lang
-    s["language"] = lang
-    s["default_language"] = lang
-    _save_json(SETTINGS_FILE, s)
-    return {"status": "success", "language": lang}
 
 @app.get("/api/help/context/{view_id}")
 def api_get_help_context(view_id: str):
@@ -8693,51 +8148,6 @@ def api_get_research_sources():
 
 
 # --- SYSTEM UPDATE & RELEASE-LIFECYCLE (MEILENSTEIN 1) ---
-@app.get("/api/v1/system/update/check")
-def api_system_update_check():
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    return system_updater.get_update_status()
-
-@app.get("/api/v1/system/update/local-changes")
-def api_system_update_local_changes():
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    return system_updater.get_local_changes()
-
-@app.post("/api/v1/system/update/push")
-def api_system_update_push(payload: dict = Body(default={})):
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    msg = payload.get("message")
-    version = payload.get("version")
-    step = payload.get("step", "custom")
-    return system_updater.push_changes(commit_message=msg, custom_version=version, version_step=step)
-
-@app.post("/api/v1/system/update/apply")
-def api_system_update_apply(payload: dict = Body(default={}), background_tasks: BackgroundTasks = None):
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    make_backup = payload.get("backup", True)
-    res = system_updater.apply_update(make_backup=make_backup)
-    if res.get("status") == "success" and background_tasks is not None:
-        background_tasks.add_task(system_updater.schedule_delayed_reload, delay=2.0)
-    return res
-
-@app.get("/api/v1/system/update/snapshots")
-def api_system_update_snapshots():
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    return {"status": "success", "snapshots": system_updater.list_snapshots()}
-
-@app.post("/api/v1/system/update/rollback")
-def api_system_update_rollback(payload: dict = Body(...)):
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    snapshot_id = payload.get("snapshot_id", "").strip()
-    if not snapshot_id:
-        raise HTTPException(status_code=400, detail="Snapshot-ID erforderlich.")
-    return system_updater.rollback_snapshot(snapshot_id)
-
-@app.post("/api/v1/system/update/backup")
-def api_system_update_backup(payload: dict = Body(default={})):
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    tag = payload.get("tag", "manual").strip() or "manual"
-    return system_updater.create_snapshot(tag=tag)
 
 
 # --- HERMES AGENT CORE UPDATE (NousResearch/hermes-agent) ---
@@ -8777,41 +8187,6 @@ def on_shutdown_graceful():
         print(f"[Archon] Graceful Shutdown ausgeführt: {res}")
     except Exception as e:
         print(f"[Archon] Graceful Shutdown Fehler: {e}", file=sys.stderr)
-
-
-@app.get("/api/system/drain/status")
-@app.get("/api/v1/system/drain/status")
-def api_drain_status():
-    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-    return {"status": "success", "drain_status": graceful_shutdown_coordinator.get_status()}
-
-
-@app.post("/api/system/drain/start")
-@app.post("/api/v1/system/drain/start")
-def api_start_drain(payload: dict = Body(default={})):
-    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-    reason = payload.get("reason", "Manuell angefordertes Draining")
-    grace = payload.get("grace_seconds", 15.0)
-    res = graceful_shutdown_coordinator.start_draining(reason=reason, grace_seconds=grace)
-    return {"status": "success", "result": res}
-
-
-@app.post("/api/system/drain/cancel")
-@app.post("/api/v1/system/drain/cancel")
-def api_cancel_drain():
-    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-    res = graceful_shutdown_coordinator.cancel_draining()
-    return {"status": "success", "result": res}
-
-
-@app.post("/api/system/drain/execute-shutdown")
-@app.post("/api/v1/system/drain/execute-shutdown")
-def api_execute_shutdown(payload: dict = Body(default={})):
-    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-    reason = payload.get("reason", "API-gesteuerter Shutdown")
-    grace = payload.get("grace_seconds", 5.0)
-    res = graceful_shutdown_coordinator.execute_graceful_shutdown_sync(reason=reason, grace_seconds=grace)
-    return {"status": "success", "result": res}
 
 
 # --- EU AI ACT COMPLIANCE & KI-INVENTAR (t-1aa5e9) ---
@@ -9910,41 +9285,6 @@ async def inject_container_config(container_name: str, config: Dict = Body(...))
             "message": f"Could not inject config to {config_url}: {e}"
         }
 
-@app.get("/api/v1/skills/docker/inspect")
-def api_skills_docker_inspect():
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.docker.inspect_system()
-
-@app.get("/api/v1/skills/docker/logs")
-def api_skills_docker_logs(container_name: str, tail: int = 100):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.docker.read_container_logs(container_name, tail)
-
-@app.post("/api/v1/skills/docker/restart")
-def api_skills_docker_restart(container_name: str = Body(...)):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.docker.restart_service(container_name)
-
-@app.post("/api/v1/skills/obsidian/write")
-def api_skills_obsidian_write(title: str = Body(...), content: str = Body(...), tags: List[str] = Body(None)):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.obsidian.write_obsidian_note(title, content, tags)
-
-@app.get("/api/v1/skills/obsidian/search")
-def api_skills_obsidian_search(query: str):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.obsidian.search_obsidian_notes(query)
-
-@app.post("/api/v1/skills/obsidian/changelog")
-def api_skills_obsidian_changelog(version: str = Body(...), changes: List[str] = Body(...)):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.obsidian.update_changelog(version, changes)
 
 @app.get("/api/v1/memory/context")
 def api_memory_context(agent_id: str = "hermes_default", limit: int = 5):
@@ -10358,68 +9698,6 @@ def api_get_agent_projects(agent_id: str):
         "projects": projects
     }
 
-@app.get("/api/v1/skills/rag/query")
-def api_skills_rag_query(prompt: str):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.rag.query_knowledge_base(prompt)
-
-@app.post("/api/v1/skills/rag/store")
-def api_skills_rag_store(event_data: Dict = Body(...)):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.rag.store_system_metric(event_data)
-
-@app.post("/api/v1/skills/git/pytest")
-def api_skills_git_pytest(test_path: str = Body("tests/")):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.testing.run_pytest(test_path)
-
-@app.post("/api/v1/skills/git/commit")
-def api_skills_git_commit(message: str = Body(...)):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.testing.git_safe_commit(message)
-
-@app.post("/api/v1/skills/mcp/connect")
-async def api_skills_mcp_connect(server_script_or_url: str = Body(...)):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return await skills_engine.mcp.connect_mcp_server(server_script_or_url)
-
-@app.post("/api/v1/skills/mcp/execute")
-async def api_skills_mcp_execute(tool_name: str = Body(...), arguments: Dict = Body(...), agent_id: str = Body(None)):
-    if not skills_engine:
-         raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    if not agent_id:
-         raise HTTPException(status_code=400, detail="agent_id is required to verify permissions")
-         
-    # Check permissions (User-defined capability mapping)
-    profiles = api_get_hermes_profiles()
-    prof = next((p for p in profiles if p["id"] == agent_id), None)
-    if not prof:
-         raise HTTPException(status_code=403, detail="Agent profile not found")
-         
-    allowed_tools = prof.get("tools", []) + prof.get("skills", [])
-    
-    # Simple check: tool_name like mcp__omniroute__check_quota -> server is omniroute
-    parts = tool_name.split("__")
-    if len(parts) >= 2 and parts[0] == "mcp":
-        server_name = parts[1]
-        allowed_servers = [t.replace("mcp__", "") for t in allowed_tools if t.startswith("mcp__")]
-        if server_name not in allowed_servers and tool_name not in allowed_tools:
-            raise HTTPException(status_code=403, detail=f"Agent '{agent_id}' is not authorized to use MCP server '{server_name}'. Must be assigned by User.")
-    
-    from backend.plugin_manager import get_plugin_manager
-    pm = get_plugin_manager()
-    try:
-        arguments = await pm.apply_before_tool_execute(tool_name, arguments, {"agent_id": agent_id})
-    except PermissionError as pe:
-        raise HTTPException(status_code=403, detail=str(pe))
-    
-    raw_res = await skills_engine.mcp.execute_mcp_tool(tool_name, arguments)
-    return await pm.apply_after_tool_execute(tool_name, raw_res, {"agent_id": agent_id})
 
 @app.get("/api/v1/hud/telemetry")
 async def get_hud_telemetry():
@@ -12225,36 +11503,6 @@ def debug_db():
 # PROAKTIVER MORGEN-STANDUP & AUTONOMER WECKDIENST (Pillar 1 & 7)
 # =====================================================================
 
-@app.post("/api/system/standup/run")
-async def api_run_morning_standup():
-    """Generiert ein proaktives Morgen-Briefing über Tasks, Flotte, Inbox und Token-Kosten."""
-    from backend.autonomous_standup import generate_morning_standup
-    res = await generate_morning_standup()
-    add_ticker("Morgen-Standup", f"Tages-Briefing für {res.get('date')} erstellt.")
-    broadcast_event("morning_briefing", res)
-    return res
-
-@app.get("/api/system/standup/latest")
-async def api_get_latest_morning_standup():
-    """Liefert das aktuellste Morgen-Briefing aus dem Obsidian Vault."""
-    try:
-        from local_memory_bridge import LocalMemoryBridge
-        bridge = LocalMemoryBridge()
-        out_dir = os.path.join(bridge.vault_path, "01_PROJEKTE", "Daily_Briefings")
-        if os.path.exists(out_dir):
-            _entries = await asyncio.to_thread(os.listdir, out_dir)
-            files = sorted([f for f in _entries if f.startswith("Briefing_") and f.endswith(".md")], reverse=True)
-            if files:
-                def _read_latest():
-                    with open(os.path.join(out_dir, files[0]), "r", encoding="utf-8") as bf:
-                        return bf.read()
-                _content = await asyncio.to_thread(_read_latest)
-                return {"status": "success", "filename": files[0], "content": _content}
-    except Exception:
-        pass
-    from backend.autonomous_standup import generate_morning_standup
-    return await generate_morning_standup()
-
 
 # --- NEUE AGENTIC OS MECHANIKEN (BATCH 3: INBOX WATCHER & ROBERT TOOL PERMISSIONS) ---
 
@@ -12361,10 +11609,6 @@ def api_query_rag(q: str = Query(..., description="Suchbegriff für das Anything
     from backend.rag_bridge import rag_bridge
     return rag_bridge.query_vault_rag(q)
 
-@app.post("/api/system/deadlock-check")
-def api_deadlock_check(timeout_seconds: int = 45):
-    from backend.deadlock_supervisor import deadlock_supervisor
-    return deadlock_supervisor.detect_and_resolve_deadlocks(stagnation_threshold_seconds=timeout_seconds)
 
 @app.post("/api/diff/preview")
 def api_diff_preview(payload: Dict = Body(...)):
@@ -12461,16 +11705,6 @@ def api_fleet_health_check():
     from backend.fleet_self_healing import check_fleet_and_heal
     return check_fleet_and_heal()
 
-@app.post("/api/system/backup-db")
-def api_backup_databases():
-    from backend.db_backup_manager import db_backup_manager
-    return db_backup_manager.checkpoint_and_backup()
-
-@app.get("/api/system/backup-db/list")
-def api_list_db_backups():
-    from backend.db_backup_manager import db_backup_manager
-    return {"status": "success", "backups": db_backup_manager.list_backups()}
-
 
 @app.post("/api/notifications/dispatch")
 def api_dispatch_notification(payload: Dict = Body(...)):
@@ -12489,23 +11723,6 @@ def api_list_recent_notifications(limit: int = 50):
 
 
 # --- NEUE AGENTIC OS MECHANIKEN (BATCH 8: COST-ESTIMATOR, DB-OPTIMIZER, HEALTH-SCORE, DOSSIER) ---
-
-
-@app.post("/api/system/optimize-db")
-def api_optimize_db():
-    from backend.db_optimizer import optimize_all_databases
-    return optimize_all_databases()
-
-@app.get("/api/system/health-score")
-@ttl_cache(seconds=30)
-def api_get_health_score():
-    from backend.system_diagnostics import get_system_health_score
-    return get_system_health_score()
-
-@app.post("/api/system/generate-dossier")
-def api_generate_dossier():
-    from backend.system_dossier_generator import generate_system_dossier
-    return generate_system_dossier()
 
 
 # --- NEUE AGENTIC OS MECHANIKEN (BATCH 9: TIME-TRAVEL DEBUGGER, COUNCIL DEBATE, TASK SELF-HEALING & DIR WATCHER) ---
@@ -12602,11 +11819,6 @@ def api_save_memory_consolidation_settings(payload: Dict = Body(...)):
     ok = save_consolidation_config(cfg)
     return {"status": "success" if ok else "error", "config": cfg}
 
-@app.post("/api/system/consolidate-memory")
-def api_trigger_memory_consolidation(payload: Dict = Body(default={})):
-    from backend.memory_consolidator import run_sleep_cycle_consolidation
-    force = bool(payload.get("force", True))
-    return run_sleep_cycle_consolidation(force=force)
 
 @app.post("/api/browser/browse-and-capture")
 def api_browse_and_capture(payload: Dict = Body(...)):
@@ -12756,24 +11968,6 @@ def api_semantic_cache_clear():
 
 
 # Feature 5: SQLite Connection-Pool & Async Write-Batching
-@app.post("/api/system/write-batcher/enqueue")
-def api_write_batcher_enqueue(payload: Dict = Body(...)):
-    from backend.async_write_batcher import async_write_batcher
-    return async_write_batcher.enqueue(
-        event_type=payload.get("event_type", "telemetry"),
-        source_module=payload.get("source_module", "router"),
-        payload=payload.get("payload", {})
-    )
-
-@app.post("/api/system/write-batcher/flush")
-def api_write_batcher_flush():
-    from backend.async_write_batcher import async_write_batcher
-    return async_write_batcher.flush()
-
-@app.get("/api/system/write-batcher/stats")
-def api_write_batcher_stats():
-    from backend.async_write_batcher import async_write_batcher
-    return async_write_batcher.get_stats()
 
 
 # --- TEIL 2 / PAKET 2 (FEATURES 6–10): MODERNE GEDÄCHTNIS- & RAG-ARCHITEKTUR (GRAPH & HYBRID MEMORY) ---
@@ -12857,10 +12051,6 @@ def api_run_eval_regression_suite(payload: Dict = Body(default={})):
 
 
 # Feature 25: Live-Ressourcen-Protector (Host CPU/RAM/Disk-Backpressure)
-@app.get("/api/system/resource-backpressure")
-def api_check_resource_backpressure(simulate_overload: bool = False):
-    from backend.resource_backpressure import resource_backpressure_protector
-    return resource_backpressure_protector.check_health_and_backpressure(simulate_overload=simulate_overload)
 
 
 # --- CORPORATE MANAGER & MULTI-COMPANY HUB ---
@@ -12981,3 +12171,15 @@ try:
     app.include_router(_hermes_profiles_r)
 except Exception as _err_hp:
     logger.warning(f"[Router] hermes_profiles nicht geladen: {_err_hp}")
+
+try:
+    from archon.routers.system import router as _system_r
+    app.include_router(_system_r)
+except Exception as _err_sys:
+    logger.warning(f"[Router] system nicht geladen: {_err_sys}")
+
+try:
+    from archon.routers.skills import router as _skills_r
+    app.include_router(_skills_r)
+except Exception as _err_sk:
+    logger.warning(f"[Router] skills nicht geladen: {_err_sk}")

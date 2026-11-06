@@ -226,6 +226,7 @@ from archon.core.runtime import (  # noqa: E402
     _load_json, _save_json, atomic_write_json,
 )
 
+from archon.core.cache import ttl_cache  # noqa: E402
 from archon.core.state_db import (  # noqa: E402
     ClosingConnection, STATE_DB_PATH, _get_state_db, _get_profile_state_db,
 )
@@ -890,9 +891,11 @@ def detect_container_port(container_identifier: str, inspected_port: int = None)
         
     return 8082
 
+@ttl_cache(seconds=10)
 def get_docker_containers_from_socket() -> List[Dict]:
     """
     Liest ALLE echten Docker-Container direkt vom Docker-Daemon über /var/run/docker.sock aus.
+    (10 s gecacht: der Socket-Read kostet ~1 s und wird von /api/services gepollt.)
     """
     try:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -1946,6 +1949,7 @@ def api_save_full_html(req: FullHtmlSaveRequest):
 # ==========================================
 
 @app.get("/api/v1/brain/galaxy-data")
+@ttl_cache(seconds=60)
 def api_brain_galaxy_data():
     nodes = []
     links = []
@@ -2206,6 +2210,7 @@ def api_library_ingest():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/library/books")
+@ttl_cache(seconds=60)
 def api_library_books():
     try:
         from utils.batch_library_importer import list_indexed_books
@@ -13114,6 +13119,7 @@ def api_optimize_db():
     return optimize_all_databases()
 
 @app.get("/api/system/health-score")
+@ttl_cache(seconds=30)
 def api_get_health_score():
     from backend.system_diagnostics import get_system_health_score
     return get_system_health_score()

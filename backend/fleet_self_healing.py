@@ -13,6 +13,8 @@ import subprocess
 import datetime
 from typing import Dict, Any, List
 
+from archon.core.cache import ttl_cache  # noqa: E402
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 KNOWN_SERVICES = {
@@ -69,6 +71,7 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
     except Exception as e:
         return {"status": "error", "service": service_name, "error": str(e)}
 
+@ttl_cache(seconds=30)
 def check_fleet_and_heal() -> Dict[str, Any]:
     """Prüft den Zustand der Core-Dienste und heilt ausgefallene Dienste automatisch (sofern in settings.json aktiviert)."""
     auto_restart = True

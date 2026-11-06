@@ -64,7 +64,7 @@ async def _execute_mission_control_task(
     if ticker is None:
         from archon.core.runtime import add_ticker as ticker
     if get_profiles is None:
-        from archon.api_hermes_profiles import api_get_hermes_profiles as get_profiles
+        from archon.core.profiles import api_get_hermes_profiles as get_profiles
     if sync_obsidian is None:
         from archon.core.runtime import _sync_task_to_obsidian as sync_obsidian
     if trigger_sandy is None:
@@ -301,7 +301,7 @@ async def _trigger_sandy_staffing_nomination(
     if ticker is None:
         from archon.core.runtime import add_ticker as ticker
     if get_profiles is None:
-        from archon.api_hermes_profiles import api_get_hermes_profiles as get_profiles
+        from archon.core.profiles import api_get_hermes_profiles as get_profiles
     if paperclip_hire is None:
         paperclip_hire = _paperclip_hire_profile_by_id
 
@@ -651,7 +651,7 @@ async def _run_synthesis_cascade(
     if ticker is None:
         from archon.core.runtime import add_ticker as ticker
     if get_profiles is None:
-        from archon.api_hermes_profiles import api_get_hermes_profiles as get_profiles
+        from archon.core.profiles import api_get_hermes_profiles as get_profiles
     if paths is None:
         paths = {"OBSIDIAN_VAULT_DIR": DEFAULT_OBSIDIAN_VAULT_DIR, "WORKSPACE_DIR": DEFAULT_WORKSPACE_DIR}
     if folder_namer is None:

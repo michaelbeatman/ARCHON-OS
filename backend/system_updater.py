@@ -18,9 +18,12 @@ import sqlite3
 import shutil
 import datetime
 import subprocess
+import logging
 from typing import Dict, Any, List, Optional, Tuple
 
 from archon.core.cache import ttl_cache, invalidate  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SNAPSHOT_DIR = os.path.join(WORKSPACE_DIR, "data", "snapshots")
@@ -453,11 +456,15 @@ def backup_sqlite_safe(src_path: str, dst_path: str) -> bool:
         return False
     finally:
         if dst:
-            try: dst.close()
-            except Exception: pass
+            try:
+                dst.close()
+            except Exception as e:
+                logger.warning("Fehler beim Schliessen der Ziel-Datenbankverbindung: %s", e, exc_info=True)
         if src:
-            try: src.close()
-            except Exception: pass
+            try:
+                src.close()
+            except Exception as e:
+                logger.warning("Fehler beim Schliessen der Quell-Datenbankverbindung: %s", e, exc_info=True)
 
 
 def create_snapshot(tag: str = "pre_update") -> Dict[str, Any]:

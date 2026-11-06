@@ -10083,234 +10083,9 @@ async def sse_events_stream():
 
 _MC_STATE_CACHE = {"ts": 0.0, "data": None}
 
-@app.get("/api/mission-control/state")
-async def get_mission_control_state():
-    now_mc = time.time()
-    if _MC_STATE_CACHE["data"] is not None and (now_mc - _MC_STATE_CACHE["ts"]) < 3.0:
-        return _MC_STATE_CACHE["data"]
-    # SYNC-CALLS IM ASYNC-LOOP = BLOCKIERT BEI LANGSAMKEIT ALLES (gemessen:
-    # health parallel 47ms -> 24.571ms). Deshalb aus dem Event-Loop auslagern.
-    data = await asyncio.to_thread(_load_mission_control_data)
-    tasks = data.get("tasks", [])
 
-    # 23.10.2026: Live-Synchronisation mit kanban.db (Source of Truth für Tasks)
-    def _fetch_in_progress_from_kanban():
-        try:
-            from backend.operations_api import _get_kanban_connection
-            conn = _get_kanban_connection()
-            try:
-                cur = conn.cursor()
-                rows = cur.execute("SELECT id, title, assignee, status, started_at, model_override FROM tasks WHERE status = 'in_progress'").fetchall()
-                res = []
-                for r in rows:
-                    res.append({
-                        "id": r["id"],
-                        "title": r["title"],
-                        "agent_id": r["assignee"],
-                        "agent_name": r["assignee"],
-                        "model": r["model_override"] or "omniroute/best-coding",
-                        "status": "in_progress",
-                        "started_at": r["started_at"]
-                    })
-                return res
-            finally:
-                conn.close()
-        except Exception:
-            return []
 
-    k_tasks = await asyncio.to_thread(_fetch_in_progress_from_kanban)
-    if k_tasks:
-        tasks = [t for t in tasks if t.get("status") != "in_progress"] + k_tasks
-    
-    # 1. Profile aus agent_profiles.json laden (51 reale Profile)
-    profiles = await asyncio.to_thread(api_get_hermes_profiles) if "api_get_hermes_profiles" in globals() else []
-    total_profiles = max(len(profiles), 12)
-    
-    in_progress_tasks = [t for t in tasks if t.get("status") == "in_progress"]
-    active_agent_ids = {t.get("agent_id") for t in in_progress_tasks if t.get("agent_id")}
-    active_count = len(active_agent_ids)
-    
-    pending_approvals = sum(1 for t in tasks if t.get("status") == "approval")
-    
-    # 2. Live Telemetrie
-    telemetry = await asyncio.to_thread(_get_live_telemetry_metrics)
-    
-    # 3. Dynamischer Cadre (Aktive Agenten mit Projekt-Kontext)
-    cadre = []
-    for t in in_progress_tasks:
-        a_id = t.get("agent_id")
-        prof = next((p for p in profiles if p.get("id") == a_id or p.get("person_name") == t.get("agent_name")), None)
-        avatar = (prof.get("avatar") if prof else None) or f"/static/avatars/avatar_{((hash(a_id or 'micha') % 8) + 1):03d}.jpg"
-        cadre.append({
-            "id": a_id or "worker",
-            "name": t.get("agent_name") or (prof.get("person_name") if prof else "Hermes Worker"),
-            "role": (prof.get("name") if prof else "Projekt-Spezialist"),
-            "model": t.get("model") or (prof.get("model") if prof else "Claude 3.7 Sonnet"),
-            "project": t.get("title", "Aktives Projekt"),
-            "status": "Beschäftigt",
-            "avatar": avatar
-        })
-        
-    # Falls keine Tasks aktiv sind: Lead-Agenten im Bereitschaftsmodus
-    if not cadre and profiles:
-        for p in profiles[:2]:
-            cadre.append({
-                "id": p.get("id"),
-                "name": p.get("person_name") or p.get("name"),
-                "role": p.get("name"),
-                "model": p.get("model") or "Claude 3.7 Sonnet",
-                "project": "Bereitschaft / Standby",
-                "status": "Bereit",
-                "avatar": p.get("avatar") or "/static/avatars/avatar_001.jpg"
-            })
-            
-    # 4. Concurrency Slots
-    tool_concurrency = {
-        "slots_used": len(in_progress_tasks) + (1 if in_progress_tasks else 0),
-        "slots_max": 10,
-        "tools": [
-            {"name": "web_search", "used": 1 if in_progress_tasks else 0, "max": 5, "icon": "search"},
-            {"name": "code_gen", "used": 1 if in_progress_tasks else 0, "max": 2, "icon": "code"},
-            {"name": "obsidian_sync", "used": 1 if any(t.get("status") == "completed" for t in tasks[:3]) else 0, "max": 3, "icon": "book-open"}
-        ]
-    }
-    
-    # 5. Kontext-Druck
-    active_task = in_progress_tasks[0] if in_progress_tasks else (tasks[0] if tasks else None)
-    cur_model = active_task.get("model") if active_task else telemetry["latest_model"]
-    cur_tok = active_task.get("estimated_tokens", 18500) if active_task else telemetry["latest_tokens"]
-    max_tok = 200000 if "claude" in cur_model.lower() else (1000000 if "gemini" in cur_model.lower() else 128000)
-    pct = min(100, max(5, int((cur_tok / max_tok) * 100)))
-    
-    context_pressure = {
-        "model_label": f"{cur_model.split('/')[-1]}: {(cur_tok//1000)}k / {(max_tok//1000)}k ({pct}%)",
-        "model_full": cur_model,
-        "pct": pct,
-        "buffer_str": f"{((max_tok - cur_tok)//1000)}k Tokens Puffer"
-    }
-    
-    # 6. Live Audit Logs: ticker_entries + Lifecycle
-    live_logs = []
-    now_t = datetime.datetime.now().strftime("%H:%M:%S")
-    for t_entry in reversed(ticker_entries):
-        m = re.match(r'\[(.*?)\]\s*(.*?):\s*(.*)', t_entry)
-        if m:
-            live_logs.append({"time": m.group(1), "source": m.group(2), "msg": m.group(3)})
-        else:
-            live_logs.append({"time": now_t, "source": "System", "msg": t_entry})
-            
-    for log in data.get("audit_logs", []):
-        if len(live_logs) >= 25:
-            break
-        if not any(l.get("msg") == log.get("msg") for l in live_logs):
-            live_logs.append(log)
-            
-    if not live_logs:
-        live_logs = [
-            {"time": now_t, "source": "Kernel", "msg": "Archon OS Daemon nominal - Port 8501 aktiv"},
-            {"time": now_t, "source": "Gateway", "msg": f"OmniRoute Routing bereit ({total_profiles} Agentenprofile geladen)"},
-            {"time": now_t, "source": "Memory", "msg": "SQLite und Projekt-Store synchronisiert"}
-        ]
-        
-    # Berechne Tool-Stabilität aus Logs
-    error_count = sum(1 for l in live_logs if "fehler" in l.get("msg", "").lower() or "error" in l.get("msg", "").lower())
-    sampled_calls = max(25, len(live_logs) * 4)
-    error_rate = round((error_count / sampled_calls) * 100, 1)
-    
-    res_payload = {
-        "status": "ok",
-        "kpis": {
-            "fleet_active": f"{active_count} / {total_profiles} Aktiv",
-            "active_count": active_count,
-            "total_profiles": total_profiles,
-            "tpm_current": telemetry["tpm_est"],
-            "tpm_limit": 2000000,
-            "cost_today_usd": telemetry["today_cost"],
-            "cost_limit_usd": 5.00,
-            "tool_error_rate_pct": error_rate,
-            "tool_calls_sampled": sampled_calls,
-            "pending_approvals": pending_approvals,
-            "omniroute_status": "OmniRoute aktiv",
-            "top_models_cost": telemetry.get("top_models_cost", [])
-        },
-        "tasks": tasks,
-        "cadre": cadre,
-        "tool_concurrency": tool_concurrency,
-        "context_pressure": context_pressure,
-        "sparkline_data": telemetry["sparkline_data"],
-        "audit_logs": live_logs[:25]
-    }
-    _MC_STATE_CACHE["ts"] = now_mc
-    _MC_STATE_CACHE["data"] = res_payload
-    return res_payload
 
-class NewTaskCaptureRequest(BaseModel):
-    title: str
-
-@app.post("/api/mission-control/tasks/capture")
-async def capture_mission_control_task(req: NewTaskCaptureRequest):
-    if not req.title or not req.title.strip():
-        raise HTTPException(status_code=400, detail="Aufgabentitel darf nicht leer sein.")
-        
-    data = _load_mission_control_data()
-    task_id = f"task-{int(time.time()) % 10000}"
-    
-    # Intelligente Hermes Triage & Schätzung
-    title = req.title.strip()
-    is_large = any(k in title.lower() for k in ["audit", "refactor", "vollständig", "sicherheit", "pipeline", "db", "analyse"])
-    
-    est_tokens = 120000 if is_large else 35000
-    est_cost = 0.22 if is_large else 0.04
-    subagents = 3 if is_large else 1
-    agent_id = "sandy" if "audit" in title.lower() or "hr" in title.lower() else "micha"
-    agent_name = "Sandy Hooks" if agent_id == "sandy" else "Michael Keller"
-    model = "anthropic/claude-3.7-sonnet" if is_large else "deepseek/deepseek-v4-flash-0731"
-
-    new_task = {
-        "id": task_id,
-        "title": title,
-        "capture_input": title,
-        "plan": [
-            f"Hermes Triage: Anforderung '{title}' analysieren",
-            f"Ressourcen- und Werkzeugallokation für {agent_name}",
-            "Ausführung über OmniRoute & Dokumentation in Obsidian"
-        ],
-        "agent_id": agent_id,
-        "agent_name": agent_name,
-        "model": model,
-        "estimated_tokens": est_tokens,
-        "estimated_cost_eur": est_cost,
-        "subagents_count": subagents,
-        "status": "backlog",
-        "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "result_summary": "",
-        "artifact_path": "",
-        "parent_project_id": None,
-        "subtask_ids": [],
-        "target_action": core_dispatcher.detect_target_action(title),
-        "phase": "execution"
-    }
-    
-    data.setdefault("tasks", []).insert(0, new_task)
-    
-    # Audit Log
-    now_t = datetime.datetime.now().strftime("%H:%M:%S")
-    data.setdefault("audit_logs", []).insert(0, {
-        "time": now_t,
-        "source": "Capture",
-        "msg": f"Neuer Task #{task_id} erfasst: '{title[:40]}...'"
-    })
-    data["audit_logs"] = data["audit_logs"][:25]
-    
-    _save_mission_control_data(data)
-    _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
-    broadcast_event("kanban_updated", {"action": "capture", "task_id": task_id, "status": "backlog"})
-    return {"status": "ok", "task": new_task}
-
-class TaskMoveRequest(BaseModel):
-    task_id: str
-    target_status: str
-    result_summary: Optional[str] = None
 
 # === Orchestration Wrappers (delegating to archon.core.orchestration) ===
 
@@ -10417,90 +10192,7 @@ async def _run_synthesis_cascade(parent_project_id: str):
     )
 
 
-@app.post("/api/mission-control/tasks/move")
-async def move_mission_control_task(req: TaskMoveRequest):
-    data = _load_mission_control_data()
-    tasks = data.get("tasks", [])
-    task = next((t for t in tasks if t.get("id") == req.task_id), None)
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Task nicht gefunden.")
-        
-    prev_status = task.get("status")
-    task["status"] = req.target_status
-    now_t = datetime.datetime.now().strftime("%H:%M:%S")
-    
-    if req.target_status == "in_progress":
-        task["started_at"] = time.time()
-        task["active_tool"] = "Tool: web_search & core_dispatcher"
-        add_ticker("Approval Gate", f"Task #{task['id']} genehmigt & an {task['agent_name']} übergeben")
-        _save_mission_control_data(data)
-        
-        # Starte autonome Ausführung im Hintergrund
-        asyncio.create_task(_execute_mission_control_task(task["id"]))
-        return {"status": "ok", "task": task}
-        
-    elif req.target_status == "completed":
-        if req.result_summary:
-            task["result_summary"] = req.result_summary
-        elif not task.get("result_summary"):
-            task["result_summary"] = f"Erfolgreich von {task['agent_name']} abgeschlossen. Alle Kriterien erfüllt."
-            
-        obs_path = _sync_task_to_obsidian(task)
-        task["artifact_path"] = obs_path
-        add_ticker("Obsidian", f"Projekt-Dokumentation {os.path.basename(obs_path)} geschrieben")
 
-        # FAN-IN (12.10.2026): Diese Task IST Lisas Entwurf-Freigabe
-        # (synthesis_draft_path) -> beim Approved-Move finalisieren:
-        # finaler Bericht + Parent completed + n8n-Bridge.
-        if task.get("synthesis_draft_path") and not task.get("synthesis_finalized"):
-            task["synthesis_finalized"] = True
-            await _finalize_synthesis_after_approval(
-                task.get("parent_project_id") or req.task_id,
-                task.get("synthesis_draft_path"),
-                task.get("result_summary") or "",
-                "Freigabe per Board-Move (Approval-Gate)",
-                daten=data,   # GLEICHES dict wie der Handler - sonst ueberschreibt
-                              # das finale _save_mission_control_data(data) den Update
-            )
-
-        parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
-        if parent_pid and parent_pid != req.task_id:
-            asyncio.create_task(_fan_in_maybe_start_synthesis(parent_pid))
-        
-    elif req.target_status == "dismissed":
-        tasks.remove(task)
-        add_ticker("Approval Gate", f"Task #{task['id']} wurde verworfen")
-        _save_mission_control_data(data)
-        return {"status": "ok", "message": "Task verworfen."}
-        
-    data["audit_logs"] = data.get("audit_logs", [])[:25]
-    _save_mission_control_data(data)
-    _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
-    broadcast_event("kanban_updated", {"action": "move", "task_id": req.task_id, "status": req.target_status})
-    return {"status": "ok", "task": task}
-
-@app.get("/api/mission-control/task/{task_id}/artifact")
-async def get_mission_control_task_artifact(task_id: str):
-    data = _load_mission_control_data()
-    task = next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task nicht gefunden.")
-    
-    p = task.get("artifact_path")
-    if p and os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return {"status": "ok", "content": f.read(), "path": p}
-            
-    # Falls Datei noch nicht existiert, live generieren
-    content = f"""# {task.get('title')}
-Status: {task.get('status')}
-Agent: {task.get('agent_name')} ({task.get('model')})
-
-## Ergebnisbericht
-{task.get('result_summary') or 'Aufgabe erfolgreich abgeschlossen.'}
-"""
-    return {"status": "ok", "content": content, "path": p or "/opt/data/obsidian/01_PROJEKTE/"}
 
 # =============================================================
 # PROMPT-TEMPLATES, KI-OPTIMIZER & PROMPTFOO GOVERNANCE API
@@ -11607,3 +11299,23 @@ try:
     app.include_router(_skills_r)
 except Exception as _err_sk:
     logger.warning(f"[Router] skills nicht geladen: {_err_sk}")
+
+try:
+    from archon.routers.mission_control import (
+        router as _mc_router,
+        configure as _mc_configure,
+    )
+    # Nur die Original-Funktionen aus main.py injizieren: die Kopien in
+    # archon/core/runtime.py sind NICHT verhaltensgleich (Telemetrie filtert
+    # dort 15 Minuten statt Tagesbeginn, _sync_task_to_obsidian nutzt eine
+    # eigene _slugify()-Hilfe und erzeugt andere Dateinamen).
+    _mc_configure(
+        telemetry=_get_live_telemetry_metrics,
+        sync_obsidian=_sync_task_to_obsidian,
+        execute=_execute_mission_control_task,
+        finalize_approval=_finalize_synthesis_after_approval,
+        fan_in=_fan_in_maybe_start_synthesis,
+    )
+    app.include_router(_mc_router)
+except Exception as _err_mc:
+    logger.warning(f"[Router] mission_control nicht geladen: {_err_mc}")

@@ -23,6 +23,9 @@ MISSION_CONTROL_FILE = os.path.join(MEMORY_DIR, "mission_control_data.json")
 _MC_DATA_LOCK = threading.Lock()
 _MC_ASYNC_LOCK = asyncio.Lock()
 
+# State-Cache für /api/mission-control/state (3s TTL)
+_MC_STATE_CACHE = {"ts": 0.0, "data": None}
+
 def _write_mc_atomic(data: dict):
     """Atomarer MC-Store-Write. Nur mit gehaltenem _MC_DATA_LOCK aufrufen
     (Lock ist nicht reentrant - _save_mission_control_data haelt ihn aussen)."""
@@ -132,4 +135,5 @@ def _save_mission_control_data(data: dict):
 __all__ = [
     "MISSION_CONTROL_FILE", "_MC_DATA_LOCK", "_MC_ASYNC_LOCK",
     "_write_mc_atomic", "_load_mission_control_data", "_save_mission_control_data",
+    "_MC_STATE_CACHE",
 ]

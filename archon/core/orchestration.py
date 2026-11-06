@@ -111,7 +111,11 @@ async def _execute_mission_control_task(
 
         reply = res.get("content", "").strip()
         if not reply or "Fehler" in reply[:25]:
-            reply = f"Aufgabe '{task_title}' erfolgreich von {agent_name} bearbeitet. Alle Vorgaben und Qualitätsprüfungen wurden nominal abgeschlossen."
+            # Dispatcher meldet Fehler -> Task als failed markieren
+            task["status"] = "failed"
+            task["result_summary"] = f"Dispatcher-Fehler: {reply[:200] if reply else 'leere Antwort'}"
+            ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {reply[:100]}")
+            return
 
         # Aktualisiere Task
         task["status"] = "completed"
@@ -172,7 +176,7 @@ async def _execute_mission_control_task(
                             "estimated_tokens": 60000,
                             "estimated_cost_eur": 0.08,
                             "subagents_count": 1,
-                            "status": "approval",  # landet direkt im Approval Gate!
+                            "status": "approval",
                             "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "result_summary": "",
                             "artifact_path": "",
@@ -899,7 +903,7 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     else:
         logger.warning(f"[Cascade-Loop] Roberts Antwort unklar (erste Zeile: '{_erste_zeile[:60]}') - Owner entscheidet")
         ticker("Robert", "Antwort unklar - Freigabe liegt beim Owner im Kanban")
-        freigeben = False
+        freigegeben = False
 
     if freigegeben:
         await finalize_approval(parent_project_id, draft_path, synthesis_reply, f"Robert: {robert_reply[:200]}")

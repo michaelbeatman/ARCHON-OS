@@ -8181,31 +8181,42 @@ ${logExcerpt}
     }
     async function triggerHermesCoreRestart() {
       const confirmed = confirm(
-        "Möchtest du den Hermes Core Container jetzt wirklich neu starten?\n\n" +
-        "Der Container wird über den Docker Socket Proxy gerebootet (Timeout: 15s)."
+        "Hermes Core prüfen?\n\n" +
+        "Der Endpunkt prüft nur den Zustand des Core-Containers über den Docker Socket Proxy " +
+        "(read-only, Timeout 15s) und startet nichts.\n" +
+        "Ein Start bleibt manuell: docker start <name>"
       );
       if (!confirmed) return;
       const btn = document.getElementById("btn-restart-hermes-core");
       if (btn) {
         btn.disabled = true;
-        btn.innerHTML = `<span class="inline-block animate-spin mr-1">⏳</span> Startet neu...`;
+        btn.innerHTML = `<span class="inline-block animate-spin mr-1">⏳</span> Prüft...`;
       }
       try {
         const res = await fetch("/api/system/hermes/restart", { method: "POST" });
-        const data = await res.json();
-        if (res.ok && data.status === "success") {
-          alert(`✅ Hermes Core erfolgreich in ${data.duration_seconds || 0}s neu gestartet.`);
+        const data = await res.json().catch(() => null);
+        const payload = (data && typeof data === "object") ? data : {};
+        const detail = payload.hint || payload.detail || "Unbekannter Fehler (Antwort ohne hint/detail)";
+        const target = payload.target ? ` (${payload.target})` : "";
+        const image = payload.image ? `\nImage: ${payload.image}` : "";
+
+        if (res.status === 200 && payload.status === "ok") {
+          alert(`✅ Hermes Core läuft${target}.${image}`);
           setTimeout(fetchSystemHealth, 2000);
+        } else if (res.status === 409 && payload.status === "not_running") {
+          alert(`⚠️ Hermes Core gestoppt${target} — es wurde nichts gestartet.\n\n${detail}`);
+        } else if (res.status === 409 && payload.status === "absent") {
+          alert(`⚠️ Kein Hermes-Core-Container vorhanden.\n\n${detail}`);
         } else {
-          alert(`❌ Fehler beim Neustart: ${data.detail || data.message || 'Unbekannter Fehler'}`);
+          alert(`❌ Prüfung fehlgeschlagen (HTTP ${res.status}): ${detail}`);
         }
       } catch (err) {
-        console.error("Restart Hermes Core error:", err);
-        alert(`❌ Verbindungsfehler beim Neustart: ${err.message}`);
+        console.error("Hermes Core check error:", err);
+        alert(`❌ Verbindungsfehler bei der Hermes-Core-Prüfung: ${err.message}`);
       } finally {
         if (btn) {
           btn.disabled = false;
-          btn.innerHTML = `<i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i><span>Hermes Core neu starten</span>`;
+          btn.innerHTML = `<i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i><span>Hermes Core prüfen</span>`;
           if (window.lucide) lucide.createIcons();
         }
       }

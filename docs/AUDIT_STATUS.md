@@ -21,7 +21,7 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 | A2 | Keine Modulstruktur | ✅ | `ls archon/core/*.py \| wc -l` → **8**, `ls archon/routers/*.py \| wc -l` → **20**, dazu `backend/`, `utils/` |
 | A3 | God Object | 🟡 | Routing + Kernlogik getrennt; Middleware/Lifespan/Config in `main.py` |
 | A4 | Enge Kopplung | 🟡 | Orchestrierung + Router entkoppelt, `main.py` importiert weiter 50+ Module |
-| A5 | 40+ Modul-Globals | 🟡 | `grep -cE "^[A-Z_][A-Z0-9_]* = " main.py` → **43** (von 52; AST-Zahl **49**, weil 6 annotiert sind). **Etappe 1+2 am 2026-11-07:** 5 unveränderliche Konstanten nach `archon/core/constants.py`, 2 wirkungslose Doppelzuweisungen (`ROLES_FILE`, `SERVICES_FILE`) und 2 tote TTL-Konstanten entfernt — Inventur und Restplan in `docs/A5_INVENTUR.md` |
+| A5 | 40+ Modul-Globals | 🟡 | `grep -cE "^[A-Z_][A-Z0-9_]* = " main.py` → **25** (von 52). **Etappe 1–4 am 2026-11-07:** 5 Konstanten → `archon/core/constants.py`, 18 Pfad-Konstanten → `archon/core/paths.py`, 2 wirkungslose Doppelzuweisungen + 2 tote TTL-Konstanten entfernt. Rest: 24 mutable Globals. Inventur: `docs/A5_INVENTUR.md` |
 | A6 | Sync-I/O in async | 🟡 | `grep -c "asyncio.to_thread" main.py` → 15 |
 | A7 | Kein DI / `Depends()` | 🟡 | `grep -c "Depends(" main.py` → **0**, **1** × `Depends()` in `archon/routers/system.py:123` (Pilot, 2026-11-07). Die DI der übrigen 6 Router läuft über `configure()`, nicht FastAPI-DI. Bewertung und kleinster nächster Schritt: `docs/A5_INVENTUR.md` §3 |
 | A8 | Config verstreut | 🔴 | unverändert, 15+ Dateien |
@@ -78,14 +78,15 @@ Gemessener Bezugspunkt für P1–P8: `scripts/bench_routes.py`, 128 Routen, Medi
 
 | Größe | Wert | Messbefehl |
 |---|---|---|
-| `main.py` | **11.258 Zeilen** | `wc -l main.py` |
-| Modul-Globals | **43** (AST: 49) | `grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py` |
+| `main.py` | **11.252 Zeilen** | `wc -l main.py` |
+| Modul-Globals | **25** | `grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py` |
 | `Depends()` | **1** (`archon/routers/system.py:123`), in `main.py` 0 | `grep -rn "Depends(" --include=*.py archon \| wc -l` |
 | `archon/core/constants.py` | **83 Zeilen**, 5 Konstanten | `wc -l archon/core/constants.py` |
+| `archon/core/paths.py` | **68 Zeilen**, 18 Pfad-Konstanten | `wc -l archon/core/paths.py` |
 | Decorator-Routen | **308** | `grep -cE '@app\.(get\|post\|put\|patch\|delete\|websocket\|api_route)\(' main.py` |
 | Live-Pfade / Operationen | **585 / 861** | `scripts/route_parity.py --check scripts/parity_baselines/openapi_baseline_2026-11-07.json` → Exit 0 |
 | Router-Dateien | **20**, davon **6** mit `configure(**deps)` | `ls archon/routers/*.py \| wc -l`; `grep -ln "def configure(" archon/routers/*.py` |
-| Tests | **240 passed, 8 skipped** (12,12 s) | `.venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider` |
+| Tests | **243 passed, 8 skipped** (10,77 s) | `.venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider` |
 | Router-Namen-Scan | **Exit 0** | `scripts/check_router_names.py; echo "exit=$?"` |
 | Tracebacks (5 min) | **0** | `docker logs --since 5m ARCHON-OS 2>&1 \| grep -c Traceback` |
 
@@ -430,12 +431,13 @@ Live (06.11.): Metadaten-URL → 403 mit Grund, `10.0.0.5` → 403, `127.0.0.1:8
 
 **Echte Restliste (Priorität von oben nach unten):**
 
-1. **A5 / A7 / A8** — 43 Modul-Globals (`grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py`),
-   1 `Depends()`, Config über 15+ Dateien. **Etappe 1+2 erledigt (2026-11-07):**
-   Konstanten ausgelagert, Doppelzuweisungen und tote TTL-Konstanten entfernt;
-   **Etappe 3** = A7-Pilot in `archon/routers/system.py` (eine Route, `Depends(get_state_db_dep)`).
-   Rest: 18 Pfad-Konstanten (B10), 24 mutablen Globals, 14 Router ohne DI.
-   Etappenplan, Aufwand (Namen × Leser-Stellen) und Abbruchkriterien: `docs/A5_INVENTUR.md`.
+1. **A5 / A7 / A8** — 25 Modul-Globals (`grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py`),
+   1 `Depends()`, Config über 15+ Dateien. **Etappe 1–4 erledigt (2026-11-07):**
+   Konstanten und Pfad-Konstanten ausgelagert, Doppelzuweisungen + tote TTL-Konstanten
+   entfernt; **Etappe 3** = A7-Pilot, **Etappe 5** = Rollout geprüft und mit Begründung
+   abgelehnt (`hermes_profiles.py`, zwei sync-Routen, Thread-Affinität).
+   Rest: **24 mutable Globals** (Caches/Bäume, Fallstrick 24) und A8-Config-Schicht.
+   Etappenplan, Aufwand und Abbruchkriterien: `docs/A5_INVENTUR.md`.
 2. **B10 Pfad-Config-Schicht** — 145 × `/opt/data` in `main.py`+`archon`+`backend`+`utils`
    (195 mit `scripts`/`tests`). Braucht eigene Config-Schicht **plus eigenen Tag mit eigener
    Baseline**, sonst ist die Parität nicht mehr prüfbar.

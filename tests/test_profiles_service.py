@@ -23,6 +23,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
+from archon.core import profiles as profiles_mod  # noqa: E402
 from archon.services import profiles_service  # noqa: E402
 from archon.services.profiles_service import (  # noqa: E402
     GateNotApproved, ProfileProtectedError, delete_profile, save_profile,
@@ -56,7 +57,9 @@ def service_umgebung(monkeypatch, tmp_path):
             "detail": detail, "requested_by": wer, "payload": payload})
     monkeypatch.setattr(profiles_service, "get_hermes_profiles_base_dirs",
                         lambda: [str(basis)])
-    monkeypatch.setattr(profiles_service, "avatars_dir", lambda: str(avatare))
+    # Avatar-Ablage: seit dem Schreibpfad-Umbau ueber die Env-Aufloesung, nicht
+    # mehr ueber ein gepatchtes avatars_dir im Service-Modul.
+    monkeypatch.setenv(profiles_mod.AVATARS_DIR_ENV, str(avatare))
     monkeypatch.setattr(profiles_service, "invalidate_hermes_profiles_cache", lambda: None)
     monkeypatch.setattr(profiles_service, "api_get_hermes_profiles", lambda: [])
     monkeypatch.setattr(profiles_service, "add_ticker", lambda *a, **k: None)

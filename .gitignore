@@ -121,3 +121,8 @@ Thumbs.db
 ~$*
 **/~$*
 
+# Laufzeit-Avatare (ARCHON_AVATARS_DIR / ~/.hermes/webui/static_avatars) liegen
+# ausserhalb des Repos. Zeigt ARCHON_AVATARS_DIR ausnahmsweise hierher, darf das
+# Verzeichnis nie getrackt werden.
+**/webui/static_avatars/
+

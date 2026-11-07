@@ -285,7 +285,7 @@ from archon.core.profiles import (  # noqa: E402
     DEFAULT_HERMES_TOOLS,
     get_hermes_profiles_base_dirs, get_primary_hermes_profiles_dir,
     invalidate_hermes_profiles_cache, api_get_hermes_profiles, create_rolling_backup,
-    materialize_role_avatars, restore_data_uri_avatars,
+    materialize_role_avatars, restore_data_uri_avatars, resolve_avatar_file,
 )
 # Gate-Ausfuehrung ruft den Service, nicht die HTTP-Endpunkte: die Endpunkte
 # brauchen einen Request (require_admin_or_503) und waren hier nie importiert.
@@ -10660,6 +10660,21 @@ except Exception as e_ops:
 
 if os.path.exists("assets"):
     app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+
+# Avatare: eigener Lesezugriff VOR dem /static-Mount (Registration Order = Match
+# Order). Die Laufzeit-Avatare liegen ausserhalb des Repos (avatars_dir, z. B.
+# /opt/data/webui/static_avatars), der Katalog avatar_NNN.jpg weiterhin in
+# APP_ROOT/static/avatars. Die Route bildet die Zwei-Quellen-Kette ab: erst
+# Laufzeit, dann versionierter Bestand. Ein eigener StaticFiles-Mount auf
+# /static/avatars scheidet aus, er wuerde den Katalog verdecken. Die URL
+# (/static/avatars/<name>) bleibt unveraendert -> kein API-Vertrag beruehrt.
+@app.get("/static/avatars/{filename}")
+def get_static_avatar(filename: str):
+    resolved = resolve_avatar_file(filename)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(resolved)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 if os.path.exists("static_v2"):
     app.mount("/static_v2", StaticFiles(directory="static_v2"), name="static_v2")

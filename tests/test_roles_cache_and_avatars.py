@@ -102,31 +102,45 @@ def test_api_get_roles_returns_all_entries(main_module):
     assert [r["id"] for r in result] == [r["id"] for r in payload]
 
 
-def test_data_uri_avatar_is_materialized(tmp_path, monkeypatch):
-    """data:-URI -> Datei unter static/avatars + /static-Pfad als Rueckgabe."""
+@pytest.fixture()
+def avatar_dirs(tmp_path, monkeypatch):
+    """Laufzeit-Ablage (Env) + versionierter Bestand (APP_ROOT) getrennt auf tmp_path.
+
+    Der Schreibpfad muss die Env-Aufloesung nehmen; APP_ROOT zeigt ebenfalls auf
+    tmp_path, damit "nichts unter static/avatars" beweisbar bleibt.
+    """
     monkeypatch.setattr(profiles_mod, "APP_ROOT", str(tmp_path))
+    runtime = tmp_path / "runtime_avatars"
+    monkeypatch.setenv(profiles_mod.AVATARS_DIR_ENV, str(runtime))
+    return runtime, tmp_path / "static" / "avatars"
+
+
+def test_data_uri_avatar_is_materialized(avatar_dirs):
+    """data:-URI -> Datei im Laufzeitverzeichnis + /static-Pfad als Rueckgabe."""
+    runtime, legacy = avatar_dirs
     data_url = "data:image/png;base64," + base64.b64encode(PNG_BYTES).decode("ascii")
 
     url = profiles_mod.materialize_data_uri_avatar("demo_agent", data_url)
 
     assert url == "/static/avatars/custom_demo_agent.png"
-    written = tmp_path / "static" / "avatars" / "custom_demo_agent.png"
+    written = runtime / "custom_demo_agent.png"
     assert written.read_bytes() == PNG_BYTES
+    assert not legacy.exists(), "versioniertes static/avatars darf nicht beschrieben werden"
 
 
-def test_materialize_is_idempotent(tmp_path, monkeypatch):
+def test_materialize_is_idempotent(avatar_dirs):
     """Zweiter Aufruf schreibt nicht neu, liefert denselben Pfad."""
-    monkeypatch.setattr(profiles_mod, "APP_ROOT", str(tmp_path))
+    runtime, _ = avatar_dirs
     data_url = "data:image/png;base64," + base64.b64encode(PNG_BYTES).decode("ascii")
 
     first = profiles_mod.materialize_data_uri_avatar("demo_agent", data_url)
-    target = tmp_path / "static" / "avatars" / "custom_demo_agent.png"
+    target = runtime / "custom_demo_agent.png"
     mtime_before = target.stat().st_mtime_ns
     second = profiles_mod.materialize_data_uri_avatar("demo_agent", data_url)
 
     assert first == second == "/static/avatars/custom_demo_agent.png"
     assert target.stat().st_mtime_ns == mtime_before
-    assert not (tmp_path / "static" / "avatars" / "custom_demo_agent.png.tmp").exists()
+    assert not (runtime / "custom_demo_agent.png.tmp").exists()
 
 
 @pytest.mark.parametrize("bad_value", [
@@ -136,15 +150,18 @@ def test_materialize_is_idempotent(tmp_path, monkeypatch):
     "data:text/plain;base64,aGVsbG8=",  # kein Bild-MIME
     "",
 ])
-def test_materialize_rejects_non_avatar_values(tmp_path, monkeypatch, bad_value):
+def test_materialize_rejects_non_avatar_values(avatar_dirs, bad_value):
     """Alles, was kein verwertbarer Bild-data:-URI ist, bleibt beim Aufrufer."""
-    monkeypatch.setattr(profiles_mod, "APP_ROOT", str(tmp_path))
+    runtime, legacy = avatar_dirs
     assert profiles_mod.materialize_data_uri_avatar("demo_agent", bad_value) is None
-    assert not (tmp_path / "static").exists()
+    assert not runtime.exists()
+    assert not legacy.exists()
 
 
-def test_materialize_rejects_unsafe_profile_id(tmp_path, monkeypatch):
+def test_materialize_rejects_unsafe_profile_id(avatar_dirs):
     """Pfad-Ausbruch ueber die Profil-ID ist ausgeschlossen."""
-    monkeypatch.setattr(profiles_mod, "APP_ROOT", str(tmp_path))
+    runtime, legacy = avatar_dirs
     data_url = "data:image/png;base64," + base64.b64encode(PNG_BYTES).decode("ascii")
     assert profiles_mod.materialize_data_uri_avatar("../../etc/passwd", data_url) is None
+    assert not runtime.exists()
+    assert not legacy.exists()

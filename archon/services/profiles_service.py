@@ -34,8 +34,9 @@ from archon.core.permissions import (
     load_permission_gates as _load_permission_gates,
 )
 from archon.core.profiles import (
-    DEFAULT_HERMES_TOOLS, api_get_hermes_profiles, avatars_dir, create_rolling_backup,
+    DEFAULT_HERMES_TOOLS, api_get_hermes_profiles, create_rolling_backup,
     get_hermes_profiles_base_dirs, invalidate_hermes_profiles_cache,
+    materialize_data_uri_avatar, resolve_avatar_file,
 )
 
 __all__ = [
@@ -273,39 +274,26 @@ def save_profile(profile_data: Dict[str, Any], *,
     clean_avatar = avatar_val
 
     if avatar_val and avatar_val.startswith("data:image"):
-        try:
-            import base64
-            header, b64 = avatar_val.split(",", 1)
-            av_mime = header.split(";")[0].replace("data:", "")
-            ext = ".png" if "png" in av_mime else (".webp" if "webp" in av_mime else (".gif" if "gif" in av_mime else ".jpg"))
-            av_blob = base64.b64decode(b64)
-            
-            # Frueher zeigte dieser Pfad auf archon/routers/static/avatars — das Bild
-            # landete also nie unter /static, waehrend profile.yaml den /static-Pfad
-            # speicherte. Jetzt dieselbe Wurzel wie der Lese-Pfad (APP_ROOT/static).
-            avatars_path = avatars_dir()
-            os.makedirs(avatars_path, exist_ok=True)
-
-            filename = f"custom_{p_id}{ext}"
-            file_path = os.path.join(avatars_path, filename)
-            with open(file_path, "wb") as f_img:
-                f_img.write(av_blob)
-            
-            clean_avatar = f"/static/avatars/{filename}"
+        # Ein Schreibpfad fuer alle: der atomare Helfer (tmp + os.replace) legt die
+        # Datei im Laufzeitverzeichnis ab (avatars_dir, nicht mehr im versionierten
+        # APP_ROOT/static/avatars) und liefert genau die /static-URL zurueck, die
+        # profile.yaml speichert. Frueher stand hier eine Kopie ohne tmp+replace.
+        clean_avatar = materialize_data_uri_avatar(p_id, avatar_val)
+        if clean_avatar:
             avatar_val = clean_avatar
             profile_data["avatar"] = clean_avatar
             profile_data["avatar_url"] = clean_avatar
-            logger.info(f"[Profiles] Saved custom avatar for '{p_id}' to {file_path}")
-        except Exception as e_av:
-            logger.error(f"[Profiles] Error decoding/saving base64 avatar for {p_id}: {e_av}")
+            logger.info(f"[Profiles] Saved custom avatar for '{p_id}' as {clean_avatar}")
+        else:
+            logger.error(f"[Profiles] Error decoding/saving base64 avatar for {p_id}")
             clean_avatar = "/static/avatars/avatar_001.jpg"
     elif avatar_val and len(avatar_val) < 500:
         clean_avatar = avatar_val
     else:
         found_custom = False
         for test_ext in [".png", ".jpg", ".jpeg", ".webp"]:
-            c_path = os.path.join(avatars_dir(), f"custom_{p_id}{test_ext}")
-            if os.path.exists(c_path):
+            # Laufzeitverzeichnis zuerst, dann der versionierte Altbestand.
+            if resolve_avatar_file(f"custom_{p_id}{test_ext}"):
                 clean_avatar = f"/static/avatars/custom_{p_id}{test_ext}"
                 found_custom = True
                 break
@@ -456,9 +444,8 @@ def save_profile(profile_data: Dict[str, Any], *,
             with sqlite3.connect(avatars_db_path) as av_conn:
                 if not av_blob and clean_avatar and clean_avatar.startswith("/static/avatars/"):
                     fname = os.path.basename(clean_avatar.split("?")[0])
-                    _static_dir = os.path.join(APP_ROOT, "static")
-                    loc_img = os.path.join(_static_dir, "avatars", fname)
-                    if os.path.exists(loc_img):
+                    loc_img = resolve_avatar_file(fname)
+                    if loc_img:
                         with open(loc_img, "rb") as img_f:
                             av_blob = img_f.read()
                         av_mime = "image/png" if fname.endswith(".png") else "image/jpeg"

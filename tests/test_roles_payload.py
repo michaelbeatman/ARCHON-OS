@@ -79,6 +79,9 @@ def antwort(tmp_path_factory):
     scratch = tmp_path_factory.mktemp("approot")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(profiles_mod, "APP_ROOT", str(scratch))
+        # Schreibziel der Avatare liegt nicht mehr unter APP_ROOT: ohne diese
+        # Env-Zeile wuerde die Materialisierung ins echte ~/.hermes schreiben.
+        mp.setenv(profiles_mod.AVATARS_DIR_ENV, str(scratch / "runtime_avatars"))
         mp.setattr(app_main.auth_service, "is_auth_enabled", lambda: False)
         invalidate(app_main.load_roles)
         resp = TestClient(app_main.app).get("/api/roles")
@@ -86,7 +89,8 @@ def antwort(tmp_path_factory):
 
     assert resp.status_code == 200, resp.text[:400]
     body = resp.content  # httpx entpackt gzip bereits
-    return {"body": body, "daten": json.loads(body), "scratch": scratch}
+    return {"body": body, "daten": json.loads(body), "scratch": scratch,
+            "runtime": scratch / "runtime_avatars"}
 
 
 # --------------------------------------------------------------- Antwortgroesse
@@ -166,7 +170,7 @@ def test_materialisiertes_bild_ist_byte_gleich_zur_data_uri(antwort, rohdaten):
         assert isinstance(pfad, str) and pfad.startswith("/static/"), (
             f"{rolle['id']}: kein /static-Pfad in der Antwort ({pfad!r})"
         )
-        datei = Path(antwort["scratch"]) / pfad.lstrip("/")
+        datei = Path(antwort["runtime"]) / pfad.rsplit("/", 1)[-1]
         assert datei.is_file(), f"{rolle['id']}: {datei} wurde nicht materialisiert"
         assert hashlib.sha256(datei.read_bytes()).hexdigest() == erwartet, (
             f"{rolle['id']}: Datei-Bytes weichen von der data-URI ab"
@@ -208,12 +212,13 @@ def test_zweiter_abruf_schreibt_nicht_neu(antwort, tmp_path_factory):
     """Der Helfer ist idempotent: unveraenderte Bytes -> kein Neuschreiben."""
     from fastapi.testclient import TestClient
 
-    ziel = sorted((Path(antwort["scratch"]) / "static" / "avatars").glob("custom_*"))
+    ziel = sorted(Path(antwort["runtime"]).glob("custom_*"))
     assert ziel, "keine materialisierten Avatare gefunden"
     vorher = {p.name: p.stat().st_mtime_ns for p in ziel}
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(profiles_mod, "APP_ROOT", str(antwort["scratch"]))
+        mp.setenv(profiles_mod.AVATARS_DIR_ENV, str(antwort["runtime"]))
         mp.setattr(app_main.auth_service, "is_auth_enabled", lambda: False)
         invalidate(app_main.load_roles)
         zweite = TestClient(app_main.app).get("/api/roles")
@@ -230,6 +235,7 @@ def test_zweiter_abruf_schreibt_nicht_neu(antwort, tmp_path_factory):
 def rollen_antwort(tmp_path, monkeypatch):
     """Baut eine Antwort aus einer synthetischen Rollenliste (ohne echte Datei)."""
     monkeypatch.setattr(profiles_mod, "APP_ROOT", str(tmp_path))
+    monkeypatch.setenv(profiles_mod.AVATARS_DIR_ENV, str(tmp_path / "runtime_avatars"))
 
     def bauen(rollen):
         monkeypatch.setattr(app_main, "load_roles", lambda: rollen)
@@ -335,6 +341,9 @@ def rundlauf(tmp_path, monkeypatch):
     roles_file.write_text("[]", encoding="utf-8")
 
     monkeypatch.setattr(profiles_mod, "APP_ROOT", str(approot))
+    # Avatare entstehen im Laufzeitverzeichnis, nicht unter approot/static:
+    # hierher umbiegen, sonst schreibt die Suite ins echte ~/.hermes.
+    monkeypatch.setenv(profiles_mod.AVATARS_DIR_ENV, str(approot / "runtime_avatars"))
     monkeypatch.setattr(app_main, "ROLES_FILE", str(roles_file))
     monkeypatch.setattr(app_main.auth_service, "is_auth_enabled", lambda: False)
     # RBAC ist nicht Gegenstand dieses Tests (eigene Datei: test_rbac_*).

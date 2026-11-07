@@ -22,8 +22,9 @@ from pydantic import BaseModel
 
 from archon.core.runtime import add_ticker, logger
 from archon.core.profiles import (
-    api_get_hermes_profiles, avatars_dir,
+    api_get_hermes_profiles,
     get_hermes_profiles_base_dirs, invalidate_hermes_profiles_cache,
+    materialize_data_uri_avatar,
 )
 
 # --------------------------------------------------
@@ -103,24 +104,18 @@ def api_upload_hermes_profile_avatar(profile_id: str, data: Dict = Body(...)):
         data_url = (data.get("image") or data.get("avatar") or "").strip()
         if not data_url.startswith("data:image"):
             raise HTTPException(status_code=400, detail="Ungültiges Bilddaten-Format (muss data:image/... sein).")
-        
-        header, b64 = data_url.split(",", 1)
-        mime = header.split(";")[0].replace("data:", "")
-        ext = ".png" if "png" in mime else (".webp" if "webp" in mime else (".gif" if "gif" in mime else ".jpg"))
-        raw_bytes = base64.b64decode(b64)
-        
-        # Frueher: os.path.dirname(__file__) -> archon/routers/static/avatars (nie
-        # ausgeliefert, weil /static auf APP_ROOT/static zeigt). Jetzt gemeinsame Wurzel.
-        avatars_path = avatars_dir()
-        os.makedirs(avatars_path, exist_ok=True)
 
-        filename = f"custom_{profile_id}{ext}"
-        file_path = os.path.join(avatars_path, filename)
-        with open(file_path, "wb") as f_img:
-            f_img.write(raw_bytes)
-        
-        avatar_url = f"/static/avatars/{filename}"
-        
+        # Ein Schreibpfad fuer alle: der atomare Helfer (tmp + os.replace) legt die
+        # Datei im Laufzeitverzeichnis ab (avatars_dir) und liefert die /static-URL.
+        # Frueher stand hier eine eigene Kopie dieser Logik ohne tmp+replace.
+        avatar_url = materialize_data_uri_avatar(profile_id, data_url)
+        if not avatar_url:
+            raise HTTPException(status_code=400, detail="Bild konnte nicht gespeichert werden (Format/Inhalt ungueltig).")
+
+        _, b64 = data_url.split(",", 1)
+        mime = data_url.split(";")[0].replace("data:", "")
+        raw_bytes = base64.b64decode(b64)
+
         # In profile.yaml aller aktiven Profile-Verzeichnisse aktualisieren
         for p_base in get_hermes_profiles_base_dirs():
             py_path = os.path.join(p_base, profile_id, "profile.yaml")

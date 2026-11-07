@@ -43,9 +43,73 @@ _AVATAR_MIME_EXT = {
 _AVATAR_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
+# Env-Override fuer das Laufzeit-Ablageverzeichnis der Avatare.
+AVATARS_DIR_ENV = "ARCHON_AVATARS_DIR"
+
+# Im Container ist /opt/data der beschreibbare Laufzeitspeicher (= Host ~/.hermes).
+# Auf dem Host gibt es /opt/data nicht, dort ist ~/.hermes das Pendant.
+_CONTAINER_DATA_DIR = "/opt/data"
+_CONTAINER_AVATARS_DIR = "/opt/data/webui/static_avatars"
+_HOST_AVATARS_DIR = "~/.hermes/webui/static_avatars"
+
+
+def _container_data_available() -> bool:
+    """True, wenn dieser Prozess im Container-Kontext mit /opt/data laeuft.
+
+    Eigene Funktion als Test-Seam: die Pfad-Aufloesung soll ohne echtes
+    /opt/data-Verzeichnis pruefbar sein (die Testsuite laeuft auf dem Host).
+    """
+    return os.path.isdir(_CONTAINER_DATA_DIR)
+
+
 def avatars_dir() -> str:
-    """Verzeichnis der per /static ausgelieferten Avatare (APP_ROOT/static/avatars)."""
+    """Beschreibbares Laufzeit-Verzeichnis der Avatare (NICHT der versionierte Baum).
+
+    Aufloesung, erster Treffer gewinnt:
+
+    1. ``ARCHON_AVATARS_DIR`` (Env) — gewinnt immer, auch gegen /opt/data.
+    2. ``/opt/data/webui/static_avatars``, wenn ``/opt/data`` existiert (Container).
+    3. ``~/.hermes/webui/static_avatars`` (Host-Pendant).
+
+    Angelegt wird das Verzeichnis vom Schreibpfad
+    (:func:`materialize_data_uri_avatar`), nicht hier — diese Funktion bleibt
+    billig und lesbar, damit Lesepfade sie ohne Nebenwirkung rufen koennen.
+    """
+    env = os.environ.get(AVATARS_DIR_ENV, "").strip()
+    if env:
+        return os.path.expanduser(env)
+    if _container_data_available():
+        return _CONTAINER_AVATARS_DIR
+    return os.path.expanduser(_HOST_AVATARS_DIR)
+
+
+def avatars_legacy_dir() -> str:
+    """Versionierter Katalog samt Alt-Avataren — nur noch lesend.
+
+    Hier liegen die kuratierten ``avatar_NNN.jpg`` und die historischen
+    ``custom_*``-PNGs. Geschrieben wird dorthin nicht mehr (siehe
+    :func:`avatars_dir`), gelesen schon: Auslieferung und Datenbank-Sync
+    fallen auf dieses Verzeichnis zurueck.
+    """
     return os.path.join(APP_ROOT, "static", "avatars")
+
+
+def resolve_avatar_file(filename: str) -> Optional[str]:
+    """Liefert den ersten existierenden Dateipfad zu einem Avatarnamen.
+
+    Kette: Laufzeitverzeichnis (:func:`avatars_dir`) -> versionierter Bestand
+    (:func:`avatars_legacy_dir`). ``None``, wenn der Name unbrauchbar ist oder
+    nirgends eine Datei liegt. Der Name wird auf einen Basisnamen reduziert,
+    damit kein Aufrufer einen Pfad-Ausbruch durchreichen kann.
+    """
+    name = os.path.basename(filename or "").strip()
+    if not name or name.startswith(".") or not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+        return None
+    for directory in (avatars_dir(), avatars_legacy_dir()):
+        candidate = os.path.join(directory, name)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
 
 
 def materialize_data_uri_avatar(profile_id: str, data_url: str) -> Optional[str]:
@@ -372,11 +436,10 @@ def api_get_hermes_profiles():
         if not avatar_val and cand_fb and "dicebear.com" not in cand_fb:
             avatar_val = cand_fb
         if not avatar_val:
-            # Automatische Erkennung vorhandener Custom-Avatare.
-            # WICHTIG: APP_ROOT/static/avatars (vorher zeigte der Pfad auf
-            # archon/core/static/avatars, das es nicht gibt).
+            # Automatische Erkennung vorhandener Custom-Avatare: Laufzeitverzeichnis
+            # zuerst, dann der versionierte Altbestand (resolve_avatar_file).
             for _ext in [".png", ".jpg", ".jpeg", ".webp"]:
-                if os.path.exists(os.path.join(avatars_dir(), f"custom_{p_id}{_ext}")):
+                if resolve_avatar_file(f"custom_{p_id}{_ext}"):
                     avatar_val = f"/static/avatars/custom_{p_id}{_ext}"
                     break
         if not avatar_val:

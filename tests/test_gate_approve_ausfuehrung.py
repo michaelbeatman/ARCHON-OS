@@ -28,6 +28,8 @@ if REPO not in sys.path:
 GATE_TOOLS = "tools_erweiterung"
 GATE_DELETE = "profil_loeschen"
 
+from archon.core import profiles as profiles_mod  # noqa: E402
+
 VALID_PAYLOAD = {
     "id": "probe_agent",
     "name": "Probe Agent",
@@ -77,7 +79,9 @@ def gate_umgebung(monkeypatch, tmp_path):
     monkeypatch.setattr(profiles_service, "_create_permission_gate", lege_gate)
     monkeypatch.setattr(profiles_service, "get_hermes_profiles_base_dirs",
                         lambda: [str(basis)])
-    monkeypatch.setattr(profiles_service, "avatars_dir", lambda: str(avatare))
+    # Avatar-Ablage ueber die Env-Aufloesung (avatars_dir ist im Service nicht
+    # mehr gebunden, seit Schreib- und Lesepfad auf profiles.py vereinheitlicht sind).
+    monkeypatch.setenv(profiles_mod.AVATARS_DIR_ENV, str(avatare))
     monkeypatch.setattr(profiles_service, "invalidate_hermes_profiles_cache", lambda: None)
     monkeypatch.setattr(profiles_service, "api_get_hermes_profiles", lambda: [])
     monkeypatch.setattr(profiles_service, "add_ticker", lambda *a, **k: None)

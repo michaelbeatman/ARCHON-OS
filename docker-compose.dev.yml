@@ -13,7 +13,7 @@ services:
       HOME: /tmp
       ENVIRONMENT: development
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     volumes:
       - /mnt/raid/AgenticOS-2026:/app
       - /mnt/raid/AgenticOS-2026/agent_workspace:/app/agent_workspace

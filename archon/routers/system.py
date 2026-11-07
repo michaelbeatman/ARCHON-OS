@@ -4,18 +4,19 @@ import asyncio
 import json
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Body, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from archon.core.cache import ttl_cache
 from archon.core.runtime import MEMORY_DIR, SETTINGS_FILE, WORKSPACE_DIR, add_ticker, logger
-from archon.core.state_db import STATE_DB_PATH, _get_state_db
+from archon.core.state_db import STATE_DB_PATH, get_state_db_dep
 
 # --------------------------------------------------
 # Dependency-Injektion statt Kopie
@@ -118,10 +119,17 @@ async def api_system_health():
 
 
 @router.post("/api/system/hermes/restart")
-async def api_system_hermes_restart():
+async def api_system_hermes_restart(
+    conn: sqlite3.Connection = Depends(get_state_db_dep),
+):
     """
     Triggers container restart for Hermes Core via docker-socket-proxy.
     Logs event into SQLite state.db.
+
+    Die State-DB-Verbindung kommt per FastAPI-Dependency (A7-Pilot) statt per
+    `with _get_state_db() as conn:`. Der Provider (`get_state_db_dep`) liefert
+    eine frische Verbindung und schliesst sie im `finally` — gleiche Semantik,
+    aber die Abhaengigkeit ist deklariert statt im Handler versteckt.
     """
     t0 = time.time()
     try:
@@ -134,21 +142,20 @@ async def api_system_hermes_restart():
             if resp.status_code in [204, 200]:
                 # Log in SQLite
                 try:
-                    with _get_state_db() as conn:
-                        conn.execute("""
-                            CREATE TABLE IF NOT EXISTS system_restart_logs (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                target TEXT,
-                                initiated_at REAL,
-                                duration_seconds REAL,
-                                status TEXT
-                            )
-                        """)
-                        conn.execute("""
-                            INSERT INTO system_restart_logs (target, initiated_at, duration_seconds, status)
-                            VALUES (?, ?, ?, ?)
-                        """, ("hermes", t0, duration, "success"))
-                        conn.commit()
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS system_restart_logs (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            target TEXT,
+                            initiated_at REAL,
+                            duration_seconds REAL,
+                            status TEXT
+                        )
+                    """)
+                    conn.execute("""
+                        INSERT INTO system_restart_logs (target, initiated_at, duration_seconds, status)
+                        VALUES (?, ?, ?, ?)
+                    """, ("hermes", t0, duration, "success"))
+                    conn.commit()
                 except Exception as log_err:
                     logger.warning(f"[Restart Log Error]: {log_err}")
 

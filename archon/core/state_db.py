@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from typing import AsyncIterator
 
 class ClosingConnection(sqlite3.Connection):
     def __enter__(self):
@@ -42,4 +43,33 @@ def _get_profile_state_db(profile_name: str = "telegram_bot"):
         return conn
     return None
 
-__all__ = ["ClosingConnection", "STATE_DB_PATH", "_get_state_db", "_get_profile_state_db"]
+
+async def get_state_db_dep() -> AsyncIterator[sqlite3.Connection]:
+    """FastAPI-Dependency (A7-Pilot): frische, selbstschliessende State-DB-Verbindung.
+
+    Semantik wie `with _get_state_db() as conn:` — `_get_state_db()` erzeugt bei
+    jedem Aufruf eine NEUE Verbindung (factory=ClosingConnection). Es existiert
+    also keine geteilte Verbindung, deren vorzeitiges Schliessen Schaden
+    anrichten koennte; das `finally` schliesst dieselbe Verbindung, die der
+    Handler benutzt.
+
+    Bewusst ein ASYNC-Generator: ein sync-Generator liefe in FastAPIs
+    Threadpool, waehrend der async-Handler im Event-Loop-Thread laeuft.
+    sqlite3-Verbindungen sind standardmaessig an den erzeugenden Thread
+    gebunden (check_same_thread=True) — die Route wuerde mit ProgrammingError
+    scheitern.
+    """
+    conn = _get_state_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+__all__ = (
+    "ClosingConnection",
+    "STATE_DB_PATH",
+    "_get_state_db",
+    "_get_profile_state_db",
+    "get_state_db_dep",
+)

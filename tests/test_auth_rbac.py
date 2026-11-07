@@ -4,21 +4,38 @@ Unit-Tests für Meilenstein 4: Multi-User-Architektur & Rollenbasierte Zugriffsk
 """
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+import backend.auth_service as auth_service
 from backend.auth_service import AuthService
 
-# Passwort kommt aus der Umgebung — niemals im Test hartkodieren.
-ADMIN_PW = os.environ.get("ARCHON_TEST_ADMIN_PASSWORD", "")
-SKIP_PW = "ARCHON_TEST_ADMIN_PASSWORD nicht gesetzt"
+# Passwort des von _seed_default_admin() angelegten Admin-Kontos in einer
+# FRISCHEN Datenbank. Kein Umgebungsgeheimnis nötig — die Tests laufen gegen
+# eine temporäre DB, die sie selbst erzeugen und danach löschen.
+TEST_ADMIN_PW = "archon2026"
 
 
 class TestAuthRBAC(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Eigene temporäre DB statt data/agentic_memory.db: keine Testbenutzer
+        # in der Produktionsdatenbank, und das Admin-Passwort ist bekannt.
+        cls._tmpdir = tempfile.mkdtemp(prefix="archon_auth_test_")
+        cls._orig_db_path = auth_service.DB_PATH
+        auth_service.DB_PATH = os.path.join(cls._tmpdir, "test_agentic_memory.db")
+
+    @classmethod
+    def tearDownClass(cls):
+        auth_service.DB_PATH = cls._orig_db_path
+        shutil.rmtree(cls._tmpdir, ignore_errors=True)
+
     def setUp(self):
         self.auth = AuthService()
 
@@ -29,9 +46,8 @@ class TestAuthRBAC(unittest.TestCase):
         self.assertEqual(admin["username"], "admin")
         self.assertEqual(admin["display_name"], "Michael Keller")
 
-    @unittest.skipUnless(ADMIN_PW, SKIP_PW)
     def test_02_authenticate_success_and_session(self):
-        session = self.auth.authenticate("admin", ADMIN_PW)
+        session = self.auth.authenticate("admin", TEST_ADMIN_PW)
         self.assertIsNotNone(session)
         self.assertTrue(session["token"].startswith("tok_"))
         self.assertEqual(session["user"]["role"], "admin")
@@ -91,9 +107,8 @@ class TestAuthRBAC(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.auth.update_user(admin_id, role="operator")
 
-    @unittest.skipUnless(ADMIN_PW, SKIP_PW)
     def test_06_logout_invalidates_session(self):
-        session = self.auth.authenticate("admin", ADMIN_PW)
+        session = self.auth.authenticate("admin", TEST_ADMIN_PW)
         token = session["token"]
         self.assertIsNotNone(self.auth.verify_session(token))
 

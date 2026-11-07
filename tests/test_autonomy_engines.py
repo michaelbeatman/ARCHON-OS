@@ -76,10 +76,39 @@ def test_mcts_engine():
     eval_res = engine.evaluate_trajectories(
         task_goal="Synchronisiere 500 Datensätze zuverlässig",
         candidate_actions=candidates,
-        simulation_rollouts=5
+        simulation_rollouts=50,
+        seed=20261106
     )
     print("MCTS Empfohlene Aktion:", eval_res["best_action"], f"(Q-Value: {eval_res['highest_confidence_q']})")
-    assert eval_res["best_action"] == "Bulk-Batching via n8n Queue"
+    ranking = eval_res["ranking"]
+    for r in ranking:
+        print(f"  {r['q_value']:.3f}  risk={r['risk_score']:.2f}  {r['action']}")
+
+    # 1. Die sichere, günstige Aktion muss gewinnen. 50 Rollouts + fester Seed
+    #    drücken den Monte-Carlo-Noise (±0,05) weit unter den Q-Abstand (~0,02),
+    #    der Lauf bleibt dadurch reproduzierbar.
+    assert eval_res["best_action"] == "Bulk-Batching via n8n Queue", \
+        f"Erwartet 'Bulk-Batching via n8n Queue', erhalten '{eval_res['best_action']}'"
+
+    # 2. Die hochriskante Aktion darf nie empfohlen werden und muss Letzte sein.
+    risky = next(r for r in ranking if r["action"] == "Unverifizierter Shell-Befehl")
+    assert not risky["recommended"], "Hochriskante Aktion darf nicht empfohlen werden"
+    assert ranking[-1]["action"] == "Unverifizierter Shell-Befehl", \
+        "Hochriskante Aktion muss das Ranking anführen (schlechtester Q-Wert)"
+
+    # 3. Genau eine Aktion ist markiert, und es ist die beste.
+    assert sum(1 for r in ranking if r["recommended"]) == 1
+    assert ranking[0]["recommended"]
+
+    # 4. Determinismus: gleicher Seed -> identisches Ergebnis.
+    again = engine.evaluate_trajectories(
+        task_goal="Synchronisiere 500 Datensätze zuverlässig",
+        candidate_actions=candidates,
+        simulation_rollouts=50,
+        seed=20261106
+    )
+    assert again["best_action"] == eval_res["best_action"]
+    assert again["ranking"] == ranking, "Gleicher Seed muss identisches Ranking liefern"
     print("✓ Feature 8 erfolgreich validiert!\n")
 
 

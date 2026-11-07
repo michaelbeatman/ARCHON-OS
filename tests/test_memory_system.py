@@ -9,6 +9,7 @@ test_memory_system.py — Automated verification for the integrated Memory Syste
 import sys
 import os
 import json
+import shutil
 import time
 import unittest
 from pathlib import Path
@@ -84,67 +85,94 @@ class TestAdaptiveMemoryBridge(unittest.TestCase):
 
 
 class TestEveyLearnerIntegration(unittest.TestCase):
-    @unittest.skip("evey-learner-API geändert (kein synced_sqlite mehr) — Test muss an die aktuelle Plugin-Version angepasst werden")
-    def test_learner_handlers(self):
+    """Angepasst an den aktuellen evey-learner-Stand (11/2026).
+
+    Das Plugin schreibt JSONL statt SQLite und liefert kein `synced_sqlite`-Feld
+    mehr — geprüft werden die realen Rückgabefelder. Die Learnings-Datei wird
+    auf ein temporäres Verzeichnis umgebogen, damit der Test keine echten
+    Learnings in `workspace/orchestrator/learnings.jsonl` hinterlässt.
+    """
+
+    def setUp(self):
         import importlib.util
+        import tempfile
+
         learner_path = HERMES_PLUGINS / "evey-learner" / "__init__.py"
         self.assertTrue(learner_path.exists(), f"Path {learner_path} must exist")
 
         spec = importlib.util.spec_from_file_location("evey_learner_mod", str(learner_path))
-        learner = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(learner)
+        self.learner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.learner)
 
+        self._tmpdir = tempfile.mkdtemp(prefix="evey_learner_test_")
+        self.learner.LEARNINGS_DIR = Path(self._tmpdir)
+        self.learner.LEARNINGS_FILE = Path(self._tmpdir) / "learnings.jsonl"
+
+    def tearDown(self):
+        shutil.rmtree(getattr(self, "_tmpdir", ""), ignore_errors=True)
+
+    def test_learner_handlers(self):
         # 1. Learn from interaction
         learn_args = {
             "task": "Automatisierter Systemtest für Evey Learner",
             "model_or_tool": "test_model_v1",
             "quality_score": 9,
-            "what_worked": "Direkte SQLite-Kopplung",
+            "what_worked": "JSONL-Persistenz",
             "what_failed": "Keine Fehler aufgetreten",
-            "do_differently": "Immer Wal-Mode verwenden",
-            "tags": ["testing", "sqlite"]
+            "do_differently": "Immer append-only schreiben",
+            "tags": ["testing", "jsonl"]
         }
-        res_json = learner.learn_handler(learn_args)
-        res = json.loads(res_json)
-        self.assertEqual(res.get("status"), "learned")
-        self.assertTrue(res.get("synced_sqlite"))
+        res = json.loads(self.learner.learn_handler(learn_args))
+        self.assertEqual(res.get("status"), "learned", res)
+        self.assertEqual(res.get("quality_score"), 9)
+        self.assertGreaterEqual(res.get("total_learnings", 0), 1)
 
         # 2. Apply learnings
         apply_args = {
-            "task_description": "Führe einen Systemtest mit SQLite durch",
+            "task_description": "Führe einen Systemtest mit JSONL durch",
             "max_results": 3
         }
-        apply_json = learner.apply_handler(apply_args)
-        apply_res = json.loads(apply_json)
-        self.assertIn(apply_res.get("status"), ["found", "no_matches"])
+        apply_res = json.loads(self.learner.apply_handler(apply_args))
+        self.assertIn(apply_res.get("status"), ["found", "no_learnings", "no_matches"], apply_res)
+        self.assertIsInstance(apply_res.get("applicable_lessons"), list)
         if apply_res.get("status") == "found":
             self.assertGreater(apply_res.get("matches", 0), 0)
 
 
 class TestEveyMemoryConsolidate(unittest.TestCase):
-    @unittest.skip("evey-memory-consolidate-API geändert (_sqlite_conversations_query entfernt) — Test muss angepasst werden")
-    def test_consolidate_module(self):
+    """Angepasst an den aktuellen evey-memory-consolidate-Stand (11/2026).
+
+    Das Plugin arbeitet nicht mehr über SQLite (`_sqlite_conversations_query`
+    existiert nicht mehr) und exportiert nicht mehr nach Obsidian. Es holt
+    Traces über Langfuse und fällt bei Fehlern weich zurück — genau das wird
+    hier geprüft, ohne echten Netzwerkzugriff.
+    """
+
+    def _load(self):
         import importlib.util
+
         consolidate_path = HERMES_PLUGINS / "evey-memory-consolidate" / "__init__.py"
         self.assertTrue(consolidate_path.exists(), f"Path {consolidate_path} must exist")
-
         spec = importlib.util.spec_from_file_location("evey_consolidate_mod", str(consolidate_path))
-        consolidate = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(consolidate)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
-        # Test SQLite conversations query fallback
-        traces = consolidate._sqlite_conversations_query(hours_back=24)
+    def test_module_surface(self):
+        consolidate = self._load()
+        self.assertTrue(callable(consolidate.handler))
+        self.assertTrue(callable(consolidate._langfuse_query))
+        # Die alte SQLite-Kopplung ist bewusst entfernt — Regression-Guard.
+        self.assertFalse(hasattr(consolidate, "_sqlite_conversations_query"))
+
+    def test_langfuse_query_fails_open(self):
+        consolidate = self._load()
+        # Unerreichbarer Host: der Query muss weich zurückfallen, nie crashen.
+        consolidate.LANGFUSE_HOST = "http://127.0.0.1:59999"
+        traces = consolidate._langfuse_query(hours_back=1)
         self.assertIsInstance(traces, list)
-
-        # Test Obsidian Markdown creation
-        sample_facts = "- [learned] SQLite WAL-Modus verhindert Locking bei gleichzeitigen Schreibvorgängen\n- [decided] Memory Bridge koppelt Hermes und Archon OS"
-        obsidian_note = consolidate._save_to_obsidian(sample_facts)
-        if obsidian_note:
-            self.assertTrue(os.path.exists(obsidian_note))
-            with open(obsidian_note, "r", encoding="utf-8") as f:
-                content = f.read()
-                self.assertIn("Tages-Konsolidierung", content)
-                self.assertIn("SQLite WAL-Modus", content)
+        self.assertGreaterEqual(len(traces), 1)
+        self.assertIsInstance(traces[0], str)
 
 
 if __name__ == "__main__":

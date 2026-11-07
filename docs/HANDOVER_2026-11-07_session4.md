@@ -76,16 +76,22 @@ Dashboard-Passwort als `password_hash`+`secret` in `~/.hermes/config.yaml` dauer
 
 ## 4. Offene Punkte (Reihenfolge aus `docs/ROADMAP.md` §3)
 
-1. **`backend/hermes_updater.py:63`** roher `AF_UNIX`-Socket am Proxy vorbei (3–4 h).
-2. **`_decision_followup`** (`main.py:3267-3269`) meldet „ausgeführt" ohne Body-Prüfung — derselbe
-   Fehlertyp wie beim Gate, 30 min.
-3. **Avatar-Upload-Route ohne Rollenzaun** (`hermes_profiles.py:99`, `POST …/avatar`) — schreibt Dateien,
-   15 min + Test.
+1. **`backend/hermes_updater.py:63`** roher `AF_UNIX`-Socket am Proxy vorbei (3–4 h) —
+   **in Arbeit**, Mandat an `senior_fullstack_engineer` (kein Commit durch den Lauf).
+2. **`_decision_followup`** (`main.py:3335`, Aufrufer `main.py:3400` — die Zahl `3267` aus der
+   Vorversion war gedriftet) meldet „ausgeführt" ohne Body-Prüfung — derselbe Fehlertyp wie
+   beim Gate, 30 min — **in Arbeit**, zusammen mit Punkt 7 in einem Mandat an
+   `senior_fullstack_engineer`.
+3. **Avatar-Upload-Route ohne Rollenzaun** (`archon/routers/hermes_profiles.py:100`,
+   `POST …/avatar`) — schreibt Dateien, 15 min + Test — **in Arbeit**, Mandat an
+   `devops_cloud_sec_specialist`.
 4. Tote UI-Pfade (166/1640 laut Handover, **nicht** nachgemessen).
 5. Paket 3 (Struktur), `docs/PLAN_STRUKTUR_2026-11-07.md`.
 6. Mikro-Performance (P1–P4 aus dem Audit, nie gemessen).
-7. **Bei Michael:** Token-Rotation über BotFather; ausserdem Entscheidung zum hartkodierten
-   RAG-API-Key `main.py:2287` (Klartext im Code, nicht geändert).
+7. **RAG-API-Key `main.py:2287`** (Klartext im Code): **entschieden** — Env/Secret-Store,
+   fail-fast beim Start. Umsetzung mit Punkt 2 in einem Mandat an `senior_fullstack_engineer`.
+   **Token-Rotation über BotFather: von Michael gestrichen** (erledigt er selbst außerhalb
+   dieses Repos) — kein offener Punkt mehr, wird hier nicht mehr nachgeführt.
 
 **Nicht mehr offen** (in dieser Session geschlossen): Gate-Approve, `/api/roles`-Payload,
 Avatar-Schreibpfad, Upload-RCE, Vault-Reichweite, voice-relay.
@@ -112,7 +118,8 @@ Avatar-Schreibpfad, Upload-RCE, Vault-Reichweite, voice-relay.
 - `docs/AUDIT_STATUS.md` widerspricht sich: Kopf „12 ✅ · 21 🟡 · 3 🔴", 36 Tabellenzeilen aber
   **12 ✅ · 19 🟡 · 5 🔴**.
 - Kein Viewer-Livetest, kein Lasttest, Promptfoo-Route nie live aufgerufen.
-- Die Langfrist-Rotation des Telegram-Tokens ist Michaels Schritt, nicht erledigt.
+- Die Telegram-Token-Rotation ist **nicht mehr offen** (Stand 07.11.): Michael erledigt sie
+  selbst außerhalb dieses Repos. Sie wird hier nicht mehr als Restpunkt geführt.
 
 ---
 
@@ -137,5 +144,8 @@ Avatar-Schreibpfad, Upload-RCE, Vault-Reichweite, voice-relay.
 
 1. `docs/ROADMAP.md` lesen (Fortschrittsblatt), dann dieses Dokument.
 2. Copy-Paste-Block aus §1 fahren; Zahlen gegen §3 halten.
-3. Offenen Punkt 1 (`hermes_updater`) oder 2/3 (kleine Fixes) aufnehmen — Michaels Wahl.
+3. Punkte 1–3 und 7 standen am Ende von Session 4 als **delegierte Mandate** (Profile
+   `senior_fullstack_engineer`, `devops_cloud_sec_specialist`): zuerst die Berichte prüfen
+   (Selbstberichte sind Behauptungen, Zahlen selbst nachmessen), dann pfadgenau committen —
+   die Läufe committen nicht selbst.
 4. Nach jeder Etappe: **Roadmap** nachziehen, nicht ein neues Handover schreiben.

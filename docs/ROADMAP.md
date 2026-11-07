@@ -5,7 +5,8 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`, HEAD `f99e8c41`, 35 Commits seit Fork-Punkt `de564278`.
+Stand: Branch `refactor/a5-di-config`; **Code-Stand `f99e8c41`** (danach nur Doku-Commits —
+`git log --oneline -1` liefert den aktuellen Kopf, bewusst kein Sha hier).
 Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **743 passed / 8 skipped**, Working Tree sauber.
 
 ---
@@ -53,13 +54,20 @@ Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 
 ---
 
-## 2. In Arbeit — nichts. Alle Baustellen sind zu. `482300c6` hat R1 und Avatar-B abgeschlossen.
+## 2. In Arbeit — drei delegierte Mandate (Stand: Ende Session 4, 07.11. abends)
 
-R1 (`/api/roles`) ist committet (`6febf38e`). Der Rundlauf-Schutz greift nur für Pfade, die
-`GET` aus dem gespeicherten data-URI erzeugt hat — die 108 bestehenden `/static`-Pfade in
-`roles.json` bleiben Pfade, sonst wäre die Datei bei einem UI-Speichern auf ~6,4 MB gewachsen
-(gemessen: 2,80 MB Bild-Bytes in 108 Feldern). Der nächste Schritt ist eine **Entscheidung**,
-keine offene Arbeit: Triage der 9 Routen (§3.1).
+Kein Punkt davon ist committet; die Läufe arbeiten im Working Tree und committen nicht selbst.
+Zuerst die Berichte gegenmessen, dann pfadgenau committen.
+
+| Mandat | Profil | Woran |
+|---|---|---|
+| 1 | `senior_fullstack_engineer` | `backend/hermes_updater.py:63` — roher `AF_UNIX`-Socket ablösen (Etappe 0 = nichts ändern ist erlaubt und muss begründet werden) |
+| 2 | `devops_cloud_sec_specialist` | `archon/routers/hermes_profiles.py:100` — Rollenzaun für `POST …/avatar`, fail-closed, ohne Aussperrung der Durchlässigkeitspfade |
+| 3 | `senior_fullstack_engineer` | `main.py:3335` Body-Prüfung in `_decision_followup` **und** `main.py:2287` RAG-Key → Env/fail-fast |
+
+`482300c6` hat R1 und Avatar-B abgeschlossen — der alte Text dieses Abschnitts bleibt als
+Fußnote: der Rundlauf-Schutz greift nur für Pfade, die `GET` aus dem gespeicherten data-URI
+erzeugt hat; die 108 bestehenden `/static`-Pfade in `roles.json` bleiben Pfade.
 
 ---
 
@@ -67,13 +75,13 @@ keine offene Arbeit: Triage der 9 Routen (§3.1).
 
 | Prio | Punkt | Messwert / Beleg | Aufwand |
 |---|---|---|---|
-| 1 | **`hermes_updater`-Socket am Proxy vorbei** | `backend/hermes_updater.py:63` `AF_UNIX` | 3–4 h |
-| 2 | **`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung** (neu) | `main.py:3267-3269`, derselbe Fehlertyp wie beim Gate | 30 min |
-| 3 | **Avatar-Upload-Route ohne Rollenzaun** (neu) | `POST /api/hermes/profiles/{id}/avatar`, `hermes_profiles.py:99` — schreibt Dateien, kein Zaun, kein globales Middleware-Netz | 15 min + Test |
+| 1 | **`hermes_updater`-Socket am Proxy vorbei** — *in Arbeit (Mandat 1)* | `backend/hermes_updater.py:63` `AF_UNIX` | 3–4 h |
+| 2 | **`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung** (neu) — *in Arbeit (Mandat 3)* | `main.py:3335`, Aufrufer `main.py:3400` (Handover-Zahl 3267 war gedriftet) | 30 min |
+| 3 | **Avatar-Upload-Route ohne Rollenzaun** (neu) — *in Arbeit (Mandat 2)* | `POST /api/hermes/profiles/{id}/avatar`, `archon/routers/hermes_profiles.py:100` — schreibt Dateien, kein Zaun, kein globales Middleware-Netz | 15 min + Test |
 | 4 | **Tote UI-Pfade** | Handover: 166 von 1640 `getElementById`-Zielen ohne DOM-Element; von mir **nicht** nachgemessen | 2–4 h je Cluster |
 | 5 | **Paket 3 (Struktur)** | `docs/PLAN_STRUKTUR_2026-11-07.md`, 5 Etappen, nicht gestartet | 1–2 Wochen |
 | 6 | **Mikro-Performance** (DB 1,25 ms, N+1 max 8 Queries, 411 `fetch`) | aus Grundprüfung, nicht neu gemessen | niedrig |
-| — | **Token-Rotation (Telegram)** | deine Seite (BotFather), Wert war bis 31.10. weltlesbar | 5 min |
+| — | **RAG-API-Key `main.py:2287`** — **entschieden**: Env/Secret-Store, fail-fast; in Mandat 3 | Klartext im Code, `--api-key`-Argument | 15 min |
 
 ---
 
@@ -101,7 +109,8 @@ keine offene Arbeit: Triage der 9 Routen (§3.1).
 2. **Danach:** `DELETE /api/vault` auf die Vault-Wurzel begrenzen (§3.2) und `voice-relay`
    einzäunen (§3.3).
 3. **Erst dann** die großen Blöcke: 48 Proxy-Routen (§3.4), Paket 3 (§3.8).
-4. **Läuft neben dir, nicht bei mir:** Token-Rotation über BotFather.
+4. **Nicht mehr geführt:** die Telegram-Token-Rotation — Michael erledigt sie selbst außerhalb
+   dieses Repos (Stand 07.11. gestrichen).
 
 Nach jeder Etappe wird **diese Datei** nachgezogen (Status + Messwert), nicht ein neues
 Handover geschrieben. Handover bleiben für den Sitzungsübergang; diese Datei ist der Fortschritt.

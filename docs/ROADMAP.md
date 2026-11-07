@@ -5,8 +5,8 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`, HEAD `482300c6`, 35 Commits seit Fork-Punkt `de564278`.
-Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **727 passed / 8 skipped**, Working Tree sauber.
+Stand: Branch `refactor/a5-di-config`, HEAD `f99e8c41`, 35 Commits seit Fork-Punkt `de564278`.
+Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **743 passed / 8 skipped**, Working Tree sauber.
 
 ---
 
@@ -29,7 +29,7 @@ Der Testaufruf ist exakt so zu nehmen: `.venv/bin/pytest tests/` scheitert mit
 
 ---
 
-## 1. Erledigt in dieser Session (8 Commits, alle von mir gegengeprüft)
+## 1. Erledigt in dieser Session (10 Commits, alle von mir gegengeprüft)
 
 | Commit | Was | Beleg |
 |---|---|---|
@@ -41,7 +41,8 @@ Der Testaufruf ist exakt so zu nehmen: `.venv/bin/pytest tests/` scheitert mit
 | `6febf38e` | **R1**: `/api/roles` 2.608.401 B → 110.711 B; Rundlauf-Schutz für die selbst materialisierten Avatare | eigener Rundlauf GET→POST→Datei: byte-identisch, Delta 0 %, 10/10 data-URIs erhalten, 108 bestehende Pfade unberührt; **711/8 Tests** |
 | `9926a9ea` | Roadmap nachgezogen | — |
 | `482300c6` | **Avatar-Variante B**: Schreibziel `/opt/data/webui/static_avatars` (Env `ARCHON_AVATARS_DIR` → Container → Home), Legacy-Baum nur noch lesend, eigene Route `main.py:10671`; Duplikate atomar | Live: nach `GET /api/hermes/profiles` ist `git status -- static/avatars` **0 Zeilen** (vorher 4 `M`); 5 Laufzeitdateien; Route 200/404, Traversal 404; **727/8 Tests** |
-| `482300c6` | Triage der 9 Routen (`docs/TRIAGE_UNGUARDED_ROUTES.md`) | alle 9 hinter dem Auth-Gate (401 ohne Login selbst geprüft); **1 kritischer Einzelfund** (§3.1) |
+| `482300c6` | Triage der 9 Routen (`docs/TRIAGE_UNGUARDED_ROUTES.md`) | alle 9 hinter dem Auth-Gate (401 ohne Login selbst geprüft); 1 kritischer Einzelfund (library/upload) |
+| `f99e8c41` | **Drei Sicherheitsbefunde geschlossen**: Upload-RCE (`basename`+`safe_path`+Zaun), Vault-Jail auf Vault-Wurzel begrenzt, `voice-relay` eingezäunt + `chat_id`-Validierung | Live: anon 401 auf allen drei; Token auf `~/.hermes/config.yaml` → **403**, Datei unversehrt; Routen 309 unverändert; **743/8 Tests**, 48 Assertions neu, 0 entfernt |
 
 Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 - **Volumes migriert und bit-verifiziert:** Agent 414 Dateien / 25.901.963 B, Dashboard 3 Dateien /
@@ -66,15 +67,12 @@ keine offene Arbeit: Triage der 9 Routen (§3.1).
 
 | Prio | Punkt | Messwert / Beleg | Aufwand |
 |---|---|---|---|
-| 1 | **`POST /api/v1/library/upload` — authentifizierte RCE** (Triage-Befund, von mir verifiziert) | `main.py:2229`: `os.path.join(raw_dir, file.filename)` ohne `basename`/`safe_path`; `/app/main.py` für uid 1000 **beschreibbar**, Container läuft mit `--reload` → beliebiger Login genügt für Codeausführung | 30–60 min |
-| 2 | **`DELETE /api/vault` — Reichweite zu groß** (Triage) | `main.py:8456`: `safe_path`-Jail erlaubt `~/.hermes` komplett → Vault-Notizen **und** alles darunter löschbar | 1 h |
-| 3 | **`POST /api/telegram/voice-relay`** (Triage) | `main.py:3025`: beliebige `chat_id` + Bot-Credentials; Aufrufer nicht im Repo | 1 h |
-| 4 | **`hermes_updater`-Socket am Proxy vorbei** | `backend/hermes_updater.py:63` `AF_UNIX` | 3–4 h |
-| 5 | **`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung** (neu) | `main.py:3267-3269`, derselbe Fehlertyp wie beim Gate | 30 min |
-| 6 | **Avatar-Upload-Route ohne Rollenzaun** (neu) | `POST /api/hermes/profiles/{id}/avatar`, `hermes_profiles.py:99` — schreibt Dateien, kein Zaun, kein globales Middleware-Netz | 15 min + Test |
-| 7 | **Tote UI-Pfade** | Handover: 166 von 1640 `getElementById`-Zielen ohne DOM-Element; von mir **nicht** nachgemessen | 2–4 h je Cluster |
-| 8 | **Paket 3 (Struktur)** | `docs/PLAN_STRUKTUR_2026-11-07.md`, 5 Etappen, nicht gestartet | 1–2 Wochen |
-| 9 | **Mikro-Performance** (DB 1,25 ms, N+1 max 8 Queries, 411 `fetch`) | aus Grundprüfung, nicht neu gemessen | niedrig |
+| 1 | **`hermes_updater`-Socket am Proxy vorbei** | `backend/hermes_updater.py:63` `AF_UNIX` | 3–4 h |
+| 2 | **`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung** (neu) | `main.py:3267-3269`, derselbe Fehlertyp wie beim Gate | 30 min |
+| 3 | **Avatar-Upload-Route ohne Rollenzaun** (neu) | `POST /api/hermes/profiles/{id}/avatar`, `hermes_profiles.py:99` — schreibt Dateien, kein Zaun, kein globales Middleware-Netz | 15 min + Test |
+| 4 | **Tote UI-Pfade** | Handover: 166 von 1640 `getElementById`-Zielen ohne DOM-Element; von mir **nicht** nachgemessen | 2–4 h je Cluster |
+| 5 | **Paket 3 (Struktur)** | `docs/PLAN_STRUKTUR_2026-11-07.md`, 5 Etappen, nicht gestartet | 1–2 Wochen |
+| 6 | **Mikro-Performance** (DB 1,25 ms, N+1 max 8 Queries, 411 `fetch`) | aus Grundprüfung, nicht neu gemessen | niedrig |
 | — | **Token-Rotation (Telegram)** | deine Seite (BotFather), Wert war bis 31.10. weltlesbar | 5 min |
 
 ---

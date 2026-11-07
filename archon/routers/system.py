@@ -27,12 +27,29 @@ _DEPS: Dict[str, Any] = {}
 def configure(**deps: Any) -> None:
     """Registriert die aus main.py injizierten Abhängigkeiten (einmalig beim Import)."""
     _DEPS.update(deps)
-    _missing = {"_load_json", "_save_json", "broadcast_event"} - set(_DEPS)
+    _missing = {"_load_json", "_save_json", "broadcast_event", "require_admin"} - set(_DEPS)
     if _missing:
         logger.warning(f"[Router] system: fehlende Dependencies {sorted(_missing)}")
 
 
 router = APIRouter()
+
+
+def _require_admin(request: Request) -> None:
+    """Rollenzaun (RBAC-Pilot) — nutzt die aus main.py injizierte Pruefung.
+
+    Kein eigener Import von `main` (waere ein Zyklus: main importiert diesen Router).
+    Fehlt die Injektion, wird bewusst **laut** abgebrochen (503) statt still
+    durchzulassen: ein Rollenzaun, der bei falscher Verdrahtung oeffnet, ist keiner.
+    """
+    checker = _DEPS.get("require_admin")
+    if checker is None:
+        logger.error("[Router] system: require_admin nicht injiziert — Route sperrt.")
+        raise HTTPException(
+            status_code=503,
+            detail="Rollenzaun nicht verdrahtet (require_admin fehlt); Aktion gesperrt.",
+        )
+    checker(request)
 
 # --------------------------------------------------
 # Hermes-Core-Diagnose (read-only)
@@ -305,7 +322,8 @@ def api_system_update_push(payload: dict = Body(default={})):
 
 
 @router.post("/api/v1/system/update/apply")
-def api_system_update_apply(payload: dict = Body(default={}), background_tasks: BackgroundTasks = None):
+def api_system_update_apply(request: Request, payload: dict = Body(default={}), background_tasks: BackgroundTasks = None):
+    _require_admin(request)  # RBAC-Pilot: Update des Systems ist Admin-Sache
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     make_backup = payload.get("backup", True)
     res = system_updater.apply_update(make_backup=make_backup)
@@ -321,7 +339,8 @@ def api_system_update_snapshots():
 
 
 @router.post("/api/v1/system/update/rollback")
-def api_system_update_rollback(payload: dict = Body(...)):
+def api_system_update_rollback(request: Request, payload: dict = Body(...)):
+    _require_admin(request)  # RBAC-Pilot: Rollback des Systems ist Admin-Sache
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     snapshot_id = payload.get("snapshot_id", "").strip()
     if not snapshot_id:

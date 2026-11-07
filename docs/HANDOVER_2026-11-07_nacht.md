@@ -15,8 +15,9 @@ davon **9 auf diesem Branch** · live (`--reload`, Änderungen sofort aktiv) · 
 
 ```
 Projekt: Archon OS, /mnt/raid/AgenticOS-2026 (Docker-Port 8501, Nur-Loopback-Binding).
-Branch: refactor/a5-di-config (66 Commits seit main, 9 eigene). NIEMALS main. Kein Push, kein Merge.
-Abzweig von refactor/critical-hardening @ 314ea093; Baseline-Commit des Branches: 4956f518.
+Branch: refactor/a5-di-config (67 Commits seit main, 10 eigene). NIEMALS main. Kein Push, kein Merge.
+Abzweig von refactor/critical-hardening @ de564278 (Tip von critical-hardening; dessen Vorfahr
+ist 314ea093 — nicht der Abzweigpunkt). Baseline-Commit des Branches: 4956f518.
 Lies zuerst docs/A5_INVENTUR.md (Kategorisierung aller Modul-Globals, A8-Bestand,
 A7-Bewertung plus Etappenplan), dann docs/AUDIT_STATUS.md (40-Punkte-Audit) und
 docs/HANDOVER_2026-11-07_abend.md (Vorstand vor dem Abzweig).
@@ -24,7 +25,10 @@ docs/HANDOVER_2026-11-07_abend.md (Vorstand vor dem Abzweig).
 Drei Pflicht-Guards nach JEDER Änderung, Abbruchregel: rot -> sofort git checkout -- <Datei>:
 1) .venv/bin/python scripts/route_parity.py --check scripts/parity_baselines/openapi_baseline_2026-11-07.json
      # Exit 0, Soll 585 Pfade / 861 Operationen
-2) .venv/bin/python scripts/check_router_names.py; echo "exit=$?"     # Soll exit=0 (20 Router, AST)
+2) .venv/bin/python scripts/check_router_names.py; echo "exit=$?"     # Soll exit=0
+     # ACHTUNG: das Skript schweigt im Erfolgsfall vollstaendig — keine Routerzahl, kein "ok".
+     # Es scannt 20 Dateien in archon/routers/, davon __init__.py uebersprungen = 19 geprueft.
+     # "exit=0" allein ist ein schwacher Beleg: die Zahl 20 stammt aus `ls archon/routers/*.py`, nicht aus dem Guard.
 3) .venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider   # Soll 243 passed, 8 skipped
 
 Zwei weitere Guards, die diese Runde dazugekommen sind (beide in der Suite):
@@ -51,10 +55,10 @@ Sprache: Deutsch. Erst messen, dann behaupten — keine Zahl aus diesem Dokument
 | `Depends()` in `archon/` | **1** (`archon/routers/system.py:123`) | `grep -rn "Depends(" --include=*.py archon \| wc -l` |
 | Tests | **243 passed, 8 skipped** (~12 s) | `.venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider` |
 | Neue Module | `archon/core/constants.py` **83** Z., `archon/core/paths.py` **68** Z. | `wc -l` |
-| Neue Werkzeuge | `scripts/path_constants_snapshot.py` **74** Z., 4 neue Testdateien (98/46/47/124/100 Z.) | `wc -l` |
-| Container | `ARCHON-OS`, Up 6 h, **`127.0.0.1:8501->8501/tcp`** | `docker ps --filter name=ARCHON-OS` |
+| Neue Werkzeuge | `scripts/path_constants_snapshot.py` **74** Z., **5** neue Testdateien (98/46/47/124/100 Z.: `test_a5_constants`, `test_a5_no_duplicates`, `test_a5_path_constants`, `test_a7_depends_pilot`, `test_a7_router_db_open`) | `wc -l` |
+| Container | `ARCHON-OS`, **`127.0.0.1:8501->8501/tcp`** (Uptime zeitabhängig) | `docker ps --filter name=ARCHON-OS` |
 | Image | **`af26a3ee66e2`** (unverändert seit dem Morgen, kein Rebuild) | `docker inspect ARCHON-OS --format '{{.Image}}'` |
-| Diff des Branches | **15 Dateien, 1056+ / 90−** | `git diff --shortstat 4956f518..HEAD` |
+| Diff des Branches | **16 Dateien, 1280+ / 90−** am HEAD (= 15/1056+ für `e03e4649`; +224 Z. ist dieses Dokument) | `git diff --shortstat 4956f518..HEAD` |
 | Traceback/NameError | **0** | `docker logs --since 5m ARCHON-OS 2>&1 \| grep -cE "Traceback\|NameError"` |
 
 Offene Audit-Zahlen, ebenfalls nachgemessen (nicht aus dem Abend-Dokument übernommen):
@@ -222,3 +226,45 @@ Stand **inklusive** dieser Dateien.
 *Erstellt: 2026-11-07 abends/nachts · Branch `refactor/a5-di-config` @ `e03e4649` ·
 66 Commits seit `main` (`dd9f111a`), 9 davon auf diesem Branch · alle Zahlen in diesem Dokument
 am selben Abend mit den genannten Befehlen gemessen, keine aus dem Abend-Handover übernommen.*
+
+**Nachtrag (Zählstand):** Die Werte 66 / 9 / 15 Dateien / 1056+ beschreiben den Stand `e03e4649`,
+also *vor* diesem Dokument. Am HEAD (`3897577a`, inkl. dieses Dokuments) gilt:
+`git rev-list --count main..HEAD` → **67**, `git rev-list --count 4956f518..HEAD` → **10**,
+`git diff --shortstat 4956f518..HEAD` → **16 Dateien, 1280+ / 90−**. Die Messbefehle in der
+Faktentabelle reproduzieren daher heute andere Zahlen als daneben stehen — wer den Stand
+braucht, auf den sie sich beziehen, muss gegen `e03e4649` messen.
+
+---
+
+## Gegenprobe 2026-11-07 (nach dem Handover-Commit)
+
+Eine zweite Session hat dieses Dokument gegen das Repo geprüft (`senior_fullstack_engineer`,
+read-only). Ergebnis: alle drei Pflicht-Guards erneut grün (Parität 585/861 exit 0,
+`check_router_names` exit 0, **243 passed / 8 skipped**), alle Bestandszahlen der Tabelle
+deckungsgleich, die beiden mitgenommenen Defekte mit Datei:Zeile bestätigt.
+
+Korrigiert wurden in diesem Durchgang:
+1. **Fork-Punkt:** `de564278` (= Tip von `refactor/critical-hardening`), nicht `314ea093`.
+   `git merge-base HEAD refactor/critical-hardening` belegt das; 314ea093 ist nur Vorfahr.
+2. **Zählwerte** 66/9/15/1056 sind der Stand `e03e4649` — siehe Nachtrag oben.
+3. **„4 neue Testdateien"** → es sind **5**.
+4. **Guard 2 ist stumm** im Erfolgsfall — „20 Router per AST" ist nicht durch seine Ausgabe
+   gedeckt; gescannt werden 19 Dateien (`__init__.py` übersprungen).
+
+Zusätzliche Befunde, die dieses Dokument vorher nicht nannte:
+- **`A6` = 15 ist pfadabhängig:** repo-weit sind es 31 × `asyncio.to_thread`
+  (`main.py` 15, `archon` 14, `backend` 2). Die 15 gilt nur für `main.py`.
+- **Host-Pfadauflösung mit Nebenwirkung:** `scripts/parity_baselines/paths_before_host.json`
+  zeigt `MEMORY_DIR` und `DATA_DIR` beide als `.` — ein Import von `main.py` auf dem Host
+  schreibt in das **Repo-Root**. Daher stammen die untracked `hermes_skills_cache.json` /
+  `hermes_skills_index.json` dort. `scripts/path_constants_snapshot.py` importiert `main` und
+  hat diesen Seiteneffekt; im Container (CWD `/app`) fällt er nicht auf.
+- **Guard-Schwäche:** `scripts/check_router_names.py` führt eine hartkodierte
+  `CONFIGURE_PARAMS`-Allowlist für 5 Router (`mission_control.py` fehlt darin); deren
+  `configure()`-Parameter kommen nur aus dem AST. Eine gewachsene Whitelist kann undefinierte
+  Namen maskieren — für einen verschärften Guard ist das eine offene Stelle.
+- **Nicht erneut gefahren:** das Snapshot-Skript (Seiteneffekt-Risiko, s. o.). Die
+  Ableitungskette in `archon/core/paths.py` wurde statisch geprüft (nur Import aus
+  `runtime.py`, keine eigene `__file__`-Ableitung).
+- `POST /api/system/hermes/restart` wurde **nicht** aufgerufen (Eingriff); die 500 ist aus dem
+  Handler-Pfad abgeleitet, nicht live gemessen.

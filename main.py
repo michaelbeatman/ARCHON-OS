@@ -24,7 +24,9 @@ import yaml
 import core_dispatcher
 import httpx
 import logging
-from utils.docker_client import docker_client, DockerError, parse_docker_stream
+from utils.docker_client import (
+    docker_client, DockerError, parse_docker_stream, parse_docker_stream_bytes,
+)
 
 from backend.platform_paths import (
     OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT, HERMES_HOME,
@@ -284,6 +286,14 @@ from archon.core.profiles import (  # noqa: E402
     get_hermes_profiles_base_dirs, get_primary_hermes_profiles_dir,
     invalidate_hermes_profiles_cache, api_get_hermes_profiles, create_rolling_backup,
 )
+# Gate-Ausfuehrung ruft den Service, nicht die HTTP-Endpunkte: die Endpunkte
+# brauchen einen Request (require_admin_or_503) und waren hier nie importiert.
+from archon.services import profiles_service  # noqa: E402
+from archon.services.profiles_service import (  # noqa: E402
+    delete_profile, save_profile,
+)
+# Kostenanzeige im Chat-Stream braucht die Preisliste des Providers-Routers.
+from archon.routers.llm_providers import get_llm_prices  # noqa: E402
 
 # --- Pfad-Jail: jeder dateibasierte Endpunkt bleibt in erlaubten Wurzeln ---
 try:
@@ -2877,27 +2887,42 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Dict = Body
     if gate.get("status") != "pending":
         return {"status": "already_decided", "decision": gate.get("status"), "gate_id": gate_id}
 
-    gate["status"] = "approved" if decision == "approve" else "rejected"
-    gate["decided_at"] = datetime.datetime.now().isoformat()
-    _save_permission_gates(gates)
-
     ergebnis = ""
+    ausgefuehrt = False
+    ausfuehrungsfehler = None
+
     if decision == "approve":
         payload = dict(gate.get("payload") or {})
         try:
             if gate.get("kind") == "tools_erweiterung":
                 payload["_approved_gate_id"] = gate_id
-                res = api_save_hermes_profile(payload)
+                res = save_profile(payload)
                 ergebnis = f"Tools gespeichert fuer '{payload.get('id')}': " + str(res)
+                ausgefuehrt = True
             elif gate.get("kind") == "profil_loeschen":
-                res = api_delete_hermes_profile(payload.get("profile_id", ""), gate_approved_id=gate_id)
+                res = delete_profile(payload.get("profile_id", ""), approved_gate_id=gate_id)
                 ergebnis = f"Profil '{payload.get('profile_id')}' archiviert/geloescht: " + str(res)[:120]
+                ausgefuehrt = True
             else:
                 ergebnis = "Unbekanntes Gate-Kind - nichts ausgefuehrt"
         except Exception as dec_err:
             logger.error(f"[Gate] Ausfuehrung nach Freigabe fehlgeschlagen: {dec_err}")
             ergebnis = f"FEHLER bei der Ausfuehrung: {dec_err}"
+            ausfuehrungsfehler = str(dec_err)
+
+        # Status erst festschreiben, wenn wirklich etwas passiert ist: vorher
+        # wurde 'approved' VOR der Ausfuehrung gespeichert, ein Fehlschlag
+        # verbrannte das Gate (erneut entscheiden -> already_decided) und der
+        # Owner konnte nicht wiederholen.
+        if ausgefuehrt:
+            gate["status"] = "approved"
+            gate["decided_at"] = datetime.datetime.now().isoformat()
+            _save_permission_gates(gates)
     else:
+        # Ablehnung ist keine Ausfuehrung -> sofort persistieren.
+        gate["status"] = "rejected"
+        gate["decided_at"] = datetime.datetime.now().isoformat()
+        _save_permission_gates(gates)
         ergebnis = "Abgelehnt - NICHTS wurde geaendert."
 
     try:
@@ -2907,7 +2932,14 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Dict = Body
         logger.warning(f"[Gate] Bestaetigungs-Ping fehlgeschlagen: {tg2}")
     add_ticker("Rechte-Gate", f"{gate_id}: {'erteilt' if decision == 'approve' else 'abgelehnt'}")
     logger.info(f"[Gate] {gate_id} -> {decision}: {ergebnis[:200]}")
-    return {"status": "ok", "decision": decision, "gate_id": gate_id, "ergebnis": ergebnis}
+    # Ehrliche Antwort: ein Fehlschlag ist HTTP 200 (der Transport hat
+    # funktioniert), aber status/error sagen die Wahrheit — der Telegram-Adapter
+    # wertet beides aus, statt "wird jetzt ausgefuehrt" zu behaupten.
+    antwort = {"status": "ok", "decision": decision, "gate_id": gate_id, "ergebnis": ergebnis}
+    if ausfuehrungsfehler:
+        antwort["status"] = "error"
+        antwort["error"] = ausfuehrungsfehler
+    return antwort
 
 
 @app.post("/api/telegram/relay")
@@ -4586,6 +4618,22 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             f"Sub-Session: {tgt_sess} | Modell (Empfehlung): {t_model} | "
             f"Ausführung: Hermes-Agent-Worker | Ergebnis erscheint im Kanban und wird automatisch in die Sub-Session gespiegelt.")
 
+_PRICE_LOOKUP_WARNED = {"done": False}
+
+
+def _warn_price_lookup_once(exc: Exception) -> None:
+    """Einmal laut meckern, wenn die Preisliste nicht kommt — nicht bei jedem Token.
+
+    Vorher verschluckte ein ``except Exception: pass`` den Fehler; die
+    Kostenanzeige blieb still bei 0 und niemand merkte, dass der Aufruf gar
+    nicht aufloesbar war.
+    """
+    if _PRICE_LOOKUP_WARNED["done"]:
+        return
+    _PRICE_LOOKUP_WARNED["done"] = True
+    logger.warning(f"[Pricing] Preisliste nicht abrufbar — Kostenanzeige bleibt 0: {exc}")
+
+
 @app.post("/api/chat/stream")
 async def api_chat_stream(req: ChatStreamRequest):
     """
@@ -4913,15 +4961,13 @@ async def api_chat_stream(req: ChatStreamRequest):
         # Kosten-Berechnung und Transparenz-Anzeige (Pillar 3/6)
         cost_str = "0.0000"
         try:
-            global _openrouter_price_cache
-            prices = _openrouter_price_cache
-            if not prices:
-                try:
-                    p_res = get_llm_prices()
-                    if isinstance(p_res, dict) and "prices" in p_res:
-                        prices = p_res["prices"]
-                except Exception:
-                    pass
+            prices = None
+            try:
+                p_res = get_llm_prices()
+                if isinstance(p_res, dict) and "prices" in p_res:
+                    prices = p_res["prices"]
+            except Exception as price_err:
+                _warn_price_lookup_once(price_err)
             m_price = (prices or {}).get(model, {})
             p_rate = m_price.get("prompt_1m", 0.0)
             c_rate = m_price.get("completion_1m", 0.0)
@@ -11354,6 +11400,13 @@ try:
     app.include_router(_hermes_profiles_r)
 except Exception as _err_hp:
     logger.warning(f"[Router] hermes_profiles nicht geladen: {_err_hp}")
+
+# Der Profil-Service traegt nur den Organigramm-Sync als echte Abhaengigkeit.
+# Bewusst ausserhalb des Router-try: der Gate-Pfad braucht ihn auch dann.
+try:
+    profiles_service.configure(org_sync_node=_sync_org_hierarchy_node)
+except Exception as _err_ps:
+    logger.warning(f"[Services] profiles_service.configure fehlgeschlagen: {_err_ps}")
 
 try:
     from archon.routers.system import (

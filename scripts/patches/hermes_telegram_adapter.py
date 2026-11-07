@@ -656,6 +656,48 @@ _POLLING_GENERATION_CONTEXT: ContextVar[Optional[int]] = ContextVar(
     "telegram_polling_generation", default=None
 )
 
+# --- ARCHON PERMISSION-GATE: Antworttexte fuer den Owner --------------------
+GATE_OK_TEXT = "\u2705 Rechte freigegeben - wird jetzt ausgefuehrt."
+GATE_REJECT_TEXT = "\u274c Rechte verweigert - nichts wurde geaendert."
+
+
+def gate_decision_answer(decision: str, status_code: int,
+                         body_text: str = "", gate_id: str = "") -> str:
+    """Antworttext fuer den Owner nach einem Gate-Klick.
+
+    Der Endpunkt antwortet mit HTTP 200 auch dann, wenn die Ausfuehrung nach
+    der Freigabe gescheitert ist (Transport ok, Fachlogik nicht). Nur den
+    Statuscode zu pruefen hiess, dem Owner "wird jetzt ausgefuehrt" zu
+    schreiben, waehrend nichts passiert war. Deshalb wird der Body ausgewertet:
+    ``status == "error"``, ein gesetztes ``error``-Feld oder ein ``ergebnis``,
+    das mit ``FEHLER`` beginnt, gelten als Fehlschlag.
+
+    Reine Funktion (kein Netz, kein Zustand) — damit testbar.
+    """
+    if status_code != 200:
+        return ("\u26a0 Archon nicht erreichbar (HTTP %s) - sende Text: "
+                "'Erlauben %s'" % (status_code, gate_id))
+    data: Dict[str, Any] = {}
+    try:
+        loaded = json.loads(body_text or "{}")
+        if isinstance(loaded, dict):
+            data = loaded
+    except Exception:
+        data = {}
+
+    fehler = str(data.get("error") or "").strip()
+    ergebnis = str(data.get("ergebnis") or "").strip()
+    if not fehler and ergebnis.upper().startswith("FEHLER"):
+        fehler = ergebnis.split(":", 1)[1].strip() if ":" in ergebnis else ergebnis
+    if not fehler and str(data.get("status") or "").lower() == "error":
+        fehler = ergebnis or "unbekannter Fehler"
+    if fehler:
+        return ("\u26a0 Freigabe gespeichert, aber Ausfuehrung fehlgeschlagen: %s"
+                % fehler[:200])
+    if decision == "approve":
+        return GATE_OK_TEXT
+    return GATE_REJECT_TEXT
+
 
 class _PollingLifecycleAbort(RuntimeError):
     """Internal control flow for polling startup fenced by teardown."""
@@ -6790,7 +6832,7 @@ class TelegramAdapter(BasePlatformAdapter):
                 await query.answer(text="\u26d4 You are not authorized to decide permission gates.")
                 return
             if decision in ("approve", "reject") and gate_id:
-                ok = False
+                _resp = None
                 err = None
                 try:
                     _resp = await _archon_req(
@@ -6798,16 +6840,15 @@ class TelegramAdapter(BasePlatformAdapter):
                         "http://ARCHON-OS:8501/api/permission-gates/%s/decide" % gate_id,
                         json={"decision": decision},
                     )
-                    ok = _resp.status_code == 200
-                    if not ok:
-                        err = "HTTP %s" % _resp.status_code
                 except Exception as _exc:
                     err = str(_exc) or type(_exc).__name__
                     logger.error("[Telegram] Gate-Callback an ARCHON fehlgeschlagen: %s", err)
-                if ok and decision == "approve":
-                    await query.answer(text="\u2705 Rechte freigegeben - wird jetzt ausgefuehrt.")
-                elif ok:
-                    await query.answer(text="\u274c Rechte verweigert - nichts wurde geaendert.")
+                if _resp is not None:
+                    # Body auswerten statt nur status_code: der Endpunkt meldet
+                    # einen Ausfuehrungs-Fehlschlag ehrlich im Body (HTTP 200).
+                    await query.answer(text=gate_decision_answer(
+                        decision, _resp.status_code,
+                        getattr(_resp, "text", "") or "", gate_id))
                 else:
                     await query.answer(text="\u26a0 Archon nicht erreichbar (%s) - sende Text: 'Erlauben %s'" % (err or "?", gate_id))
             else:

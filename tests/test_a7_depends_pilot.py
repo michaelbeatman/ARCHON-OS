@@ -1,15 +1,20 @@
 """A7-Pilot: `POST /api/system/hermes/restart` haengt an einem `Depends()`-Provider.
 
-Zwei Zusicherungen, bewusst getrennt:
+Die Route ist seit dem P7-Fix eine **Diagnose** (read-only): sie prueft die
+Kandidatenliste des Hermes-Core-Containers und meldet den Zustand, startet aber
+bewusst nichts (Begruendung im Handler-Docstring: Gateway-Kollision).
+
+Drei Zusicherungen, bewusst getrennt:
 
 1. `test_restart_route_declares_db_dependency` (AST) — die Route deklariert die
    State-DB als FastAPI-Dependency und oeffnet sie nicht mehr selbst per
-   `with _get_state_db() as conn:`. Das ist der Regressionsschutz: wer den
+   `with _get_state_db() as conn:`. Unveraendert seit dem A7-Pilot: wer den
    Handler zurueckbaut, wird rot.
 2. `test_restart_route_injects_db_and_writes_log` (funktional, TestClient) —
    beweist, dass FastAPI die Dependency wirklich aufloest und der Handler die
-   gelieferte Verbindung benutzt: gemockter Docker-Aufruf (204) + temporaere DB,
-   Assertion auf Statuscode, Antwortkoerper UND den geschriebenen DB-Satz.
+   gelieferte Verbindung benutzt.
+3. Die vier Zustandsfaelle der Diagnose (laeuft / gestoppt / nicht vorhanden /
+   Docker-Fehler) plus der Nachweis, dass **kein** `container_action` laeuft.
 
 Rot-Beweis fuer (1) gegen den Vorstand:
     ARCHON_SYSTEM_PY=/pfad/zu/altem/system.py pytest tests/test_a7_depends_pilot.py -k declares
@@ -19,19 +24,29 @@ import ast
 import os
 import sqlite3
 
-import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import archon.core.state_db as state_db
 import archon.routers.system as system_router
+from utils.docker_client import docker_client as _docker_client
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SYSTEM_PY = os.environ.get(
     "ARCHON_SYSTEM_PY", os.path.join(REPO, "archon", "routers", "system.py")
 )
 ROUTE_NAME = "api_system_hermes_restart"
+ROUTE_PATH = "/api/system/hermes/restart"
+
+RUNNING = {
+    "State": {"Running": True, "Status": "running"},
+    "Config": {"Image": "hermes-agent-plus:latest"},
+}
+STOPPED = {
+    "State": {"Running": False, "Status": "exited"},
+    "Config": {"Image": "hermes-agent-plus:latest"},
+}
 
 
 def _route_node(path):
@@ -86,39 +101,148 @@ def client_and_db(tmp_path, monkeypatch):
 
     monkeypatch.setattr(state_db, "_get_state_db", _tmp_state_db)
 
-    class _OkResponse:
-        status_code = 204
-        text = ""
-
-    async def _fake_post(self, *args, **kwargs):
-        return _OkResponse()
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", _fake_post)
-
     app = FastAPI()
     app.include_router(system_router.router)
     return TestClient(app), db_path
 
 
-def test_restart_route_injects_db_and_writes_log(client_and_db):
-    """Echter Request durch die Route: 200, Erfolgsbody, Satz in der DB."""
-    client, db_path = client_and_db
+def _fake_probe(monkeypatch, by_name):
+    """Ersetzt die read-only Container-Abfrage.
 
-    response = client.post("/api/system/hermes/restart")
+    `by_name[name]` ist das Container-JSON; fehlt der Schluessel, existiert der
+    Container nicht; eine Exception-Instanz bedeutet "Docker-Fehler".
+    Rueckgabe: Liste der abgefragten Namen (Reihenfolge = Kandidatenliste).
+    """
+    asked = []
+
+    def _inspect(name):
+        asked.append(name)
+        value = by_name.get(name)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    monkeypatch.setattr(system_router, "_inspect_hermes_core", _inspect)
+    return asked
+
+
+def _rows(db_path):
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return conn.execute("SELECT target, status FROM system_restart_logs").fetchall()
+    finally:
+        conn.close()
+
+
+def test_restart_route_injects_db_and_writes_log(client_and_db, monkeypatch):
+    """Echter Request durch die Route: 200 und Satz in der vom Depends() gelieferten DB."""
+    client, db_path = client_and_db
+    _fake_probe(monkeypatch, {"hermes-agent": RUNNING})
+
+    response = client.post(ROUTE_PATH)
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["status"] == "success"
-    assert "duration_seconds" in body
+    assert body["status"] == "ok"
+    assert body["running"] is True
+    assert body["image"] == "hermes-agent-plus:latest"
+    assert "duration_seconds" not in body  # Diagnose, kein Restart-Report
 
-    conn = sqlite3.connect(str(db_path))
-    try:
-        rows = conn.execute(
-            "SELECT target, status FROM system_restart_logs"
-        ).fetchall()
-    finally:
-        conn.close()
-    assert rows == [("hermes", "success")], (
+    assert _rows(db_path) == [("hermes-agent", "ok")], (
         "Die per Depends() gelieferte Verbindung wurde nicht (oder falsch) "
-        "beschrieben — Zeilen: %s" % rows
+        "beschrieben — Zeilen: %s" % _rows(db_path)
+    )
+
+
+def test_restart_route_reports_running_core(client_and_db, monkeypatch):
+    """Laufender Kandidat -> 200 mit Ziel, running und Image."""
+    client, _ = client_and_db
+    asked = _fake_probe(monkeypatch, {"hermes-agent": RUNNING})
+
+    response = client.post(ROUTE_PATH)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["target"] == "hermes-agent"
+    assert body["running"] is True
+    assert body["image"] == "hermes-agent-plus:latest"
+    assert "laeuft" in body["hint"]
+    # Der erste Kandidat traegt, der zweite wird nicht mehr abgefragt.
+    assert asked == ["hermes-agent"]
+
+
+def test_restart_route_reports_stopped_core_without_starting(client_and_db, monkeypatch):
+    """Gestoppter Kandidat -> 409 not_running mit manueller Anweisung."""
+    client, db_path = client_and_db
+    _fake_probe(monkeypatch, {"hermes-agent": STOPPED})
+
+    response = client.post(ROUTE_PATH)
+
+    assert response.status_code == 409, response.text
+    body = response.json()
+    assert body["status"] == "not_running"
+    assert body["target"] == "hermes-agent"
+    assert body["running"] is False
+    assert "docker start hermes-agent" in body["hint"]
+    assert "NICHT Teil dieser Route" in body["hint"]
+    assert _rows(db_path) == [("hermes-agent", "not_running")]
+
+
+def test_restart_route_reports_absent_candidate(client_and_db, monkeypatch):
+    """Keiner der Kandidaten existiert -> 409 absent mit Liste der Versuche."""
+    client, db_path = client_and_db
+    asked = _fake_probe(monkeypatch, {})
+
+    response = client.post(ROUTE_PATH)
+
+    assert response.status_code == 409, response.text
+    body = response.json()
+    assert body["status"] == "absent"
+    assert body["tried"] == ["hermes-agent", "hermes"]
+    assert body["tried"] == asked
+    assert "Kein Hermes-Core-Container" in body["hint"]
+    assert _rows(db_path) == [("none", "absent")]
+
+
+def test_restart_route_reports_docker_error_as_502(client_and_db, monkeypatch):
+    """Docker nicht erreichbar -> 502, niemals 500."""
+    client, _ = client_and_db
+    _fake_probe(monkeypatch, {"hermes-agent": RuntimeError("Docker-Socket weg")})
+
+    response = client.post(ROUTE_PATH)
+
+    assert response.status_code == 502, response.text
+    body = response.json()
+    assert body["status"] == "docker_error"
+    assert "Docker-Socket weg" in body["hint"]
+
+
+@pytest.mark.parametrize(
+    "probe_map",
+    [
+        {"hermes-agent": RUNNING},
+        {"hermes-agent": STOPPED},
+        {},
+        {"hermes-agent": RuntimeError("kaputt")},
+    ],
+    ids=["running", "stopped", "absent", "docker_error"],
+)
+def test_restart_route_never_starts_a_container(client_and_db, monkeypatch, probe_map):
+    """Kern der Entscheidung: die Route loest NIE start/stop/restart aus."""
+    client, _ = client_and_db
+    _fake_probe(monkeypatch, probe_map)
+    calls = []
+
+    def _count(*args, **kwargs):
+        calls.append((args, kwargs))
+        return b""
+
+    monkeypatch.setattr(_docker_client, "container_action", _count)
+
+    client.post(ROUTE_PATH)
+
+    assert calls == [], (
+        "Die Diagnose-Route hat einen Container-Aufruf ausgeloest: %s — der Start "
+        "darf ausschliesslich manuell erfolgen." % calls
     )

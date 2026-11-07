@@ -99,6 +99,20 @@ class DockerClient:
 
     def request(self, method: str, path: str, payload: Optional[dict] = None,
                 timeout: float = 1.0) -> bytes:
+        """Rohantwort-Body. Der HTTP-Status wird verworfen — wer ihn braucht: request_status()."""
+        return self._request_raw(method, path, payload, timeout)[1]
+
+    def request_status(self, method: str, path: str, payload: Optional[dict] = None,
+                       timeout: float = 1.0) -> tuple[int, bytes]:
+        """Wie request(), liefert aber (HTTP-Status, Body).
+
+        Noetig, um "Container existiert nicht" (404) von "Abfrage erfolgreich" (200) zu
+        unterscheiden: der Body allein ist in beiden Faellen JSON.
+        """
+        return self._request_raw(method, path, payload, timeout)
+
+    def _request_raw(self, method: str, path: str, payload: Optional[dict] = None,
+                     timeout: float = 1.0) -> tuple[int, bytes]:
         self._check_allowed(method, path)
         kind, target = self._endpoint()
         body = json.dumps(payload) if payload is not None else ""
@@ -127,7 +141,8 @@ class DockerClient:
             except Exception:
                 pass
 
-    def _read_response(self, sock: socket.socket) -> bytes:
+    def _read_response(self, sock: socket.socket) -> tuple[int, bytes]:
+        """Liest die komplette Antwort und liefert (HTTP-Status, Body)."""
         response = b""
         content_length = None
         chunked = False
@@ -162,13 +177,18 @@ class DockerClient:
                     break
 
         parts = response.split(b"\r\n\r\n", 1)
+        status_line = parts[0].split(b"\r\n", 1)[0] if parts else b""
+        try:
+            status = int(status_line.split(b" ")[1])
+        except (IndexError, ValueError):
+            status = 0
         if len(parts) < 2:
             if deadline_hit:
                 raise DockerError(f"Docker-Timeout nach {len(response)} Bytes")
-            return b""
+            return status, b""
         if chunked:
-            return _decode_chunked(parts[1])
-        return parts[1]
+            return status, _decode_chunked(parts[1])
+        return status, parts[1]
 
     # ---------------- Bequeme Helfer ----------------
 

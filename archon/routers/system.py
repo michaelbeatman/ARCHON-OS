@@ -34,6 +34,64 @@ def configure(**deps: Any) -> None:
 
 router = APIRouter()
 
+# --------------------------------------------------
+# Hermes-Core-Diagnose (read-only)
+# --------------------------------------------------
+# Reihenfolge = Prioritaet, per Env ueberschreibbar.
+# Beleg: docker-compose.yml deklariert den Core als `gateway run` auf 8642 mit
+# container_name "hermes". In DIESEM Stack laeuft er als `hermes-agent`
+# (Container-Name und Netz-Alias, per docker inspect); "hermes" existiert nicht.
+# Die Route ist bewusst eine Diagnose: sie startet nichts (siehe Docstring dort).
+HERMES_CORE_CANDIDATES: tuple = tuple(
+    c.strip()
+    for c in os.environ.get("ARCHON_HERMES_CORE_CONTAINER", "hermes-agent,hermes").split(",")
+    if c.strip()
+)
+
+
+def _inspect_hermes_core(name: str) -> Optional[Dict[str, Any]]:
+    """Read-only Zustandsabfrage ueber den Allowlist-Client.
+
+    Rueckgabe: Container-JSON, oder None wenn der Container nicht existiert (404).
+    Wirft DockerError, wenn Docker selbst nicht antwortet oder der Name ungueltig ist.
+    """
+    from utils.docker_client import DockerError, docker_client, validate_container_name
+
+    status, raw = docker_client.request_status(
+        "GET", f"/containers/{validate_container_name(name)}/json"
+    )
+    if status == 404:
+        return None
+    if status != 200:
+        raise DockerError(f"Docker inspect '{name}' fehlgeschlagen (HTTP {status}): {raw[:200]!r}")
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except ValueError as exc:
+        raise DockerError(f"Antwort fuer '{name}' ist kein JSON: {exc}") from exc
+
+
+def _log_core_state(conn: sqlite3.Connection, target: str, state: str, started_at: float) -> None:
+    """Diagnose-Ergebnis protokollieren. Fehler hier duerfen die Antwort nicht kippen."""
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS system_restart_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target TEXT,
+                initiated_at REAL,
+                duration_seconds REAL,
+                status TEXT
+            )
+        """)
+        conn.execute(
+            "INSERT INTO system_restart_logs (target, initiated_at, duration_seconds, status)"
+            " VALUES (?, ?, ?, ?)",
+            (target, started_at, round(time.time() - started_at, 2), state),
+        )
+        conn.commit()
+    except Exception as log_err:
+        logger.warning(f"[Hermes Core Log Error]: {log_err}")
+
+
 async def _check_service_health(name: str, url_candidates: List[str], client: httpx.AsyncClient) -> Dict[str, Any]:
     for url in url_candidates:
         t0 = time.time()
@@ -64,7 +122,8 @@ async def api_system_health():
     async with httpx.AsyncClient(follow_redirects=True) as client:
         t_core = _check_service_health(
             "hermes_core",
-            ["http://hermes:8642", "http://hermes:8644", "http://host.docker.internal:8644"],
+            ["http://hermes-agent:8642", "http://hermes:8642", "http://hermes:8644",
+             "http://host.docker.internal:8644"],
             client
         )
         t_omni = _check_service_health(
@@ -123,56 +182,79 @@ async def api_system_hermes_restart(
     conn: sqlite3.Connection = Depends(get_state_db_dep),
 ):
     """
-    Triggers container restart for Hermes Core via docker-socket-proxy.
-    Logs event into SQLite state.db.
+    Diagnose des Hermes-Core-Containers — read-only, startet nichts.
 
-    Die State-DB-Verbindung kommt per FastAPI-Dependency (A7-Pilot) statt per
-    `with _get_state_db() as conn:`. Der Provider (`get_state_db_dep`) liefert
-    eine frische Verbindung und schliesst sie im `finally` — gleiche Semantik,
-    aber die Abhaengigkeit ist deklariert statt im Handler versteckt.
+    Der Pfad heisst historisch "/restart" und loeste einen Neustart eines Containers
+    namens `hermes` aus, den es in diesem Stack nicht gibt (jeder Aufruf endete 500).
+    Diese Route startet bewusst KEINEN Container: der Core-Ableger `hermes-agent`
+    faehrt `gateway run` und wuerde mit dem laufenden Host-Gateway um denselben
+    Bot-Token konkurrieren (Telegram-getUpdates-Konflikt — beide Instanzen verlieren
+    Nachrichten). Der Start bleibt ein manueller Eingriff (`docker start <name>`).
+
+    Die State-DB kommt per FastAPI-Dependency (A7-Pilot); sie protokolliert den Befund.
+
+    Antworten (stabil):
+      200 {"status":"ok","target":…,"running":true,"image":…,"hint":…}
+      409 {"status":"not_running","target":…,"running":false,"image":…,"hint":…}
+      409 {"status":"absent","tried":[…],"hint":…}
+      502 {"status":"docker_error","hint":…}
     """
     t0 = time.time()
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "http://docker-socket-proxy:2375/containers/hermes/restart?t=10",
-                timeout=15.0
-            )
-            duration = round(time.time() - t0, 2)
-            if resp.status_code in [204, 200]:
-                # Log in SQLite
-                try:
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS system_restart_logs (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            target TEXT,
-                            initiated_at REAL,
-                            duration_seconds REAL,
-                            status TEXT
-                        )
-                    """)
-                    conn.execute("""
-                        INSERT INTO system_restart_logs (target, initiated_at, duration_seconds, status)
-                        VALUES (?, ?, ?, ?)
-                    """, ("hermes", t0, duration, "success"))
-                    conn.commit()
-                except Exception as log_err:
-                    logger.warning(f"[Restart Log Error]: {log_err}")
+    tried: List[str] = []
+    found_name: Optional[str] = None
+    found_data: Dict[str, Any] = {}
 
-                add_ticker("Hermes System", "Hermes Core Container erfolgreich neu gestartet.")
-                return {
-                    "status": "success",
-                    "message": "Hermes Core erfolgreich neu gestartet.",
-                    "duration_seconds": duration
-                }
-            else:
-                raise HTTPException(
-                    status_code=resp.status_code,
-                    detail=f"Docker API antwortete mit Status {resp.status_code}: {resp.text}"
-                )
-    except Exception as e:
-        logger.error(f"[Hermes Restart Failed]: {e}")
-        raise HTTPException(status_code=500, detail=f"Hermes Neustart fehlgeschlagen: {str(e)}")
+    for name in HERMES_CORE_CANDIDATES:
+        try:
+            data = _inspect_hermes_core(name)
+        except Exception as exc:
+            logger.error(f"[Hermes Core Probe Failed]: {exc}")
+            return JSONResponse(status_code=502, content={
+                "status": "docker_error",
+                "hint": f"Docker-Abfrage fehlgeschlagen ({name}): {exc}",
+            })
+        tried.append(name)
+        if data is not None:
+            found_name, found_data = name, data
+            break
+
+    if found_name is None:
+        hint = (
+            f"Kein Hermes-Core-Container vorhanden (versucht: {', '.join(tried)}). "
+            "Diese Route startet bewusst keinen Container — bitte manuell starten."
+        )
+        _log_core_state(conn, "none", "absent", t0)
+        add_ticker("Hermes System", f"Hermes Core nicht vorhanden ({', '.join(tried)}).")
+        return JSONResponse(status_code=409, content={
+            "status": "absent",
+            "tried": tried,
+            "hint": hint,
+        })
+
+    running = bool(found_data.get("State", {}).get("Running", False))
+    image = str(found_data.get("Config", {}).get("Image") or "")
+
+    if running:
+        outcome, code = "ok", 200
+        hint = f"Container {found_name} laeuft (Image: {image or 'unbekannt'})."
+        ticker_text = f"Hermes Core {found_name}: laeuft."
+    else:
+        outcome, code = "not_running", 409
+        hint = (
+            f"Container {found_name} ist gestoppt (RestartPolicy=no). "
+            f"Start ist bewusst NICHT Teil dieser Route — bitte manuell: docker start {found_name}"
+        )
+        ticker_text = f"Hermes Core {found_name}: gestoppt (kein Start ausgeloest)."
+
+    _log_core_state(conn, found_name, outcome, t0)
+    add_ticker("Hermes System", ticker_text)
+    return JSONResponse(status_code=code, content={
+        "status": outcome,
+        "target": found_name,
+        "running": running,
+        "image": image,
+        "hint": hint,
+    })
 
 
 @router.get("/api/system/language")

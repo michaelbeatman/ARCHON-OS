@@ -28,6 +28,11 @@ logger = logging.getLogger("hermes.updater")
 HERMES_REPO = "NousResearch/hermes-agent"
 GITHUB_API_BASE = f"https://api.github.com/repos/{HERMES_REPO}"
 
+# Container-Name des Hermes Core in DIESEM Stack: `hermes-agent` (Container-Name und
+# Netz-Alias, per `docker inspect` belegt). Der Compose-Eintrag `hermes` laeuft hier
+# nicht — er stammt aus der Windows-Variante von docker-compose.yml.
+HERMES_CORE_CONTAINER = "hermes-agent"
+
 # Bekannte Basis-Informationen bei Offline-Betrieb oder Fallback
 DEFAULT_INSTALLED_VERSION = "v0.22.6"
 DEFAULT_INSTALLED_CODENAME = "2026.9.24"
@@ -89,14 +94,14 @@ class DockerSocketClient:
 def get_installed_hermes_info(force_check: bool = False) -> Dict[str, Any]:
     """
     Ermittelt die tatsächlich installierte Hermes Core Version und den Build-SHA.
-    Fragt den aktiven hermes-Container direkt per `hermes --version` ab.
+    Fragt den aktiven Core-Container (`hermes-agent`) direkt per `hermes --version` ab.
     """
     info = {
         "version": DEFAULT_INSTALLED_VERSION,
         "version_codename": DEFAULT_INSTALLED_CODENAME,
         "installed_sha": DEFAULT_INSTALLED_SHA,
         "installed_sha_short": DEFAULT_INSTALLED_SHA[:8],
-        "container_name": "hermes",
+        "container_name": HERMES_CORE_CONTAINER,
         "container_status": "unknown",
         "image": "hermes-agent-plus:latest",
         "install_method": "docker",
@@ -105,7 +110,7 @@ def get_installed_hermes_info(force_check: bool = False) -> Dict[str, Any]:
 
     try:
         docker_cli = DockerSocketClient()
-        c_data = docker_cli.get_json("/containers/hermes/json")
+        c_data = docker_cli.get_json(f"/containers/{HERMES_CORE_CONTAINER}/json")
         if c_data and isinstance(c_data, dict):
             state = c_data.get("State", {})
             is_running = state.get("Running", False)
@@ -120,7 +125,7 @@ def get_installed_hermes_info(force_check: bool = False) -> Dict[str, Any]:
                         "AttachStderr": True,
                         "Cmd": ["hermes", "--version"]
                     }
-                    s, res = docker_cli.post("/containers/hermes/exec", body=json.dumps(exec_payload).encode("utf-8"))
+                    s, res = docker_cli.post(f"/containers/{HERMES_CORE_CONTAINER}/exec", body=json.dumps(exec_payload).encode("utf-8"))
                     if s in (200, 201):
                         exec_id = json.loads(res).get("Id")
                         if exec_id:
@@ -317,7 +322,7 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
     Führt das Hermes Agent Core Update aus:
     1. Zieht das neueste Docker Image von Docker Hub (nousresearch/hermes-agent:latest)
     2. Kennzeichnet/Taggt das Image als hermes-agent-plus:latest
-    3. Erstellt den hermes-Container atomar mit dem neuen Image neu
+    3. Erstellt den Core-Container (hermes-agent) atomar mit dem neuen Image neu
     """
     t0 = time.time()
     docker_cli = DockerSocketClient()
@@ -359,12 +364,12 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
     recreated = False
     if auto_restart:
         try:
-            ok, msg = recreate_container_with_new_image(docker_cli, "hermes", "hermes-agent-plus:latest")
+            ok, msg = recreate_container_with_new_image(docker_cli, HERMES_CORE_CONTAINER, "hermes-agent-plus:latest")
             log_messages.append(msg)
             recreated = ok
-            # Auch hermes-dashboard aktualisieren, falls vorhanden
-            d_ok, d_msg = recreate_container_with_new_image(docker_cli, "hermes-dashboard", "hermes-agent-plus:latest")
-            log_messages.append(d_msg)
+            # hermes-dashboard wird bewusst NICHT mit neu instanziiert: der Container laeuft,
+            # und seine Compose-Datei (docker-compose.hermes.yml) fehlt — ein Recreate waere
+            # nicht rueckholbar. Wer das aendert, muss die Compose-Datei zuerst wiederherstellen.
         except Exception as e:
             log_messages.append(f"Container-Recreation fehlgeschlagen: {e}")
 

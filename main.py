@@ -2809,8 +2809,6 @@ def save_all_agent_profiles(profiles_list):
         "roles.json",
         "/app/agent_profiles.json",
         "/app/roles.json",
-        "/app/archon/core/agent_profiles.json",
-        "/app/archon/core/roles.json",
         os.path.join(WORKSPACE_DIR, "agent_profiles.json"),
         os.path.join(WORKSPACE_DIR, "roles.json")
     ]

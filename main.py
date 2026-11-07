@@ -172,6 +172,51 @@ def _get_service_token() -> str:
     return tok
 
 
+# --- RAG-Sync-Zugang: Env statt Klartext, fail-fast ------------------------
+# Der Vault->RAG-Sync braucht einen AnythingLLM-API-Key. Bis 07.11.2026 stand
+# er als Literal im Code (hier und in mehreren tools/-Skripten); jetzt kommt er
+# ausschliesslich aus der Umgebung. Variablenname bewusst identisch mit
+# backend/rag_bridge.py — ein Secret, ein Name, kein zweites Schema.
+RAG_API_KEY_ENV = "ANYTHINGLLM_API_KEY"
+
+
+class MissingRagApiKeyError(RuntimeError):
+    """Der RAG-Sync hat keinen API-Key — es wird kein Request abgesetzt."""
+
+
+def _get_rag_api_key() -> str:
+    """Liefert den RAG-API-Key aus der Umgebung.
+
+    Kein stiller Fallback auf einen Default: ein leerer Key endet downstream
+    als Auth-Fehler oder als Sync, der nichts tut. Deshalb Exception am
+    Nutzungspunkt, damit kein subprocess mit leerem Key startet.
+    """
+    key = (os.environ.get(RAG_API_KEY_ENV) or "").strip()
+    if not key:
+        raise MissingRagApiKeyError(
+            f"{RAG_API_KEY_ENV} fehlt in der Umgebung. Der Vault->RAG-Sync "
+            "startet nicht (kein Fallback-Key, kein Request mit leerem Key)."
+        )
+    return key
+
+
+def _check_rag_api_key_config() -> bool:
+    """Startcheck: fehlender RAG-Key ist als ERROR sichtbar, kippt den Start nicht.
+
+    Der Key wird nur im Hintergrund-Trigger nach einem Library-Upload mit
+    auto_ingest gebraucht. Ein harter Startabbruch wuerde einen Dienst
+    verweigern, der ohne die RAG-Funktion voll funktionsfaehig ist — deshalb
+    fail-fast am Nutzungspunkt (Exception + ERROR dort) plus diese Zeile.
+    """
+    try:
+        _get_rag_api_key()
+    except MissingRagApiKeyError as err:
+        logger.error(f"[RAG-Sync] {err}")
+        return False
+    logger.info(f"[RAG-Sync] API-Key aus {RAG_API_KEY_ENV} geladen.")
+    return True
+
+
 def _request_has_service_token(request: Request) -> bool:
     expected = _get_service_token()
     provided = request.headers.get("x-archon-service-token", "")
@@ -2284,10 +2329,14 @@ async def api_library_upload(request: Request):
                     import subprocess
                     sync_script = os.path.join(os.path.dirname(__file__), "tools", "sync_vault_to_rag.py")
                     if os.path.exists(sync_script):
-                        cmd = [sys.executable, sync_script, "--api-key", "R9YRVG7-FCFMRNK-NZ3FKSX-QKN5RHF", "--all"]
+                        # Key ausschliesslich aus der Umgebung — kein Literal,
+                        # kein Default. Fehlt er, startet kein subprocess.
+                        cmd = [sys.executable, sync_script, "--api-key", _get_rag_api_key(), "--all"]
                         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except MissingRagApiKeyError as ex:
+                    logger.error(f"[RAG-Sync] Sync nicht gestartet: {ex}")
                 except Exception as ex:
-                    print(f"[RAG-Sync-Trigger Error]: {ex}", file=sys.stderr)
+                    logger.error(f"[RAG-Sync-Trigger] Fehler: {ex}")
             asyncio.create_task(trigger_background_rag_sync())
 
         return {
@@ -3332,31 +3381,173 @@ except Exception as _pdm_err:
     logger.warning(f"[Permissions] Decision-Factory nicht registriert: {_pdm_err}")
 
 
+# --- Folgeaktionen: Beleg statt Behauptung --------------------------------
+# Ein Downstream-Aufruf gilt nur dann als ausgefuehrt, wenn der Antwort-Body den
+# Vertrag des Endpunkts erfuellt (Status UND Inhalt), bei Schreibvorgaengen
+# zusaetzlich der persistierte Zustand. HTTP 200 allein ist kein Beleg:
+# /api/permission-gates/*/decide antwortet auch bei gescheiterter Ausfuehrung
+# mit 200 und legt den Fehlschlag in den Body.
+
+_FOLGE_OK = "Folgeaktion ausgeführt"
+
+
+def _folge_nicht(aktion: str, grund: str) -> str:
+    """Ehrliche Meldung: nichts ausgefuehrt, Grund aus der Antwort."""
+    return f"Folgeaktion nicht ausgeführt: {aktion} — {grund}"
+
+
+def _antwort_grund(antwort: Any) -> str:
+    """Kurzgrund aus einer Fehlerantwort, ohne den Body zu verschlucken."""
+    if not isinstance(antwort, dict):
+        return f"Antwort ist kein JSON-Objekt ({type(antwort).__name__})"
+    detail = antwort.get("error") or antwort.get("detail") or antwort.get("ergebnis")
+    return str(detail or antwort.get("status") or "ohne Begründung")[:300]
+
+
+def _pruefe_move_antwort(antwort: Any, ref: str) -> str:
+    """Vertrag von POST /api/mission-control/tasks/move:
+    ``{"status": "ok", "task": {...}}`` mit dem verschobenen Task.
+
+    Rueckgabe "" = belegt, sonst der Grund. Geprueft wird der Task-Stand aus
+    der Antwort (der Endpunkt gibt den unter dem Lock mutierten Task zurueck),
+    nicht ein spaeterer Read-Back.
+    """
+    if not isinstance(antwort, dict) or antwort.get("status") != "ok":
+        return _antwort_grund(antwort)
+    task = antwort.get("task")
+    if not isinstance(task, dict):
+        return "Antwort ohne Task-Objekt"
+    if str(task.get("id") or "") != str(ref):
+        return f"Antwort betrifft Task '{task.get('id')}' statt '{ref}'"
+    if task.get("status") != "in_progress":
+        return f"Task-Status '{task.get('status')}' statt 'in_progress'"
+    return ""
+
+
+def _pruefe_gate_persistiert(ref: str) -> str:
+    """Persistierter Gate-Status: nur ein 'approved'-Gate gilt als ausgefuehrt.
+
+    Der Endpunkt antwortet auch fuer unbekannte Gate-Arten mit ``status: ok``,
+    ohne etwas zu tun — der Body allein reicht deshalb nicht.
+    """
+    try:
+        gates = _load_permission_gates() or {}
+    except Exception as e:
+        return f"Gate-Status nicht lesbar ({e})"
+    gate = next((g for g in gates.get("gates", []) if str(g.get("id")) == str(ref)), None)
+    if gate is None:
+        return f"Gate '{ref}' nicht im Gate-Store gefunden"
+    if gate.get("status") != "approved":
+        return f"Gate-Status '{gate.get('status')}' statt 'approved'"
+    return ""
+
+
+def _pruefe_gate_antwort(antwort: Any, ref: str) -> str:
+    """Vertrag von POST /api/permission-gates/{id}/decide: status ok|error|
+    already_decided plus gate_id und decision."""
+    if not isinstance(antwort, dict) or antwort.get("status") != "ok":
+        return _antwort_grund(antwort)
+    if str(antwort.get("gate_id") or "") != str(ref):
+        return f"Antwort betrifft Gate '{antwort.get('gate_id')}' statt '{ref}'"
+    if str(antwort.get("decision") or "").lower() != "approve":
+        return f"Antwort meldet Entscheidung '{antwort.get('decision')}' statt 'approve'"
+    return _pruefe_gate_persistiert(ref)
+
+
+def _pruefe_synthese_beleg(task: Any) -> str:
+    """Persistierter Parent-Task der Synthese: finalized UND completed."""
+    if task is None:
+        return "Parent-Task nicht in Mission Control gefunden"
+    if not task.get("synthesis_finalized"):
+        return "synthesis_finalized nicht gesetzt"
+    if task.get("status") != "completed":
+        return f"Parent-Status '{task.get('status')}' statt 'completed'"
+    return ""
+
+
+async def _synthese_parent(pid: str):
+    """(lesbar, task) aus dem persistierten Mission-Control-Store."""
+    try:
+        data = await asyncio.to_thread(_load_mission_control_data) or {}
+    except Exception as e:
+        logger.warning(f"[Decision] Mission-Control-Store nicht lesbar: {e}")
+        return False, None
+    task = next((t for t in data.get("tasks", []) if str(t.get("id")) == str(pid)), None)
+    return True, task
+
+
+async def _followup_synthesis(pid: str, dossier: str, dec: dict) -> str:
+    aktion = f"Synthese für {pid}"
+    lesbar, vorher = await _synthese_parent(pid)
+    if not lesbar:
+        return _folge_nicht(aktion, "Mission-Control-Store nicht lesbar — nicht verifizierbar")
+    if vorher is not None and vorher.get("synthesis_finalized"):
+        return _folge_nicht(aktion, "bereits finalisiert (synthesis_finalized=true)")
+    try:
+        await _finalize_synthesis_after_approval(
+            pid, dossier, dec.get("kurzfassung") or "",
+            "Owner-Freigabe über den Entscheidungs-Service")
+    except Exception as e:
+        return _folge_nicht(aktion, f"Aufruf fehlgeschlagen: {e}")
+    lesbar, nachher = await _synthese_parent(pid)
+    if not lesbar:
+        return _folge_nicht(aktion, "Mission-Control-Store nicht lesbar — nicht verifizierbar")
+    grund = _pruefe_synthese_beleg(nachher)
+    if grund:
+        return _folge_nicht(aktion, grund)
+    return f"{_FOLGE_OK}: Synthese {pid} finalisiert (belegt: synthesis_finalized=true, status=completed)."
+
+
+async def _followup_mission_start(ref: str) -> str:
+    aktion = f"Ausführung für Mission {ref or '(ohne ref_id)'}"
+    if not ref:
+        return _folge_nicht(aktion, "Entscheidungs-Block trägt keine ref_id")
+    try:
+        antwort = await asyncio.to_thread(
+            _decision_self_api, "POST", "/api/mission-control/tasks/move",
+            {"task_id": ref, "target_status": "in_progress"})
+    except Exception as e:
+        return _folge_nicht(aktion, f"Aufruf fehlgeschlagen: {e}")
+    grund = _pruefe_move_antwort(antwort, ref)
+    if grund:
+        return _folge_nicht(aktion, grund)
+    return (f"{_FOLGE_OK}: Mission {ref} auf 'in_progress' verschoben und Ausführung "
+            "angestoßen (belegt: move status=ok, task.status=in_progress).")
+
+
+async def _followup_permission_gate(ref: str) -> str:
+    aktion = f"Rechte-Gate {ref or '(ohne ref_id)'}"
+    if not ref:
+        return _folge_nicht(aktion, "Entscheidungs-Block trägt keine ref_id")
+    try:
+        antwort = await asyncio.to_thread(
+            _decision_self_api, "POST",
+            f"/api/permission-gates/{ref}/decide", {"decision": "approve"})
+    except Exception as e:
+        return _folge_nicht(aktion, f"Aufruf fehlgeschlagen: {e}")
+    grund = _pruefe_gate_antwort(antwort, ref)
+    if grund:
+        return _folge_nicht(aktion, grund)
+    return f"{_FOLGE_OK}: Rechte-Gate {ref} freigegeben (belegt: status=ok, Gate persistiert als 'approved')."
+
+
 async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
-    """Fuehrt nach der Statusaenderung die typ-spezifische Folgeaktion aus."""
+    """Fuehrt nach der Statusaenderung die typ-spezifische Folgeaktion aus.
+
+    Meldet 'ausgeführt' nur bei belegter Ausfuehrung (Body-Vertrag und, bei
+    Schreibvorgaengen, persistierter Zustand); sonst die ehrliche Variante
+    mit dem Grund aus der Antwort.
+    """
     ref = dec.get("ref_id") or ""
     dossier = dec.get("dossier") or ""
     if decision != "approve":
         return "Abgelehnt — keine Folgeaktion ausgeführt."
     if typ == "synthesis_freigabe":
-        await _finalize_synthesis_after_approval(
-            ref or "projekt", dossier, dec.get("kurzfassung") or "",
-            "Owner-Freigabe über den Entscheidungs-Service")
-        return "Synthese finalisiert (Abschlussbericht + Parent abgeschlossen)."
+        return await _followup_synthesis(ref or "projekt", dossier, dec)
     if typ == "mission_freigabe":
-        if ref:
-            # Der MC-Task steht auf 'approval' -> ueber den bestehenden Move-Pfad
-            # starten (setzt in_progress + startet die Ausfuehrung).
-            await asyncio.to_thread(_decision_self_api, "POST",
-                                    "/api/mission-control/tasks/move",
-                                    {"task_id": ref, "target_status": "in_progress"})
-        return f"Ausführung für Mission {ref} gestartet."
+        return await _followup_mission_start(ref)
     if typ == "permission_gate":
-        if ref:
-            await asyncio.to_thread(_decision_self_api, "POST",
-                                    f"/api/permission-gates/{ref}/decide",
-                                    {"decision": "approve"})
-        return f"Rechte-Gate {ref} ausgeführt."
+        return await _followup_permission_gate(ref)
     return "Keine Folgeaktion nötig (Statusänderung genügt)."
 
 
@@ -11388,6 +11579,7 @@ _STARTUP_HOOKS.extend([
     _harden_secret_permissions,  # 3. Secret-Dateien auf 600 setzen
     _start_gateway_idle_loop,    # 4. IMAP/Inbox/Internet-Watchdog-Loops
     _warm_hermes_skill_caches,   # 4. Skills-Cache vorwärmen (Thread)
+    _check_rag_api_key_config,   # 5. RAG-Key vorhanden? Fehlt er -> ERROR-Zeile
 ])
 
 _SHUTDOWN_HOOKS.extend([

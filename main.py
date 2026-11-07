@@ -310,6 +310,14 @@ except Exception as _pj_err:  # pragma: no cover - darf den Start nie blockieren
 
     def allowed_roots(extra=None):  # type: ignore[misc]
         return []
+
+# --- Rollenzaun fuer die in main.py verbliebenen schreibenden Routen ---------
+# Ein Injektionspunkt (archon/routers/_rbac.py): `main.py` registriert seine
+# require_admin-Funktion am Dateiende per configure(); hier wird nur der
+# Aufrufpfad importiert. Fehlt die Injektion, sperrt der Zaun (503) statt
+# still durchzulassen — fail-closed.
+from archon.routers._rbac import require_admin_or_503  # noqa: E402
+
 os.makedirs(OBSIDIAN_VAULT_DIR, exist_ok=True)
 os.makedirs(os.path.join(WORKSPACE_DIR, "sandbox"), exist_ok=True)
 os.makedirs(MEMORY_DIR, exist_ok=True)
@@ -2205,6 +2213,9 @@ def api_brain_vault_file(path: str):
 
 @app.post("/api/v1/library/upload")
 async def api_library_upload(request: Request):
+    # RBAC: Datei-Schreiben in den Bibliotheksbaum ist Admin-Sache. Der Zaun
+    # steht VOR jedem makedirs/open, damit ein 403 keinen Seiteneffekt hat.
+    require_admin_or_503(request)
     try:
         from utils.batch_library_importer import resolve_raw_docs_dir, resolve_vault_path, process_document
         raw_dir = resolve_raw_docs_dir()
@@ -2227,13 +2238,32 @@ async def api_library_upload(request: Request):
         results = []
         for file in uploaded_files:
             if hasattr(file, "filename") and file.filename:
-                file_path = os.path.join(raw_dir, file.filename)
+                # Traversal-Haertung: nur der Basisname wird verwendet, danach
+                # laeuft der Zielpfad durch das Pfad-Jail mit `raw_dir` als
+                # erlaubter Wurzel. Kein Schreiben ausserhalb von raw_dir.
+                name = os.path.basename(str(file.filename).replace("\\", "/")).strip()
+                if not name or name in (".", ".."):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Ungueltiger Dateiname: {file.filename!r}"
+                    )
+                try:
+                    file_path = safe_path(
+                        os.path.join(raw_dir, name),
+                        must_exist=False, allow_write=True,
+                        allow_dirs=False, extra_roots=[raw_dir],
+                    )
+                except PathJailError as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Dateiname nicht erlaubt: {e}"
+                    )
                 content = await file.read()
                 with open(file_path, "wb") as f:
                     f.write(content)
                     
                 item_info = {
-                    "filename": file.filename,
+                    "filename": name,
                     "size_bytes": len(content),
                     "saved_path": file_path
                 }
@@ -2265,6 +2295,9 @@ async def api_library_upload(request: Request):
             "uploaded_count": len(results),
             "items": results
         }
+    except HTTPException:
+        # 400/403 nicht in ein 500 umdeuten (Zaun-/Namensfehler bleiben sichtbar).
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -3021,8 +3054,29 @@ async def api_telegram_relay(ziel_agent: str = Form(""), text: str = Form(""),
     logger.info(f"[Relay] {ziel}: {len(msg)} Z rein, {len(antwort)} Z zurueck an Telegram")
     return {"status": "ok", "ziel_agent": ziel, "antwort_kopf": antwort[:400]}
 
+_TELEGRAM_CHAT_ID_RE = re.compile(r"^-?[0-9]{1,20}$")
+
+
+def _redact_telegram_secrets(text: object) -> str:
+    """Entfernt Bot-Token und Bot-API-URLs aus Fehlertexten (Antwort/Log).
+
+    Der Token steckt in `https://api.telegram.org/bot<id>:<token>/…`; eine
+    rohe Exception-Repr kann diese URL enthalten. Deshalb wird jeder
+    Fehlertext vor Ausgabe durch diese Funktion gejagt.
+    """
+    out = str(text)
+    out = re.sub(r"https?://api\.telegram\.org/\S*", "<telegram-api-url>", out)
+    out = re.sub(r"bot[0-9]{3,}:[A-Za-z0-9_-]{10,}", "bot<redacted>", out)
+    for env_key in ("TELEGRAM_BOT_TOKEN",):
+        secret = (os.environ.get(env_key) or "").strip()
+        if secret:
+            out = out.replace(secret, "<redacted>")
+    return out
+
+
 @app.post("/api/telegram/voice-relay")
 async def api_telegram_voice_relay(
+    request: Request,
     file: UploadFile = File(None),
     file_id: str = Form(""),
     chat_id: str = Form(""),
@@ -3032,7 +3086,22 @@ async def api_telegram_voice_relay(
     """
     Empfaengt Sprachnachrichten aus Telegram (als Upload oder per Telegram file_id),
     transkribiert sie, routet sie an den Ziel-Agenten und sendet Text + Sprachantwort zurueck.
+
+    Rollenzaun: Admin oder Service-Token (der Telegram-Adapter ausserhalb dieses
+    Repos sendet `X-Archon-Service-Token`). Die Route bewegt Bot-Credentials und
+    LLM-Kosten, deshalb kein Durchlass fuer `viewer`/`operator`/`anonymous`.
     """
+    require_admin_or_503(request)
+    # `chat_id` kommt aus dem Request und steuert das Sende-Ziel mit den
+    # Bot-Credentials -> nur numerische Telegram-IDs (Gruppen sind negativ).
+    clean_chat_id = (chat_id or "").strip()
+    if clean_chat_id and not _TELEGRAM_CHAT_ID_RE.match(clean_chat_id):
+        raise HTTPException(
+            status_code=400,
+            detail="chat_id ungueltig: erwartet numerische Telegram-ID "
+                   "(z. B. '123456789' oder '-1001234567890').",
+        )
+
     from backend.voice_pipeline import (
         transcribe_audio_bytes, download_telegram_file,
         detect_target_agent, synthesize_speech, send_telegram_voice
@@ -3048,7 +3117,10 @@ async def api_telegram_voice_relay(
         try:
             audio_bytes, fname = await download_telegram_file(file_id)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Download von Telegram fehlgeschlagen: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Download von Telegram fehlgeschlagen: {_redact_telegram_secrets(e)}",
+            )
 
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Keine Audio-Daten uebergeben.")
@@ -3066,7 +3138,7 @@ async def api_telegram_voice_relay(
 
     # 4. Sprachantwort erzeugen & an Telegram senden
     voice_sent = False
-    tgt_chat = chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")
+    tgt_chat = clean_chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")
     if reply_voice and tgt_chat and answer_text and not answer_text.startswith("[Sprachnachricht"):
         try:
             speech_path = await synthesize_speech(answer_text)
@@ -3074,7 +3146,11 @@ async def api_telegram_voice_relay(
             if os.path.exists(speech_path):
                 os.remove(speech_path)
         except Exception as v_err:
-            logger.warning(f"[VoiceRelay] Sprachantwort-Versand fehlgeschlagen: {v_err}")
+            # Fehlertext kann Bot-API-URL/Token enthalten -> redigiert loggen.
+            logger.warning(
+                f"[VoiceRelay] Sprachantwort-Versand fehlgeschlagen: "
+                f"{_redact_telegram_secrets(v_err)}"
+            )
 
     return {
         "status": "ok",
@@ -8453,11 +8529,24 @@ def api_edit_vault_file_direct(payload: Dict = Body(...)):
 
 
 @app.delete("/api/vault")
-def api_delete_vault_file_direct(path: str = Query(...)):
+def api_delete_vault_file_direct(request: Request, path: str = Query(...)):
+    # RBAC: Loeschen ist Admin-Sache (vor jedem os.remove).
+    require_admin_or_503(request)
     try:
-        real_path = safe_path(path, must_exist=True, allow_write=True, allow_dirs=False)
+        real_path = safe_path(path, must_exist=True, allow_write=True, allow_dirs=False,
+                              extra_roots=[OBSIDIAN_VAULT_DIR])
     except PathJailError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    # Reichweite verengen: `extra_roots` ERWEITERT das Jail nur, es verengt es
+    # nicht (Default-Wurzeln enthalten u. a. ~/.hermes). Deshalb wird hier
+    # zusaetzlich geprueft, dass der Zielpfad wirklich unter der Vault-Wurzel
+    # liegt — sonst waere z. B. ~/.hermes/config.yaml loeschbar.
+    vault_root = os.path.realpath(os.path.abspath(os.path.expanduser(OBSIDIAN_VAULT_DIR)))
+    if real_path != vault_root and not real_path.startswith(vault_root + os.sep):
+        raise HTTPException(
+            status_code=403,
+            detail="Loeschen nur innerhalb der Vault-Wurzel erlaubt.",
+        )
     if not os.path.isfile(real_path):
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
     os.remove(real_path)

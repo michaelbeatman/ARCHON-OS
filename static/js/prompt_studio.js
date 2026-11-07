@@ -2315,41 +2315,64 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
       }
     }
     // Sandbox code runner
-    async function runSandbox() {
-      const filename = document.getElementById("sandbox-filename").value.trim();
-      const code = document.getElementById("sandbox-code").value;
-      if (!filename) return;
-      const btn = document.getElementById("sandbox-btn");
-      btn.innerText = "Ausführen...";
-      btn.disabled = true;
-      try {
-        const res = await fetch("/api/sandbox", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ file_path: filename, code_content: code })
-        });
-        const data = await res.json();
-        
-        document.getElementById("sandbox-output-block").classList.remove("hidden");
-        const consolePre = document.getElementById("sandbox-console");
-        if (data.status === "success") {
-          let output = `Exit Code: ${data.code}\n\n`;
-          if (data.stdout) {
-            output += `--- STDOUT ---\n${data.stdout}\n`;
+        async function runSandbox() {
+          const filename = document.getElementById("sandbox-filename").value.trim();
+          const code = document.getElementById("sandbox-code").value;
+          if (!filename) return;
+          const btn = document.getElementById("sandbox-btn");
+          btn.innerText = "Ausführen...";
+          btn.disabled = true;
+          try {
+            const res = await fetch("/api/sandbox/execute", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code: code, language: "python" })
+            });
+            const data = await res.json();
+
+            document.getElementById("sandbox-output-block").classList.remove("hidden");
+            const consolePre = document.getElementById("sandbox-console");
+            // Neue Endpunkt liefert andere Keys: success/failed/timeout, exit_code, stdout, stderr, duration_seconds
+            if (data.status === "success") {
+              let output = `Exit Code: ${data.exit_code}\n\n`;
+              if (data.stdout) {
+                output += `--- STDOUT ---\n${data.stdout}\n`;
+              }
+              if (data.stderr) {
+                output += `--- STDERR ---\n${data.stderr}\n`;
+              }
+              if (data.duration_seconds !== undefined) {
+                output += `\nDauer: ${data.duration_seconds}s`;
+              }
+              consolePre.innerText = output;
+              consolePre.style.color = "#22c55e";
+            } else if (data.status === "failed") {
+              let output = `Exit Code: ${data.exit_code}\n\n`;
+              if (data.stdout) {
+                output += `--- STDOUT ---\n${data.stdout}\n`;
+              }
+              if (data.stderr) {
+                output += `--- STDERR ---\n${data.stderr}\n`;
+              }
+              if (data.error) {
+                output += `\nFehler: ${data.error}`;
+              }
+              consolePre.innerText = output;
+              consolePre.style.color = "#ef4444";
+            } else if (data.status === "timeout") {
+              consolePre.innerText = `Timeout: ${data.error || "Ausführung überschritt das Zeitlimit."}`;
+              consolePre.style.color = "#ef4444";
+            } else if (data.status === "disabled") {
+              consolePre.innerText = `Deaktiviert: ${data.error || "Sandbox ist deaktiviert."}`;
+              consolePre.style.color = "#ef4444";
+            } else {
+              consolePre.innerText = `Fehler: ${data.error || data.message || "Unbekannter Fehler"}`;
+              consolePre.style.color = "#ef4444";
+            }
+          } catch (e) {
+            alert("Fehler bei Sandbox-Verbindung.");
+          } finally {
+            btn.innerText = "🚀 Code ausführen";
+            btn.disabled = false;
           }
-          if (data.stderr) {
-            output += `--- STDERR ---\n${data.stderr}\n`;
-          }
-          consolePre.innerText = output;
-          consolePre.style.color = "#22c55e";
-        } else {
-          consolePre.innerText = `Fehler: ${data.message}`;
-          consolePre.style.color = "#ef4444";
         }
-      } catch (e) {
-        alert("Fehler bei Sandbox-Verbindung.");
-      } finally {
-        btn.innerText = "🚀 Code ausführen";
-        btn.disabled = false;
-      }
-    }

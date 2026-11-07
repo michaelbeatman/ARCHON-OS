@@ -32,7 +32,7 @@ _ALLOWED = [
     ("GET", re.compile(r"^/containers/[^/]+/json$")),
     ("GET", re.compile(r"^/containers/[^/]+/logs\?.*$")),
     ("GET", re.compile(r"^/containers/[^/]+/stats\?.*$")),
-    ("GET", re.compile(r"^/containers/json$")),
+    ("GET", re.compile(r"^/containers/json(\?.*)?$")),
     ("POST", re.compile(r"^/containers/[^/]+/exec$")),
     ("POST", re.compile(r"^/exec/[^/]+/start$")),
     ("POST", re.compile(r"^/containers/[^/]+/(start|stop|restart)$")),

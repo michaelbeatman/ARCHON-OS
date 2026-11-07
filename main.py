@@ -24,6 +24,7 @@ import yaml
 import core_dispatcher
 import httpx
 import logging
+from utils.docker_client import docker_client, DockerError
 
 from backend.platform_paths import (
     OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT, HERMES_HOME,
@@ -926,131 +927,101 @@ def get_docker_containers_from_socket() -> List[Dict]:
     """
     Liest ALLE echten Docker-Container direkt vom Docker-Daemon über /var/run/docker.sock aus.
     (10 s gecacht: der Socket-Read kostet ~1 s und wird von /api/services gepollt.)
+    Nutzt utils.docker_client (Allowlist-geprüft, einheitlicher Transport).
     """
     try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(5)
-        s.connect('/var/run/docker.sock')
-        s.sendall(b'GET /containers/json?all=true HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n')
-        
-        response = b''
-        while True:
-            try:
-                chunk = s.recv(16384)
-                if not chunk: break
-                response += chunk
-            except socket.timeout:
-                break
-        s.close()
-        
-        parts = response.split(b'\r\n\r\n', 1)
-        if len(parts) < 2:
-            return load_services()
-        
-        body_raw = parts[1]
-        json_start = body_raw.find(b'[')
-        json_end = body_raw.rfind(b']')
-        
-        if json_start != -1 and json_end != -1:
-            raw_json_slice = body_raw[json_start:json_end+1]
-            clean_bytes = re.sub(rb'\r\n[0-9a-fA-F]+\r\n', b'', raw_json_slice)
-            containers_data = json.loads(clean_bytes.decode('utf-8', errors='ignore'))
-        else:
-            return load_services()
-        
-        containers_list = []
-        SYSTEM_INTERNAL_IDS = ["agent-os-container", "agent-os-ui", "agent-os", "agent_os", "agent_os_ui", "agent_os_container", "crm", "pocketbase", "pocketbase-crm"]
-        
-        saved_configs = {}
-        if os.path.exists(COUPLED_AGENTS_FILE):
-            raw_saved = _load_json(COUPLED_AGENTS_FILE, [])
-            if isinstance(raw_saved, list):
-                for sc in raw_saved:
-                    saved_configs[sc.get("id") or sc.get("container_name")] = sc
-            elif isinstance(raw_saved, dict):
-                saved_configs = raw_saved
-
-        for c in containers_data:
-            if not isinstance(c, dict): continue
-            raw_names = c.get('Names') or []
-            c_name = raw_names[0].lstrip('/') if (raw_names and len(raw_names) > 0) else c.get('Id', '')[:12]
-            c_id = c_name
-            
-            if c_name.lower() in SYSTEM_INTERNAL_IDS:
-                continue
-                
-            status_str = c.get('Status', '') or ''
-            is_online = "Up" in status_str
-            image_str = c.get('Image', '') or ''
-            
-            saved_cfg = saved_configs.get(c_name) or saved_configs.get(c_id) or {}
-            is_active = is_online
-            if "active" in saved_cfg:
-                is_active = bool(saved_cfg["active"])
-            elif "coupled" in saved_cfg:
-                is_active = bool(saved_cfg["coupled"])
-            
-            ports_list = c.get('Ports') or []
-            inspected_p = None
-            for p in ports_list:
-                if isinstance(p, dict):
-                    if 'PublicPort' in p:
-                        inspected_p = p['PublicPort']
-                        break
-                    elif 'PrivatePort' in p:
-                        inspected_p = p['PrivatePort']
-                    
-            port_num = detect_container_port(c_name, inspected_p)
-            display_name = c_name.replace('-', ' ').replace('_', ' ').title()
-            
-            default_role = saved_cfg.get("role") or ("Orchestrator & System-Architekt" if "hermes" in c_name.lower() else "Senior Coder / Software Engineer")
-            default_model = saved_cfg.get("model") or "free-forever"
-            
-            containers_list.append({
-                "id": c_id,
-                "name": display_name,
-                "container_name": c_name,
-                "image": image_str,
-                "description": f"Docker Container '{c_name}' | Image: {image_str.split(':')[0]} | Port: {port_num}",
-                "status": status_str,
-                "active": is_active,
-                "coupled": is_active,
-                "online": is_online,
-                "running": is_online,
-                "port": port_num,
-                "model": default_model,
-                "role": default_role
-            })
-            
-        return containers_list if len(containers_list) > 0 else load_services()
-    except Exception as e:
-        print(f"Error querying docker socket: {e}")
+        raw = docker_client.request("GET", "/containers/json?all=true", timeout=5.0)
+        containers_data = json.loads(raw.decode("utf-8"))
+    except DockerError as e:
+        print(f"Error querying docker socket via docker_client: {e}")
         return load_services()
+    except Exception as e:
+        print(f"Error parsing docker response: {e}")
+        return load_services()
+
+    containers_list = []
+    SYSTEM_INTERNAL_IDS = ["agent-os-container", "agent-os-ui", "agent-os", "agent_os", "agent_os_ui", "agent_os_container", "crm", "pocketbase", "pocketbase-crm"]
+
+    saved_configs = {}
+    if os.path.exists(COUPLED_AGENTS_FILE):
+        raw_saved = _load_json(COUPLED_AGENTS_FILE, [])
+        if isinstance(raw_saved, list):
+            for sc in raw_saved:
+                saved_configs[sc.get("id") or sc.get("container_name")] = sc
+        elif isinstance(raw_saved, dict):
+            saved_configs = raw_saved
+
+    for c in containers_data:
+        if not isinstance(c, dict): continue
+        raw_names = c.get('Names') or []
+        c_name = raw_names[0].lstrip('/') if (raw_names and len(raw_names) > 0) else c.get('Id', '')[:12]
+        c_id = c_name
+
+        if c_name.lower() in SYSTEM_INTERNAL_IDS:
+            continue
+
+        status_str = c.get('Status', '') or ''
+        is_online = "Up" in status_str
+        image_str = c.get('Image', '') or ''
+
+        saved_cfg = saved_configs.get(c_name) or saved_configs.get(c_id) or {}
+        is_active = is_online
+        if "active" in saved_cfg:
+            is_active = bool(saved_cfg["active"])
+        elif "coupled" in saved_cfg:
+            is_active = bool(saved_cfg["coupled"])
+
+        ports_list = c.get('Ports') or []
+        inspected_p = None
+        for p in ports_list:
+            if isinstance(p, dict):
+                if 'PublicPort' in p:
+                    inspected_p = p['PublicPort']
+                    break
+                elif 'PrivatePort' in p:
+                    inspected_p = p['PrivatePort']
+
+        port_num = detect_container_port(c_name, inspected_p)
+        display_name = c_name.replace('-', ' ').replace('_', ' ').title()
+
+        default_role = saved_cfg.get("role") or ("Orchestrator & System-Architekt" if "hermes" in c_name.lower() else "Senior Coder / Software Engineer")
+        default_model = saved_cfg.get("model") or "free-forever"
+
+        containers_list.append({
+            "id": c_id,
+            "name": display_name,
+            "container_name": c_name,
+            "image": image_str,
+            "description": f"Docker Container '{c_name}' | Image: {image_str.split(':')[0]} | Port: {port_num}",
+            "status": status_str,
+            "active": is_active,
+            "coupled": is_active,
+            "online": is_online,
+            "running": is_online,
+            "port": port_num,
+            "model": default_model,
+            "role": default_role
+        })
+
+    return containers_list if len(containers_list) > 0 else load_services()
 
 def post_docker_container_action(container_name: str, action: str = "start") -> dict:
     try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(5)
-        s.connect('/var/run/docker.sock')
-        req = f'POST /containers/{container_name}/{action} HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n'.encode('utf-8')
-        s.sendall(req)
-        resp = s.recv(4096)
-        s.close()
-        
+        # validate_container_name is called inside container_action
+        raw = docker_client.container_action(container_name, action)
+        # docker_client returns raw bytes; we don't need the response body for start/stop/restart
+        # Just verify no DockerError was raised
+
         # Keep hermes-dashboard-proxy in sync if hermes-dashboard restarted
         if container_name in ["hermes-dashboard", "hermes"] and action in ["start", "restart"]:
             try:
-                s2 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                s2.settimeout(5)
-                s2.connect('/var/run/docker.sock')
-                req2 = f'POST /containers/hermes-dashboard-proxy/restart HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n'.encode('utf-8')
-                s2.sendall(req2)
-                s2.recv(4096)
-                s2.close()
+                docker_client.container_action("hermes-dashboard-proxy", "restart")
             except Exception:
                 pass
 
         return {"status": "success", "message": f"Container {container_name} {action}ed."}
+    except DockerError as e:
+        return {"status": "error", "message": str(e)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -8415,31 +8386,12 @@ def api_delete_vault_file_direct(path: str = Query(...)):
 
 @app.post("/api/sandbox")
 def api_run_python_sandbox(payload: Dict = Body(...)):
-    fname = re.sub(r"[^a-zA-Z0-9._-]", "_", payload.get("file_path", "sandbox_script.py"))
-    if not fname.endswith(".py"):
-        fname += ".py"
-    code_content = payload.get("code_content", "")
-    sb_dir = os.path.join(DATA_DIR, "sandbox")
-    os.makedirs(sb_dir, exist_ok=True)
-    script_path = os.path.join(sb_dir, fname)
-    with open(script_path, "w", encoding="utf-8") as f:
-        f.write(code_content)
-    try:
-        proc = subprocess.run(
-            [sys.executable, script_path],
-            cwd=sb_dir,
-            capture_output=True,
-            text=True,
-            timeout=15
-        )
-        return {
-            "status": "success",
-            "code": proc.returncode,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr
-        }
-    except Exception as e:
-        return {"status": "error", "code": -1, "stdout": "", "stderr": str(e)}
+    # NOTBREMSE S6: Nutzer-Code-Ausführung mit Host-Python deaktiviert.
+    # Isolierte Ausführung: POST /api/sandbox/execute (backend/ephemeral_sandbox, Docker, --network none).
+    raise HTTPException(
+        status_code=501,
+        detail="Sandbox deaktiviert (S6-Hardening). Nutze POST /api/sandbox/execute für isolierte Ausführung."
+    )
 
 @app.get("/api/vault/files")
 def api_get_vault_files():

@@ -11,11 +11,85 @@ import time
 import uuid
 import subprocess
 import json
+import shlex
+import socket
 from typing import Dict, Any, Optional
+
+from utils.docker_client import docker_client, DockerError
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SANDBOX_TEMP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "sandbox_runs")
 os.makedirs(SANDBOX_TEMP_DIR, exist_ok=True)
+
+
+def _resolve_host_path(container_path: str) -> Optional[str]:
+    """
+    Löst einen Container-Pfad auf den entsprechenden Host-Pfad über die gemounteten Volumes auf.
+
+    Priorität:
+    1. ARCHON_SANDBOX_HOST_DIR Environment Variable (Override, hat Vorrang)
+    2. Automatisch über Docker API: eigenen Container inspizieren, Mounts prüfen,
+       längsten Destination-Präfix-Match finden
+
+    Returns:
+        Host-Pfad als String, oder None wenn nicht auflösbar.
+    """
+    # 1. Override per Environment Variable
+    override = os.environ.get("ARCHON_SANDBOX_HOST_DIR")
+    if override:
+        return os.path.abspath(override)
+
+    # 2. Eigene Container-ID ermitteln
+    container_id = os.environ.get("HOSTNAME") or socket.gethostname()
+    if not container_id:
+        return None
+
+    # Container-Info via docker_client holen (Allowlist: GET /containers/{id}/json)
+    try:
+        raw = docker_client.request("GET", f"/containers/{container_id}/json", timeout=5.0)
+        info = json.loads(raw.decode("utf-8"))
+    except (DockerError, json.JSONDecodeError, UnicodeDecodeError, OSError):
+        return None
+
+    mounts = info.get("Mounts", [])
+    if not mounts:
+        return None
+
+    # Pfad normalisieren
+    container_path = os.path.abspath(container_path)
+
+    # Mount mit längstem Destination-Präfix finden, der container_path abdeckt
+    best_match = None
+    best_len = -1
+
+    for mount in mounts:
+        dest = mount.get("Destination", "")
+        src = mount.get("Source", "")
+        if not dest or not src:
+            continue
+        dest = os.path.abspath(dest)
+        src = os.path.abspath(src)
+
+        # Prüfen ob container_path unter dest liegt (oder genau dest ist)
+        try:
+            rel = os.path.relpath(container_path, dest)
+            if not rel.startswith(".."):
+                # container_path ist unter dest
+                if len(dest) > best_len:
+                    best_len = len(dest)
+                    best_match = (src, dest, rel)
+        except ValueError:
+            # Kreuz-Device, nicht relativierbar
+            continue
+
+    if best_match is None:
+        return None
+
+    src, dest, rel = best_match
+    if rel == ".":
+        return src
+    return os.path.join(src, rel)
+
 
 class EphemeralSandbox:
     def __init__(self, temp_dir: str = SANDBOX_TEMP_DIR):
@@ -31,7 +105,7 @@ class EphemeralSandbox:
         network_enabled: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
-        Führt den Code in einem flüchtigen, temporären Docker-Container oder Subprozess aus.
+        Führt den Code in einem flüchtigen, temporären Docker-Container aus.
         Gibt Ausgaben, Laufzeit, Speicherverbrauch und Exit-Code zurück.
         """
         try:
@@ -61,32 +135,58 @@ class EphemeralSandbox:
                 f.write(code)
 
             t0 = time.time()
-            net_flag = "" if network_enabled else "--network none"
-            docker_cmd = (
-                f'docker run --rm {net_flag} '
-                f'-m {memory_limit_mb}m --cpus {cpu_limit} '
-                f'-v "{os.path.abspath(self.temp_dir)}:/sandbox" '
-                f'-w /sandbox python:3.11-alpine python /sandbox/{os.path.basename(run_file)}'
-            )
+            net_flag = ["--network", "none"] if not network_enabled else []
 
-            # Prüfe, ob Docker verfügbar ist; andernfalls fail-closed (kein Host-Python-Fallback)
+            # Host-Pfad für den Volume-Mount auflösen
+            host_temp_dir = _resolve_host_path(self.temp_dir)
+            if not host_temp_dir:
+                return {
+                    "status": "error",
+                    "run_id": run_id,
+                    "error": "Sandbox-Host-Pfad nicht auflösbar — Ausführung verweigert (Docker-outside-of-Docker Mount fehlgeschlagen).",
+                    "engine": "unavailable",
+                    "exit_code": -1,
+                    "stdout": "",
+                    "stderr": "Cannot resolve container path to host path for volume mount.",
+                    "duration_seconds": 0,
+                    "memory_limit_mb": memory_limit_mb,
+                    "network_enabled": network_enabled,
+                    "limits_enforced": False,
+                    "destroyed": True
+                }
+
+            # Docker-Kommando als Liste bauen (kein shell=True, daher sicheres Quoting)
+            # shlex.quote ist bei Liste nicht nötig, aber Host-Pfad kann Leerzeichen enthalten
+            docker_cmd = [
+                "docker", "run", "--rm",
+            ]
+            docker_cmd.extend(net_flag)
+            docker_cmd.extend([
+                "-m", f"{memory_limit_mb}m",
+                "--cpus", str(cpu_limit),
+                "-v", f"{host_temp_dir}:/sandbox",
+                "-w", "/sandbox",
+                "python:3.11-alpine",
+                "python", f"/sandbox/{os.path.basename(run_file)}"
+            ])
+
+            # Prüfe, ob Docker verfügbar ist; andernfalls fail-closed
             use_docker = True
             try:
-                chk = subprocess.run("docker info", shell=True, capture_output=True, text=True, timeout=3)
+                chk = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=3)
                 if chk.returncode != 0:
                     use_docker = False
             except Exception:
                 use_docker = False
 
             if use_docker:
-                proc = subprocess.run(docker_cmd, shell=True, capture_output=True, text=True, timeout=timeout_seconds)
+                proc = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=timeout_seconds)
                 stdout = proc.stdout
                 stderr = proc.stderr
                 exit_code = proc.returncode
                 limits_enforced = True
             else:
                 # FAIL-CLOSED: Ohne Docker-Isolation KEINE Ausführung.
-                # Der alte subprocess-Fallback lief auf dem Host-Python — exakt das, was S6 verbietet.
                 return {
                     "status": "error",
                     "run_id": run_id,
@@ -139,5 +239,6 @@ class EphemeralSandbox:
                     os.remove(run_file)
                 except Exception:
                     pass
+
 
 ephemeral_sandbox = EphemeralSandbox()

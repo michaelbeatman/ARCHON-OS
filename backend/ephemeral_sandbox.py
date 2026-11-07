@@ -18,8 +18,20 @@ from typing import Dict, Any, Optional
 from utils.docker_client import docker_client, DockerError
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SANDBOX_TEMP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "sandbox_runs")
-os.makedirs(SANDBOX_TEMP_DIR, exist_ok=True)
+SANDBOX_TEMP_DIR = "/opt/data/archon_sandbox_runs"
+
+
+def _ensure_sandbox_temp_dir():
+    """Lazy directory creation - only when actually needed."""
+    try:
+        os.makedirs(SANDBOX_TEMP_DIR, exist_ok=True)
+    except PermissionError:
+        # Fallback for test environments without /opt/data access
+        import tempfile
+        fallback = os.path.join(tempfile.gettempdir(), "archon_sandbox_runs")
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+    return SANDBOX_TEMP_DIR
 
 
 def _resolve_host_path(container_path: str) -> Optional[str]:
@@ -92,8 +104,8 @@ def _resolve_host_path(container_path: str) -> Optional[str]:
 
 
 class EphemeralSandbox:
-    def __init__(self, temp_dir: str = SANDBOX_TEMP_DIR):
-        self.temp_dir = temp_dir
+    def __init__(self, temp_dir: Optional[str] = None):
+        self.temp_dir = temp_dir or _ensure_sandbox_temp_dir()
 
     def execute_in_sandbox(
         self,

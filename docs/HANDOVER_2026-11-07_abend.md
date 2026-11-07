@@ -1,11 +1,13 @@
 # Handover — neue Session (Abendstand 2026-11-07)
 
-**Ersetzt** `docs/HANDOVER_2026-11-07.md` (Stand Vormittag) — seither **14 Commits**
-(gemessen: `git rev-list --count f9b2ab52..HEAD` → 14; der Auftrag sprach von „elf",
-die Auftragsliste selbst enthielt schon 12. Nachgerechnet, nicht übernommen).
+**Ersetzt** `docs/HANDOVER_2026-11-07.md` (Stand Vormittag) — seither **16 Commits**
+(gemessen 2026-11-07 abends neu: `git rev-list --count f9b2ab52..HEAD` → **16**. Die
+Vorfassung dieses Dokuments nannte 14; die Differenz sind die beiden Doku-Commits
+`1e9856a6` und `314ea093`. Nachgerechnet, nicht übernommen).
 
-**Stand:** 2026-11-07, abends · Branch `refactor/critical-hardening` @ `f22402fc`,
-live deployt (`--reload`, Änderungen sofort aktiv) · **54 Commits seit `main`** (`dd9f111a`).
+**Stand:** 2026-11-07, abends · Branch `refactor/critical-hardening` @ **`314ea093`**
+(`git log --oneline -1`), live deployt (`--reload`, Änderungen sofort aktiv) ·
+**55 Commits seit `main`** (`git rev-list --count main..HEAD` → 55; `main` = `dd9f111a`).
 
 ---
 
@@ -15,7 +17,7 @@ live deployt (`--reload`, Änderungen sofort aktiv) · **54 Commits seit `main`*
 Projekt: Archon OS, /mnt/raid/AgenticOS-2026 (Docker, Port 8501, Nur-Loopback-Binding).
 Lies zuerst docs/REFACTOR_STAND_2026-11-06.md (Umbau) und
 docs/AUDIT_STATUS.md (40-Punkte-Audit: Status + Messbefehl je Punkt).
-Branch: refactor/critical-hardening (54 Commits seit main). NIEMALS main. Kein Push, kein Merge.
+Branch: refactor/critical-hardening (55 Commits seit main). NIEMALS main. Kein Push, kein Merge.
 Vor jeder Änderung messen, nach jeder Änderung DREI Pflicht-Guards:
 1) .venv/bin/python scripts/route_parity.py --check
      scripts/parity_baselines/openapi_baseline_2026-11-06.json    # Exit 0, Soll: 585 Pfade / 861 Operationen
@@ -70,10 +72,12 @@ sind die sechs Sandbox-Proben (Kapitel „Sandbox") erneut zu fahren.
 
 ---
 
-## Was seit dem Vorgänger-Handover passiert ist (14 Commits, je gemessen via `git show --stat`)
+## Was seit dem Vorgänger-Handover passiert ist (16 Commits, je gemessen via `git show --stat`)
 
 | Commit | Inhalt |
 |---|---|
+| `314ea093` | **Handover-Zahlen nachgezogen** — `docs/HANDOVER_2026-11-07_abend.md`: 54 statt 53 Commits, B8 systematisch per AST-Scan belegt (Doku) |
+| `1e9856a6` | **Handover Abend 2026-11-07** — `docs/HANDOVER_2026-11-07_abend.md` neu, ersetzt den Vormittagsstand (Doku) |
 | `f22402fc` | **Entwickler-Rollen auf openrouter** — `roles.json` 4+/4−: `devops_cloud_sec_specialist` und `senior_fullstack_engineer` auf `openrouter` / `deepseek/deepseek-v4.1-flash-1017` (kein Free-Tier-Cooldown) |
 | `69aff9da` | **Dublette aus Git entfernt** — `archon/core/agent_profiles.json` gelöscht (3.438 Zeilen, die 2,6-MB-Kopie; Datei liegt weiter untracked im Arbeitsbaum) |
 | `92d31f61` | **15 Screenshots ins Handbuch** — `docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx` binär, 7,68 MB → 4,75 MB (Bilder komprimiert), Text/Tabellen/Überschriften unverändert |
@@ -183,18 +187,27 @@ Alle Rollen standen auf demselben Free-Tier-Modell; drei Läufe starben am Coold
 |---|---|---|
 | 1 | **A5 / A7 / A8** | 🔴 offen: **52** Modul-Globals (`grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py`), **0** `Depends()`, Config verstreut (15+ Dateien). Großer Umbau, eigener Branch/Tag. |
 | 2 | **B10 Pfad-Config** | 🟡 **145** × `/opt/data` in `main.py`+`archon`+`backend`+`utils` (195 mit `scripts`/`tests`). Braucht eigene Config-Schicht **plus eigenen Tag mit eigener Baseline**. |
-| 3 | **S7 / B5 / B8** | geprüft, unauffällig — **aber**: S7 fand ich mit **22** `safe_load` in `main.py`+`archon`+`backend`+`utils` (**74** projektweit ohne `.venv`), **0** unsichere `yaml.load(`. B5: **10** `execute(f"…")`-Stellen, alle mit Platzhalter-/Spaltenlisten aus festen Strings (`set_clause`, `col_names`, `', '.join(updates)`, `IN ({placeholders})`) — **ein latenter Härtungspunkt**: `local_memory_bridge.py:454` `evict_stale_memories(table=…)` setzt `{table}` ungeprüft ins SQL (Aufrufer übergeben heute feste Namen). B8: **systematisch geprüft** (AST-Scan über alle `*.py` außer `.venv`/Archiv: HTTP-Aufrufe in `async def` ohne `await` mit `httpx`/`client`-Bezug) — genau **ein** Treffer: `backend/agent_router.py:633` `async with client.stream(...)` auf einem `httpx.AsyncClient`. Das ist das korrekte, nicht-blockierende Muster. Kein blockierendes `httpx.Client` in einem async-Handler gefunden. |
+| 3 | **S7 / B5 / B8** | geprüft, unauffällig — **aber**: S7 fand ich mit **22** `safe_load` in `main.py`+`archon`+`backend`+`utils` (**74** projektweit ohne `.venv`), **0** unsichere `yaml.load(`. B5: **10** `execute(f"…")`-Stellen, alle mit Platzhalter-/Spaltenlisten aus festen Strings (`set_clause`, `col_names`, `', '.join(updates)`, `IN ({placeholders})`) — **ein latenter Härtungspunkt**: `local_memory_bridge.py:454` `evict_stale_memories(table=…)` setzt `{table}` ungeprüft ins SQL (Aufrufer übergeben heute feste Namen). B8: **systematisch geprüft**, Ergebnis nachgemessen 07.11.: alle `client.get/post`-Treffer
+liegen entweder in `async def` hinter `await` (korrekt) oder im **sync** `def`-Handler
+`exec_container_command_api`/`send_prompt_to_agent` (FastAPI-Threadpool → unkritisch).
+Das eine blockierende `httpx.Client` (`main.py:8942`) ist genau dieser sync-Pfad; das
+`async with client.stream(...)` in `backend/agent_router.py:633` ist das korrekte Muster.
+**Kein blockierendes `httpx` in einem `async def`-Handler** — Status ✅, Details in
+`docs/AUDIT_STATUS.md` (Abschnitt B8). |
 | 4 | **B9** | 🔴 **50** × `api_route` in `main.py`. |
 | 5 | **A6** | 🟡 **15** × `asyncio.to_thread` in `main.py` (sync-I/O in async bleibt punktuell). |
 | 6 | **Performance P1–P8** | 🔴 ungeprüft/offen (Pooling, synchrone Docker-Calls, N+1, Batching, Vault-Reads, Modell-Re-Instanziierung, Streaming, Cache-Keys). Bezug: `scripts/bench_routes.py`, 128 Routen, Median 73 ms warm (Stand 06.11.). |
 | 7 | **S3 / S4 / S9** | 🟡 laut `docs/AUDIT_STATUS.md` unverändert offen: kein Secret-Manager, kein MFA, Telegram-Token im Klartext in `.env`. |
 
-**Erledigt und in `AUDIT_STATUS.md` noch falsch/veraltet markiert** (Doku nachziehen, nicht
-Code ändern): `S6` (dort 🔴, faktisch geschlossen), `B3` (dort 🟡, keine rohen Sockets
-mehr), `B1` (dort 🟡, vierter Schreiber migriert = vollständig), `S7/B5/B8` (dort ⚪,
-oben eingeordnet). **Vorsicht:** `AUDIT_STATUS.md` ist der Abarbeitungsstand vom 06.11.
-und wurde in dieser Runde **nicht** aktualisiert — beim nächsten Mal selbst nachlesen,
-nicht abschreiben.
+**Doku nachgezogen (2026-11-07 abends, nur Doku, kein Code).** `docs/AUDIT_STATUS.md` ist auf
+den gemessenen Ist-Stand gezogen: `S6` ✅ (alter Pfad 501, Isolation live belegt), `B1` ✅
+(alle vier Schreiber `update_mc` + Delta-Merge, `RuntimeError` statt Fallback), `B3` 🟡
+(Hauptpfad über Allowlist, **Rest:** `backend/hermes_updater.py:58`
+`DockerSocketClient` umgeht sie), `S7` ✅ (22/74 `safe_load`, 0 unsichere `yaml.load`),
+`B5` 🟡 (10 `execute(f"`-Stellen sicher, Härtungspunkt
+`local_memory_bridge.py:454 evict_stale_memories(table=…)`), `B8` ✅.
+Kennzahlen dort ebenfalls nachgezogen: `main.py` 11.291 · 308 Decorator-Routen · 585/861
+Live-Pfade · 20 Router (6 mit `configure`) · 234 passed/8 skipped · B10 = 145.
 
 ---
 
@@ -273,6 +286,7 @@ Seiteneffekte haben, ist weiterhin ungeklärt.
 
 ---
 
-*Erstellt: 2026-11-07 abends · Branch `refactor/critical-hardening` @ `f22402fc` ·
-54 Commits seit `main` (`dd9f111a`) · alle Zahlen in diesem Dokument am selben Abend
-mit den genannten Befehlen gemessen.*
+*Erstellt: 2026-11-07 abends · Branch `refactor/critical-hardening` @ `314ea093` ·
+55 Commits seit `main` (`dd9f111a`) · alle Zahlen in diesem Dokument am selben Abend
+mit den genannten Befehlen gemessen. Doku-Nachzug: `docs/AUDIT_STATUS.md` am 07.11. abends
+auf den gemessenen Ist-Stand gezogen (S6/B1/S7/B8 ✅, B5/B3 🟡 mit benanntem Rest).*

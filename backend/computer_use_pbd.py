@@ -30,6 +30,59 @@ import json
 import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
+
+def _find_line_value(text: str, key: str):
+    """Erster Wert einer Zeile, die mit `key` beginnt (z. B. "created_at: ")."""
+    for line in text.splitlines():
+        if line.startswith(key):
+            return line[len(key):].strip()
+    return None
+
+
+def _replace_line_value(text: str, key: str, value: str) -> str:
+    """Ersetzt den Wert der ersten Zeile, die mit `key` beginnt."""
+    out, done = [], False
+    for line in text.splitlines(keepends=True):
+        if not done and line.startswith(key):
+            newline = "\n" if line.endswith("\n") else ""
+            out.append(f"{key}{value}{newline}")
+            done = True
+        else:
+            out.append(line)
+    return "".join(out)
+
+
+def _write_if_changed(path: str, content: str, timestamp_keys: tuple) -> bool:
+    """Schreibt `content` nur, wenn er sich abzüglich der Zeitstempel-Zeilen ändert.
+
+    Ohne diese Prüfung erzeugt jeder Synthese-Lauf einen neuen Zeitstempel in
+    `Erstellt am: …` / `created_at: …`. Der Inhalt ist danach "geändert", obwohl
+    er identisch ist: `git status` wird nie sauber und jede Rücksetzung wird beim
+    nächsten Lauf überschrieben. Vorgehen: Zeitstempel-Werte aus der bestehenden
+    Datei übernehmen, dann vergleichen; nur bei echter Abweichung schreiben.
+    """
+    existing = None
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                existing = f.read()
+        except OSError:
+            existing = None
+
+    if existing is not None:
+        stabilized = content
+        for key in timestamp_keys:
+            stored = _find_line_value(existing, key)
+            if stored is not None:
+                stabilized = _replace_line_value(stabilized, key, stored)
+        if stabilized == existing:
+            return False
+        content = stabilized
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return True
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS_DIR = os.path.join(WORKSPACE_DIR, ".agents", "skills")
 SCRIPTS_DIR = os.path.join(WORKSPACE_DIR, "scripts", "dynamic_tools")
@@ -326,16 +379,14 @@ class DemonstrationRecorder:
         # 1. Synthetisiere Python-Skript
         script_code = self._synthesize_python_script(slug, session)
         script_path = os.path.join(SCRIPTS_DIR, f"{slug}.py")
-        with open(script_path, "w", encoding="utf-8") as f:
-            f.write(script_code)
+        _write_if_changed(script_path, script_code, ("Erstellt am: ",))
 
         # 2. Synthetisiere SKILL.md
         skill_dir = os.path.join(SKILLS_DIR, slug)
         os.makedirs(skill_dir, exist_ok=True)
         skill_md = self._synthesize_skill_md(slug, session, script_path)
         skill_path = os.path.join(skill_dir, "SKILL.md")
-        with open(skill_path, "w", encoding="utf-8") as f:
-            f.write(skill_md)
+        _write_if_changed(skill_path, skill_md, ("created_at: ",))
 
         self._current_session = None
 

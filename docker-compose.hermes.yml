@@ -124,8 +124,11 @@ services:
       - agents-net
 
 networks:
-  # Projektnetz (existiert bereits als archon-hermes_hermes-net)
+  # Projektnetz — EXTERN, weil hermes-webui (anderer Stack) daran haengt.
+  # Ohne external: true versucht Compose beim up das Netz zu loeschen/neu anzulegen
+  # und bricht ab: "has active endpoints (name: hermes-webui)".
   hermes-net:
+    external: true
     name: archon-hermes_hermes-net
   # Netz des Archon-Stacks — extern, gehoert NICHT diesem Projekt
   agents-net:

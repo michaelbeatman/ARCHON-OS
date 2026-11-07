@@ -200,6 +200,49 @@ injizieren könnte — dort wäre `Depends()` Attrappe. `mission_control.py` und
 `hermes_profiles.py` haben bereits `configure()`; sie umzubauen ist der *zweite* Schritt,
 nicht der erste.
 
+### 3.1 Rollout-Befund (Etappe 5) — keine weitere Umstellung, mit Begründung
+
+**Pilot umgesetzt** (Etappe 3): `archon/core/state_db.py:get_state_db_dep()` (async-Generator,
+weil der Handler `async def` ist) → `archon/routers/system.py:123`
+`conn: sqlite3.Connection = Depends(get_state_db_dep)`.
+
+**Inventar der verbleibenden Stellen** (AST-Scan über alle 20 Router, Route = Funktion mit
+`@router.*`-Dekorator):
+
+| Datei | Route | Ressource | Handler-Typ | Lebensdauer | Entscheidung |
+|---|---|---|---|---|---|
+| `hermes_profiles.py:372` | `POST /api/hermes/profiles` (`api_save_hermes_profile`) | `sqlite3.connect(avatars_db_path)` | **`def`** (Threadpool) | ein `with`-Block im Rumpf | **nicht umgestellt** |
+| `hermes_profiles.py:452` | `POST /api/hermes/profiles/{id}/avatar` (`api_upload_hermes_profile_avatar`) | `sqlite3.connect(avatars_db_path)` | **`def`** (Threadpool) | ein `with`-Block im Rumpf | **nicht umgestellt** |
+
+Sonst öffnet **kein** Router-Handler eine request-scoped Ressource (`_get_state_db` /
+`_get_profile_state_db` / `sqlite3.connect`) — nachgewiesen durch
+`tests/test_a7_router_db_open.py`.
+
+**Drei Abbruchgründe, jeder einzeln belegt:**
+
+1. **Thread-Affinität (entscheidend).** `sqlite3.connect()` gilt `check_same_thread=True`.
+   Ein per Dependency erzeugter Connection wird in einem **anderen** Thread benutzt als dem
+   des sync-Handlers. Gemessen (Python 3.11.16, zwei Threads mit verschiedenen Idents):
+   `ProgrammingError: SQLite objects created in a thread can only be used in that same
+   thread.` Gegenprobe: derselbe Test blieb einmal **grün**, weil Python Thread-Idents
+   recycelt — der Fehler ist also **lastabhängig und nicht deterministisch**. Genau das ist
+   die schlechteste Sorte Fehler: Tests grün, Betrieb rot. Beim Pilot (`async def`-Handler)
+   war das kein Thema, weil ein async-Provider im selben Event-Loop-Thread läuft.
+2. **Fehlerpfad.** Heute fängt ein umgebendes `try/except Exception → logger.warning` einen
+   fehlgeschlagenen `connect` ab und der Handler läuft weiter. Eine Dependency wird **vor**
+   dem Handler aufgelöst — der Fehler würde zum 500 statt zur Warnung. Identisches Verhalten
+   ließe sich nur herstellen, indem der Provider selbst `None` liefert und die
+   Fehlerbehandlung des Handlers dupliziert; das wäre mehr Code als heute, an der falschen
+   Stelle.
+3. **Kein realer HTTP-Beleg möglich.** Beide Routen sind **mutierend** (schreiben
+   `profile.yaml`, `agent_profiles.json`, `avatars.db`). Ein echter Aufruf würde
+   Produktivdaten ändern — laut Auftrag nur mit Rückfrage zulässig.
+
+**Fazit:** Das Pilot-Muster überträgt sich **nicht** auf sync-Handler mit dynamischem Pfad und
+eigener Fehlerbehandlung. Die beiden Stellen bleiben, bis es einen Connection-Pool oder eine
+`check_same_thread=False`-Strategie mit eigener Testabdeckung gibt — das ist ein eigener
+Schnitt, kein Rollout.
+
 ---
 
 ## 4. Etappenplan (Aufwand aus Messwerten, nicht aus Gefühl)

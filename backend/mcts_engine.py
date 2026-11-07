@@ -47,7 +47,8 @@ class MCTSEngine:
         self,
         task_goal: str,
         candidate_actions: List[Dict[str, Any]],
-        simulation_rollouts: Optional[int] = None
+        simulation_rollouts: Optional[int] = None,
+        seed: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Führt eine Monte-Carlo-Simulation über die Kandidatenaktionen durch.
@@ -55,8 +56,13 @@ class MCTSEngine:
         - Zielerreichung (Feasibility / Success Rate)
         - Risiko / Kollateralschaden (Safety)
         - Effizienz (Token- und Ressourcenaufwand)
+
+        seed: Optionaler Seed für den Monte-Carlo-Noise. Ohne Seed bleibt die
+        Simulation stochastisch (Produktivverhalten). Mit Seed sind Läufe
+        reproduzierbar — nötig für stabile Tests bei knappen Q-Wert-Abständen.
         """
         rollouts = simulation_rollouts or self.default_rollouts
+        rng = random.Random(seed) if seed is not None else random
         root = MCTSNode(action="ROOT", description=f"Task Goal: {task_goal}")
         root.visits = 1
 
@@ -75,7 +81,7 @@ class MCTSEngine:
         for rollout_idx in range(rollouts):
             for child in root.children:
                 # Simuliere Rollout-Wert
-                value, sim_log = self._simulate_rollout(child, task_goal)
+                value, sim_log = self._simulate_rollout(child, task_goal, rng)
                 child.visits += 1
                 child.total_value += value
                 simulated_paths.append({
@@ -111,7 +117,7 @@ class MCTSEngine:
             "simulated_at": datetime.datetime.now().isoformat()
         }
 
-    def _simulate_rollout(self, node: MCTSNode, task_goal: str) -> Tuple[float, str]:
+    def _simulate_rollout(self, node: MCTSNode, task_goal: str, rng=None) -> Tuple[float, str]:
         """Heuristische Simulation eines Handlungsstrangs."""
         # Basis-Erfolgswahrscheinlichkeit
         base_success = 0.85
@@ -121,7 +127,7 @@ class MCTSEngine:
         token_penalty = min(0.15, (node.estimated_tokens / 10000.0) * 0.1)
         
         # Leichte Zufallsvarianz (Monte Carlo Noise)
-        noise = random.uniform(-0.05, 0.05)
+        noise = (rng or random).uniform(-0.05, 0.05)
         
         score = max(0.0, min(1.0, base_success - risk_penalty - token_penalty + noise))
         log = f"Score: {score:.2f} (Risikomalus: -{risk_penalty:.2f}, Kostenmalus: -{token_penalty:.2f})"

@@ -21,7 +21,7 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 | A2 | Keine Modulstruktur | ✅ | `ls archon/core/*.py \| wc -l` → **8**, `ls archon/routers/*.py \| wc -l` → **20**, dazu `backend/`, `utils/` |
 | A3 | God Object | 🟡 | Routing + Kernlogik getrennt; Middleware/Lifespan/Config in `main.py` |
 | A4 | Enge Kopplung | 🟡 | Orchestrierung + Router entkoppelt, `main.py` importiert weiter 50+ Module |
-| A5 | 40+ Modul-Globals | 🔴 | `grep -cE "^[A-Z_][A-Z0-9_]* = " main.py` → **52** |
+| A5 | 40+ Modul-Globals | 🟡 | `grep -cE "^[A-Z_][A-Z0-9_]* = " main.py` → **47** (von 52; AST-Zahl **53**, weil 6 annotiert sind). **Etappe 1 am 2026-11-07:** 5 unveränderliche Konstanten nach `archon/core/constants.py` — Inventur und Restplan in `docs/A5_INVENTUR.md` |
 | A6 | Sync-I/O in async | 🟡 | `grep -c "asyncio.to_thread" main.py` → 15 |
 | A7 | Kein DI / `Depends()` | 🔴 | `grep -c "Depends(" main.py` → **0** (DI erfolgt über `configure()`, nicht FastAPI-DI) |
 | A8 | Config verstreut | 🔴 | unverändert, 15+ Dateien |
@@ -78,11 +78,13 @@ Gemessener Bezugspunkt für P1–P8: `scripts/bench_routes.py`, 128 Routen, Medi
 
 | Größe | Wert | Messbefehl |
 |---|---|---|
-| `main.py` | **11.291 Zeilen** | `wc -l main.py` |
+| `main.py` | **11.260 Zeilen** | `wc -l main.py` |
+| Modul-Globals | **47** (AST: 53) | `grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py` |
+| `archon/core/constants.py` | **83 Zeilen**, 5 Konstanten | `wc -l archon/core/constants.py` |
 | Decorator-Routen | **308** | `grep -cE '@app\.(get\|post\|put\|patch\|delete\|websocket\|api_route)\(' main.py` |
-| Live-Pfade / Operationen | **585 / 861** | `scripts/route_parity.py --check scripts/parity_baselines/openapi_baseline_2026-11-06.json` → Exit 0 |
+| Live-Pfade / Operationen | **585 / 861** | `scripts/route_parity.py --check scripts/parity_baselines/openapi_baseline_2026-11-07.json` → Exit 0 |
 | Router-Dateien | **20**, davon **6** mit `configure(**deps)` | `ls archon/routers/*.py \| wc -l`; `grep -ln "def configure(" archon/routers/*.py` |
-| Tests | **234 passed, 8 skipped** (13,48 s) | `.venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider` |
+| Tests | **237 passed, 8 skipped** (11,06 s) | `.venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider` |
 | Router-Namen-Scan | **Exit 0** | `scripts/check_router_names.py; echo "exit=$?"` |
 | Tracebacks (5 min) | **0** | `docker logs --since 5m ARCHON-OS 2>&1 \| grep -c Traceback` |
 
@@ -427,8 +429,10 @@ Live (06.11.): Metadaten-URL → 403 mit Grund, `10.0.0.5` → 403, `127.0.0.1:8
 
 **Echte Restliste (Priorität von oben nach unten):**
 
-1. **A5 / A7 / A8** — 52 Modul-Globals (`grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py`),
-   0 `Depends()`, Config über 15+ Dateien. Großer Umbau, eigener Branch/Tag.
+1. **A5 / A7 / A8** — 47 Modul-Globals (`grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py`),
+   0 `Depends()`, Config über 15+ Dateien. **Etappe 1 erledigt (2026-11-07):** 5 unveränderliche
+   Konstanten ausgelagert, eigener Branch `refactor/a5-di-config`; Etappenplan, Aufwand
+   (Namen × Leser-Stellen) und Abbruchkriterien in `docs/A5_INVENTUR.md`.
 2. **B10 Pfad-Config-Schicht** — 145 × `/opt/data` in `main.py`+`archon`+`backend`+`utils`
    (195 mit `scripts`/`tests`). Braucht eigene Config-Schicht **plus eigenen Tag mit eigener
    Baseline**, sonst ist die Parität nicht mehr prüfbar.

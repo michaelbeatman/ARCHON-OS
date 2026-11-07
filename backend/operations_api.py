@@ -4007,9 +4007,13 @@ def abort_bot_screen_execution():
 class ToolEvolutionRequest(BaseModel):
     tool_name: str
     description: str
-    sample_usage_prompt: str
+    sample_usage_prompt: str = ""
     creator_agent: str = "default"
     max_retries: int = 3
+    # Die Engine kann KEINEN Code aus einer Beschreibung erzeugen. Sie testet und
+    # repariert fertigen Code. Ohne diese Felder ist keine Synthese möglich.
+    implementation_code: Optional[str] = None
+    verification_test_code: Optional[str] = None
 
 class MCTSSimulationRequest(BaseModel):
     task_goal: str
@@ -4038,17 +4042,36 @@ def list_evolved_tools():
 
 @router.post("/autonomy/evolve-tool")
 def trigger_tool_evolution(req: ToolEvolutionRequest):
-    """Startet den Voyager-Selbstreparatur- und Synthese-Loop für ein fehlendes Werkzeug."""
+    """Voyager-Zyklus für FERTIGEN Code: Sandbox-Test, Reparaturversuche, Registrierung.
+
+    Historie: Dieser Endpunkt übergab `sample_usage_prompt`/`max_retries` an
+    `synthesize_and_evolve_tool()`, die diese Parameter nicht kennt und stattdessen
+    `implementation_code` + `verification_test_code` verlangt → TypeError (HTTP 500)
+    bei jedem Aufruf. Die Engine kann aus einer Beschreibung keinen Code erzeugen;
+    deshalb wird hier ehrlich mit 400 abgelehnt statt einen Erfolg vorzutäuschen.
+    """
     from backend.self_evolving_tooling import get_self_evolving_tool_engine
+    implementation_code = (req.implementation_code or "").strip()
+    verification_test_code = (req.verification_test_code or "").strip()
+    if not implementation_code:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Keine Synthese möglich: die Selbst-Evolutions-Engine erzeugt keinen "
+                "Code aus einer Beschreibung. 'implementation_code' (und sinnvollerweise "
+                "'verification_test_code') müssen mitgeschickt werden — die Engine testet "
+                "und repariert fertigen Code in der Sandbox."
+            ),
+        )
     engine = get_self_evolving_tool_engine()
-    res = engine.synthesize_and_evolve_tool(
+    return engine.synthesize_and_evolve_tool(
+        creator_agent=req.creator_agent,
         tool_name=req.tool_name,
         description=req.description,
-        sample_usage_prompt=req.sample_usage_prompt,
-        creator_agent=req.creator_agent,
-        max_retries=req.max_retries
+        implementation_code=implementation_code,
+        verification_test_code=verification_test_code,
+        max_repair_iterations=req.max_retries,
     )
-    return res
 
 
 @router.post("/autonomy/mcts-simulate")

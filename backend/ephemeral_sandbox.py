@@ -69,7 +69,7 @@ class EphemeralSandbox:
                 f'-w /sandbox python:3.11-alpine python /sandbox/{os.path.basename(run_file)}'
             )
 
-            # Prüfe, ob Docker verfügbar ist; andernfalls gesicherter Subprocess-Fallback
+            # Prüfe, ob Docker verfügbar ist; andernfalls fail-closed (kein Host-Python-Fallback)
             use_docker = True
             try:
                 chk = subprocess.run("docker info", shell=True, capture_output=True, text=True, timeout=3)
@@ -83,25 +83,31 @@ class EphemeralSandbox:
                 stdout = proc.stdout
                 stderr = proc.stderr
                 exit_code = proc.returncode
+                limits_enforced = True
             else:
-                # Subprocess-Fallback mit Timeout
-                proc = subprocess.run(
-                    [sys.executable, run_file],
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout_seconds,
-                    cwd=self.temp_dir
-                )
-                stdout = proc.stdout
-                stderr = proc.stderr
-                exit_code = proc.returncode
+                # FAIL-CLOSED: Ohne Docker-Isolation KEINE Ausführung.
+                # Der alte subprocess-Fallback lief auf dem Host-Python — exakt das, was S6 verbietet.
+                return {
+                    "status": "error",
+                    "run_id": run_id,
+                    "error": "Sandbox-Ausführung ohne Docker-Isolation verweigert (S6-Hardening). Docker CLI oder Daemon nicht verfügbar.",
+                    "engine": "unavailable",
+                    "exit_code": -1,
+                    "stdout": "",
+                    "stderr": "Docker not available; host execution prohibited by S6 policy.",
+                    "duration_seconds": 0,
+                    "memory_limit_mb": memory_limit_mb,
+                    "network_enabled": network_enabled,
+                    "limits_enforced": False,
+                    "destroyed": True
+                }
 
             duration = round(time.time() - t0, 3)
 
             return {
                 "status": "success" if exit_code == 0 else "failed",
                 "run_id": run_id,
-                "engine": "docker_micro_container" if use_docker else "isolated_subprocess",
+                "engine": "docker_micro_container",
                 "language": language,
                 "exit_code": exit_code,
                 "stdout": stdout[:4000],
@@ -109,6 +115,7 @@ class EphemeralSandbox:
                 "duration_seconds": duration,
                 "memory_limit_mb": memory_limit_mb,
                 "network_enabled": network_enabled,
+                "limits_enforced": limits_enforced,
                 "destroyed": True
             }
 

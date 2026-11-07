@@ -3,7 +3,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Basis-Tools installieren (Git für In-App Update-System, Curl)
-RUN apt-get update && apt-get install -y --no-install-recommends git curl && \
+# Docker CLI für isolierte Sandbox-Ausführung
+RUN apt-get update && apt-get install -y --no-install-recommends git curl docker.io && \
     rm -rf /var/lib/apt/lists/*
 
 # Non-Root-User und -Gruppe anlegen
@@ -23,8 +24,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY --chown=streamlituser:streamlitgroup main.py .
 COPY --chown=streamlituser:streamlitgroup core_*.py .
 COPY --chown=streamlituser:streamlitgroup views_core.py .
-COPY --chown=streamlituser:streamlitgroup GUARDRAIL.md .
-COPY --chown=streamlituser:streamlitgroup manifests/ manifests/
 COPY --chown=streamlituser:streamlitgroup static/ static/
 COPY --chown=streamlituser:streamlitgroup agents.json /app/agent_workspace/agents.json
 COPY --chown=streamlituser:streamlitgroup agents.json /app/data/agents.json

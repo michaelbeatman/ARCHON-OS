@@ -19,10 +19,26 @@ import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
     WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR, APP_ROOT,
     add_ticker, broadcast_event, ticker_entries, _load_json, _save_json, atomic_write_json,
+    logger,
 )
 
 
 from utils.docker_client import docker_client as _docker_client, parse_docker_stream  # noqa: F401
+
+
+# --------------------------------------------------
+# Dependency-Injektion statt Kopie
+# --------------------------------------------------
+# _load_mission_control_data, _save_mission_control_data, api_get_hermes_profiles
+# werden aus main.py per configure() injiziert
+_DEPS: Dict[str, Any] = {}
+
+def configure(**deps: Any) -> None:
+    """Registriert die aus main.py injizierten Abhängigkeiten (einmalig beim Import)."""
+    _DEPS.update(deps)
+    _missing = {"_load_mission_control_data", "_save_mission_control_data", "api_get_hermes_profiles"} - set(_DEPS)
+    if _missing:
+        logger.warning(f"[Router] governance: fehlende Dependencies {sorted(_missing)}")
 
 
 def docker_socket_request(method: str, path: str, payload: dict = None, timeout: float = 1.0) -> bytes:
@@ -139,7 +155,7 @@ async def test_agent_profile_governance(agent_id: str):
     Führt die Governance-Testsuite (Anti-Floskel, Markdown, JSON-Format)
     für das angegebene Agentenprofil aus und liefert die Erfolgsquote zurück.
     """
-    profiles = api_get_hermes_profiles() if "api_get_hermes_profiles" in globals() else []
+    profiles = _DEPS["api_get_hermes_profiles"]() if "api_get_hermes_profiles" in _DEPS else []
     prof = next((p for p in profiles if p.get("id") == agent_id or p.get("person_name") == agent_id), None)
     agent_name = prof.get("person_name", agent_id) if prof else agent_id
     role = prof.get("name", "Spezialist") if prof else "Spezialist"
@@ -264,14 +280,14 @@ async def test_agent_profile_governance(agent_id: str):
     score_str = f"{passed_count}/{total_count} Tests bestanden"
     
     now_t = datetime.datetime.now().strftime("%H:%M:%S")
-    mc_data = _load_mission_control_data()
+    mc_data = _DEPS["_load_mission_control_data"]()
     mc_data.setdefault("audit_logs", []).insert(0, {
         "time": now_t,
         "source": "Governance",
         "msg": f"Promptfoo Evaluierung für {agent_name}: {score_str}"
     })
     add_ticker("Governance", f"Testsuite für {agent_name}: {score_str}")
-    _save_mission_control_data(mc_data)
+    _DEPS["_save_mission_control_data"](mc_data)
 
     return {
         "status": "ok",

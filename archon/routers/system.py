@@ -17,6 +17,20 @@ from archon.core.cache import ttl_cache
 from archon.core.runtime import MEMORY_DIR, SETTINGS_FILE, WORKSPACE_DIR, add_ticker, logger
 from archon.core.state_db import STATE_DB_PATH, _get_state_db
 
+# --------------------------------------------------
+# Dependency-Injektion statt Kopie
+# --------------------------------------------------
+# _load_json, _save_json, broadcast_event werden aus main.py per configure() injiziert
+_DEPS: Dict[str, Any] = {}
+
+def configure(**deps: Any) -> None:
+    """Registriert die aus main.py injizierten Abhängigkeiten (einmalig beim Import)."""
+    _DEPS.update(deps)
+    _missing = {"_load_json", "_save_json", "broadcast_event"} - set(_DEPS)
+    if _missing:
+        logger.warning(f"[Router] system: fehlende Dependencies {sorted(_missing)}")
+
+
 router = APIRouter()
 
 async def _check_service_health(name: str, url_candidates: List[str], client: httpx.AsyncClient) -> Dict[str, Any]:
@@ -156,7 +170,7 @@ async def api_system_hermes_restart():
 
 @router.get("/api/system/language")
 def get_system_language():
-    s = _load_json(SETTINGS_FILE, {})
+    s = _DEPS["_load_json"](SETTINGS_FILE, {})
     lang = s.get("system_language") or s.get("language") or "de"
     return {
         "status": "success",
@@ -171,11 +185,11 @@ def set_system_language(payload: dict = Body(...)):
     supported = ["de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"]
     if lang not in supported:
         raise HTTPException(status_code=400, detail=f"Nicht unterstützte Sprache: {lang}")
-    s = _load_json(SETTINGS_FILE, {})
+    s = _DEPS["_load_json"](SETTINGS_FILE, {})
     s["system_language"] = lang
     s["language"] = lang
     s["default_language"] = lang
-    _save_json(SETTINGS_FILE, s)
+    _DEPS["_save_json"](SETTINGS_FILE, s)
     return {"status": "success", "language": lang}
 
 
@@ -273,7 +287,7 @@ async def api_run_morning_standup():
     from backend.autonomous_standup import generate_morning_standup
     res = await generate_morning_standup()
     add_ticker("Morgen-Standup", f"Tages-Briefing für {res.get('date')} erstellt.")
-    broadcast_event("morning_briefing", res)
+    _DEPS["broadcast_event"]("morning_briefing", res)
     return res
 
 

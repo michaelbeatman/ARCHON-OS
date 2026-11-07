@@ -26,6 +26,21 @@ from archon.core.profiles import (
     invalidate_hermes_profiles_cache,
 )
 
+# --------------------------------------------------
+# Dependency-Injektion statt Kopie
+# --------------------------------------------------
+# Die Funktionen save_all_agent_profiles, _sync_org_hierarchy_node,
+# invalidate_paperclip_agents_cache leben in main.py und werden per
+# configure() injiziert — kein main.py Import!
+_DEPS: Dict[str, Any] = {}
+
+def configure(**deps: Any) -> None:
+    """Registriert die aus main.py injizierten Abhängigkeiten (einmalig beim Import)."""
+    _DEPS.update(deps)
+    _missing = {"save_all_agent_profiles", "_sync_org_hierarchy_node", "invalidate_paperclip_agents_cache"} - set(_DEPS)
+    if _missing:
+        logger.warning(f"[Router] hermes_profiles: fehlende Dependencies {sorted(_missing)}")
+
 router = APIRouter()
 
 
@@ -373,7 +388,7 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
     except Exception as e:
         logger.warning(f"[Profiles] Error syncing avatar to avatars.db: {e}")
 
-    _sync_org_hierarchy_node(
+    _DEPS["_sync_org_hierarchy_node"](
         p_id,
         name=profile_data.get("name", p_id),
         person_name=person_name,
@@ -473,8 +488,9 @@ def api_update_hermes_profile_status(profile_id: str, body: Optional[ProfileStat
         
     prof["status"] = new_status
     prof["runtime_status"] = new_status
-    save_all_agent_profiles(roles_list)
-    invalidate_paperclip_agents_cache()
+    _DEPS["save_all_agent_profiles"](roles_list)
+    _DEPS["invalidate_paperclip_agents_cache"]()
+    invalidate_hermes_profiles_cache()
     
     agent_label = prof.get('person_name', prof.get('name', profile_id)) if prof else profile_id
     action_text = "aktiviert" if new_status == "active" else "deaktiviert"

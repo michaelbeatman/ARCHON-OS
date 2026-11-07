@@ -2809,6 +2809,8 @@ def save_all_agent_profiles(profiles_list):
         "roles.json",
         "/app/agent_profiles.json",
         "/app/roles.json",
+        "/app/archon/core/agent_profiles.json",
+        "/app/archon/core/roles.json",
         os.path.join(WORKSPACE_DIR, "agent_profiles.json"),
         os.path.join(WORKSPACE_DIR, "roles.json")
     ]
@@ -11192,7 +11194,15 @@ try:
 except Exception as _e2_plugins:
     logger.warning(f"[Router] plugins nicht geladen: {_e2_plugins}")
 try:
-    from archon.routers.governance import router as _governance_router2
+    from archon.routers.governance import (
+        router as _governance_router2,
+        configure as _governance_configure,
+    )
+    _governance_configure(
+        _load_mission_control_data=_load_mission_control_data,
+        _save_mission_control_data=_save_mission_control_data,
+        api_get_hermes_profiles=api_get_hermes_profiles,
+    )
     app.include_router(_governance_router2)
 except Exception as _e2_governance:
     logger.warning(f"[Router] governance nicht geladen: {_e2_governance}")
@@ -11202,7 +11212,15 @@ try:
 except Exception as _e2_templates:
     logger.warning(f"[Router] templates nicht geladen: {_e2_templates}")
 try:
-    from archon.routers.boardroom import router as _boardroom_router2
+    from archon.routers.boardroom import (
+        router as _boardroom_router2,
+        configure as _boardroom_configure,
+    )
+    _boardroom_configure(
+        load_boardroom_frameworks=load_boardroom_frameworks,
+        load_roles=load_roles,
+        api_get_hermes_profiles=api_get_hermes_profiles,
+    )
     app.include_router(_boardroom_router2)
 except Exception as _e2_boardroom:
     logger.warning(f"[Router] boardroom nicht geladen: {_e2_boardroom}")
@@ -11214,19 +11232,42 @@ except Exception as _err_llmp:
     logger.warning(f"[Router] llm_providers nicht geladen: {_err_llmp}")
 
 try:
-    from archon.routers.hermes_profiles import router as _hermes_profiles_r
+    from archon.routers.hermes_profiles import (
+        router as _hermes_profiles_r,
+        configure as _hp_configure,
+    )
+    _hp_configure(
+        save_all_agent_profiles=save_all_agent_profiles,
+        _sync_org_hierarchy_node=_sync_org_hierarchy_node,
+        invalidate_paperclip_agents_cache=invalidate_paperclip_agents_cache,
+    )
     app.include_router(_hermes_profiles_r)
 except Exception as _err_hp:
     logger.warning(f"[Router] hermes_profiles nicht geladen: {_err_hp}")
 
 try:
-    from archon.routers.system import router as _system_r
+    from archon.routers.system import (
+        router as _system_r,
+        configure as _system_configure,
+    )
+    _system_configure(
+        _load_json=_load_json,
+        _save_json=_save_json,
+        broadcast_event=broadcast_event,
+    )
     app.include_router(_system_r)
 except Exception as _err_sys:
     logger.warning(f"[Router] system nicht geladen: {_err_sys}")
 
 try:
-    from archon.routers.skills import router as _skills_r
+    from archon.routers.skills import (
+        router as _skills_r,
+        configure as _skills_configure,
+    )
+    _skills_configure(
+        skills_engine=skills_engine,
+        api_get_hermes_profiles=api_get_hermes_profiles,
+    )
     app.include_router(_skills_r)
 except Exception as _err_sk:
     logger.warning(f"[Router] skills nicht geladen: {_err_sk}")

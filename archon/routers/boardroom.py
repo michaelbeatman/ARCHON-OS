@@ -19,7 +19,24 @@ import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
     WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR, APP_ROOT,
     add_ticker, broadcast_event, ticker_entries, _load_json, _save_json, atomic_write_json,
+    logger,
 )
+
+# --------------------------------------------------
+# Dependency-Injektion statt Kopie
+# --------------------------------------------------
+# load_boardroom_frameworks, load_roles, api_get_hermes_profiles
+# werden aus main.py per configure() injiziert
+_DEPS: Dict[str, Any] = {}
+
+def configure(**deps: Any) -> None:
+    """Registriert die aus main.py injizierten Abhängigkeiten (einmalig beim Import)."""
+    _DEPS.update(deps)
+    _missing = {"load_boardroom_frameworks", "load_roles", "api_get_hermes_profiles"} - set(_DEPS)
+    if _missing:
+        logger.warning(f"[Router] boardroom: fehlende Dependencies {sorted(_missing)}")
+
+from copy import deepcopy as _deepcopy
 
 router = APIRouter()
 
@@ -128,7 +145,7 @@ def api_delete_boardroom_history_item(item_id: str):
 
 @router.get("/api/boardroom/frameworks")
 def api_get_boardroom_frameworks():
-    return load_boardroom_frameworks()
+    return _DEPS["load_boardroom_frameworks"]()
 
 
 @router.post("/api/boardroom/frameworks")
@@ -145,7 +162,7 @@ def api_reset_boardroom_frameworks():
             os.remove(FRAMEWORKS_FILE)
         except Exception:
             pass
-    core_dispatcher.CATEGORIZED_FRAMEWORKS = copy.deepcopy(core_dispatcher.DEFAULT_CATEGORIZED_FRAMEWORKS)
+    core_dispatcher.CATEGORIZED_FRAMEWORKS = _deepcopy(core_dispatcher.DEFAULT_CATEGORIZED_FRAMEWORKS)
     _save_json(FRAMEWORKS_FILE, core_dispatcher.CATEGORIZED_FRAMEWORKS)
     return {"status": "success"}
 
@@ -192,10 +209,10 @@ async def api_boardroom_parse_attachment(file: UploadFile = File(...)):
 
 
 def _prepare_boardroom_agents(req: BoardroomRequest):
-    roles = load_roles()
+    roles = _DEPS["load_roles"]()
     roles_map = {r["id"]: r for r in roles}
     try:
-        hermes_profiles = api_get_hermes_profiles()
+        hermes_profiles = _DEPS["api_get_hermes_profiles"]()
         for hp in hermes_profiles:
             pid = hp.get("id")
             if pid:

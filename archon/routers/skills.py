@@ -14,6 +14,22 @@ from pydantic import BaseModel
 
 from archon.core.runtime import DATA_DIR, MEMORY_DIR, WORKSPACE_DIR, add_ticker, logger
 
+# --------------------------------------------------
+# Dependency-Injektion statt Kopie
+# --------------------------------------------------
+# skills_engine, api_get_hermes_profiles werden aus main.py per configure() injiziert
+# shutil ist stdlib — lokal importieren
+_DEPS: Dict[str, Any] = {}
+
+def configure(**deps: Any) -> None:
+    """Registriert die aus main.py injizierten Abhängigkeiten (einmalig beim Import)."""
+    _DEPS.update(deps)
+    _missing = {"skills_engine", "api_get_hermes_profiles"} - set(_DEPS)
+    if _missing:
+        logger.warning(f"[Router] skills: fehlende Dependencies {sorted(_missing)}")
+
+import shutil
+
 router = APIRouter()
 
 
@@ -443,90 +459,90 @@ async def api_reset_single_hermes_skill(skill_id: str):
 
 @router.get("/api/v1/skills/docker/inspect")
 def api_skills_docker_inspect():
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.docker.inspect_system()
+    return _DEPS["skills_engine"].docker.inspect_system()
 
 
 @router.get("/api/v1/skills/docker/logs")
 def api_skills_docker_logs(container_name: str, tail: int = 100):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.docker.read_container_logs(container_name, tail)
+    return _DEPS["skills_engine"].docker.read_container_logs(container_name, tail)
 
 
 @router.post("/api/v1/skills/docker/restart")
 def api_skills_docker_restart(container_name: str = Body(...)):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.docker.restart_service(container_name)
+    return _DEPS["skills_engine"].docker.restart_service(container_name)
 
 
 @router.post("/api/v1/skills/obsidian/write")
 def api_skills_obsidian_write(title: str = Body(...), content: str = Body(...), tags: List[str] = Body(None)):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.obsidian.write_obsidian_note(title, content, tags)
+    return _DEPS["skills_engine"].obsidian.write_obsidian_note(title, content, tags)
 
 
 @router.get("/api/v1/skills/obsidian/search")
 def api_skills_obsidian_search(query: str):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.obsidian.search_obsidian_notes(query)
+    return _DEPS["skills_engine"].obsidian.search_obsidian_notes(query)
 
 
 @router.post("/api/v1/skills/obsidian/changelog")
 def api_skills_obsidian_changelog(version: str = Body(...), changes: List[str] = Body(...)):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.obsidian.update_changelog(version, changes)
+    return _DEPS["skills_engine"].obsidian.update_changelog(version, changes)
 
 
 @router.get("/api/v1/skills/rag/query")
 def api_skills_rag_query(prompt: str):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.rag.query_knowledge_base(prompt)
+    return _DEPS["skills_engine"].rag.query_knowledge_base(prompt)
 
 
 @router.post("/api/v1/skills/rag/store")
 def api_skills_rag_store(event_data: Dict = Body(...)):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.rag.store_system_metric(event_data)
+    return _DEPS["skills_engine"].rag.store_system_metric(event_data)
 
 
 @router.post("/api/v1/skills/git/pytest")
 def api_skills_git_pytest(test_path: str = Body("tests/")):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.testing.run_pytest(test_path)
+    return _DEPS["skills_engine"].testing.run_pytest(test_path)
 
 
 @router.post("/api/v1/skills/git/commit")
 def api_skills_git_commit(message: str = Body(...)):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return skills_engine.testing.git_safe_commit(message)
+    return _DEPS["skills_engine"].testing.git_safe_commit(message)
 
 
 @router.post("/api/v1/skills/mcp/connect")
 async def api_skills_mcp_connect(server_script_or_url: str = Body(...)):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return await skills_engine.mcp.connect_mcp_server(server_script_or_url)
+    return await _DEPS["skills_engine"].mcp.connect_mcp_server(server_script_or_url)
 
 
 @router.post("/api/v1/skills/mcp/execute")
 async def api_skills_mcp_execute(tool_name: str = Body(...), arguments: Dict = Body(...), agent_id: str = Body(None)):
-    if not skills_engine:
+    if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     if not agent_id:
          raise HTTPException(status_code=400, detail="agent_id is required to verify permissions")
-         
+        
     # Check permissions (User-defined capability mapping)
-    profiles = api_get_hermes_profiles()
+    profiles = _DEPS["api_get_hermes_profiles"]()
     prof = next((p for p in profiles if p["id"] == agent_id), None)
     if not prof:
          raise HTTPException(status_code=403, detail="Agent profile not found")

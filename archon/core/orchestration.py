@@ -122,12 +122,16 @@ async def _execute_mission_control_task(
 
         Mit update_mc: gezieltes Merge in den frisch geladenen Store, damit
         parallele Aenderungen an anderen Tasks nicht ueberschrieben werden.
-        Ohne (Altverhalten/Tests): komplettes save_mc.
+        Ohne update_mc: RuntimeError (wie in Commit a4267fa2 an anderer Stelle).
         """
         if update_mc is not None:
             update_mc(lambda fresh: _merge_task_delta(fresh, data, task_id, tasks))
         else:
-            save_mc(data)
+            raise RuntimeError(
+                "_execute_mission_control_task: Parameter 'update_mc' fehlt. "
+                "main.py injiziert update_mission_control_data; Aufrufer muessen die "
+                "Abhaengigkeit explizit uebergeben."
+            )
 
     agent_id = task.get("agent_id", "micha")
     agent_name = task.get("agent_name", "Michael Keller")
@@ -372,6 +376,22 @@ def _merge_synthesis_audit_delta(fresh: dict, parent_id: str, time_str: str, rob
                 f"Kanban-Entscheidung {deci.get('task_id') if deci else 'NICHT angelegt'}")})
 
 
+def _merge_finalize_synthesis_delta(fresh: dict, parent_pid: str, final_obs_path: str, local_parent: dict, audit_entry: dict) -> None:
+    """Merged Parent-Task-Updates (status, phase, artifact_path, result_summary, synthesis_finalized, completed_at) + audit_logs."""
+    for t in fresh.get("tasks", []):
+        if t.get("id") == parent_pid:
+            # Parent-Task-Felder übernehmen
+            t["status"] = local_parent.get("status", t.get("status"))
+            t["phase"] = local_parent.get("phase", t.get("phase"))
+            t["artifact_path"] = local_parent.get("artifact_path", t.get("artifact_path"))
+            t["result_summary"] = local_parent.get("result_summary", t.get("result_summary"))
+            t["synthesis_finalized"] = local_parent.get("synthesis_finalized", t.get("synthesis_finalized"))
+            t["completed_at"] = local_parent.get("completed_at", t.get("completed_at"))
+            break
+    # audit_logs Eintrag hinzufügen
+    fresh.setdefault("audit_logs", []).insert(0, audit_entry)
+
+
 async def _trigger_sandy_staffing_nomination(
     parent_task: dict,
     profiles: list,
@@ -512,7 +532,11 @@ Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, ful
             if update_mc is not None:
                 update_mc(lambda fresh: _merge_sandy_delta(fresh, data, parent_id, created_sub_ids, created_subtasks))
             else:
-                save_mc(data)
+                raise RuntimeError(
+                    "_trigger_sandy_staffing_nomination: Parameter 'update_mc' fehlt. "
+                    "main.py injiziert update_mission_control_data; Aufrufer muessen die "
+                    "Abhaengigkeit explizit uebergeben."
+                )
         _commit()
     except Exception as e:
         logger.warning(f"[Cascade-Loop] Fehler bei Sandy-Staffing: {e}")
@@ -528,6 +552,7 @@ async def _finalize_synthesis_after_approval(
     dispatcher: Dispatcher = None,
     load_mc: LoadMC = _default_load_mc,
     save_mc: SaveMC = _default_save_mc,
+    update_mc: Optional[Callable] = None,
     ticker: Ticker = None,
     paths: Dict[str, str] = None,
     folder_namer: FolderNamer = None,
@@ -550,6 +575,12 @@ async def _finalize_synthesis_after_approval(
         set_status = _set_agent_profile_status
     if tg_ping is None:
         tg_ping = _tg_ping_synthesis
+    if update_mc is None:
+        raise RuntimeError(
+            "_finalize_synthesis_after_approval: Parameter 'update_mc' fehlt. "
+            "main.py injiziert update_mission_control_data; Aufrufer muessen die "
+            "Abhaengigkeit explizit uebergeben."
+        )
 
     try:
         data = daten if daten is not None else load_mc()
@@ -587,6 +618,8 @@ async def _finalize_synthesis_after_approval(
                 final_obs_path = p
             except Exception as we:
                 logger.warning(f"[Synthese] Konnte finalen Bericht nicht nach {d} schreiben: {we}")
+
+        # Parent-Task lokal updaten
         parent_task["status"] = "completed"
         parent_task["phase"] = "completed"
         parent_task["artifact_path"] = final_obs_path
@@ -594,12 +627,27 @@ async def _finalize_synthesis_after_approval(
         parent_task["synthesis_finalized"] = True
         parent_task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         now_t = datetime.datetime.now().strftime("%H:%M:%S")
-        data.setdefault("audit_logs", []).insert(0, {
+
+        # Audit-Log-Eintrag lokal vorbereiten
+        audit_entry = {
             "time": now_t, "source": "Synthese-Loop",
             "msg": f"Finale Beschlussvorlage fuer #{parent_pid} freigegeben und abgelegt ({approver_note[:60]})"
-        })
+        }
+
+        # Atomares Commit: Parent-Task-Felder + audit_logs mergen
+        def _commit():
+            if update_mc is not None:
+                update_mc(lambda fresh: _merge_finalize_synthesis_delta(
+                    fresh, parent_pid, final_obs_path, parent_task, audit_entry))
+            else:
+                raise RuntimeError(
+                    "_finalize_synthesis_after_approval: Parameter 'update_mc' fehlt. "
+                    "main.py injiziert update_mission_control_data; Aufrufer muessen die "
+                    "Abhaengigkeit explizit uebergeben."
+                )
+        _commit()
+
         ticker("Synthese-Loop", f"Freigabe: finale Beschlussvorlage fuer '{parent_title[:35]}...' bereit")
-        save_mc(data)
 
         # Demobilisierung der Fachagenten (Stammagenten bleiben aktiv)
         try:
@@ -1011,12 +1059,11 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
         if update_mc is not None:
             update_mc(lambda fresh: _merge_synthesis_draft_delta(fresh, parent_project_id, draft_path))
         else:
-            # Fallback: vollständigen Store speichern (Altverhalten)
-            data = load_mc()
-            pt = next((t for t in data.get("tasks", []) if t.get("id") == parent_project_id), None)
-            if pt:
-                pt["synthesis_draft_path"] = draft_path
-            save_mc(data)
+            raise RuntimeError(
+                "_run_synthesis_cascade: Parameter 'update_mc' fehlt. "
+                "main.py injiziert update_mission_control_data; Aufrufer muessen die "
+                "Abhaengigkeit explizit uebergeben."
+            )
     _commit_draft()
 
     if freigegeben:
@@ -1061,13 +1108,11 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
         if update_mc is not None:
             update_mc(lambda fresh: _merge_synthesis_audit_delta(fresh, parent_project_id, now_t, robert_reply, _deci, draft_name))
         else:
-            data = load_mc()
-            data.setdefault("audit_logs", []).insert(0, {
-                "time": now_t, "source": "Synthese-Loop",
-                "msg": (f"Lisa-Entwurf für #{parent_project_id} braucht Freigabe "
-                        f"(Robert: {robert_reply[:60] or 'ohne Antwort'}) — "
-                        f"Kanban-Entscheidung {_deci.get('task_id') if _deci else 'NICHT angelegt'}")})
-            save_mc(data)
+            raise RuntimeError(
+                "_run_synthesis_cascade: Parameter 'update_mc' fehlt. "
+                "main.py injiziert update_mission_control_data; Aufrufer muessen die "
+                "Abhaengigkeit explizit uebergeben."
+            )
     _commit_audit()
 
     ticker("Synthese-Loop", f"Entscheidung im Kanban angelegt: {draft_name}")

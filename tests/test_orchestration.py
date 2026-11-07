@@ -51,10 +51,33 @@ def mock_load_mc():
     return m
 
 
-@pytest.fixture
+@ pytest.fixture
 def mock_save_mc():
     """Mock _save_mission_control_data — tut nichts, zeichnet aber Aufrufe auf."""
     return Mock()
+
+
+def make_mock_update_mc():
+    """Factory: gibt eine Mock-funktion für update_mission_control_data mit captured-Dict."""
+    captured = {}
+
+    def _update_mc(merger, load_mc_mock):
+        # merger ist ein Callable: fresh -> new_data (modifiziert fresh in-place, gibt None zurück)
+        # Wir wenden den merger auf den aktuellen load_mc_mock.return_value an
+        # und speichern das Ergebnis (das modified dict, nicht der Rückgabewert)
+        data = load_mc_mock.return_value
+        # Merger modifiziert data in-place
+        merger(data)
+        captured['data'] = data
+        return data
+
+    _update_mc.captured = captured
+    return _update_mc
+
+
+def make_update_mc(mock_load_mc, mock_update_mc):
+    """Hilfsfunktion: gibt eine update_mc-Funktion zurück, die load_mc kapselt."""
+    return lambda m: mock_update_mc(m, mock_load_mc)
 
 
 @pytest.fixture
@@ -225,6 +248,8 @@ class TestExecuteMissionControlTask:
         }
         mock_dispatcher.dispatch_to_omniroute_or_container.return_value = {"content": "Done"}
 
+        mock_update_mc = make_mock_update_mc()
+        
         await _execute_mission_control_task(
             task_id,
             dispatcher=mock_dispatcher,
@@ -235,13 +260,14 @@ class TestExecuteMissionControlTask:
             sync_obsidian=mock_sync_obsidian,
             trigger_sandy=mock_trigger_sandy,
             fan_in=mock_fan_in,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         # Assertions
         mock_load_mc.assert_called()
-        assert mock_save_mc.call_count >= 2  # einmal vor Dispatch, einmal im finally
+        assert mock_update_mc.captured['data'] is not None
         # Task sollte completed sein
-        saved_data = mock_save_mc.call_args_list[-1][0][0]  # letzter save_mc call
+        saved_data = mock_update_mc.captured['data']
         task = next(t for t in saved_data["tasks"] if t["id"] == task_id)
         assert task["status"] == "completed"
         assert task["result_summary"] == "Done"
@@ -293,6 +319,8 @@ class TestExecuteMissionControlTask:
         }
         mock_dispatcher.dispatch_to_omniroute_or_container.side_effect = Exception("Network down")
 
+        mock_update_mc = make_mock_update_mc()
+
         await _execute_mission_control_task(
             task_id,
             dispatcher=mock_dispatcher,
@@ -303,10 +331,11 @@ class TestExecuteMissionControlTask:
             sync_obsidian=mock_sync_obsidian,
             trigger_sandy=mock_trigger_sandy,
             fan_in=mock_fan_in,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         # Task muss failed sein, NICHT completed
-        saved_data = mock_save_mc.call_args_list[-1][0][0]
+        saved_data = mock_update_mc.captured['data']
         task = next(t for t in saved_data["tasks"] if t["id"] == task_id)
         assert task["status"] == "failed"
         assert "Fehler" in task["result_summary"]
@@ -335,6 +364,8 @@ class TestExecuteMissionControlTask:
         }
         mock_dispatcher.dispatch_to_omniroute_or_container.return_value = {"content": "Fehler: Model unavailable"}
 
+        mock_update_mc = make_mock_update_mc()
+
         await _execute_mission_control_task(
             task_id,
             dispatcher=mock_dispatcher,
@@ -345,9 +376,10 @@ class TestExecuteMissionControlTask:
             sync_obsidian=mock_sync_obsidian,
             trigger_sandy=mock_trigger_sandy,
             fan_in=mock_fan_in,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
-        saved_data = mock_save_mc.call_args_list[-1][0][0]
+        saved_data = mock_update_mc.captured['data']
         task = next(t for t in saved_data["tasks"] if t["id"] == task_id)
         assert task["status"] == "failed"
 
@@ -544,6 +576,8 @@ class TestTriggerSandyStaffingNomination:
             })
         }
 
+        mock_update_mc = make_mock_update_mc()
+
         await _trigger_sandy_staffing_nomination(
             parent_task, profiles,
             dispatcher=mock_dispatcher,
@@ -552,10 +586,11 @@ class TestTriggerSandyStaffingNomination:
             ticker=mock_ticker,
             get_profiles=mock_get_profiles,
             paperclip_hire=mock_paperclip_hire,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         # 2 Subtasks angelegt
-        saved = mock_save_mc.call_args[0][0]
+        saved = mock_update_mc.captured['data']
         subtasks = [t for t in saved["tasks"] if t.get("parent_project_id") == "parent-1"]
         assert len(subtasks) == 2
         assert all(s["status"] == "approval" for s in subtasks)
@@ -574,6 +609,8 @@ class TestTriggerSandyStaffingNomination:
         mock_load_mc.return_value = {"tasks": [{"id": "parent-1", "title": "Parent"}], "metrics": {}, "audit_logs": []}
         mock_dispatcher.dispatch_to_omniroute_or_container.side_effect = Exception("API down")
 
+        mock_update_mc = make_mock_update_mc()
+
         await _trigger_sandy_staffing_nomination(
             {"id": "parent-1", "title": "Parent"},
             [{"id": "sandy", "person_name": "Sandy"}],
@@ -583,6 +620,7 @@ class TestTriggerSandyStaffingNomination:
             ticker=mock_ticker,
             get_profiles=mock_get_profiles,
             paperclip_hire=mock_paperclip_hire,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         # save_mc wird im except-Block nicht aufgerufen (Exception wird geloggt und Funktion endet)
@@ -598,6 +636,8 @@ class TestTriggerSandyStaffingNomination:
         mock_load_mc.return_value = {"tasks": [], "metrics": {}, "audit_logs": []}
         mock_dispatcher.dispatch_to_omniroute_or_container.return_value = {"content": "not json"}
 
+        mock_update_mc = make_mock_update_mc()
+
         await _trigger_sandy_staffing_nomination(
             {"id": "parent-1", "title": "Parent"},
             [{"id": "sandy", "person_name": "Sandy"}],
@@ -607,9 +647,10 @@ class TestTriggerSandyStaffingNomination:
             ticker=mock_ticker,
             get_profiles=mock_get_profiles,
             paperclip_hire=mock_paperclip_hire,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
-        saved = mock_save_mc.call_args[0][0]
+        saved = mock_update_mc.captured['data']
         assert len(saved["tasks"]) == 0
 
     @pytest.mark.asyncio
@@ -623,6 +664,8 @@ class TestTriggerSandyStaffingNomination:
             "content": json.dumps({"project_title": "X", "nominated_agents": []})
         }
 
+        mock_update_mc = make_mock_update_mc()
+
         await _trigger_sandy_staffing_nomination(
             {"id": "parent-1", "title": "Parent"},
             [{"id": "sandy", "person_name": "Sandy"}],
@@ -632,9 +675,10 @@ class TestTriggerSandyStaffingNomination:
             ticker=mock_ticker,
             get_profiles=mock_get_profiles,
             paperclip_hire=mock_paperclip_hire,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
-        saved = mock_save_mc.call_args[0][0]
+        saved = mock_update_mc.captured['data']
         assert len(saved["tasks"]) == 0
 
 
@@ -672,6 +716,8 @@ class TestFinalizeSynthesisAfterApproval:
         mock_folder_namer.return_value = "project-folder"
         mock_dispatcher.trigger_n8n_execution.return_value = {"status": "ok"}
 
+        mock_update_mc = make_mock_update_mc()
+
         await _finalize_synthesis_after_approval(
             parent_pid, draft_path, synthese, approver,
             dispatcher=mock_dispatcher,
@@ -682,9 +728,10 @@ class TestFinalizeSynthesisAfterApproval:
             folder_namer=mock_folder_namer,
             set_status=mock_set_status,
             tg_ping=mock_tg_ping,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
-        saved = mock_save_mc.call_args_list[-1][0][0]
+        saved = mock_update_mc.captured['data']
         parent = next(t for t in saved["tasks"] if t["id"] == parent_pid)
         assert parent["status"] == "completed"
         assert parent["phase"] == "completed"
@@ -703,6 +750,8 @@ class TestFinalizeSynthesisAfterApproval:
         """Failure Path: Parent nicht gefunden — frühzeitiger Return, Warning."""
         mock_load_mc.return_value = {"tasks": [], "metrics": {}, "audit_logs": []}
 
+        mock_update_mc = make_mock_update_mc()
+
         await _finalize_synthesis_after_approval(
             "missing", "/fake/draft.md", "synth", "note",
             dispatcher=mock_dispatcher,
@@ -713,6 +762,7 @@ class TestFinalizeSynthesisAfterApproval:
             folder_namer=mock_folder_namer,
             set_status=mock_set_status,
             tg_ping=mock_tg_ping,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         assert any("Parent 'missing' beim Finalisieren nicht gefunden" in r.message for r in caplog.records)
@@ -731,6 +781,8 @@ class TestFinalizeSynthesisAfterApproval:
             "metrics": {}, "audit_logs": []
         }
 
+        mock_update_mc = make_mock_update_mc()
+
         await _finalize_synthesis_after_approval(
             "parent-1", "/fake/draft.md", "synth", "note",
             dispatcher=mock_dispatcher,
@@ -741,6 +793,7 @@ class TestFinalizeSynthesisAfterApproval:
             folder_namer=mock_folder_namer,
             set_status=mock_set_status,
             tg_ping=mock_tg_ping,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         mock_dispatcher.trigger_n8n_execution.assert_not_called()
@@ -763,6 +816,8 @@ class TestFinalizeSynthesisAfterApproval:
         mock_folder_namer.return_value = ""
         mock_dispatcher.trigger_n8n_execution.side_effect = Exception("n8n down")
 
+        mock_update_mc = make_mock_update_mc()
+
         await _finalize_synthesis_after_approval(
             "parent-1", "/fake/draft.md", "synth", "note",
             dispatcher=mock_dispatcher,
@@ -773,9 +828,10 @@ class TestFinalizeSynthesisAfterApproval:
             folder_namer=mock_folder_namer,
             set_status=mock_set_status,
             tg_ping=mock_tg_ping,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
-        saved = mock_save_mc.call_args_list[-1][0][0]
+        saved = mock_update_mc.captured['data']
         parent = next(t for t in saved["tasks"] if t["id"] == "parent-1")
         assert parent["status"] == "completed"  # trotzdem finalisiert
         assert any("n8n Trigger fehlgeschlagen" in r.message for r in caplog.records)
@@ -1029,6 +1085,8 @@ class TestRunSynthesisCascade:
             {"id": "gpts_critical_reviewer", "person_name": "Reviewer", "model": "test", "system_prompt": "Reviewer"},
         ]
 
+        mock_update_mc = make_mock_update_mc()
+
         await _run_synthesis_cascade(
             parent_pid,
             dispatcher=mock_dispatcher,
@@ -1042,12 +1100,13 @@ class TestRunSynthesisCascade:
             create_decision=mock_create_decision,
             finalize_approval=mock_finalize_approval,
             tg_ping=mock_tg_ping,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         # finalize_approval aufgerufen
         mock_finalize_approval.assert_called_once()
         # Draft angelegt
-        saved = mock_save_mc.call_args_list[-1][0][0]
+        saved = mock_update_mc.captured['data']
         parent = next(t for t in saved["tasks"] if t["id"] == parent_pid)
         assert parent["synthesis_draft_path"] is not None
 
@@ -1083,6 +1142,8 @@ class TestRunSynthesisCascade:
             {"id": "gpts_critical_reviewer", "person_name": "Reviewer", "model": "test", "system_prompt": "Reviewer"},
         ]
 
+        mock_update_mc = make_mock_update_mc()
+
         await _run_synthesis_cascade(
             parent_pid,
             dispatcher=mock_dispatcher,
@@ -1096,6 +1157,7 @@ class TestRunSynthesisCascade:
             create_decision=mock_create_decision,
             finalize_approval=mock_finalize_approval,
             tg_ping=mock_tg_ping,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         assert any("Synthese ohne SYNTHESE-BEREIT-Marker" in r.message for r in caplog.records)
@@ -1132,6 +1194,8 @@ class TestRunSynthesisCascade:
             {"id": "gpts_critical_reviewer", "person_name": "Reviewer", "model": "test", "system_prompt": "Reviewer"},
         ]
 
+        mock_update_mc = make_mock_update_mc()
+
         await _run_synthesis_cascade(
             parent_pid,
             dispatcher=mock_dispatcher,
@@ -1145,6 +1209,7 @@ class TestRunSynthesisCascade:
             create_decision=mock_create_decision,
             finalize_approval=mock_finalize_approval,
             tg_ping=mock_tg_ping,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         # finalize_approval NICHT aufgerufen
@@ -1152,7 +1217,7 @@ class TestRunSynthesisCascade:
         # create_decision aufgerufen
         mock_create_decision.assert_called_once()
         # Draft angelegt
-        saved = mock_save_mc.call_args_list[-1][0][0]
+        saved = mock_update_mc.captured['data']
         parent = next(t for t in saved["tasks"] if t["id"] == parent_pid)
         assert parent["synthesis_draft_path"] is not None
 
@@ -1164,6 +1229,8 @@ class TestRunSynthesisCascade:
     ):
         """Failure Path: Parent nicht gefunden — frühzeitiger Return, Warning."""
         mock_load_mc.return_value = {"tasks": [], "metrics": {}, "audit_logs": []}
+
+        mock_update_mc = make_mock_update_mc()
 
         await _run_synthesis_cascade(
             "missing",
@@ -1178,6 +1245,7 @@ class TestRunSynthesisCascade:
             create_decision=mock_create_decision,
             finalize_approval=mock_finalize_approval,
             tg_ping=mock_tg_ping,
+            update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
         assert any("Parent-Task missing nicht gefunden" in r.message for r in caplog.records)

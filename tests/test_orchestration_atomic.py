@@ -96,15 +96,20 @@ async def test_parallel_change_survives_with_update_mc(store):
 
 @pytest.mark.asyncio
 async def test_parallel_change_is_lost_without_update_mc(store):
-    """Gegenprobe: ohne update_mc überschreibt der Snapshot die Nutzeränderung.
+    """Gegenprobe: ohne update_mc wirft die Funktion RuntimeError statt still zu degradieren.
 
-    Dieser Test dokumentiert den Altbestand. Er muss grün sein, solange der
-    alte Pfad existiert — und würde rot, wenn jemand den Fix wieder ausbaut,
-    ohne den alten Pfad zu entfernen.
+    Dieser Test dokumentiert das NEUE Verhalten (RuntimeError). Er ist grün, weil
+    der alte stille Fallback (save_mc) entfernt wurde — Commit a4267fa2
+    vereinheitlicht fehlende Injektion -> RuntimeError.
     """
     dispatcher = _dispatcher_that_moves_other_task(store)
 
-    await _execute_mission_control_task("t1", **_kwargs(store, dispatcher))
+    with pytest.raises(RuntimeError, match="update_mc.*fehlt"):
+        await _execute_mission_control_task("t1", **_kwargs(store, dispatcher))
 
-    assert _status(store, "t1") == "completed"
-    assert _status(store, "t2") == "backlog"       # Änderung verloren (Altverhalten)
+    # Task t1 wird NICHT completed, da die Exception vor _commit() geworfen wird
+    # (oder in _commit() selbst). Prüfen dass der Store unverändert bleibt oder
+    # t1 nicht completed ist.
+    # Da die Exception in _commit() geworfen wird, bleibt t1 unverändert.
+    assert _status(store, "t1") == "in_progress"
+    assert _status(store, "t2") == "backlog"  # Nutzeränderung nicht angewendet (Exception vor Dispatch)

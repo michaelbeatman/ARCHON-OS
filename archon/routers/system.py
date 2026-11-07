@@ -186,10 +186,11 @@ async def api_system_hermes_restart(
 
     Der Pfad heisst historisch "/restart" und loeste einen Neustart eines Containers
     namens `hermes` aus, den es in diesem Stack nicht gibt (jeder Aufruf endete 500).
-    Diese Route startet bewusst KEINEN Container: der Core-Ableger `hermes-agent`
-    faehrt `gateway run` und wuerde mit dem laufenden Host-Gateway um denselben
-    Bot-Token konkurrieren (Telegram-getUpdates-Konflikt — beide Instanzen verlieren
-    Nachrichten). Der Start bleibt ein manueller Eingriff (`docker start <name>`).
+    Diese Route startet bewusst KEINEN Container: der Start des Core-Ablegers
+    `hermes-agent` (Cmd `gateway run`) bleibt ein manueller Eingriff
+    (`docker start <name>`) — so entschieden von Michael Keller am 2026-11-07.
+    (Er hat klargestellt, dass der Telegram-Token ausschliesslich vom Telegram-Bot
+    genutzt wird; eine getUpdates-Konkurrenz ist damit nicht belegt.)
 
     Die State-DB kommt per FastAPI-Dependency (A7-Pilot); sie protokolliert den Befund.
 

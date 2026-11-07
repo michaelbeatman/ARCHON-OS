@@ -21,7 +21,7 @@ from archon.core.permissions import (
     load_permission_gates as _load_permission_gates,
 )
 from archon.core.profiles import (
-    DEFAULT_HERMES_TOOLS, api_get_hermes_profiles, create_rolling_backup,
+    DEFAULT_HERMES_TOOLS, api_get_hermes_profiles, avatars_dir, create_rolling_backup,
     get_hermes_profiles_base_dirs, get_primary_hermes_profiles_dir,
     invalidate_hermes_profiles_cache,
 )
@@ -197,12 +197,14 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
             ext = ".png" if "png" in av_mime else (".webp" if "webp" in av_mime else (".gif" if "gif" in av_mime else ".jpg"))
             av_blob = base64.b64decode(b64)
             
-            _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-            avatars_dir = os.path.join(_static_dir, "avatars")
-            os.makedirs(avatars_dir, exist_ok=True)
-            
+            # Frueher zeigte dieser Pfad auf archon/routers/static/avatars — das Bild
+            # landete also nie unter /static, waehrend profile.yaml den /static-Pfad
+            # speicherte. Jetzt dieselbe Wurzel wie der Lese-Pfad (APP_ROOT/static).
+            avatars_path = avatars_dir()
+            os.makedirs(avatars_path, exist_ok=True)
+
             filename = f"custom_{p_id}{ext}"
-            file_path = os.path.join(avatars_dir, filename)
+            file_path = os.path.join(avatars_path, filename)
             with open(file_path, "wb") as f_img:
                 f_img.write(av_blob)
             
@@ -217,10 +219,9 @@ def api_save_hermes_profile(profile_data: Dict = Body(...)):
     elif avatar_val and len(avatar_val) < 500:
         clean_avatar = avatar_val
     else:
-        _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
         found_custom = False
         for test_ext in [".png", ".jpg", ".jpeg", ".webp"]:
-            c_path = os.path.join(_static_dir, "avatars", f"custom_{p_id}{test_ext}")
+            c_path = os.path.join(avatars_dir(), f"custom_{p_id}{test_ext}")
             if os.path.exists(c_path):
                 clean_avatar = f"/static/avatars/custom_{p_id}{test_ext}"
                 found_custom = True
@@ -417,12 +418,13 @@ def api_upload_hermes_profile_avatar(profile_id: str, data: Dict = Body(...)):
         ext = ".png" if "png" in mime else (".webp" if "webp" in mime else (".gif" if "gif" in mime else ".jpg"))
         raw_bytes = base64.b64decode(b64)
         
-        _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-        avatars_dir = os.path.join(_static_dir, "avatars")
-        os.makedirs(avatars_dir, exist_ok=True)
-        
+        # Frueher: os.path.dirname(__file__) -> archon/routers/static/avatars (nie
+        # ausgeliefert, weil /static auf APP_ROOT/static zeigt). Jetzt gemeinsame Wurzel.
+        avatars_path = avatars_dir()
+        os.makedirs(avatars_path, exist_ok=True)
+
         filename = f"custom_{profile_id}{ext}"
-        file_path = os.path.join(avatars_dir, filename)
+        file_path = os.path.join(avatars_path, filename)
         with open(file_path, "wb") as f_img:
             f_img.write(raw_bytes)
         

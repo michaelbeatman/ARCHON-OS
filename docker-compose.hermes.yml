@@ -1,0 +1,140 @@
+# ---------------------------------------------------------------------------
+# docker-compose.hermes.yml — REKONSTRUKTION (Paket 1, Teil D)
+#
+# ENTWURF. Nicht angewendet: kein `up`, kein `create`, kein `start`, kein Recreate.
+#
+# Warum die Datei rekonstruiert werden musste: `hermes-agent` und `hermes-dashboard`
+# tragen die Labels
+#     com.docker.compose.project = archon-hermes
+#     com.docker.compose.project.config_files = /mnt/raid/AgenticOS-2026/docker-compose.hermes.yml
+#     com.docker.compose.project.working_dir = /mnt/raid/AgenticOS-2026
+# Die Datei existiert im Repo nicht. Ohne sie ist jeder Recreate (echter
+# Update-Lauf) unmöglich; die Container sind nur per `docker start` bedienbar.
+#
+# Quelle jedes Werts: `docker inspect` des laufenden/gestoppten Containers
+# (Stand 2026-11-07), gegen `docker image inspect` abgeglichen, damit nur das
+# drinsteht, was Compose gesetzt hat und nicht schon im Image steckt.
+# Belege je Zeile: siehe deploy/README oder Bericht (Feld -> Inspect-Pfad).
+#
+# Secrets stehen NICHT im Klartext, sondern als ${...}-Referenzen. Erwartete
+# Quelle: eine Env-Datei beim Aufruf, z. B.
+#     docker compose --env-file .env.archon -f docker-compose.hermes.yml config
+# Fehlende Variablen (in .env und .env.archon nicht vorhanden, Stand 2026-11-07):
+#     TELEGRAM_ALLOWED_USERS, TELEGRAM_HOME_CHANNEL,
+#     HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
+# ---------------------------------------------------------------------------
+
+name: archon-hermes
+
+services:
+
+  hermes-agent:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-agent
+    # Entrypoint/WorkingDir/User stammen aus dem Image und werden nicht
+    # ueberschrieben (Image: entrypoint-dispatch.sh, /opt/hermes, root).
+    command: ["gateway", "run"]
+    restart: "no"
+    ports:
+      - "127.0.0.1:8644:8642"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # --- vom Image abweichend / zusaetzlich (Compose-gesetzt) ---
+      HERMES_HOME: /home/hermes/.hermes
+      HERMES_UID: "1000"
+      HERMES_GID: "1000"
+      API_SERVER_HOST: 0.0.0.0
+      OMNIROUTE_URL: ${OMNIROUTE_URL:-http://omniroute:20128/v1}
+      # --- Secrets: nur Referenzen ---
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS}
+      TELEGRAM_HOME_CHANNEL: ${TELEGRAM_HOME_CHANNEL}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      OMNIROUTE_API_KEY: ${OMNIROUTE_API_KEY}
+      HERMES_DASHBOARD_SESSION_TOKEN: ${HERMES_DASHBOARD_SESSION_TOKEN}
+    volumes:
+      # Das /opt/data-Volume ist ein ANONYMES Volume (Hash-Name, 1,8 GB Inhalt).
+      # Es wird hier unter einem festen Namen referenziert, damit ein Recreate die
+      # Daten NICHT verliert. Ohne diese Zeile legt Compose ein neues leeres
+      # Volume an — das ist der teuerste Fehler, den diese Datei verhindern soll.
+      - hermes-agent-data:/opt/data
+      - /home/micha/.hermes:/home/hermes/.hermes
+      - "/mnt/raid/Mein Obsidian:/opt/data/obsidian:ro"
+    networks:
+      - hermes-net
+      - agents-net
+
+  hermes-dashboard:
+    image: hermes-agent-plus:latest
+    container_name: hermes-dashboard
+    # Entrypoint und Cmd sind gegenueber dem Image ueberschrieben: der Container
+    # laeuft mit /bin/sh -c <Skript>, das vor dem Dashboard-Start die
+    # _config_version in die config.yaml schreibt. Im Original stand dort
+    # CFG=${HERMES_HOME:-/home/hermes/.hermes}/config.yaml — hier ist der Pfad
+    # ausgeschrieben, weil HERMES_HOME in genau diesem Service auf
+    # /home/hermes/.hermes gesetzt ist (siehe environment). Damit entfaellt jede
+    # $-Expansion, die Compose beim Parsen selbst aufloesen wuerde.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -f /home/hermes/.hermes/config.yaml ] && ! grep -q "^_config_version:" /home/hermes/.hermes/config.yaml; then
+          echo "_config_version: 34" >> /home/hermes/.hermes/config.yaml
+        fi
+        exec /opt/hermes/.venv/bin/hermes dashboard --host 0.0.0.0 --port 9119 --no-open
+    restart: unless-stopped
+    depends_on:
+      hermes-agent:
+        condition: service_started
+        required: false
+    ports:
+      - "127.0.0.1:9129:9119"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      HERMES_HOME: /home/hermes/.hermes
+      HERMES_UID: "1000"
+      HERMES_GID: "1000"
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_HOST: 0.0.0.0
+      HERMES_DASHBOARD_PORT: "9119"
+      GATEWAY_HEALTH_URL: http://hermes-agent:8642
+      PLAYWRIGHT_BROWSERS_PATH: /opt/hermes/.playwright
+      # Zwei Variablen, die im Image fehlen, aber im Container gesetzt sind
+      # (Werte entsprechen dem Image-Default der jeweils anderen Variante).
+      HERMES_DISABLE_LAZY_INSTALLS: "1"
+      HERMES_LAZY_INSTALL_TARGET: /opt/data/lazy-packages
+      npm_config_install_links: "false"
+      # --- Secrets: nur Referenzen ---
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-micha}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD}
+      HERMES_DASHBOARD_SESSION_TOKEN: ${HERMES_DASHBOARD_SESSION_TOKEN}
+    volumes:
+      - hermes-dashboard-data:/opt/data
+      - /home/micha/.hermes:/home/hermes/.hermes
+      - "/mnt/raid/Mein Obsidian:/opt/data/obsidian:ro"
+    networks:
+      - hermes-net
+      - agents-net
+
+networks:
+  # Projektnetz (existiert bereits als archon-hermes_hermes-net)
+  hermes-net:
+    name: archon-hermes_hermes-net
+  # Netz des Archon-Stacks — extern, gehoert NICHT diesem Projekt
+  agents-net:
+    external: true
+    name: archon-os-dev_agents_net
+
+volumes:
+  # Anonyme Volumes, per Name festgenagelt (siehe Kommentar bei den Mounts)
+  hermes-agent-data:
+    external: true
+    name: 1980851f7f0e58cb8ec2bfbd718f18dc629f52f7b05d3b7619266cbd622232be
+  hermes-dashboard-data:
+    external: true
+    name: f1e50a5f8ac7823dede2ca7241b18ef1bbe2cf0a435f845e462dd155bb8eed77

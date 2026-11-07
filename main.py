@@ -487,8 +487,19 @@ def save_agents(agents: List[Dict]):
     _save_json(agents_root, cleaned)
     _save_json(AGENTS_FILE, cleaned)
 
+# Rollen: 2,63 MB JSON pro Aufruf (gemessen Median 64-80 ms, nur Parsen).
+# TTL 60 s, weil die Datei ausschliesslich ueber POST /api/roles (save_roles)
+# geschrieben wird — dieser Pfad invalidiert sofort, die TTL deckt nur
+# Fremdschreiber (Handedit, zweite Session) ab. Kuerzer waere teurer als der
+# Nutzen: der Frontend-Aufruf passiert beim App-Start und im Rollen-Manager.
+@ttl_cache(seconds=60)
 def load_roles() -> List[Dict]: return _load_json(ROLES_FILE, DEFAULT_ROLES)
-def save_roles(roles: List[Dict]): _save_json(ROLES_FILE, roles)
+
+def save_roles(roles: List[Dict]):
+    _save_json(ROLES_FILE, roles)
+    # Invalidierung an der Schreibstelle: der naechste Leser sieht die Aenderung
+    # sofort statt erst nach Ablauf der TTL.
+    invalidate_ttl_cache(load_roles)
 
 
 def load_services() -> List[Dict]:

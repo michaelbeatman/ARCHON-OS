@@ -15,6 +15,14 @@
   let currentItemsTypeFilter = "all";
   let currentSelectedItemId = null;
 
+  // Null-sicherer Feld-Setzer: die Legacy-IDs (erp-f-*, erp-flag-*, ...) existieren
+  // in keinem aktiven View (Details am Legacy-Block unten bei createNewErpAddress).
+  // Ohne ihn stirbt jeder Zugriff mit "Cannot set properties of null".
+  const erpSetVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val !== undefined && val !== null ? val : "";
+  };
+
   const INITIAL_ENTITIES = [
     {
       id: "ent-nordstern",
@@ -868,10 +876,7 @@
     const chkSupp = document.getElementById("erp-flag-supplier");
     if (chkSupp) chkSupp.checked = !!e.is_supplier;
 
-    const setVal = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.value = val !== undefined && val !== null ? val : "";
-    };
+    const setVal = erpSetVal;  // identische Semantik wie oben, ein Helfer statt zwei
     setVal("erp-f-id", e.id);
     setVal("erp-f-display-name", e.display_name);
     setVal("erp-f-legal-form", e.legal_form);
@@ -995,18 +1000,27 @@
     });
   };
 
+  // LEGACY-ADRESSFORMULAR (Stand 2026-11-07 nachgeprueft): die IDs erp-f-*,
+  // erp-flag-customer/-supplier, erp-contacts-list, erp-new-contact-form,
+  // erp-interactions-list, erp-detail-* und erp-addr-list-container existieren in
+  // KEINEM aktiven View (static/views/view_operations_erp.html hat 20 IDs, keine
+  // davon aus dieser Familie; das aktive Adress-UI ist crmStudio in
+  // views/view_addresses.html). "Neue Firma" hat deshalb keinen Button und ruft
+  // diese Funktion nie auf. Die Felder werden NICHT ins View ergaenzt — das waere
+  // ein Formular (Produktentscheidung), kein Bugfix. Die Zugriffe laufen ueber
+  // den null-sicheren Helfer erpSetVal (oben definiert).
   window.createNewErpAddress = function () {
     currentSelectedEntityId = null;
-    document.getElementById("erp-f-id").value = "";
-    document.getElementById("erp-f-display-name").value = "Neue Firma / Kontakt";
-    document.getElementById("erp-f-legal-form").value = "GmbH";
-    document.getElementById("erp-f-debtor-no").value = "";
-    document.getElementById("erp-f-creditor-no").value = "";
-    document.getElementById("erp-f-street").value = "";
-    document.getElementById("erp-f-zip").value = "";
-    document.getElementById("erp-f-city").value = "";
-    document.getElementById("erp-f-vat-id").value = "";
-    document.getElementById("erp-f-notes").value = "";
+    erpSetVal("erp-f-id", "");
+    erpSetVal("erp-f-display-name", "Neue Firma / Kontakt");
+    erpSetVal("erp-f-legal-form", "GmbH");
+    erpSetVal("erp-f-debtor-no", "");
+    erpSetVal("erp-f-creditor-no", "");
+    erpSetVal("erp-f-street", "");
+    erpSetVal("erp-f-zip", "");
+    erpSetVal("erp-f-city", "");
+    erpSetVal("erp-f-vat-id", "");
+    erpSetVal("erp-f-notes", "");
     const chkCust = document.getElementById("erp-flag-customer");
     const chkSupp = document.getElementById("erp-flag-supplier");
     if (chkCust) chkCust.checked = currentAddrRoleFilter === "customers";

@@ -7,8 +7,10 @@ Import (spart beim ersten Request ~20s Kaltaufbau).
 
 from __future__ import annotations
 
+import base64
 import json
 import os
+import re
 import shutil
 import time
 from typing import Any, Dict, List, Optional
@@ -22,6 +24,70 @@ DEFAULT_HERMES_TOOLS = [
     "image_generate", "bfl_flux3", "text_to_speech", "speech_to_text", "skills", "task_planning",
     "memory", "session_search", "clarify", "delegate_task", "cronjob", "computer_use"
 ]
+
+# --------------------------------------------------
+# Avatare: data:-URI -> Datei unter /static/avatars
+# --------------------------------------------------
+# Der Profil-Editor speichert hochgeladene Bilder als Base64 im profile.yaml.
+# Im Listen-Endpunkt kostete das gemessen 1,25 MB pro Antwort (5 Profile, jedes
+# Bild zweimal als `avatar` und `avatar_url` gesendet) — 96 % der 2,6 MB. Die
+# Datei ist eine reine Ableitung des YAML-Werts: identische Bytes, nur ueber
+# /static ausgeliefert. Das YAML bleibt unveraendert die Quelle der Wahrheit.
+_AVATAR_MIME_EXT = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+_AVATAR_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def avatars_dir() -> str:
+    """Verzeichnis der per /static ausgelieferten Avatare (APP_ROOT/static/avatars)."""
+    return os.path.join(APP_ROOT, "static", "avatars")
+
+
+def materialize_data_uri_avatar(profile_id: str, data_url: str) -> Optional[str]:
+    """Schreibt einen data:-URI-Avatar als Datei und liefert den /static-Pfad.
+
+    Gibt None zurueck, wenn der Wert kein verwertbarer data:-URI ist — der
+    Aufrufer behaelt dann den Originalwert (nie stillschweigend ein anderes Bild).
+    """
+    if not isinstance(data_url, str) or not data_url.startswith("data:image"):
+        return None
+    if not _AVATAR_ID_RE.match(profile_id or ""):
+        return None
+    try:
+        header, b64 = data_url.split(",", 1)
+        mime = header.split(";")[0].replace("data:", "").strip().lower()
+        ext = _AVATAR_MIME_EXT.get(mime)
+        if not ext:
+            return None
+        raw = base64.b64decode(b64, validate=False)
+        if not raw:
+            return None
+        target_dir = avatars_dir()
+        os.makedirs(target_dir, exist_ok=True)
+        target = os.path.join(target_dir, f"custom_{profile_id}{ext}")
+        unchanged = False
+        if os.path.exists(target):
+            try:
+                with open(target, "rb") as fh:
+                    unchanged = fh.read() == raw
+            except OSError:
+                unchanged = False
+        if not unchanged:
+            tmp = f"{target}.tmp"
+            with open(tmp, "wb") as fh:
+                fh.write(raw)
+            os.replace(tmp, target)
+            logger.info(f"[Profiles] Avatar von '{profile_id}' aus data:-URI materialisiert ({len(raw)} B)")
+        return f"/static/avatars/custom_{profile_id}{ext}"
+    except Exception as e:  # Base64 kaputt, Rechte, Platte voll
+        logger.warning(f"[Profiles] Avatar-Materialisierung fuer '{profile_id}' fehlgeschlagen: {e}")
+        return None
+
 
 def get_hermes_profiles_base_dirs() -> List[str]:
     """Liefert alle aktiven Hermes-Profil-Pfade (Container-Mounts und Host-Pfade)."""
@@ -186,28 +252,35 @@ def api_get_hermes_profiles():
         description = ydata.get("description") or fallback.get("description") or (soul_prompt[:140] + "..." if soul_prompt else "")
         prompt = soul_prompt or ydata.get("prompt") or fallback.get("prompt") or fallback.get("system_prompt") or f"Du bist {person_name} ({name})."
         tools = ydata.get("tools") or fallback.get("tools") or DEFAULT_HERMES_TOOLS
-        # Automatische Erkennung vorhandener Custom-Avatare
+        # Avatar-Auflösung. Vorrang hat der Eintrag im profile.yaml (er ist die
+        # Quelle der Wahrheit und war faktisch schon vorher maßgeblich, weil die
+        # Datei-Erkennung ins Leere lief); die Datei-Erkennung ist nur noch der
+        # Fallback fuer Profile ohne Avatar-Eintrag.
         avatar_val = None
-        _static_avatars = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "avatars")
-        for _ext in [".png", ".jpg", ".jpeg", ".webp"]:
-            _c_avatar = os.path.join(_static_avatars, f"custom_{p_id}{_ext}")
-            if os.path.exists(_c_avatar):
-                avatar_val = f"/static/avatars/custom_{p_id}{_ext}"
-                break
-
+        cand_y = ydata.get("avatar") or ydata.get("avatar_url")
+        cand_fb = fallback.get("avatar") or fallback.get("avatar_url")
+        if cand_y:
+            # Ein data:-URI ist der neueste Upload: er wird als Datei materialisiert,
+            # statt 1,25 MB Base64 in jede Listen-Antwort zu legen. Schlaegt das fehl,
+            # bleibt der Originalwert stehen (nie stillschweigend ein anderes Bild).
+            avatar_val = materialize_data_uri_avatar(p_id, cand_y) or (
+                cand_y if "dicebear.com" not in cand_y else None)
+        if not avatar_val and cand_fb and "dicebear.com" not in cand_fb:
+            avatar_val = cand_fb
         if not avatar_val:
-            cand_y = ydata.get("avatar") or ydata.get("avatar_url")
-            cand_fb = fallback.get("avatar") or fallback.get("avatar_url")
-            if cand_y and "dicebear.com" not in cand_y:
-                avatar_val = cand_y
-            elif cand_fb and "dicebear.com" not in cand_fb:
-                avatar_val = cand_fb
-            else:
-                # Deterministischer Fallback aus dem realistischen Katalog (verhindert Duplikate)
-                _h = abs(hash(p_id)) % 108 + 1
-                if _h == 1:
-                    _h = 2
-                avatar_val = f"/static/avatars/avatar_{_h:03d}.jpg"
+            # Automatische Erkennung vorhandener Custom-Avatare.
+            # WICHTIG: APP_ROOT/static/avatars (vorher zeigte der Pfad auf
+            # archon/core/static/avatars, das es nicht gibt).
+            for _ext in [".png", ".jpg", ".jpeg", ".webp"]:
+                if os.path.exists(os.path.join(avatars_dir(), f"custom_{p_id}{_ext}")):
+                    avatar_val = f"/static/avatars/custom_{p_id}{_ext}"
+                    break
+        if not avatar_val:
+            # Deterministischer Fallback aus dem realistischen Katalog (verhindert Duplikate)
+            _h = abs(hash(p_id)) % 108 + 1
+            if _h == 1:
+                _h = 2
+            avatar_val = f"/static/avatars/avatar_{_h:03d}.jpg"
         
         provider = ydata.get("provider") or (cdata.get("model", {}).get("provider") if isinstance(cdata.get("model"), dict) else None) or fallback.get("provider", "omniroute")
         model = ydata.get("model") or (cdata.get("model", {}).get("default") if isinstance(cdata.get("model"), dict) else None) or fallback.get("model", "auto/best-free")

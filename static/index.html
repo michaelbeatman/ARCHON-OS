@@ -8174,11 +8174,23 @@ ${logExcerpt}
       if (systemHealthInterval) clearInterval(systemHealthInterval);
       systemHealthInterval = setInterval(() => {
         if (document.hidden) return;
-        const sysView = document.getElementById("view-system-settings");
-        if (sysView && sysView.classList.contains("hidden")) return;
+        // Kein View-Gate: der Poll speist die globale Health-Badge im Header
+        // (health-status-dot / system-health-badge), die auch ausserhalb des
+        // System-Control-Centers sichtbar ist. Der frueher hier gepruefte
+        // Container "view-system-settings" existiert nicht (die Einstellungen
+        // sind ein Modal: #system-settings-modal) — der Check lief immer ins
+        // Leere und haette bei "Reparatur" auf die Modal-ID den Header-Poll
+        // stillgelegt, solange das Modal zu ist.
         fetchSystemHealth();
       }, 20000);
     }
+    // UNBENUTZT: kein Aufrufer und kein Button im DOM (grep: nur diese Definition).
+    // Die Funktion prueft nur den Zustand des Hermes-Core ueber
+    // POST /api/system/hermes/restart (read-only, startet nichts). Sie wird
+    // bewusst NICHT verdrahtet — ein sichtbarer Restart-/Check-Button ist eine
+    // Produktentscheidung, kein Bugfix. Der fruehere Zugriff auf
+    // #btn-restart-hermes-core ist entfernt: das Element existiert in keinem
+    // aktiven View (Grundpruefung §5.2).
     async function triggerHermesCoreRestart() {
       const confirmed = confirm(
         "Hermes Core prüfen?\n\n" +
@@ -8187,11 +8199,6 @@ ${logExcerpt}
         "Ein Start bleibt manuell: docker start <name>"
       );
       if (!confirmed) return;
-      const btn = document.getElementById("btn-restart-hermes-core");
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = `<span class="inline-block animate-spin mr-1">⏳</span> Prüft...`;
-      }
       try {
         const res = await fetch("/api/system/hermes/restart", { method: "POST" });
         const data = await res.json().catch(() => null);
@@ -8213,12 +8220,6 @@ ${logExcerpt}
       } catch (err) {
         console.error("Hermes Core check error:", err);
         alert(`❌ Verbindungsfehler bei der Hermes-Core-Prüfung: ${err.message}`);
-      } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = `<i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i><span>Hermes Core prüfen</span>`;
-          if (window.lucide) lucide.createIcons();
-        }
       }
     }
     // Starte Telemetrie-Polling automatisch nach dem Laden

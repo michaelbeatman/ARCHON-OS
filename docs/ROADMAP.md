@@ -5,9 +5,8 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`, HEAD `c7f19b55`, 29 Commits seit Fork-Punkt `de564278`.
-Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **685 passed / 8 skipped** (committet),
-**697 passed / 8 skipped** (Arbeitsstand mit P3, noch nicht committet).
+Stand: Branch `refactor/a5-di-config`, HEAD `6febf38e`, 32 Commits seit Fork-Punkt `de564278`.
+Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **711 passed / 8 skipped**, Working Tree sauber.
 
 ---
 
@@ -30,7 +29,7 @@ Der Testaufruf ist exakt so zu nehmen: `.venv/bin/pytest tests/` scheitert mit
 
 ---
 
-## 1. Erledigt in dieser Session (4 Commits, alle von mir gegengeprüft)
+## 1. Erledigt in dieser Session (6 Commits, alle von mir gegengeprüft)
 
 | Commit | Was | Beleg |
 |---|---|---|
@@ -38,6 +37,8 @@ Der Testaufruf ist exakt so zu nehmen: `.venv/bin/pytest tests/` scheitert mit
 | `cb90a157` | `hermes-net` als `external` — sonst bricht jeder Recreate an `hermes-webui` | Fehler wörtlich reproduziert, danach Recreate erfolgreich |
 | `9229fba3` | Plan Avatar-Schreibpfad (Variante B: `/opt/data/webui/static_avatars`) | 256 Zeilen; 9 getrackte `custom_*`-PNGs, Ursache `profiles.py:46-48` |
 | `c7f19b55` | Gate-Approve repariert (Service-Extraktion), Gate wird bei Fehlschlag nicht mehr verbraucht, Owner-Meldung ehrlich, 2 ungebundene Namen gebunden | 685/8 Tests; 4 ungebundene Aufrufe vorher → 0 nachher; 47 Assertions neu, 0 entfernt |
+| `1c49ee09` | Diese Roadmap als verbindliches Fortschrittsblatt | 109 Zeilen, ersetzt das Suchen in 7 Handovern |
+| `6febf38e` | **R1**: `/api/roles` 2.608.401 B → 110.711 B; Rundlauf-Schutz für die selbst materialisierten Avatare | eigener Rundlauf GET→POST→Datei: byte-identisch, Delta 0 %, 10/10 data-URIs erhalten, 108 bestehende Pfade unberührt; **711/8 Tests** |
 
 Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 - **Volumes migriert und bit-verifiziert:** Agent 414 Dateien / 25.901.963 B, Dashboard 3 Dateien /
@@ -48,16 +49,13 @@ Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 
 ---
 
-## 2. In Arbeit — eine Entscheidung blockiert den Commit
+## 2. In Arbeit — nichts. Alle Baustellen sind zu.
 
-**P3 `/api/roles`:** Antwort 2.608.401 B → **110.707 B** (−95,8 %, gemessen), 697 Tests grün.
-**Nicht committet**, weil ein Rückschreib-Risiko offen ist:
-
-Das Frontend lädt `/api/roles` in eine globale Variable und postet genau dieses Array zurück
-(`static/js/prompt_studio.js:2146-2158`); `save_roles` (`main.py:509`) schreibt kommentarlos,
-was es bekommt. Damit würden die `/static`-Pfade in `roles.json` landen und die data-URI — die
-Quelle des Bildes — verschwinden. Nötig: Rücknormalisierung in `save_roles`
-(`/static/avatars/<name>` → data-URI) plus Rundlauf-Test. Aufwand: klein.
+R1 (`/api/roles`) ist committet (`6febf38e`). Der Rundlauf-Schutz greift nur für Pfade, die
+`GET` aus dem gespeicherten data-URI erzeugt hat — die 108 bestehenden `/static`-Pfade in
+`roles.json` bleiben Pfade, sonst wäre die Datei bei einem UI-Speichern auf ~6,4 MB gewachsen
+(gemessen: 2,80 MB Bild-Bytes in 108 Feldern). Der nächste Schritt ist eine **Entscheidung**,
+keine offene Arbeit: Triage der 9 Routen (§3.1).
 
 ---
 
@@ -66,15 +64,14 @@ Quelle des Bildes — verschwinden. Nötig: Rücknormalisierung in `save_roles`
 | Prio | Punkt | Messwert / Beleg | Aufwand |
 |---|---|---|---|
 | 1 | **Triage der 9 ungeschützten Routen mit Gefahrensignal** (neu, heute gemessen) | `audit_route_guards.py`: 120 mit Zaun, 214 Schreib-Routen ohne, **9** mit Exec/Lösch-Signal (`main.py:752/1899/2193/3011/8442/10915`, `backend/operations_api.py:265/781/1611`) — Kandidaten, keine bewiesenen Lücken | 2–4 h Triage |
-| 2 | **P3 committen** (nach Rücknormalisierung) | siehe §2 | 30–60 min |
-| 3 | **48 mehrdeutige Proxy-Routen** (`api_route` mit GET+POST) | selbst gezählt: 48 von 50 | 0,5–1 Tag |
-| 4 | **Avatar-Schreibpfad umsetzen** (Variante B, Plan liegt) | `docs/PLAN_AVATAR_SCHREIBPFAD.md` | 2–3 h |
-| 5 | **`hermes_updater`-Socket am Proxy vorbei** | `backend/hermes_updater.py:63` `AF_UNIX` | 3–4 h |
-| 6 | **`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung** (neu) | `main.py:3267-3269`, derselbe Fehlertyp wie beim Gate | 30 min |
-| 7 | **Avatar-Upload-Route ohne Rollenzaun** (neu) | `POST /api/hermes/profiles/{id}/avatar`, `hermes_profiles.py:99` — schreibt Dateien, kein Zaun, kein globales Middleware-Netz | 15 min + Test |
-| 8 | **Tote UI-Pfade** | Handover: 166 von 1640 `getElementById`-Zielen ohne DOM-Element; von mir **nicht** nachgemessen | 2–4 h je Cluster |
-| 9 | **Paket 3 (Struktur)** | `docs/PLAN_STRUKTUR_2026-11-07.md`, 5 Etappen, nicht gestartet | 1–2 Wochen |
-| 10 | **Mikro-Performance** (DB 1,25 ms, N+1 max 8 Queries, 411 `fetch`) | aus Grundprüfung, nicht neu gemessen | niedrig |
+| 2 | **48 mehrdeutige Proxy-Routen** (`api_route` mit GET+POST) | selbst gezählt: 48 von 50 | 0,5–1 Tag |
+| 3 | **Avatar-Schreibpfad umsetzen** (Variante B, Plan liegt) | `docs/PLAN_AVATAR_SCHREIBPFAD.md` | 2–3 h |
+| 4 | **`hermes_updater`-Socket am Proxy vorbei** | `backend/hermes_updater.py:63` `AF_UNIX` | 3–4 h |
+| 5 | **`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung** (neu) | `main.py:3267-3269`, derselbe Fehlertyp wie beim Gate | 30 min |
+| 6 | **Avatar-Upload-Route ohne Rollenzaun** (neu) | `POST /api/hermes/profiles/{id}/avatar`, `hermes_profiles.py:99` — schreibt Dateien, kein Zaun, kein globales Middleware-Netz | 15 min + Test |
+| 7 | **Tote UI-Pfade** | Handover: 166 von 1640 `getElementById`-Zielen ohne DOM-Element; von mir **nicht** nachgemessen | 2–4 h je Cluster |
+| 8 | **Paket 3 (Struktur)** | `docs/PLAN_STRUKTUR_2026-11-07.md`, 5 Etappen, nicht gestartet | 1–2 Wochen |
+| 9 | **Mikro-Performance** (DB 1,25 ms, N+1 max 8 Queries, 411 `fetch`) | aus Grundprüfung, nicht neu gemessen | niedrig |
 | — | **Token-Rotation (Telegram)** | deine Seite (BotFather), Wert war bis 31.10. weltlesbar | 5 min |
 
 ---
@@ -98,12 +95,12 @@ Quelle des Bildes — verschwinden. Nötig: Rücknormalisierung in `save_roles`
 
 ## 5. Wie es weitergeht (Vorschlag)
 
-1. **Heute:** P3-Rücknormalisierung + Commit → damit ist die Baustelle zu.
-2. **Danach:** Triage der 9 Routen (Prio 1) — potenziell die einzigen echten Sicherheitsfunde,
-   die noch offen sind, und billiger als Paket 3.
-3. **Parallel möglich:** Avatar-Variante B umsetzen (Plan liegt, freigegeben), weil sie jede
-   künftige Session von einem schmutzigen Working Tree befreit.
-4. **Erst dann** die großen Blöcke: 48 Proxy-Routen, Paket 3.
+1. **Jetzt:** Triage der 9 Routen (§3.1) — potenziell die einzigen echten Sicherheitsfunde,
+   die noch offen sind, und billiger als jedes Strukturpaket.
+2. **Danach:** Avatar-Variante B umsetzen (Plan liegt, freigegeben) — befreit jede künftige
+   Session von einem schmutzigen Working Tree, statt ihn nur zu dokumentieren.
+3. **Erst dann** die großen Blöcke: 48 Proxy-Routen (§3.2), Paket 3 (§3.8).
+4. **Läuft neben dir, nicht bei mir:** Token-Rotation über BotFather.
 
 Nach jeder Etappe wird **diese Datei** nachgezogen (Status + Messwert), nicht ein neues
 Handover geschrieben. Handover bleiben für den Sitzungsübergang; diese Datei ist der Fortschritt.

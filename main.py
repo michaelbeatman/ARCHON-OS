@@ -330,9 +330,9 @@ def _start_watchdog_daemon():
 
 MEMORY_FILE = os.path.join(MEMORY_DIR, "agent_memory.json")
 AGENTS_FILE = os.path.join(MEMORY_DIR, "agents.json")
-ROLES_FILE = os.path.join(MEMORY_DIR, "roles.json")
+# ROLES_FILE/SERVICES_FILE: effektiv gilt die spaetere Definition unter
+# WORKSPACE_DIR (Z. ~2520) — die MEMORY_DIR-Variante war wirkungslos.
 KANBAN_FILE = os.path.join(WORKSPACE_DIR, "kanban_data.json")
-SERVICES_FILE = os.path.join(MEMORY_DIR, "services.json")
 THEME_FILE = os.path.join(MEMORY_DIR, "theme_custom.json")
 THEME_LIVE_FILE = os.path.join(MEMORY_DIR, "theme_live_overrides.json")
 GATEWAY_CONFIG_FILE = os.path.join(MEMORY_DIR, "gateway_config.json")
@@ -2741,7 +2741,6 @@ HERMES_PROFILES_DIR = os.path.join(MEMORY_DIR, "hermes_profiles")
 os.makedirs(HERMES_PROFILES_DIR, exist_ok=True)
 _HERMES_SKILLS_CACHE = None
 _HERMES_SKILLS_CACHE_TIME = 0
-_HERMES_SKILLS_CACHE_TTL = 300.0
 
 
 _SKILL_INDEX_DISK_PATH = os.path.join(DATA_DIR, "hermes_skills_index.json")
@@ -7526,7 +7525,6 @@ async def api_ask_help_assistant(payload: dict = Body(...)):
 
 _PAPERCLIP_AGENTS_CACHE = None
 _PAPERCLIP_AGENTS_CACHE_TIME = 0.0
-_PAPERCLIP_AGENTS_CACHE_TTL = 30.0
 
 def invalidate_paperclip_agents_cache():
     global _PAPERCLIP_AGENTS_CACHE, _PAPERCLIP_AGENTS_CACHE_TIME

@@ -145,17 +145,67 @@ if __name__ == "__main__":
                 "error": f"Tool-Verifikation nach {max_repair_iterations} Iterationen fehlgeschlagen:\n{last_error}"
             }
 
-        # 3. Permanent abspeichern
+        # 3. Permanent abspeichern (idempotent: nur schreiben, wenn sich der Inhalt ohne Zeitstempel ändert)
         tool_filename = f"{tool_slug}.py"
         tool_file_path = os.path.join(DYNAMIC_TOOLS_DIR, tool_filename)
-        with open(tool_file_path, "w", encoding="utf-8") as f:
-            f.write(f"# Autonom synthetisiert von {creator_agent} am {datetime.datetime.now().isoformat()}\n")
-            f.write(current_code)
+        
+        # Header ohne Zeitstempel für Vergleich
+        header_prefix = f"# Autonom synthetisiert von {creator_agent} am "
+        
+        # Prüfen ob Datei existiert und Inhalt (abzüglich Zeitstempel) identisch ist
+        should_write = True
+        stored_created_at = None
+        if os.path.exists(tool_file_path):
+            with open(tool_file_path, "r", encoding="utf-8") as f:
+                existing_content = f.read()
+            # created_at aus existierendem Header extrahieren (robuster als DB-Format)
+            if existing_content.startswith(header_prefix):
+                header_end = existing_content.find("\n")
+                if header_end > 0:
+                    existing_header = existing_content[:header_end + 1]
+                    existing_without_header = existing_content[header_end + 1:]
+                    new_without_header = current_code
+                    if existing_without_header == new_without_header:
+                        should_write = False
+                        # created_at aus bestehendem Header extrahieren für Wiederverwendung
+                        stored_created_at = existing_content[len(header_prefix):header_end].strip()
+            else:
+                existing_without_header = existing_content
+                new_without_header = current_code
+                if existing_without_header == new_without_header:
+                    should_write = False
+        
+        if should_write:
+            # created_at für neuen Eintrag: aus existierendem Header falls Update, sonst jetzt
+            write_created_at = stored_created_at or datetime.datetime.now().isoformat()
+            with open(tool_file_path, "w", encoding="utf-8") as f:
+                f.write(f"{header_prefix}{write_created_at}\n" + current_code)
+        else:
+            # Auch beim Nicht-Schreiben: created_at aus Header für Skill-Wiederverwendung
+            if stored_created_at is None and os.path.exists(tool_file_path):
+                with open(tool_file_path, "r", encoding="utf-8") as f:
+                    existing_content = f.read()
+                if existing_content.startswith(header_prefix):
+                    header_end = existing_content.find("\n")
+                    if header_end > 0:
+                        stored_created_at = existing_content[len(header_prefix):header_end].strip()
 
-        # 4. Als SKILL.md registrieren
+        # 4. Als SKILL.md registrieren (idempotent)
         skill_dir = os.path.join(SKILLS_DIR, f"auto-{tool_slug.replace('_', '-')}")
         os.makedirs(skill_dir, exist_ok=True)
         skill_md_path = os.path.join(skill_dir, "SKILL.md")
+        
+        # created_at für Skill: aus existierendem Header falls Update, sonst jetzt (Format YYYY-MM-DD HH:MM)
+        if stored_created_at:
+            # ISO-Format in YYYY-MM-DD HH:MM umwandeln
+            try:
+                dt = datetime.datetime.fromisoformat(stored_created_at.replace('Z', '+00:00'))
+                skill_created_at = dt.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                skill_created_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        else:
+            skill_created_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        
         skill_content = f"""---
 name: auto-{tool_slug.replace('_', '-')}
 description: {description}
@@ -173,10 +223,19 @@ evolution_iterations: {iteration}
 Pfad: `scripts/dynamic_tools/{tool_filename}`
 
 ## 3. Verifikation
-Sandbox-Selbsttest erfolgreich bestanden am {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}.
+Sandbox-Selbsttest erfolgreich bestanden am {skill_created_at}.
 """
-        with open(skill_md_path, "w", encoding="utf-8") as f:
-            f.write(skill_content)
+        # Nur schreiben wenn sich Inhalt ändert
+        should_write_skill = True
+        if os.path.exists(skill_md_path):
+            with open(skill_md_path, "r", encoding="utf-8") as f:
+                existing_skill = f.read()
+            if existing_skill == skill_content:
+                should_write_skill = False
+        
+        if should_write_skill:
+            with open(skill_md_path, "w", encoding="utf-8") as f:
+                f.write(skill_content)
 
         # 5. In SQLite registrieren
         tool_id = f"tool_{tool_slug}_{int(datetime.datetime.now().timestamp())}"

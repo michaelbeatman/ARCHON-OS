@@ -1,0 +1,19 @@
+/* Archon CRM CSS Live Studio */
+#archon-css-studio, #archon-css-studio-minimized, #archon-css-highlighter { z-index: 99999999 !important; }
+
+.mission-control-root {
+  gap: 5px;
+}
+
+div.h-full > div.grid > div.flex {
+  gap: 5px;
+  padding-right: 5px;
+}
+
+div.flex-1 > div.h-full > div.grid {
+  gap: 4px;
+}
+
+div.flex > div.rounded-xl > div.space-y-2 {
+  box-shadow: none;
+}

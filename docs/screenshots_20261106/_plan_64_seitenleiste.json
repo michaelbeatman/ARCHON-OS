@@ -1,0 +1,642 @@
+[
+ {
+  "nav": "nav-mission-control",
+  "nav_label": "Dashboard",
+  "fn": null,
+  "arg": null,
+  "sub": "Dashboard",
+  "label": "Dashboard",
+  "n": 1,
+  "file": "01_Dashboard__Dashboard.png"
+ },
+ {
+  "nav": "nav-operations",
+  "nav_label": "Operations",
+  "fn": "setOperationsTab",
+  "arg": "projects",
+  "sub": "Operations",
+  "label": "Operations",
+  "n": 2,
+  "file": "02_Operations__Operations.png"
+ },
+ {
+  "nav": "nav-operations",
+  "nav_label": "Operations",
+  "fn": "setOperationsTab",
+  "arg": "chat",
+  "sub": "Master Chat",
+  "label": "Master Chat",
+  "n": 3,
+  "file": "03_Operations__Master_Chat.png"
+ },
+ {
+  "nav": "nav-operations",
+  "nav_label": "Operations",
+  "fn": "setOperationsTab",
+  "arg": "kanban",
+  "sub": "KANBAN",
+  "label": "KANBAN",
+  "n": 4,
+  "file": "04_Operations__KANBAN.png"
+ },
+ {
+  "nav": "nav-operations",
+  "nav_label": "Operations",
+  "fn": "setOperationsTab",
+  "arg": "org",
+  "sub": "Organisation",
+  "label": "Organisation",
+  "n": 5,
+  "file": "05_Operations__Organisation.png"
+ },
+ {
+  "nav": "nav-operations",
+  "nav_label": "Operations",
+  "fn": "setOperationsTab",
+  "arg": "automation",
+  "sub": "n8n-Automation",
+  "label": "n8n-Automation",
+  "n": 6,
+  "file": "06_Operations__n8n-Automation.png"
+ },
+ {
+  "nav": "nav-operations",
+  "nav_label": "Operations",
+  "fn": "setOperationsTab",
+  "arg": "comm",
+  "sub": "Kommunikation",
+  "label": "Kommunikation",
+  "n": 7,
+  "file": "07_Operations__Kommunikation.png"
+ },
+ {
+  "nav": "nav-master-chat",
+  "nav_label": "master-chat",
+  "fn": null,
+  "arg": null,
+  "sub": "master-chat",
+  "label": "master-chat",
+  "n": 8,
+  "file": "08_master-chat__master-chat.png"
+ },
+ {
+  "nav": "nav-inbox",
+  "nav_label": "Posteingang & Triage",
+  "fn": "setInboxCategoryFilter",
+  "arg": "all",
+  "sub": "Übersicht",
+  "label": "Übersicht",
+  "n": 9,
+  "file": "09_Posteingang_und_Triage__Übersicht.png"
+ },
+ {
+  "nav": "nav-inbox",
+  "nav_label": "Posteingang & Triage",
+  "fn": "setInboxCategoryFilter",
+  "arg": "webhook",
+  "sub": "Webhooks",
+  "label": "Webhooks",
+  "n": 10,
+  "file": "10_Posteingang_und_Triage__Webhooks.png"
+ },
+ {
+  "nav": "nav-inbox",
+  "nav_label": "Posteingang & Triage",
+  "fn": "setInboxCategoryFilter",
+  "arg": "intern",
+  "sub": "Intern",
+  "label": "Intern",
+  "n": 11,
+  "file": "11_Posteingang_und_Triage__Intern.png"
+ },
+ {
+  "nav": "nav-inbox",
+  "nav_label": "Posteingang & Triage",
+  "fn": "setInboxCategoryFilter",
+  "arg": "email",
+  "sub": "E-Mail",
+  "label": "E-Mail",
+  "n": 12,
+  "file": "12_Posteingang_und_Triage__E-Mail.png"
+ },
+ {
+  "nav": "nav-inbox",
+  "nav_label": "Posteingang & Triage",
+  "fn": "setInboxCategoryFilter",
+  "arg": "messenger",
+  "sub": "Messenger",
+  "label": "Messenger",
+  "n": 13,
+  "file": "13_Posteingang_und_Triage__Messenger.png"
+ },
+ {
+  "nav": "nav-inbox",
+  "nav_label": "Posteingang & Triage",
+  "fn": "setInboxCategoryFilter",
+  "arg": "approvals",
+  "sub": "2 Freigaben",
+  "label": "2 Freigaben",
+  "n": 14,
+  "file": "14_Posteingang_und_Triage__2_Freigaben.png"
+ },
+ {
+  "nav": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "fn": "switchAgentCadreTab",
+  "arg": "overview",
+  "sub": "Übersicht",
+  "label": "Übersicht",
+  "n": 15,
+  "file": "15_Agentenkader__Übersicht.png"
+ },
+ {
+  "nav": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "fn": "switchAgentCadreTab",
+  "arg": "chat",
+  "sub": "Chat",
+  "label": "Chat",
+  "n": 16,
+  "file": "16_Agentenkader__Chat.png"
+ },
+ {
+  "nav": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "fn": "switchAgentCadreTab",
+  "arg": "botscreen",
+  "sub": "Screen",
+  "label": "Screen",
+  "n": 17,
+  "file": "17_Agentenkader__Screen.png"
+ },
+ {
+  "nav": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "fn": "switchAgentCadreTab",
+  "arg": "skills",
+  "sub": "Fähigkeiten",
+  "label": "Fähigkeiten",
+  "n": 18,
+  "file": "18_Agentenkader__Fähigkeiten.png"
+ },
+ {
+  "nav": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "fn": "switchAgentCadreTab",
+  "arg": "operations",
+  "sub": "Operations",
+  "label": "Operations",
+  "n": 19,
+  "file": "19_Agentenkader__Operations.png"
+ },
+ {
+  "nav": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "fn": "switchAgentCadreTab",
+  "arg": "soul",
+  "sub": "SOUL",
+  "label": "SOUL",
+  "n": 20,
+  "file": "20_Agentenkader__SOUL.png"
+ },
+ {
+  "nav": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "fn": "switchAgentCadreTab",
+  "arg": "personalakte",
+  "sub": "Personalakte",
+  "label": "Personalakte",
+  "n": 21,
+  "file": "21_Agentenkader__Personalakte.png"
+ },
+ {
+  "nav": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "fn": "switchAgentCadreTab",
+  "arg": "marketplace",
+  "sub": "Marktplatz",
+  "label": "Marktplatz",
+  "n": 22,
+  "file": "22_Agentenkader__Marktplatz.png"
+ },
+ {
+  "nav": "nav-automation",
+  "nav_label": "automation",
+  "fn": null,
+  "arg": null,
+  "sub": "automation",
+  "label": "automation",
+  "n": 23,
+  "file": "23_automation__automation.png"
+ },
+ {
+  "nav": "nav-showroom",
+  "nav_label": "Showroom",
+  "fn": "filterShowroomCategory",
+  "arg": "all",
+  "sub": "Explorer",
+  "label": "Explorer",
+  "n": 24,
+  "file": "24_Showroom__Explorer.png"
+ },
+ {
+  "nav": "nav-showroom",
+  "nav_label": "Showroom",
+  "fn": "filterShowroomCategory",
+  "arg": "zwischenberichte",
+  "sub": "Berichte",
+  "label": "Berichte",
+  "n": 25,
+  "file": "25_Showroom__Berichte.png"
+ },
+ {
+  "nav": "nav-showroom",
+  "nav_label": "Showroom",
+  "fn": "filterShowroomCategory",
+  "arg": "medien",
+  "sub": "Medien",
+  "label": "Medien",
+  "n": 26,
+  "file": "26_Showroom__Medien.png"
+ },
+ {
+  "nav": "nav-showroom",
+  "nav_label": "Showroom",
+  "fn": "filterShowroomCategory",
+  "arg": "endprodukte",
+  "sub": "Endprodukte",
+  "label": "Endprodukte",
+  "n": 27,
+  "file": "27_Showroom__Endprodukte.png"
+ },
+ {
+  "nav": "nav-showroom",
+  "nav_label": "Showroom",
+  "fn": "filterShowroomCategory",
+  "arg": "apps",
+  "sub": "Web-Apps",
+  "label": "Web-Apps",
+  "n": 28,
+  "file": "28_Showroom__Web-Apps.png"
+ },
+ {
+  "nav": "nav-watchdog",
+  "nav_label": "Internet-Watchdog",
+  "fn": "switchWatchdogSubTab",
+  "arg": "basket",
+  "sub": "Korb: 0 / 3",
+  "label": "Korb: 0 / 3",
+  "n": 29,
+  "file": "29_Internet-Watchdog__Korb_0_3.png"
+ },
+ {
+  "nav": "nav-watchdog",
+  "nav_label": "Internet-Watchdog",
+  "fn": "switchWatchdogSubTab",
+  "arg": "radar",
+  "sub": "Radar",
+  "label": "Radar",
+  "n": 30,
+  "file": "30_Internet-Watchdog__Radar.png"
+ },
+ {
+  "nav": "nav-watchdog",
+  "nav_label": "Internet-Watchdog",
+  "fn": "switchWatchdogSubTab",
+  "arg": "sources",
+  "sub": "Quellen",
+  "label": "Quellen",
+  "n": 31,
+  "file": "31_Internet-Watchdog__Quellen.png"
+ },
+ {
+  "nav": "nav-watchdog",
+  "nav_label": "Internet-Watchdog",
+  "fn": "switchWatchdogSubTab",
+  "arg": "settings",
+  "sub": "Optionen",
+  "label": "Optionen",
+  "n": 32,
+  "file": "32_Internet-Watchdog__Optionen.png"
+ },
+ {
+  "nav": "nav-research",
+  "nav_label": "Research Lab",
+  "fn": "switchResearchSubTab",
+  "arg": "labor",
+  "sub": "Labor",
+  "label": "Labor",
+  "n": 33,
+  "file": "33_Research_Lab__Labor.png"
+ },
+ {
+  "nav": "nav-research",
+  "nav_label": "Research Lab",
+  "fn": "switchResearchSubTab",
+  "arg": "dossiers",
+  "sub": "Dossiers",
+  "label": "Dossiers",
+  "n": 34,
+  "file": "34_Research_Lab__Dossiers.png"
+ },
+ {
+  "nav": "nav-research",
+  "nav_label": "Research Lab",
+  "fn": "switchResearchSubTab",
+  "arg": "quellen",
+  "sub": "Quellen",
+  "label": "Quellen",
+  "n": 35,
+  "file": "35_Research_Lab__Quellen.png"
+ },
+ {
+  "nav": "nav-library",
+  "nav_label": "Zentralbibliothek",
+  "fn": "switchLibrarySubTab",
+  "arg": "rag",
+  "sub": "RAG Index",
+  "label": "RAG Index",
+  "n": 36,
+  "file": "36_Zentralbibliothek__RAG_Index.png"
+ },
+ {
+  "nav": "nav-library",
+  "nav_label": "Zentralbibliothek",
+  "fn": "switchLibrarySubTab",
+  "arg": "erfasser",
+  "sub": "Erfasser",
+  "label": "Erfasser",
+  "n": 37,
+  "file": "37_Zentralbibliothek__Erfasser.png"
+ },
+ {
+  "nav": "nav-library",
+  "nav_label": "Zentralbibliothek",
+  "fn": "switchLibrarySubTab",
+  "arg": "vault",
+  "sub": "Obsidian",
+  "label": "Obsidian",
+  "n": 38,
+  "file": "38_Zentralbibliothek__Obsidian.png"
+ },
+ {
+  "nav": "nav-ai-mastermind",
+  "nav_label": "AI-Boardroom",
+  "fn": "setBoardroomTab",
+  "arg": "overview",
+  "sub": "Übersicht",
+  "label": "Übersicht",
+  "n": 39,
+  "file": "39_AI-Boardroom__Übersicht.png"
+ },
+ {
+  "nav": "nav-ai-mastermind",
+  "nav_label": "AI-Boardroom",
+  "fn": "setBoardroomTab",
+  "arg": "debate",
+  "sub": "Debatte",
+  "label": "Debatte",
+  "n": 40,
+  "file": "40_AI-Boardroom__Debatte.png"
+ },
+ {
+  "nav": "nav-ai-mastermind",
+  "nav_label": "AI-Boardroom",
+  "fn": "setBoardroomTab",
+  "arg": "live",
+  "sub": "Live",
+  "label": "Live",
+  "n": 41,
+  "file": "41_AI-Boardroom__Live.png"
+ },
+ {
+  "nav": "nav-addresses",
+  "nav_label": "Kontakte & CRM",
+  "fn": null,
+  "arg": null,
+  "sub": "Kontakte & CRM",
+  "label": "Kontakte & CRM",
+  "n": 42,
+  "file": "42_Kontakte_und_CRM__Kontakte_und_CRM.png"
+ },
+ {
+  "nav": "nav-items",
+  "nav_label": "Artikel & Leistungen",
+  "fn": "setItemsTypeFilter",
+  "arg": "all",
+  "sub": "Alle",
+  "label": "Alle",
+  "n": 43,
+  "file": "43_Artikel_und_Leistungen__Alle.png"
+ },
+ {
+  "nav": "nav-items",
+  "nav_label": "Artikel & Leistungen",
+  "fn": "setItemsTypeFilter",
+  "arg": "service",
+  "sub": "Zeit/Service",
+  "label": "Zeit/Service",
+  "n": 44,
+  "file": "44_Artikel_und_Leistungen__Zeit_Service.png"
+ },
+ {
+  "nav": "nav-items",
+  "nav_label": "Artikel & Leistungen",
+  "fn": "setItemsTypeFilter",
+  "arg": "saas",
+  "sub": "SaaS/Abo",
+  "label": "SaaS/Abo",
+  "n": 45,
+  "file": "45_Artikel_und_Leistungen__SaaS_Abo.png"
+ },
+ {
+  "nav": "nav-items",
+  "nav_label": "Artikel & Leistungen",
+  "fn": "setItemsTypeFilter",
+  "arg": "product",
+  "sub": "Produkte",
+  "label": "Produkte",
+  "n": 46,
+  "file": "46_Artikel_und_Leistungen__Produkte.png"
+ },
+ {
+  "nav": "nav-operations-erp",
+  "nav_label": "Vorgänge & Verträge",
+  "fn": "switchErpOpsSubTab",
+  "arg": "offers",
+  "sub": "Angebote/AB",
+  "label": "Angebote/AB",
+  "n": 47,
+  "file": "47_Vorgänge_und_Verträge__Angebote_AB.png"
+ },
+ {
+  "nav": "nav-operations-erp",
+  "nav_label": "Vorgänge & Verträge",
+  "fn": "switchErpOpsSubTab",
+  "arg": "pipeline",
+  "sub": "Pipeline",
+  "label": "Pipeline",
+  "n": 48,
+  "file": "48_Vorgänge_und_Verträge__Pipeline.png"
+ },
+ {
+  "nav": "nav-operations-erp",
+  "nav_label": "Vorgänge & Verträge",
+  "fn": "switchErpOpsSubTab",
+  "arg": "contracts",
+  "sub": "Verträge",
+  "label": "Verträge",
+  "n": 49,
+  "file": "49_Vorgänge_und_Verträge__Verträge.png"
+ },
+ {
+  "nav": "nav-finance",
+  "nav_label": "Finanzen & Belege",
+  "fn": "setFinanceSubTab",
+  "arg": "receipts",
+  "sub": "Belege",
+  "label": "Belege",
+  "n": 50,
+  "file": "50_Finanzen_und_Belege__Belege.png"
+ },
+ {
+  "nav": "nav-finance",
+  "nav_label": "Finanzen & Belege",
+  "fn": "setFinanceSubTab",
+  "arg": "analytics",
+  "sub": "Analytics",
+  "label": "Analytics",
+  "n": 51,
+  "file": "51_Finanzen_und_Belege__Analytics.png"
+ },
+ {
+  "nav": "nav-finance",
+  "nav_label": "Finanzen & Belege",
+  "fn": "setFinanceSubTab",
+  "arg": "contracts",
+  "sub": "Verträge",
+  "label": "Verträge",
+  "n": 52,
+  "file": "52_Finanzen_und_Belege__Verträge.png"
+ },
+ {
+  "nav": "nav-finance",
+  "nav_label": "Finanzen & Belege",
+  "fn": "setFinanceSubTab",
+  "arg": "dunning",
+  "sub": "Mahnwesen",
+  "label": "Mahnwesen",
+  "n": 53,
+  "file": "53_Finanzen_und_Belege__Mahnwesen.png"
+ },
+ {
+  "nav": "nav-corporate",
+  "nav_label": "Corporate & Mandant",
+  "fn": "switchCorporateSubTab",
+  "arg": "master",
+  "sub": "Stammdaten & Design",
+  "label": "Stammdaten & Design",
+  "n": 54,
+  "file": "54_Corporate_und_Mandant__Stammdaten_und_Design.png"
+ },
+ {
+  "nav": "nav-corporate",
+  "nav_label": "Corporate & Mandant",
+  "fn": "switchCorporateSubTab",
+  "arg": "templates",
+  "sub": "Formulare & Vorlagen-Studio",
+  "label": "Formulare & Vorlagen-Studio",
+  "n": 55,
+  "file": "55_Corporate_und_Mandant__Formulare_und_Vorlagen-Studio.png"
+ },
+ {
+  "nav": "nav-approval-policies",
+  "nav_label": "Approval-Policies",
+  "fn": "setApprovalsSubTab",
+  "arg": "finance",
+  "sub": "Finanzen",
+  "label": "Finanzen",
+  "n": 56,
+  "file": "56_Approval-Policies__Finanzen.png"
+ },
+ {
+  "nav": "nav-approval-policies",
+  "nav_label": "Approval-Policies",
+  "fn": "setApprovalsSubTab",
+  "arg": "email",
+  "sub": "E-Mail",
+  "label": "E-Mail",
+  "n": 57,
+  "file": "57_Approval-Policies__E-Mail.png"
+ },
+ {
+  "nav": "nav-approval-policies",
+  "nav_label": "Approval-Policies",
+  "fn": "setApprovalsSubTab",
+  "arg": "system",
+  "sub": "System & IT",
+  "label": "System & IT",
+  "n": 58,
+  "file": "58_Approval-Policies__System_und_IT.png"
+ },
+ {
+  "nav": "nav-guardian",
+  "nav_label": "Token Guard",
+  "fn": "setGuardianSubTab",
+  "arg": "overview",
+  "sub": "Übersicht",
+  "label": "Übersicht",
+  "n": 59,
+  "file": "59_Token_Guard__Übersicht.png"
+ },
+ {
+  "nav": "nav-guardian",
+  "nav_label": "Token Guard",
+  "fn": "setGuardianSubTab",
+  "arg": "sessions",
+  "sub": "310 Sessions",
+  "label": "310 Sessions",
+  "n": 60,
+  "file": "60_Token_Guard__310_Sessions.png"
+ },
+ {
+  "nav": "nav-guardian",
+  "nav_label": "Token Guard",
+  "fn": "setGuardianSubTab",
+  "arg": "concurrency",
+  "sub": "5 Drosselung",
+  "label": "5 Drosselung",
+  "n": 61,
+  "file": "61_Token_Guard__5_Drosselung.png"
+ },
+ {
+  "nav": "nav-log-stream",
+  "nav_label": "Telemetrie & Logs",
+  "fn": "setLogStreamSourceMode",
+  "arg": "containers",
+  "sub": "Container",
+  "label": "Container",
+  "n": 62,
+  "file": "62_Telemetrie_und_Logs__Container.png"
+ },
+ {
+  "nav": "nav-log-stream",
+  "nav_label": "Telemetrie & Logs",
+  "fn": "setLogStreamSourceMode",
+  "arg": "profiles",
+  "sub": "Agenten",
+  "label": "Agenten",
+  "n": 63,
+  "file": "63_Telemetrie_und_Logs__Agenten.png"
+ },
+ {
+  "nav": "nav-log-stream",
+  "nav_label": "Telemetrie & Logs",
+  "fn": "setLogStreamSourceMode",
+  "arg": "audit",
+  "sub": "Audit",
+  "label": "Audit",
+  "n": 64,
+  "file": "64_Telemetrie_und_Logs__Audit.png"
+ }
+]

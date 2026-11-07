@@ -1,0 +1,508 @@
+@import "tailwindcss";
+/* @import "./custom_studio.css"; */
+@import "@xyflow/react/dist/style.css";
+
+:root {
+  --background: #0b0f19;
+  --foreground: #f8fafc;
+
+  /* Default Accent: Smaragd (Emerald) */
+  --accent-primary: #10b981;
+  --accent-primary-hover: #059669;
+  --accent-light-bg: rgba(16, 185, 129, 0.1);
+  --accent-light-border: rgba(16, 185, 129, 0.3);
+  --accent-light-text: #059669;
+  --accent-soft-bg: #ecfdf5;
+  --accent-soft-border: #a7f3d0;
+  --accent-dark-soft-bg: rgba(6, 78, 59, 0.6);
+  --accent-dark-soft-border: rgba(6, 95, 70, 0.8);
+
+  /* Section specific theme variables - default dark mode */
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #f8fafc;
+  --sidebar-active-bg: rgba(16, 185, 129, 0.15);
+  --sidebar-active-text: #10b981;
+  --header-bg: #0f172a;
+
+  --contact-drawer-bg: #0f172a;
+  --contact-link-color: #2563eb;
+  --contact-linkedin-link: #0077b5;
+  --contact-message-inbound-bg: #1e293b;
+  --contact-message-outbound-bg: #0f172a;
+  --contact-message-text: #f8fafc;
+  --contact-message-header-email-bg: #FFEDD5;
+  --contact-message-header-note-bg: #D1FAE5;
+  --contact-message-header-meeting-bg: #FFE4E6;
+  --contact-message-header-linkedin-bg: #E0F2FE;
+  --contact-message-history-btn-bg: rgba(16, 185, 129, 0.1);
+  --contact-message-history-btn-border: rgba(16, 185, 129, 0.3);
+  --contact-message-history-btn-text: #10b981;
+  --contact-nextstep-color: #059669;
+
+  --kanban-bg: #0b0f19;
+  --kanban-card-bg: #1e293b;
+  --kanban-card-border: #334155;
+
+  --calendar-bg: #0b0f19;
+  --calendar-grid-border: #334155;
+  --calendar-card-bg: #1e293b;
+  --calendar-event-google-bg: #0284c7;
+  --calendar-event-google-text: #ffffff;
+  --calendar-event-outlook-bg: #4f46e5;
+  --calendar-event-outlook-text: #ffffff;
+  --calendar-event-crm-bg: #10b981;
+  --calendar-event-crm-text: #ffffff;
+
+  --mediaboard-bg: #0b0f19;
+  --mediaboard-card-bg: #1e293b;
+  --mediaboard-postit-bg: #fef08a;
+  --mediaboard-border: #334155;
+
+  --mission-bg: #0b0f19;
+  --mission-card-bg: #1e293b;
+  --mission-card-border: #374151;
+  --mission-accent: #10b981;
+  --mission-text: #f8fafc;
+
+  --studio-bg: #0b0f19;
+  --studio-card-bg: #111827;
+  --studio-card-border: #1f2937;
+  --studio-input-bg: #0f172a;
+  --studio-input-text: #f8fafc;
+  --studio-input-border: #334155;
+  --studio-accent: #ef4444;
+  --studio-accent-hover: #dc2626;
+  --studio-text: #f8fafc;
+  --studio-text-muted: #94a3b8;
+  --studio-tab-active-bg: rgba(239, 68, 68, 0.12);
+  --studio-tab-active-text: #f87171;
+  --studio-tab-active-border: #ef4444;
+}
+
+[data-accent="blue"], html[data-accent="blue"] {
+  --accent-primary: #2563eb;
+  --accent-primary-hover: #1d4ed8;
+  --accent-light-bg: rgba(37, 99, 235, 0.1);
+  --accent-light-border: rgba(37, 99, 235, 0.3);
+  --accent-light-text: #2563eb;
+  --accent-soft-bg: #eff6ff;
+  --accent-soft-border: #bfdbfe;
+  --accent-dark-soft-bg: rgba(30, 58, 138, 0.6);
+  --accent-dark-soft-border: rgba(30, 64, 175, 0.8);
+}
+
+[data-accent="purple"], html[data-accent="purple"] {
+  --accent-primary: #8b5cf6;
+  --accent-primary-hover: #7c3aed;
+  --accent-light-bg: rgba(139, 92, 246, 0.1);
+  --accent-light-border: rgba(139, 92, 246, 0.3);
+  --accent-light-text: #8b5cf6;
+  --accent-soft-bg: #f5f3ff;
+  --accent-soft-border: #ddd6fe;
+  --accent-dark-soft-bg: rgba(76, 29, 149, 0.6);
+  --accent-dark-soft-border: rgba(91, 33, 182, 0.8);
+}
+
+[data-accent="amber"], html[data-accent="amber"] {
+  --accent-primary: #f59e0b;
+  --accent-primary-hover: #d97706;
+  --accent-light-bg: rgba(245, 158, 11, 0.1);
+  --accent-light-border: rgba(245, 158, 11, 0.3);
+  --accent-light-text: #d97706;
+  --accent-soft-bg: #fffbeb;
+  --accent-soft-border: #fde68a;
+  --accent-dark-soft-bg: rgba(120, 53, 15, 0.6);
+  --accent-dark-soft-border: rgba(146, 64, 14, 0.8);
+}
+
+[data-accent="rose"], html[data-accent="rose"] {
+  --accent-primary: #f43f5e;
+  --accent-primary-hover: #e11d48;
+  --accent-light-bg: rgba(244, 63, 94, 0.1);
+  --accent-light-border: rgba(244, 63, 94, 0.3);
+  --accent-light-text: #f43f5e;
+  --accent-soft-bg: #fff1f2;
+  --accent-soft-border: #fecdd3;
+  --accent-dark-soft-bg: rgba(136, 19, 55, 0.6);
+  --accent-dark-soft-border: rgba(159, 18, 57, 0.8);
+}
+
+[data-accent="teal"], html[data-accent="teal"] {
+  --accent-primary: #0d9488;
+  --accent-primary-hover: #0f766e;
+  --accent-light-bg: rgba(13, 148, 136, 0.1);
+  --accent-light-border: rgba(13, 148, 136, 0.3);
+  --accent-light-text: #0d9488;
+  --accent-soft-bg: #f0fdfa;
+  --accent-soft-border: #99f6e4;
+  --accent-dark-soft-bg: rgba(19, 78, 74, 0.6);
+  --accent-dark-soft-border: rgba(17, 94, 89, 0.8);
+}
+
+/* Dynamic Accent Utility Classes */
+.bg-accent-main {
+  background-color: var(--accent-primary) !important;
+}
+.bg-accent-main-hover:hover {
+  background-color: var(--accent-primary-hover) !important;
+}
+.bg-accent-light {
+  background-color: var(--accent-light-bg) !important;
+}
+.border-accent-light {
+  border-color: var(--accent-light-border) !important;
+}
+.text-accent-main {
+  color: var(--accent-primary) !important;
+}
+.text-accent-light {
+  color: var(--accent-light-text) !important;
+}
+.bg-accent-soft {
+  background-color: var(--accent-soft-bg) !important;
+}
+.border-accent-soft {
+  border-color: var(--accent-soft-border) !important;
+}
+.bg-accent-dark-soft {
+  background-color: var(--accent-dark-soft-bg) !important;
+}
+.border-accent-dark-soft {
+  border-color: var(--accent-dark-soft-border) !important;
+}
+.accent-color-input {
+  accent-color: var(--accent-primary) !important;
+}
+
+body {
+  background: #0b0f19;
+  color: #f8fafc;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Modern Theme-Aware Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+/* Light mode (default) scrollbar */
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary-hover);
+}
+
+/* Dark mode scrollbar track override */
+html.dark ::-webkit-scrollbar-track,
+.dark ::-webkit-scrollbar-track,
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+html.dark ::-webkit-scrollbar-thumb,
+.dark ::-webkit-scrollbar-thumb,
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+/* Firefox standard scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-primary) #f1f5f9;
+}
+
+html.dark *,
+.dark *,
+[data-theme="dark"] * {
+  scrollbar-color: var(--accent-primary) #0f172a;
+}
+
+/* ──────────────────────────────────────────────────────────── */
+/* SECTION-SPECIFIC CUSTOM STYLE OVERRIDES */
+/* ──────────────────────────────────────────────────────────── */
+
+/* 1. Kanban Pipeline View */
+.kanban-view-root {
+  background-color: var(--kanban-bg) !important;
+}
+.kanban-view-root .bg-white,
+.kanban-view-root .bg-slate-900\/60,
+.kanban-view-root .bg-slate-900\/80,
+.kanban-view-root .bg-slate-950\/40,
+.kanban-view-root .bg-slate-900 {
+  background-color: var(--kanban-card-bg) !important;
+}
+.kanban-view-root .border,
+.kanban-view-root .border-slate-200,
+.kanban-view-root .border-slate-800,
+.kanban-view-root .border-slate-800\/80 {
+  border-color: var(--kanban-card-border) !important;
+}
+
+/* 2. Calendar View */
+.calendar-view-root {
+  background-color: var(--calendar-bg) !important;
+}
+.calendar-view-root .bg-white,
+.calendar-view-root .bg-slate-900,
+.calendar-view-root .bg-slate-900\/50,
+.calendar-view-root .bg-slate-900\/60,
+.calendar-view-root .bg-slate-950\/50 {
+  background-color: var(--calendar-card-bg) !important;
+}
+.calendar-view-root .border,
+.calendar-view-root .border-b,
+.calendar-view-root .border-l,
+.calendar-view-root .border-r,
+.calendar-view-root .border-t,
+.calendar-view-root .border-slate-200,
+.calendar-view-root .border-slate-800,
+.calendar-view-root .border-slate-800\/60 {
+  border-color: var(--calendar-grid-border) !important;
+}
+
+/* 3. Media Board View */
+.mediaboard-view-root {
+  background-color: var(--mediaboard-bg) !important;
+}
+.mediaboard-view-root .bg-white,
+.mediaboard-view-root .bg-slate-900,
+.mediaboard-view-root .bg-slate-900\/40 {
+  background-color: var(--mediaboard-card-bg) !important;
+}
+.mediaboard-view-root .border,
+.mediaboard-view-root .border-slate-200,
+.mediaboard-view-root .border-slate-800 {
+  border-color: var(--mediaboard-border) !important;
+}
+/* Post-it Notes (yellow notes) */
+.mediaboard-view-root .bg-yellow-100,
+.mediaboard-view-root .bg-amber-100,
+.mediaboard-view-root .bg-yellow-100\/10,
+.mediaboard-view-root .bg-yellow-50,
+.mediaboard-view-root [class*="bg-yellow-"],
+.mediaboard-view-root [class*="bg-amber-"] {
+  background-color: var(--mediaboard-postit-bg) !important;
+}
+
+.mission-control-root .bg-white,
+.mission-control-root .dark\:bg-slate-900 {
+  background-color: var(--mission-card-bg) !important;
+}
+.mission-control-root .border-slate-200,
+.mission-control-root .dark\:border-slate-800 {
+  border-color: var(--mission-card-border) !important;
+}
+.mission-control-root .text-slate-500,
+.mission-control-root .dark\:text-slate-400 {
+  color: var(--mission-text) !important;
+}
+.mission-control-root .mission-accent {
+  color: var(--mission-accent) !important;
+}
+
+
+/* 4. Custom Theme Layout Bindings */
+.sidebar-root {
+  background-color: var(--sidebar-bg) !important;
+  color: var(--sidebar-text) !important;
+}
+.sidebar-root .sidebar-item-active {
+  background-color: var(--sidebar-active-bg) !important;
+  color: var(--sidebar-active-text) !important;
+  border-color: var(--sidebar-active-bg) !important;
+}
+.sidebar-root .text-slate-600,
+.sidebar-root .text-slate-400,
+.sidebar-root .text-slate-550,
+.sidebar-root .text-slate-500 {
+  color: var(--sidebar-text) !important;
+  opacity: 0.85;
+}
+.header-root {
+  background-color: var(--header-bg) !important;
+  border-color: var(--kanban-card-border) !important;
+}
+.contact-drawer-container {
+  background-color: var(--contact-drawer-bg) !important;
+}
+
+.contact-drawer-container a:not([class*="bg-"]),
+.chat-card-root a {
+  color: var(--contact-link-color) !important;
+}
+.contact-drawer-container a[href*="linkedin.com"],
+.chat-card-root a[href*="linkedin.com"] {
+  color: var(--contact-linkedin-link) !important;
+}
+
+/* Chat Bubbles / Message Cards */
+.chat-card-root {
+  background-color: var(--contact-message-inbound-bg) !important;
+  border-color: var(--kanban-card-border) !important;
+}
+.chat-card-root.outbound {
+  background-color: var(--contact-message-outbound-bg) !important;
+}
+.chat-card-root div.whitespace-pre-wrap,
+.chat-card-root div.whitespace-pre-line,
+.chat-card-root .text-slate-800 {
+  color: var(--contact-message-text) !important;
+}
+
+
+/* 5. Light Mode variables overrides */
+.light .kanban-view-root,
+.light.kanban-view-root {
+  --kanban-bg: #f1f5f9;
+  --kanban-card-bg: #ffffff;
+  --kanban-card-border: #e2e8f0;
+}
+.light .calendar-view-root,
+.light.calendar-view-root {
+  --calendar-bg: #ffffff;
+  --calendar-grid-border: #e2e8f0;
+  --calendar-card-bg: #f8fafc;
+}
+.light .mediaboard-view-root,
+.light.mediaboard-view-root {
+  --mediaboard-bg: #f8fafc;
+  --mediaboard-card-bg: #ffffff;
+  --mediaboard-postit-bg: #fef08a;
+  --mediaboard-border: #e2e8f0;
+}
+
+.light .mission-control-root,
+.light.mission-control-root {
+  --mission-bg: #f8fafc;
+  --mission-card-bg: #ffffff;
+  --mission-card-border: #e2e8f0;
+  --mission-accent: #10b981;
+  --mission-text: #0f172a;
+}
+.light .sidebar-root,
+.light.sidebar-root {
+  --sidebar-bg: #ffffff;
+  --sidebar-text: #1e293b;
+  --sidebar-active-bg: rgba(16, 185, 129, 0.1);
+  --sidebar-active-text: #059669;
+}
+.light .header-root,
+.light.header-root {
+  --header-bg: #ffffff;
+}
+.light .contact-drawer-container,
+.light.contact-drawer-container,
+[data-theme="light"] .contact-drawer-container,
+[data-theme="light"].contact-drawer-container {
+  --contact-drawer-bg: #ffffff;
+  --contact-link-color: #2563eb;
+  --contact-linkedin-link: #0a66c2;
+  --contact-message-inbound-bg: #ffffff;
+  --contact-message-outbound-bg: #f8fafc;
+  --contact-message-text: #0f172a;
+  --contact-message-header-email-bg: #FFEDD5;
+  --contact-message-header-note-bg: #D1FAE5;
+  --contact-message-header-meeting-bg: #FFE4E6;
+  --contact-message-header-linkedin-bg: #E0F2FE;
+  --contact-message-history-btn-bg: rgba(16, 185, 129, 0.1);
+  --contact-message-history-btn-border: rgba(16, 185, 129, 0.3);
+  --contact-message-history-btn-text: #059669;
+  --contact-nextstep-color: #047857;
+}
+
+/* Hard protection against Live Studio or utility overrides blowing up the drawer */
+.contact-drawer-container {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.contact-drawer-container > div:first-child,
+#contact-drawer-header,
+div.fixed > div.w-full > div.p-4,
+div#contact-drawer-header {
+  height: 72px !important;
+  max-height: 72px !important;
+  min-height: 72px !important;
+  flex: 0 0 72px !important;
+  overflow: hidden !important;
+}
+
+.contact-drawer-container > div:nth-child(2) {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: calc(100vh - 72px - 65px) !important;
+}
+.light .studio-root,
+.light.studio-root {
+  --studio-bg: #f8fafc;
+  --studio-card-bg: #ffffff;
+  --studio-card-border: #e2e8f0;
+  --studio-input-bg: #ffffff;
+  --studio-input-text: #0f172a;
+  --studio-input-border: #cbd5e1;
+  --studio-accent: #dc2626;
+  --studio-accent-hover: #b91c1c;
+  --studio-text: #0f172a;
+  --studio-text-muted: #64748b;
+  --studio-tab-active-bg: #fef2f2;
+  --studio-tab-active-text: #dc2626;
+  --studio-tab-active-border: #dc2626;
+}
+
+/* 6. Calendar Event Source Custom Colors (Outlook Pastel Style) */
+/* Default (Dark Mode) */
+.event-google {
+  background-color: color-mix(in srgb, var(--calendar-event-google-bg, #0284c7) 20%, transparent) !important;
+  border-color: var(--calendar-event-google-bg, #0284c7) !important;
+  color: var(--calendar-event-google-text, #ffffff) !important;
+  border-left-width: 4px !important;
+}
+.event-outlook {
+  background-color: color-mix(in srgb, var(--calendar-event-outlook-bg, #4f46e5) 20%, transparent) !important;
+  border-color: var(--calendar-event-outlook-bg, #4f46e5) !important;
+  color: var(--calendar-event-outlook-text, #ffffff) !important;
+  border-left-width: 4px !important;
+}
+.event-crm {
+  background-color: color-mix(in srgb, var(--calendar-event-crm-bg, #10b981) 20%, transparent) !important;
+  border-color: var(--calendar-event-crm-bg, #10b981) !important;
+  color: var(--calendar-event-crm-text, #ffffff) !important;
+  border-left-width: 4px !important;
+}
+
+/* Light Mode overrides */
+.light .event-google {
+  background-color: color-mix(in srgb, var(--calendar-event-google-bg, #0284c7) 12%, transparent) !important;
+  color: var(--calendar-event-google-text, #0369a1) !important;
+}
+.light .event-outlook {
+  background-color: color-mix(in srgb, var(--calendar-event-outlook-bg, #4f46e5) 12%, transparent) !important;
+  color: var(--calendar-event-outlook-text, #4338ca) !important;
+}
+.light .event-crm {
+  background-color: color-mix(in srgb, var(--calendar-event-crm-bg, #10b981) 12%, transparent) !important;
+  color: var(--calendar-event-crm-text, #047857) !important;
+}
+
+.chat-card-root .text-slate-800,
+.chat-card-root .whitespace-pre-line,
+.chat-card-root .whitespace-pre-wrap {
+  color: var(--contact-message-text) !important;
+}
+
+

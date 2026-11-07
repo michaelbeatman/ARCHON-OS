@@ -1,0 +1,474 @@
+[
+ {
+  "nav_id": "nav-mission-control",
+  "nav_label": "Dashboard",
+  "subtabs": []
+ },
+ {
+  "nav_id": "nav-operations",
+  "nav_label": "Operations",
+  "subtabs": [
+   [
+    "setOperationsTab",
+    "projects",
+    "Operations"
+   ],
+   [
+    "setOperationsTab",
+    "chat",
+    "Master Chat"
+   ],
+   [
+    "setOperationsTab",
+    "kanban",
+    "KANBAN"
+   ],
+   [
+    "setOperationsTab",
+    "org",
+    "Organisation"
+   ],
+   [
+    "setOperationsTab",
+    "automation",
+    "n8n-Automation"
+   ],
+   [
+    "setOperationsTab",
+    "comm",
+    "Kommunikation"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-master-chat",
+  "nav_label": "master-chat",
+  "subtabs": [
+   [
+    "setOperationsTab",
+    "projects",
+    "Operations"
+   ],
+   [
+    "setOperationsTab",
+    "chat",
+    "Master Chat"
+   ],
+   [
+    "setOperationsTab",
+    "kanban",
+    "KANBAN"
+   ],
+   [
+    "setOperationsTab",
+    "org",
+    "Organisation"
+   ],
+   [
+    "setOperationsTab",
+    "automation",
+    "n8n-Automation"
+   ],
+   [
+    "setOperationsTab",
+    "comm",
+    "Kommunikation"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-inbox",
+  "nav_label": "Posteingang & Triage",
+  "subtabs": [
+   [
+    "setInboxCategoryFilter",
+    "all",
+    "Übersicht"
+   ],
+   [
+    "setInboxCategoryFilter",
+    "webhook",
+    "Webhooks"
+   ],
+   [
+    "setInboxCategoryFilter",
+    "intern",
+    "Intern"
+   ],
+   [
+    "setInboxCategoryFilter",
+    "email",
+    "E-Mail"
+   ],
+   [
+    "setInboxCategoryFilter",
+    "messenger",
+    "Messenger"
+   ],
+   [
+    "setInboxCategoryFilter",
+    "approvals",
+    "2 Freigaben"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-agent-profiles",
+  "nav_label": "Agentenkader",
+  "subtabs": [
+   [
+    "switchAgentCadreTab",
+    "overview",
+    "Übersicht"
+   ],
+   [
+    "switchAgentCadreTab",
+    "chat",
+    "Chat"
+   ],
+   [
+    "switchAgentCadreTab",
+    "botscreen",
+    "Screen"
+   ],
+   [
+    "switchAgentCadreTab",
+    "skills",
+    "Fähigkeiten"
+   ],
+   [
+    "switchAgentCadreTab",
+    "operations",
+    "Operations"
+   ],
+   [
+    "switchAgentCadreTab",
+    "soul",
+    "SOUL"
+   ],
+   [
+    "switchAgentCadreTab",
+    "personalakte",
+    "Personalakte"
+   ],
+   [
+    "switchAgentCadreTab",
+    "marketplace",
+    "Marktplatz"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-automation",
+  "nav_label": "automation",
+  "subtabs": [
+   [
+    "setOperationsTab",
+    "projects",
+    "Operations"
+   ],
+   [
+    "setOperationsTab",
+    "chat",
+    "Master Chat"
+   ],
+   [
+    "setOperationsTab",
+    "kanban",
+    "KANBAN"
+   ],
+   [
+    "setOperationsTab",
+    "org",
+    "Organisation"
+   ],
+   [
+    "setOperationsTab",
+    "automation",
+    "n8n-Automation"
+   ],
+   [
+    "setOperationsTab",
+    "comm",
+    "Kommunikation"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-showroom",
+  "nav_label": "Showroom",
+  "subtabs": [
+   [
+    "filterShowroomCategory",
+    "all",
+    "Explorer"
+   ],
+   [
+    "filterShowroomCategory",
+    "zwischenberichte",
+    "Berichte"
+   ],
+   [
+    "filterShowroomCategory",
+    "medien",
+    "Medien"
+   ],
+   [
+    "filterShowroomCategory",
+    "endprodukte",
+    "Endprodukte"
+   ],
+   [
+    "filterShowroomCategory",
+    "apps",
+    "Web-Apps"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-watchdog",
+  "nav_label": "Internet-Watchdog",
+  "subtabs": [
+   [
+    "switchWatchdogSubTab",
+    "basket",
+    "Korb: 0 / 3"
+   ],
+   [
+    "switchWatchdogSubTab",
+    "radar",
+    "Radar"
+   ],
+   [
+    "switchWatchdogSubTab",
+    "sources",
+    "Quellen"
+   ],
+   [
+    "switchWatchdogSubTab",
+    "settings",
+    "Optionen"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-research",
+  "nav_label": "Research Lab",
+  "subtabs": [
+   [
+    "switchResearchSubTab",
+    "labor",
+    "Labor"
+   ],
+   [
+    "switchResearchSubTab",
+    "dossiers",
+    "Dossiers"
+   ],
+   [
+    "switchResearchSubTab",
+    "quellen",
+    "Quellen"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-library",
+  "nav_label": "Zentralbibliothek",
+  "subtabs": [
+   [
+    "switchLibrarySubTab",
+    "rag",
+    "RAG Index"
+   ],
+   [
+    "switchLibrarySubTab",
+    "erfasser",
+    "Erfasser"
+   ],
+   [
+    "switchLibrarySubTab",
+    "vault",
+    "Obsidian"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-ai-mastermind",
+  "nav_label": "AI-Boardroom",
+  "subtabs": [
+   [
+    "setBoardroomTab",
+    "overview",
+    "Übersicht"
+   ],
+   [
+    "setBoardroomTab",
+    "debate",
+    "Debatte"
+   ],
+   [
+    "setBoardroomTab",
+    "live",
+    "Live"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-addresses",
+  "nav_label": "Kontakte & CRM",
+  "subtabs": []
+ },
+ {
+  "nav_id": "nav-items",
+  "nav_label": "Artikel & Leistungen",
+  "subtabs": [
+   [
+    "setItemsTypeFilter",
+    "all",
+    "Alle"
+   ],
+   [
+    "setItemsTypeFilter",
+    "service",
+    "Zeit/Service"
+   ],
+   [
+    "setItemsTypeFilter",
+    "saas",
+    "SaaS/Abo"
+   ],
+   [
+    "setItemsTypeFilter",
+    "product",
+    "Produkte"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-operations-erp",
+  "nav_label": "Vorgänge & Verträge",
+  "subtabs": [
+   [
+    "switchErpOpsSubTab",
+    "offers",
+    "Angebote/AB"
+   ],
+   [
+    "switchErpOpsSubTab",
+    "pipeline",
+    "Pipeline"
+   ],
+   [
+    "switchErpOpsSubTab",
+    "contracts",
+    "Verträge"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-finance",
+  "nav_label": "Finanzen & Belege",
+  "subtabs": [
+   [
+    "setFinanceSubTab",
+    "receipts",
+    "Belege"
+   ],
+   [
+    "setFinanceSubTab",
+    "analytics",
+    "Analytics"
+   ],
+   [
+    "setFinanceSubTab",
+    "contracts",
+    "Verträge"
+   ],
+   [
+    "setFinanceSubTab",
+    "dunning",
+    "Mahnwesen"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-corporate",
+  "nav_label": "Corporate & Mandant",
+  "subtabs": [
+   [
+    "switchCorporateSubTab",
+    "master",
+    "Stammdaten & Design"
+   ],
+   [
+    "switchCorporateSubTab",
+    "templates",
+    "Formulare & Vorlagen-Studio"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-approval-policies",
+  "nav_label": "Approval-Policies",
+  "subtabs": [
+   [
+    "setApprovalsSubTab",
+    "finance",
+    "Finanzen"
+   ],
+   [
+    "setApprovalsSubTab",
+    "email",
+    "E-Mail"
+   ],
+   [
+    "setApprovalsSubTab",
+    "system",
+    "System & IT"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-guardian",
+  "nav_label": "Token Guard",
+  "subtabs": [
+   [
+    "setGuardianSubTab",
+    "overview",
+    "Übersicht"
+   ],
+   [
+    "setGuardianSubTab",
+    "sessions",
+    "310 Sessions"
+   ],
+   [
+    "setGuardianSubTab",
+    "concurrency",
+    "5 Drosselung"
+   ]
+  ]
+ },
+ {
+  "nav_id": "nav-log-stream",
+  "nav_label": "Telemetrie & Logs",
+  "subtabs": [
+   [
+    "setLogStreamSourceMode",
+    "containers",
+    "Container"
+   ],
+   [
+    "setLogStreamSourceMode",
+    "profiles",
+    "Agenten"
+   ],
+   [
+    "setLogStreamSourceMode",
+    "audit",
+    "Audit"
+   ]
+  ]
+ }
+]

@@ -335,6 +335,43 @@ def _set_agent_profile_status(
         logger.warning(f"[ProfileStatus] Fehler beim Status-Update für '{profile_id}': {e}")
 
 
+def _merge_sandy_delta(fresh: dict, local_data: dict, parent_id: str, created_sub_ids: list, local_tasks: list) -> None:
+    """Überträgt nur die Sandy-Änderungen (neue Subtasks + Parent-Update) in den frisch geladenen Store."""
+    fresh_tasks = fresh.setdefault("tasks", [])
+    fresh_ids = {t.get("id") for t in fresh_tasks}
+
+    # 1. Neue Subtasks hinzufügen (nur die, die es im fresh noch nicht gibt)
+    for sub in local_tasks:
+        if sub.get("id") not in fresh_ids:
+            fresh_tasks.insert(0, sub)
+
+    # 2. Parent-Task aktualisieren (subtask_ids, phase)
+    for i, t in enumerate(fresh_tasks):
+        if t.get("id") == parent_id:
+            local_parent = next((pt for pt in local_data.get("tasks", []) if pt.get("id") == parent_id), None)
+            if local_parent:
+                fresh_tasks[i]["subtask_ids"] = local_parent.get("subtask_ids", fresh_tasks[i].get("subtask_ids", []))
+                fresh_tasks[i]["phase"] = local_parent.get("phase", fresh_tasks[i].get("phase"))
+            break
+
+
+def _merge_synthesis_draft_delta(fresh: dict, parent_id: str, draft_path: str) -> None:
+    """Aktualisiert nur synthesis_draft_path im Parent-Task (atomar via update_mc)."""
+    for t in fresh.get("tasks", []):
+        if t.get("id") == parent_id:
+            t["synthesis_draft_path"] = draft_path
+            break
+
+
+def _merge_synthesis_audit_delta(fresh: dict, parent_id: str, time_str: str, robert_reply: str, deci: dict | None, draft_name: str) -> None:
+    """Fügt nur den audit_log Eintrag für die Synthese-Entscheidung hinzu (atomar via update_mc)."""
+    fresh.setdefault("audit_logs", []).insert(0, {
+        "time": time_str, "source": "Synthese-Loop",
+        "msg": (f"Lisa-Entwurf für #{parent_id} braucht Freigabe "
+                f"(Robert: {robert_reply[:60] or 'ohne Antwort'}) — "
+                f"Kanban-Entscheidung {deci.get('task_id') if deci else 'NICHT angelegt'}")})
+
+
 async def _trigger_sandy_staffing_nomination(
     parent_task: dict,
     profiles: list,
@@ -342,6 +379,7 @@ async def _trigger_sandy_staffing_nomination(
     dispatcher: Dispatcher = None,
     load_mc: LoadMC = _default_load_mc,
     save_mc: SaveMC = _default_save_mc,
+    update_mc: Optional[Callable] = None,
     ticker: Ticker = None,
     get_profiles: GetProfiles = None,
     paperclip_hire: Callable = None,
@@ -396,6 +434,7 @@ Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, ful
             model=sandy_model,
         )
         reply = res.get("content", "").strip()
+        # Lokalen Snapshot laden, Änderungen vorbereiten
         data = load_mc()
         candidate_blocks = []
         for part in reply.split("```"):
@@ -405,9 +444,10 @@ Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, ful
             if "nominated_agents" in clean_p and clean_p.startswith("{") and clean_p.endswith("}"):
                 candidate_blocks.append(clean_p)
         if not candidate_blocks:
-            candidate_blocks = re.findall(r'(\{[^\}]*"nominated_agents"[^\}]*\})', reply)
+            candidate_blocks = re.findall(r'(\{[^}]*"nominated_agents"[^}]*\})', reply)
 
         created_sub_ids = []
+        created_subtasks = []
         for jm in candidate_blocks:
             try:
                 parsed = json.loads(jm)
@@ -452,6 +492,7 @@ Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, ful
                     }
                     data.setdefault("tasks", []).insert(0, sub_task)
                     created_sub_ids.append(sub_task_id)
+                    created_subtasks.append(sub_task)
                     ticker("Approval Gate", f"Neuer Sub-Task #{sub_task_id} ({sub_name}) wartet auf Freigabe!")
 
                     # --- AUTO-HIRE HOOK: Agent in Paperclip registrieren & Status auf 'active' ---
@@ -460,11 +501,19 @@ Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, ful
                     except Exception as hire_err:
                         logger.warning(f"[AutoHire] Hire fehlgeschlagen für '{sub_agent_id}': {hire_err}")
 
-        live_parent = next((t for t in data.get("tasks", []) if t.get("id") == parent_id), None)
-        if live_parent and created_sub_ids:
-            live_parent.setdefault("subtask_ids", []).extend(created_sub_ids)
-            live_parent["phase"] = "staffing"
-        save_mc(data)
+        # Parent-Task im lokalen Snapshot updaten (subtask_ids, phase)
+        local_parent = next((t for t in data.get("tasks", []) if t.get("id") == parent_id), None)
+        if local_parent and created_sub_ids:
+            local_parent.setdefault("subtask_ids", []).extend(created_sub_ids)
+            local_parent["phase"] = "staffing"
+
+        # Atomares Commit: nur unser Delta (neue Subtasks + Parent-Update) in den frischen Store mergen
+        def _commit():
+            if update_mc is not None:
+                update_mc(lambda fresh: _merge_sandy_delta(fresh, data, parent_id, created_sub_ids, created_subtasks))
+            else:
+                save_mc(data)
+        _commit()
     except Exception as e:
         logger.warning(f"[Cascade-Loop] Fehler bei Sandy-Staffing: {e}")
 
@@ -680,6 +729,7 @@ async def _run_synthesis_cascade(
     dispatcher: Dispatcher = None,
     load_mc: LoadMC = _default_load_mc,
     save_mc: SaveMC = _default_save_mc,
+    update_mc: Optional[Callable] = None,
     ticker: Ticker = None,
     get_profiles: GetProfiles = None,
     paths: Dict[str, str] = None,
@@ -726,6 +776,7 @@ async def _run_synthesis_cascade(
         tg_ping = _tg_ping_synthesis
 
     logger.info(f"[Cascade-Loop] Starte Synthese fuer Parent-Projekt {parent_project_id}")
+    # Initialen Snapshot laden (nur für Parent-Titel und Geschwister)
     data = load_mc()
     tasks = data.get("tasks", [])
     parent_task = next((t for t in tasks if t.get("id") == parent_project_id), None)
@@ -739,7 +790,7 @@ async def _run_synthesis_cascade(
         and t.get("id") != parent_project_id
     ]
 
-    # Berichte auslesen (Artifact bevorzugt, sonst result_summary)
+    # Berichte auslesen (Artifact bevorzugt, sonst result_summary) - synchron, kein await
     reports = []
     for s in siblings:
         sub_title = s.get("title", "Teilaufgabe")
@@ -841,43 +892,6 @@ VORGABEN:
     if _syn_lines and _syn_lines[-1].strip().upper() == _MARKER:
         synthesis_reply = "\n".join(_syn_lines[:-1]).strip()
 
-    # Entwurf ablegen (Basis der Robert-Freigabe)
-    safe_pid = re.sub(r'[^a-zA-Z0-9_\-]+', '-', parent_project_id).strip('-') or "projekt"
-    draft_name = f"{safe_pid}_synthese_lisa_entwurf.md"
-    target_dirs = [
-        "/opt/data/obsidian/01_PROJEKTE",
-        os.path.join(paths["OBSIDIAN_VAULT_DIR"], "01_PROJEKTE"),
-        os.path.join(paths["WORKSPACE_DIR"], "obsidian_vault", "01_PROJEKTE"),
-    ]
-    # 12.10.2026 (Ordnerflut-Fix): Entwurf + finaler Bericht gehoeren in den
-    # EINEN Projekt-Ordner des Eltern-Projekts, nicht als lose Dateien daneben.
-    try:
-        _fan_ordner = folder_namer({"parent_project_id": parent_project_id, "parent_project_title": parent_title})
-    except Exception:
-        _fan_ordner = ""
-    # 2a: Ablageordner fuer das Synthese-Dossier im Projektordner
-    _tg_doss_dir = None
-    try:
-        if _fan_ordner:
-            _tg_doss_dir = os.path.join(paths["OBSIDIAN_VAULT_DIR"], "01_PROJEKTE",
-                                        _fan_ordner, "01_Zwischenberichte")
-    except Exception:
-        _tg_doss_dir = None
-    draft_path = (f"/opt/data/obsidian/01_PROJEKTE/{_fan_ordner}/03_Endprodukte/{draft_name}"
-                  if _fan_ordner else f"/opt/data/obsidian/01_PROJEKTE/{draft_name}")
-    for d in target_dirs:
-        try:
-            d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d
-            os.makedirs(d_ziel, exist_ok=True)
-            p = os.path.join(d_ziel, draft_name)
-            with open(p, "w", encoding="utf-8") as f:
-                f.write(f"# Synthese-Entwurf: {parent_title}\n\n{synthesis_reply}\n")
-            draft_path = p
-        except Exception:
-            continue
-    parent_task["synthesis_draft_path"] = draft_path
-    save_mc(data)
-
     # --- SCHRITT 1.5: KRITISCHER REVIEWER prüft Lisas Synthese vor Roberts Entscheidung ---
     reviewer_prof = next((p for p in profiles if p.get("id") == "gpts_critical_reviewer"), None)
     reviewer_critique = ""
@@ -920,8 +934,8 @@ LISAS SYNTHESE:
 
 """ + (f"""UNABHAENGIGE QUALITAETSPRUEFUNG (Kritischer Reviewer):
 {reviewer_critique}
-""" if reviewer_critique else "") + """
-Pruefe Vollstaendigkeit und Plausibilitaet. Antworte MIT GENAU EINEM DER ZWEI
+
+""" if reviewer_critique else "") + """Pruefe Vollstaendigkeit und Plausibilitaet. Antworte MIT GENAU EINEM DER ZWEI
 WOERTER ALS ALLERERSTER ZEILE: FREIGABE oder ABLEHNUNG - danach hoechstens
 ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     r_prof = next((p for p in profiles if p.get("id") in ("executive_decision_architect", "robert")), None)
@@ -955,6 +969,55 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
         logger.warning(f"[Cascade-Loop] Roberts Antwort unklar (erste Zeile: '{_erste_zeile[:60]}') - Owner entscheidet")
         ticker("Robert", "Antwort unklar - Freigabe liegt beim Owner im Kanban")
         freigegeben = False
+
+    # Entwurf ablegen (Basis der Robert-Freigabe)
+    safe_pid = re.sub(r'[^a-zA-Z0-9_\-]+', '-', parent_project_id).strip('-') or "projekt"
+    draft_name = f"{safe_pid}_synthese_lisa_entwurf.md"
+    target_dirs = [
+        "/opt/data/obsidian/01_PROJEKTE",
+        os.path.join(paths["OBSIDIAN_VAULT_DIR"], "01_PROJEKTE"),
+        os.path.join(paths["WORKSPACE_DIR"], "obsidian_vault", "01_PROJEKTE"),
+    ]
+    # 12.10.2026 (Ordnerflut-Fix): Entwurf + finaler Bericht gehoeren in den
+    # EINEN Projekt-Ordner des Eltern-Projekts, nicht als lose Dateien daneben.
+    try:
+        _fan_ordner = folder_namer({"parent_project_id": parent_project_id, "parent_project_title": parent_title})
+    except Exception:
+        _fan_ordner = ""
+    # 2a: Ablageordner fuer das Synthese-Dossier im Projektordner
+    _tg_doss_dir = None
+    try:
+        if _fan_ordner:
+            _tg_doss_dir = os.path.join(paths["OBSIDIAN_VAULT_DIR"], "01_PROJEKTE",
+                                        _fan_ordner, "01_Zwischenberichte")
+    except Exception:
+        _tg_doss_dir = None
+    draft_path = (f"/opt/data/obsidian/01_PROJEKTE/{_fan_ordner}/03_Endprodukte/{draft_name}"
+                  if _fan_ordner else f"/opt/data/obsidian/01_PROJEKTE/{draft_name}")
+    for d in target_dirs:
+        try:
+            d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d
+            os.makedirs(d_ziel, exist_ok=True)
+            p = os.path.join(d_ziel, draft_name)
+            with open(p, "w", encoding="utf-8") as f:
+                f.write(f"# Synthese-Entwurf: {parent_title}\n\n{synthesis_reply}\n")
+            draft_path = p
+        except Exception:
+            continue
+
+    # --- ATOMARER COMMIT: synthesis_draft_path in Parent-Task schreiben ---
+    # Wir nutzen update_mc für atomares Merge (nur Parent-Task Update, keine Tasks-Listen-Änderung)
+    def _commit_draft():
+        if update_mc is not None:
+            update_mc(lambda fresh: _merge_synthesis_draft_delta(fresh, parent_project_id, draft_path))
+        else:
+            # Fallback: vollständigen Store speichern (Altverhalten)
+            data = load_mc()
+            pt = next((t for t in data.get("tasks", []) if t.get("id") == parent_project_id), None)
+            if pt:
+                pt["synthesis_draft_path"] = draft_path
+            save_mc(data)
+    _commit_draft()
 
     if freigegeben:
         await finalize_approval(parent_project_id, draft_path, synthesis_reply, f"Robert: {robert_reply[:200]}")
@@ -992,13 +1055,22 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
         except Exception as _de:
             logger.warning(f"[Synthese] Entscheidung anlegen fehlgeschlagen: {_de}")
     now_t = datetime.datetime.now().strftime("%H:%M:%S")
-    data.setdefault("audit_logs", []).insert(0, {
-        "time": now_t, "source": "Synthese-Loop",
-        "msg": (f"Lisa-Entwurf für #{parent_project_id} braucht Freigabe "
-                f"(Robert: {robert_reply[:60] or 'ohne Antwort'}) — "
-                f"Kanban-Entscheidung {_deci.get('task_id') if _deci else 'NICHT angelegt'}")})
+
+    # --- ATOMARER COMMIT: audit_logs Eintrag hinzufügen ---
+    def _commit_audit():
+        if update_mc is not None:
+            update_mc(lambda fresh: _merge_synthesis_audit_delta(fresh, parent_project_id, now_t, robert_reply, _deci, draft_name))
+        else:
+            data = load_mc()
+            data.setdefault("audit_logs", []).insert(0, {
+                "time": now_t, "source": "Synthese-Loop",
+                "msg": (f"Lisa-Entwurf für #{parent_project_id} braucht Freigabe "
+                        f"(Robert: {robert_reply[:60] or 'ohne Antwort'}) — "
+                        f"Kanban-Entscheidung {_deci.get('task_id') if _deci else 'NICHT angelegt'}")})
+            save_mc(data)
+    _commit_audit()
+
     ticker("Synthese-Loop", f"Entscheidung im Kanban angelegt: {draft_name}")
-    save_mc(data)
     if not _deci:
         logger.warning(f"[Synthese] Entscheidung für #{parent_project_id} konnte NICHT "
                        f"angelegt werden — Freigabe ist per Telegram/Kanban nicht möglich.")

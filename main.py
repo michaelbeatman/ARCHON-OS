@@ -246,9 +246,21 @@ def prometheus_metrics():
 # Pfade + Laufzeit-Helfer kommen aus app.core.runtime (gemeinsame Basis für
 # main.py und die ausgelagerten Router; dort zyklenfrei definiert).
 from archon.core.runtime import (  # noqa: E402
-    WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR,
+    WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, OBSIDIAN_VAULT_DIR,
     resolve_obsidian_vault_path, ticker_entries, add_ticker, broadcast_event,
     _load_json, _save_json, atomic_write_json, _SSE_SUBSCRIBERS,
+)
+
+# --- A5-Etappe 4b: Pfad-Konstanten ausgelagert -----------------------------
+# Quelle ist archon/core/paths.py; alle Pfade leiten sich aus den Basis-
+# Verzeichnissen oben ab (keine zweite __file__-Wahrheit). main.py importiert
+# nur noch — die Werte sind per scripts/path_constants_snapshot.py belegt.
+from archon.core.paths import (
+    MEMORY_FILE, AGENTS_FILE, KANBAN_FILE, THEME_FILE, THEME_LIVE_FILE,
+    GATEWAY_CONFIG_FILE, QUICKCHAT_SESSIONS_DIR, COUPLED_AGENTS_FILE,
+    THEMES_DIR, FRAMEWORKS_FILE, BOARDROOM_HISTORY_FILE, ROLES_FILE,
+    SERVICES_FILE, HERMES_PROFILES_DIR, _SKILL_INDEX_DISK_PATH,
+    SETTINGS_FILE, KANBAN_CARDS_FILE, CONFIG_FILE,
 )
 
 from archon.core.permissions import (  # noqa: E402
@@ -328,15 +340,8 @@ def _start_watchdog_daemon():
         print(f"Failed to start watchdog_daemon: {e}", file=sys.stderr)
         watchdog_runner = None
 
-MEMORY_FILE = os.path.join(MEMORY_DIR, "agent_memory.json")
-AGENTS_FILE = os.path.join(MEMORY_DIR, "agents.json")
 # ROLES_FILE/SERVICES_FILE: effektiv gilt die spaetere Definition unter
 # WORKSPACE_DIR (Z. ~2520) — die MEMORY_DIR-Variante war wirkungslos.
-KANBAN_FILE = os.path.join(WORKSPACE_DIR, "kanban_data.json")
-THEME_FILE = os.path.join(MEMORY_DIR, "theme_custom.json")
-THEME_LIVE_FILE = os.path.join(MEMORY_DIR, "theme_live_overrides.json")
-GATEWAY_CONFIG_FILE = os.path.join(MEMORY_DIR, "gateway_config.json")
-QUICKCHAT_SESSIONS_DIR = os.path.join(MEMORY_DIR, "quickchat_sessions")
 os.makedirs(QUICKCHAT_SESSIONS_DIR, exist_ok=True)
 
 # Ticker/SSE/Broadcast leben in app.core.runtime (siehe Import oben).
@@ -485,7 +490,6 @@ def save_agents(agents: List[Dict]):
 def load_roles() -> List[Dict]: return _load_json(ROLES_FILE, DEFAULT_ROLES)
 def save_roles(roles: List[Dict]): _save_json(ROLES_FILE, roles)
 
-COUPLED_AGENTS_FILE = os.path.join(WORKSPACE_DIR, "config", "coupled_agents.json")
 
 def load_services() -> List[Dict]:
     if os.path.exists(COUPLED_AGENTS_FILE):
@@ -697,7 +701,6 @@ def api_seo_articles():
                 })
     return {"status": "success", "articles": articles}
 
-THEMES_DIR = os.path.join(WORKSPACE_DIR, "themes")
 os.makedirs(THEMES_DIR, exist_ok=True)
 
 @app.get("/api/themes")
@@ -1119,8 +1122,6 @@ async def fetch_agent_response_api(agent: Dict, user_prompt: str) -> Dict:
         "model": model_combo
     }
 
-FRAMEWORKS_FILE = os.path.join(WORKSPACE_DIR, "frameworks.json")
-BOARDROOM_HISTORY_FILE = os.path.join(WORKSPACE_DIR, "boardroom_history.json")
 
 
 def load_boardroom_frameworks():
@@ -2521,8 +2522,6 @@ a {{
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-ROLES_FILE = os.path.join(WORKSPACE_DIR, "roles.json")
-SERVICES_FILE = os.path.join(WORKSPACE_DIR, "services.json")
 
 DEFAULT_ROLES = [
     # 1. MANAGEMENT & ARCHITEKTUR
@@ -2737,13 +2736,11 @@ DEFAULT_ROLES = [
 ]
 
 
-HERMES_PROFILES_DIR = os.path.join(MEMORY_DIR, "hermes_profiles")
 os.makedirs(HERMES_PROFILES_DIR, exist_ok=True)
 _HERMES_SKILLS_CACHE = None
 _HERMES_SKILLS_CACHE_TIME = 0
 
 
-_SKILL_INDEX_DISK_PATH = os.path.join(DATA_DIR, "hermes_skills_index.json")
 
 
 async def _warm_hermes_skill_caches():
@@ -7747,7 +7744,6 @@ def api_marketplace_recruit(data: Dict = Body(...)):
         }
     }
 
-SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
 
 @app.post("/api/settings")
 async def api_save_settings(request: Request, settings: Dict = Body(None)):
@@ -8364,7 +8360,6 @@ def api_get_vault_files():
     _VAULT_FILES_CACHE = {"ts": now, "data": files}
     return files
 
-KANBAN_CARDS_FILE = os.path.join(DATA_DIR, "kanban_cards.json")
 
 @app.get("/api/kanban")
 def api_get_kanban():
@@ -8462,7 +8457,6 @@ def api_telemetry_dashboard():
     }
 
 # Helper to read/write persistent agent settings in main.py
-CONFIG_FILE = os.path.join(WORKSPACE_DIR, "obsidian_vault", "agent_configs.json")
 
 def load_agent_configs():
     if os.path.exists(CONFIG_FILE):

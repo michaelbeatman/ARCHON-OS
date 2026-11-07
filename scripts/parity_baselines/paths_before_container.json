@@ -1,0 +1,20 @@
+{
+  "AGENTS_FILE": "/app/data/agents.json",
+  "BOARDROOM_HISTORY_FILE": "/app/agent_workspace/boardroom_history.json",
+  "CONFIG_FILE": "/app/agent_workspace/obsidian_vault/agent_configs.json",
+  "COUPLED_AGENTS_FILE": "/app/agent_workspace/config/coupled_agents.json",
+  "FRAMEWORKS_FILE": "/app/agent_workspace/frameworks.json",
+  "GATEWAY_CONFIG_FILE": "/app/data/gateway_config.json",
+  "HERMES_PROFILES_DIR": "/app/data/hermes_profiles",
+  "KANBAN_CARDS_FILE": "/app/data/kanban_cards.json",
+  "KANBAN_FILE": "/app/agent_workspace/kanban_data.json",
+  "MEMORY_FILE": "/app/data/agent_memory.json",
+  "QUICKCHAT_SESSIONS_DIR": "/app/data/quickchat_sessions",
+  "ROLES_FILE": "/app/agent_workspace/roles.json",
+  "SERVICES_FILE": "/app/agent_workspace/services.json",
+  "SETTINGS_FILE": "/app/agent_workspace/settings.json",
+  "THEMES_DIR": "/app/agent_workspace/themes",
+  "THEME_FILE": "/app/data/theme_custom.json",
+  "THEME_LIVE_FILE": "/app/data/theme_live_overrides.json",
+  "_SKILL_INDEX_DISK_PATH": "/app/data/hermes_skills_index.json"
+}

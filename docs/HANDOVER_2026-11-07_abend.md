@@ -5,7 +5,7 @@
 die Auftragsliste selbst enthielt schon 12. Nachgerechnet, nicht übernommen).
 
 **Stand:** 2026-11-07, abends · Branch `refactor/critical-hardening` @ `f22402fc`,
-live deployt (`--reload`, Änderungen sofort aktiv) · **53 Commits seit `main`** (`dd9f111a`).
+live deployt (`--reload`, Änderungen sofort aktiv) · **54 Commits seit `main`** (`dd9f111a`).
 
 ---
 
@@ -15,7 +15,7 @@ live deployt (`--reload`, Änderungen sofort aktiv) · **53 Commits seit `main`*
 Projekt: Archon OS, /mnt/raid/AgenticOS-2026 (Docker, Port 8501, Nur-Loopback-Binding).
 Lies zuerst docs/REFACTOR_STAND_2026-11-06.md (Umbau) und
 docs/AUDIT_STATUS.md (40-Punkte-Audit: Status + Messbefehl je Punkt).
-Branch: refactor/critical-hardening (53 Commits seit main). NIEMALS main. Kein Push, kein Merge.
+Branch: refactor/critical-hardening (54 Commits seit main). NIEMALS main. Kein Push, kein Merge.
 Vor jeder Änderung messen, nach jeder Änderung DREI Pflicht-Guards:
 1) .venv/bin/python scripts/route_parity.py --check
      scripts/parity_baselines/openapi_baseline_2026-11-06.json    # Exit 0, Soll: 585 Pfade / 861 Operationen
@@ -183,7 +183,7 @@ Alle Rollen standen auf demselben Free-Tier-Modell; drei Läufe starben am Coold
 |---|---|---|
 | 1 | **A5 / A7 / A8** | 🔴 offen: **52** Modul-Globals (`grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py`), **0** `Depends()`, Config verstreut (15+ Dateien). Großer Umbau, eigener Branch/Tag. |
 | 2 | **B10 Pfad-Config** | 🟡 **145** × `/opt/data` in `main.py`+`archon`+`backend`+`utils` (195 mit `scripts`/`tests`). Braucht eigene Config-Schicht **plus eigenen Tag mit eigener Baseline**. |
-| 3 | **S7 / B5 / B8** | geprüft, unauffällig — **aber**: S7 fand ich mit **22** `safe_load` in `main.py`+`archon`+`backend`+`utils` (**74** projektweit ohne `.venv`), **0** unsichere `yaml.load(`. B5: **10** `execute(f"…")`-Stellen, alle mit Platzhalter-/Spaltenlisten aus festen Strings (`set_clause`, `col_names`, `', '.join(updates)`, `IN ({placeholders})`) — **ein latenter Härtungspunkt**: `local_memory_bridge.py:454` `evict_stale_memories(table=…)` setzt `{table}` ungeprüft ins SQL (Aufrufer übergeben heute feste Namen). B8: **nur Stichprobe**, keine systematische Analyse der async-Pfade — kein Traceback im Log, das ist kein Beweis. |
+| 3 | **S7 / B5 / B8** | geprüft, unauffällig — **aber**: S7 fand ich mit **22** `safe_load` in `main.py`+`archon`+`backend`+`utils` (**74** projektweit ohne `.venv`), **0** unsichere `yaml.load(`. B5: **10** `execute(f"…")`-Stellen, alle mit Platzhalter-/Spaltenlisten aus festen Strings (`set_clause`, `col_names`, `', '.join(updates)`, `IN ({placeholders})`) — **ein latenter Härtungspunkt**: `local_memory_bridge.py:454` `evict_stale_memories(table=…)` setzt `{table}` ungeprüft ins SQL (Aufrufer übergeben heute feste Namen). B8: **systematisch geprüft** (AST-Scan über alle `*.py` außer `.venv`/Archiv: HTTP-Aufrufe in `async def` ohne `await` mit `httpx`/`client`-Bezug) — genau **ein** Treffer: `backend/agent_router.py:633` `async with client.stream(...)` auf einem `httpx.AsyncClient`. Das ist das korrekte, nicht-blockierende Muster. Kein blockierendes `httpx.Client` in einem async-Handler gefunden. |
 | 4 | **B9** | 🔴 **50** × `api_route` in `main.py`. |
 | 5 | **A6** | 🟡 **15** × `asyncio.to_thread` in `main.py` (sync-I/O in async bleibt punktuell). |
 | 6 | **Performance P1–P8** | 🔴 ungeprüft/offen (Pooling, synchrone Docker-Calls, N+1, Batching, Vault-Reads, Modell-Re-Instanziierung, Streaming, Cache-Keys). Bezug: `scripts/bench_routes.py`, 128 Routen, Median 73 ms warm (Stand 06.11.). |
@@ -274,5 +274,5 @@ Seiteneffekte haben, ist weiterhin ungeklärt.
 ---
 
 *Erstellt: 2026-11-07 abends · Branch `refactor/critical-hardening` @ `f22402fc` ·
-53 Commits seit `main` (`dd9f111a`) · alle Zahlen in diesem Dokument am selben Abend
+54 Commits seit `main` (`dd9f111a`) · alle Zahlen in diesem Dokument am selben Abend
 mit den genannten Befehlen gemessen.*

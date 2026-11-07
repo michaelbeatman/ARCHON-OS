@@ -89,6 +89,110 @@ def materialize_data_uri_avatar(profile_id: str, data_url: str) -> Optional[str]
         return None
 
 
+_ROLE_AVATAR_FIELDS = ("avatar", "avatar_url")
+
+
+def materialize_role_avatars(roles: Any) -> Any:
+    """Ersetzt data:-URI-Avatare einer Rollen-Liste durch die /static-Pfade.
+
+    `roles.json` bleibt die Quelle der Wahrheit: die data-URI wird nur fuer die
+    Antwort materialisiert (Datei anlegen, Pfad ausliefern). Die Eingabe wird
+    nicht verandert — `load_roles()` liefert ein gecachtes Objekt, das auch
+    interne Leser (Prompt-Aufbau, Boardroom) benutzen und das seinen data-URI
+    behalten muss.
+
+    Je Ziel-Feld wird der vorhandene, idempotente `materialize_data_uri_avatar`
+    benutzt; liefert er None (ungueltiger Wert), bleibt der Originalwert stehen
+    — es wird nie ein Feld geleert.
+    """
+    if not isinstance(roles, list):
+        return roles
+    # Ein Bild steckt in der Datei zweimal (avatar + avatar_url): einmal
+    # materialisieren genuegt, sonst wird dieselbe halbe Megabyte-Base64
+    # doppelt decodiert und gehasht.
+    resolved: Dict[tuple, Optional[str]] = {}
+    result: List[Any] = []
+    for role in roles:
+        if not isinstance(role, dict):
+            result.append(role)
+            continue
+        item = dict(role)
+        for field in _ROLE_AVATAR_FIELDS:
+            value = item.get(field)
+            if not isinstance(value, str) or not value.startswith("data:image"):
+                continue
+            key = (str(item.get("id") or ""), value)
+            if key not in resolved:
+                resolved[key] = materialize_data_uri_avatar(key[0], value)
+            if resolved[key]:
+                item[field] = resolved[key]
+        result.append(item)
+    return result
+
+
+# Rueckweg: /static-Pfad -> data:-URI (Schutz gegen den Rundlauf GET -> POST).
+# Nur Dateinamen direkt unter static/avatars, keine Verzeichniswechsel.
+_STATIC_AVATAR_RE = re.compile(r"^/static/avatars/[A-Za-z0-9_.-]+$")
+
+
+def restore_data_uri_avatars(roles: Any, stored: Any = None) -> Any:
+    """Dreht nur die selbst materialisierten Avatare vor dem Speichern zurueck.
+
+    `GET /api/roles` liefert materialisierte Pfade; das Frontend postet die
+    Antwort unveraendert zurueck (`prompt_studio.js`: loadRolesFromServer ->
+    saveRolesToServer). Ohne Umkehrung stuende nach dem ersten Speichern im UI
+    der Pfad in `roles.json` und die data-URI — fuer Rollen ohne eigenes Profil
+    die einzige Kopie des Bildes — waere verloren.
+
+    Die Regel ist selbstbegrenzend: zurueckgedreht wird nur, wenn der eingehende
+    Pfad **genau** der ist, den `materialize_data_uri_avatar` aus dem aktuell
+    gespeicherten data-URI derselben Rolle erzeugt. Damit bleiben die rund 100
+    `/static`-Pfade, die schon heute in der Datei stehen (geteilte Katalog-
+    Avatare), unangetastet — sonst blaehte ein Speichern die Datei um ~3,7 MB
+    auf Base64 auf.
+
+    :param roles: eingehende Rollenliste (z. B. aus dem POST-Body).
+    :param stored: aktuell gespeicherter Stand (dieselbe Datei, die geschrieben
+                   wird). Ohne Vorlage wird nichts zurueckgedreht.
+    """
+    if not isinstance(roles, list):
+        return roles
+    vorlage: Dict[str, Dict[str, Any]] = {}
+    if isinstance(stored, list):
+        for eintrag in stored:
+            if isinstance(eintrag, dict) and eintrag.get("id") is not None:
+                vorlage[str(eintrag.get("id"))] = eintrag
+    if not vorlage:
+        return roles
+    # Ein Bild steht zweimal drin (avatar + avatar_url): einmal pruefen genuegt.
+    geprueft: Dict[tuple, bool] = {}
+    result: List[Any] = []
+    for role in roles:
+        if not isinstance(role, dict):
+            result.append(role)
+            continue
+        item = dict(role)
+        role_id = str(item.get("id") or "")
+        alt = vorlage.get(role_id)
+        if alt is None:
+            result.append(item)
+            continue
+        for field in _ROLE_AVATAR_FIELDS:
+            wert = item.get(field)
+            gespeichert = alt.get(field)
+            if not isinstance(wert, str) or not _STATIC_AVATAR_RE.match(wert):
+                continue
+            if not (isinstance(gespeichert, str) and gespeichert.startswith("data:image")):
+                continue
+            key = (role_id, gespeichert)
+            if key not in geprueft:
+                geprueft[key] = materialize_data_uri_avatar(role_id, gespeichert) == wert
+            if geprueft[key]:
+                item[field] = gespeichert
+        result.append(item)
+    return result
+
+
 def get_hermes_profiles_base_dirs() -> List[str]:
     """Liefert alle aktiven Hermes-Profil-Pfade (Container-Mounts und Host-Pfade)."""
     candidates = [

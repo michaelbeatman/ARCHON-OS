@@ -285,6 +285,7 @@ from archon.core.profiles import (  # noqa: E402
     DEFAULT_HERMES_TOOLS,
     get_hermes_profiles_base_dirs, get_primary_hermes_profiles_dir,
     invalidate_hermes_profiles_cache, api_get_hermes_profiles, create_rolling_backup,
+    materialize_role_avatars, restore_data_uri_avatars,
 )
 # Gate-Ausfuehrung ruft den Service, nicht die HTTP-Endpunkte: die Endpunkte
 # brauchen einen Request (require_admin_or_503) und waren hier nie importiert.
@@ -506,7 +507,13 @@ def save_agents(agents: List[Dict]):
 def load_roles() -> List[Dict]: return _load_json(ROLES_FILE, DEFAULT_ROLES)
 
 def save_roles(roles: List[Dict]):
-    _save_json(ROLES_FILE, roles)
+    # Rueckweg zum GET: das Frontend postet die materialisierte Antwort
+    # unveraendert zurueck. Ohne diese Umkehrung stuenden /static-Pfade in
+    # roles.json und die data-URI (einzige Kopie fuer Rollen ohne Profil)
+    # waere verloren. Vorlage ist der Stand, der gleich ueberschrieben wird:
+    # nur Pfade, die aus genau diesem data-URI entstehen, werden zurueckgedreht.
+    vorher = _load_json(ROLES_FILE, [])
+    _save_json(ROLES_FILE, restore_data_uri_avatars(roles, vorher))
     # Invalidierung an der Schreibstelle: der naechste Leser sieht die Aenderung
     # sofort statt erst nach Ablauf der TTL.
     invalidate_ttl_cache(load_roles)
@@ -640,7 +647,14 @@ def api_save_agents(request: Request, agents: List[Dict]):
     return {"status": "success"}
 
 @app.get("/api/roles")
-def api_get_roles(): return load_roles()
+def api_get_roles():
+    # 2,6 MB pro Antwort, davon 2,38 MB data:-URI-Avatare (5 Rollen, je Bild
+    # zweimal als avatar und avatar_url). Fuer die Antwort wird jedes Bild
+    # einmalig als Datei materialisiert und durch seinen /static-Pfad ersetzt;
+    # roles.json bleibt unveraendert die Quelle der Wahrheit. Beim Schreiben
+    # zu kuerzen waere falsch: fuer Rollen ohne Profil ist die data-URI die
+    # einzige Kopie des Bildes.
+    return materialize_role_avatars(load_roles())
 
 @app.post("/api/roles")
 def api_save_roles(request: Request, roles: List[Dict]):

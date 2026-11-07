@@ -81,3 +81,23 @@ def test_allowed_patterns_exact():
     
     # Gesamtzahl unverändert (7 Einträge)
     assert len(_ALLOWED) == 7
+
+
+def test_allowlist_allows_post_containers_exec():
+    """POST /containers/<name>/exec wird von Allowlist akzeptiert."""
+    docker_client._check_allowed("POST", "/containers/test-container/exec")
+    docker_client._check_allowed("POST", "/containers/hermes/exec")
+
+
+def test_allowlist_allows_post_exec_start():
+    """POST /exec/<id>/start wird von Allowlist akzeptiert."""
+    docker_client._check_allowed("POST", "/exec/abc123/start")
+    docker_client._check_allowed("POST", "/exec/xyz/start")
+
+
+def test_allowlist_rejects_unknown_exec_path():
+    """Unbekannte exec-Pfade werden abgelehnt."""
+    with pytest.raises(DockerError, match="nicht erlaubt"):
+        docker_client._check_allowed("POST", "/exec/abc123/unknown")
+    with pytest.raises(DockerError, match="nicht erlaubt"):
+        docker_client._check_allowed("GET", "/containers/test/exec")

@@ -24,7 +24,7 @@ import yaml
 import core_dispatcher
 import httpx
 import logging
-from utils.docker_client import docker_client, DockerError
+from utils.docker_client import docker_client, DockerError, parse_docker_stream
 
 from backend.platform_paths import (
     OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT, HERMES_HOME,
@@ -1279,39 +1279,23 @@ import subprocess
 import threading
 
 def _run_docker_exec(cmd: list) -> tuple[int, str, str]:
-    """Run a command inside the hermes container via Docker Unix Socket."""
+    """Run a command inside the hermes container via docker_client (allowlisted)."""
     target_containers = ["hermes-webui", "hermes", "hermes-agent"]
-    try:
-        transport = httpx.HTTPTransport(uds="/var/run/docker.sock")
-        with httpx.Client(transport=transport, timeout=25.0) as client:
-            for c_name in target_containers:
-                try:
-                    res = client.post(f"http://docker/containers/{c_name}/exec", json={
-                        "AttachStdout": True,
-                        "AttachStderr": True,
-                        "Cmd": cmd
-                    })
-                    if res.status_code == 201:
-                        exec_id = res.json().get("Id")
-                        res_start = client.post(f"http://docker/exec/{exec_id}/start", json={
-                            "Detach": False,
-                            "Tty": False
-                        })
-                        return 0, res_start.text, ""
-                except Exception:
-                    continue
-    except Exception as e:
-        pass
-
-    # Fallback to local subprocess if running in host mode
     for c_name in target_containers:
         try:
-            full_cmd = ["docker", "exec", c_name] + cmd
-            r = subprocess.run(full_cmd, capture_output=True, text=True, timeout=15)
-            if r.returncode == 0:
-                return r.returncode, r.stdout, r.stderr
-        except Exception:
+            # Validate container name and use docker_client.exec_command
+            output_bytes = docker_client.exec_command(c_name, cmd, timeout=25.0)
+            # docker_client returns raw multiplexed stream - parse to text
+            stdout = parse_docker_stream(output_bytes)
+            return 0, stdout, ""
+        except DockerError:
+            # Container not found or invalid name - try next
             continue
+        except Exception:
+            # Any other error - try next container
+            continue
+    
+    # All containers failed
     return 1, "", "Failed to execute in hermes container (tried hermes-agent, hermes)"
 
 def _load_gateway_config() -> Dict:
@@ -8551,46 +8535,6 @@ def docker_socket_request(method: str, path: str, payload: dict = None, timeout:
     except Exception as e:
         print(f"[Docker] Socket-Request Fehler: {e}", file=sys.stderr)
         return b""
-
-
-def parse_docker_stream(data: bytes) -> str:
-    result = ""
-    offset = 0
-    while offset < len(data):
-        if len(data) - offset < 8:
-            result += data[offset:].decode('utf-8', errors='ignore')
-            break
-        import struct
-        try:
-            size = struct.unpack('>I', data[offset+4:offset+8])[0]
-        except Exception:
-            result += data[offset:].decode('utf-8', errors='ignore')
-            break
-        offset += 8
-        payload = data[offset:offset+size]
-        result += payload.decode('utf-8', errors='ignore')
-        offset += size
-    return result
-
-def parse_docker_stream_bytes(data: bytes) -> bytes:
-    result = b''
-    offset = 0
-    while offset < len(data):
-        if len(data) - offset < 8:
-            result += data[offset:]
-            break
-        import struct
-        try:
-            size = struct.unpack('>I', data[offset+4:offset+8])[0]
-        except Exception:
-            result += data[offset:]
-            break
-        offset += 8
-        payload = data[offset:offset+size]
-        result += payload
-        offset += size
-    return result
-
 @app.get("/api/v1/container/settings")
 def get_container_settings(container_name: str):
     configs = load_agent_configs()

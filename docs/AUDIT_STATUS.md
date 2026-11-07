@@ -1,8 +1,19 @@
 # Audit-Status — Archon OS
 
-Stand: **2026-11-07 (Abendmessung)** · Branch `refactor/critical-hardening` @ `314ea093`
-(`git rev-list --count main..HEAD` → **55**; Vorgängerstand dieses Dokuments war 2026-11-06/`f22402fc`)
-Bezug: externes Code-Audit (God-File-Analyse, ~40 Punkte, A/B/P/S)
+Stand: **2026-11-07 (Nachtrag Session 2)** · Branch `refactor/a5-di-config` @ `1424e3dc`
+(`git rev-list --count main..HEAD` → **80**; Vorgängerstand dieses Kopfes war 2026-11-07 abends / `314ea093`)
+Bezug: externes Code-Audit (God-File-Analyse, **~40** Punkte laut Quelle, siehe Hinweis unten)
+
+**Hinweis zur Punktzahl (Grundprüfung 2026-11-07):** Die Tabellen dieses Dokuments enthalten
+**36** Punkte (A1–A8, B1–B10, S1–S10, P1–P8) — und zwar seit der ersten committeten Fassung,
+keine Zeile wurde je entfernt. Die „~40" in Zeile 5 war eine gerundete Schätzung, die über vier
+Handover zum Faktum „40-Punkte-Audit" wurde. Das externe Original-Audit liegt **nicht** im Repo;
+ob vier Punkte beim Überführen verloren gingen, ist nicht mehr rekonstruierbar. Vollständige
+Herleitung: `docs/GRUNDPRUEFUNG_2026-11-07.md` §1.1.
+
+**Stand nach Session 2 (gemessen, Details im Handover Session 3):** 12 ✅ · 21 🟡 · 3 🔴
+(P2/P7/P8 als Dokumentationsfehler entlastet; S4, S9, B3/S1 mit echtem Fortschritt).
+Tests **661 passed / 8 skipped**, Parität **585/861**, `main.py` **11.404** Zeilen.
 
 Dieses Dokument ist der Abarbeitungsstand. Jede Zeile nennt den **Messbefehl**,
 damit der Status reproduzierbar ist und nicht aus dem Gedächtnis zitiert wird.
@@ -32,7 +43,7 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 |---|---|---|---|
 | B1 | Race Condition MC-Lock | ✅ | **abgeschlossen 2026-11-07**: alle vier Schreiber nutzen `update_mc` + Delta-Merge, ohne stillen Fallback (`RuntimeError`). Belege siehe Abschnitt „B1" unten |
 | B2 | Doppelte Proxy-Implementierungen | ✅ | `utils/reverse_proxy.py`, eine Klasse für alle Ziele |
-| B3 | Docker-Socket ohne Schutz | 🟡 | `main.py` spricht den Socket **nicht mehr direkt** an — `docker_socket_request` ist eine Deprecated-Fassade auf `utils/docker_client.py` (Allowlist). **Rest offen:** `backend/hermes_updater.py:63` (`DockerSocketClient`, roher `socket.socket(AF_UNIX)`; Zeile 58 vor dem Commit `ffb04bec`, im Live-Pfad von `get_installed_hermes_info`/`recreate_container_with_new_image`) umgeht die Allowlist. Belege unten |
+| B3 | Docker-Socket ohne Schutz | 🟡 | **2026-11-07 (Paket 1, Infra): der Proxy ist jetzt wirklich eine Grenze.** Service war aus `docker-compose.dev.yml` verschwunden (Label zeigte dorthin, Block fehlte) → in `f9a8acf5` wieder angelegt, Regeln aus einer geprüften, read-only gemounteten `haproxy.cfg` (nicht mehr aus der Env-Generierung), `EXEC=1` für den Paperclip-Pfad. In `1a10d31b` dann die Methoden-ACL: vorher war die Methodenzeile ein ODER (`… || env(POST)`), deshalb ging `DELETE /images/...` bis Docker durch (404) — jetzt 403. **Rest offen:** `backend/hermes_updater.py:63` (`DockerSocketClient`, roher `socket.socket(AF_UNIX)`) umgeht den Proxy weiterhin; `main.py` spricht ebenfalls direkt am Proxy vorbei (eigener Socket-Mount). Details unten |
 | B4 | Path Traversal | ✅ | `utils/path_jail.py`; `grep -c "safe_path" main.py` → **12** Vorkommen (davon 6 Aufrufe) |
 | B5 | SQL-Injection | 🟡 | **geprüft, kein akuter Befund**: `grep -rn 'execute(f\"' --include=*.py main.py archon backend utils` → **10** Stellen, alle mit Platzhalter-/Spaltenlisten aus festen Strings. **Ein latenter Härtungspunkt:** `local_memory_bridge.py:454` `evict_stale_memories(table=…)` interpoliert `{table}` ungeprüft (Z. 459 und 471). Details unten |
 | B6 | Stille Exceptions | ✅ | `grep -rn "except.*:.*pass" …` → **0** projektweit; `grep -rn "except:" main.py archon backend utils \| wc -l` → 2 nackte `except:` verbleiben |
@@ -45,15 +56,15 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 
 | # | Punkt | Status | Beleg / Messung |
 |---|---|---|---|
-| S1 | Docker-Socket | 🟡 | siehe B3 — Hauptpfad abgesichert, `hermes_updater.DockerSocketClient` offen |
+| S1 | Docker-Socket | 🟡 | siehe B3 — Proxy-Grenze jetzt wirksam (Methoden-ACL, `f9a8acf5` + `1a10d31b`), `hermes_updater.DockerSocketClient` und der direkte `main.py`-Socket bleiben offen |
 | S2 | Path Traversal | ✅ | Path-Jail aktiv, 403 außerhalb der Wurzeln |
 | S3 | Keys in Env/Logs | 🟡 | 117 Dateien auf 600, Maskierung im Live-Editor; kein Secret-Manager |
-| S4 | Schwache Admin-Auth | 🟡 | Rollenprüfung vorhanden (`main.py:7376`, `/api/auth/toggle` prüft `role == "admin"`), aber kein MFA/2FA und keine systematische Prüfung aller Admin-Endpunkte |
+| S4 | Schwache Admin-Auth | 🟡 | **2026-11-07 (Paket 2): Rollenzaun auf Klasse A vollständig — 123 destruktive/administrative Operationen geschützt** (vorher 6). Zentral über `archon/routers/_rbac.py` (fail-closed: fehlt die Injektion → 503) + `require_admin()` in `main.py`. Ein `viewer` bekommt 403 (vorher 200). **Bewusst ungeschützt bleiben 225 Klasse-B-Routen** (Kanban/Task-Status, Notizen, Chat, CRM/ERP-Pflege, eigene Einstellungen) — sonst wäre normales Arbeiten für Nicht-Admins unmöglich. **Offen:** 48 Proxy-Operationen (`@app.api_route` mit GET+POST gemischt) brauchen Methodenverzweigung; kein MFA/2FA |
 | S5 | CORS mit `*` | ✅ | explizite Origin-Liste + LAN-Regex statt Wildcard |
 | S6 | Sandbox-Escape | ✅ | **geschlossen 2026-11-07**: alter Pfad **501**, neuer Pfad isoliert (`docker_micro_container`, Netzwerk aus, 512 MB, OOM-Kill, Secret-Pfade unerreichbar). Restrisiko benannt. Details unten |
 | S7 | YAML-Deserialisierung | ✅ | **geprüft**: `grep -rn "safe_load" --include=*.py main.py archon backend utils \| wc -l` → **22** (**74** projektweit), `grep -rn "yaml.load(" … \| wc -l` → **0** echte unsichere Aufrufe (die 4 Treffer projektweit sind Empfehlungstexte in `antigravity_complete_skills_package/…`) |
 | S8 | Kein Rate-Limiting | ✅ | **siehe unten — behoben am 2026-11-06** |
-| S9 | Telegram-Token im Klartext | 🟡 | Rechte gehärtet, Klartext in `.env` bleibt |
+| S9 | Telegram-Token im Klartext | 🟡 | **Rechte gehärtet 2026-11-07 (Agent, verifiziert):** `data/snapshots/*/.env` (8 Kopien, darunter das seit 31.10. weltlesbare `manual_20261031_154716/.env` mit **666**), `gmail_token.json` (666), `google_token.json` (666), `credentials.json` (755), `paperclip/docker/.env` (664) → alle **600**. Klartext in `.env` bleibt; **Token-Rotation steht aus** (Aufgabe Michael, BotFather). Michaels Einordnung: der Token wird ausschließlich vom Telegram-Bot genutzt |
 | S10 | SSRF im Proxy | ✅ | **siehe unten — behoben am 2026-11-06** |
 
 ## Performance
@@ -61,13 +72,13 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 | # | Punkt | Status |
 |---|---|---|
 | P1 | Kein DB-Pooling | 🔴 |
-| P2 | Synchrone Docker-Calls | 🔴 |
+| P2 | Synchrone Docker-Calls | 🟡 | **2026-11-07 gemessen (Grundprüfung §3.2):** alle 8 Docker-nahen Routen sind sync `def` → Threadpool, **kein** Event-Loop-Block (AST: 0 Treffer in `async def`). Die Audit-Behauptung ist damit widerlegt. **Dafür gefunden und behoben:** `/api/v1/container/metrics` las wegen Timeout 1,0 s (< `docker stats` 1,005 s) jede Antwort ab und meldete pauschal „Stopped/0 %" — Fix in `cba725b4` (3,0 s + 5-s-Cache, drei ehrliche Zustände). Live danach: 10/10 `Running`, Median 1.018 ms, Cache-Treffer 15 ms statt 1.185 ms |
 | P3 | N+1-Muster | 🔴 |
 | P4 | Kein Request-Batching | 🔴 |
 | P5 | Redundante Vault-Reads | 🟡 (TTL-Cache) |
 | P6 | Modell-Re-Instanziierung | 🟡 |
-| P7 | Kein Streaming | 🔴 |
-| P8 | Cache-Keys ohne ETag | 🔴 |
+| P7 | Kein Streaming | 🟡 | **widerlegt (Grundprüfung §3.7, Engineer live gemessen):** **5** SSE-Endpunkte, `/api/v1/events/stream` → 200, `transfer-encoding: chunked`, erstes Event sofort. Router-Session konnte es nur bis zum 401 prüfen (kein Service-Token) |
+| P8 | Cache-Keys ohne ETag | 🟡 | **halb widerlegt (Grundprüfung §3.8):** `/`, `/static/index.html`, `/static/js/*.js` senden `etag` + `last-modified`, bedingte Anfrage → **304**. Für JSON-APIs stimmt die Behauptung: keine ETag/Last-Modified-Header |
 
 Gemessener Bezugspunkt für P1–P8: `scripts/bench_routes.py`, 128 Routen, Median 73 ms warm
 (Stand 2026-11-06, **nicht** neu gemessen — Bench bewusst nicht in dieser Doku-Runde gefahren).
@@ -78,15 +89,16 @@ Gemessener Bezugspunkt für P1–P8: `scripts/bench_routes.py`, 128 Routen, Medi
 
 | Größe | Wert | Messbefehl |
 |---|---|---|
-| `main.py` | **11.252 Zeilen** | `wc -l main.py` |
+| `main.py` | **11.404 Zeilen** | `wc -l main.py` |
 | Modul-Globals | **25** | `grep -cE '^[A-Z_][A-Z0-9_]* = ' main.py` |
-| `Depends()` | **1** (`archon/routers/system.py:123`), in `main.py` 0 | `grep -rn "Depends(" --include=*.py archon \| wc -l` |
+| `Depends()` | **1** (`archon/routers/system.py:182`), in `main.py` 0 | `grep -rn "Depends(" --include=*.py archon \| wc -l` |
 | `archon/core/constants.py` | **83 Zeilen**, 5 Konstanten | `wc -l archon/core/constants.py` |
 | `archon/core/paths.py` | **68 Zeilen**, 18 Pfad-Konstanten | `wc -l archon/core/paths.py` |
 | Decorator-Routen | **308** | `grep -cE '@app\.(get\|post\|put\|patch\|delete\|websocket\|api_route)\(' main.py` |
 | Live-Pfade / Operationen | **585 / 861** | `scripts/route_parity.py --check scripts/parity_baselines/openapi_baseline_2026-11-07.json` → Exit 0 |
-| Router-Dateien | **20**, davon **6** mit `configure(**deps)` | `ls archon/routers/*.py \| wc -l`; `grep -ln "def configure(" archon/routers/*.py` |
-| Tests | **243 passed, 8 skipped** (10,77 s) | `.venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider` |
+| Router-Dateien | **21**, davon **7** mit `configure(deps)` — die 21. ist `archon/routers/_rbac.py` (Injektionspunkt, 7. `configure`), kein zusätzlicher API-Router | `ls archon/routers/*.py \| wc -l` |
+| Rollenzaun | **115** Aufrufe von `require_admin` / `_require_admin` / `require_admin_or_503` | `grep -rn "require_admin" --include=*.py main.py archon backend views_core.py \| wc -l` |
+| Tests | **661 passed, 8 skipped** | `.venv/bin/python -m pytest tests/ -q --no-header -p no:cacheprovider` |
 | Router-Namen-Scan | **Exit 0** | `scripts/check_router_names.py; echo "exit=$?"` |
 | Tracebacks (5 min) | **0** | `docker logs --since 5m ARCHON-OS 2>&1 \| grep -c Traceback` |
 

@@ -5,9 +5,9 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`; **Code-Stand `f99e8c41`** (danach nur Doku-Commits —
-`git log --oneline -1` liefert den aktuellen Kopf, bewusst kein Sha hier).
-Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **743 passed / 8 skipped**, Working Tree sauber.
+Stand: Branch `refactor/a5-di-config`; Code-Stand `48d9b7db` (Session 5) —
+`git log --oneline -1` liefert den aktuellen Kopf, bewusst kein Sha hier.
+Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **789 passed / 8 skipped**, Working Tree sauber.
 
 ---
 
@@ -43,6 +43,8 @@ Der Testaufruf ist exakt so zu nehmen: `.venv/bin/pytest tests/` scheitert mit
 | `9926a9ea` | Roadmap nachgezogen | — |
 | `482300c6` | **Avatar-Variante B**: Schreibziel `/opt/data/webui/static_avatars` (Env `ARCHON_AVATARS_DIR` → Container → Home), Legacy-Baum nur noch lesend, eigene Route `main.py:10671`; Duplikate atomar | Live: nach `GET /api/hermes/profiles` ist `git status -- static/avatars` **0 Zeilen** (vorher 4 `M`); 5 Laufzeitdateien; Route 200/404, Traversal 404; **727/8 Tests** |
 | `482300c6` | Triage der 9 Routen (`docs/TRIAGE_UNGUARDED_ROUTES.md`) | alle 9 hinter dem Auth-Gate (401 ohne Login selbst geprüft); 1 kritischer Einzelfund (library/upload) |
+| `65a4a820` | **Avatar-Upload-Route mit Rollenzaun**: `require_admin_or_503(request)` als erste Anweisung, Signatur um `Request` erweitert, 9 neue Tests, Bestandstest nur signaturseitig | Prüfer-Lauf: Altstand ließ **Operator** durch und erreichte den Schreibpfad, neuer Stand 403; fail-closed 503 ohne Injektion, drei Durchlässigkeitspfade je 1 Test (200), Suite **789/8** |
+| `48d9b7db` | **`_decision_followup` mit Body-Beleg** + **RAG-Key aus `ANYTHINGLLM_API_KEY`** (kein Default, `MissingRagApiKeyError`, Startcheck als ERROR) | Prüfer-Lauf: Altstand meldete in 2/2 Fehlerfällen „ausgeführt", neuer Stand „nicht ausgeführt"; `main.py` enthält **0** Treffer des Key-Literals; 37 neue Tests; Suite **789/8** |
 | `f99e8c41` | **Drei Sicherheitsbefunde geschlossen**: Upload-RCE (`basename`+`safe_path`+Zaun), Vault-Jail auf Vault-Wurzel begrenzt, `voice-relay` eingezäunt + `chat_id`-Validierung | Live: anon 401 auf allen drei; Token auf `~/.hermes/config.yaml` → **403**, Datei unversehrt; Routen 309 unverändert; **743/8 Tests**, 48 Assertions neu, 0 entfernt |
 
 Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
@@ -54,20 +56,22 @@ Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 
 ---
 
-## 2. In Arbeit — drei delegierte Mandate (Stand: Ende Session 4, 07.11. abends)
+## 2. In Arbeit — Mandat 1 wartet auf Entscheidung, Mandate 2+3 sind committet
 
-Kein Punkt davon ist committet; die Läufe arbeiten im Working Tree und committen nicht selbst.
-Zuerst die Berichte gegenmessen, dann pfadgenau committen.
-
-| Mandat | Profil | Woran |
+| Mandat | Profil | Stand |
 |---|---|---|
-| 1 | `senior_fullstack_engineer` | `backend/hermes_updater.py:63` — roher `AF_UNIX`-Socket ablösen (Etappe 0 = nichts ändern ist erlaubt und muss begründet werden) |
-| 2 | `devops_cloud_sec_specialist` | `archon/routers/hermes_profiles.py:100` — Rollenzaun für `POST …/avatar`, fail-closed, ohne Aussperrung der Durchlässigkeitspfade |
-| 3 | `senior_fullstack_engineer` | `main.py:3335` Body-Prüfung in `_decision_followup` **und** `main.py:2287` RAG-Key → Env/fail-fast |
+| 1 | `senior_fullstack_engineer` | `backend/hermes_updater.py:63` — **Etappe 0: nichts geändert**, mit Belegen (siehe §3 Prio 1). Wartet auf Michaels Entscheidung A/B. |
+| 2 | `devops_cloud_sec_specialist` | ✅ **`65a4a820`** — Rollenzaun für `POST …/avatar`, fail-closed, 9 Tests, Rot-Beweis gegen Altstand selbst reproduziert |
+| 3 | `senior_fullstack_engineer` | ✅ **`48d9b7db`** — Body-Beleg in `_decision_followup` + RAG-Key aus Env; 37 neue Tests, Rot-Beweis selbst reproduziert |
 
-`482300c6` hat R1 und Avatar-B abgeschlossen — der alte Text dieses Abschnitts bleibt als
-Fußnote: der Rundlauf-Schutz greift nur für Pfade, die `GET` aus dem gespeicherten data-URI
-erzeugt hat; die 108 bestehenden `/static`-Pfade in `roles.json` bleiben Pfade.
+`482300c6` hat R1 und Avatar-B abgeschlossen — der Rundlauf-Schutz greift nur für Pfade, die
+`GET` aus dem gespeicherten data-URI erzeugt hat; die 108 bestehenden `/static`-Pfade in
+`roles.json` bleiben Pfade.
+
+**Bewusste Abweichung in `48d9b7db` (Entscheidung bei Michael):** fehlt `ANYTHINGLLM_API_KEY`,
+schreibt der Startcheck eine **ERROR-Zeile**, kippt den Start aber **nicht**. Ein harter
+Abbruch hätte einen Lifespan-Umbau gebraucht — `main.py:78` fängt Hook-Exceptions und loggt nur.
+Der RAG-Sync selbst ist fail-fast: ohne Key wird kein `subprocess` gestartet.
 
 ---
 
@@ -75,13 +79,15 @@ erzeugt hat; die 108 bestehenden `/static`-Pfade in `roles.json` bleiben Pfade.
 
 | Prio | Punkt | Messwert / Beleg | Aufwand |
 |---|---|---|---|
-| 1 | **`hermes_updater`-Socket am Proxy vorbei** — *in Arbeit (Mandat 1)* | `backend/hermes_updater.py:63` `AF_UNIX` | 3–4 h |
-| 2 | **`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung** (neu) — *in Arbeit (Mandat 3)* | `main.py:3335`, Aufrufer `main.py:3400` (Handover-Zahl 3267 war gedriftet) | 30 min |
-| 3 | **Avatar-Upload-Route ohne Rollenzaun** (neu) — *in Arbeit (Mandat 2)* | `POST /api/hermes/profiles/{id}/avatar`, `archon/routers/hermes_profiles.py:100` — schreibt Dateien, kein Zaun, kein globales Middleware-Netz | 15 min + Test |
+| 1 | **`hermes_updater`-Socket am Proxy vorbei** — **Etappe 0, wartet auf Entscheidung A/B** | `backend/hermes_updater.py:63` `AF_UNIX`. Belegt: gemeinsamer Client kann 7 von 11 benötigten Endpunkt-Formen nicht (`utils/docker_client.py` `_ALLOWED`), und in `DOCKER_HOST`-Topologie liefert der Proxy für `images/create` **403** (`haproxy.cfg:135` nur `METH_GET`). Umstellung bricht das Update. Nötig wäre: privilegierter Admin-Client + Proxy-Cfg-Erweiterung + Umstellung. Dazu offen: `docker-compose.yml:31` mountet den Socket weiter als Legacy-Fallback → Proxy-Härtung für den Updater wirkungslos | 3–4 h gemessen zu knapp, eher 1 Tag |
+| 2 | ~~`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung~~ — **erledigt `48d9b7db`** | `main.py:3335` (Handover-Zahl 3267 war gedriftet) | — |
+| 3 | ~~Avatar-Upload-Route ohne Rollenzaun~~ — **erledigt `65a4a820`** | `archon/routers/hermes_profiles.py:100` | — |
 | 4 | **Tote UI-Pfade** | Handover: 166 von 1640 `getElementById`-Zielen ohne DOM-Element; von mir **nicht** nachgemessen | 2–4 h je Cluster |
 | 5 | **Paket 3 (Struktur)** | `docs/PLAN_STRUKTUR_2026-11-07.md`, 5 Etappen, nicht gestartet | 1–2 Wochen |
 | 6 | **Mikro-Performance** (DB 1,25 ms, N+1 max 8 Queries, 411 `fetch`) | aus Grundprüfung, nicht neu gemessen | niedrig |
-| — | **RAG-API-Key `main.py:2287`** — **entschieden**: Env/Secret-Store, fail-fast; in Mandat 3 | Klartext im Code, `--api-key`-Argument | 15 min |
+| — | ~~RAG-API-Key `main.py:2287` Klartext~~ — **erledigt `48d9b7db`** (Env, fail-fast) | **Rest bei Michael:** (a) `ANYTHINGLLM_API_KEY` in `.env.archon` setzen + Recreate, sonst läuft der Hintergrund-RAG-Sync im Container nicht mehr; (b) Key **rotieren** — er ist in der Git-Historie (`98bebb10`, `85d01934`, `45c295eb`, `4cc38f31`), in `.archon_backup_20261105_1015/main.py` (versioniert) und in 3 `omniroute_data/…/call_logs/2026-11-06/*.json` | 30 min |
+| 7 | **`POST /api/hermes/profiles/{id}/favorite` ohne Rollenzaun** (neu, Vorschlag des DevOps-Laufs) | `archon/routers/hermes_profiles.py:283` schreibt `profile.yaml` — dieselbe Klasse wie der Avatar-Befund | 15 min + Test |
+| 8 | **Restliche Key-Fundstellen** (Vorschlag) | `backend/rag_bridge.py:17`, `tools/sync_remaining_600s.py:8`, `tools/sync_cannabis_rag.py:8`, `tools/sync_vault_all_parallel.py:9`, `tools/sync_cannabis_rag_parallel.py:10` — alle auf Env umstellen, dann kann `main.py` das `--api-key`-Argument fallen lassen | 30 min |
 
 ---
 

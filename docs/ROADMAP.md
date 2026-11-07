@@ -5,8 +5,8 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`, HEAD `6febf38e`, 32 Commits seit Fork-Punkt `de564278`.
-Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **711 passed / 8 skipped**, Working Tree sauber.
+Stand: Branch `refactor/a5-di-config`, HEAD `482300c6`, 35 Commits seit Fork-Punkt `de564278`.
+Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **727 passed / 8 skipped**, Working Tree sauber.
 
 ---
 
@@ -29,7 +29,7 @@ Der Testaufruf ist exakt so zu nehmen: `.venv/bin/pytest tests/` scheitert mit
 
 ---
 
-## 1. Erledigt in dieser Session (6 Commits, alle von mir gegengeprüft)
+## 1. Erledigt in dieser Session (8 Commits, alle von mir gegengeprüft)
 
 | Commit | Was | Beleg |
 |---|---|---|
@@ -39,6 +39,9 @@ Der Testaufruf ist exakt so zu nehmen: `.venv/bin/pytest tests/` scheitert mit
 | `c7f19b55` | Gate-Approve repariert (Service-Extraktion), Gate wird bei Fehlschlag nicht mehr verbraucht, Owner-Meldung ehrlich, 2 ungebundene Namen gebunden | 685/8 Tests; 4 ungebundene Aufrufe vorher → 0 nachher; 47 Assertions neu, 0 entfernt |
 | `1c49ee09` | Diese Roadmap als verbindliches Fortschrittsblatt | 109 Zeilen, ersetzt das Suchen in 7 Handovern |
 | `6febf38e` | **R1**: `/api/roles` 2.608.401 B → 110.711 B; Rundlauf-Schutz für die selbst materialisierten Avatare | eigener Rundlauf GET→POST→Datei: byte-identisch, Delta 0 %, 10/10 data-URIs erhalten, 108 bestehende Pfade unberührt; **711/8 Tests** |
+| `9926a9ea` | Roadmap nachgezogen | — |
+| `482300c6` | **Avatar-Variante B**: Schreibziel `/opt/data/webui/static_avatars` (Env `ARCHON_AVATARS_DIR` → Container → Home), Legacy-Baum nur noch lesend, eigene Route `main.py:10671`; Duplikate atomar | Live: nach `GET /api/hermes/profiles` ist `git status -- static/avatars` **0 Zeilen** (vorher 4 `M`); 5 Laufzeitdateien; Route 200/404, Traversal 404; **727/8 Tests** |
+| `482300c6` | Triage der 9 Routen (`docs/TRIAGE_UNGUARDED_ROUTES.md`) | alle 9 hinter dem Auth-Gate (401 ohne Login selbst geprüft); **1 kritischer Einzelfund** (§3.1) |
 
 Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 - **Volumes migriert und bit-verifiziert:** Agent 414 Dateien / 25.901.963 B, Dashboard 3 Dateien /
@@ -49,7 +52,7 @@ Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 
 ---
 
-## 2. In Arbeit — nichts. Alle Baustellen sind zu.
+## 2. In Arbeit — nichts. Alle Baustellen sind zu. `482300c6` hat R1 und Avatar-B abgeschlossen.
 
 R1 (`/api/roles`) ist committet (`6febf38e`). Der Rundlauf-Schutz greift nur für Pfade, die
 `GET` aus dem gespeicherten data-URI erzeugt hat — die 108 bestehenden `/static`-Pfade in
@@ -63,9 +66,9 @@ keine offene Arbeit: Triage der 9 Routen (§3.1).
 
 | Prio | Punkt | Messwert / Beleg | Aufwand |
 |---|---|---|---|
-| 1 | **Triage der 9 ungeschützten Routen mit Gefahrensignal** (neu, heute gemessen) | `audit_route_guards.py`: 120 mit Zaun, 214 Schreib-Routen ohne, **9** mit Exec/Lösch-Signal (`main.py:752/1899/2193/3011/8442/10915`, `backend/operations_api.py:265/781/1611`) — Kandidaten, keine bewiesenen Lücken | 2–4 h Triage |
-| 2 | **48 mehrdeutige Proxy-Routen** (`api_route` mit GET+POST) | selbst gezählt: 48 von 50 | 0,5–1 Tag |
-| 3 | **Avatar-Schreibpfad umsetzen** (Variante B, Plan liegt) | `docs/PLAN_AVATAR_SCHREIBPFAD.md` | 2–3 h |
+| 1 | **`POST /api/v1/library/upload` — authentifizierte RCE** (Triage-Befund, von mir verifiziert) | `main.py:2229`: `os.path.join(raw_dir, file.filename)` ohne `basename`/`safe_path`; `/app/main.py` für uid 1000 **beschreibbar**, Container läuft mit `--reload` → beliebiger Login genügt für Codeausführung | 30–60 min |
+| 2 | **`DELETE /api/vault` — Reichweite zu groß** (Triage) | `main.py:8456`: `safe_path`-Jail erlaubt `~/.hermes` komplett → Vault-Notizen **und** alles darunter löschbar | 1 h |
+| 3 | **`POST /api/telegram/voice-relay`** (Triage) | `main.py:3025`: beliebige `chat_id` + Bot-Credentials; Aufrufer nicht im Repo | 1 h |
 | 4 | **`hermes_updater`-Socket am Proxy vorbei** | `backend/hermes_updater.py:63` `AF_UNIX` | 3–4 h |
 | 5 | **`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung** (neu) | `main.py:3267-3269`, derselbe Fehlertyp wie beim Gate | 30 min |
 | 6 | **Avatar-Upload-Route ohne Rollenzaun** (neu) | `POST /api/hermes/profiles/{id}/avatar`, `hermes_profiles.py:99` — schreibt Dateien, kein Zaun, kein globales Middleware-Netz | 15 min + Test |
@@ -95,11 +98,11 @@ keine offene Arbeit: Triage der 9 Routen (§3.1).
 
 ## 5. Wie es weitergeht (Vorschlag)
 
-1. **Jetzt:** Triage der 9 Routen (§3.1) — potenziell die einzigen echten Sicherheitsfunde,
-   die noch offen sind, und billiger als jedes Strukturpaket.
-2. **Danach:** Avatar-Variante B umsetzen (Plan liegt, freigegeben) — befreit jede künftige
-   Session von einem schmutzigen Working Tree, statt ihn nur zu dokumentieren.
-3. **Erst dann** die großen Blöcke: 48 Proxy-Routen (§3.2), Paket 3 (§3.8).
+1. **Jetzt:** `POST /api/v1/library/upload` absichern (§3.1) — authentifizierte RCE, kleinster
+   Aufwand mit größter Wirkung: `basename` + `safe_path` + Rollenzaun.
+2. **Danach:** `DELETE /api/vault` auf die Vault-Wurzel begrenzen (§3.2) und `voice-relay`
+   einzäunen (§3.3).
+3. **Erst dann** die großen Blöcke: 48 Proxy-Routen (§3.4), Paket 3 (§3.8).
 4. **Läuft neben dir, nicht bei mir:** Token-Rotation über BotFather.
 
 Nach jeder Etappe wird **diese Datei** nachgezogen (Status + Messwert), nicht ein neues

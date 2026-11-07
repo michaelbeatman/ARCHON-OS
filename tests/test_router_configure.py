@@ -151,10 +151,18 @@ def test_hermes_profiles_status_endpoint_calls_save():
         runtime_module.add_ticker = MagicMock()
         
         try:
-            result = hermes_profiles.api_update_hermes_profile_status(
-                "telegram_bot", 
-                type('obj', (object,), {'status': 'active'})()
-            )
+            # RBAC: Admin-Route — dieser Test prueft das Speichern, nicht die Rolle.
+            from archon.routers import _rbac as rbac_module
+            previous = rbac_module._checker
+            rbac_module.configure(require_admin=lambda request: {"role": "admin"})
+            try:
+                result = hermes_profiles.api_update_hermes_profile_status(
+                    type('obj', (object,), {'headers': {}})(),
+                    "telegram_bot",
+                    type('obj', (object,), {'status': 'active'})()
+                )
+            finally:
+                rbac_module._checker = previous
             assert result["status"] == "success"
             assert result["new_status"] == "active"
             mock_save.assert_called_once()

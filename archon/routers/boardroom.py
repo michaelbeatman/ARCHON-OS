@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
+
+from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -149,14 +151,16 @@ def api_get_boardroom_frameworks():
 
 
 @router.post("/api/boardroom/frameworks")
-def api_save_boardroom_frameworks(frameworks: Dict = Body(...)):
+def api_save_boardroom_frameworks(request: Request, frameworks: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     core_dispatcher.CATEGORIZED_FRAMEWORKS = frameworks
     _save_json(FRAMEWORKS_FILE, frameworks)
     return {"status": "success"}
 
 
 @router.post("/api/boardroom/frameworks/reset")
-def api_reset_boardroom_frameworks():
+def api_reset_boardroom_frameworks(request: Request):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     if os.path.exists(FRAMEWORKS_FILE):
         try:
             os.remove(FRAMEWORKS_FILE)

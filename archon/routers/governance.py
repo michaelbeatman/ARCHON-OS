@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
+
+from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -67,7 +69,8 @@ def api_ai_act_stats():
 
 @router.post("/api/governance/ai-act/reclassify/{agent_id}")
 @router.post("/api/v1/governance/ai-act/reclassify/{agent_id}")
-def api_ai_act_reclassify(agent_id: str, payload: dict = Body(...)):
+def api_ai_act_reclassify(request: Request, agent_id: str, payload: dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
     updated = eu_ai_act_inventory_manager.set_manual_override(agent_id, payload)
     if not updated:
@@ -123,10 +126,14 @@ def api_list_classifications(item_type: Optional[str] = None):
 
 
 @router.post("/api/governance/promptfoo/run-eval")
-def api_run_promptfoo_eval(config_path: str = "/app/tests/promptfooconfig.yaml"):
+def api_run_promptfoo_eval(request: Request, config_path: str = "/app/tests/promptfooconfig.yaml"):
     """
     Führt die vollständige Promptfoo Testmatrix im Docker-Container aus.
+
+    RBAC: Container-Exec mit frei uebergebenem ``config_path`` — Admin-Sache.
+    Der Zaun steht bewusst vor der ersten fachlichen Anweisung.
     """
+    require_admin_or_503(request)  # RBAC: Codeausfuehrung im Container ist Admin-Sache
     exec_create_payload = {
         "AttachStdout": True,
         "AttachStderr": True,

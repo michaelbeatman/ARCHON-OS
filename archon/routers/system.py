@@ -195,7 +195,7 @@ async def api_system_health():
 
 
 @router.post("/api/system/hermes/restart")
-async def api_system_hermes_restart(
+async def api_system_hermes_restart(request: Request,
     conn: sqlite3.Connection = Depends(get_state_db_dep),
 ):
     """
@@ -217,6 +217,7 @@ async def api_system_hermes_restart(
       409 {"status":"absent","tried":[…],"hint":…}
       502 {"status":"docker_error","hint":…}
     """
+    _require_admin(request)  # RBAC: Admin-Sache
     t0 = time.time()
     tried: List[str] = []
     found_name: Optional[str] = None
@@ -287,7 +288,8 @@ def get_system_language():
 
 
 @router.post("/api/system/language")
-def set_system_language(payload: dict = Body(...)):
+def set_system_language(request: Request, payload: dict = Body(...)):
+    _require_admin(request)  # RBAC: Admin-Sache
     lang = (payload.get("language") or "de").strip().lower()
     supported = ["de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"]
     if lang not in supported:
@@ -313,7 +315,8 @@ def api_system_update_local_changes():
 
 
 @router.post("/api/v1/system/update/push")
-def api_system_update_push(payload: dict = Body(default={})):
+def api_system_update_push(request: Request, payload: dict = Body(default={})):
+    _require_admin(request)  # RBAC: Admin-Sache
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     msg = payload.get("message")
     version = payload.get("version")
@@ -349,7 +352,8 @@ def api_system_update_rollback(request: Request, payload: dict = Body(...)):
 
 
 @router.post("/api/v1/system/update/backup")
-def api_system_update_backup(payload: dict = Body(default={})):
+def api_system_update_backup(request: Request, payload: dict = Body(default={})):
+    _require_admin(request)  # RBAC: Admin-Sache
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     tag = payload.get("tag", "manual").strip() or "manual"
     return system_updater.create_snapshot(tag=tag)
@@ -364,7 +368,8 @@ def api_drain_status():
 
 @router.post("/api/system/drain/start")
 @router.post("/api/v1/system/drain/start")
-def api_start_drain(payload: dict = Body(default={})):
+def api_start_drain(request: Request, payload: dict = Body(default={})):
+    _require_admin(request)  # RBAC: Admin-Sache
     from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
     reason = payload.get("reason", "Manuell angefordertes Draining")
     grace = payload.get("grace_seconds", 15.0)
@@ -374,7 +379,8 @@ def api_start_drain(payload: dict = Body(default={})):
 
 @router.post("/api/system/drain/cancel")
 @router.post("/api/v1/system/drain/cancel")
-def api_cancel_drain():
+def api_cancel_drain(request: Request):
+    _require_admin(request)  # RBAC: Admin-Sache
     from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
     res = graceful_shutdown_coordinator.cancel_draining()
     return {"status": "success", "result": res}
@@ -382,7 +388,8 @@ def api_cancel_drain():
 
 @router.post("/api/system/drain/execute-shutdown")
 @router.post("/api/v1/system/drain/execute-shutdown")
-def api_execute_shutdown(payload: dict = Body(default={})):
+def api_execute_shutdown(request: Request, payload: dict = Body(default={})):
+    _require_admin(request)  # RBAC: Admin-Sache
     from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
     reason = payload.get("reason", "API-gesteuerter Shutdown")
     grace = payload.get("grace_seconds", 5.0)
@@ -429,7 +436,8 @@ def api_deadlock_check(timeout_seconds: int = 45):
 
 
 @router.post("/api/system/backup-db")
-def api_backup_databases():
+def api_backup_databases(request: Request):
+    _require_admin(request)  # RBAC: Admin-Sache
     from backend.db_backup_manager import db_backup_manager
     return db_backup_manager.checkpoint_and_backup()
 
@@ -441,7 +449,8 @@ def api_list_db_backups():
 
 
 @router.post("/api/system/optimize-db")
-def api_optimize_db():
+def api_optimize_db(request: Request):
+    _require_admin(request)  # RBAC: Admin-Sache
     from backend.db_optimizer import optimize_all_databases
     return optimize_all_databases()
 

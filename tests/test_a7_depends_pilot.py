@@ -100,6 +100,12 @@ def client_and_db(tmp_path, monkeypatch):
         return sqlite3.connect(str(db_path), timeout=5.0)
 
     monkeypatch.setattr(state_db, "_get_state_db", _tmp_state_db)
+    # RBAC: die Route ist eine Admin-Route. Diese Tests beschreiben den
+    # Nicht-Rollen-Pfad (Depends/DB-Verhalten), deshalb wird der Rollenzaun
+    # als "Admin erkannt" verdrahtet — ohne Injektion sperrt er fail-closed
+    # (503) und der Test wuerde das Falsche messen.
+    monkeypatch.setitem(system_router._DEPS, "require_admin",
+                        lambda request: {"role": "admin"})
 
     app = FastAPI()
     app.include_router(system_router.router)

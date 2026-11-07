@@ -9,7 +9,9 @@ import sys
 from typing import Any, Dict, List, Optional
 
 import yaml
-from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile, Request
+
+from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel
 
 from archon.core.runtime import (
@@ -93,7 +95,8 @@ def api_get_agents_profiles():
 
 
 @router.post("/api/hermes/profiles")
-def api_save_hermes_profile(profile_data: Dict = Body(...)):
+def api_save_hermes_profile(request: Request, profile_data: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     p_id = profile_data.get("id")
     if not p_id:
         p_id = re.sub(r'[^a-zA-Z0-9_]', '_', profile_data.get("name", "custom_agent").lower())
@@ -478,7 +481,8 @@ def api_upload_hermes_profile_avatar(profile_id: str, data: Dict = Body(...)):
 
 
 @router.post("/api/hermes/profiles/{profile_id}/status")
-def api_update_hermes_profile_status(profile_id: str, body: Optional[ProfileStatusUpdate] = None):
+def api_update_hermes_profile_status(request: Request, profile_id: str, body: Optional[ProfileStatusUpdate] = None):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     roles_list = api_get_hermes_profiles()
     prof = next((r for r in roles_list if r["id"] == profile_id), None)
     if not prof:
@@ -501,17 +505,20 @@ def api_update_hermes_profile_status(profile_id: str, body: Optional[ProfileStat
 
 
 @router.post("/api/hermes/profiles/{profile_id}/hire-paperclip")
-def api_hire_hermes_profile_paperclip(profile_id: str):
+def api_hire_hermes_profile_paperclip(request: Request, profile_id: str):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     return api_update_hermes_profile_status(profile_id, ProfileStatusUpdate(status="active"))
 
 
 @router.post("/api/hermes/profiles/{profile_id}/fire-paperclip")
-def api_fire_hermes_profile_paperclip(profile_id: str):
+def api_fire_hermes_profile_paperclip(request: Request, profile_id: str):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     return api_update_hermes_profile_status(profile_id, ProfileStatusUpdate(status="inactive"))
 
 
 @router.post("/api/hermes/profiles/{profile_id}/model")
-def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
+def api_set_hermes_profile_model(request: Request, profile_id: str, req: SetProfileModelRequest):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         import api_provider
         prov = req.provider.strip().lower()
@@ -574,7 +581,8 @@ def api_set_hermes_profile_model(profile_id: str, req: SetProfileModelRequest):
 
 
 @router.delete("/api/hermes/profiles/{profile_id}")
-def api_delete_hermes_profile(profile_id: str, gate_approved_id: str = ""):
+def api_delete_hermes_profile(request: Request, profile_id: str, gate_approved_id: str = ""):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     if profile_id in ["default", "hermes_default", "micha"]:
         raise HTTPException(status_code=400, detail=f"System-Profil '{profile_id}' kann nicht gelöscht werden.")
     # --- PERMISSION-GATE: Loeschen = Rechte-Entzug -> Owner per Telegram ---

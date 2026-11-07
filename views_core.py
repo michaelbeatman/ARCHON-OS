@@ -19,7 +19,9 @@ import json
 import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+
+from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/views", tags=["views_core"])
@@ -527,8 +529,9 @@ class FileActionPayload(BaseModel):
 
 
 @router.post("/showroom/file/delete")
-async def delete_showroom_file(payload: FileActionPayload):
+async def delete_showroom_file(request: Request, payload: FileActionPayload):
     """Verschiebt eine Datei oder einen gesamten Projektordner in den Papierkorb (Projects/Papierkorb)."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     import shutil
     source = Path(payload.filepath).resolve()
     if not source.exists():
@@ -560,8 +563,9 @@ async def delete_showroom_file(payload: FileActionPayload):
 
 
 @router.post("/showroom/file/restore")
-async def restore_showroom_file(payload: FileActionPayload):
+async def restore_showroom_file(request: Request, payload: FileActionPayload):
     """Stellt eine Datei oder einen Ordner aus dem Papierkorb wieder her."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     import shutil
     source = Path(payload.filepath).resolve()
     if not source.exists():
@@ -594,8 +598,9 @@ async def restore_showroom_file(payload: FileActionPayload):
 
 
 @router.post("/showroom/file/purge")
-async def purge_showroom_file(payload: FileActionPayload):
+async def purge_showroom_file(request: Request, payload: FileActionPayload):
     """Löscht eine Datei oder einen Ordner endgültig aus dem Papierkorb."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     import shutil
     source = Path(payload.filepath).resolve()
     if not source.exists():
@@ -839,11 +844,12 @@ class CodeRunPayload(BaseModel):
 
 
 @router.post("/showroom/run-code")
-async def run_showroom_code(payload: CodeRunPayload):
+async def run_showroom_code(request: Request, payload: CodeRunPayload):
     """
     Fuehrt Code-Snippets oder Skripte aus dem Showroom in einer isolierten Sandbox aus.
     Gibt stdout, stderr, Exit-Code und Laufzeit zurueck.
     """
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     import tempfile
     import time
     import subprocess

@@ -7,7 +7,9 @@ import time
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Request
+
+from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel
 
 from archon.core.runtime import logger  # noqa: F401
@@ -256,7 +258,8 @@ def get_llm_provider_models(provider: str = ""):
 
 
 @router.post("/api/llm-providers/select")
-def select_llm_provider(req: LLMProviderSelectRequest):
+def select_llm_provider(request: Request, req: LLMProviderSelectRequest):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         import api_provider
         pid = req.provider.strip().lower()
@@ -281,7 +284,8 @@ def select_llm_provider(req: LLMProviderSelectRequest):
 
 
 @router.post("/api/llm-providers/save-key")
-def save_llm_provider_key(req: LLMProviderSaveKeyRequest):
+def save_llm_provider_key(request: Request, req: LLMProviderSaveKeyRequest):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         import api_provider
         env_key = req.env_name.strip()
@@ -313,8 +317,9 @@ def api_get_privacy_status():
 
 
 @router.post("/api/llm-providers/privacy-routing")
-def api_save_privacy_routing(payload: Dict[str, Any] = Body(...)):
+def api_save_privacy_routing(request: Request, payload: Dict[str, Any] = Body(...)):
     """Aktualisiert die Richtlinien für sensibles On-Premise Routing und EU-Fallback (t-c4489c)."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from backend.privacy_router import save_privacy_config
         saved = save_privacy_config(payload, operator="operator")

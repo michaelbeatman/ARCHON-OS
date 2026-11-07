@@ -17,6 +17,8 @@ import time
 import secrets
 from typing import List, Dict, Optional, Any
 from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, File
+
+from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
@@ -2322,8 +2324,9 @@ def get_org_hierarchy():
 
 
 @router.post("/org-hierarchy")
-def save_org_hierarchy(req: OrgHierarchySaveRequest):
+def save_org_hierarchy(request: Request, req: OrgHierarchySaveRequest):
     """Speichert die vom Nutzer interaktiv erstellten Verbindungen und Positionen."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         os.makedirs(os.path.dirname(ORG_HIERARCHY_FILE), exist_ok=True)
         payload = {
@@ -2362,8 +2365,9 @@ def save_org_hierarchy(req: OrgHierarchySaveRequest):
 
 
 @router.delete("/org-hierarchy")
-def reset_org_hierarchy():
+def reset_org_hierarchy(request: Request):
     """Setzt die Hierarchie auf die 6 Standard-Teams zurück."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     if os.path.exists(ORG_HIERARCHY_FILE):
         try:
             os.remove(ORG_HIERARCHY_FILE)
@@ -2391,8 +2395,9 @@ def get_concurrency_settings():
     }
 
 @router.post("/governance/concurrency")
-def update_concurrency_settings(req: ConcurrencyUpdateRequest):
+def update_concurrency_settings(request: Request, req: ConcurrencyUpdateRequest):
     """Passt das Limit für gleichzeitige LLM-Tasks dynamisch im laufenden System an."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     import core_dispatcher
     val = max(1, min(20, req.max_tasks))
     core_dispatcher.MAX_CONCURRENT_AGENT_TASKS = val
@@ -2617,8 +2622,9 @@ def api_get_notification_policy():
 
 
 @router.post("/notifications/policy")
-def api_update_notification_policy(req: Dict[str, Any] = Body(...)):
+def api_update_notification_policy(request: Request, req: Dict[str, Any] = Body(...)):
     """Aktualisiert die Benachrichtigungs- und Ruhezeit-Regeln in settings.json."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from backend.notification_hub import get_notification_hub
         hub = get_notification_hub()
@@ -2685,8 +2691,9 @@ def api_list_prompt_versions(agent_id: str):
 
 
 @router.post("/prompts/{agent_id}/versions")
-def api_save_prompt_version(agent_id: str, req: Dict[str, Any] = Body(...)):
+def api_save_prompt_version(request: Request, agent_id: str, req: Dict[str, Any] = Body(...)):
     """Speichert eine neue Version des System-Prompts für einen Agenten."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from backend.prompt_registry import prompt_registry
         prompt_text = req.get("prompt")
@@ -2720,8 +2727,9 @@ def api_diff_prompt_versions(agent_id: str, v1: int = Query(...), v2: int = Quer
 
 
 @router.post("/prompts/{agent_id}/rollback")
-def api_rollback_prompt_version(agent_id: str, req: Dict[str, Any] = Body(...)):
+def api_rollback_prompt_version(request: Request, agent_id: str, req: Dict[str, Any] = Body(...)):
     """Führt einen 1-Click Rollback auf eine frühere Prompt-Version durch."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from backend.prompt_registry import prompt_registry
         target_v = req.get("target_version")
@@ -2739,8 +2747,9 @@ def api_rollback_prompt_version(agent_id: str, req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/prompts/{agent_id}/canary")
-def api_set_prompt_canary(agent_id: str, req: Dict[str, Any] = Body(...)):
+def api_set_prompt_canary(request: Request, agent_id: str, req: Dict[str, Any] = Body(...)):
     """Konfiguriert eine Prompt-Version als Canary mit Prozentsatz (1-99%)."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from backend.prompt_registry import prompt_registry
         version = req.get("version")
@@ -2756,8 +2765,9 @@ def api_set_prompt_canary(agent_id: str, req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/prompts/{agent_id}/promote")
-def api_promote_prompt_canary(agent_id: str, req: Dict[str, Any] = Body(...)):
+def api_promote_prompt_canary(request: Request, agent_id: str, req: Dict[str, Any] = Body(...)):
     """Befördert eine Canary-Version zur vollwertigen stabilen Version (100% Traffic)."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from backend.prompt_registry import prompt_registry
         version = req.get("version")
@@ -2789,8 +2799,9 @@ def api_get_mcp_tools():
 
 
 @router.post("/mcp/call")
-def api_call_mcp_tool(req: Dict[str, Any] = Body(...)):
+def api_call_mcp_tool(request: Request, req: Dict[str, Any] = Body(...)):
     """Führt ein Archon MCP-Werkzeug über eine HTTP-REST-Schnittstelle aus."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from scripts.archon_mcp_server import ArchonMcpServer
         tool_name = req.get("name")
@@ -2897,8 +2908,9 @@ def api_get_restore_test_history():
 
 
 @router.post("/backup/restore-test")
-def api_trigger_restore_test(notify: bool = Query(default=True)):
+def api_trigger_restore_test(request: Request, notify: bool = Query(default=True)):
     """Führt einen On-Demand Restore- und Integritätstest in einer Sandbox aus."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from scripts.automated_restore_test import restore_tester
         report = restore_tester.run_restore_test(notify=notify)
@@ -2908,8 +2920,9 @@ def api_trigger_restore_test(notify: bool = Query(default=True)):
 
 
 @router.post("/gdpr/export")
-def api_gdpr_export(req: Dict[str, Any] = Body(...)):
+def api_gdpr_export(request: Request, req: Dict[str, Any] = Body(...)):
     """Art. 15 DSGVO: Erstellt einen vollständigen Datenauszug für eine Person über alle Speicherschichten."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     identifier = req.get("identifier", "").strip()
     if not identifier:
         raise HTTPException(status_code=400, detail="Feld 'identifier' ist erforderlich.")
@@ -2924,8 +2937,9 @@ def api_gdpr_export(req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/gdpr/erase")
-def api_gdpr_erase(req: Dict[str, Any] = Body(...)):
+def api_gdpr_erase(request: Request, req: Dict[str, Any] = Body(...)):
     """Art. 17 DSGVO: Löscht/anonymisiert Daten zu einer Person und erzeugt eine kryptografische Quittung."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     identifier = req.get("identifier", "").strip()
     dry_run = bool(req.get("dry_run", False))
     anonymize = bool(req.get("anonymize", True))
@@ -2953,8 +2967,9 @@ def api_gdpr_audit_log(limit: int = Query(default=50)):
 
 
 @router.post("/chaos/run")
-def api_chaos_run(req: Dict[str, Any] = Body(default={})):
+def api_chaos_run(request: Request, req: Dict[str, Any] = Body(default={})):
     """Führt automatisierte Chaos- und Resilienz-Tests gegen Container, DB und Watchdog aus."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     dry_run = bool(req.get("dry_run", True))
     try:
         import sys
@@ -3322,8 +3337,9 @@ def api_get_approval_policies(domain: Optional[str] = None):
 
 
 @router.post("/approvals/policies")
-def api_update_approval_policy(req: Dict[str, Any] = Body(...)):
+def api_update_approval_policy(request: Request, req: Dict[str, Any] = Body(...)):
     """Aktualisiert eine Freigaberegel revisionssicher mit SHA-256 Hash-Kette."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     policy_key = req.get("policy_key", "").strip()
     new_value = str(req.get("new_value", "")).strip()
     user_id = req.get("user_id", "admin").strip()
@@ -3474,8 +3490,9 @@ def api_list_keys():
 
 
 @router.post("/keys")
-def api_create_key(req: Dict[str, Any] = Body(...)):
+def api_create_key(request: Request, req: Dict[str, Any] = Body(...)):
     """Erstellt einen neuen API-Key und gibt den Klartext-Token einmalig zurück."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     name = req.get("name", "").strip()
     scopes = req.get("scopes", ["read_only"])
     rate_limit_rpm = int(req.get("rate_limit_rpm", 60))
@@ -3500,8 +3517,9 @@ def api_create_key(req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/keys/{key_id}/revoke")
-def api_revoke_key(key_id: str, req: Dict[str, Any] = Body(default={})):
+def api_revoke_key(request: Request, key_id: str, req: Dict[str, Any] = Body(default={})):
     """Deaktiviert einen API-Key dauerhaft und revisionssicher."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     revoked_by = req.get("revoked_by", "admin").strip()
     try:
         from backend.api_key_manager import api_key_manager
@@ -3516,8 +3534,9 @@ def api_revoke_key(key_id: str, req: Dict[str, Any] = Body(default={})):
 
 
 @router.delete("/keys/{key_id}")
-def api_delete_key(key_id: str, req: Dict[str, Any] = Body(default={})):
+def api_delete_key(request: Request, key_id: str, req: Dict[str, Any] = Body(default={})):
     """Löscht einen Key vollständig aus der aktiven Liste."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     deleted_by = req.get("deleted_by", "admin").strip()
     try:
         from backend.api_key_manager import api_key_manager
@@ -3733,8 +3752,9 @@ def api_get_trusted_sources():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/security/trusted-sources/toggle")
-def api_toggle_trusted_source(req: Dict[str, Any] = Body(...)):
+def api_toggle_trusted_source(request: Request, req: Dict[str, Any] = Body(...)):
     """Schaltet den Trusted-Status [T] für einen Absender um."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     source_id = req.get("source_id", "").strip()
     if not source_id:
         raise HTTPException(status_code=400, detail="Keine source_id angegeben.")
@@ -3759,8 +3779,9 @@ def api_get_break_glass_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/security/break-glass/create")
-def api_create_break_glass_vault():
+def api_create_break_glass_vault(request: Request):
     """Generiert ein neues verschlüsseltes Notfall-Backup und einen einmaligen Recovery-Key."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from scripts.break_glass_recovery import create_break_glass_vault
         res = create_break_glass_vault(operator="admin")
@@ -3898,8 +3919,9 @@ class TakeoverRequestModel(BaseModel):
     agent_name: Optional[str] = None
 
 @router.post("/bot-screen/takeover/request")
-def request_human_takeover(req: TakeoverRequestModel):
+def request_human_takeover(request: Request, req: TakeoverRequestModel):
     """Wird von einem Agenten ausgelöst, wenn ein Captcha oder 2FA-Schranke erkannt wird."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     _bot_screen_state["takeover_requested"] = True
     _bot_screen_state["takeover_reason"] = req.reason
     _bot_screen_state["takeover_timestamp"] = datetime.datetime.now().isoformat()
@@ -3932,8 +3954,9 @@ def request_human_takeover(req: TakeoverRequestModel):
     return {"status": "takeover_active", "state": _bot_screen_state}
 
 @router.post("/bot-screen/takeover/resume")
-def resume_from_human_takeover():
+def resume_from_human_takeover(request: Request):
     """Wird vom Nutzer per Klick auf 'Agent fortsetzen' aufgerufen."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     _bot_screen_state["takeover_requested"] = False
     _bot_screen_state["takeover_reason"] = ""
     _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
@@ -3966,15 +3989,17 @@ class ScreenInteractionModel(BaseModel):
     text: Optional[str] = None
 
 @router.post("/bot-screen/interact")
-def interact_with_bot_screen(action_data: ScreenInteractionModel):
+def interact_with_bot_screen(request: Request, action_data: ScreenInteractionModel):
     """Nimmt Benutzerinteraktionen (Klick, Tasteneingabe) entgegen."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
     return {"status": "success", "echo": action_data.dict()}
 
 
 @router.post("/bot-screen/abort")
-def abort_bot_screen_execution():
+def abort_bot_screen_execution(request: Request):
     """Notfall-Abbruch: Entzieht dem Agenten sofort alle Rechte und stoppt aktive Browser-Aktionen."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     _bot_screen_state["takeover_requested"] = False
     _bot_screen_state["mouse_control_enabled"] = False
     _bot_screen_state["agent_authorized"] = False
@@ -4041,7 +4066,7 @@ def list_evolved_tools():
 
 
 @router.post("/autonomy/evolve-tool")
-def trigger_tool_evolution(req: ToolEvolutionRequest):
+def trigger_tool_evolution(request: Request, req: ToolEvolutionRequest):
     """Voyager-Zyklus für FERTIGEN Code: Sandbox-Test, Reparaturversuche, Registrierung.
 
     Historie: Dieser Endpunkt übergab `sample_usage_prompt`/`max_retries` an
@@ -4050,6 +4075,7 @@ def trigger_tool_evolution(req: ToolEvolutionRequest):
     bei jedem Aufruf. Die Engine kann aus einer Beschreibung keinen Code erzeugen;
     deshalb wird hier ehrlich mit 400 abgelehnt statt einen Erfolg vorzutäuschen.
     """
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.self_evolving_tooling import get_self_evolving_tool_engine
     implementation_code = (req.implementation_code or "").strip()
     verification_test_code = (req.verification_test_code or "").strip()
@@ -4101,8 +4127,9 @@ def trigger_speculative_prefetch(req: PrefetchRequest):
 
 
 @router.post("/autonomy/jit-persona/execute")
-def execute_jit_persona_task(req: JITPersonaTaskRequest):
+def execute_jit_persona_task(request: Request, req: JITPersonaTaskRequest):
     """Erzeugt ad-hoc eine flüchtige Spezialisten-Persona und führt die Aufgabe isoliert aus."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.jit_persona_engine import get_jit_persona_engine
     engine = get_jit_persona_engine()
     res = engine.execute_ephemeral_task(

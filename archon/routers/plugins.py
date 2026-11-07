@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
+
+from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -31,7 +33,8 @@ def api_list_plugins():
 
 
 @router.post("/api/v1/plugins/{plugin_id}/toggle")
-def api_toggle_plugin(plugin_id: str, payload: dict = Body(default={})):
+def api_toggle_plugin(request: Request, plugin_id: str, payload: dict = Body(default={})):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     plugin = pm.plugins.get(plugin_id)
@@ -48,7 +51,8 @@ def api_toggle_plugin(plugin_id: str, payload: dict = Body(default={})):
 
 
 @router.post("/api/v1/plugins/{plugin_id}/reload")
-def api_reload_plugin(plugin_id: str):
+def api_reload_plugin(request: Request, plugin_id: str):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     success = pm.reload_plugin(plugin_id)
@@ -73,7 +77,8 @@ def api_get_plugin_settings(plugin_id: str):
 
 
 @router.post("/api/v1/plugins/{plugin_id}/config")
-def api_save_plugin_settings(plugin_id: str, payload: dict = Body(...)):
+def api_save_plugin_settings(request: Request, plugin_id: str, payload: dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     plugin = pm.plugins.get(plugin_id)
@@ -99,7 +104,8 @@ def api_get_plugin_tools():
 
 
 @router.post("/api/v1/plugins/tools/execute")
-async def api_execute_plugin_tool(payload: dict = Body(...)):
+async def api_execute_plugin_tool(request: Request, payload: dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     tool_name = payload.get("tool_name", "")

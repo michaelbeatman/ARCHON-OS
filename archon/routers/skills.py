@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 from fastapi import APIRouter, BackgroundTasks, Body, File, HTTPException, Query, Request, UploadFile
+
+from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
@@ -367,6 +369,7 @@ def api_get_single_hermes_skill(skill_id: str):
 
 @router.post("/api/hermes/skills/{skill_id}")
 async def api_save_single_hermes_skill(skill_id: str, request: Request):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     global _HERMES_SKILLS_CACHE
     data = await request.json()
     file_path = find_skill_file(skill_id)
@@ -419,7 +422,8 @@ async def api_save_single_hermes_skill(skill_id: str, request: Request):
 
 
 @router.post("/api/hermes/skills/{skill_id}/reset")
-async def api_reset_single_hermes_skill(skill_id: str):
+async def api_reset_single_hermes_skill(request: Request, skill_id: str):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     global _HERMES_SKILLS_CACHE
     file_path = find_skill_file(skill_id)
     if not file_path or not os.path.exists(file_path):
@@ -472,7 +476,8 @@ def api_skills_docker_logs(container_name: str, tail: int = 100):
 
 
 @router.post("/api/v1/skills/docker/restart")
-def api_skills_docker_restart(container_name: str = Body(...)):
+def api_skills_docker_restart(request: Request, container_name: str = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     return _DEPS["skills_engine"].docker.restart_service(container_name)
@@ -514,28 +519,32 @@ def api_skills_rag_store(event_data: Dict = Body(...)):
 
 
 @router.post("/api/v1/skills/git/pytest")
-def api_skills_git_pytest(test_path: str = Body("tests/")):
+def api_skills_git_pytest(request: Request, test_path: str = Body("tests/")):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     return _DEPS["skills_engine"].testing.run_pytest(test_path)
 
 
 @router.post("/api/v1/skills/git/commit")
-def api_skills_git_commit(message: str = Body(...)):
+def api_skills_git_commit(request: Request, message: str = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     return _DEPS["skills_engine"].testing.git_safe_commit(message)
 
 
 @router.post("/api/v1/skills/mcp/connect")
-async def api_skills_mcp_connect(server_script_or_url: str = Body(...)):
+async def api_skills_mcp_connect(request: Request, server_script_or_url: str = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     return await _DEPS["skills_engine"].mcp.connect_mcp_server(server_script_or_url)
 
 
 @router.post("/api/v1/skills/mcp/execute")
-async def api_skills_mcp_execute(tool_name: str = Body(...), arguments: Dict = Body(...), agent_id: str = Body(None)):
+async def api_skills_mcp_execute(request: Request, tool_name: str = Body(...), arguments: Dict = Body(...), agent_id: str = Body(None)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     if not agent_id:

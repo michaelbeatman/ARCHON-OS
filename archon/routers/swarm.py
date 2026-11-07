@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
+
+from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -30,7 +32,8 @@ from archon.core.runtime import (  # noqa: F401
 router = APIRouter()
 
 @router.post("/api/swarm/spawn-ephemeral-team")
-def api_spawn_ephemeral_team(payload: Dict = Body(...)):
+def api_spawn_ephemeral_team(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.ephemeral_team_spawner import ephemeral_team_spawner
     return ephemeral_team_spawner.spawn_task_force(
         mission_title=payload.get("mission_title", "Spezial-Auftrag"),

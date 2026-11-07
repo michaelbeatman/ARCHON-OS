@@ -43,6 +43,16 @@ from archon.core.orchestration import (
     _run_synthesis_cascade as _orch_run_synthesis_cascade,
 )
 
+# --- A5-Etappe 1: unveraenderliche Modul-Konstanten ausgelagert ------------
+# Quelle ist jetzt archon/core/constants.py (ein Ort, keine Kopie). Mutabler
+# State und Pfad-Konstanten bleiben bewusst in dieser Datei (Fallstrick 24 / B10).
+from archon.core.constants import (
+    _AUTH_PUBLIC_PREFIXES,
+    _AUTH_PROTECTED_PREFIXES,
+    _DECISION_TYPEN,
+    DELEGATION_PROTOCOL_PROMPT,
+    STUDIO_BG_UPLOAD_DIR,
+)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("archon_os")
 
@@ -134,19 +144,9 @@ async def add_no_cache_for_avatars(request: Request, call_next):
 
 # --- Auth-Gate (wirkt nur, wenn settings.auth.enabled = true) --------------
 _AUTH_PUBLIC_EXACT = {"/", "/health", "/metrics", "/favicon.ico", "/openapi.json", "/login", "/docs", "/redoc"}
-_AUTH_PUBLIC_PREFIXES = ("/static/", "/api/auth/login", "/api/auth/status", "/docs", "/redoc")
 
 # Nicht-/api-Pfade, die trotzdem geschuetzt sein muessen: eingebettete
 # Admin-Oberflaechen (n8n-Editor, OmniRoute-Konsole) und App-Shells.
-_AUTH_PROTECTED_PREFIXES = (
-    "/omniroute-proxy",
-    "/n8n-proxy",
-    "/rest/",
-    "/hud",
-    "/mobile",
-    "/m",
-    "/v2",
-)
 
 _SERVICE_TOKEN_CACHE = {"ts": 0.0, "token": ""}
 
@@ -3047,8 +3047,6 @@ async def api_telegram_send(payload: TelegramSendPayload):
 #   POST /api/decisions/decide {task_id, decision, von}
 # =========================================================================
 
-_DECISION_TYPEN = ("delegation_review", "synthesis_freigabe",
-                   "mission_freigabe", "permission_gate")
 
 
 def _decision_kanban_status(typ: str, decision: str) -> str:
@@ -3850,34 +3848,6 @@ def _check_delegation_permission(delegator_id: str, target_id: str):
                        f"'{target_id}' gehört zu Team {(t or {}).get('team_id', 'unbekannt')}.")
     return False, f"Spezialist '{delegator_id}' (Tier 3) darf nicht delegieren. Bitte beim eigenen LEAD eskalieren."
 
-DELEGATION_PROTOCOL_PROMPT = """
-
-=== DELEGATIONSPROTOKOLL (Engine v2) ===
-Wenn eine Aufgabe an einen anderen Agenten delegiert werden soll, MUSST du dafür ausschließlich
-den folgenden JSON-Block in deine Antwort schreiben (valides JSON, exakte Feldnamen):
-
-```delegation
-{"ziel_agent": "<agent_id>", "auftrag": "<präzise Aufgabenbeschreibung mit Kontext>", "modell": "<auto/best-reasoning|auto/best-coding|auto/best-free|auto/best-vision>", "prioritaet": "normal|hoch", "reasoning_level": "off|minimal|low|medium|high|max", "parent_project_id": "<nur bei Zerlegung in mehrere Teilauftraege: IMMER dieselbe id fuer alle Bloecke, z.B. projekt-immobilienplattform>"}
-```
-
-Regeln für reasoning_level:
-- Wähle den Denkgrad angepasst an die Komplexität des Auftrags:
-  * "off": Für einfache Routine-Aufgaben, Formatierungen oder Textablagen (0 Tokens Denkzeit, maximal schnell & billig).
-  * "minimal": Für simple Überprüfungen oder kurze Standardrecherchen (~1k Tokens).
-  * "low": Für Standardarbeiten mit kurzer Plausibilitätsprüfung (~2k Tokens).
-  * "medium": Ausgewogener Standard für normale Fachaufgaben (~4k Tokens).
-  * "high": Für fundierte Code-Architektur, Refactoring oder Finanzmodellierung (~8k Tokens).
-  * "max": Für hochkritische strategische Memos, Rechtsgutachten oder System-Apex-Entscheidungen (~16k Tokens).
-
-Wichtige Regeln für Delegation & Berichte:
-- ziel_agent = exakte Agent-ID, nie der Anzeigename. Mehrere Blöcke für Parallelaufträge erlaubt.
-- KEINE SELBST-DELEGATION: Delegiere NIEMALS an dich selbst (z.B. niemals an deine eigene Agent-ID). Willst du Zwischenergebnisse zusammenfassen, auswerten oder freigeben, mache dies direkt in deiner eigenen Antwort.
-- KEINE EIGENEN QUITTUNGEN TEXTEN: Schreibe nach einem ```delegation ...``` Block NIEMALS selbst eine Quittung wie 'DELEGATION QUITTUNG: Auftrag erfolgreich delegiert...'. Die Quittung wird ausschließlich und automatisch vom Backend erzeugt und eingefügt.
-- KEINE SCHEIN-AUFTRÄGE: Erfinde keine Aufgaben wie 'Registriere Projekt im System' oder 'Parent-Project-ID registrieren'. Projekte existieren automatisch über ihren Ordner in `01_PROJEKTE/`. Wenn ein Agent Kontext benötigt, gib ihm den genauen Projektpfad oder die Quelldateien im Auftrag mit.
-- KEIN ROHES HTML IM CHAT ZUM SELBSTSPEICHERN: Wenn ein Abschlussbericht oder HTML-Dokument erstellt wird, gebe niemals seitenweise rohen HTML-Code im Chat aus mit der Aufforderung, der Nutzer solle diesen manuell in Notepad kopieren! Erstelle stattdessen eine lesbare Zusammenfassung mit Markdown direkt im Chat und speichere die vollwertige HTML-Datei im Projektordner (`01_PROJEKTE/<projekt>/03_Endprodukte/<datei>.html`).
-- ZERLEGST du EINEN Auftrag in MEHRERE Teilaufträge: gib in JEDEM Block dieselbe `parent_project_id` an (z.B. "projekt-<kurzname>"). Das sammelt alle Teilergebnisse automatisch in der Projektstruktur.
-- Status-Verfolgung über die Task-ID: Kanban in_progress = läuft, review = Ergebnis da, blocked = Problem.
-=== ENDE DELEGATIONSPROTOKOLL ==="""
 
 DELEGATION_ALIAS_MAP = {
     # Apex / Leitung / Robert
@@ -7568,7 +7538,6 @@ def api_get_paperclip_agents():
     return {"status": "success", "agents": []}
 
 # --- CSS Live Studio: Hintergrund-Bild-Upload (User-Wunsch 10.10.2026) ---
-STUDIO_BG_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "uploads")
 
 @app.post("/api/studio/upload-bg")
 async def api_studio_upload_bg(file: UploadFile = File(...)):

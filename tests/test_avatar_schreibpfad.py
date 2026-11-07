@@ -142,8 +142,32 @@ def test_resolve_avatar_file_lehnt_pfad_ausbruch_ab(monkeypatch, tmp_path, name)
 
 @pytest.fixture()
 def upload_umgebung(monkeypatch, tmp_path):
-    """Router + Service ohne echte Profil-/DB-Pfade."""
+    """Router + Service ohne echte Profil-/DB-Pfade.
+
+    Seit dem Rollenzaun (RBAC) braucht die Upload-Route ein ``Request`` und
+    einen verdrahteten Admin-Durchlass. Wir nutzen den echten ``require_admin``
+    im Einzelnutzer-Modus (``auth.enabled=false``), damit der Test weiterhin den
+    Schreibpfad prueft statt am Zaun zu enden.
+    """
     from archon.routers import hermes_profiles as router_mod
+    from archon.routers import _rbac as rbac_module
+    import main as _main
+    from starlette.requests import Request
+
+    monkeypatch.setattr(_main.auth_service, "is_auth_enabled", lambda: False)
+    monkeypatch.setattr(_main.auth_service, "get_fallback_admin",
+                        lambda: {"id": "usr_admin", "username": "admin",
+                                 "role": "admin", "permissions": {},
+                                 "is_fallback": True})
+    monkeypatch.setattr(rbac_module, "_checker", _main.require_admin)
+    request = Request({
+        "type": "http", "http_version": "1.1", "method": "POST",
+        "scheme": "http", "path": "/api/hermes/profiles/probe_agent/avatar",
+        "raw_path": b"/api/hermes/profiles/probe_agent/avatar",
+        "query_string": b"", "root_path": "", "headers": [],
+        "client": ("127.0.0.1", 1234), "server": ("testserver", 80),
+        "app": _main.app,
+    })
 
     laufzeit = tmp_path / "laufzeit"
     monkeypatch.setenv(profiles_mod.AVATARS_DIR_ENV, str(laufzeit))
@@ -156,15 +180,15 @@ def upload_umgebung(monkeypatch, tmp_path):
     monkeypatch.setattr(
         os.path, "expanduser",
         lambda p: str(tmp_path / "kein_home") if p.startswith("~") else _echt_expand(p))
-    return router_mod, laufzeit
+    return router_mod, laufzeit, request
 
 
 def test_router_upload_schreibt_atomar_in_laufzeitverzeichnis(upload_umgebung):
     """api_upload_hermes_profile_avatar: Nutzen des gemeinsamen Helfers, kein tmp."""
-    router_mod, laufzeit = upload_umgebung
+    router_mod, laufzeit, request = upload_umgebung
 
     antwort = router_mod.api_upload_hermes_profile_avatar(
-        "probe_agent", {"image": PNG_DATA_URI})
+        request, "probe_agent", {"image": PNG_DATA_URI})
 
     assert antwort["status"] == "success"
     assert antwort["avatar_url"] == "/static/avatars/custom_probe_agent.png"

@@ -98,7 +98,8 @@ def api_save_hermes_profile(request: Request, profile_data: Dict = Body(...)):
 
 
 @router.post("/api/hermes/profiles/{profile_id}/avatar")
-def api_upload_hermes_profile_avatar(profile_id: str, data: Dict = Body(...)):
+def api_upload_hermes_profile_avatar(request: Request, profile_id: str, data: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache (fail-closed, vor jedem Schreibpfad)
     try:
         import base64, hashlib, time
         data_url = (data.get("image") or data.get("avatar") or "").strip()

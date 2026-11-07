@@ -2,9 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Basis-Tools installieren (Git für In-App Update-System, Curl)
-# Docker CLI für isolierte Sandbox-Ausführung
-RUN apt-get update && apt-get install -y --no-install-recommends git curl docker.io && \
+# Basis-Tools installieren (Git für In-App Update-System, Curl, ca-certificates für HTTPS)
+# Docker CLI (statisch, ohne Daemon) für isolierte Sandbox-Ausführung — Debian 13 (trixie)
+# liefert via docker.io keinen CLI-Binary, daher offizielles statisches Binary holen.
+RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates && \
+    curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.3.1.tgz \
+      | tar -xz --strip-components=1 -C /usr/local/bin docker/docker && \
+    chmod +x /usr/local/bin/docker && \
     rm -rf /var/lib/apt/lists/*
 
 # Non-Root-User und -Gruppe anlegen

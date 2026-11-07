@@ -32,7 +32,7 @@ Legende: ✅ erledigt und belegt · 🟡 teilweise · 🔴 offen und gemessen ·
 |---|---|---|---|
 | B1 | Race Condition MC-Lock | ✅ | **abgeschlossen 2026-11-07**: alle vier Schreiber nutzen `update_mc` + Delta-Merge, ohne stillen Fallback (`RuntimeError`). Belege siehe Abschnitt „B1" unten |
 | B2 | Doppelte Proxy-Implementierungen | ✅ | `utils/reverse_proxy.py`, eine Klasse für alle Ziele |
-| B3 | Docker-Socket ohne Schutz | 🟡 | `main.py` spricht den Socket **nicht mehr direkt** an — `docker_socket_request` ist eine Deprecated-Fassade auf `utils/docker_client.py` (Allowlist). **Rest offen:** `backend/hermes_updater.py:58` (`DockerSocketClient`, roher `socket.socket(AF_UNIX)`, im Live-Pfad von `get_installed_hermes_info`/`recreate_container_with_new_image`) umgeht die Allowlist. Belege unten |
+| B3 | Docker-Socket ohne Schutz | 🟡 | `main.py` spricht den Socket **nicht mehr direkt** an — `docker_socket_request` ist eine Deprecated-Fassade auf `utils/docker_client.py` (Allowlist). **Rest offen:** `backend/hermes_updater.py:63` (`DockerSocketClient`, roher `socket.socket(AF_UNIX)`; Zeile 58 vor dem Commit `ffb04bec`, im Live-Pfad von `get_installed_hermes_info`/`recreate_container_with_new_image`) umgeht die Allowlist. Belege unten |
 | B4 | Path Traversal | ✅ | `utils/path_jail.py`; `grep -c "safe_path" main.py` → **12** Vorkommen (davon 6 Aufrufe) |
 | B5 | SQL-Injection | 🟡 | **geprüft, kein akuter Befund**: `grep -rn 'execute(f\"' --include=*.py main.py archon backend utils` → **10** Stellen, alle mit Platzhalter-/Spaltenlisten aus festen Strings. **Ein latenter Härtungspunkt:** `local_memory_bridge.py:454` `evict_stale_memories(table=…)` interpoliert `{table}` ungeprüft (Z. 459 und 471). Details unten |
 | B6 | Stille Exceptions | ✅ | `grep -rn "except.*:.*pass" …` → **0** projektweit; `grep -rn "except:" main.py archon backend utils \| wc -l` → 2 nackte `except:` verbleiben |
@@ -267,7 +267,7 @@ grep -rn "socket.socket\|docker.sock\|HTTPTransport(uds" --include=*.py main.py 
 | `utils/docker_client.py:79,117,130` | **Guard selbst** (`socket.AF_UNIX` hinter Allowlist) |
 | `archon/routers/governance.py:44` | Fassade auf `_docker_client` — abgesichert |
 | `archon/routers/system.py:81,130`, `backend/post_task_pipeline.py:522,526` | `http://docker-socket-proxy:2375` per httpx (Netzwerk-Transport, kein Unix-Socket) |
-| **`backend/hermes_updater.py:58`** | **offen**: `DockerSocketClient` mit rohem `socket.socket(AF_UNIX)` + `http.client`-Wrapper, **ohne** Allowlist, **ohne** Namensvalidierung; im Live-Pfad von `get_installed_hermes_info()` (Z. 107) und `recreate_container_with_new_image()` (Z. 323) |
+| **`backend/hermes_updater.py:63`** | **offen**: `DockerSocketClient` mit rohem `socket.socket(AF_UNIX)` + `http.client`-Wrapper, **ohne** Allowlist, **ohne** Namensvalidierung; im Live-Pfad von `get_installed_hermes_info()` (Z. 107) und `recreate_container_with_new_image()` (Z. 323). Zeilenangabe 58 gilt für Commits vor `ffb04bec` |
 | `backend/privacy_router.py:103,152` | **andere Risikoklasse**: roher TCP-Connect als Latenzprobe gegen Provider-URLs, kein Docker-Socket |
 
 **Bewertung 🟡.** Der Hauptpfad (`/api/services`, `/api/v1/container/*`, Logs, Stats, Exec)
@@ -445,7 +445,7 @@ Live (06.11.): Metadaten-URL → 403 mit Grund, `10.0.0.5` → 403, `127.0.0.1:8
    Konsolidierung auf wenige Meta-Routen, eigener Paritäts-Nachweis.
 4. **A6** — 15 × `asyncio.to_thread`; sync-I/O in async bleibt punktuell offen.
    Kandidaten über einen AST-Scan auf `async def`-Handler eingrenzen (wie B8 gefahren).
-5. **B3-Rest / S1** — `backend/hermes_updater.py:58` `DockerSocketClient` auf
+5. **B3-Rest / S1** — `backend/hermes_updater.py:63` `DockerSocketClient` auf
    `utils/docker_client` umstellen (Allowlist + Namensvalidierung).
    `backend/privacy_router.py:103,152` (roher TCP-Connect für Latenzproben) separat bewerten.
 6. **B5-Härtung** — `local_memory_bridge.py:454` `evict_stale_memories(table=…)`:

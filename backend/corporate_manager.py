@@ -6,12 +6,20 @@ legal/correspondence templates (DIN 5008, § 14 UStG Invoices, NDAs, Offers).
 
 import os
 import json
+import tempfile
+import threading
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 PROFILES_FILE = os.path.join(DATA_DIR, "corporate_profiles.json")
+
+# F-03: EIN Lock fuer alle Load-Aendern-Speichern-Sequenzen (RMW). Vorher
+# schrieben parallele Aufrufer direkt ueber die Zieldatei — ein Abbruch
+# mitten im write hinterliess eine kaputte/leere Datei, und der naechste
+# save_company() legte nur noch die Default-Firma an (alle uebrigen weg).
+_DATA_LOCK = threading.RLock()
 
 DEFAULT_PRIMARY_COMPANY = {
     "id": "archon-systems",
@@ -83,8 +91,25 @@ class CorporateManager:
             }
 
     def _save_data(self, data: Dict[str, Any]):
-        with open(self.filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        # F-03: atomar (Temp-Datei im selben Verzeichnis + fsync + os.replace),
+        # damit ein Abbruch nie eine Halbdatei/kaputte Firmenliste hinterlaesst.
+        with _DATA_LOCK:
+            target = self.filepath
+            d = os.path.dirname(os.path.abspath(target)) or "."
+            os.makedirs(d, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=d, prefix=".corporate_profiles_", suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp, target)
+            except BaseException:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
 
     def list_companies(self) -> List[Dict[str, Any]]:
         data = self._load_data()
@@ -116,94 +141,97 @@ class CorporateManager:
         return None
 
     def set_active_company(self, company_id: str) -> bool:
-        data = self._load_data()
-        for c in data.get("companies", []):
-            if c.get("id") == company_id:
-                data["active_company_id"] = company_id
-                self._save_data(data)
-                return True
+        with _DATA_LOCK:
+            data = self._load_data()
+            for c in data.get("companies", []):
+                if c.get("id") == company_id:
+                    data["active_company_id"] = company_id
+                    self._save_data(data)
+                    return True
         return False
 
     def save_company(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        data = self._load_data()
-        company_id = payload.get("id") or str(uuid.uuid4())[:8]
-        now_iso = datetime.utcnow().isoformat() + "Z"
+        with _DATA_LOCK:
+            data = self._load_data()
+            company_id = payload.get("id") or str(uuid.uuid4())[:8]
+            now_iso = datetime.utcnow().isoformat() + "Z"
 
-        existing_idx = None
-        for i, c in enumerate(data.get("companies", [])):
-            if c.get("id") == company_id:
-                existing_idx = i
-                break
+            existing_idx = None
+            for i, c in enumerate(data.get("companies", [])):
+                if c.get("id") == company_id:
+                    existing_idx = i
+                    break
 
-        company_record = {
-            "id": company_id,
-            "name": payload.get("name", "Neues Unternehmen"),
-            "legal_form": payload.get("legal_form", ""),
-            "slogan": payload.get("slogan", ""),
-            "address": {
-                "street": payload.get("address", {}).get("street", ""),
-                "postal_code": payload.get("address", {}).get("postal_code", ""),
-                "city": payload.get("address", {}).get("city", ""),
-                "country": payload.get("address", {}).get("country", "Deutschland")
-            },
-            "contact": {
-                "phone": payload.get("contact", {}).get("phone", ""),
-                "email": payload.get("contact", {}).get("email", ""),
-                "website": payload.get("contact", {}).get("website", "")
-            },
-            "registry": {
-                "court": payload.get("registry", {}).get("court", ""),
-                "number": payload.get("registry", {}).get("number", ""),
-                "managing_directors": payload.get("registry", {}).get("managing_directors", "")
-            },
-            "tax": {
-                "tax_number": payload.get("tax", {}).get("tax_number", ""),
-                "vat_id": payload.get("tax", {}).get("vat_id", ""),
-                "small_business": bool(payload.get("tax", {}).get("small_business", False))
-            },
-            "bank": {
-                "bank_name": payload.get("bank", {}).get("bank_name", ""),
-                "iban": payload.get("bank", {}).get("iban", ""),
-                "bic": payload.get("bank", {}).get("bic", "")
-            },
-            "design": {
-                "primary_color": payload.get("design", {}).get("primary_color", "#4f46e5"),
-                "secondary_color": payload.get("design", {}).get("secondary_color", "#06b6d4"),
-                "accent_color": payload.get("design", {}).get("accent_color", "#10b981"),
-                "logo_url": payload.get("design", {}).get("logo_url", ""),
-                "font_family": payload.get("design", {}).get("font_family", "Inter, system-ui, sans-serif")
-            },
-            "created_at": payload.get("created_at") or now_iso,
-            "updated_at": now_iso
-        }
+            company_record = {
+                "id": company_id,
+                "name": payload.get("name", "Neues Unternehmen"),
+                "legal_form": payload.get("legal_form", ""),
+                "slogan": payload.get("slogan", ""),
+                "address": {
+                    "street": payload.get("address", {}).get("street", ""),
+                    "postal_code": payload.get("address", {}).get("postal_code", ""),
+                    "city": payload.get("address", {}).get("city", ""),
+                    "country": payload.get("address", {}).get("country", "Deutschland")
+                },
+                "contact": {
+                    "phone": payload.get("contact", {}).get("phone", ""),
+                    "email": payload.get("contact", {}).get("email", ""),
+                    "website": payload.get("contact", {}).get("website", "")
+                },
+                "registry": {
+                    "court": payload.get("registry", {}).get("court", ""),
+                    "number": payload.get("registry", {}).get("number", ""),
+                    "managing_directors": payload.get("registry", {}).get("managing_directors", "")
+                },
+                "tax": {
+                    "tax_number": payload.get("tax", {}).get("tax_number", ""),
+                    "vat_id": payload.get("tax", {}).get("vat_id", ""),
+                    "small_business": bool(payload.get("tax", {}).get("small_business", False))
+                },
+                "bank": {
+                    "bank_name": payload.get("bank", {}).get("bank_name", ""),
+                    "iban": payload.get("bank", {}).get("iban", ""),
+                    "bic": payload.get("bank", {}).get("bic", "")
+                },
+                "design": {
+                    "primary_color": payload.get("design", {}).get("primary_color", "#4f46e5"),
+                    "secondary_color": payload.get("design", {}).get("secondary_color", "#06b6d4"),
+                    "accent_color": payload.get("design", {}).get("accent_color", "#10b981"),
+                    "logo_url": payload.get("design", {}).get("logo_url", ""),
+                    "font_family": payload.get("design", {}).get("font_family", "Inter, system-ui, sans-serif")
+                },
+                "created_at": payload.get("created_at") or now_iso,
+                "updated_at": now_iso
+            }
 
-        if existing_idx is not None:
-            data["companies"][existing_idx] = company_record
-        else:
-            data.setdefault("companies", []).append(company_record)
+            if existing_idx is not None:
+                data["companies"][existing_idx] = company_record
+            else:
+                data.setdefault("companies", []).append(company_record)
 
-        if not data.get("active_company_id") or len(data["companies"]) == 1:
-            data["active_company_id"] = company_id
+            if not data.get("active_company_id") or len(data["companies"]) == 1:
+                data["active_company_id"] = company_id
 
-        self._save_data(data)
-        return company_record
+            self._save_data(data)
+            return company_record
 
     def delete_company(self, company_id: str) -> bool:
-        data = self._load_data()
-        companies = data.get("companies", [])
-        if len(companies) <= 1:
-            return False  # Mindestens ein Unternehmen muss verbleiben
+        with _DATA_LOCK:
+            data = self._load_data()
+            companies = data.get("companies", [])
+            if len(companies) <= 1:
+                return False  # Mindestens ein Unternehmen muss verbleiben
 
-        filtered = [c for c in companies if c.get("id") != company_id]
-        if len(filtered) == len(companies):
-            return False
+            filtered = [c for c in companies if c.get("id") != company_id]
+            if len(filtered) == len(companies):
+                return False
 
-        data["companies"] = filtered
-        if data.get("active_company_id") == company_id:
-            data["active_company_id"] = filtered[0]["id"]
+            data["companies"] = filtered
+            if data.get("active_company_id") == company_id:
+                data["active_company_id"] = filtered[0]["id"]
 
-        self._save_data(data)
-        return True
+            self._save_data(data)
+            return True
 
     def render_template(
         self,

@@ -3,6 +3,15 @@
     // =========================================================================
     // WISSENSBIBLIOTHEK & PDF INGEST PIPELINE (Second Brain & Obsidian Mirror)
     // =========================================================================
+    function escapeHtmlWB(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
     let libraryBooksList = [];
     let librarySelectedFiles = [];
     let libraryActiveCategoryFilter = 'ALL';
@@ -185,16 +194,16 @@
             <td class="py-3 px-3">
               <div class="font-bold text-primary-custom text-xs flex items-center gap-2">
                 <i data-lucide="${book.is_index ? 'book-open' : 'file-text'}" class="w-4 h-4 text-black dark:text-white shrink-0"></i>
-                <span class="truncate max-w-[280px]" title="${book.title}">${book.title}</span>
+                <span class="truncate max-w-[280px]" title="${escapeHtmlWB(book.title)}">${escapeHtmlWB(book.title)}</span>
               </div>
-              <div class="text-[10px] text-muted-custom font-mono mt-0.5 truncate max-w-[280px]">${book.filename}</div>
+              <div class="text-[10px] text-muted-custom font-mono mt-0.5 truncate max-w-[280px]">${escapeHtmlWB(book.filename)}</div>
             </td>
             <td class="py-3 px-3">${catBadge}</td>
             <td class="py-3 px-3 text-muted-custom text-xs">${pages} ${pages === 1 ? 'Seite' : 'Seiten'} <span class="text-[10px] opacity-70">(${sizeKb} KB)</span></td>
             <td class="py-3 px-3">${formatBadge}</td>
             <td class="py-3 px-3 text-right">
               <div class="flex items-center justify-end gap-1.5">
-                <button type="button" onclick="previewLibraryBook('${book.rel_path}', '${book.title.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)] text-xs font-medium border border-[var(--border)] transition flex items-center gap-1 cursor-pointer" title="Notiz im Browser lesen">
+                <button type="button" data-rel-path="${escapeHtmlWB(book.rel_path)}" data-title="${escapeHtmlWB(book.title)}" onclick="previewLibraryBook(this.dataset.relPath, this.dataset.title)" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)] text-xs font-medium border border-[var(--border)] transition flex items-center gap-1 cursor-pointer" title="Notiz im Browser lesen">
                   <i data-lucide="eye" class="w-3.5 h-3.5"></i> Vorschau
                 </button>
                 <a href="${obsidianUri}" class="px-2.5 py-1 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 text-xs font-medium transition flex items-center gap-1 cursor-pointer" title="Direkt in Obsidian öffnen">

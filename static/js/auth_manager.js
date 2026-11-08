@@ -12,6 +12,16 @@ class AuthManager {
     this.users = [];
   }
 
+  escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   async init() {
     try {
       await this.loadCurrentUser();
@@ -329,16 +339,16 @@ class AuthManager {
           <tr class="hover:bg-[var(--secondary)]/40 border-b border-[var(--border)] transition text-xs">
             <td class="p-3 font-bold flex items-center gap-2">
               <span class="w-6 h-6 rounded-full bg-zinc-800 text-white flex items-center justify-center font-mono font-bold text-[10px]">
-                ${(u.display_name || u.username)[0].toUpperCase()}
+                ${this.escapeHtml((u.display_name || u.username)[0].toUpperCase())}
               </span>
               <div>
-                <div class="text-[var(--foreground)] font-medium">${u.display_name}</div>
-                <div class="text-[10px] font-mono text-[var(--muted-foreground)]">@${u.username}</div>
+                <div class="text-[var(--foreground)] font-medium">${this.escapeHtml(u.display_name)}</div>
+                <div class="text-[10px] font-mono text-[var(--muted-foreground)]">@${this.escapeHtml(u.username)}</div>
               </div>
             </td>
-            <td class="p-3 font-mono text-[11px] text-[var(--muted-foreground)]">${u.email || '-'}</td>
+            <td class="p-3 font-mono text-[11px] text-[var(--muted-foreground)]">${this.escapeHtml(u.email || '-')}</td>
             <td class="p-3">
-              <select onchange="window.authManager.handleRoleChange('${u.id}', this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono font-bold ${u.role === 'admin' ? 'text-rose-500' : (u.role === 'operator' ? 'text-sky-500' : 'text-zinc-400')}">
+              <select data-id="${this.escapeHtml(u.id)}" onchange="window.authManager.handleRoleChange(this.dataset.id, this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono font-bold ${u.role === 'admin' ? 'text-rose-500' : (u.role === 'operator' ? 'text-sky-500' : 'text-zinc-400')}">
                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
                 <option value="operator" ${u.role === 'operator' ? 'selected' : ''}>Operator</option>
                 <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Viewer</option>
@@ -350,9 +360,9 @@ class AuthManager {
               </span>
             </td>
             <td class="p-3 text-right">
-              <button onclick="window.authManager.openPasswordDialog('${u.id}','${u.username}', ${u.id === ((this.currentUser && this.currentUser.id) || '')})" class="p-1 text-zinc-400 hover:text-sky-500 transition cursor-pointer" title="Passwort ändern">🔑</button>
+              <button data-id="${this.escapeHtml(u.id)}" data-username="${this.escapeHtml(u.username)}" data-self="${u.id === ((this.currentUser && this.currentUser.id) || '')}" onclick="window.authManager.openPasswordDialog(this.dataset.id, this.dataset.username, this.dataset.self === 'true')" class="p-1 text-zinc-400 hover:text-sky-500 transition cursor-pointer" title="Passwort ändern">🔑</button>
               ${u.role !== 'admin' ? `
-                <button onclick="window.authManager.handleDeleteUser('${u.id}', '${u.username}')" class="p-1 text-zinc-400 hover:text-rose-500 transition cursor-pointer" title="Benutzer löschen">
+                <button data-id="${this.escapeHtml(u.id)}" data-username="${this.escapeHtml(u.username)}" onclick="window.authManager.handleDeleteUser(this.dataset.id, this.dataset.username)" class="p-1 text-zinc-400 hover:text-rose-500 transition cursor-pointer" title="Benutzer löschen">
                   🗑️
                 </button>
               ` : '<span class="text-[10px] text-zinc-400 font-mono">Haupt-Admin</span>'}

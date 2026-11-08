@@ -58,20 +58,24 @@ class TaskSelfHealer:
         return conn
 
     def _init_db(self):
-        with self._get_conn() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS task_healing_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    task_id TEXT NOT NULL,
-                    attempt INTEGER NOT NULL,
-                    error_trace TEXT NOT NULL,
-                    action_taken TEXT NOT NULL,
-                    rollback_success INTEGER DEFAULT 1,
-                    repaired_successfully INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
+        conn = self._get_conn()
+        try:
+            with conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS task_healing_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        task_id TEXT NOT NULL,
+                        attempt INTEGER NOT NULL,
+                        error_trace TEXT NOT NULL,
+                        action_taken TEXT NOT NULL,
+                        rollback_success INTEGER DEFAULT 1,
+                        repaired_successfully INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.commit()
+        finally:
+            conn.close()
 
     def rollback_git_changes(self, file_path: Optional[str] = None) -> Dict[str, Any]:
         """Setzt nicht committete Aenderungen GENAU EINER validierten Datei zurueck.
@@ -179,20 +183,24 @@ Antworte strukturiert mit der korrigierten Fassung."""
 
         # 3. Loggen
         action_desc = f"Rollback {affected_file}" if rollback_applied else ("Rollback übersprungen (keine Datei)" if not affected_file else f"Rollback {affected_file} ({rollback_res.get('status')})")
-        with self._get_conn() as conn:
-            conn.execute("""
-                INSERT INTO task_healing_logs 
-                (task_id, attempt, error_trace, action_taken, rollback_success, repaired_successfully, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (
-                task_id,
-                attempt,
-                error_output[:1000],
-                f"{action_desc} + Reflection Prompt",
-                1 if rollback_ok else 0,
-                1 if repaired_ok else 0
-            ))
-            conn.commit()
+        conn = self._get_conn()
+        try:
+            with conn:
+                conn.execute("""
+                    INSERT INTO task_healing_logs 
+                    (task_id, attempt, error_trace, action_taken, rollback_success, repaired_successfully, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    task_id,
+                    attempt,
+                    error_output[:1000],
+                    f"{action_desc} + Reflection Prompt",
+                    1 if rollback_ok else 0,
+                    1 if repaired_ok else 0
+                ))
+                conn.commit()
+        finally:
+            conn.close()
 
         # 4. Wenn max_attempts erreicht und nicht repariert -> Task auf 'blocked' setzen
         if attempt >= max_attempts and not repaired_ok:
@@ -221,12 +229,15 @@ Antworte strukturiert mit der korrigierten Fassung."""
 
     def get_healing_logs(self, limit: int = 25) -> List[Dict[str, Any]]:
         """Liefert die Historie der Selbstheilungs-Versuche."""
+        conn = self._get_conn()
         try:
-            with self._get_conn() as conn:
+            with conn:
                 cur = conn.cursor()
                 cur.execute("SELECT * FROM task_healing_logs ORDER BY id DESC LIMIT ?", (limit,))
                 return [dict(r) for r in cur.fetchall()]
         except Exception:
             return []
+        finally:
+            conn.close()
 
 task_self_healer = TaskSelfHealer()

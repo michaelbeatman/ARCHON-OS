@@ -29,19 +29,23 @@ class EventMesh:
         return conn
 
     def _init_db(self):
-        with self._get_conn() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS event_mesh_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    channel TEXT NOT NULL,
-                    event_type TEXT NOT NULL,
-                    direction TEXT NOT NULL,
-                    payload_json TEXT NOT NULL,
-                    status TEXT DEFAULT 'processed',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
+        conn = self._get_conn()
+        try:
+            with conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS event_mesh_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        channel TEXT NOT NULL,
+                        event_type TEXT NOT NULL,
+                        direction TEXT NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        status TEXT DEFAULT 'processed',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.commit()
+        finally:
+            conn.close()
 
     def ingest_inbound_event(self, channel: str, event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Nimmt ein externes Webhook-Ereignis (z. B. von n8n oder GitHub) entgegen."""
@@ -49,14 +53,18 @@ class EventMesh:
         payload_str = json.dumps(payload, ensure_ascii=False)
 
         # 1. Protokollieren
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO event_mesh_log (channel, event_type, direction, payload_json, status, created_at)
-                VALUES (?, ?, 'inbound', ?, 'processed', CURRENT_TIMESTAMP)
-            """, (channel, event_type, payload_str))
-            conn.commit()
-            evt_id = cur.lastrowid
+        conn = self._get_conn()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO event_mesh_log (channel, event_type, direction, payload_json, status, created_at)
+                    VALUES (?, ?, 'inbound', ?, 'processed', CURRENT_TIMESTAMP)
+                """, (channel, event_type, payload_str))
+                conn.commit()
+                evt_id = cur.lastrowid
+        finally:
+            conn.close()
 
         # 2. Wenn es ein n8n-Trigger ist -> Aufgabe in Kanban erstellen
         task_id = None
@@ -105,12 +113,16 @@ class EventMesh:
             res_body = str(e)
             status_str = "delivery_failed"
 
-        with self._get_conn() as conn:
-            conn.execute("""
-                INSERT INTO event_mesh_log (channel, event_type, direction, payload_json, status, created_at)
-                VALUES (?, ?, 'outbound', ?, ?, CURRENT_TIMESTAMP)
-            """, (webhook_url, event_type, payload_str, status_str))
-            conn.commit()
+        conn = self._get_conn()
+        try:
+            with conn:
+                conn.execute("""
+                    INSERT INTO event_mesh_log (channel, event_type, direction, payload_json, status, created_at)
+                    VALUES (?, ?, 'outbound', ?, ?, CURRENT_TIMESTAMP)
+                """, (webhook_url, event_type, payload_str, status_str))
+                conn.commit()
+        finally:
+            conn.close()
 
         return {
             "status": status_str,
@@ -180,17 +192,21 @@ class EventMesh:
         }
 
     def list_events(self, limit: int = 50) -> List[Dict[str, Any]]:
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM event_mesh_log ORDER BY id DESC LIMIT ?", (limit,))
-            res = []
-            for r in cur.fetchall():
-                d = dict(r)
-                try:
-                    d["payload"] = json.loads(d["payload_json"])
-                except Exception:
-                    d["payload"] = {}
-                res.append(d)
-            return res
+        conn = self._get_conn()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM event_mesh_log ORDER BY id DESC LIMIT ?", (limit,))
+                res = []
+                for r in cur.fetchall():
+                    d = dict(r)
+                    try:
+                        d["payload"] = json.loads(d["payload_json"])
+                    except Exception:
+                        d["payload"] = {}
+                    res.append(d)
+                return res
+        finally:
+            conn.close()
 
 event_mesh = EventMesh()

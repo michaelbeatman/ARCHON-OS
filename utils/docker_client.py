@@ -79,7 +79,7 @@ _DEFAULT_TIMEOUT = 1.0
 # ~10 s auf SIGTERM/SIGKILL (gemessen: Aktion wirkt, Client meldete vorher
 # "Timeout nach 0 Bytes" beim 1-s-Default). 20 s = Stop-Frist + Startzeit.
 _ACTION_TIMEOUT = 20.0
-_ACTION_TIMEOUTS = {"start": _ACTION_TIMEOUT, "stop": _ACTION_TIMEOUT}
+_ACTION_TIMEOUTS = {"start": _ACTION_TIMEOUT, "stop": _ACTION_TIMEOUT, "restart": _ACTION_TIMEOUT}
 
 # Eigener Transport-Schalter des Admin-Clients (Etappe 3). Bewusst NICHT
 # DOCKER_HOST: das ist global und wuerde main.py, archon/routers/* und

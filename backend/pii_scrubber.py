@@ -8,6 +8,8 @@ die Originalwerte nach Erhalt der LLM-Antwort lokal wieder ein (Re-Hydration).
 
 import re
 import uuid
+import threading
+from collections import OrderedDict
 from typing import Dict, Any, Tuple
 
 
@@ -31,8 +33,18 @@ PHONE_REGEX = re.compile(r"(?:\+\d{1,3}[\s\-]?|0\d{2,4}[\s\-/]?)\d{3,4}[\s\-]?\d
 
 
 class BidirectionalPIIScrubber:
-    def __init__(self):
-        self._sessions: Dict[str, Dict[str, str]] = {}
+    def __init__(self, max_sessions: int = 500):
+        self.max_sessions = max_sessions
+        self._sessions: OrderedDict[str, Dict[str, str]] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def clear_sessions(self) -> None:
+        with self._lock:
+            self._sessions.clear()
+
+    def evict_session(self, session_id: str) -> None:
+        with self._lock:
+            self._sessions.pop(session_id, None)
 
     def scrub_text(self, text: str, session_id: str = "") -> Dict[str, Any]:
         cfg = _get_cfg()
@@ -66,7 +78,10 @@ class BidirectionalPIIScrubber:
         if bool(cfg.get("scrub_phones", True)):
             working = _replace_matches(PHONE_REGEX, "PHONE", working)
 
-        self._sessions[sid] = vault
+        with self._lock:
+            while len(self._sessions) >= self.max_sessions:
+                self._sessions.popitem(last=False)
+            self._sessions[sid] = vault
         return {
             "enabled": True,
             "session_id": sid,
@@ -80,7 +95,8 @@ class BidirectionalPIIScrubber:
         if not bool(cfg.get("enabled", True)) or not bool(cfg.get("auto_rehydrate_response", True)):
             return {"rehydrated": False, "text": response_text}
 
-        vault = custom_vault if custom_vault is not None else self._sessions.get(session_id, {})
+        with self._lock:
+            vault = custom_vault if custom_vault is not None else dict(self._sessions.get(session_id, {}))
         restored = response_text or ""
         restored_count = 0
         for placeholder, real_val in vault.items():

@@ -5853,254 +5853,30 @@ app.include_router(_hermes_config_router)
 from archon.routers.context_help import router as _context_help_router, HELP_CONTEXT_DATA
 app.include_router(_context_help_router)
 
-# --- MEILENSTEIN 4: MULTI-USER & RBAC ENDPOINTS ---
+# --- MEILENSTEIN 4: MULTI-USER & RBAC ENDPOINTS (ausgelagert nach archon.routers.auth) ---
 from backend.auth_service import auth_service
-
-def get_current_user_from_request(request: Request) -> dict:
-    """Ermittelt die Identitaet aus der Session.
-
-    Kandidaten in dieser Reihenfolge: ``Authorization``-Header,
-    ``X-Archon-Session``, ``archon_session``-Cookie. Der Cookie wird auch dann
-    geprueft, wenn ein ``Authorization``-Header vorhanden ist, der **keine**
-    Archon-Session traegt — sonst verliert eine angemeldete Sitzung ihre Rolle,
-    sobald ein Client einen fremden Bearer-Header mitsendet (etwa das
-    eingebettete Hermes-Dashboard). Akzeptiert wird ausschliesslich eine
-    gueltige Archon-Session; an den Rechten aendert das nichts.
-    """
-    candidates: List[str] = []
-    auth_header = request.headers.get("authorization", "")
-    if auth_header.lower().startswith("bearer "):
-        candidates.append(auth_header[7:].strip())
-    header_session = request.headers.get("x-archon-session", "").strip()
-    if header_session:
-        candidates.append(header_session)
-    cookie_session = (request.cookies.get("archon_session", "") or "").strip()
-    if cookie_session:
-        candidates.append(cookie_session)
-
-    is_enabled = auth_service.is_auth_enabled()
-
-    for candidate in candidates:
-        if not candidate:
-            continue
-        try:
-            user = auth_service.verify_session(candidate)
-        except Exception:
-            user = None
-        if user:
-            user["auth_enabled"] = is_enabled
-            return user
-
-    # Multi-User-Modus: ohne gültige Session gibt es KEINE Admin-Rechte.
-    if is_enabled:
-        if _request_has_service_token(request):
-            return {
-                "id": "usr_service",
-                "username": "service",
-                "display_name": "Interner Dienst",
-                "role": "admin",
-                "permissions": ["service"],
-                "is_service": True,
-                "auth_enabled": True,
-            }
-        return {
-            "id": "usr_anonymous",
-            "username": "anonymous",
-            "display_name": "Nicht angemeldet",
-            "role": "anonymous",
-            "permissions": [],
-            "is_fallback": False,
-            "auth_enabled": True,
-        }
-
-    fb = auth_service.get_fallback_admin()
-    fb["auth_enabled"] = is_enabled
-    return fb
-
-
-def require_admin(request: Request) -> Dict[str, Any]:
-    """Rollenzaun fuer destruktive Admin-Routen (RBAC-Pilot, 6 Routen).
-
-    Referenz war die Pruefung in `api_auth_toggle` (main.py:7296): Rolle ermitteln,
-    bei `!= "admin"` mit 403 abbrechen. Diese Fassung ist derselbe Code als Helfer,
-    damit sechs Routen ihn teilen statt ihn sechsmal zu kopieren.
-
-    Bewusst KEIN `Depends()`: die Pruefung steht sichtbar als erste Anweisung im
-    Handler, die Handler-Signatur bleibt fuer FastAPI unveraendert und die
-    OpenAPI-Paritaet (585 Pfade / 861 Operationen) beruehrt das gar nicht.
-
-    Durchlaessig (kein Aussperren bestehender Zugaenge):
-      * ``auth.enabled = false``  -> `get_fallback_admin()` liefert Rolle ``admin``
-      * ``X-Archon-Service-Token`` -> Rolle ``admin`` (interne Automaten, `is_service`)
-      * Session mit Rolle ``admin``
-    Gesperrt: ``operator``, ``viewer``, ``anonymous`` -> 403.
-    """
-    user = get_current_user_from_request(request)
-    if user.get("role") != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Nur Administratoren duerfen diese Aktion ausfuehren "
-                   f"(erkannte Rolle: {user.get('role') or 'unbekannt'}).",
-        )
-    return user
-
-@app.get("/api/auth/status")
-def api_auth_status():
-    return {
-        "status": "success",
-        "auth_enabled": auth_service.is_auth_enabled()
-    }
-
-@app.post("/api/auth/toggle")
-def api_auth_toggle(request: Request, payload: dict = Body(...)):
-    curr = get_current_user_from_request(request)
-    if curr.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen den Authentifizierungsmodus ändern.")
-    enabled = bool(payload.get("enabled", False))
-    s = _load_json(SETTINGS_FILE, {})
-    if "auth" not in s or not isinstance(s["auth"], dict):
-        s["auth"] = {}
-    s["auth"]["enabled"] = enabled
-    s["auth"]["mode"] = "multi_user" if enabled else "single_user"
-    _save_json(SETTINGS_FILE, s)
-
-    alt_paths = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json"),
-        "/app/settings.json"
-    ]
-    for alt in alt_paths:
-        try:
-            if os.path.exists(alt) and os.path.abspath(alt) != os.path.abspath(SETTINGS_FILE):
-                alt_s = _load_json(alt, {})
-                if "auth" not in alt_s or not isinstance(alt_s["auth"], dict):
-                    alt_s["auth"] = {}
-                alt_s["auth"]["enabled"] = enabled
-                alt_s["auth"]["mode"] = s["auth"]["mode"]
-                _save_json(alt, alt_s)
-        except Exception:
-            pass
-    return {
-        "status": "success",
-        "auth_enabled": enabled,
-        "mode": s["auth"]["mode"],
-        "message": "Multi-User-Modus aktiviert." if enabled else "Einzelplatz-Modus aktiviert (keine Anmeldung erforderlich)."
-    }
-
-@app.get("/api/auth/me")
-def api_auth_me(request: Request):
-    user = get_current_user_from_request(request)
-    return {
-        "status": "success",
-        "user": user,
-        "auth_enabled": auth_service.is_auth_enabled()
-    }
-
-@app.post("/api/auth/login")
-def api_auth_login(request: Request, payload: dict = Body(...)):
-    username = payload.get("username", "")
-    password = payload.get("password", "")
-    client_ip = request.client.host if request.client else ""
-    user_agent = request.headers.get("user-agent", "")
-    session = auth_service.authenticate(username, password, ip_address=client_ip, user_agent=user_agent)
-    if not session:
-        raise HTTPException(status_code=401, detail="Ungültiger Benutzername oder falsches Passwort.")
-    res = JSONResponse(content={"status": "success", **session})
-    res.set_cookie(key="archon_session", value=session["token"], max_age=86400 * 30, httponly=True, samesite="lax")
-    return res
-
-@app.post("/api/auth/logout")
-def api_auth_logout(request: Request):
-    token = request.cookies.get("archon_session") or request.headers.get("x-archon-session", "")
-    if token:
-        auth_service.logout(token)
-    res = JSONResponse(content={"status": "success", "message": "Erfolgreich abgemeldet."})
-    res.delete_cookie(key="archon_session")
-    return res
-
-@app.get("/api/auth/users")
-def api_auth_list_users(request: Request):
-    curr = get_current_user_from_request(request)
-    if curr.get("role") not in ("admin", "operator"):
-        return {"status": "success", "users": [curr]}
-    return {"status": "success", "users": auth_service.list_users()}
-
-@app.post("/api/auth/users")
-def api_auth_create_user(request: Request, payload: dict = Body(...)):
-    curr = get_current_user_from_request(request)
-    if curr.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen neue Benutzer anlegen.")
-    try:
-        new_u = auth_service.create_user(
-            username=payload.get("username"),
-            password=payload.get("password"),
-            role=payload.get("role", "operator"),
-            display_name=payload.get("display_name", ""),
-            email=payload.get("email", "")
-        )
-        return {"status": "success", "user": new_u}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.patch("/api/auth/users/{user_id}")
-def api_auth_update_user(user_id: str, request: Request, payload: dict = Body(...)):
-    curr = get_current_user_from_request(request)
-    if curr.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Benutzerrollen anpassen.")
-    try:
-        updated = auth_service.update_user(
-            user_id=user_id,
-            role=payload.get("role"),
-            display_name=payload.get("display_name"),
-            email=payload.get("email"),
-            is_active=payload.get("is_active")
-        )
-        return {"status": "success", "user": updated}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/api/auth/change-password")
-def api_auth_change_password(request: Request, payload: dict = Body(...)):
-    """Passwort ändern: eigener Account (mit aktuellem Passwort) oder als Admin für andere."""
-    curr = get_current_user_from_request(request)
-    if not curr or curr.get("id") in (None, "", "usr_anonymous"):
-        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
-
-    target_id = str(payload.get("user_id") or curr.get("id")).strip()
-    new_pw = str(payload.get("new_password") or "")
-    if len(new_pw) < 8:
-        raise HTTPException(status_code=400, detail="Das neue Passwort muss mindestens 8 Zeichen haben.")
-
-    is_self = (target_id == curr.get("id"))
-    if is_self:
-        current_pw = str(payload.get("current_password") or "")
-        if not auth_service.verify_password(curr.get("username", ""), current_pw):
-            raise HTTPException(status_code=400, detail="Das aktuelle Passwort ist falsch.")
-    elif curr.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen fremde Passwörter ändern.")
-
-    try:
-        ok = auth_service.change_password(target_id, new_pw)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    if not ok:
-        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden.")
-
-    return {
-        "status": "success",
-        "message": "Passwort geändert.",
-        "relogin_required": is_self,
-    }
-
-@app.delete("/api/auth/users/{user_id}")
-def api_auth_delete_user(user_id: str, request: Request):
-    curr = get_current_user_from_request(request)
-    if curr.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Benutzer löschen.")
-    try:
-        auth_service.delete_user(user_id)
-        return {"status": "success", "message": "Benutzer gelöscht."}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+from archon.routers.auth import (
+    router as _auth_router,
+    configure as _auth_configure,
+    get_current_user_from_request,
+    require_admin,
+    api_auth_status,
+    api_auth_toggle,
+    api_auth_me,
+    api_auth_login,
+    api_auth_logout,
+    api_auth_list_users,
+    api_auth_create_user,
+    api_auth_update_user,
+    api_auth_change_password,
+    api_auth_delete_user,
+)
+_auth_configure(
+    _load_json=_load_json,
+    _save_json=_save_json,
+    _request_has_service_token=_request_has_service_token,
+)
+app.include_router(_auth_router)
 
 
 _PAPERCLIP_AGENTS_CACHE = None

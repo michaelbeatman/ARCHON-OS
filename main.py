@@ -3671,522 +3671,64 @@ from archon.routers.inbox_tools import (
 app.include_router(_inbox_tools_router)
 
 
-# --- NEUE AGENTIC OS MECHANIKEN (BATCH 4: AUDIT, SNAPSHOTS, CONSENSUS, BUDGET & TELEGRAM) ---
-
-@app.get("/api/snapshots")
-def api_list_snapshots(limit: int = 50):
-    from backend.snapshot_manager import snapshot_manager
-    return {"status": "success", "snapshots": snapshot_manager.list_snapshots(limit=limit)}
-
-@app.post("/api/snapshots/{snapshot_id}/restore")
-def api_restore_snapshot(request: Request, snapshot_id: str):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.snapshot_manager import snapshot_manager
-    return snapshot_manager.restore_snapshot(snapshot_id)
-
-@app.get("/api/audit/logs")
-def api_list_audit_logs(limit: int = 50):
-    from backend.audit_log import chained_audit_log
-    return {"status": "success", "logs": chained_audit_log.list_events(limit=limit)}
-
-@app.get("/api/audit/verify")
-def api_verify_audit_log():
-    from backend.audit_log import chained_audit_log
-    return chained_audit_log.verify_integrity()
-
-@app.post("/api/tasks/review-consensus")
-async def api_review_task_consensus(payload: Dict = Body(...)):
-    from backend.consensus_gate import review_task_output
-    task_id = payload.get("task_id", "task-gen")
-    task_title = payload.get("title", "")
-    task_output = payload.get("output", "")
-    worker = payload.get("worker_agent", "hermes-coder")
-    priority = int(payload.get("priority", 3))
-    return await review_task_output(task_id, task_title, task_output, worker_agent=worker, priority=priority)
-
-@app.post("/api/tasks/{task_id}/budget/check")
-def api_check_task_budget(task_id: str, payload: Dict = Body(...)):
-    from backend.agent_router import check_task_budget
-    return check_task_budget(
-        task_id=task_id,
-        cost_usd=payload.get("cost_usd", 0.0),
-        budget_usd=payload.get("budget_usd", 0.25),
-        task_title=payload.get("title", "")
-    )
-
-
-# --- NEUE AGENTIC OS MECHANIKEN (BATCH 5: RAG-BRIDGE, DEADLOCKS, DIFFS, SKILL-SYNTHESIS, EVENT-MESH) ---
-
-@app.get("/api/rag/query")
-def api_query_rag(q: str = Query(..., description="Suchbegriff für das AnythingLLM Docker-RAG")):
-    from backend.rag_bridge import rag_bridge
-    return rag_bridge.query_vault_rag(q)
-
-
-@app.post("/api/diff/preview")
-def api_diff_preview(request: Request, payload: Dict = Body(...)):
-    # F25 (Security-Review): Der Handler las ``file_path`` ohne jede Pruefung
-    # und ohne Rollenzaun — damit liest jede eingeloggte Rolle beliebige
-    # Dateien des Containers (u. a. ``.env.archon``, Service-Token) und
-    # bekommt deren Inhalt als Diff geliefert.
-    # Jetzt: Admin-Zaun + Jail auf den Projekt-Wurzelbaum.
-    require_admin_or_503(request)
-    from backend.diff_engine import compute_file_diff
-
-    raw_path = str(payload.get("file_path", "")).strip()
-    if not raw_path:
-        raise HTTPException(status_code=400, detail="Gültiger 'file_path' erforderlich.")
-
-    # Der Diff dient dem Bearbeiten von Projektdateien — erlaubt ist der
-    # Repo-Wurzelbaum (inkl. data/, static/), nicht das Systemverzeichnis.
-    repo_root = os.path.dirname(os.path.abspath(__file__))
-    try:
-        real_path = safe_path_within(
-            raw_path, [repo_root], must_exist=True, allow_dirs=False,
-        )
-    except PathJailError as e:
-        raise HTTPException(status_code=403, detail=f"Pfad nicht erlaubt: {e}")
-
-    return compute_file_diff(
-        file_path=real_path,
-        new_content=payload.get("new_content", ""),
-        context_lines=int(payload.get("context_lines", 3))
-    )
-
-@app.get("/api/skills/proposals")
-def api_list_skill_proposals(status: Optional[str] = None):
-    from backend.skill_synthesizer import skill_synthesizer
-    return {"status": "success", "proposals": skill_synthesizer.list_proposals(status=status)}
-
-@app.post("/api/skills/proposals/{proposal_id}/approve")
-def api_approve_skill_proposal(request: Request, proposal_id: str):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.skill_synthesizer import skill_synthesizer
-    return skill_synthesizer.approve_skill(proposal_id)
-
-@app.post("/api/events/inbound/{channel}")
-def api_ingest_inbound_event(channel: str, payload: Dict = Body(...)):
-    from backend.event_mesh import event_mesh
-    return event_mesh.ingest_inbound_event(
-        channel=channel,
-        event_type=payload.get("event_type", "generic_event"),
-        payload=payload
-    )
-
-@app.get("/api/events/history")
-def api_list_event_history(limit: int = 50):
-    from backend.event_mesh import event_mesh
-    return {"status": "success", "events": event_mesh.list_events(limit=limit)}
-
-
-# --- NEUE AGENTIC OS MECHANIKEN (BATCH 6: THROTTLE, BENCHMARK, VISION, HYGIENE, HANDOFF) ---
-
-@app.get("/api/concurrency/status")
-def api_get_concurrency_status():
-    from backend.concurrency_throttle import concurrency_throttle
-    return {"status": "success", "concurrency": concurrency_throttle.get_status()}
-
-@app.post("/api/concurrency/config")
-def api_save_concurrency_config(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.concurrency_throttle import save_concurrency_config, get_concurrency_config
-    cfg = get_concurrency_config()
-    cfg.update(payload)
-    ok = save_concurrency_config(cfg)
-    return {"status": "success" if ok else "error", "concurrency": cfg}
-
-
-@app.post("/api/vision/analyze")
-def api_analyze_vision(payload: Dict = Body(...)):
-    from backend.vision_pipeline import analyze_image_file
-    return analyze_image_file(
-        image_path=payload.get("image_path", ""),
-        focus_prompt=payload.get("focus_prompt", "Beschreibe den Inhalt dieses Screenshots detailliert.")
-    )
-
-
-
-@app.post("/api/handoff/create")
-def api_create_handoff(payload: Dict = Body(...)):
-    from backend.handoff_desk import handoff_desk
-    return handoff_desk.create_handoff(
-        task_id=payload.get("task_id", ""),
-        from_agent=payload.get("from_agent", ""),
-        to_agent=payload.get("to_agent", ""),
-        deliverables=payload.get("deliverables", {}),
-        acceptance_criteria=payload.get("acceptance_criteria", "")
-    )
-
-@app.post("/api/handoff/{handoff_id}/accept")
-def api_accept_handoff(handoff_id: str, payload: Dict = Body(...)):
-    from backend.handoff_desk import handoff_desk
-    return handoff_desk.accept_handoff(
-        handoff_id=handoff_id,
-        receiving_agent=payload.get("receiving_agent", "")
-    )
-
-
-# --- NEUE AGENTIC OS MECHANIKEN (BATCH 7: FLEET SELF-HEALING, DB-BACKUP, SECRET-MASKING, NOTIFICATION-HUB) ---
-
-@app.post("/api/fleet/heal/{service_name}")
-def api_heal_service(request: Request, service_name: str):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.fleet_self_healing import restart_service_container
-    return restart_service_container(service_name)
-
-@app.get("/api/fleet/health-check")
-def api_fleet_health_check():
-    from backend.fleet_self_healing import check_fleet_and_heal
-    return check_fleet_and_heal()
-
-
-@app.post("/api/notifications/dispatch")
-def api_dispatch_notification(payload: Dict = Body(...)):
-    from backend.notification_hub import notification_hub
-    return notification_hub.dispatch_notification(
-        title=payload.get("title", "System-Benachrichtigung"),
-        message=payload.get("message", ""),
-        severity=payload.get("severity", "INFO"),
-        category=payload.get("category", "system")
-    )
-
-@app.get("/api/notifications/recent")
-def api_list_recent_notifications(limit: int = 50):
-    from backend.notification_hub import notification_hub
-    return {"status": "success", "notifications": notification_hub.list_recent(limit=limit)}
-
-
-# --- NEUE AGENTIC OS MECHANIKEN (BATCH 8: COST-ESTIMATOR, DB-OPTIMIZER, HEALTH-SCORE, DOSSIER) ---
-
-
-# --- NEUE AGENTIC OS MECHANIKEN (BATCH 9: TIME-TRAVEL DEBUGGER, COUNCIL DEBATE, TASK SELF-HEALING & DIR WATCHER) ---
-
-@app.get("/api/traces/{task_id}")
-def api_get_task_trace(task_id: str):
-    from backend.time_travel_debugger import time_travel_debugger
-    return {"status": "success", "task_id": task_id, "trace": time_travel_debugger.get_task_trace(task_id)}
-
-@app.post("/api/traces/{task_id}/fork")
-def api_fork_task_trace(task_id: str, payload: Dict = Body(...)):
-    from backend.time_travel_debugger import time_travel_debugger
-    return time_travel_debugger.fork_execution(
-        task_id=task_id,
-        from_step=int(payload.get("from_step", 1)),
-        new_prompt=payload.get("new_prompt"),
-        new_model=payload.get("new_model")
-    )
-
-@app.post("/api/traces/{task_id}/rollback")
-def api_rollback_task_trace(task_id: str, payload: Dict = Body(...)):
-    from backend.time_travel_debugger import time_travel_debugger
-    return time_travel_debugger.rollback_to_step(
-        task_id=task_id,
-        to_step=int(payload.get("to_step", 0))
-    )
-
-
-@app.post("/api/consensus/council-vote")
-async def api_run_council_vote(payload: Dict = Body(...)):
-    from backend.consensus_gate import run_tri_agent_council
-    return await run_tri_agent_council(
-        task_id=payload.get("task_id", "council-task"),
-        task_title=payload.get("title", ""),
-        task_output=payload.get("output", ""),
-        model=payload.get("model")
-    )
-
-@app.get("/api/consensus/history")
-def api_get_consensus_history(limit: int = 25):
-    from backend.consensus_gate import get_consensus_history
-    return {"status": "success", "consensus_history": get_consensus_history(limit=limit)}
-
-@app.post("/api/healing/attempt")
-async def api_attempt_task_healing(request: Request, payload: Dict = Body(...)):
-    # F2 (Security-Review): Die Route hatte keinen Rollenzaun — jede
-    # eingeloggte Rolle konnte den Selbstheilungspfad ausloesen (der
-    # Shell-Injection-Teil ist ueber validate_affected_file geschlossen,
-    # der Autorisierungs-Teil nicht).
-    require_admin_or_503(request)
-    from backend.task_self_healer import task_self_healer
-    return await task_self_healer.attempt_self_healing(
-        task_id=payload.get("task_id", "heal-task"),
-        task_title=payload.get("title", "Autonome Fehlerbehebung"),
-        failed_code=payload.get("failed_code", ""),
-        error_output=payload.get("error_output", ""),
-        worker_agent=payload.get("worker_agent", "hermes-coder"),
-        affected_file=payload.get("affected_file"),
-        attempt=int(payload.get("attempt", 1)),
-        max_attempts=int(payload["max_attempts"]) if "max_attempts" in payload else None,
-        model=payload.get("model")
-    )
-
-@app.get("/api/healing/logs")
-def api_get_healing_logs(limit: int = 25):
-    from backend.task_self_healer import task_self_healer
-    return {"status": "success", "logs": task_self_healer.get_healing_logs(limit=limit)}
-
-@app.post("/api/events/scan-directory")
-def api_scan_inbox_directory(payload: Dict = Body(default={})):
-    from backend.event_mesh import event_mesh
-    return event_mesh.scan_inbox_directory(inbox_dir=payload.get("inbox_dir"))
-
-
-# --- NEUE AGENTIC OS MECHANIKEN (BATCH 10: SANDBOX, MEMORY CONSOLIDATION, VISUAL BROWSER, WAR-ROOM & SLA CONTRACTS) ---
-
-@app.post("/api/sandbox/execute")
-def api_execute_sandbox(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC-Pilot: Codeausfuehrung ist Admin-Sache
-    from backend.ephemeral_sandbox import ephemeral_sandbox
-    return ephemeral_sandbox.execute_in_sandbox(
-        code=payload.get("code", ""),
-        language=payload.get("language", "python"),
-        memory_limit_mb=int(payload["memory_limit_mb"]) if "memory_limit_mb" in payload else None,
-        cpu_limit=float(payload["cpu_limit"]) if "cpu_limit" in payload else None,
-        timeout_seconds=int(payload["timeout_seconds"]) if "timeout_seconds" in payload else None,
-        network_enabled=bool(payload["network_enabled"]) if "network_enabled" in payload else None
-    )
-
-@app.get("/api/settings/memory-consolidation")
-def api_get_memory_consolidation_settings():
-    from backend.memory_consolidator import get_consolidation_config
-    return {"status": "success", "config": get_consolidation_config()}
-
-@app.post("/api/settings/memory-consolidation")
-def api_save_memory_consolidation_settings(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.memory_consolidator import get_consolidation_config, save_consolidation_config
-    cfg = get_consolidation_config()
-    cfg.update(payload)
-    ok = save_consolidation_config(cfg)
-    return {"status": "success" if ok else "error", "config": cfg}
-
-
-@app.post("/api/browser/browse-and-capture")
-def api_browse_and_capture(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.visual_web_agent import visual_web_agent
-    return visual_web_agent.browse_and_capture(
-        task_id=payload.get("task_id", f"vis-{datetime.datetime.now().strftime('%H%M%S')}"),
-        target_url=payload.get("url", "https://example.com"),
-        actions=payload.get("actions"),
-        extract_selector=payload.get("extract_selector")
-    )
-
-@app.post("/api/simulation/war-room")
-async def api_run_war_room(payload: Dict = Body(...)):
-    from backend.war_room_simulator import run_war_room_simulation
-    return await run_war_room_simulation(
-        topic=payload.get("topic", "System-Update"),
-        proposal_text=payload.get("proposal", ""),
-        model=payload.get("model")
-    )
-
-@app.get("/api/simulation/war-room/history")
-def api_get_war_room_history(limit: int = 20):
-    from backend.war_room_simulator import get_war_room_history
-    return {"status": "success", "history": get_war_room_history(limit=limit)}
-
-
-# --- ZENTRALE KONFIGURATION ALLER 10 AUTONOMIE- & RESILIENZ-GRUPPEN (SETTINGS-PAKET A & B) ---
-
-@app.get("/api/settings/model-routing")
-def api_get_model_routing():
-    from backend.model_routing import load_config
-    return {"status": "success", "config": load_config()}
-
-
-@app.post("/api/settings/model-routing")
-def api_save_model_routing(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.model_routing import save_config
-    try:
-        cfg = save_config(payload)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return {"status": "success", "config": cfg}
-
-
-@app.get("/api/settings/model-routing/resolve")
-def api_resolve_model_routing(task: str = Query("")):
-    from backend.model_routing import resolve, is_enabled
-    return {"status": "success", "enabled": is_enabled(), "route": resolve(task)}
-
-
-@app.get("/api/settings/autonomy-modules")
-def api_get_autonomy_modules_settings():
-    from backend.autonomy_settings import load_all_settings
-    return {"status": "success", "settings": load_all_settings()}
-
-@app.post("/api/settings/autonomy-modules")
-def api_save_autonomy_modules_settings(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.autonomy_settings import save_autonomy_settings
-    updated = save_autonomy_settings(payload)
-    # BIDIREKTIONALE SYNCHRONISATION: Archon Autonomie-Module (settings.json) -> Hermes (config.yaml)
-    try:
-        import yaml
-        active_path, _ = _get_hermes_config_paths()
-        if active_path and os.path.exists(active_path):
-            with open(active_path, "r", encoding="utf-8") as f:
-                hdata = yaml.safe_load(f.read()) or {}
-            if not isinstance(hdata, dict):
-                hdata = {}
-            conc = payload.get("concurrency", {})
-            if isinstance(conc, dict):
-                if "max_concurrent_agents" in conc:
-                    hdata.setdefault("delegation", {})["max_concurrent_children"] = int(conc["max_concurrent_agents"])
-                if "queue_timeout_seconds" in conc:
-                    hdata.setdefault("agent", {})["task_timeout_seconds"] = int(conc["queue_timeout_seconds"])
-            cb = payload.get("circuit_breaker", {})
-            if isinstance(cb, dict):
-                tlg = hdata.setdefault("tool_loop_guardrails", {})
-                if "loop_detection_enabled" in cb:
-                    tlg["warnings_enabled"] = bool(cb["loop_detection_enabled"])
-                if "max_identical_turns" in cb:
-                    tlg.setdefault("hard_stop_after", {})["exact_failure"] = int(cb["max_identical_turns"])
-                if "max_steps_per_task" in cb:
-                    hdata.setdefault("agent", {})["max_turns"] = int(cb["max_steps_per_task"])
-            sb = payload.get("ephemeral_sandbox", {})
-            if isinstance(sb, dict):
-                term = hdata.setdefault("terminal", {})
-                if "cpu_limit" in sb:
-                    term["container_cpu"] = float(sb["cpu_limit"])
-                if "timeout_seconds" in sb:
-                    term["timeout"] = int(sb["timeout_seconds"])
-            cc = payload.get("context_compactor", {})
-            if isinstance(cc, dict):
-                comp = hdata.setdefault("compression", {})
-                if "enabled" in cc:
-                    comp["enabled"] = bool(cc["enabled"])
-                if "keep_recent_turns" in cc:
-                    comp["protect_last_n"] = int(cc["keep_recent_turns"])
-            cg = payload.get("consensus_gate", {})
-            if isinstance(cg, dict) and "enabled" in cg:
-                hdata.setdefault("moa", {})["enabled"] = bool(cg["enabled"])
-            with open(active_path, "w", encoding="utf-8") as f:
-                yaml.dump(hdata, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    except Exception as e_sync:
-        logger.warning(f"[Archon -> Hermes Sync] {e_sync}")
-    return {"status": "success", "settings": updated}
-
-
-# --- TEIL 2 / PAKET 1 (FEATURES 1–5): PERFORMANCE CORE, SKALIERUNG & TOKEN-EFFIZIENZ ---
-
-# Feature 1: Semantisches Prompt- & Response-Caching
-@app.post("/api/cache/semantic-lookup")
-def api_semantic_cache_lookup(payload: Dict = Body(...)):
-    from backend.semantic_cache import semantic_cache_manager
-    return semantic_cache_manager.lookup(
-        prompt=payload.get("prompt", ""),
-        model=payload.get("model", "any"),
-        threshold_override=payload.get("similarity_threshold")
-    )
-
-@app.post("/api/cache/semantic-store")
-def api_semantic_cache_store(payload: Dict = Body(...)):
-    from backend.semantic_cache import semantic_cache_manager
-    return semantic_cache_manager.store(
-        prompt=payload.get("prompt", ""),
-        response=payload.get("response", ""),
-        model=payload.get("model", "any")
-    )
-
-@app.get("/api/cache/semantic-stats")
-def api_semantic_cache_stats():
-    from backend.semantic_cache import semantic_cache_manager
-    return semantic_cache_manager.get_stats()
-
-@app.delete("/api/cache/semantic-clear")
-def api_semantic_cache_clear():
-    from backend.semantic_cache import semantic_cache_manager
-    return semantic_cache_manager.clear()
-
-
-# Feature 2: Paralleles Map-Reduce Sub-Tasking (Fan-Out / Fan-In)
-
-
-# Feature 3: Speculative Fast-Routing & Latenz-Hedging
-
-
-# Feature 4: Dynamisches Context-Compaction & Hierarchisches Summarizing
-
-
-# Feature 5: SQLite Connection-Pool & Async Write-Batching
-
-
-# --- TEIL 2 / PAKET 2 (FEATURES 6–10): MODERNE GEDÄCHTNIS- & RAG-ARCHITEKTUR (GRAPH & HYBRID MEMORY) ---
-
-# Feature 6: Hybrid-Search (BM25 SQLite FTS5 + Vektor-RAG + Reciprocal Rank Fusion)
-
-
-# Feature 7: Lokaler Knowledge-Graph (Entitäten- & Beziehungs-Tripel)
-
-
-# Feature 8: Agentic Corrective RAG (CRAG)
-
-
-# Feature 9: 2-Stufen Core-Memory nach MemGPT/Letta-Vorbild (Pinned Working Memory)
-
-
-# Feature 10: Automatisches Citation- & Quellen-Pinning
-
-
-# --- TEIL 2 / PAKET 3 (FEATURES 11–15): ZUVERLÄSSIGE AUSFÜHRUNG & DETERMINISMUS (DURABLE EXECUTION) ---
-
-# Feature 11: Structured Outputs & JSON-Schema-Garantie
-
-
-# Feature 12: Durable Execution Checkpointing (Pause / Resume)
-
-
-# Feature 13: Idempotency-Keys & Tool-Call-Deduplizierung
-
-
-# Feature 14: Dry-Run / Shadow-Mode für Agenten-Aufträge
-
-
-# Feature 15: Dead-Letter-Queue (DLQ) mit Auto-Replay-Manager
-
-
-# --- TEIL 2 / PAKET 4 (FEATURES 16–20): SICHERHEIT, DATENSCHUTZ & ENTERPRISE-GOVERNANCE (GUARDRAILS) ---
-
-# Feature 16: Bidirektionaler PII-Scrubber & Re-Hydration (DSGVO)
-
-
-# Feature 17: Egress-Firewall & Domain-Allowlisting
-
-
-# Feature 18: Granulare Agenten-RBAC & Datei-Scope-Jails
-
-
-# Feature 19: Deterministischer Output-Linter & Policy-Checker
-
-
-# Feature 20: Manipulationssichere Kosten- & Entscheidungs-Quittungen (Execution Receipts)
-
-
-# --- TEIL 2 / PAKET 5 (FEATURES 21–25): SELBST-OPTIMIERUNG, EVALUATION & SCHWARM-INTELLIGENZ (NEXT-GEN) ---
-
-# Feature 21: Automatischer Prompt-Optimizer (DSPy / TextGrad-Prinzip)
-@app.post("/api/evolution/optimize-prompt")
-def api_optimize_role_prompt(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    from backend.prompt_optimizer import prompt_optimizer
-    return prompt_optimizer.optimize_role_prompt(
-        agent_role=payload.get("agent_role", "backend_architect"),
-        current_prompt=payload.get("current_prompt", "Du bist ein präziser System-Agent."),
-        recent_failures=payload.get("recent_failures", [])
-    )
-
-
-# Feature 22: Gold-Standard Regression-Test-Suite (Eval-Dataset Runner)
-@app.post("/api/evolution/eval-suite/run")
-def api_run_eval_regression_suite(payload: Dict = Body(default={})):
-    from backend.eval_regression_runner import eval_regression_runner
-    return eval_regression_runner.run_suite(
-        candidate_label=payload.get("candidate_label", "v2026.10-release"),
-        simulated_outputs=payload.get("simulated_outputs")
-    )
+from archon.routers.resilience import (
+    router as _resilience_router,
+    api_list_snapshots,
+    api_restore_snapshot,
+    api_list_audit_logs,
+    api_verify_audit_log,
+    api_heal_service,
+    api_fleet_health_check,
+    api_dispatch_notification,
+    api_list_recent_notifications,
+    api_get_task_trace,
+    api_fork_task_trace,
+    api_rollback_task_trace,
+    api_attempt_task_healing,
+    api_get_healing_logs,
+)
+from archon.routers.mesh import (
+    router as _mesh_router,
+    api_query_rag,
+    api_diff_preview,
+    api_list_skill_proposals,
+    api_approve_skill_proposal,
+    api_ingest_inbound_event,
+    api_list_event_history,
+    api_scan_inbox_directory,
+    api_get_concurrency_status,
+    api_save_concurrency_config,
+    api_analyze_vision,
+    api_create_handoff,
+    api_accept_handoff,
+    api_review_task_consensus,
+    api_check_task_budget,
+    api_run_council_vote,
+    api_get_consensus_history,
+    api_execute_sandbox,
+    api_get_memory_consolidation_settings,
+    api_save_memory_consolidation_settings,
+    api_browse_and_capture,
+    api_run_war_room,
+    api_get_war_room_history,
+)
+from archon.routers.autonomy_settings import (
+    router as _autonomy_settings_router,
+    api_get_model_routing,
+    api_save_model_routing,
+    api_resolve_model_routing,
+    api_get_autonomy_modules_settings,
+    api_save_autonomy_modules_settings,
+    api_semantic_cache_lookup,
+    api_semantic_cache_store,
+    api_semantic_cache_stats,
+    api_semantic_cache_clear,
+    api_optimize_role_prompt,
+    api_run_eval_regression_suite,
+)
+app.include_router(_resilience_router)
+app.include_router(_mesh_router)
+app.include_router(_autonomy_settings_router)
 
 
 # Feature 23: Dynamisches Modell-Routing nach Echtzeit-Telemetrie (Bandit-Router)

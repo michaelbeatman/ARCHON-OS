@@ -8,6 +8,7 @@ Import (spart beim ersten Request ~20s Kaltaufbau).
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -444,8 +445,8 @@ def api_get_hermes_profiles():
                     avatar_val = f"/static/avatars/custom_{p_id}{_ext}"
                     break
         if not avatar_val:
-            # Deterministischer Fallback aus dem realistischen Katalog (verhindert Duplikate)
-            _h = abs(hash(p_id)) % 108 + 1
+            # Z-19: Deterministischer Fallback aus dem Katalog via SHA256 (PYTHONHASHSEED-unabhaengig)
+            _h = int(hashlib.sha256(str(p_id).encode("utf-8")).hexdigest(), 16) % 108 + 1
             if _h == 1:
                 _h = 2
             avatar_val = f"/static/avatars/avatar_{_h:03d}.jpg"

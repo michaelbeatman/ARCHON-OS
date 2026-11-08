@@ -138,7 +138,8 @@ def _load_profiles_map() -> Dict[str, Dict]:
 def _get_fallback_avatar(aid: str) -> str:
     if not aid:
         return "/static/avatars/avatar_002.jpg"
-    h = abs(hash(aid)) % 108 + 1
+    import hashlib
+    h = int(hashlib.sha256(str(aid).encode("utf-8")).hexdigest(), 16) % 108 + 1
     if h == 1:
         h = 2
     return f"/static/avatars/avatar_{h:03d}.jpg"

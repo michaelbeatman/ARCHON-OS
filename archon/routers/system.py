@@ -120,8 +120,6 @@ async def _check_service_health(name: str, url_candidates: List[str], client: ht
             elif resp.status_code == 404 and name == "hermes_core":
                 # Hermes root returns 404 on / if no static handler, but server is actively UP
                 return {"status": "up", "latency_ms": latency, "endpoint": url}
-            elif resp.status_code < 500:
-                return {"status": "up", "latency_ms": latency, "endpoint": url}
         except Exception:
             continue
     return {"status": "down", "latency_ms": 0.0}

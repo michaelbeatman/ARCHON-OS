@@ -48,6 +48,11 @@ STRICT_PREFIXES: Tuple[str, ...] = (
     "/api/proxy",
     "/api/router/hedged",
     "/api/auth",
+    "/api/healing/attempt",
+    "/api/fleet/heal",
+    "/api/documents/parse",
+    "/api/llm-providers/test-connection",
+    "/api/v1/library/upload",
 )
 
 # Muss immer antworten bzw. wird nicht als "Nutzung" gezaehlt.

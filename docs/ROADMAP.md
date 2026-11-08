@@ -208,6 +208,21 @@ Suite-Stand nach sechstem Commit: **1154 passed / 8 skipped, EXIT=0** (`.venv/bi
 
 ---
 
+## 1e. 🟡-Fix-Cluster (Session Antigravity, 08.11.2026)
+
+Laufende Abarbeitung der 55 gelben Wartbarkeits-, Robustheits- und Logikbefunde aus dem Handover-Review mit lückenlosem Rot-Beweis vor dem Fix, isolierten Tests und voller Testsuite-Validierung.
+**4 Commits (17 Befunde geschlossen):** `d22441b7`, `3b7e4d4e`, `5d14636b`, `7169c20c`.
+Suite-Stand nach zehntem Commit: **1170 passed / 8 skipped, EXIT=0** (`.venv/bin/python -m pytest tests/ -q` in 65s).
+
+| Commit | Befunde | Was | Beleg |
+|---|---|---|---|
+| `d22441b7` | **R-24**, **R-25**, **R-26**, **R-27**, **R-28**, **R-29** | **R-24:** `operations_api.py` – Reopen eines Tasks auf 'todo' leert `completed_at` und `started_at` deterministisch. **R-25:** `operations_api.py` & `operations_kanban.js` – `failed`-Tasks landen nicht mehr fälschlich in `todo`, sondern in der dedizierten Spalte. **R-26:** `operations_api.py` – Notfall-Abbruch entzieht sofort Interaktionsrechte (409 Conflict Guard), Resume stellt Rechte wieder her. **R-27:** `main.py` – Container-Aktionen werfen bei DockerError ehrliche HTTP-Statuscodes (500/502/400) statt 200 OK mit Fehlertext. **R-28:** `main.py` – `POST /api/kanban` synchronisiert Tasks in `kanban.db` und atomic JSON. **R-29:** `backend/cost_estimator.py` – Unbekannte kommerzielle Modelle fallen nicht auf $0.00 zurück, sondern nutzen konservativen GPT-4-Tarif. | `tests/test_fix_batch7.py` (6/6 passed). Vorher: 4 failed, 2 passed. |
+| `3b7e4d4e` | **R-30**, **R-31**, **R-32**, **R-33** | **R-30:** `backend/approval_policy_engine.py` – `verify_audit_integrity` prüft neben `prev_hash` auch den SHA-256 Hash der tatsächlichen Zeilen-Payloads (erkennt in-place SQLite-Manipulation). **R-31:** `backend/contract_manager.py` – `renew_contract` kappt den Monatsletzten nicht mehr pauschal auf den 28., sondern nutzt `calendar.monthrange`. **R-32:** `backend/crm_service.py` – Leere CRM-Funnels melden ehrliche 0er-Metriken statt Phantasiezahlen (999/70/33/32%). **R-33:** `backend/gdpr_compliance_engine.py` – Art. 15 DSGVO-Export setzt Truncation-Flags und ermittelt ungedeckelte Gesamtzahlen transparent. | `tests/test_fix_batch8.py` (4/4 passed). Vorher: 4 failed. |
+| `5d14636b` | **M-13**, **M-14**, **M-15** | **M-13:** `core_dispatcher.py` – Task-Dispatching bindet an `concurrency_throttle.acquire_slot` / `release_slot` an (Pillar 1 Prio-Scheduling greift real). **M-14:** `backend/operations_api.py` – Autonome Kanban-Tasks registrieren sich bei `graceful_shutdown_coordinator` (Draining schützt echte Arbeitsläufe). **M-15:** `backend/dead_letter_queue.py` – `list_dlq` meldet ungedeckelte Gesamtanzahl; `replay_job` steht per Default auf echtem Requeue statt simuliertem Erfolg. | `tests/test_fix_batch9.py` (3/3 passed). Vorher: 3 failed. |
+| `7169c20c` | **M-18**, **M-19**, **M-20**, **M-22** | **M-18:** `main.py` – `/api/agents` reichert Profile mit `avatar_url` und `runtime_status` an; `save_agents` spiegelt Änderungen in die SSOT `agent_profiles.json`. **M-19:** `archon/routers/hermes_profiles.py` – `set_profile_model` aktualisiert `APP_ROOT/agent_profiles.json` statt ungültigen Router-Relativpfad. **M-20:** `utils/docker_client.py` – Singleton liest `DOCKER_HOST` / `DOCKER_SOCKET` dynamisch per Property aus `os.environ` (kein Einfrieren beim Import, Admin-Host behält Vorrang). **M-22:** `static/js/mission_control_cockpit.js` – In-Flight Guard `__mc_is_fetching` verhindert parallele, überlappende Poller. | `tests/test_fix_batch10.py` (3/3 passed). Vorher: 3 failed. |
+
+---
+
 ## 2. In Arbeit — Mandat 1 wartet auf Entscheidung, Mandate 2+3 sind committet
 
 | Mandat | Profil | Stand |

@@ -5,9 +5,11 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`; Code-Stand `0edc2870` (Session 5) —
+Stand: Branch `refactor/a5-di-config`; Code-Stand `c642b924` (Session 6, 08.11. abends) —
 `git log --oneline -1` liefert den aktuellen Kopf, bewusst kein Sha hier.
-Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **860 passed / 8 skipped**, Working Tree sauber.
+Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **971 passed / 8 skipped**,
+Working Tree sauber bis auf die drei Doku-Dateien dieser Sitzung (`HANDOVER_…_session2.md`,
+`REVIEW_2026-11-08_security.md`, `scripts/audit_route_guards.py`).
 
 ---
 
@@ -19,7 +21,7 @@ Wer wissen will, ob die Angaben hier stimmen, fährt genau das:
 cd /mnt/raid/AgenticOS-2026
 git log --oneline -6                      # die Commits dieser Session
 git status --short                        # fremde Änderungen im Baum
-.venv/bin/python -m pytest tests/ -q      # 685 bzw. 697 passed, 8 skipped
+.venv/bin/python -m pytest tests/ -q      # 971 passed, 8 skipped
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8501/health          # 200
 docker logs --since 10m ARCHON-OS 2>&1 | grep -c Traceback                     # 0
 ```
@@ -53,6 +55,65 @@ Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 - **Dashboard-Passwort dauerhaft:** `password_hash` + `secret` in `~/.hermes/config.yaml`;
   Provider registriert sich ohne Env-Passwort, `/auth/password-login` liefert 401 bei falschem
   Passwort. Dashboard läuft nach Recreate auf dem Digest-Pin, `restarts=0`.
+
+---
+
+## 1b. 🔴-Fix-Cluster 1+2+4 und 3 — committet, Proxy live gedeployt (Session 6, 08.11.)
+
+Zwei Delegations-Läufe (`senior_fullstack_engineer` Cluster 1+2+4, `devops_cloud_sec_specialist`
+Cluster 3) haben die 🔴-Befunde aus `docs/REVIEW_2026-11-08.md` und `…_security.md` behoben.
+**9 Commits** von `909421d6` bis `c642b924`, 34 Dateien, +4845/−164.
+
+| Commit | Befunde | Beleg |
+|---|---|---|
+| `03993de0` | F2/F26/R-05/N-12 Selbstheilung ohne Shell-Injection | `shell=True` aus `task_self_healer`/`fleet_self_healing` entfernt, argv-Liste, `validate_container_name` |
+| `e8f96edc` | F5 Sandbox-Härtung | `--cap-drop=ALL`, `--read-only`, `--pids-limit`, non-root, Digest-Pin; **Rot-Beweis: Altstand hatte 0 Härtungsflags** |
+| `473e357d` | F20/F27 Proxy-Isolation + Methoden-ACL + App-Limits | Proxy nur noch `archon-admin_net`, ACL auf Lesen+Start/Stop, `mem_limit 2g`, `pids_limit 200`, `read_only` |
+| `2cca2776` | Cluster-3-Regressionstests + F8-Doku | `tests/test_cluster3_hardening.py`, Handbuch-Abschnitt Dev≠Prod |
+| `255004dc` | R-08/F9 + F1/R-34 + F11 Auth-Gate fail-closed | Kein Fallback-Token mehr: fehlt `HERMES_SESSION_TOKEN`/`…DASHBOARD…`/`OMNIROUTE_API_KEY`, antwortet `forward_to_hermes` mit **502**; `hermes-webui/api` in `_AUTH_PROTECTED_PREFIXES` |
+| `65bd036f` | R-09 Rollenzaun in 6 Routern + Z-01 skills | `require_admin_or_503` als erste Anweisung der mutierenden Handler |
+| `af060e1f` | F19/M-03/Z-01 Traversal, F3/M-02/D-05 Datei-Lesen, F24 Vault | `basename` vor `join`, `safe_path` mit engen Roots, Vault-Root-Prüfung |
+| `215903dc` | D-04 XSS | DOMPurify **lokal vendored** (`static/vendor/dompurify.min.js`, 22.216 B), 7 Verwendungen in `index.html` |
+| `c642b924` | Review-Doku | §4.1 „als erledigt bestätigt" |
+
+**Messwerte (selbst gefahren, nicht aus Profilberichten übernommen):**
+- `.venv/bin/python -m pytest tests/ -q` → **971 passed / 8 skipped, EXIT=0** (Baseline war 860/8; +111 neue Tests, 0 Abwertungen)
+- **Rot-Beweise selbst nachgefahren:** Worktree auf `909421d6`, neue Testdateien hineinkopiert →
+  **25 failed, 3 passed, 24 errors**. Die Tests sind gegen den Altstand wirklich rot.
+- `haproxy -c` mit `SOCKET_PATH` → nur Warnungen, keine Fehler.
+- **Compose-Altlast (nicht durch die Fixes entstanden):** `docker compose -f docker-compose.yml
+  -f docker-compose.dev.yml config -q` meldet `container name "ARCHON-OS" is already in use` —
+  identisch gegen `909421d6` geprüft. Ursache: base führt Service `archon-os`, dev führt `archon`,
+  beide mit `container_name: ARCHON-OS`. Deploy daher **mit genau einer** Compose-Datei.
+
+### Live-Deploy des Proxys (F20) — durchgeführt am 08.11.
+
+`archon-admin_net` (`internal: true`) neu angelegt, `docker-socket-proxy` aus
+`docker-compose.dev.yml` (Projekt `archon-os-dev`) neu erzeugt, `ARCHON-OS` per
+`docker network connect` ans Verwaltungsnetz gehängt — **kein App-Recreate**.
+
+| Gegenprobe | Ergebnis |
+|---|---|
+Proxy aus `agents_net` | **BLOCKIERT** (vorher erreichbar/200) |
+Proxy aus `ARCHON-OS`: `/version`, `/containers/json`, `/stats` | 200 |
+`/containers/<c>/restart` | **403** (unverändert gesperrt) |
+`/health` | **200** |
+ACL-Env live | `EXEC=0 VOLUMES=0 NETWORKS=0 IMAGES=0 DELETE=0 CREATE=0`, nur `ALLOW_START/STOP=1` |
+
+**Zwischenfall, ehrlich protokolliert:** Eine Gegenprobe per `POST /containers/ARCHON-OS/stop`
+hat den App-Container gestoppt — `ALLOW_STOP=1` ist gewollt aktiv (B2-Restart = stop+start).
+Sauberer SIGTERM (`Exited (0)`), nach 20 s wieder `Up`, `/health` 200, keine Datenkorruption;
+der RAG-Sync (`docker exec -d`) wurde mitgerissen und neu gestartet (State blieb bei 37 Dateien).
+**Lehre: für ACL-Proben nur `/restart` (403) verwenden, niemals `/stop`.**
+
+### Was der Proxy-Fix *nicht* leistet (wichtig für die Einordnung)
+
+`ARCHON-OS` hat weiterhin `/var/run/docker.sock` gemountet (C1, bewusst). Damit kann die App die
+Proxy-ACL **vollständig umgehen** — die Methoden-Beschränkung wirkt nur gegen Container ohne
+Socket-Mount (z. B. `hermes`, das ausschließlich `DOCKER_HOST` hat). Der **echte** Gewinn ist die
+Netz-Isolation: `n8n`, `anything-llm`, `chroma`, `ollama-embed` erreichen den Daemon-Proxy nicht mehr.
+Die ACL-Verengung wirkt erst nach der Klasse-B/C-Migration (C2: eigener Sandbox-Runner), die den
+Socket-Mount überflüssig macht.
 
 ---
 
@@ -117,6 +178,10 @@ schnelleres Embedding-Modell (`all-minilm`, 384 Dimensionen) bzw. ein Cloud-Embe
 | — | ~~RAG-API-Key `main.py:2287` Klartext~~ — **erledigt `48d9b7db`** (Env, fail-fast) | **Rest bei Michael:** (a) `ANYTHINGLLM_API_KEY` in `.env.archon` setzen + Recreate, sonst läuft der Hintergrund-RAG-Sync im Container nicht mehr; (b) Key **rotieren** — er ist in der Git-Historie (`98bebb10`, `85d01934`, `45c295eb`, `4cc38f31`), in `.archon_backup_20261105_1015/main.py` (versioniert) und in 3 `omniroute_data/…/call_logs/2026-11-06/*.json` | 30 min |
 | 7 | **`POST /api/hermes/profiles/{id}/favorite` ohne Rollenzaun** (neu, Vorschlag des DevOps-Laufs) | `archon/routers/hermes_profiles.py:283` schreibt `profile.yaml` — dieselbe Klasse wie der Avatar-Befund | 15 min + Test |
 | 8 | **Restliche Key-Fundstellen** (Vorschlag) | `backend/rag_bridge.py:17`, `tools/sync_remaining_600s.py:8`, `tools/sync_cannabis_rag.py:8`, `tools/sync_vault_all_parallel.py:9`, `tools/sync_cannabis_rag_parallel.py:10` — alle auf Env umstellen, dann kann `main.py` das `--api-key`-Argument fallen lassen | 30 min |
+| 9 | **`EXEC=0` im Proxy bricht Exec-Pfade** (neu, 08.11. gemessen) | Live-Probe: `POST /containers/ARCHON-OS/exec` über den Proxy → **403**. Betroffene Aufrufer gehen alle über `utils/docker_client` (Transport `DOCKER_HOST`, **kein** 403-Fallback auf den Socket): `main.py:9345/9392` (`/api/v1/container/exec`), `archon/routers/governance.py:143` (promptfoo), `main.py:2730` (archon-quartz), `backend/hermes_updater.py:233`, `utils/docker_client.py:396`. `backend/post_task_pipeline.py:522` (Paperclip) ist tot — Paperclip wurde abgelöst. **Entscheidung offen:** `ARCHON_PROXY_ALLOW_EXEC=1` in `.env.archon` (Proxy-Recreate genügt) **oder** Exec-Pfade auf den Socket pinnen. Sicherheitsverlust durch `=1` ist gering, weil `ARCHON-OS` ohnehin den rohen Socket hält (siehe §1b) | 15 min |
+| 10 | **`shell=True` im JEV-Fast-Path** (neu, von Robert als 🟠 P2 eingestuft) | `main.py:9568` in `@app.post("/api/v1/container/exec")`: nach `require_admin(request)` läuft `subprocess.run(cmd, shell=True)` mit `cmd` aus `jev_router.classify_prompt(req.command)` — also aus einer **LLM-Klassifikation** des Nutzertexts. JEV ist per Default aus (`get_jev_config()["enabled"]` = False), Endpunkt admin-only → Defense-in-Depth-Lücke, kein offenes Tor. Fix: `shell=False` + argv-Validierung | <2 h |
+| 11 | **ARCHON-OS-Recreate für F27 ausstehend** (bewusst zurückgestellt) | `mem_limit 2g`, `pids_limit 200`, `read_only`, `cap_drop: ALL` sind committet, aber **nicht aktiv** — der laufende Container hat die alten Werte. Recreate erst **nach** dem RAG-Sync (Entscheidung Michael, 08.11.) | 10 min + Sync-Neustart |
+| 12 | **Compose-Doppelung `container_name: ARCHON-OS`** (Altlast) | base (`archon-os`) und dev (`archon`) setzen denselben Container-Namen → `compose config` mit **beiden** Dateien scheitert. Gegen `909421d6` identisch reproduziert, also nicht durch die Fixes entstanden. Deploy-Regel: genau eine Datei pro Aufruf | 15 min |
 
 ---
 
@@ -134,6 +199,13 @@ schnelleres Embedding-Modell (`all-minilm`, 384 Dimensionen) bzw. ein Cloud-Embe
   `restarts=0`) — das ist der einzige der vier Punkte, der jetzt belegt ist.
 - **Mock-Dispatcher/Browser-Verhalten:** nichts davon habe ich selbst gefahren; Aussagen dazu
   stammen aus Profilberichten.
+- **F27 ist nicht live:** die Limits/Härtung aus `473e357d` stehen nur im Compose-File; der laufende
+  `ARCHON-OS` hat weiterhin keine `read_only`-Wurzel, kein `cap_drop` und keine Pids-Grenze.
+- **F20-Dauerbetrieb nicht beobachtet:** die Gegenproben sind Momentaufnahmen vom 08.11. abends;
+  ob ein `docker compose up` ohne `--no-deps` die Netz-Isolation später wieder aufhebt, ist ungeprüft.
+- **Exec-Verhalten nach `EXEC=0`:** nur der 403 gegen den Proxy ist gemessen — ob die betroffenen
+  Endpunkte im Betrieb leer antworten (der Client verwirft den Status und gibt `b""` zurück), ist
+  **nicht** end-to-end geprüft.
 
 ---
 

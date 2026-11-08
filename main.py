@@ -2083,12 +2083,32 @@ async def _email_imap_background_loop():
         await asyncio.sleep(180)
 
 _BACKGROUND_TASKS: list = []
+_RAG_SYNC_LOCK = asyncio.Lock()
+_RAG_SYNC_PROCESS = None
 
 
-def _spawn_background(coro):
-    """Startet einen Endlos-Task und registriert ihn für einen sauberen Shutdown."""
-    task = asyncio.create_task(coro)
+def _is_rag_sync_running() -> bool:
+    """Prueft, ob aktuell ein RAG-Sync-Prozess aktiv ist (Re-06)."""
+    global _RAG_SYNC_PROCESS
+    return _RAG_SYNC_PROCESS is not None and _RAG_SYNC_PROCESS.poll() is None
+
+
+def _spawn_background(coro, name: str = ""):
+    """Startet einen Background-Task, registriert ihn für Shutdown und loggt unhandled exceptions."""
+    task = asyncio.create_task(coro, name=name) if name else asyncio.create_task(coro)
     _BACKGROUND_TASKS.append(task)
+
+    def _done_cb(t):
+        try:
+            _BACKGROUND_TASKS.remove(t)
+        except ValueError:
+            pass
+        if not t.cancelled():
+            exc = t.exception()
+            if exc:
+                logger.error(f"[BackgroundTask] Unhandled exception in {t.get_name()}: {exc}", exc_info=exc)
+
+    task.add_done_callback(_done_cb)
     return task
 
 
@@ -2652,19 +2672,24 @@ async def api_library_upload(request: Request):
         # Wenn auto_ingest aktiv war, im Hintergrund AnythingLLM RAG-Sync anstoßen
         if auto_ingest:
             async def trigger_background_rag_sync():
-                try:
-                    import subprocess
-                    sync_script = os.path.join(os.path.dirname(__file__), "tools", "sync_vault_to_rag.py")
-                    if os.path.exists(sync_script):
-                        # Key ausschliesslich aus der Umgebung — kein Literal,
-                        # kein Default. Fehlt er, startet kein subprocess.
-                        cmd = [sys.executable, sync_script, "--api-key", _get_rag_api_key(), "--all"]
-                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except MissingRagApiKeyError as ex:
-                    logger.error(f"[RAG-Sync] Sync nicht gestartet: {ex}")
-                except Exception as ex:
-                    logger.error(f"[RAG-Sync-Trigger] Fehler: {ex}")
-            asyncio.create_task(trigger_background_rag_sync())
+                global _RAG_SYNC_PROCESS
+                async with _RAG_SYNC_LOCK:
+                    if _is_rag_sync_running():
+                        logger.info("[RAG-Sync] Vollsync laeuft bereits; ueberspringe redundanten Start.")
+                        return
+                    try:
+                        import subprocess
+                        sync_script = os.path.join(os.path.dirname(__file__), "tools", "sync_vault_to_rag.py")
+                        if os.path.exists(sync_script):
+                            # Key ausschliesslich aus der Umgebung — kein Literal,
+                            # kein Default. Fehlt er, startet kein subprocess.
+                            cmd = [sys.executable, sync_script, "--api-key", _get_rag_api_key(), "--all"]
+                            _RAG_SYNC_PROCESS = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    except MissingRagApiKeyError as ex:
+                        logger.error(f"[RAG-Sync] Sync nicht gestartet: {ex}")
+                    except Exception as ex:
+                        logger.error(f"[RAG-Sync-Trigger] Fehler: {ex}")
+            _spawn_background(trigger_background_rag_sync(), name="rag_sync_trigger")
 
         return {
             "status": "success",
@@ -4941,7 +4966,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         )
         try:
             from backend.operations_api import _execute_kanban_task_async
-            asyncio.create_task(_execute_kanban_task_async(task_id))
+            _spawn_background(_execute_kanban_task_async(task_id), name=f"kanban_{task_id}")
         except Exception as exe_err:
             logger.warning(f"[Delegation] Sofortige Ausfuehrung fehlgeschlagen: {exe_err}")
         kconn.execute(
@@ -5128,9 +5153,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     })
                     # Autonomen Folge-Turn auslösen, falls Orchestrator aktiv
                     if orig_delegator in ("executive_decision_architect", "hermes-orchestrator", "micha", "default"):
-                        asyncio.create_task(_trigger_autonomous_orchestrator_followup(
+                        _spawn_background(_trigger_autonomous_orchestrator_followup(
                             orig_delegator, origin_sess_id, task_id, status, result, final_title, parent_pid
-                        ))
+                        ), name=f"followup_{task_id}")
                 except Exception as feed_err:
                     logger.warning(f"[Delegation] Feedback an Delegator-Session fehlgeschlagen: {feed_err}")
             # --- Telegram-Push (HITL-Kanal, User-Vorgabe 09.10.2026) ---
@@ -5193,7 +5218,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
 
                     await asyncio.to_thread(update_mission_control_data, _fan_in_mutate)
                     if fan_parent:
-                        asyncio.create_task(_fan_in_maybe_start_synthesis(fan_parent))
+                        _spawn_background(_fan_in_maybe_start_synthesis(fan_parent), name=f"fan_in_{fan_parent}")
                 except Exception as fan_err:
                     logger.warning(f"[Delegation] Fan-in-Ruecklauf fehlgeschlagen: {fan_err}")
         except Exception as e:
@@ -5264,7 +5289,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         except Exception as fan_err:
             logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 
-    asyncio.create_task(_bg_watch_task(task_id, tgt_sess, ziel, origin_session_id, delegator_id, parent_pid))
+    _spawn_background(_bg_watch_task(task_id, tgt_sess, ziel, origin_session_id, delegator_id, parent_pid), name=f"bg_watch_{task_id}")
     resolve_str = f" [aufgelöst von '{ziel_raw}']" if ziel_raw and ziel_raw != ziel else ""
     return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}{resolve_str}) | Kanban-Task: {task_id or 'n/a'} | "
             f"Sub-Session: {tgt_sess} | Modell (Empfehlung): {t_model} | "

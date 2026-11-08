@@ -1074,8 +1074,11 @@
         use_llm: valLlmEl ? valLlmEl.checked : false,
         judge_model: "omniroute/free-forever"
       };
+      // D-17: Die HTTP-Antwort wird geprueft. Ein 500 bei /api/settings
+      // (oder /api/v1/services) fuehrte bisher zu "erfolgreich gespeichert",
+      // obwohl die Aenderung nicht angekommen war.
       try {
-        await fetch("/api/settings", {
+        const settingsResp = await fetch("/api/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -1087,14 +1090,26 @@
             validate: validateConfig
           })
         });
+        if (!settingsResp.ok) {
+          throw new Error("HTTP " + settingsResp.status + " beim Speichern der Einstellungen");
+        }
         updateJevStatusPill(jevConfig.enabled);
-        await fetch("/api/v1/services", {
+        const servicesResp = await fetch("/api/v1/services", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(servicesList)
         });
+        if (!servicesResp.ok) {
+          throw new Error("HTTP " + servicesResp.status + " beim Speichern der Dienste");
+        }
       } catch (e) {
         console.error("Error saving settings:", e);
+        if (typeof showNotification === "function") {
+          showNotification("System Control Center", `Speichern fehlgeschlagen: ${e.message || e}. Es wurden nicht alle Aenderungen uebernommen.`, "error");
+        } else {
+          alert("Speichern fehlgeschlagen: " + (e.message || e));
+        }
+        return;
       }
       if (typeof window.saveHermesFormSettings === "function") {
         await window.saveHermesFormSettings(false);
@@ -1168,11 +1183,16 @@
         const currentJev = data.jev || {};
         const newState = !currentJev.enabled;
         currentJev.enabled = newState;
-        await fetch("/api/settings", {
+        // D-17: Der JEV-Toggle prueft die HTTP-Antwort — ein 500 darf nicht
+        // als "AKTIVIERT" gemeldet werden.
+        const saveResp = await fetch("/api/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ jev: currentJev })
         });
+        if (!saveResp.ok) {
+          throw new Error("HTTP " + saveResp.status + " beim Speichern der JEV-Einstellung");
+        }
         updateJevStatusPill(newState);
         const tog = document.getElementById("setting-jev-enabled");
         if (tog) {

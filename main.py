@@ -6722,86 +6722,18 @@ async def api_upload_theme_background(request: Request, file: UploadFile = File(
     return {"status": "success", "url": f"/static/uploads/{fname}"}
 
 
-@app.get("/api/vault")
-def api_get_vault_list():
-    files = api_get_vault_files()
-    result = []
-    for item in files:
-        result.append({
-            "name": item.get("name"),
-            "path": item.get("path"),
-            "relative_path": item.get("relative_path"),
-            "type": "Obsidian MD"
-        })
-    return result
-
-
-@app.get("/api/vault/file")
-def api_read_vault_file_direct(path: str = Query(...)):
-    # F3 (gleiche Klasse): `safe_path` zieht die Default-Wurzeln (/opt/data,
-    # /app/data, ~/.hermes) mit — damit waren .env und Configs lesbar. Erlaubt
-    # ist nur die Vault-Wurzel.
-    try:
-        real_path = safe_path_within(
-            path, [OBSIDIAN_VAULT_DIR], must_exist=True, allow_dirs=False,
-        )
-    except PathJailError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    if not os.path.isfile(real_path):
-        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
-    with open(real_path, "r", encoding="utf-8", errors="replace") as f:
-        return {"status": "success", "path": real_path, "content": f.read()}
-
-
-@app.post("/api/vault/edit")
-def api_edit_vault_file_direct(request: Request, payload: Dict = Body(...)):
-    # RBAC: Schreiben in den Vault ist Admin-Sache (vor jedem open()).
-    require_admin_or_503(request)
-    path = payload.get("path", "")
-    content = payload.get("content", "")
-    if not path:
-        raise HTTPException(status_code=400, detail="Pfad fehlt.")
-    # Reichweite verengen (F24): nur die Vault-Wurzel. `safe_path(...,
-    # extra_roots=[...])` ERWEITERT das Jail nur — die Default-Wurzeln
-    # (/opt/data, /app, ~/.hermes) blieben sonst beschreibbar.
-    try:
-        real_path = safe_path_within(
-            path, [OBSIDIAN_VAULT_DIR], allow_write=True, allow_dirs=False,
-        )
-    except PathJailError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    os.makedirs(os.path.dirname(real_path), exist_ok=True)
-    with open(real_path, "w", encoding="utf-8") as f:
-        f.write(content)
-    _VAULT_FILES_CACHE["ts"] = 0.0
-    return {"status": "success", "path": real_path}
-
-
-@app.delete("/api/vault")
-def api_delete_vault_file_direct(request: Request, path: str = Query(...)):
-    # RBAC: Loeschen ist Admin-Sache (vor jedem os.remove).
-    require_admin_or_503(request)
-    try:
-        real_path = safe_path(path, must_exist=True, allow_write=True, allow_dirs=False,
-                              extra_roots=[OBSIDIAN_VAULT_DIR])
-    except PathJailError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    # Reichweite verengen: `extra_roots` ERWEITERT das Jail nur, es verengt es
-    # nicht (Default-Wurzeln enthalten u. a. ~/.hermes). Deshalb wird hier
-    # zusaetzlich geprueft, dass der Zielpfad wirklich unter der Vault-Wurzel
-    # liegt — sonst waere z. B. ~/.hermes/config.yaml loeschbar.
-    vault_root = os.path.realpath(os.path.abspath(os.path.expanduser(OBSIDIAN_VAULT_DIR)))
-    if real_path != vault_root and not real_path.startswith(vault_root + os.sep):
-        raise HTTPException(
-            status_code=403,
-            detail="Loeschen nur innerhalb der Vault-Wurzel erlaubt.",
-        )
-    if not os.path.isfile(real_path):
-        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
-    os.remove(real_path)
-    _VAULT_FILES_CACHE["ts"] = 0.0
-    return {"status": "success", "deleted": real_path}
-
+# --- OBSIDIAN VAULT ROUTER (ausgelagert nach archon.routers.vault) ---
+from archon.routers.vault import (
+    router as _vault_router,
+    api_get_vault_list,
+    api_read_vault_file_direct,
+    api_edit_vault_file_direct,
+    api_delete_vault_file_direct,
+    api_get_vault_files,
+    api_generate_vault_index,
+    _VAULT_FILES_CACHE,
+)
+app.include_router(_vault_router)
 
 @app.post("/api/sandbox")
 def api_run_python_sandbox(request: Request, payload: Dict = Body(...)):
@@ -6812,26 +6744,6 @@ def api_run_python_sandbox(request: Request, payload: Dict = Body(...)):
         status_code=501,
         detail="Sandbox deaktiviert (S6-Hardening). Nutze POST /api/sandbox/execute für isolierte Ausführung."
     )
-
-@app.get("/api/vault/files")
-def api_get_vault_files():
-    global _VAULT_FILES_CACHE
-    now = time.time()
-    if _VAULT_FILES_CACHE["data"] and (now - _VAULT_FILES_CACHE["ts"]) < 300.0:
-        return _VAULT_FILES_CACHE["data"]
-    vault_dir = OBSIDIAN_VAULT_DIR
-    if not os.path.exists(vault_dir):
-        return []
-    files = []
-    for root, dirs, filenames in os.walk(vault_dir):
-        # Ignore internal Obsidian / Git folders
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
-        for f in filenames:
-            if f.endswith(".md"):
-                rel_path = os.path.relpath(os.path.join(root, f), vault_dir)
-                files.append({"name": f, "relative_path": rel_path, "path": os.path.join(root, f)})
-    _VAULT_FILES_CACHE = {"ts": now, "data": files}
-    return files
 
 
 @app.get("/api/kanban")
@@ -8889,10 +8801,7 @@ def api_analyze_vision(payload: Dict = Body(...)):
         focus_prompt=payload.get("focus_prompt", "Beschreibe den Inhalt dieses Screenshots detailliert.")
     )
 
-@app.post("/api/vault/generate-index")
-def api_generate_vault_index():
-    from backend.vault_hygiene import generate_vault_index_and_hygiene
-    return generate_vault_index_and_hygiene()
+
 
 @app.post("/api/handoff/create")
 def api_create_handoff(payload: Dict = Body(...)):

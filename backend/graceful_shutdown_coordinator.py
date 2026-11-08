@@ -210,8 +210,12 @@ class GracefulShutdownCoordinator:
             if os.path.exists(dbp):
                 try:
                     with sqlite3.connect(dbp, timeout=2.0) as conn:
+                        # N-07: 'tasks' hat KEINE Spalte 'updated_at' (pragma
+                        # table_info(tasks) -> 0 Treffer). Das SET auf die
+                        # fehlende Spalte warf OperationalError, wurde geschluckt
+                        # und der Task nie als 'checkpointed' markiert.
                         conn.execute(
-                            "UPDATE tasks SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            "UPDATE tasks SET status = ? WHERE id = ?",
                             (new_status, task_id)
                         )
                         conn.commit()
@@ -329,8 +333,10 @@ class GracefulShutdownCoordinator:
             if os.path.exists(dbp):
                 try:
                     with sqlite3.connect(dbp, timeout=5.0) as conn:
+                        # N-07: gleicher Fix wie in _update_task_db_status —
+                        # 'updated_at' existiert in tasks nicht.
                         cur = conn.execute(
-                            "UPDATE tasks SET status = 'todo', updated_at = CURRENT_TIMESTAMP WHERE status = 'in_progress'"
+                            "UPDATE tasks SET status = 'todo' WHERE status = 'in_progress'"
                         )
                         count += cur.rowcount
                         conn.commit()

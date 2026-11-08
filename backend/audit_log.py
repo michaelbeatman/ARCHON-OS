@@ -13,6 +13,7 @@ import json
 import hashlib
 import sqlite3
 import datetime
+import threading
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,56 +24,60 @@ class ChainedAuditLog:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        self._lock = threading.Lock()
         self._init_db()
 
     def _get_conn(self):
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
-        conn.execute("PRAGMA busy_timeout=5000;")
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.execute("PRAGMA busy_timeout=10000;")
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_db(self):
-        with self._get_conn() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS audit_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT NOT NULL,
-                    category TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    event_type TEXT,
-                    agent_id TEXT NOT NULL,
-                    payload_json TEXT NOT NULL,
-                    prev_hash TEXT NOT NULL,
-                    current_hash TEXT NOT NULL
-                )
-            """)
-            conn.commit()
+        conn = self._get_conn()
+        try:
+            with conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS audit_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        action TEXT NOT NULL,
+                        event_type TEXT,
+                        agent_id TEXT NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        prev_hash TEXT NOT NULL,
+                        current_hash TEXT NOT NULL
+                    )
+                """)
 
-            cur = conn.cursor()
-            cur.execute("PRAGMA table_info(audit_log)")
-            existing_cols = {c["name"] for c in cur.fetchall()}
+                cur = conn.cursor()
+                cur.execute("PRAGMA table_info(audit_log)")
+                existing_cols = {c["name"] for c in cur.fetchall()}
 
-            if "timestamp" not in existing_cols and "created_at" in existing_cols:
-                conn.execute("ALTER TABLE audit_log ADD COLUMN timestamp TEXT DEFAULT ''")
-                conn.execute("UPDATE audit_log SET timestamp = created_at WHERE timestamp = ''")
-            if "category" not in existing_cols:
-                conn.execute("ALTER TABLE audit_log ADD COLUMN category TEXT DEFAULT 'system'")
-            if "action" not in existing_cols and "event_type" in existing_cols:
-                conn.execute("ALTER TABLE audit_log ADD COLUMN action TEXT DEFAULT ''")
-                conn.execute("UPDATE audit_log SET action = event_type WHERE action = ''")
-            if "event_type" not in existing_cols and "action" in existing_cols:
-                conn.execute("ALTER TABLE audit_log ADD COLUMN event_type TEXT DEFAULT ''")
-                conn.execute("UPDATE audit_log SET event_type = action WHERE event_type = ''")
-            if "current_hash" not in existing_cols and "hash" in existing_cols:
-                conn.execute("ALTER TABLE audit_log ADD COLUMN current_hash TEXT DEFAULT ''")
-                conn.execute("UPDATE audit_log SET current_hash = hash WHERE current_hash = ''")
-            if "payload_json" not in existing_cols and "payload" in existing_cols:
-                conn.execute("ALTER TABLE audit_log ADD COLUMN payload_json TEXT DEFAULT '{}'")
-                conn.execute("UPDATE audit_log SET payload_json = payload WHERE payload_json = '{}'")
+                if "timestamp" not in existing_cols and "created_at" in existing_cols:
+                    conn.execute("ALTER TABLE audit_log ADD COLUMN timestamp TEXT DEFAULT ''")
+                    conn.execute("UPDATE audit_log SET timestamp = created_at WHERE timestamp = ''")
+                if "category" not in existing_cols:
+                    conn.execute("ALTER TABLE audit_log ADD COLUMN category TEXT DEFAULT 'system'")
+                if "action" not in existing_cols and "event_type" in existing_cols:
+                    conn.execute("ALTER TABLE audit_log ADD COLUMN action TEXT DEFAULT 'event'")
+                    conn.execute("UPDATE audit_log SET action = event_type WHERE action = 'event'")
+                if "event_type" not in existing_cols and "action" in existing_cols:
+                    conn.execute("ALTER TABLE audit_log ADD COLUMN event_type TEXT DEFAULT ''")
+                    conn.execute("UPDATE audit_log SET event_type = action WHERE event_type = ''")
+                if "current_hash" not in existing_cols and "hash" in existing_cols:
+                    conn.execute("ALTER TABLE audit_log ADD COLUMN current_hash TEXT DEFAULT ''")
+                    conn.execute("UPDATE audit_log SET current_hash = hash WHERE current_hash = ''")
+                if "payload_json" not in existing_cols and "payload" in existing_cols:
+                    conn.execute("ALTER TABLE audit_log ADD COLUMN payload_json TEXT DEFAULT '{}'")
+                    conn.execute("UPDATE audit_log SET payload_json = payload WHERE payload_json = '{}'")
 
             conn.commit()
             cur.execute("PRAGMA table_info(audit_log)")
             self.cols = {c["name"] for c in cur.fetchall()}
+        finally:
+            conn.close()
 
     def record_event(self, category: str, action: str, agent_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -82,37 +87,48 @@ class ChainedAuditLog:
         payload_str = json.dumps(payload, sort_keys=True, ensure_ascii=False)
         now_iso = datetime.datetime.now().isoformat()
 
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT current_hash FROM audit_log ORDER BY id DESC LIMIT 1")
-            last_row = cur.fetchone()
-            prev_hash = last_row["current_hash"] if last_row and last_row["current_hash"] else GENESIS_HASH
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                cur = conn.cursor()
+                cur.execute("SELECT current_hash FROM audit_log ORDER BY id DESC LIMIT 1")
+                last_row = cur.fetchone()
+                prev_hash = last_row["current_hash"] if last_row and last_row["current_hash"] else GENESIS_HASH
 
-            raw_str = f"{prev_hash}|{now_iso}|{category}|{action}|{agent_id}|{payload_str}"
-            current_hash = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
+                raw_str = f"{prev_hash}|{now_iso}|{category}|{action}|{agent_id}|{payload_str}"
+                current_hash = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
-            col_map = {
-                "timestamp": now_iso,
-                "category": category,
-                "action": action,
-                "event_type": action,
-                "agent_id": agent_id,
-                "payload_json": payload_str,
-                "prev_hash": prev_hash,
-                "current_hash": current_hash,
-                "hash": current_hash,
-                "payload": payload_str,
-                "created_at": now_iso
-            }
+                col_map = {
+                    "timestamp": now_iso,
+                    "category": category,
+                    "action": action,
+                    "event_type": action,
+                    "agent_id": agent_id,
+                    "payload_json": payload_str,
+                    "prev_hash": prev_hash,
+                    "current_hash": current_hash,
+                    "hash": current_hash,
+                    "payload": payload_str,
+                    "created_at": now_iso
+                }
 
-            active_cols = [c for c in col_map if c in getattr(self, "cols", col_map.keys())]
-            placeholders = ", ".join(["?"] * len(active_cols))
-            col_names = ", ".join(active_cols)
-            values = [col_map[c] for c in active_cols]
+                active_cols = [c for c in col_map if c in getattr(self, "cols", col_map.keys())]
+                placeholders = ", ".join(["?"] * len(active_cols))
+                col_names = ", ".join(active_cols)
+                values = [col_map[c] for c in active_cols]
 
-            cur.execute(f"INSERT INTO audit_log ({col_names}) VALUES ({placeholders})", values)
-            conn.commit()
-            event_id = cur.lastrowid
+                cur.execute(f"INSERT INTO audit_log ({col_names}) VALUES ({placeholders})", values)
+                conn.commit()
+                event_id = cur.lastrowid
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+            finally:
+                conn.close()
 
             return {
                 "event_id": event_id,
@@ -129,54 +145,58 @@ class ChainedAuditLog:
         Vollständige GoBD / ISO 27001 Revisionsprüfung:
         Prüft jedes Kettenglied von Block 1 bis N auf mathematische Unversehrtheit.
         """
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT id, timestamp, category, action, agent_id, payload_json, prev_hash, current_hash FROM audit_log ORDER BY id ASC")
-            rows = cur.fetchall()
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT id, timestamp, category, action, agent_id, payload_json, prev_hash, current_hash FROM audit_log ORDER BY id ASC")
+                rows = cur.fetchall()
 
-            if not rows:
+                if not rows:
+                    return {
+                        "valid": True,
+                        "total_records": 0,
+                        "genesis_hash": GENESIS_HASH,
+                        "latest_hash": GENESIS_HASH,
+                        "message": "Audit-Log ist leer. Keine Transaktionen vorhanden."
+                    }
+
+                expected_prev = GENESIS_HASH
+                for r in rows:
+                    # 1. Kettenglied-Prüfung
+                    if r["prev_hash"] != expected_prev:
+                        return {
+                            "valid": False,
+                            "corrupted_id": r["id"],
+                            "reason": f"Kettenbruch bei Block #{r['id']}: Vorheriger Hash stimmt nicht mit vorherigem Block überein.",
+                            "expected_prev": expected_prev,
+                            "actual_prev": r["prev_hash"]
+                        }
+
+                    # 2. Inhalts-Signatur Prüfung
+                    raw_str = f"{r['prev_hash']}|{r['timestamp']}|{r['category']}|{r['action']}|{r['agent_id']}|{r['payload_json']}"
+                    recomputed = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
+
+                    if recomputed != r["current_hash"]:
+                        return {
+                            "valid": False,
+                            "corrupted_id": r["id"],
+                            "reason": f"Manipulationsalarm bei Block #{r['id']}: Inhalt oder Zeitstempel weicht vom signierten Hash ab.",
+                            "expected_hash": recomputed,
+                            "actual_hash": r["current_hash"]
+                        }
+
+                    expected_prev = r["current_hash"]
+
                 return {
                     "valid": True,
-                    "total_records": 0,
+                    "total_records": len(rows),
                     "genesis_hash": GENESIS_HASH,
-                    "latest_hash": GENESIS_HASH,
-                    "message": "Audit-Log ist leer. Keine Transaktionen vorhanden."
+                    "latest_hash": expected_prev,
+                    "message": f"Kryptografische GoBD/ISO Audit-Kette vollständig intakt ({len(rows)} Blöcke verifiziert)."
                 }
-
-            expected_prev = GENESIS_HASH
-            for r in rows:
-                # 1. Kettenglied-Prüfung
-                if r["prev_hash"] != expected_prev:
-                    return {
-                        "valid": False,
-                        "corrupted_id": r["id"],
-                        "reason": f"Kettenbruch bei Block #{r['id']}: Vorheriger Hash stimmt nicht mit vorherigem Block überein.",
-                        "expected_prev": expected_prev,
-                        "actual_prev": r["prev_hash"]
-                    }
-
-                # 2. Inhalts-Signatur Prüfung
-                raw_str = f"{r['prev_hash']}|{r['timestamp']}|{r['category']}|{r['action']}|{r['agent_id']}|{r['payload_json']}"
-                recomputed = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
-
-                if recomputed != r["current_hash"]:
-                    return {
-                        "valid": False,
-                        "corrupted_id": r["id"],
-                        "reason": f"Manipulationsalarm bei Block #{r['id']}: Inhalt oder Zeitstempel weicht vom signierten Hash ab.",
-                        "expected_hash": recomputed,
-                        "actual_hash": r["current_hash"]
-                    }
-
-                expected_prev = r["current_hash"]
-
-            return {
-                "valid": True,
-                "total_records": len(rows),
-                "genesis_hash": GENESIS_HASH,
-                "latest_hash": expected_prev,
-                "message": f"Kryptografische GoBD/ISO Audit-Kette vollständig intakt ({len(rows)} Blöcke verifiziert)."
-            }
+            finally:
+                conn.close()
 
     def list_events(self, category: Optional[str] = None, search: Optional[str] = None, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
         """Liefert gefilterte Audit-Events mit Paginierung für UI und Dashboards."""

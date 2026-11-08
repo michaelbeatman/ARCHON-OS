@@ -36,6 +36,13 @@ except ImportError:
     httpx = None
 
 
+# Embedding eines Buchkapitels dauert auf schwacher CPU mehrere Minuten.
+# Timeout deshalb konfigurierbar; ein zu kurzer Wert bricht den Client ab,
+# waehrend der Server fertig einbettet (Dokument landet im Index, wird aber
+# nicht als synchronisiert vermerkt und beim naechsten Lauf erneut hochgeladen).
+SYNC_TIMEOUT = float(os.environ.get("RAG_SYNC_TIMEOUT", "900"))
+
+
 def get_default_vault_path() -> Path:
     """Ermittelt den Vault-Pfad abhängig von der Laufzeitumgebung (Docker vs. Host)."""
     env_path = os.environ.get("OBSIDIAN_VAULT_PATH")
@@ -211,7 +218,7 @@ def upload_document(base_url: str, api_key: str, file_path: Path) -> Optional[st
 
         if httpx:
             files = {"file": (file_path.name, file_bytes, "text/markdown")}
-            with httpx.Client(timeout=180.0) as client:
+            with httpx.Client(timeout=SYNC_TIMEOUT) as client:
                 res = client.post(upload_url, headers=headers, files=files)
                 if res.status_code != 200:
                     print(f"    [FEHLER Upload] HTTP {res.status_code}: {res.text[:120]}", file=sys.stderr)
@@ -231,7 +238,7 @@ def upload_document(base_url: str, api_key: str, file_path: Path) -> Optional[st
 
             headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
             req = urllib.request.Request(upload_url, data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=180) as resp:
+            with urllib.request.urlopen(req, timeout=SYNC_TIMEOUT) as resp:
                 data = json.loads(resp.read().decode())
 
         if isinstance(data, dict):
@@ -265,7 +272,7 @@ def add_document_to_workspace(base_url: str, api_key: str, workspace_slug: str, 
 
     try:
         if httpx:
-            with httpx.Client(timeout=180.0) as client:
+            with httpx.Client(timeout=SYNC_TIMEOUT) as client:
                 res = client.post(update_url, headers=headers, json=payload)
                 if res.status_code == 200:
                     return True
@@ -275,7 +282,7 @@ def add_document_to_workspace(base_url: str, api_key: str, workspace_slug: str, 
             import urllib.request
             req_data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(update_url, data=req_data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=180) as resp:
+            with urllib.request.urlopen(req, timeout=SYNC_TIMEOUT) as resp:
                 if resp.status == 200:
                     return True
             return False

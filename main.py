@@ -2166,116 +2166,14 @@ class ProfileStatusUpdate(BaseModel):
 # 
 
 
-def _get_hermes_config_path() -> str:
-    candidates = [
-        "/opt/data/config.yaml",
-        "/opt/data/hermes_config.json",
-        os.path.expanduser("~/.hermes/config.yaml"),
-        os.path.expanduser("~/.hermes/hermes_config.json"),
-        os.path.join(MEMORY_DIR, "hermes_config.json")
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return os.path.join(MEMORY_DIR, "hermes_config.json")
-
-@app.get("/api/hermes/config")
-def api_get_hermes_config():
-    cfg_file = _get_hermes_config_path()
-    try:
-        if os.path.exists(cfg_file):
-            with open(cfg_file, "r", encoding="utf-8") as f:
-                if cfg_file.endswith(".yaml") or cfg_file.endswith(".yml"):
-                    try:
-                        import yaml
-                        data = yaml.safe_load(f) or {}
-                    except Exception:
-                        data = {"raw": f.read()}
-                else:
-                    data = json.load(f)
-            return {"status": "success", "file": cfg_file, "config": data}
-    except Exception as e:
-        logger.warning(f"[Hermes Config] Error reading {cfg_file}: {e}")
-
-    return {
-        "status": "success",
-        "file": cfg_file,
-        "config": {
-            "default_model": "auto/best-free",
-            "default_temperature": 0.7,
-            "global_tools": DEFAULT_HERMES_TOOLS
-        }
-    }
-
-@app.post("/api/hermes/config")
-def api_save_hermes_config(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    cfg_file = _get_hermes_config_path()
-    os.makedirs(os.path.dirname(os.path.abspath(cfg_file)), exist_ok=True)
-    create_rolling_backup(cfg_file, max_backups=3)
-
-    config_data = payload.get("config", payload)
-    try:
-        if cfg_file.endswith(".yaml") or cfg_file.endswith(".yml"):
-            try:
-                import yaml
-                with open(cfg_file, "w", encoding="utf-8") as f:
-                    yaml.dump(config_data, f, allow_unicode=True)
-            except Exception:
-                with open(cfg_file, "w", encoding="utf-8") as f:
-                    json.dump(config_data, f, indent=2, ensure_ascii=False)
-        else:
-            with open(cfg_file, "w", encoding="utf-8") as f:
-                json.dump(config_data, f, indent=2, ensure_ascii=False)
-        return {"status": "success", "file": cfg_file, "config": config_data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fehler beim Speichern der Konfiguration: {e}")
-
-
-@app.post("/api/hermes/memory/purge")
-def api_hermes_memory_purge(request: Request, purge_options: Dict = Body(default={})):
-    """
-    Cleans sessions and chat messages while strictly preserving session_model_usage.
-    """
-    require_admin(request)  # RBAC: Admin-Sache
-    cleared_sessions = 0
-    cleared_messages = 0
-    try:
-        conn = sqlite3.connect(STATE_DB_PATH, timeout=20.0)
-        conn.execute("PRAGMA busy_timeout=20000;")
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) FROM session_model_usage")
-            usage_count_before = cur.fetchone()[0]
-
-            mode = purge_options.get("mode", "empty_and_orphaned")
-            if mode == "all_sessions":
-                cur.execute("DELETE FROM messages")
-                cleared_messages = cur.rowcount
-                cur.execute("DELETE FROM sessions")
-                cleared_sessions = cur.rowcount
-            else:
-                cur.execute("DELETE FROM sessions WHERE message_count = 0 OR message_count IS NULL")
-                cleared_sessions = cur.rowcount
-                cur.execute("DELETE FROM messages WHERE session_id NOT IN (SELECT id FROM sessions)")
-                cleared_messages = cur.rowcount
-
-            conn.commit()
-
-            cur.execute("SELECT COUNT(*) FROM session_model_usage")
-            usage_count_after = cur.fetchone()[0]
-
-            return {
-                "status": "success",
-                "cleared_sessions": cleared_sessions,
-                "cleared_messages": cleared_messages,
-                "model_usage_records_preserved": usage_count_after
-            }
-        finally:
-            conn.close()
-    except Exception as e:
-        logger.error(f"[Memory Purge Error]: {e}")
-        raise HTTPException(status_code=500, detail=f"Fehler bei der Speicherbereinigung: {str(e)}")
+from archon.routers.hermes_ops import (
+    router as _hermes_ops_router,
+    _get_hermes_config_path,
+    api_get_hermes_config,
+    api_save_hermes_config,
+    api_hermes_memory_purge,
+)
+app.include_router(_hermes_ops_router)
 
 # ============================================================================
 # CHAT ROUTER & DELEGATION (ausgelagert nach archon.routers.chat)

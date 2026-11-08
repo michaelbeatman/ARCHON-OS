@@ -96,10 +96,40 @@ def load_notebooks_data() -> Dict[str, dict]:
 
 
 def save_notebooks_data(data: Dict[str, dict]):
-    """Speichert alle Notebooks persistent ab."""
+    """Speichert alle Notebooks persistent ab.
+
+    D-19: Der Write ist atomar (tmp + os.replace). Ein Abbruch mitten im
+    ``json.dump`` hinterliess previously eine kaputte Datei, die beim
+    naechsten Laden still auf ``{}`` zurueckfiel.
+    """
     os.makedirs(os.path.dirname(NOTEBOOKS_FILE), exist_ok=True)
-    with open(NOTEBOOKS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    tmp_path = f"{NOTEBOOKS_FILE}.tmp.{os.getpid()}"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, NOTEBOOKS_FILE)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+def _append_chat_history(notebook_id: str, entries: List[dict]) -> None:
+    """Haengt Chat-Eintraege an den AKTUELLEN Stand an (kein Snapshot).
+
+    D-19: Read-Modify-Write auf dem frisch geladenen Zustand. Wer waehrend
+    der LLM-Synthese eine Quelle hinzufuegt oder einen weiteren Turn
+    speichert, geht hier nicht verloren.
+    """
+    data = load_notebooks_data()
+    if notebook_id not in data:
+        return
+    data[notebook_id].setdefault("chat_history", []).extend(entries)
+    save_notebooks_data(data)
 
 
 def list_notebooks() -> List[dict]:
@@ -486,7 +516,13 @@ async def query_notebook(notebook_id: str, prompt: str) -> dict:
     # KI-Synthese
     response_text = await generate_grounded_llm_response(prompt, chunks, citations)
     
-    # Im Verlauf speichern
+    # D-19: Der Verlauf wird NICHT aus dem Snapshot vor dem LLM-Aufruf
+    # gespeichert. Zwischen ``load_notebooks_data()`` und dem ``await`` der
+    # Synthese koennen Quellen hinzugefuegt oder weitere Chat-Turns
+    # abgespeichert worden sein — der alte Snapshot hat diese Aenderungen
+    # beim Schreiben ueberschrieben (Lost Update).
+    # Jetzt: frisch laden, nur die eigene Nachricht anhaengen, atomar
+    # schreiben. Die Quellen-/Chat-Historie des frischen Stands bleibt.
     citations_str = ", ".join(citations) if citations else "Keine spezifischen Zitate"
     msg_entry_user = {
         "role": "user",
@@ -499,9 +535,8 @@ async def query_notebook(notebook_id: str, prompt: str) -> dict:
         "sources": citations_str,
         "timestamp": datetime.datetime.now().isoformat()
     }
-    
-    data[notebook_id].setdefault("chat_history", []).extend([msg_entry_user, msg_entry_assistant])
-    save_notebooks_data(data)
+
+    _append_chat_history(notebook_id, [msg_entry_user, msg_entry_assistant])
 
     return {
         "response": response_text,

@@ -397,16 +397,39 @@
             msgColorClass = "text-slate-500 text-[10px]";
             nameColorClass = "text-slate-600";
           }
-          const logRow = `<div class="flex gap-3">
-            <span class="text-label-custom flex-shrink-0 font-mono">${time}</span>
-            <span class="${nameColorClass} font-mono flex-shrink-0 w-24 truncate">System</span>
-            <span class="${msgColorClass} flex-1 leading-relaxed">${msg}</span>
-          </div>`;
-          
+          // S-04: Die Agenten-/Tool-Ausgabe wird NICHT als HTML interpretiert —
+          // der Text geht ueber textContent in ein eigenes Element. Damit kann
+          // kein Agent mehr Markup im Cockpit ausfuehren.
+          // F-18: kein `innerHTML +=` (quadratisches Neuparsen des kompletten
+          // Logs) und unbegrenztes DOM-Wachstum — alte Zeilen werden entfernt.
+          const row = document.createElement("div");
+          row.className = "flex gap-3";
+
+          const timeEl = document.createElement("span");
+          timeEl.className = "text-label-custom flex-shrink-0 font-mono";
+          timeEl.textContent = time;
+
+          const nameEl = document.createElement("span");
+          nameEl.className = `${nameColorClass} font-mono flex-shrink-0 w-24 truncate`;
+          nameEl.textContent = "System";
+
+          const msgEl = document.createElement("span");
+          msgEl.className = `${msgColorClass} flex-1 leading-relaxed`;
+          msgEl.textContent = msg;
+
+          row.appendChild(timeEl);
+          row.appendChild(nameEl);
+          row.appendChild(msgEl);
+
           if (logDiv.innerHTML.includes("Connecting to") || logDiv.innerHTML.includes("Heartbeat OK")) {
-            logDiv.innerHTML = logRow;
-          } else {
-            logDiv.innerHTML += logRow;
+            logDiv.innerHTML = "";
+          }
+          logDiv.appendChild(row);
+
+          // F-18: Log-Decke (200 Zeilen) — kein unbegrenztes DOM-Wachstum.
+          const MAX_LOG_ROWS = 200;
+          while (logDiv.childElementCount > MAX_LOG_ROWS) {
+            logDiv.removeChild(logDiv.firstElementChild);
           }
           logDiv.scrollTop = logDiv.scrollHeight;
         } catch (e) {

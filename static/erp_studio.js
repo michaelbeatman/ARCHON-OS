@@ -1949,9 +1949,13 @@
       }
     });
 
-    let createdViaApi = false;
+    // D-16: Bei API-Fehler wird KEIN Beleg erfunden. Die alte Fassung legte
+    // lokal eine fortlaufend numerierte, "gebuchte" Rechnung an — sie existiert
+    // im Backend nicht, wird aber im Board gezeigt und gedruckt; Buchhaltung
+    // und DATEV divergieren still.
+    let resp = null;
     try {
-      const resp = await fetch("/api/erp/documents", {
+      resp = await fetch("/api/erp/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1963,31 +1967,26 @@
           lines: lines
         })
       });
-      if (resp.ok) createdViaApi = true;
-    } catch (e) {}
+    } catch (e) {
+      console.error("ERP-Dokument konnte nicht angelegt werden:", e);
+      if (typeof showNotification === "function") {
+        showNotification("ERP", "Beleg konnte nicht angelegt werden — der Server war nicht erreichbar.", "error");
+      } else {
+        alert("Beleg konnte nicht angelegt werden — der Server war nicht erreichbar.");
+      }
+      return;
+    }
 
-    if (!createdViaApi) {
-      const ent = allEntities.find((x) => x.id === entityId);
-      const prefix = docType === "invoice" ? "RE" : docType === "order" ? "AB" : "ANG";
-      const countSame = cachedOffers.filter((d) => d.doc_type === docType).length + 1;
-      const today = new Date().toISOString().slice(0, 10);
-      const tax = Number((sumNet * 0.19).toFixed(2));
-      cachedOffers.unshift({
-        id: `doc-${Date.now()}`,
-        doc_type: docType,
-        doc_number: `${prefix}-2026-000${countSame}`,
-        status: docType === "invoice" ? "booked" : "sent",
-        entity_id: entityId,
-        entity_name: ent ? ent.display_name : "Kunde",
-        issue_date: today,
-        due_date: today,
-        amount_net: Number(sumNet.toFixed(2)),
-        tax_amount: tax,
-        amount_gross: Number((sumNet + tax).toFixed(2)),
-        currency: "EUR",
-        lines: lines
-      });
-      saveTenantLocalState(cid);
+    if (!resp.ok) {
+      let detail = "";
+      try { detail = await resp.text(); } catch (e) { detail = ""; }
+      console.error("ERP-Dokument konnte nicht angelegt werden:", resp.status, detail);
+      if (typeof showNotification === "function") {
+        showNotification("ERP", `Beleg konnte nicht angelegt werden (HTTP ${resp.status}). Es wurde nichts gebucht.`, "error");
+      } else {
+        alert(`Beleg konnte nicht angelegt werden (HTTP ${resp.status}). Es wurde nichts gebucht.`);
+      }
+      return;
     }
 
     await loadErpDocuments();
@@ -2067,32 +2066,33 @@
 
   window.convertErpDocToInvoice = async function (docId) {
     const cid = getActiveCompanyId();
-    let convertedViaApi = false;
+    // D-16: Gleiche Fehlerklasse wie beim Anlegen — bei API-Fehler wird KEIN
+    // lokaler, gebuchter Beleg erfunden.
+    let resp = null;
     try {
-      const resp = await fetch(`/api/erp/documents/${encodeURIComponent(docId)}/convert`, {
+      resp = await fetch(`/api/erp/documents/${encodeURIComponent(docId)}/convert`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ company_id: cid, target_doc_type: "invoice" })
       });
-      if (resp.ok) convertedViaApi = true;
-    } catch (e) {}
-
-    if (!convertedViaApi) {
-      const src = cachedOffers.find((d) => d.id === docId);
-      if (src) {
-        src.status = "accepted";
-        const invCount = cachedOffers.filter((d) => d.doc_type === "invoice").length + 1;
-        const today = new Date().toISOString().slice(0, 10);
-        cachedOffers.unshift({
-          ...JSON.parse(JSON.stringify(src)),
-          id: `doc-inv-${Date.now()}`,
-          doc_type: "invoice",
-          doc_number: `RE-2026-000${invCount}`,
-          status: "booked",
-          issue_date: today
-        });
-        saveTenantLocalState(cid);
+    } catch (e) {
+      console.error("ERP-Umwandlung konnte nicht angelegt werden:", e);
+      if (typeof showNotification === "function") {
+        showNotification("ERP", "Umwandlung in Rechnung fehlgeschlagen — der Server war nicht erreichbar.", "error");
+      } else {
+        alert("Umwandlung in Rechnung fehlgeschlagen — der Server war nicht erreichbar.");
       }
+      return;
+    }
+
+    if (!resp.ok) {
+      console.error("ERP-Umwandlung konnte nicht angelegt werden:", resp.status);
+      if (typeof showNotification === "function") {
+        showNotification("ERP", `Umwandlung in Rechnung fehlgeschlagen (HTTP ${resp.status}). Es wurde nichts gebucht.`, "error");
+      } else {
+        alert(`Umwandlung in Rechnung fehlgeschlagen (HTTP ${resp.status}). Es wurde nichts gebucht.`);
+      }
+      return;
     }
 
     await loadErpDocuments();

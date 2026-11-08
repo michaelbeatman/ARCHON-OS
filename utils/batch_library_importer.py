@@ -572,12 +572,23 @@ def process_document(file_path: str, vault_dir: str, target_category: str = "aut
     
     # Domain klassifizieren oder vorgegebene Kategorie nutzen
     if target_category and target_category != "auto":
-        sub_folder = target_category
-        domain_title = target_category.replace("_", " ").title()
+        clean_cat = os.path.basename(str(target_category).replace("\\", "/")).strip()
+        if not clean_cat or clean_cat in (".", ".."):
+            sub_folder, domain_title = classify_domain(filename, sample_text)
+        else:
+            sub_folder = clean_cat
+            domain_title = clean_cat.replace("_", " ").title()
     else:
         sub_folder, domain_title = classify_domain(filename, sample_text)
         
-    target_category_dir = os.path.join(bib_dir, sub_folder)
+    from utils.path_jail import safe_path_within, PathJailError
+    candidate_target = os.path.join(bib_dir, sub_folder)
+    try:
+        target_category_dir = safe_path_within(candidate_target, [bib_dir], allow_write=True, allow_dirs=True)
+    except PathJailError:
+        sub_folder, domain_title = classify_domain(filename, sample_text)
+        target_category_dir = safe_path_within(os.path.join(bib_dir, sub_folder), [bib_dir], allow_write=True, allow_dirs=True)
+
     os.makedirs(target_category_dir, exist_ok=True)
     
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")

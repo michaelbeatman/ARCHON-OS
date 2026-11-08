@@ -54,9 +54,9 @@ def _get_kanban_connection():
                 SET status = 'todo', started_at = NULL
                 WHERE status = 'in_progress'
                   AND (
-                    (CAST(started_at AS REAL) > 0 AND CAST(started_at AS REAL) < ?)
-                    OR (started_at IS NOT NULL AND started_at < ?)
-                    OR (started_at IS NULL AND created_at < ?)
+                    (CAST(started_at AS REAL) >= 1000000000 AND CAST(started_at AS REAL) < ?)
+                    OR (started_at IS NOT NULL AND started_at LIKE '____-__-__%' AND started_at < ?)
+                    OR (started_at IS NULL AND created_at IS NOT NULL AND created_at < ?)
                   )
             """, (cutoff_ts, cutoff_iso, cutoff_iso))
             conn.commit()

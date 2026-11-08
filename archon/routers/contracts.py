@@ -45,6 +45,12 @@ def api_contract_stats():
     return {"status": "success", "stats": ContractManager.get_stats()}
 
 
+@router.get("/api/contracts/history")
+def api_get_contracts_history(limit: int = 25):
+    from backend.sla_contract_enforcer import sla_contract_enforcer
+    return {"status": "success", "contracts": sla_contract_enforcer.list_contracts(limit=limit)}
+
+
 @router.get("/api/contracts/{contract_id}")
 @router.get("/api/v1/contracts/{contract_id}")
 def api_get_contract(contract_id: str):
@@ -128,9 +134,3 @@ def api_validate_contract(request: Request, payload: Dict = Body(...)):
         contract_id=payload.get("contract_id", ""),
         delivery_payload=payload.get("delivery", {})
     )
-
-
-@router.get("/api/contracts/history")
-def api_get_contracts_history(limit: int = 25):
-    from backend.sla_contract_enforcer import sla_contract_enforcer
-    return {"status": "success", "contracts": sla_contract_enforcer.list_contracts(limit=limit)}

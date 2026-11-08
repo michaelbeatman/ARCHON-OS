@@ -158,12 +158,13 @@ def _load_kanban_meta() -> Dict:
 
 
 def _save_kanban_meta(meta: Dict) -> None:
-    # 12.10.2026 (Fix Punkt 1, Datenrisiko): atomares Schreiben (Temp+replace).
-    # HINWEIS: Wer load-aendern-speichern als SEQUENZ braucht, muss
-    # backend.kanban_sidecar.update_kanban_meta nutzen (Lock!) — diese Funktion
-    # schreibt nur, sie sperrt nicht.
-    from backend.kanban_sidecar import _write_atomic
-    _write_atomic(meta)
+    # M-12: Diese Funktion war ein zweiter, UNGESPERRTER Writer neben
+    # backend.kanban_sidecar.update_kanban_meta. Damit der naechste Aufrufer die
+    # Sperre nicht umgehen kann, schreiben wir jetzt ausschliesslich ueber den
+    # gelockten update_kanban_meta-Pfad (Load-Modify-Write unter threading.Lock,
+    # atomar via Temp+os.replace).
+    from backend.kanban_sidecar import update_kanban_meta
+    update_kanban_meta(lambda _current: meta)
 
 
 def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:

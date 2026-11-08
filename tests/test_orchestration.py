@@ -455,8 +455,9 @@ class TestSetAgentProfileStatus:
             {"id": "agent-1", "status": "standby", "current_task_id": "old"}
         ]), encoding="utf-8")
 
-        # Patch __file__ to point to tmp_path
-        with patch("archon.core.orchestration.os.path.dirname", return_value=str(tmp_path)):
+        # R-19: SSOT-Aufloesung ueber runtime.APP_ROOT (Repo-Root) — nicht mehr
+        # os.path.dirname(__file__). Der Mock lenkt APP_ROOT auf tmp_path.
+        with patch("archon.core.orchestration.APP_ROOT", str(tmp_path)):
             _set_agent_profile_status(
                 "agent-1", "active", "task-new",
                 rolling_backup=mock_rolling_backup,
@@ -479,7 +480,7 @@ class TestSetAgentProfileStatus:
             {"id": "agent-1", "status": "active", "current_task_id": "task-1"}
         ]), encoding="utf-8")
 
-        with patch("archon.core.orchestration.os.path.dirname", return_value=str(tmp_path)):
+        with patch("archon.core.orchestration.APP_ROOT", str(tmp_path)):
             _set_agent_profile_status(
                 "agent-1", "standby", "",
                 rolling_backup=mock_rolling_backup,
@@ -494,7 +495,7 @@ class TestSetAgentProfileStatus:
         self, mock_rolling_backup, mock_invalidate_profiles, tmp_path
     ):
         """Failure Path: agent_profiles.json existiert nicht — frühzeitiger Return, keine Side-Effects."""
-        with patch("archon.core.orchestration.os.path.dirname", return_value=str(tmp_path)):
+        with patch("archon.core.orchestration.APP_ROOT", str(tmp_path)):
             _set_agent_profile_status(
                 "agent-1", "active", "task-1",
                 rolling_backup=mock_rolling_backup,
@@ -513,7 +514,7 @@ class TestSetAgentProfileStatus:
             {"id": "other", "status": "standby"}
         ]), encoding="utf-8")
 
-        with patch("archon.core.orchestration.os.path.dirname", return_value=str(tmp_path)):
+        with patch("archon.core.orchestration.APP_ROOT", str(tmp_path)):
             _set_agent_profile_status(
                 "missing", "active", "task-1",
                 rolling_backup=mock_rolling_backup,
@@ -530,7 +531,7 @@ class TestSetAgentProfileStatus:
         profiles_file = tmp_path / "agent_profiles.json"
         profiles_file.write_text("not valid json", encoding="utf-8")
 
-        with patch("archon.core.orchestration.os.path.dirname", return_value=str(tmp_path)):
+        with patch("archon.core.orchestration.APP_ROOT", str(tmp_path)):
             _set_agent_profile_status(
                 "agent-1", "active", "task-1",
                 rolling_backup=mock_rolling_backup,

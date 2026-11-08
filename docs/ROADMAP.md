@@ -5,9 +5,9 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`; Code-Stand `c642b924` (Session 6, 08.11. abends) —
+Stand: Branch `refactor/a5-di-config`; Code-Stand `0f6c762f` (Session 6, 08.11. abends) —
 `git log --oneline -1` liefert den aktuellen Kopf, bewusst kein Sha hier.
-Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **971 passed / 8 skipped**,
+Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **1121 passed / 8 skipped**,
 Working Tree sauber bis auf die drei Doku-Dateien dieser Sitzung (`HANDOVER_…_session2.md`,
 `REVIEW_2026-11-08_security.md`, `scripts/audit_route_guards.py`).
 
@@ -21,7 +21,7 @@ Wer wissen will, ob die Angaben hier stimmen, fährt genau das:
 cd /mnt/raid/AgenticOS-2026
 git log --oneline -6                      # die Commits dieser Session
 git status --short                        # fremde Änderungen im Baum
-.venv/bin/python -m pytest tests/ -q      # 971 passed, 8 skipped
+.venv/bin/python -m pytest tests/ -q      # 1121 passed, 8 skipped
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8501/health          # 200
 docker logs --since 10m ARCHON-OS 2>&1 | grep -c Traceback                     # 0
 ```
@@ -117,6 +117,78 @@ Socket-Mount überflüssig macht.
 
 ---
 
+## 1c. 🟠-Cluster in zwei Parallellspuren — gemergt (Session 6, 08.11.)
+
+Zwei file-disjunkte Spuren in eigenen `git worktree`s auf eigenen Branches, danach sequenziell
+gemergt. **49 Commits** (7 Spur A + 39 Spur B + 3 Doku), zwei Merge-Commits, **keine Konflikte**.
+
+| Spur | Profil | Modell | Branch | Dateien |
+|---|---|---|---|---|
+A | `senior_fullstack_engineer` | `minimax/minimax-m3.1-flash` | `fix/orange-a` (Tip `25cb4d0f`) | `main.py`, `views_core.py`, `core_skills_engine.py`, `utils/notebook_engine.py`, `static/*` |
+B | `devops_cloud_sec_specialist` | `deepseek/deepseek-v4-flash-0731` | `fix/orange-b` (Tip `ef81d6a2`) | `backend/*`, `archon/core/*`, `archon/routers/*` |
+
+Merge-Commits: `bbccc189` (A) · `0f6c762f` (B). Worktrees und Branches nach dem Merge entfernt
+(`git branch -d` → beide waren vollständig gemergt).
+
+### Was wirklich erledigt ist — gezählt, nicht geschätzt
+
+**Wichtig:** 46/49 Commits sind **nicht** 46 Befunde. Die Zahl der distinkten Befund-IDs ist höher,
+weil ein Commit mehrere IDs bündelt — und niedriger als die Commit-Zahl, weil drei Commits reine
+Doku sind.
+
+| Größe | Wert | Beleg |
+|---|---|---|
+Commits seit `3269f7e1` | **49** (davon 3 Doku, 2 Merge) | `git log --oneline 3269f7e1..HEAD` |
+distinkte Befund-IDs in Commit-Titeln | **61** (56 🟠 + 5 🟡) | Regex über die Commit-Subjects |
+zusätzlich im Bericht als erledigt, aber **nicht** im Commit-Titel | **5** (D-08…D-12) | `docs/ORANGE_A_BERICHT.md`; Tests `test_save_full_html_*`, `test_gateway_start_*`, `test_oracle_feed_*`, `test_design_themes_*`, `test_default_modellname_*` laufen (9 passed) |
+**Befunde dieser Runde** | **66** (61 🟠 + 5 🟡) | Summe der beiden Zeilen darüber |
+Suite nach beiden Merges | **1121 passed / 8 skipped, EXIT=0** | `.venv/bin/python -m pytest tests/ -q` |
+
+### Stand der 🟠 im Code-Review (`REVIEW_2026-11-08.md`)
+
+Der Parser findet **151** Befunde (34 🔴 · 65 🟠 · 51 🟡 · 1 ⚪); die Kopfzeile des Reviews nennt
+**157** (33 🔴 · 68 🟠 · 55 🟡 · 1 ⚪). Die Differenz sind Befunde, die als Paar in einer Zeile stehen
+(`K-1/K-2`) oder deren Kopfzeile nicht dem Muster `**ID <Punkt>**` folgt — **die Review-Kopfzeile ist
+die belastbare Zahl, nicht mein Parser.**
+
+| Status | Anzahl | Befunde |
+|---|---|---|
+🟠 erledigt in dieser Runde | 61 | siehe Commit-Titel |
+🟠 schon vorher geschlossen | 2 | **Z-09** (`255004dc`: `_hermes_proxy_token()` liefert ohne Env `""` → 502), **Z-13** (durch F5-Härtung `e8f96edc`: `TimeoutExpired` → `_terminate_container`) |
+🟠 **offen** | **2** | **F-15** (`static/js/agent_profiles.js`), **F-16** (`static/js/operations_kanban.js`) — lagen außerhalb des Mandats (Spur A hatte nur `skill_markt.js`, `erp_studio.js`, `wissensbibliothek.js`), von beiden Agenten korrekt als „nicht meine Datei" gemeldet |
+
+Damit ist der 🟠-Block des Code-Reviews bis auf **zwei Frontend-Befunde** abgearbeitet.
+
+### Die Lehre dieser Runde: Kontext, nicht Call-Anzahl, kostet Geld
+
+Gemessen aus `session_model_usage` in der Profil-`state.db`:
+
+```
+Spur B: 373 API-Calls · 1.474.646 Input · 234.743 Output
+        106.914.048 Cache-Read-Tokens  →  $3,88 (geschätzt)
+Spur A: 264 API-Calls ·   723.759 Input · 235.417 Output  →  $1,42 (geschätzt)
+```
+
+**107 Mio Cache-Read-Tokens bei 373 Calls heißt ~287.000 Token Kontext pro Call.** Beide Agenten haben
+das 2.197-Zeilen-Review am Stück gelesen und alle Diffs im Verlauf behalten; dieser Kontext wurde dann
+bei *jedem* Call erneut abgerechnet. Nicht die Zahl der Calls war das Problem, sondern Kontextgröße × Calls.
+
+**Zwei Einschränkungen, damit die Zahl nicht überinterpretiert wird:**
+1. `cost_status = 'estimated'` (Quelle `provider_models_api`), `actual_cost_usd = 0.0` — es gibt **keine**
+   abgerechnete Rechnung. Die Schätzung liegt deutlich über dem OpenRouter-Listenpreis (für Spur B nach
+   Kataloggrößenordnung ~$0,56 statt $3,88). Belastbar wird das nur über die echte Abrechnung.
+2. **Modellwahl war mein Fehler:** `deepseek-v4-flash-0731` ($4,38/Mio In gemessen) und
+   `minimax-m3.1-flash` ($3,31/Mio In) sind 12–16× teurer als `deepseek-v4.1-flash-1017` ($0,27/Mio In),
+   das die Läufe davor nutzten. Ich hatte sie wegen der Rate-Limit-Bucket-Trennung gepinnt, ohne die
+   Preise zu prüfen.
+
+**Konsequenz für künftige Mandate:** Review-Dokumente nicht am Stück lesen (nur die Befund-Abschnitte),
+keine Voll-Diffs im Verlauf, Suite einmal am Ende statt nach jedem Fix, höchstens ~20 Befunde pro Lauf.
+Modellseitig ist `senior_fullstack_engineer` auf `meta/muse-spark-1.3-contributor` gestellt
+($0,10/$0,20 pro Mio — günstigster Output im Feld, per Probe gegen den Listenpreis verifiziert).
+
+---
+
 ## 2. In Arbeit — Mandat 1 wartet auf Entscheidung, Mandate 2+3 sind committet
 
 | Mandat | Profil | Stand |
@@ -181,6 +253,8 @@ schnelleres Embedding-Modell (`all-minilm`, 384 Dimensionen) bzw. ein Cloud-Embe
 | 9 | ~~**`EXEC=0` im Proxy bricht Exec-Pfade**~~ — **entschieden und erledigt (08.11.)**: `ARCHON_PROXY_ALLOW_EXEC=1` in der Projekt-`.env` (dort, weil Compose **nur** daraus interpoliert — `env_file: .env.archon` speist nur den Container, nicht `${…}`-Ausdrücke), Proxy neu erstellt. `EXEC=1` live; End-to-end belegt: `docker_client.exec_command('ARCHON-OS', ['echo','exec-ok'])` liefert den Docker-Stream mit `exec-ok`; roher `exec-create` 201. Grenzen bleiben zu: `restart`/`volumes/create`/`images/json` je **403**, Proxy aus `agents_net` **BLOCKIERT**, `/health` 200. Ausgangslage war: Live-Probe: `POST /containers/ARCHON-OS/exec` über den Proxy → **403**. Betroffene Aufrufer gehen alle über `utils/docker_client` (Transport `DOCKER_HOST`, **kein** 403-Fallback auf den Socket): `main.py:9345/9392` (`/api/v1/container/exec`), `archon/routers/governance.py:143` (promptfoo), `main.py:2730` (archon-quartz), `backend/hermes_updater.py:233`, `utils/docker_client.py:396`. `backend/post_task_pipeline.py:522` (Paperclip) ist tot — Paperclip wurde abgelöst. **Entscheidung offen:** `ARCHON_PROXY_ALLOW_EXEC=1` in `.env.archon` (Proxy-Recreate genügt) **oder** Exec-Pfade auf den Socket pinnen. Sicherheitsverlust durch `=1` ist gering, weil `ARCHON-OS` ohnehin den rohen Socket hält (siehe §1b) | 15 min |
 | 10 | **`shell=True` im JEV-Fast-Path** (neu, von Robert als 🟠 P2 eingestuft) | `main.py:9568` in `@app.post("/api/v1/container/exec")`: nach `require_admin(request)` läuft `subprocess.run(cmd, shell=True)` mit `cmd` aus `jev_router.classify_prompt(req.command)` — also aus einer **LLM-Klassifikation** des Nutzertexts. JEV ist per Default aus (`get_jev_config()["enabled"]` = False), Endpunkt admin-only → Defense-in-Depth-Lücke, kein offenes Tor. Fix: `shell=False` + argv-Validierung | <2 h |
 | 11 | ~~**ARCHON-OS-Recreate für F27**~~ — **live, 08.11. 10:47** | Recreate `-p archon -f docker-compose.dev.yml up -d --no-deps --force-recreate archon` (Image lokal, kein Build). Ist-Werte vorher: `Memory=0 Pids=None Readonly=false CapDrop=None`. Jetzt live: `Memory=2147483648 PidsLimit=200 Readonly=true CapDrop=[ALL] CapAdd=[CHOWN DAC_OVERRIDE SETGID SETUID] no-new-privileges:true`, beide Netze, `running`, `Restarts=0`, **0 Tracebacks**, keine read-only-Fehler im Log, `/health` 200 nach 9 s, `/api/auth/status` 200, `/api/services` 401 (Zaun greift), Proxy-Class-A + `exec_command` liefern `f27-ok`. RAG-Sync nach dem Recreate neu gestartet (State blieb bei 49). **Offen:** das dev-Compose hat für `archon` **keinen** `healthcheck` (nur die base-Datei) — `docker inspect` zeigt keinen Health-Status | — |
+| 13 | **F-15 🟠 XSS in `static/js/agent_profiles.js`** (offen, 08.11.) | Von beiden Spuren korrekt abgelehnt („nicht meine Datei") — lag außerhalb des Mandats. Derselbe Sink-Typ wie D-04 (Chat-Markdown): `innerHTML`/`marked.parse` ohne `DOMPurify`. Fix klein, DOMPurify liegt bereits vendored (`static/vendor/dompurify.min.js`) | 30 min |
+| 14 | **F-16 🟠 `static/js/operations_kanban.js`** (offen, 08.11.) | Ebenfalls außerhalb des Mandats. Gleiche Prüfung wie F-15 nötig (DOM-Aufbau vs. `innerHTML`-Schleife) | 30 min |
 | 12 | **Compose-Doppelung `container_name: ARCHON-OS`** (Altlast) | base (`archon-os`) und dev (`archon`) setzen denselben Container-Namen → `compose config` mit **beiden** Dateien scheitert. Gegen `909421d6` identisch reproduziert, also nicht durch die Fixes entstanden. Deploy-Regel: genau eine Datei pro Aufruf | 15 min |
 
 ---

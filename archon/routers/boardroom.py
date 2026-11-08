@@ -70,47 +70,13 @@ class BoardroomRequest(BaseModel):
 
 def load_boardroom_history():
     hist = _load_json(BOARDROOM_HISTORY_FILE, None)
+    # R-14: keinerlei erfundene Starter-Debatten mehr. Der GET erzeugt weder
+    # Fiktion noch hat er einen Schreib-Seiteneffekt. Ein noch vorhandenes,
+    # altes Sample-Artefakt wird beim ersten echten Speichern ueberschrieben.
     if hist is None:
-        # Initial starter entries so the overview looks alive immediately
-        hist = [
-            {
-                "id": "deb_sample_001",
-                "timestamp": "2026-10-26T21:30:00",
-                "date_display": "26.10.2026 · 21:30 Uhr",
-                "task": "Sollten wir unsere Microservices-Architektur konsolidieren und kostenfreie OmniRoute-Modelle als zentrales Gateway nutzen?",
-                "framework": "Steffi Kieffer Boardroom",
-                "chairman": "Michael Keller (Orchestrator)",
-                "rounds": 2,
-                "slots_count": 3,
-                "slots": [
-                    {"name": "Skeptiker & Risikoprüfer", "role": "Haftungs- & Risikoanalyse", "model": "deepseek/deepseek-r1"},
-                    {"name": "Innovator & Stratege", "role": "Strategische Entscheidungen", "model": "anthropic/claude-3.7-sonnet"},
-                    {"name": "Pragmatiker & Implementierer", "role": "Enterprise Solutions", "model": "deepseek/deepseek-chat"}
-                ],
-                "transcript": "Michael Keller (Moderator): Debatte eröffnet. Fragestellung: Konsolidierung der Microservices und Nutzung von OmniRoute als zentrales Gateway.\n\nSkeptiker (Haftungs- & Risikoanalyse): Aus Ausfallsicherheits- und SLA-Sicht birgt ein zentrales Gateway ein Single-Point-of-Failure-Risiko, sofern kein lokales Fallback auf Ollama oder direkte API-Keys hinterlegt ist.\n\nInnovator (Strategie): Wirtschaftlich sparen wir dadurch erhebliche Infrastrukturkosten. Die Konsolidierung vereinfacht das Routing und Token-Accounting drastisch.\n\nPragmatiker (Enterprise Solutions): Technisch machbar mittels NGINX-Reverse-Proxy und FastAPI-Failover. Empfehlung: Hybrides Modell mit 2 Fallback-Providern.",
-                "synthesis": "KONSENS & ENTSCHEIDUNGSEMPFEHLUNG:\n1. Konsolidierung wird befürwortet unter der Bedingung eines automatischen Fallback-Routings.\n2. OmniRoute fungiert als primäres Gateway; bei Latenz > 5000ms wird nahtlos auf direkte API-Keys bzw. lokale Modelle (Ollama) umgeschaltet.\n3. Implementierung eines 30-Tage-Pilotbetriebs mit Token-Monitoring.",
-                "vault_file": "boardroom_debatte_sample_001.md"
-            },
-            {
-                "id": "deb_sample_002",
-                "timestamp": "2026-10-25T17:15:00",
-                "date_display": "25.10.2026 · 17:15 Uhr",
-                "task": "Einführung eines autonomen Nacht-Watchdogs für CI/CD-Pipelines und Sicherheits-Patches",
-                "framework": "CLEAR-Model",
-                "chairman": "Michael Keller (Orchestrator)",
-                "rounds": 2,
-                "slots_count": 3,
-                "slots": [
-                    {"name": "Code Security Lead", "role": "Zero-Trust & Pentest", "model": "openai/gpt-4o"},
-                    {"name": "Senior DevOps Engineer", "role": "Docker & Infrastructure", "model": "deepseek/deepseek-chat"},
-                    {"name": "Quality Assurance", "role": "E2E Playwright Suite", "model": "google/gemini-2.5-flash"}
-                ],
-                "transcript": "Michael Keller: Diskussion zur Einführung eines autonomen Nacht-Watchdogs für automatische CI/CD-Patches.\n\nSecurity Lead: Autonome Patches dürfen nur in isolierten Staging-Branches committet werden. Production-Deploys erfordern HITL-Freigabe (Human-in-the-Loop).\n\nDevOps: Wir können nächtliche Cron-Jobs aufsetzen, die automatische PRs erstellen und Test-Suites laufen lassen.\n\nQA: Vollständige Test-Suite muss grün sein, bevor ein PR für den Reviewer markiert wird.",
-                "synthesis": "KONSENS & FAZIT:\n- Autonomer Nacht-Watchdog wird aktiviert, agiert jedoch im Staging-Modus.\n- Keine automatischen Merges in den Main-Branch ohne 2FA-Freigabe des Administrators.\n- Slack/Telegram-Benachrichtigung bei erfolgreichem Testlauf.",
-                "vault_file": "boardroom_debatte_sample_002.md"
-            }
-        ]
-        _save_json(BOARDROOM_HISTORY_FILE, hist)
+        return []
+    if not isinstance(hist, list):
+        return []
     return hist
 
 

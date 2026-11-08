@@ -1181,7 +1181,7 @@ class KanbanPaletteUpdate(BaseModel):
     columns: Optional[Dict[str, Dict[str, str]]] = None
     reset: bool = False
 
-def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None) -> Optional[str]:
+def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_heal: bool = False) -> Optional[str]:
     """Ermittelt den relativen Obsidian-Projektordner fuer eine Task mit automatischer Reparatur/Fallback."""
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
@@ -1293,8 +1293,15 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None) -> Opt
         except Exception:
             pass
 
-    # Wenn ein Ordner gefunden wurde, automatisch im Sidecar nachpflegen
-    if rel:
+    # In-Memory Cache im uebergebenen meta-Dict aktualisieren (vermeidet N-fache Lookups)
+    if rel and meta is not None:
+        try:
+            meta.setdefault("tasks", {}).setdefault(task_id, {})["obsidian"] = rel
+        except Exception:
+            pass
+
+    # P-03: Nur bei explizitem auto_heal=True (z.B. Task-Mutation) Sidecar-fsync ausfuehren
+    if rel and auto_heal:
         try:
             from backend.kanban_sidecar import update_kanban_meta
             def _heal(m):

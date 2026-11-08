@@ -123,13 +123,37 @@ def api_crm_get_report():
 
 @router.get("/api/crm/avatars/{contact_id}/{filename}")
 def api_crm_avatar(contact_id: str, filename: str):
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    avatar_path = os.path.join(root_dir, "pocketbase", "pb_data", "storage", "pbc_1512878646", contact_id, filename)
-    if os.path.exists(avatar_path):
-        return FileResponse(avatar_path)
-    alt_path = os.path.join(root_dir, "static", "avatars", filename)
-    if os.path.exists(alt_path):
-        return FileResponse(alt_path)
+    # F13: Path-Traversal-Schutz
+    if any(sep in contact_id or sep in filename for sep in ("/", "\\")) or ".." in contact_id or ".." in filename:
+        raise HTTPException(status_code=400, detail="Ungueltige Pfadparameter")
+
+    from archon.core.runtime import WORKSPACE_DIR
+    from utils.path_jail import safe_filename, safe_path_within, PathJailError
+
+    clean_cid = safe_filename(contact_id)
+    clean_fn = safe_filename(filename)
+
+    pb_avatar_dir = os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data", "storage", "pbc_1512878646", clean_cid)
+    static_avatar_dir = os.path.join(WORKSPACE_DIR, "static", "avatars")
+
+    # 1. Pocketbase Storage
+    try:
+        cand_pb = os.path.join(pb_avatar_dir, clean_fn)
+        safe_pb = safe_path_within(cand_pb, [pb_avatar_dir], allow_write=False, allow_dirs=False)
+        if os.path.isfile(safe_pb):
+            return FileResponse(safe_pb)
+    except (PathJailError, ValueError):
+        pass
+
+    # 2. Static Avatars
+    try:
+        cand_static = os.path.join(static_avatar_dir, clean_fn)
+        safe_static = safe_path_within(cand_static, [static_avatar_dir], allow_write=False, allow_dirs=False)
+        if os.path.isfile(safe_static):
+            return FileResponse(safe_static)
+    except (PathJailError, ValueError):
+        pass
+
     raise HTTPException(status_code=404, detail="Avatar not found")
 
 

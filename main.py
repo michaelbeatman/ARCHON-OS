@@ -383,13 +383,16 @@ except Exception as _pj_err:  # pragma: no cover - darf den Start nie blockieren
         pass
 
     def safe_path(candidate, **kwargs):  # type: ignore[misc]
-        return os.path.realpath(os.path.abspath(os.path.expanduser(str(candidate))))
+        raise PathJailError("PathJail subsystem unavailable (fail-closed)")
 
     def safe_path_within(candidate, roots, **kwargs):  # type: ignore[misc]
-        return os.path.realpath(os.path.abspath(os.path.expanduser(str(candidate))))
+        raise PathJailError("PathJail subsystem unavailable (fail-closed)")
 
     def safe_filename(name):  # type: ignore[misc]
-        return os.path.basename(str(name or "").replace("\\", "/"))
+        clean = os.path.basename(str(name or "").replace("\\", "/"))
+        if not clean or clean in (".", ".."):
+            raise PathJailError(f"Ungueltiger Dateiname: {name!r}")
+        return clean
 
     def allowed_roots(extra=None):  # type: ignore[misc]
         return []
@@ -11559,7 +11562,8 @@ if os.path.exists("static_v2"):
 # reload trigger
 
 @app.get("/api/debug-db")
-def debug_db():
+def debug_db(request: Request):
+    require_admin_or_503(request)
     try:
         with _get_state_db() as conn:
             return {"db_path": STATE_DB_PATH, "msg_count": conn.execute("SELECT count(*) FROM messages").fetchone()[0]}

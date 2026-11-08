@@ -210,6 +210,41 @@
     // REAL-TIME SSE STREAMING (Pillar 1 & 2 / Live Push statt Polling)
     // =========================================================================
     let _opsEventSource = null;
+    // F-16: jedes kanban_updated/task_status/mission_created rief sofort
+    // loadOperationsData(false) aus (4 parallele Fetches, keine Bremse, keine
+    // In-Flight-Sperre) — ueberlappende Antworten ueberschrieben das Board.
+    // Jetzt: Buendeln per Debounce, hoechstens ein Lauf gleichzeitig; ein
+    // waehrend des Laufs eingetroffenes Event wird genau einmal nachgeholt.
+    let _opsReloadTimer = null;
+    let _opsReloadInFlight = false;
+    let _opsReloadPending = false;
+
+    function scheduleOpsKanbanReload() {
+      if (_opsReloadTimer) return;              // laufende Sammelphase: mitbuendeln
+      _opsReloadTimer = setTimeout(function () {
+        _opsReloadTimer = null;
+        _runOpsKanbanReload();
+      }, 400);
+    }
+
+    async function _runOpsKanbanReload() {
+      if (_opsReloadInFlight) {                 // nie zwei Laeufe parallel
+        _opsReloadPending = true;
+        return;
+      }
+      _opsReloadInFlight = true;
+      try {
+        await loadOperationsData(false);
+      } catch (e) {
+        console.error('[Archon SSE] Board-Reload fehlgeschlagen:', e);
+      } finally {
+        _opsReloadInFlight = false;
+        if (_opsReloadPending) {
+          _opsReloadPending = false;
+          scheduleOpsKanbanReload();
+        }
+      }
+    }
     let _opsSseReconnectTimer = null;
 
     function initOpsRealtimeStream() {
@@ -229,7 +264,7 @@
 
             if (evType === 'kanban_updated' || evType === 'task_status' || evType === 'mission_created') {
               console.log('[Archon SSE] Board-Änderung empfangen:', evType, evData);
-              loadOperationsData(false);
+              scheduleOpsKanbanReload();   // F-16: gebuendelt statt pro Event ein Voll-Reload
             } else if (evType === 'task_chunk') {
               const outEl = document.getElementById(`ops-task-stream-${evData.task_id}`);
               if (outEl && evData.chunk) {

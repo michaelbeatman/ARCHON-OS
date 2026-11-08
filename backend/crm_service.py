@@ -691,7 +691,7 @@ class CRMService:
             im_dialog = status_counts.get("Im Dialog", 0)
             interview = status_counts.get("Interview", 0) + status_counts.get("Interview vereinbart", 0)
 
-            reply_rate = round((im_dialog / (erst_nachricht + im_dialog)) * 100) if (erst_nachricht + im_dialog) > 0 else 32
+            reply_rate = round((im_dialog / (erst_nachricht + im_dialog)) * 100) if (erst_nachricht + im_dialog) > 0 else 0
             meeting_rate = round((interview / (im_dialog + interview)) * 100) if (im_dialog + interview) > 0 else 0
 
             # 3. Role regexes matching MissionControlView.tsx exactly
@@ -783,12 +783,12 @@ class CRMService:
 
             # Status breakdown
             status_breakdown = [
-                {"status": "Vernetzt", "count": status_counts.get("Vernetzt", 999)},
-                {"status": "Erstnachricht", "count": status_counts.get("Erstnachricht", 70)},
-                {"status": "Im Dialog", "count": status_counts.get("Im Dialog", 33)},
+                {"status": "Vernetzt", "count": status_counts.get("Vernetzt", 0)},
+                {"status": "Erstnachricht", "count": status_counts.get("Erstnachricht", 0)},
+                {"status": "Im Dialog", "count": status_counts.get("Im Dialog", 0)},
                 {"status": "Interview", "count": interview},
-                {"status": "Regelmäßiger Kontakt", "count": status_counts.get("Regelmäßiger Kontakt", 12)},
-                {"status": "Parkposition", "count": status_counts.get("Parkposition", 21)},
+                {"status": "Regelmäßiger Kontakt", "count": status_counts.get("Regelmäßiger Kontakt", 0)},
+                {"status": "Parkposition", "count": status_counts.get("Parkposition", 0)},
             ]
 
             # 4. Recent contacts (Last 8 updated)

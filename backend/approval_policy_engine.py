@@ -482,6 +482,18 @@ class ApprovalPolicyEngine:
                         "broken_at_id": r["id"],
                         "message": f"Kettenbruch bei Eintrag ID {r['id']}: prev_hash stimmt nicht überein."
                     }
+                # R-30: Validiere auch den berechneten Hash ueber dem tatsaechlichen Inhalt der Zeile
+                if r["action"] == "INIT":
+                    payload = f"{r['prev_hash']}|{r['timestamp']}|{r['user_id']}|INIT|{r['domain']}|{r['policy_key']}|{r['new_value']}"
+                else:
+                    payload = f"{r['prev_hash']}|{r['timestamp']}|{r['user_id']}|{r['action']}|{r['domain']}|{r['policy_key']}|{r['old_value']}->{r['new_value']}"
+                expected_curr_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                if r["current_hash"] != expected_curr_hash:
+                    return {
+                        "valid": False,
+                        "broken_at_id": r["id"],
+                        "message": f"Payload-Manipulation bei Eintrag ID {r['id']}: Berechneter Hash stimmt nicht mit aktuellem Zeileninhalt überein."
+                    }
                 prev_hash = r["current_hash"]
 
             return {

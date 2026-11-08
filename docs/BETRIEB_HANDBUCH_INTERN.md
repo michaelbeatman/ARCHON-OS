@@ -420,3 +420,53 @@ docker logs --since 30m ARCHON-OS 2>&1 | grep -E "Traceback|ERROR"
 2. Status prüfen: Health der drei Dienste + Profilanzahl (siehe Abschnitt 6).
 3. Offene Punkte aus Abschnitt 5 mit dem Nutzer durchgehen.
 4. Bei Änderungen an Profilen: Container stoppen (Fallstrick 1).
+
+---
+
+## 10. Dev-Stack ≠ Prod-Stack (F8, Cluster 3, 2026-11-08)
+
+Der Entwicklungs-Stack (`docker-compose.dev.yml`) ist **kein** Produktions-Setup und
+darf nicht als Vorlage für einen Produktivbetrieb gelten:
+
+| Punkt | Dev (`docker-compose.dev.yml`) | Produktion |
+|-------|-------------------------------|------------|
+| Reload | `uvicorn --reload` | **kein** `--reload` |
+| Bind-Mount | `/mnt/raid/AgenticOS-2026:/app` (schreibbar) | Image, nicht das Repo |
+| Rootfs | `read_only: true` + `tmpfs /tmp` | wie Dev (ab Cluster 3) |
+| Limits | `mem_limit 2g`, `pids_limit 200` | wie Dev |
+| User | `1000:1000` | eigener Benutzer, nie root |
+| Docker-Zugang | Socket-Proxy im internen `archon-admin_net` | dito |
+
+**Warum das wichtig ist (F8):** `--reload` beobachtet `/app`. Jede Schreib-Lücke in
+eine `.py`-Datei unter `/app` wird damit unmittelbar zu Codeausführung im Container —
+und `/app` ist der Bind-Mount des Repos. Der Dev-Stack kombiniert also bewusst:
+uid 1000, schreibbares Repo, Auto-Reload. In Produktion fällt mindestens einer dieser
+drei Faktoren weg (`read_only` schützt das Rootfs, das Image enthält keinen Repo-Mount,
+kein Reload).
+
+**Regeln**
+
+1. `docker-compose.dev.yml` niemals mit `-f docker-compose.dev.yml` in Produktion starten.
+2. Vor einem Produktiv-Deploy prüfen: kein `--reload`, `read_only: true`, Limits gesetzt
+   (`docker inspect ARCHON-OS --format '{{.HostConfig.Memory}} {{.HostConfig.PidsLimit}} {{.HostConfig.ReadonlyRootfs}}'`).
+3. Der `/var/run/docker.sock`-Mount im App-Container bleibt ein Verstärker (Host-Root bei
+   Ausbruch). Er ist nur deshalb vertretbar, weil (a) der Socket-Proxy die Regel-Achse ist
+   und (b) die Sandbox-Pfade (`docker run --rm`) ihn strukturell brauchen.
+   Rückbau-Reihenfolge: Sandbox auf eine eigene Socket-Instanz verschieben, dann Mount
+   entfernen.
+
+### 10.1 Docker-Socket-Proxy (F20)
+
+- Der Proxy hängt **nicht** mehr in `archon-os-dev_agents_net`, sondern ausschließlich im
+  internen Netz `archon-admin_net` (kein Gateway, kein NAT). Mitglieder: `ARCHON-OS`
+  und `hermes`.
+- Methoden-ACL: nur `CONTAINERS` (List/Inspect/Logs/Stats), `ALLOW_START`, `ALLOW_STOP`,
+  `INFO`, `PING`, `VERSION`. `ALLOW_RESTARTS=0`, `EXEC=0`, `VOLUMES=0`, `NETWORKS=0`,
+  `IMAGES=0`, `ALLOW_CONTAINER_CREATE/DELETE/RENAME=0`, `ALLOW_IMAGE_PULL/TAG=0`.
+- Bewusste Einzelfreigaben (Default **0**, nur für die Dauer einer Operation setzen):
+  - `ARCHON_PROXY_ALLOW_UPDATER=1` — Create/Rename/Delete/Pull/Tag für `backend/hermes_updater.py`
+  - `ARCHON_PROXY_ALLOW_EXEC=1` — `/containers/<c>/exec` für die Paperclip-Pipeline
+    (`backend/post_task_pipeline.py:522`)
+- Basic-Auth am Proxy ist in `deploy/docker-socket-proxy/haproxy.cfg` als kommentierte
+  Vorlage hinterlegt. Sie ist **nicht** aktiv, weil `utils/docker_client.py` heute keine
+  Credentials sendet — erst Client und Secret zusammen ausrollen.

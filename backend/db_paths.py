@@ -100,3 +100,36 @@ def resolve_db(filename: str) -> str:
 
     logger.info("[db_paths] %s wird unter %s neu initialisiert.", filename, preferred)
     return preferred
+
+
+class ClosingConnection(sqlite3.Connection):
+    """Verbindung, die sich am Ende eines with-Blocks deterministisch schliesst."""
+    def __enter__(self):
+        super().__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
+
+def get_db_connection(db_name_or_path: str, timeout: float = 15.0) -> sqlite3.Connection:
+    """Erzeugt eine gehärtete ClosingConnection mit busy_timeout und WAL-Modus."""
+    if os.path.isabs(db_name_or_path) or "/" in db_name_or_path or "\\" in db_name_or_path:
+        db_path = db_name_or_path
+    else:
+        db_path = resolve_db(db_name_or_path)
+
+    os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+    conn = sqlite3.connect(db_path, timeout=timeout, factory=ClosingConnection)
+    conn.execute(f"PRAGMA busy_timeout = {int(timeout * 1000)};")
+    try:
+        # WAL-Modus fuer verbesserte Nebenlaeufigkeit (ausser auf Netzwerk-Mounts)
+        if not str(db_path).replace("\\", "/").startswith("/opt/data"):
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA synchronous = NORMAL;")
+    except Exception:
+        pass
+    return conn

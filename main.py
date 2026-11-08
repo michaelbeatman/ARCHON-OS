@@ -370,7 +370,7 @@ from archon.core.mission_control import (  # noqa: E402
 )
 
 from archon.core.profiles import (  # noqa: E402
-    DEFAULT_HERMES_TOOLS,
+    DEFAULT_HERMES_TOOLS, ALL_HERMES_TOOLS, AgentProfileValidationSchema, save_all_agent_profiles,
     get_hermes_profiles_base_dirs, get_primary_hermes_profiles_dir,
     invalidate_hermes_profiles_cache, api_get_hermes_profiles, create_rolling_backup,
     materialize_role_avatars, restore_data_uri_avatars, resolve_avatar_file,
@@ -865,67 +865,6 @@ async def _warm_hermes_skill_caches():
         except Exception as e:
             print(f"[Skills-Warmup] failed: {e}")
     threading.Thread(target=_warm, daemon=True, name="skills-warmup").start()
-
-
-ALL_HERMES_TOOLS = [
-    "web_search", "browser", "terminal", "filesystem", "execute_code", "vision_analyze",
-    "video_analyze", "image_generate", "video_generate", "bfl_flux3", "x_search", "text_to_speech",
-    "speech_to_text", "skills", "task_planning", "memory", "context_engine", "session_search",
-    "clarify", "delegate_task", "cronjob", "home_assistant", "spotify", "discord",
-    "discord_admin", "yuanbao", "computer_use", "a2a"
-]
-
-# Hermes-Profil-Registry -> archon.core.profiles (Import weiter unten)
-
-
-class AgentProfileValidationSchema(BaseModel):
-    id: str
-    name: str
-    person_name: str
-    category: str
-    model: str
-    prompt: Optional[str] = None
-    system_prompt: Optional[str] = None
-    tools: List[str]
-
-    def get_prompt_text(self) -> str:
-        val = (self.prompt or self.system_prompt or "").strip()
-        if not val:
-            val = f"Du bist {self.person_name} ({self.name})."
-        return val
-
-def save_all_agent_profiles(profiles_list):
-    invalidate_hermes_profiles_cache()
-    # SSOT: Projekt-Wurzel immer primär schreiben.
-    try:
-        _app_root = os.path.dirname(os.path.abspath(__file__))
-        _ssot = os.path.join(_app_root, "agent_profiles.json")
-        create_rolling_backup(_ssot, max_backups=3)
-        with open(_ssot, "w", encoding="utf-8") as f:
-            json.dump(profiles_list, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"[Save Profiles] Error writing SSOT agent_profiles.json: {e}")
-
-    candidates = [
-        os.path.join(MEMORY_DIR, "agent_profiles.json"),
-        os.path.join(MEMORY_DIR, "roles.json"),
-        "agent_profiles.json",
-        "roles.json",
-        "/app/agent_profiles.json",
-        "/app/roles.json",
-        os.path.join(WORKSPACE_DIR, "agent_profiles.json"),
-        os.path.join(WORKSPACE_DIR, "roles.json")
-    ]
-    for cand in candidates:
-        try:
-            d = os.path.dirname(cand)
-            if d:
-                os.makedirs(d, exist_ok=True)
-            create_rolling_backup(cand, max_backups=3)
-            with open(cand, "w", encoding="utf-8") as f:
-                json.dump(profiles_list, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
 
 
 from archon.routers.telegram import (

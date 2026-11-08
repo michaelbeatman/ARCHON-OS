@@ -14,7 +14,7 @@ import sqlite3
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request
 from archon.routers._rbac import require_admin_or_503
-from archon.core.runtime import add_ticker, logger
+from archon.core.runtime import add_ticker, logger, MEMORY_DIR
 from archon.core.paths import SETTINGS_FILE, HERMES_PROFILES_DIR
 from backend.db_paths import get_db_connection
 
@@ -28,6 +28,7 @@ router = APIRouter(tags=["guardian"])
 _GUARDIAN_ALLOWED_TIMEFRAMES = ("all", "24h", "7d", "30d")
 _GUARDIAN_CACHE_TTL = 10.0
 _GUARDIAN_CACHE_MAX_ENTRIES = len(_GUARDIAN_ALLOWED_TIMEFRAMES)
+_GUARDIAN_STATS_CACHE: Dict[str, Any] = {}
 
 @router.get("/api/guardian/stats")
 def api_get_guardian_stats(timeframe: str = "all"):

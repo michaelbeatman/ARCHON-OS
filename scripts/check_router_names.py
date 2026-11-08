@@ -177,6 +177,9 @@ def scan_file(filepath: Path):
         elif isinstance(node, ast.ExceptHandler):
             if node.name:
                 comprehension_vars.add(node.name)
+        elif isinstance(node, ast.Lambda):
+            for arg in node.args.args:
+                function_args.add(arg.arg)
     
     # Look for configure() function to get its parameter names
     configure_params = set()

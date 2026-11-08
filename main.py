@@ -6746,73 +6746,13 @@ def api_run_python_sandbox(request: Request, payload: Dict = Body(...)):
     )
 
 
-@app.get("/api/kanban")
-def api_get_kanban():
-    kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.join(HERMES_HOME, "kanban.db")
-    if os.path.exists(kanban_db):
-        kconn = None
-        try:
-            kconn = sqlite3.connect(kanban_db, timeout=5.0)
-            kconn.execute("PRAGMA busy_timeout=5000;")
-            kconn.row_factory = sqlite3.Row
-            rows = kconn.execute(
-                "SELECT id, title, body as description, assignee, status, priority, created_at FROM tasks WHERE status != 'archived' ORDER BY priority DESC, created_at DESC"
-            ).fetchall()
-            return [dict(r) for r in rows]
-        except Exception:
-            pass
-        finally:
-            if kconn:
-                kconn.close()
-    if os.path.exists(KANBAN_CARDS_FILE):
-        try:
-            with open(KANBAN_CARDS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return []
-
-@app.post("/api/kanban")
-async def api_save_kanban(request: Request):
-    try:
-        cards = await request.json()
-        atomic_write_json(KANBAN_CARDS_FILE, cards)
-        kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.join(HERMES_HOME, "kanban.db")
-        if os.path.exists(kanban_db) and isinstance(cards, list):
-            kconn = None
-            try:
-                kconn = sqlite3.connect(kanban_db, timeout=5.0)
-                kconn.execute("PRAGMA busy_timeout=5000;")
-                for c in cards:
-                    if not isinstance(c, dict) or not c.get("id"):
-                        continue
-                    kconn.execute("""
-                        INSERT INTO tasks (id, title, body, assignee, status, priority, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
-                        ON CONFLICT(id) DO UPDATE SET
-                            title=excluded.title,
-                            body=excluded.body,
-                            assignee=excluded.assignee,
-                            status=excluded.status,
-                            priority=excluded.priority
-                    """, (
-                        c.get("id"),
-                        c.get("title", ""),
-                        c.get("description") or c.get("body", ""),
-                        c.get("assignee", "coder"),
-                        c.get("status", "todo"),
-                        c.get("priority", 1),
-                        c.get("created_at")
-                    ))
-                kconn.commit()
-            except Exception:
-                pass
-            finally:
-                if kconn:
-                    kconn.close()
-        return {"status": "success"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+# --- KANBAN PERSISTENZ ROUTER (ausgelagert nach archon.routers.kanban) ---
+from archon.routers.kanban import (
+    router as _kanban_router,
+    api_get_kanban,
+    api_save_kanban,
+)
+app.include_router(_kanban_router)
 
 _TELEMETRY_CACHE = {"ts": 0.0, "containers": 0}
 

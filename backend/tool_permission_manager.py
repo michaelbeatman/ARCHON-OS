@@ -106,7 +106,9 @@ class ToolPermissionManager:
             cmd = item.get("command_to_run")
             now_iso = datetime.datetime.now().isoformat()
             try:
-                proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+                import shlex
+                cmd_args = shlex.split(cmd) if isinstance(cmd, str) else cmd
+                proc = subprocess.run(cmd_args, shell=False, capture_output=True, text=True, timeout=120)
                 output = f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
                 final_status = "installed" if proc.returncode == 0 else "failed"
             except Exception as exc:

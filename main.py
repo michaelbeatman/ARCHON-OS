@@ -3885,7 +3885,9 @@ def exec_container_command_api(req: ContainerExecRequest, request: Request):
                 cmd = classification.get("command")
                 desc = classification.get("description", "System-Befehl")
                 import subprocess
-                proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+                import shlex
+                cmd_args = shlex.split(cmd) if isinstance(cmd, str) else cmd
+                proc = subprocess.run(cmd_args, shell=False, capture_output=True, text=True, timeout=30)
                 out = proc.stdout if proc.stdout else proc.stderr
                 return {
                     "exit_code": proc.returncode,

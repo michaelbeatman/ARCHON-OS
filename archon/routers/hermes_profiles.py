@@ -238,7 +238,8 @@ def api_set_hermes_profile_model(request: Request, profile_id: str, req: SetProf
                     logger.warning(f"Could not update config.yaml for {profile_id}: {cfg_err}")
 
         try:
-            ap_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
+            from archon.core.runtime import APP_ROOT, atomic_write_json
+            ap_file = os.path.join(APP_ROOT, "agent_profiles.json")
             if os.path.exists(ap_file):
                 with open(ap_file, "r", encoding="utf-8") as f:
                     ap_list = json.load(f)
@@ -250,13 +251,11 @@ def api_set_hermes_profile_model(request: Request, profile_id: str, req: SetProf
                             if reas:
                                 item["reasoning_level"] = reas
                             break
-                    with open(ap_file, "w", encoding="utf-8") as f:
-                        json.dump(ap_list, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
+                    atomic_write_json(ap_file, ap_list)
+        except Exception as _ap_err:
+            logger.warning(f"[set_profile_model] Error updating SSOT agent_profiles.json: {_ap_err}")
 
-        global _HERMES_PROFILES_CACHE
-        _HERMES_PROFILES_CACHE = None
+        invalidate_hermes_profiles_cache()
 
         return {"status": "ok", "provider": prov, "model": mod, "result": res}
     except Exception as e:

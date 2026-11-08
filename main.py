@@ -600,6 +600,31 @@ def save_agents(agents: List[Dict]):
     _save_json(agents_root, cleaned)
     _save_json(AGENTS_FILE, cleaned)
 
+    # M-18: Sync zu agent_profiles.json (SSOT fuer Hermes und Chat)
+    try:
+        from archon.core.runtime import APP_ROOT, atomic_write_json
+        from archon.core.profiles import invalidate_hermes_profiles_cache
+        ssot_file = os.path.join(APP_ROOT, "agent_profiles.json")
+        if os.path.exists(ssot_file):
+            with open(ssot_file, "r", encoding="utf-8") as f:
+                p_list = json.load(f)
+            if isinstance(p_list, list):
+                incoming_map = {str(a.get("id")): a for a in agents if a.get("id")}
+                updated = False
+                for p in p_list:
+                    pid = str(p.get("id"))
+                    if pid in incoming_map:
+                        inc = incoming_map[pid]
+                        for fld in ("name", "role", "model", "provider", "system_prompt"):
+                            if fld in inc and inc[fld]:
+                                p[fld] = inc[fld]
+                                updated = True
+                if updated:
+                    atomic_write_json(ssot_file, p_list)
+                    invalidate_hermes_profiles_cache()
+    except Exception:
+        pass
+
 # Rollen: 2,63 MB JSON pro Aufruf (gemessen Median 64-80 ms, nur Parsen).
 # TTL 60 s, weil die Datei ausschliesslich ueber POST /api/roles (save_roles)
 # geschrieben wird — dieser Pfad invalidiert sofort, die TTL deckt nur
@@ -777,7 +802,23 @@ def clear_ticker():
     return {"status": "cleared"}
 
 @app.get("/api/agents")
-def api_get_agents(): return load_agents()
+def api_get_agents():
+    agents = load_agents()
+    try:
+        from archon.core.profiles import api_get_hermes_profiles
+        profiles_list = api_get_hermes_profiles()
+        p_map = {p.get("id"): p for p in profiles_list if isinstance(p, dict) and p.get("id")}
+        for a in agents:
+            aid = a.get("id")
+            if aid in p_map:
+                prof = p_map[aid]
+                if not a.get("avatar_url") and prof.get("avatar_url"):
+                    a["avatar_url"] = prof["avatar_url"]
+                if "runtime_status" not in a and "runtime_status" in prof:
+                    a["runtime_status"] = prof["runtime_status"]
+    except Exception:
+        pass
+    return agents
 
 @app.post("/api/agents")
 def api_save_agents(request: Request, agents: List[Dict]):

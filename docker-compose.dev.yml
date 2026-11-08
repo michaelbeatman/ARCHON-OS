@@ -32,6 +32,27 @@ services:
       DOCKER_HOST: "tcp://docker-socket-proxy:2375"
     ports:
       - "127.0.0.1:8501:8501"
+    # F27 (Cluster 3): harte Limits + Haertung. `deploy.resources` wirkt
+    # ausserhalb von Swarm nicht, deshalb die flachen Compose-Keys.
+    # read_only ist moeglich, weil /app, /opt/data und /app/data Bind-Mounts
+    # sind; /tmp braucht ein tmpfs (HOME=/tmp steht oben bereits).
+    mem_limit: 2g
+    memswap_limit: 2g
+    pids_limit: 200
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /var/cache:rw,size=64m
+    cap_drop:
+      - ALL
+    # Minimum fuer uvicorn --reload mit uid 1000 auf Bind-Mounts.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    security_opt:
+      - "no-new-privileges:true"
     volumes:
       - /mnt/raid/AgenticOS-2026:/app
       - /mnt/raid/AgenticOS-2026/agent_workspace:/app/agent_workspace
@@ -47,6 +68,8 @@ services:
     restart: unless-stopped
     networks:
       - agents_net
+      # F20: eigener Verwaltungsnetz-Zugang zum Socket-Proxy (nur ARCHON-OS).
+      - archon-admin_net
 
   # Docker-API-Proxy: einziger durch die Anwendung genutzter Weg zum Daemon.
   # Ist-Stand 1:1 übernommen (netzwerk-, mount- und env-gleich), bewusst nur
@@ -65,15 +88,18 @@ services:
     # damit der Nachbarordner /usr/local/etc/haproxy/errors/ fuer die
     # errorfile-Direktiven erhalten bleibt.
     command: ["haproxy", "-f", "/usr/local/etc/haproxy/socket-proxy.cfg"]
+    # F20 (Cluster 3): Methoden-ACL verengt. Default = Lesen + Start/Stop.
+    # Create/Delete/Rename/Pull/Tag/Exec/Volumes/Networks/Images sind aus; sie
+    # werden nur noch per explizitem Env-Schalter (Default 0) freigegeben:
+    #   ARCHON_PROXY_ALLOW_UPDATER=1  -> Create/Rename/Delete/Pull/Tag (Updater)
+    #   ARCHON_PROXY_ALLOW_EXEC=1     -> /containers/<c>/exec (Paperclip-Pipeline)
+    # Beides ist eine bewusste Einzelfreigabe, kein Dauerzustand.
     environment:
-      # Updater (Etappe 2): nur die Fuenf Schritte des Image-/Container-Austauschs
-      # freigegeben, jeder hinter seinem eigenen Flag. Start/Stop werden gebraucht,
-      # Restart/Kill/Pause bleiben zu (ALLOW_RESTARTS=0). Default im Cfg-File: 0.
-      ALLOW_CONTAINER_CREATE: "1"
-      ALLOW_CONTAINER_DELETE: "1"
-      ALLOW_CONTAINER_RENAME: "1"
-      ALLOW_IMAGE_PULL: "1"
-      ALLOW_IMAGE_TAG: "1"
+      ALLOW_CONTAINER_CREATE: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_CONTAINER_DELETE: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_CONTAINER_RENAME: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_IMAGE_PULL: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_IMAGE_TAG: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
       ALLOW_RESTARTS: "0"
       ALLOW_START: "1"
       ALLOW_STOP: "1"
@@ -85,32 +111,40 @@ services:
       DELETE: "0"
       DISABLE_IPV6: "0"
       DISTRIBUTION: "0"
-      EVENTS: "1"
-      EXEC: "1"
+      EVENTS: "0"
+      EXEC: "${ARCHON_PROXY_ALLOW_EXEC:-0}"
       GRPC: "0"
-      IMAGES: "1"
+      IMAGES: "0"
       INFO: "1"
       LOG_LEVEL: "info"
-      NETWORKS: "1"
+      NETWORKS: "0"
       NODES: "0"
       PING: "1"
       PLUGINS: "0"
       POST: "1"
       SECRETS: "0"
-      SERVICES: "1"
+      SERVICES: "0"
       SESSION: "0"
       SWARM: "0"
       SYSTEM: "0"
-      TASKS: "1"
+      TASKS: "0"
       VERSION: "1"
-      VOLUMES: "1"
+      VOLUMES: "0"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./deploy/docker-socket-proxy/haproxy.cfg:/usr/local/etc/haproxy/socket-proxy.cfg:ro
+    # F20: NICHT mehr im gemeinsamen agents_net. Der Daemon-Zugang haengt nur
+    # noch am internen Verwaltungsnetz, in dem ausschliesslich ARCHON-OS (und
+    # der Orchestrator) sitzt.
     networks:
-      - agents_net
+      - archon-admin_net
 
 networks:
   agents_net:
     external: true
     name: archon-os-dev_agents_net
+  archon-admin_net:
+    name: archon-admin_net
+    # internal: kein Gateway, kein NAT -> der Proxy ist aus dem Internet/LAN
+    # nicht erreichbar, auch nicht per Portveroeffentlichung.
+    internal: true

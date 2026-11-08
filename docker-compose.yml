@@ -4,6 +4,9 @@ networks:
   agentic_mesh:
     name: archon-os-dev_agents_net
     external: true
+  archon-admin_net:
+    name: archon-admin_net
+    internal: true
 
 services:
   archon-os:
@@ -16,6 +19,8 @@ services:
     user: root
     networks:
       - agentic_mesh
+      # F20: eigener Verwaltungsnetz-Zugang zum Socket-Proxy.
+      - archon-admin_net
     ports:
       - "8501:8501"
     environment:
@@ -40,11 +45,32 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    # F27 (Cluster 3): harte Limits/Haertung. `deploy.resources` allein wirkt
+    # ausserhalb von Swarm nicht.
+    mem_limit: 2g
+    memswap_limit: 2g
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /var/cache:rw,size=64m
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    security_opt:
+      - "no-new-privileges:true"
     deploy:
       resources:
         limits:
           memory: 2048M
           cpus: "2.0"
+          # Compose-v5-Quirk: sobald `deploy.resources.limits` existiert, muss die
+          # PID-Grenze hier stehen (`pids_limit` daneben -> "can't set distinct
+          # values"). Beide Schreibweisen setzen denselben HostConfig-Wert.
+          pids: 200
 
   n8n:
     image: n8nio/n8n:latest
@@ -96,22 +122,31 @@ services:
     image: tecnativa/docker-socket-proxy:latest
     container_name: docker-socket-proxy
     restart: unless-stopped
+    # F20 (Cluster 3): nicht mehr im gemeinsamen Agenten-Netz; Methoden-ACL auf
+    # Lesen + Start/Stop verengt. Erweiterte Rechte nur per Env-Einzelfreigabe:
+    #   ARCHON_PROXY_ALLOW_UPDATER=1 (Create/Rename/Delete/Pull/Tag)
+    #   ARCHON_PROXY_ALLOW_EXEC=1    (Container-Exec, Paperclip-Pipeline)
     networks:
-      - agentic_mesh
+      - archon-admin_net
     environment:
       - CONTAINERS=1
-      - IMAGES=1
+      - IMAGES=0
       - INFO=1
-      - NETWORKS=1
-      - SERVICES=1
-      - TASKS=1
-      - VOLUMES=1
+      - NETWORKS=0
+      - SERVICES=0
+      - TASKS=0
+      - VOLUMES=0
       - POST=1
       - DELETE=0
-      # EXEC=1 noetig fuer /containers/{id}/exec + /exec/{id}/start
-      # (Log-/Datei-/Skill-Ansicht im Panel). Angriffsoberflaeche bleibt
-      # auf die im Proxy aktivierten Endpunkte begrenzt.
-      - EXEC=1
+      - EXEC=${ARCHON_PROXY_ALLOW_EXEC:-0}
+      - ALLOW_START=1
+      - ALLOW_STOP=1
+      - ALLOW_RESTARTS=0
+      - ALLOW_CONTAINER_CREATE=${ARCHON_PROXY_ALLOW_UPDATER:-0}
+      - ALLOW_CONTAINER_DELETE=${ARCHON_PROXY_ALLOW_UPDATER:-0}
+      - ALLOW_CONTAINER_RENAME=${ARCHON_PROXY_ALLOW_UPDATER:-0}
+      - ALLOW_IMAGE_PULL=${ARCHON_PROXY_ALLOW_UPDATER:-0}
+      - ALLOW_IMAGE_TAG=${ARCHON_PROXY_ALLOW_UPDATER:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
@@ -137,6 +172,10 @@ services:
       agentic_mesh:
         aliases:
           - hermes-agent
+      # F20: der Orchestrator nutzt DOCKER_HOST -> braucht Zugang zum Proxy.
+      archon-admin_net:
+        aliases:
+          - hermes-admin
     dns:
       - 8.8.8.8
       - 1.1.1.1

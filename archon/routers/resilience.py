@@ -139,24 +139,6 @@ def api_rollback_task_trace(task_id: str, payload: Dict = Body(...)):
 # --- TASK SELF-HEALING ---
 
 
-@router.post("/api/healing/attempt")
-async def api_attempt_task_healing(request: Request, payload: Dict = Body(...)):
-    _require_admin_or_503(request)
-    from backend.task_self_healer import task_self_healer
-
-    return await task_self_healer.attempt_self_healing(
-        task_id=payload.get("task_id", "heal-task"),
-        task_title=payload.get("title", "Autonome Fehlerbehebung"),
-        failed_code=payload.get("failed_code", ""),
-        error_output=payload.get("error_output", ""),
-        worker_agent=payload.get("worker_agent", "hermes-coder"),
-        affected_file=payload.get("affected_file"),
-        attempt=int(payload.get("attempt", 1)),
-        max_attempts=int(payload["max_attempts"]) if "max_attempts" in payload else None,
-        model=payload.get("model"),
-    )
-
-
 @router.get("/api/healing/logs")
 def api_get_healing_logs(limit: int = 25):
     from backend.task_self_healer import task_self_healer

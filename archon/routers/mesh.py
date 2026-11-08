@@ -49,7 +49,11 @@ def api_diff_preview(request: Request, payload: Dict = Body(...)):
 
     import main as app_main
 
-    repo_root = getattr(app_main, "WORKSPACE_DIR", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    repo_root = (
+        os.path.dirname(os.path.abspath(app_main.__file__))
+        if hasattr(app_main, "__file__")
+        else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
     try:
         real_path = safe_path_within(
             raw_path,

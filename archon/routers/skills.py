@@ -11,6 +11,7 @@ import yaml
 from fastapi import APIRouter, BackgroundTasks, Body, File, HTTPException, Query, Request, UploadFile
 
 from archon.routers._rbac import require_admin_or_503
+from utils.path_jail import safe_filename, PathJailError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
@@ -370,6 +371,12 @@ def api_get_single_hermes_skill(skill_id: str):
 @router.post("/api/hermes/skills/{skill_id}")
 async def api_save_single_hermes_skill(skill_id: str, request: Request):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    if ".." in skill_id or "/" in skill_id or "\\" in skill_id:
+        raise HTTPException(status_code=400, detail="Ungueltige skill_id (Pfad-Traversal unzulaessig).")
+    try:
+        skill_id = safe_filename(skill_id)
+    except (PathJailError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"Ungueltige skill_id: {e}")
     global _HERMES_SKILLS_CACHE
     data = await request.json()
     file_path = find_skill_file(skill_id)

@@ -2844,6 +2844,9 @@ print('Ausführung erfolgreich!')</textarea>
     // Kacheln riefen ins Leere, deshalb blieb auch der n8n-Wrapper leer.
     const OPS_TABS = ["projects", "chat", "kanban", "org", "automation", "comm"];
     function setOperationsTab(tab) {
+      if (typeof window._opsKanbanSetTab === "function") {
+        return window._opsKanbanSetTab(tab);
+      }
       if (OPS_TABS.indexOf(tab) === -1) tab = "projects";
       OPS_TABS.forEach(function (t) {
         const btn = document.getElementById("ops-subtab-" + t);
@@ -2973,7 +2976,11 @@ print('Ausführung erfolgreich!')</textarea>
         if (typeof initWatchdogView === 'function') initWatchdogView();
       }
       if (tabId === "operations") {
-        if (typeof loadOperationsProjects === 'function') {
+        const targetTab = window.currentOpsTab || localStorage.getItem("archon_ops_tab") || "projects";
+        if (typeof setOperationsTab === 'function') {
+          setOperationsTab(targetTab);
+        }
+        if (typeof loadOperationsProjects === 'function' && targetTab === 'projects') {
           loadOperationsProjects();
         }
       }

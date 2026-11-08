@@ -18,6 +18,7 @@ from archon.services import profiles_service
 from archon.services.profiles_service import (
     GateNotApproved, ProfileProtectedError, ProfileValidationError,
 )
+from utils.path_jail import safe_filename, PathJailError
 from pydantic import BaseModel
 
 from archon.core.runtime import add_ticker, logger
@@ -100,6 +101,12 @@ def api_save_hermes_profile(request: Request, profile_data: Dict = Body(...)):
 @router.post("/api/hermes/profiles/{profile_id}/avatar")
 def api_upload_hermes_profile_avatar(request: Request, profile_id: str, data: Dict = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache (fail-closed, vor jedem Schreibpfad)
+    if ".." in profile_id or "/" in profile_id or "\\" in profile_id:
+        raise HTTPException(status_code=400, detail="Ungueltige profile_id (Pfad-Traversal unzulaessig).")
+    try:
+        profile_id = safe_filename(profile_id)
+    except (PathJailError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"Ungueltige profile_id: {e}")
     try:
         import base64, hashlib, time
         data_url = (data.get("image") or data.get("avatar") or "").strip()
@@ -280,7 +287,15 @@ def api_delete_hermes_profile(request: Request, profile_id: str, gate_approved_i
 
 
 @router.post("/api/hermes/profiles/{profile_id}/favorite")
-def api_toggle_hermes_profile_favorite(profile_id: str, is_fav: Optional[bool] = None):
+def api_toggle_hermes_profile_favorite(profile_id: str, is_fav: Optional[bool] = None, request: Request = None):
+    if request is not None and isinstance(request, Request):
+        require_admin_or_503(request)  # RBAC: Admin-Sache
+    if ".." in profile_id or "/" in profile_id or "\\" in profile_id:
+        raise HTTPException(status_code=400, detail="Ungueltige profile_id (Pfad-Traversal unzulaessig).")
+    try:
+        profile_id = safe_filename(profile_id)
+    except (PathJailError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"Ungueltige profile_id: {e}")
     # F-11: keine Erfolgsmeldung ohne Schreibbeleg. Vorher meldete der Endpoint
     # {"status": "success", "is_favorite": False}, wenn kein profile.yaml gefunden
     # oder der Write fehlschlug.

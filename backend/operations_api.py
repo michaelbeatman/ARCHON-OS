@@ -3195,8 +3195,17 @@ def api_esign_list_contracts(limit: int = Query(default=50)):
 
 
 @router.post("/esign/webhook")
-def api_esign_webhook(payload: Dict[str, Any] = Body(...)):
+def api_esign_webhook(request: Request, payload: Dict[str, Any] = Body(...)):
     """Empfängt Webhooks von DocuSeal nach Unterzeichnung eines Dokuments."""
+    webhook_secret = os.getenv("DOCUSEAL_WEBHOOK_SECRET")
+    if webhook_secret:
+        header_secret = request.headers.get("X-DocuSeal-Secret") or request.headers.get("X-Webhook-Secret") or request.query_params.get("secret")
+        if not header_secret or not secrets.compare_digest(str(header_secret), str(webhook_secret)):
+            raise HTTPException(status_code=403, detail="Ungueltiges Webhook-Secret.")
+    else:
+        # Fallback auf Admin-Rollenzaun, falls kein Secret konfiguriert ist
+        require_admin_or_503(request)
+
     try:
         from backend.docuseal_client import docuseal_client
         res = docuseal_client.handle_webhook_event(payload)

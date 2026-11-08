@@ -200,7 +200,8 @@ class ChainedAuditLog:
 
     def list_events(self, category: Optional[str] = None, search: Optional[str] = None, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
         """Liefert gefilterte Audit-Events mit Paginierung für UI und Dashboards."""
-        with self._get_conn() as conn:
+        conn = self._get_conn()
+        try:
             cur = conn.cursor()
             query = "SELECT * FROM audit_log WHERE 1=1"
             params: List[Any] = []
@@ -242,6 +243,8 @@ class ChainedAuditLog:
                 "offset": offset,
                 "entries": res
             }
+        finally:
+            conn.close()
 
     def generate_compliance_export(self, format_type: str = "json") -> Dict[str, Any]:
         """
@@ -249,10 +252,13 @@ class ChainedAuditLog:
         Enthält alle Blöcke, die Merkle-Prüfsumme, Zeitspanne und Validierungs-Signatur.
         """
         verification = self.verify_integrity()
-        with self._get_conn() as conn:
+        conn = self._get_conn()
+        try:
             cur = conn.cursor()
             cur.execute("SELECT * FROM audit_log ORDER BY id ASC")
             rows = [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
 
         meta = {
             "standard": "GoBD & ISO/IEC 27001 Revisionssicherheits-Nachweis",

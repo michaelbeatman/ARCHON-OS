@@ -14,9 +14,11 @@ import sys
 import re
 import shutil
 import glob
+import threading
 import time
 import json
 import datetime
+import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -186,6 +188,30 @@ VAULT_CACHE_FILE = os.path.join(MEMORY_DIR, "obsidian_vault_tree_cache.json")
 _vault_tree_in_memory_cache = None
 _vault_tree_cache_time = 0
 _vault_is_scanning = False
+# N-09: Check-then-Act ueber Threads. Ohne Sperre starten N gleichzeitige
+# Cold-Requests N Scans und schreiben alle in dieselbe Cache-Datei; mit
+# ``open(...,"w")`` kann ein Abbruch sie abschneiden (halber JSON-File).
+# Der Lock deckt die Belegung des Scan-Flags ab, der atomare Write
+# (tmp + os.replace) die Datei.
+_vault_scan_lock = threading.Lock()
+
+
+def _write_cache_atomic(path: str, payload: Dict[str, Any]) -> None:
+    """Schreibt den Vault-Cache atomar (tmp + replace) — nie ein halbes JSON."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp_path = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 def _build_vault_tree_fast(current_dir, rel_path="", depth=0, max_depth=4):
     if depth > max_depth:
@@ -233,18 +259,29 @@ def _build_vault_tree_fast(current_dir, rel_path="", depth=0, max_depth=4):
 
 def _refresh_vault_cache_worker(vault_dir):
     global _vault_tree_in_memory_cache, _vault_tree_cache_time, _vault_is_scanning
-    _vault_is_scanning = True
+    # N-09: Das Scan-Flag wird unter dem Lock gesetzt (Check-then-Act ueber
+    # Threads). Ein Thread, der den Lock nicht bekommt, bricht ab, statt
+    # parallel zu scannen und dieselbe Datei zu schreiben.
+    with _vault_scan_lock:
+        if _vault_is_scanning:
+            return None
+        _vault_is_scanning = True
     try:
         tree = _build_vault_tree_fast(vault_dir)
         _vault_tree_in_memory_cache = tree
         _vault_tree_cache_time = time.time()
-        os.makedirs(os.path.dirname(os.path.abspath(VAULT_CACHE_FILE)), exist_ok=True)
-        with open(VAULT_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"vault_path": vault_dir, "tree": tree, "updated_at": _vault_tree_cache_time}, f, ensure_ascii=False)
+        # N-09: atomarer Write — die Cache-Datei kann nie halb geschrieben sein.
+        _write_cache_atomic(
+            VAULT_CACHE_FILE,
+            {"vault_path": vault_dir, "tree": tree, "updated_at": _vault_tree_cache_time},
+        )
+        return tree
     except Exception as e:
         print(f"Fehler im Vault-Cache Worker: {e}")
+        return None
     finally:
-        _vault_is_scanning = False
+        with _vault_scan_lock:
+            _vault_is_scanning = False
 
 @router.get("/library/vault/tree")
 async def get_vault_tree(force_refresh: bool = False):
@@ -273,7 +310,6 @@ async def get_vault_tree(force_refresh: bool = False):
             
             # Wenn Cache älter als 10 Minuten ist und kein Scan läuft: im Hintergrund aktualisieren
             if (now - _vault_tree_cache_time > 600) and not _vault_is_scanning:
-                import threading
                 threading.Thread(target=_refresh_vault_cache_worker, args=(vault_dir,), daemon=True).start()
 
             return {
@@ -285,11 +321,12 @@ async def get_vault_tree(force_refresh: bool = False):
         except Exception:
             pass
 
-    # 3. Wenn kein Cache existiert: Direkt erstellen & cachen
-    import threading
-    if not _vault_is_scanning:
-        # Falls Cache leer ist, synchron aufbauen und cachen
-        _refresh_vault_cache_worker(vault_dir)
+    # 3. Wenn kein Cache existiert: erstellen & cachen.
+    # P-01: Der Vault-Walk dauert gemessen ~10 s. Inline im ``async def``
+    # friert er den Event-Loop ein (SSE-Streams, laufende Chats). Der Scan
+    # laeuft deshalb in einem Thread; der Handler wartet await auf das Ergebnis.
+    # Der Worker selbst entscheidet per Lock, ob ueberhaupt gescannt wird.
+    await asyncio.to_thread(_refresh_vault_cache_worker, vault_dir)
 
     return {
         "vault_path": vault_dir,
@@ -923,34 +960,43 @@ async def run_showroom_code(request: Request, payload: CodeRunPayload):
             tmp_path = f.name
 
         start_time = time.perf_counter()
+
+        def _run_python_sync():
+            """Synchroner Teil — laeuft im Thread (P-02), nicht im Event-Loop."""
+            try:
+                res = subprocess.run(
+                    [sys.executable or "python", tmp_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=12,
+                    cwd=str(scratch_dir),
+                    input=payload.stdin or ""
+                )
+                elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
+                return {
+                    "status": "success" if res.returncode == 0 else "error",
+                    "exit_code": res.returncode,
+                    "stdout": res.stdout,
+                    "stderr": res.stderr,
+                    "duration_ms": elapsed_ms,
+                    "language": "python"
+                }
+            except subprocess.TimeoutExpired:
+                elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
+                return {
+                    "status": "timeout",
+                    "exit_code": 124,
+                    "stdout": "",
+                    "stderr": "Ausfuehrung nach 12 Sekunden abgebrochen (Timeout).",
+                    "duration_ms": elapsed_ms,
+                    "language": "python"
+                }
+
+        # P-02: Bis zu 12 s blockierender subprocess.run im async-Handler
+        # friert den Event-Loop ein (SSE, laufende Chats). Der Lauf geht
+        # deshalb in einen Thread.
         try:
-            res = subprocess.run(
-                [sys.executable or "python", tmp_path],
-                capture_output=True,
-                text=True,
-                timeout=12,
-                cwd=str(scratch_dir),
-                input=payload.stdin or ""
-            )
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
-            return {
-                "status": "success" if res.returncode == 0 else "error",
-                "exit_code": res.returncode,
-                "stdout": res.stdout,
-                "stderr": res.stderr,
-                "duration_ms": elapsed_ms,
-                "language": "python"
-            }
-        except subprocess.TimeoutExpired:
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
-            return {
-                "status": "timeout",
-                "exit_code": 124,
-                "stdout": "",
-                "stderr": "Ausfuehrung nach 12 Sekunden abgebrochen (Timeout).",
-                "duration_ms": elapsed_ms,
-                "language": "python"
-            }
+            return await asyncio.to_thread(_run_python_sync)
         except Exception as ex:
             return {
                 "status": "error",

@@ -422,6 +422,24 @@ async def _dispatch_to_omniroute_or_container_exec(
     except Exception as mem_err:
         pass
 
+    # Spekulatives Vorladen von Entitaeten (CRM, ERP, relevante Notizen)
+    prefetch_addon = ""
+    try:
+        from backend.speculative_prefetcher import get_speculative_prefetcher
+        prefetcher = get_speculative_prefetcher()
+        p_res = prefetcher.prefetch_for_task(prompt)
+        p_lines = []
+        if "crm_contact" in p_res:
+            c = p_res["crm_contact"]
+            p_lines.append(f"- CRM-Kontakt: {c.get('first_name', '')} {c.get('last_name', '')} ({c.get('email', '')}) [Firma: {c.get('company', 'Unbekannt')}]")
+        if "erp_doc" in p_res:
+            d = p_res["erp_doc"]
+            p_lines.append(f"- ERP-Dokument: {d.get('doc_number', '')} ({d.get('type', '')}) [Status: {d.get('status', '')}]")
+        if p_lines:
+            prefetch_addon = "\n\n### [SPEKULATIV VORGELADENE KONTEXT-DATEN]:\n" + "\n".join(p_lines)
+    except Exception:
+        pass
+
     # Prompt-Registry & Canary-Routing
     effective_prompt_info = None
     try:
@@ -435,7 +453,7 @@ async def _dispatch_to_omniroute_or_container_exec(
     except Exception:
         pass
 
-    full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{memory_context_addon}".strip()
+    full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{memory_context_addon}{prefetch_addon}".strip()
 
     messages = [
         {"role": "system", "content": full_system_prompt},

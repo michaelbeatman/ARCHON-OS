@@ -427,8 +427,19 @@ async def save_prompt_template(request: Request, req: TemplateSaveRequest):
             f"# AUSGABE-ARTEFAKT:\n{req.fields.get('ausgabe_artefakt', '')}"
         )
     
+    # Z-02: die ID darf nicht kollidieren — der alte Modulo (time.time()*1000
+    # % 100000) wiederholte den Wertebereich alle 100 s; /schema und /render
+    # nahmen dann per next(...) die falsche Vorlage.
+    tpl_id_base = f"tpl-custom-{int(time.time() * 1000)}"
+    existing_ids = {t.get("id") for t in data.get("templates", [])}
+    tpl_id = tpl_id_base
+    _suffix = 1
+    while tpl_id in existing_ids:
+        tpl_id = f"{tpl_id_base}-{_suffix}"
+        _suffix += 1
+
     new_tpl = {
-        "id": f"tpl-custom-{int(time.time()*1000)%100000}",
+        "id": tpl_id,
         "category": req.category,
         "title": req.title,
         "description": req.description or "",

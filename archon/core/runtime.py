@@ -128,6 +128,7 @@ def _save_json(filepath: str, data: Any) -> None:
         atomic_write_json(filepath, data)
     except Exception as e:
         print(f"Error saving {filepath}: {e}", file=sys.stderr)
+        raise
 
 
 def atomic_write_json(filepath: str, data: Any, indent: int = 2) -> None:

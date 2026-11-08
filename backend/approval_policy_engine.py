@@ -344,34 +344,45 @@ class ApprovalPolicyEngine:
             if not req:
                 raise ValueError("Freigabeanfrage nicht gefunden.")
 
+            if req["status"] in ("approved", "rejected"):
+                raise ValueError(f"Anfrage kann nicht abgelehnt werden (aktueller Status: {req['status']}).")
+
+            if req["status"] in ("approved", "rejected"):
+                raise ValueError(f"Anfrage kann nicht genehmigt werden (aktueller Status: {req['status']}).")
+
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
             deleg_row = cur.execute("SELECT * FROM delegation_settings WHERE user_id = 'admin'").fetchone()
             is_deleg_active = bool(deleg_row["is_active"]) if deleg_row else False
             sub_name = deleg_row["substitute_name"] if deleg_row else "Katharina Völk (QM)"
             actual_approver = f"{approver_id} (i.V. {sub_name})" if is_deleg_active and approver_id == "admin" else approver_id
 
-            if req["requires_four_eyes"] and not req["first_approver"]:
-                # 1st approval step
-                cur.execute("""
-                    UPDATE approval_requests
-                    SET first_approver = ?, first_approved_at = ?, status = 'first_approved'
-                    WHERE id = ?
-                """, (actual_approver, now, request_id))
-                new_status = "first_approved"
-            else:
-                # Final approval step
-                if req["requires_four_eyes"]:
+            if req["requires_four_eyes"]:
+                if not req["first_approver"]:
+                    # 1st approval step
+                    cur.execute("""
+                        UPDATE approval_requests
+                        SET first_approver = ?, first_approved_at = ?, status = 'first_approved'
+                        WHERE id = ?
+                    """, (actual_approver, now, request_id))
+                    new_status = "first_approved"
+                else:
+                    # 2nd approval step: Prüfen, dass zweite Genehmigung von einer anderen Person stammt
+                    first = (req["first_approver"] or "").split(" ")[0].lower()
+                    second = (actual_approver or "").split(" ")[0].lower()
+                    if req["first_approver"] == actual_approver or first == second:
+                        raise ValueError("Vier-Augen-Prinzip: Zweitgenehmigung muss durch eine andere Person erfolgen.")
                     cur.execute("""
                         UPDATE approval_requests
                         SET second_approver = ?, second_approved_at = ?, status = 'approved'
                         WHERE id = ?
                     """, (actual_approver, now, request_id))
-                else:
-                    cur.execute("""
-                        UPDATE approval_requests
-                        SET first_approver = ?, first_approved_at = ?, status = 'approved'
-                        WHERE id = ?
-                    """, (actual_approver, now, request_id))
+                    new_status = "approved"
+            else:
+                cur.execute("""
+                    UPDATE approval_requests
+                    SET first_approver = ?, first_approved_at = ?, status = 'approved'
+                    WHERE id = ?
+                """, (actual_approver, now, request_id))
                 new_status = "approved"
 
             audit_hash = self._log_audit_change(actual_approver, "APPROVE_REQUEST", req["domain"], request_id, req["status"], new_status, conn=conn)
@@ -391,6 +402,9 @@ class ApprovalPolicyEngine:
             req = cur.execute("SELECT * FROM approval_requests WHERE id = ?", (request_id,)).fetchone()
             if not req:
                 raise ValueError("Freigabeanfrage nicht gefunden.")
+
+            if req["status"] in ("approved", "rejected"):
+                raise ValueError(f"Anfrage kann nicht abgelehnt werden (aktueller Status: {req['status']}).")
 
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
             cur.execute("""

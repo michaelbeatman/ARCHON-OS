@@ -3392,7 +3392,6 @@ from archon.routers.resilience import (
     api_get_task_trace,
     api_fork_task_trace,
     api_rollback_task_trace,
-    api_attempt_task_healing,
     api_get_healing_logs,
 )
 from archon.routers.mesh import (
@@ -3437,6 +3436,24 @@ from archon.routers.autonomy_settings import (
 app.include_router(_resilience_router)
 app.include_router(_mesh_router)
 app.include_router(_autonomy_settings_router)
+
+
+@app.post("/api/healing/attempt")
+async def api_attempt_task_healing(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)
+    from backend.task_self_healer import task_self_healer
+
+    return await task_self_healer.attempt_self_healing(
+        task_id=payload.get("task_id", "heal-task"),
+        task_title=payload.get("title", "Autonome Fehlerbehebung"),
+        failed_code=payload.get("failed_code", ""),
+        error_output=payload.get("error_output", ""),
+        worker_agent=payload.get("worker_agent", "hermes-coder"),
+        affected_file=payload.get("affected_file"),
+        attempt=int(payload.get("attempt", 1)),
+        max_attempts=int(payload["max_attempts"]) if "max_attempts" in payload else None,
+        model=payload.get("model"),
+    )
 
 
 # Feature 23: Dynamisches Modell-Routing nach Echtzeit-Telemetrie (Bandit-Router)

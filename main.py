@@ -2807,44 +2807,13 @@ async def on_shutdown_graceful():
 
 
 # --- DOKUMENTEN-PARSING & TABELLENEXTRAKTION (t-539b65) ---
-def _resolve_parser_input(filepath: str) -> str:
-    """Prueft den Parser-Eingabepfad gegen die Bibliotheks-Wurzel (D-05).
-
-    Der Parser liest beliebige Formate ein. Frueher wurde jeder angegebene Pfad
-    geoeffnet (``/opt/data/.env``, ``/app/.env.archon``). Erlaubt ist jetzt nur
-    noch ``library/raw_docs`` — die Wurzel, in die Uploads geschrieben werden.
-    """
-    if not filepath:
-        raise HTTPException(status_code=400, detail="Gültiger 'filepath' erforderlich.")
-    from utils.batch_library_importer import resolve_raw_docs_dir
-    try:
-        return safe_path_within(
-            filepath, [resolve_raw_docs_dir()], must_exist=True, allow_dirs=False,
-        )
-    except PathJailError as e:
-        raise HTTPException(status_code=403, detail=f"Pfad nicht erlaubt: {e}")
-
-
-@app.post("/api/documents/parse")
-@app.post("/api/v1/documents/parse")
-def api_parse_document(request: Request, payload: dict = Body(...)):
-    # RBAC: der Parser liest Dateien im Auftrag des Aufrufers -> Admin-Sache.
-    require_admin_or_503(request)
-    from backend.document_parser import DocumentParserEngine
-    real_path = _resolve_parser_input(payload.get("filepath", ""))
-    res = DocumentParserEngine.parse_file(real_path)
-    return {"status": "success", "result": res}
-
-
-@app.post("/api/documents/extract-tables")
-@app.post("/api/v1/documents/extract-tables")
-def api_extract_tables(request: Request, payload: dict = Body(...)):
-    require_admin_or_503(request)
-    from backend.document_parser import DocumentParserEngine
-    real_path = _resolve_parser_input(payload.get("filepath", ""))
-    res = DocumentParserEngine.parse_file(real_path)
-    tables = res.get("tables") or res.get("tables_by_sheet") or []
-    return {"status": "success", "tables": tables, "format": res.get("format")}
+from archon.routers.documents import (
+    router as _documents_router,
+    _resolve_parser_input,
+    api_parse_document,
+    api_extract_tables,
+)
+app.include_router(_documents_router)
 
 
 # --- DEAL-PIPELINE & FORECAST-ENGINE (ausgelagert nach archon.routers.deals) ---

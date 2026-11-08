@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
+
+from archon.core.paths import STUDIO_BG_UPLOAD_DIR
 
 logger = logging.getLogger("archon.routers.ui")
 
@@ -137,3 +140,34 @@ def api_save_full_html(request: Request, req: FullHtmlSaveRequest):
     if hasattr(app_main, "add_ticker"):
         app_main.add_ticker("Design Studio", "HTML & Design-Stand erfolgreich eingefroren und gespeichert.")
     return {"status": "success", "written_to": written, "failed": failed}
+
+
+@router.post("/api/studio/upload-bg")
+async def api_studio_upload_bg(file: UploadFile = File(...)):
+    """Lädt ein Hintergrundbild (JPG/PNG/WebP) für das CSS Live Studio hoch.
+    Speichert unter /static/uploads/ und liefert die URL zurück."""
+    allowed_ext = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed_ext:
+        raise HTTPException(status_code=400, detail=f"Dateityp '{ext}' nicht erlaubt (jpg, jpeg, png, webp, gif).")
+    content = await file.read()
+    if len(content) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Bild zu groß (max. 8 MB).")
+    os.makedirs(STUDIO_BG_UPLOAD_DIR, exist_ok=True)
+    ts = int(time.time() * 1000)
+    safe_ext = ext if ext else ".jpg"
+    out_name = f"studio-bg_{ts}{safe_ext}"
+    out_path = os.path.join(STUDIO_BG_UPLOAD_DIR, out_name)
+    with open(out_path, "wb") as f:
+        f.write(content)
+    import main as app_main
+
+    if hasattr(app_main, "add_ticker"):
+        app_main.add_ticker("CSS Studio", f"Hintergrundbild hochgeladen: {out_name}")
+    return {"status": "success", "url": f"/static/uploads/{out_name}", "filename": out_name, "size": len(content)}

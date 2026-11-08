@@ -11517,10 +11517,31 @@ def api_query_rag(q: str = Query(..., description="Suchbegriff für das Anything
 
 
 @app.post("/api/diff/preview")
-def api_diff_preview(payload: Dict = Body(...)):
+def api_diff_preview(request: Request, payload: Dict = Body(...)):
+    # F25 (Security-Review): Der Handler las ``file_path`` ohne jede Pruefung
+    # und ohne Rollenzaun — damit liest jede eingeloggte Rolle beliebige
+    # Dateien des Containers (u. a. ``.env.archon``, Service-Token) und
+    # bekommt deren Inhalt als Diff geliefert.
+    # Jetzt: Admin-Zaun + Jail auf den Projekt-Wurzelbaum.
+    require_admin_or_503(request)
     from backend.diff_engine import compute_file_diff
+
+    raw_path = str(payload.get("file_path", "")).strip()
+    if not raw_path:
+        raise HTTPException(status_code=400, detail="Gültiger 'file_path' erforderlich.")
+
+    # Der Diff dient dem Bearbeiten von Projektdateien — erlaubt ist der
+    # Repo-Wurzelbaum (inkl. data/, static/), nicht das Systemverzeichnis.
+    repo_root = os.path.dirname(os.path.abspath(__file__))
+    try:
+        real_path = safe_path_within(
+            raw_path, [repo_root], must_exist=True, allow_dirs=False,
+        )
+    except PathJailError as e:
+        raise HTTPException(status_code=403, detail=f"Pfad nicht erlaubt: {e}")
+
     return compute_file_diff(
-        file_path=payload.get("file_path", ""),
+        file_path=real_path,
         new_content=payload.get("new_content", ""),
         context_lines=int(payload.get("context_lines", 3))
     )
@@ -11676,7 +11697,12 @@ def api_get_consensus_history(limit: int = 25):
     return {"status": "success", "consensus_history": get_consensus_history(limit=limit)}
 
 @app.post("/api/healing/attempt")
-async def api_attempt_task_healing(payload: Dict = Body(...)):
+async def api_attempt_task_healing(request: Request, payload: Dict = Body(...)):
+    # F2 (Security-Review): Die Route hatte keinen Rollenzaun — jede
+    # eingeloggte Rolle konnte den Selbstheilungspfad ausloesen (der
+    # Shell-Injection-Teil ist ueber validate_affected_file geschlossen,
+    # der Autorisierungs-Teil nicht).
+    require_admin_or_503(request)
     from backend.task_self_healer import task_self_healer
     return await task_self_healer.attempt_self_healing(
         task_id=payload.get("task_id", "heal-task"),

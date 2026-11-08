@@ -8,6 +8,9 @@ Endpunkt bedeutete Root auf dem Host.
 Jetzt:
   * Transport umschaltbar per DOCKER_HOST (tcp://docker-socket-proxy:2375)
     mit Fallback auf den Unix-Socket.
+  * Der privilegierte Admin-Client hat dafuer einen eigenen Schalter
+    (DOCKER_ADMIN_HOST), damit der Updater den Proxy nutzen kann, ohne dass
+    die uebrigen Aufrufer ihren Transport wechseln.
   * Methoden-/Pfad-Allowlist: nur die tatsächlich benötigten Operationen.
   * Container-Namen werden strikt validiert (kein '/', kein '..', keine
     Query-Injection in den API-Pfad).
@@ -57,6 +60,11 @@ _ALLOWED = [
     ("POST", re.compile(r"^/exec/[^/]+/start$")),
     ("POST", re.compile(r"^/containers/[^/]+/(start|stop|restart)$")),
 ]
+
+# Eigener Transport-Schalter des Admin-Clients (Etappe 3). Bewusst NICHT
+# DOCKER_HOST: das ist global und wuerde main.py, archon/routers/* und
+# ephemeral_sandbox mitziehen, die andere Proxy-Flags brauchen.
+_ADMIN_HOST_ENV = "DOCKER_ADMIN_HOST"
 
 # ---------------------------------------------------------------------------
 # Eigene, getrennte Allowlist fuer den privilegierten Admin-Client.
@@ -315,11 +323,22 @@ class DockerAdminClient(DockerClient):
     Gleicher Transport wie DockerClient (DOCKER_HOST bzw. Unix-Socket), aber
     eigene Allowlist (_ADMIN_ALLOWED). Nur der Updater darf das nutzen.
 
+    Zusaetzlich DOCKER_ADMIN_HOST: eigener Transport-Ziel fuer genau diesen
+    Client. DOCKER_HOST ist global und wuerde main.py, archon/routers/* und
+    ephemeral_sandbox mitziehen, die andere Flags brauchen — deshalb ein
+    eigener Name mit Fallback: DOCKER_ADMIN_HOST -> DOCKER_HOST -> Unix-Socket.
+
     Jede Methode validiert ihre Argumente, bevor sie den API-Pfad baut — ein
     Aufrufer kann also keinen Query-Anhang an einen Namen kleben.
     """
 
     _rules = _ADMIN_ALLOWED
+
+    def __init__(self) -> None:
+        super().__init__()
+        admin_host = os.environ.get(_ADMIN_HOST_ENV, "").strip()
+        if admin_host:
+            self._host = admin_host
 
     # ---------------- Assets ----------------
 

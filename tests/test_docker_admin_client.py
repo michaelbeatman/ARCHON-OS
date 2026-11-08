@@ -21,6 +21,7 @@ from utils.docker_client import (
     DockerClient,
     DockerError,
     _ADMIN_ALLOWED,
+    _ADMIN_HOST_ENV,
     _ALLOWED,
     docker_client,
     validate_image_ref,
@@ -224,3 +225,81 @@ def test_env_seconds_falls_back_on_garbage(monkeypatch):
     monkeypatch.setenv(hermes_updater._PULL_TIMEOUT_ENV, "keine-zahl")
 
     assert hermes_updater._env_seconds(hermes_updater._PULL_TIMEOUT_ENV, 1800.0) == 1800.0
+
+
+# --------------------------------------------------------------------------
+# Etappe 3: eigenes Transport-Ziel des Admin-Clients (DOCKER_ADMIN_HOST)
+# --------------------------------------------------------------------------
+
+def _fresh_admin(monkeypatch, admin_host=None, docker_host=None):
+    """Neuer Admin-Client mit kontrollierter Umgebung (kein Import-Zeitpunkt)."""
+    if admin_host is None:
+        monkeypatch.delenv(_ADMIN_HOST_ENV, raising=False)
+    else:
+        monkeypatch.setenv(_ADMIN_HOST_ENV, admin_host)
+    if docker_host is None:
+        monkeypatch.delenv("DOCKER_HOST", raising=False)
+    else:
+        monkeypatch.setenv("DOCKER_HOST", docker_host)
+    return DockerAdminClient()
+
+
+def test_admin_host_env_routes_client_to_proxy(monkeypatch):
+    """DOCKER_ADMIN_HOST gesetzt: genau dieser Client geht auf TCP, nicht auf den Socket."""
+    client = _fresh_admin(monkeypatch, admin_host="tcp://docker-socket-proxy:2375")
+
+    assert client._endpoint() == ("tcp", "docker-socket-proxy:2375")
+
+
+def test_admin_host_wins_over_docker_host(monkeypatch):
+    """Vorrang: DOCKER_ADMIN_HOST schlaegt DOCKER_HOST (der gilt fuer die anderen Aufrufer)."""
+    client = _fresh_admin(
+        monkeypatch,
+        admin_host="tcp://docker-socket-proxy:2375",
+        docker_host="tcp://andere-stelle:2375",
+    )
+
+    assert client._endpoint() == ("tcp", "docker-socket-proxy:2375")
+
+
+def test_admin_host_falls_back_to_docker_host(monkeypatch):
+    """Ohne DOCKER_ADMIN_HOST gilt der bisherige Weg: DOCKER_HOST."""
+    client = _fresh_admin(monkeypatch, docker_host="unix:///tmp/docker.sock")
+
+    assert client._endpoint() == ("unix", "/tmp/docker.sock")
+
+
+def test_admin_host_falls_back_to_unix_socket(monkeypatch):
+    """Rot-Beweis: ohne beide Env-Variablen bleibt es beim lokalen Socket."""
+    client = _fresh_admin(monkeypatch)
+
+    assert client._endpoint() == ("unix", "/var/run/docker.sock")
+
+
+def test_admin_host_empty_string_counts_as_unset(monkeypatch):
+    """Ein leerer/whitespace Wert ist kein Ziel — er darf den Fallback nicht verschlucken."""
+    client = _fresh_admin(monkeypatch, admin_host="   ", docker_host="tcp://docker-socket-proxy:2375")
+
+    assert client._endpoint() == ("tcp", "docker-socket-proxy:2375")
+
+
+def test_shared_client_ignores_admin_host(monkeypatch):
+    """Sicherheitsgrenze: DOCKER_ADMIN_HOST bewegt DockerClient (alle anderen Aufrufer) NICHT."""
+    monkeypatch.setenv(_ADMIN_HOST_ENV, "tcp://docker-socket-proxy:2375")
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+
+    assert DockerClient()._endpoint() == ("unix", "/var/run/docker.sock")
+
+
+def test_updater_adapter_creates_admin_client_with_admin_host(monkeypatch):
+    """Der Adapter (Schalter an) baut den Admin-Client — der liest DOCKER_ADMIN_HOST selbst."""
+    import backend.hermes_updater as hermes_updater
+
+    monkeypatch.setenv(hermes_updater._USE_DOCKER_CLIENT_ENV, "1")
+    monkeypatch.setenv(_ADMIN_HOST_ENV, "tcp://docker-socket-proxy:2375")
+
+    adapter = hermes_updater._make_docker_client()
+
+    assert isinstance(adapter, hermes_updater.DockerAdminAdapter)
+    assert adapter._client._endpoint() == ("tcp", "docker-socket-proxy:2375")
+

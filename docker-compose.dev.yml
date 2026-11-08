@@ -12,6 +12,12 @@ services:
     environment:
       HOME: /tmp
       ENVIRONMENT: development
+      # Etappe 3: der Updater laeuft ueber den Proxy statt ueber den rohen Socket.
+      # DOCKER_ADMIN_HOST gilt nur fuer DockerAdminClient (utils/docker_client.py);
+      # DOCKER_HOST bleibt bewusst ungesetzt, damit main.py, archon/routers/* und
+      # ephemeral_sandbox ihren Transport behalten.
+      HERMES_UPDATER_DOCKER_CLIENT: "1"
+      DOCKER_ADMIN_HOST: "tcp://docker-socket-proxy:2375"
     ports:
       - "127.0.0.1:8501:8501"
     volumes:
@@ -20,6 +26,10 @@ services:
       - /mnt/raid/AgenticOS-2026/data:/app/data
       - /home/micha/.hermes:/opt/data
       - /mnt/raid/Mein Obsidian:/opt/data/obsidian
+      # BLEIBT (Blocker-Befund Etappe 3, Schritt 6): main.py, archon/routers/* und
+      # ephemeral_sandbox nutzen den gemeinsamen DockerClient ohne DOCKER_HOST und
+      # fallen damit auf diesen Socket zurueck. Zeile erst entfernen, wenn diese
+      # Aufrufer auf den Proxy umgestellt sind.
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:
@@ -43,9 +53,17 @@ services:
     # errorfile-Direktiven erhalten bleibt.
     command: ["haproxy", "-f", "/usr/local/etc/haproxy/socket-proxy.cfg"]
     environment:
+      # Updater (Etappe 2): nur die Fuenf Schritte des Image-/Container-Austauschs
+      # freigegeben, jeder hinter seinem eigenen Flag. Start/Stop werden gebraucht,
+      # Restart/Kill/Pause bleiben zu (ALLOW_RESTARTS=0). Default im Cfg-File: 0.
+      ALLOW_CONTAINER_CREATE: "1"
+      ALLOW_CONTAINER_DELETE: "1"
+      ALLOW_CONTAINER_RENAME: "1"
+      ALLOW_IMAGE_PULL: "1"
+      ALLOW_IMAGE_TAG: "1"
       ALLOW_RESTARTS: "0"
-      ALLOW_START: "0"
-      ALLOW_STOP: "0"
+      ALLOW_START: "1"
+      ALLOW_STOP: "1"
       AUTH: "0"
       BUILD: "0"
       COMMIT: "0"

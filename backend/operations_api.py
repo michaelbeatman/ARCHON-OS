@@ -66,6 +66,31 @@ def _get_kanban_connection():
     return conn
 
 
+def _parse_kanban_ts(value) -> Optional[float]:
+    """Wandelt einen Kanban-Zeitstempel in Epoch-Sekunden um.
+
+    Das Modul schreibt ISO-Strings (``datetime.now().isoformat()``), aeltere
+    Zeilen koennen aber auch float-Epochs enthalten. Fuer die KPI-Berechnung
+    (R-20/F-01) ist beides noetig — ``float('2026-11-08T09:00:00')`` wirft
+    sonst ValueError und die KPIs bleiben dauerhaft leer.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip()
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        pass
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        return datetime.datetime.fromisoformat(s).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
 def _sync_to_memory_bridge(task_id: str, title: Optional[str], assignee: Optional[str], status: str, result: Optional[str] = None):
     """Synchronisiert Kanban-Aufgaben mit der zentralen agentic_memory.db (tasks-Tabelle)."""
     try:
@@ -1749,10 +1774,10 @@ def kanban_stats():
         for s, e in cur.execute(
             "SELECT started_at, completed_at FROM tasks WHERE started_at IS NOT NULL AND completed_at IS NOT NULL"
         ):
-            try:
-                cycles.append((float(e) - float(s)) / 3600.0)
-            except (TypeError, ValueError):
-                pass
+            s_ts = _parse_kanban_ts(s)
+            e_ts = _parse_kanban_ts(e)
+            if s_ts is not None and e_ts is not None:
+                cycles.append((e_ts - s_ts) / 3600.0)
         avg_cycle = round(sum(cycles) / len(cycles), 1) if cycles else None
         now = datetime.datetime.now()
         created_7d = cur.execute(
@@ -1761,11 +1786,9 @@ def kanban_stats():
         epoch_7d = (now - datetime.timedelta(days=7)).timestamp()
         done_7d = 0
         for (e,) in cur.execute("SELECT completed_at FROM tasks WHERE completed_at IS NOT NULL"):
-            try:
-                if float(e) >= epoch_7d:
-                    done_7d += 1
-            except (TypeError, ValueError):
-                pass
+            e_ts = _parse_kanban_ts(e)
+            if e_ts is not None and e_ts >= epoch_7d:
+                done_7d += 1
         return {
             "status": "ok",
             "active_total": sum(active.values()),

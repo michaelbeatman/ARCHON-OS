@@ -427,7 +427,14 @@ class ApprovalPolicyEngine:
                     SET status = 'escalated', escalated_at = ?
                     WHERE id = ?
                 """, (now, r["id"]))
-                self._log_audit_change("system_watchdog", "ESCALATE_REQUEST", r["domain"], r["id"], "pending", "escalated")
+                # N-08: Die Audit-Schreibung muss auf DERSELBEN Verbindung laufen.
+                # conn=None oeffnete eine ZWEITE Verbindung innerhalb des offenen
+                # Schreib-Locks -> 'database is locked' nach dem Busy-Timeout, die
+                # Eskalation wurde nie persistiert und das Dashboard warf danach.
+                self._log_audit_change(
+                    "system_watchdog", "ESCALATE_REQUEST", r["domain"], r["id"],
+                    "pending", "escalated", conn=conn,
+                )
                 escalated_count += 1
 
             if escalated_count > 0:

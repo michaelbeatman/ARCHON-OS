@@ -23,6 +23,7 @@ BUILTINS = {
     'MemoryError', 'NameError', 'OSError', 'OverflowError', 'RecursionError',
     'ReferenceError', 'RuntimeError', 'SyntaxError', 'SystemError',
     'TypeError', 'ValueError', 'ZeroDivisionError', 'Warning',
+    'FileNotFoundError', 'PermissionError', 'FileExistsError', 'IsADirectoryError',
     'DeprecationWarning', 'EncodingWarning', 'FutureWarning', 'ImportWarning',
     'PendingDeprecationWarning', 'ResourceWarning', 'RuntimeWarning',
     'SyntaxWarning', 'UnicodeWarning', 'BytesWarning', 'int', 'float',

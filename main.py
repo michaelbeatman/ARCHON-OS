@@ -927,224 +927,29 @@ def api_seo_articles():
                 })
     return {"status": "success", "articles": articles}
 
-os.makedirs(THEMES_DIR, exist_ok=True)
+# --- THEME & DESIGN ROUTER (ausgelagert nach archon.routers.theme) ---
+from archon.routers.theme import (
+    router as _theme_router,
+    load_theme,
+    save_theme,
+    api_get_themes,
+    api_get_theme_by_name,
+    api_save_theme_by_name,
+    api_delete_theme_by_name,
+    api_get_design_themes,
+    api_save_design_themes,
+    api_delete_design_theme,
+    api_get_theme,
+    api_save_theme,
+    api_get_theme_live_overrides,
+    api_save_theme_live_overrides,
+    api_bake_theme_into_main_design,
+    api_delete_theme_live_overrides,
+    api_upload_theme_background,
+    DESIGN_THEMES_TARGETS,
+)
+app.include_router(_theme_router)
 
-@app.get("/api/themes")
-def api_get_themes():
-    themes = []
-    if os.path.exists(THEMES_DIR):
-        for file in os.listdir(THEMES_DIR):
-            if file.endswith(".json"):
-                themes.append(file.replace(".json", ""))
-    return {"themes": themes}
-
-@app.get("/api/themes/{theme_name}")
-def api_get_theme_by_name(theme_name: str):
-    path = os.path.join(THEMES_DIR, f"{theme_name}.json")
-    if os.path.exists(path):
-        return _load_json(path, {})
-    return {}
-
-@app.post("/api/themes/{theme_name}")
-def api_save_theme_by_name(theme_name: str, theme_data: dict = Body(...)):
-    path = os.path.join(THEMES_DIR, f"{theme_name}.json")
-    _save_json(path, theme_data)
-    return {"status": "success", "theme_name": theme_name}
-
-@app.delete("/api/themes/{theme_name}")
-def api_delete_theme_by_name(theme_name: str):
-    path = os.path.join(THEMES_DIR, f"{theme_name}.json")
-    if os.path.exists(path):
-        os.remove(path)
-    return {"status": "success"}
-
-DESIGN_THEMES_TARGETS = [
-    os.path.join("config", "design_themes.json"),
-    "/app/config/design_themes.json",
-    os.path.join("data", "design_themes.json"),
-    "/app/data/design_themes.json"
-]
-
-@app.get("/api/design/themes")
-def api_get_design_themes():
-    for cand in DESIGN_THEMES_TARGETS:
-        if os.path.exists(cand):
-            data = _load_json(cand, {})
-            if data and "themes" in data and len(data["themes"]) > 0:
-                return data
-    return {"active_theme_id": "archon_current", "active_mode": "light", "themes": {}}
-
-@app.post("/api/design/themes")
-def api_save_design_themes(payload: Dict = Body(...)):
-    current = api_get_design_themes()
-    if "active_theme_id" in payload:
-        current["active_theme_id"] = payload["active_theme_id"]
-    if "active_mode" in payload:
-        current["active_mode"] = payload["active_mode"]
-    if "themes" in payload and isinstance(payload["themes"], dict):
-        current["themes"] = payload["themes"]
-    if "theme" in payload and isinstance(payload["theme"], dict):
-        t = payload["theme"]
-        tid = t.get("id") or "custom_" + str(int(time.time()))
-        t["id"] = tid
-        if "themes" not in current or not isinstance(current["themes"], dict):
-            current["themes"] = {}
-        current["themes"][tid] = t
-        if payload.get("set_active", True):
-            current["active_theme_id"] = tid
-    # D-11: Die vier Kopien werden nicht mehr stillschweigend geschluckt.
-    # Sind alle unbeschreibbar, war der Theme nach Reload weg — gemeldet
-    # wurde trotzdem "success". Jetzt: Fehler werden gesammelt und als
-    # HTTP-Fehler gemeldet (mit Liste der fehlgeschlagenen Ziele).
-    written, failed = [], {}
-    for target in DESIGN_THEMES_TARGETS:
-        try:
-            os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
-            _save_json(target, current)
-            written.append(target)
-        except Exception as exc:
-            failed[target] = str(exc)
-    if not written:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Theme konnte in keinem Ziel gespeichert werden: {failed}",
-        )
-    return {"status": "success", "data": current, "written_to": written, "failed": failed}
-
-@app.delete("/api/design/themes/{theme_id}")
-def api_delete_design_theme(theme_id: str):
-    current = api_get_design_themes()
-    themes = current.get("themes", {})
-    if theme_id in themes and len(themes) > 1:
-        del themes[theme_id]
-        if current.get("active_theme_id") == theme_id:
-            current["active_theme_id"] = next(iter(themes.keys()), "archon_current")
-        # D-11: siehe api_save_design_themes — Fehler werden nicht verschluckt.
-        written, failed = [], {}
-        for target in DESIGN_THEMES_TARGETS:
-            try:
-                _save_json(target, current)
-                written.append(target)
-            except Exception as exc:
-                failed[target] = str(exc)
-        if not written:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Theme konnte in keinem Ziel geloescht werden: {failed}",
-            )
-        return {"status": "success", "data": current, "written_to": written, "failed": failed}
-    return {"status": "success", "data": current}
-
-@app.get("/api/theme")
-def api_get_theme():
-    return load_theme()
-
-@app.post("/api/theme")
-def api_save_theme(theme_data: Dict = Body(...)):
-    save_theme(theme_data)
-    return {"status": "success"}
-
-@app.get("/api/theme/live-overrides")
-def api_get_theme_live_overrides():
-    return _load_json(THEME_LIVE_FILE, {"rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {}})
-
-@app.post("/api/theme/live-overrides")
-def api_save_theme_live_overrides(payload: Dict = Body(...)):
-    existing = _load_json(THEME_LIVE_FILE, {"rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {}})
-    merged = dict(existing) if isinstance(existing, dict) else {}
-
-    if "rawCss" in payload:
-        merged["rawCss"] = payload["rawCss"]
-
-    for field in ("rules", "textOverrides", "htmlOverrides"):
-        if field in payload:
-            new_val = payload[field]
-            if isinstance(new_val, dict):
-                if new_val:
-                    if not isinstance(merged.get(field), dict):
-                        merged[field] = {}
-                    merged[field].update(new_val)
-            else:
-                merged[field] = new_val
-
-    for meta_key in ("migration_version", "updated_at"):
-        if meta_key in payload:
-            merged[meta_key] = payload[meta_key]
-
-    _save_json(THEME_LIVE_FILE, merged)
-    return {"status": "success"}
-
-@app.post("/api/theme/bake-into-main-design")
-def api_bake_theme_into_main_design(payload: Dict = Body(None)):
-    """
-    Kompiliert alle Live-Studio-Regeln direkt in static/custom_studio.css,
-    leert die temporären Overrides auf Server und Client und setzt den Zähler auf 0 zurück.
-    """
-    data = payload or _load_json(THEME_LIVE_FILE, {})
-    rules = data.get("rules", {})
-    if not rules:
-        live = _load_json(THEME_LIVE_FILE, {})
-        rules = live.get("rules", {})
-
-    css_lines = []
-    prop_count = 0
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    css_lines.append("/* ========================================================================= */")
-    css_lines.append(f"/* ARCHON STUDIO BAKED CSS — Eingebrannt am: {now_str}               */")
-    css_lines.append("/* ========================================================================= */\n")
-
-    for sel, props in rules.items():
-        if not props or not isinstance(props, dict):
-            continue
-        clean_props = []
-        for p, v in props.items():
-            if v is not None and str(v).strip() != "":
-                clean_val = str(v).replace("!important", "").strip()
-                clean_props.append(f"  {p}: {clean_val} !important;")
-                prop_count += 1
-        if clean_props:
-            css_lines.append(f"{sel} {{")
-            css_lines.extend(clean_props)
-            css_lines.append("}\n")
-
-    compiled_css = "\n".join(css_lines)
-
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    studio_css_path = os.path.join(root_dir, "static", "custom_studio.css")
-    try:
-        with open(studio_css_path, "w", encoding="utf-8") as f:
-            f.write(compiled_css)
-    except Exception as e:
-        print(f"[ThemeBake] Fehler beim Schreiben in custom_studio.css: {e}")
-
-    # Setze theme_live_overrides.json zurück
-    reset_data = {
-        "rules": {},
-        "rawCss": "",
-        "textOverrides": data.get("textOverrides", {}),
-        "htmlOverrides": data.get("htmlOverrides", {}),
-        "migration_version": f"baked_{int(time.time())}",
-        "reset_all": True,
-        "updated_at": datetime.datetime.now().isoformat(timespec="seconds")
-    }
-    _save_json(THEME_LIVE_FILE, reset_data)
-
-    return {
-        "status": "success",
-        "baked_rules_count": prop_count,
-        "selectors_count": len(rules),
-        "version": reset_data["migration_version"],
-        "message": f"{prop_count} Regeln erfolgreich ins permanente Hauptdesign eingebrannt."
-    }
-
-@app.delete("/api/theme/live-overrides")
-def api_delete_theme_live_overrides():
-    _save_json(THEME_LIVE_FILE, {
-        "rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {},
-        "migration_version": "2026_10_27_baked_1793101139", "reset_all": True,
-        "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
-    })
-    return {"status": "success"}
 
 def detect_container_port(container_identifier: str, inspected_port: int = None) -> int:
     """Ermittelt den echten Host-Port eines Docker-Containers."""
@@ -2758,142 +2563,21 @@ def api_library_book_content(rel_path: str = Query(...)):
 # NOTEBOOKLM STUDIO & GROUNDED RETRIEVAL API
 # ---------------------------------------------------------
 
-@app.get("/api/v1/notebooks")
-def api_get_notebooks():
-    try:
-        from utils.notebook_engine import list_notebooks
-        return {"notebooks": list_notebooks()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/v1/notebooks")
-def api_create_notebook(payload: dict = Body(...)):
-    try:
-        from utils.notebook_engine import create_notebook
-        name = payload.get("name", "").strip()
-        if not name:
-            raise HTTPException(status_code=400, detail="Name ist erforderlich.")
-        description = payload.get("description", "").strip()
-        nb = create_notebook(name, description)
-        return {"status": "success", "notebook": nb}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/v1/notebooks/{nb_id}")
-def api_delete_notebook(nb_id: str):
-    try:
-        from utils.notebook_engine import delete_notebook
-        ok = delete_notebook(nb_id)
-        if not ok:
-            raise HTTPException(status_code=404, detail="Notebook nicht gefunden.")
-        return {"status": "deleted", "id": nb_id}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v1/notebooks/{nb_id}/sources")
-def api_get_notebook_sources(nb_id: str):
-    try:
-        from utils.notebook_engine import list_sources
-        sources = list_sources(nb_id)
-        return {"sources": sources, "count": len(sources)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/v1/notebooks/{nb_id}/sources/upload")
-async def api_upload_notebook_source(nb_id: str, request: Request):
-    # RBAC: Upload schreibt in die Bibliothek -> Admin-Sache (F19/M-03).
-    require_admin_or_503(request)
-    try:
-        from utils.notebook_engine import add_source_file
-        form = await request.form()
-        file = form.get("file")
-        if not file:
-            raise HTTPException(status_code=400, detail="Keine Datei übermittelt.")
-        file_bytes = await file.read()
-        res = add_source_file(nb_id, file_bytes, file.filename)
-        return res
-    except HTTPException:
-        raise
-    except PathJailError as pe:
-        raise HTTPException(status_code=400, detail=f"Dateiname nicht erlaubt: {pe}")
-    except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/v1/notebooks/{nb_id}/sources/attach-vault")
-def api_attach_vault_source(nb_id: str, payload: dict = Body(...)):
-    try:
-        from utils.notebook_engine import add_source_from_vault
-        rel_path = payload.get("rel_path")
-        if not rel_path:
-            raise HTTPException(status_code=400, detail="rel_path ist erforderlich.")
-        res = add_source_from_vault(nb_id, rel_path)
-        return res
-    except HTTPException:
-        raise
-    except PathJailError as pe:
-        raise HTTPException(status_code=400, detail=f"Pfad nicht erlaubt: {pe}")
-    except (ValueError, FileNotFoundError) as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/v1/notebooks/{nb_id}/sources/{src_id}")
-def api_delete_notebook_source(nb_id: str, src_id: str):
-    try:
-        from utils.notebook_engine import delete_source
-        ok = delete_source(nb_id, src_id)
-        if not ok:
-            raise HTTPException(status_code=404, detail="Quelle nicht gefunden.")
-        return {"status": "deleted", "source_id": src_id}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v1/notebooks/{nb_id}/chat-history")
-def api_get_notebook_chat(nb_id: str):
-    try:
-        from utils.notebook_engine import get_notebook
-        nb = get_notebook(nb_id)
-        if not nb:
-            raise HTTPException(status_code=404, detail="Notebook nicht gefunden.")
-        return {"chat_history": nb.get("chat_history", [])}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/v1/notebooks/{nb_id}/query")
-async def api_query_notebook(nb_id: str, payload: dict = Body(...)):
-    try:
-        from utils.notebook_engine import query_notebook
-        prompt = payload.get("prompt", "").strip()
-        if not prompt:
-            raise HTTPException(status_code=400, detail="Prompt ist erforderlich.")
-        res = await query_notebook(nb_id, prompt)
-        return res
-    except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/v1/notebooks/{nb_id}/sync-obsidian")
-def api_sync_notebook_obsidian(nb_id: str, payload: dict = Body(...)):
-    try:
-        from utils.notebook_engine import save_to_obsidian
-        query = payload.get("query", "")
-        response_text = payload.get("response", "")
-        citations = payload.get("citations", "")
-        res = save_to_obsidian(nb_id, query, response_text, citations)
-        return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# --- NOTEBOOKLM STUDIO & GROUNDED RETRIEVAL API (ausgelagert nach archon.routers.notebooks) ---
+from archon.routers.notebooks import (
+    router as _notebooks_router,
+    api_get_notebooks,
+    api_create_notebook,
+    api_delete_notebook,
+    api_get_notebook_sources,
+    api_upload_notebook_source,
+    api_attach_vault_source,
+    api_delete_notebook_source,
+    api_get_notebook_chat,
+    api_query_notebook,
+    api_sync_notebook_obsidian,
+)
+app.include_router(_notebooks_router)
 
 @app.get("/api/v1/brain/quartz-config")
 def api_get_quartz_config():
@@ -5663,59 +5347,17 @@ def api_extract_tables(request: Request, payload: dict = Body(...)):
     return {"status": "success", "tables": tables, "format": res.get("format")}
 
 
-# --- DEAL-PIPELINE & FORECAST-ENGINE (t-5b159d) ---
-@app.get("/api/deals")
-@app.get("/api/v1/deals")
-def api_list_deals(stage: Optional[str] = None, partner: Optional[str] = None, assigned_agent: Optional[str] = None):
-    from backend.deal_pipeline import DealPipelineManager
-    return {"status": "success", "deals": DealPipelineManager.list_deals(stage=stage, partner=partner, assigned_agent=assigned_agent)}
-
-
-@app.get("/api/deals/forecast")
-@app.get("/api/v1/deals/forecast")
-def api_deal_forecast():
-    from backend.deal_pipeline import DealPipelineManager
-    return {"status": "success", "forecast": DealPipelineManager.get_forecast()}
-
-
-@app.get("/api/deals/{deal_id}")
-@app.get("/api/v1/deals/{deal_id}")
-def api_get_deal(deal_id: str):
-    from backend.deal_pipeline import DealPipelineManager
-    deal = DealPipelineManager.get(deal_id)
-    if not deal:
-        raise HTTPException(status_code=404, detail="Deal nicht gefunden.")
-    return {"status": "success", "deal": deal}
-
-
-@app.post("/api/deals")
-@app.post("/api/v1/deals")
-def api_save_deal(payload: dict = Body(...)):
-    from backend.deal_pipeline import DealPipelineManager
-    saved = DealPipelineManager.create_or_update(payload)
-    return {"status": "success", "deal": saved}
-
-
-@app.post("/api/deals/{deal_id}/move-stage")
-@app.post("/api/v1/deals/{deal_id}/move-stage")
-def api_move_deal_stage(deal_id: str, payload: dict = Body(...)):
-    from backend.deal_pipeline import DealPipelineManager
-    new_stage = payload.get("stage", "")
-    notes = payload.get("notes")
-    if not new_stage:
-        raise HTTPException(status_code=400, detail="'stage' erforderlich.")
-    moved = DealPipelineManager.move_stage(deal_id, new_stage, notes=notes)
-    if not moved:
-        raise HTTPException(status_code=404, detail="Deal oder Phase ungültig.")
-    return {"status": "success", "deal": moved}
-
-
-@app.delete("/api/deals/{deal_id}")
-@app.delete("/api/v1/deals/{deal_id}")
-def api_delete_deal(deal_id: str):
-    from backend.deal_pipeline import DealPipelineManager
-    deleted = DealPipelineManager.delete(deal_id)
-    return {"status": "success" if deleted else "not_found", "deleted": deleted}
+# --- DEAL-PIPELINE & FORECAST-ENGINE (ausgelagert nach archon.routers.deals) ---
+from archon.routers.deals import (
+    router as _deals_router,
+    api_list_deals,
+    api_deal_forecast,
+    api_get_deal,
+    api_save_deal,
+    api_move_deal_stage,
+    api_delete_deal,
+)
+app.include_router(_deals_router)
 
 
 # --- PLUGIN SYSTEM & EXTENSIBILITY (MEILENSTEIN 5) ---
@@ -5724,32 +5366,7 @@ def api_delete_deal(deal_id: str):
 _VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
 
 
-@app.post("/api/theme/upload-background")
-async def api_upload_theme_background(request: Request, file: UploadFile = File(...)):
-    # D-13: Ohne Typ-/Groessenfilter landete eine .svg/.html im Web-Root
-    # (same-origin) — Stored XSS; ``await file.read()`` ohne Limit fraess
-    # zusaetzlich RAM. Jetzt wie die Schwester-Route
-    # (api_studio_upload_bg): Endungs-Whitelist + 8-MB-Limit.
-    require_admin(request)  # RBAC: Upload ist Admin-Sache
-    allowed_ext = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-                   ".webp": "image/webp", ".gif": "image/gif"}
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in allowed_ext:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Dateityp '{ext}' nicht erlaubt (jpg, jpeg, png, webp, gif).",
-        )
-    content = await file.read(8 * 1024 * 1024 + 1)
-    if len(content) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Bild zu gross (max. 8 MB).")
-    uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
-    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", file.filename or "background.png")
-    fname = f"bg_{int(time.time())}_{safe_name}"
-    dest = os.path.join(uploads_dir, fname)
-    with open(dest, "wb") as f:
-        f.write(content)
-    return {"status": "success", "url": f"/static/uploads/{fname}"}
+
 
 
 # --- OBSIDIAN VAULT ROUTER (ausgelagert nach archon.routers.vault) ---

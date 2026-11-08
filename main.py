@@ -464,126 +464,13 @@ os.makedirs(QUICKCHAT_SESSIONS_DIR, exist_ok=True)
 # =====================================================================
 # PERSISTENZ-HELFER (Basic UI Configuration State)
 # =====================================================================
-
-DEFAULT_AGENTS = [
-    {
-        "id": "hermes-orchestrator",
-        "name": "Hermes Master Orchestrator",
-        "role": "System-Architekt & Paperclip Lead",
-        "model": "omniroute/best-reasoning",
-        "status": "active",
-        "engine": "hermes",
-        "active": True,
-        "url": "http://localhost:8787",
-        "type": "iframe"
-    },
-    {
-        "id": "hermes-researcher",
-        "name": "Hermes Deep Researcher",
-        "role": "Web-Scraping, Markt- & SEO-Analysen",
-        "model": "omniroute/free-forever",
-        "status": "active",
-        "engine": "hermes",
-        "active": True,
-        "url": "http://localhost:8787",
-        "type": "iframe"
-    },
-    {
-        "id": "hermes-coder",
-        "name": "Hermes Senior Coder",
-        "role": "Fullstack Software Engineer & Dev",
-        "model": "omniroute/deepseek-coder",
-        "status": "active",
-        "engine": "hermes",
-        "active": True,
-        "url": "http://localhost:8787",
-        "type": "iframe"
-    },
-    {
-        "id": "hermes-odysseus",
-        "name": "Hermes Odysseus Strategist",
-        "role": "Business Strategy & Second Brain Vault",
-        "model": "omniroute/best-reasoning",
-        "status": "active",
-        "engine": "hermes",
-        "active": True,
-        "url": "http://localhost:8787",
-        "type": "iframe"
-    }
-]
-
-# DEFAULT_ROLES: definiert weiter unten mit allen 24 Spezialrollen (Zeile ~525)
-
-DEFAULT_SERVICES = [
-    {
-        "id": "omniroute",
-        "name": "OmniRoute AI Gateway",
-        "description": "Multi-LLM & Gateway Proxy Router",
-        "active": True,
-        "model": "free-forever",
-        "role": "Gateway",
-        "port": 20128
-    },
-    {
-        "id": "hermes",
-        "name": "Hermes Engine & WebUI",
-        "description": "Universelle Multi-Profile Agent Engine",
-        "active": True,
-        "model": "free-forever",
-        "role": "Orchestrator",
-        "port": 8787
-    },
-    {
-        "id": "hermes-dashboard",
-        "name": "Hermes Control Dashboard",
-        "description": "Hermes Telemetrie & Performance Monitor",
-        "active": True,
-        "model": "free-forever",
-        "role": "Telemetry",
-        "port": 9119
-    },
-    {
-        "id": "crm",
-        "name": "CRM & LinkedIn Hub",
-        "description": "Kontakt-Management & Outreach System",
-        "active": True,
-        "model": "free-forever",
-        "role": "CRM",
-        "port": 3005
-    },
-    {
-        "id": "open-webui",
-        "name": "Open WebUI",
-        "description": "Schneller LLM-Chat Fallback",
-        "active": True,
-        "model": "free-forever",
-        "role": "Chat Fallback",
-        "port": 8082
-    },
-    {
-        "id": "pocketbase",
-        "name": "Pocketbase Storage",
-        "description": "Echtzeit-Datenbank & Auth System",
-        "active": True,
-        "model": "free-forever",
-        "role": "Database",
-        "port": 8090
-    },
-    {
-        "id": "n8n",
-        "name": "n8n Automatisierung",
-        "description": "Workflow- & Integrations-Automatisierung",
-        "active": True,
-        "model": "free-forever",
-        "role": "Automation",
-        "port": 5678
-    }
-]
-
-# _load_json/_save_json -> app.core.runtime
-
-GHOST_AGENT_IDS = {"prime-agent", "autogen-studio", "openhands", "openclaw", "gpt-researcher", "a-01", "a-02"}
-SYSTEM_INTERNAL_IDS = {"agent-os-container", "agent-os-ui", "agent-os", "agent_os", "agent_os_ui", "agent_os_container"}
+from archon.core.settings_state import (
+    DEFAULT_AGENTS,
+    DEFAULT_SERVICES,
+    GHOST_AGENT_IDS,
+    SYSTEM_INTERNAL_IDS,
+)
+from archon.core.roles_data import DEFAULT_ROLES
 
 def load_agents() -> List[Dict]:
     agents_root = os.path.join(WORKSPACE_DIR, "agents.json")
@@ -598,8 +485,6 @@ def load_agents() -> List[Dict]:
 
 def save_agents(agents: List[Dict]):
     existing = load_agents()
-    # M-16: Inaktive und interne System-Agenten duerfen nicht geloescht werden,
-    # wenn ein Frontend (z.B. skill_markt.js) nur ein gefiltertes Array sendet.
     incoming_ids = {str(a.get("id")) for a in agents if a.get("id")}
     preserved = [
         a for a in existing
@@ -613,7 +498,6 @@ def save_agents(agents: List[Dict]):
     _save_json(agents_root, cleaned)
     _save_json(AGENTS_FILE, cleaned)
 
-    # M-18: Sync zu agent_profiles.json (SSOT fuer Hermes und Chat)
     try:
         from archon.core.runtime import APP_ROOT, atomic_write_json
         from archon.core.profiles import invalidate_hermes_profiles_cache
@@ -638,28 +522,14 @@ def save_agents(agents: List[Dict]):
     except Exception:
         pass
 
-# Rollen: 2,63 MB JSON pro Aufruf (gemessen Median 64-80 ms, nur Parsen).
-# TTL 60 s, weil die Datei ausschliesslich ueber POST /api/roles (save_roles)
-# geschrieben wird — dieser Pfad invalidiert sofort, die TTL deckt nur
-# Fremdschreiber (Handedit, zweite Session) ab. Kuerzer waere teurer als der
-# Nutzen: der Frontend-Aufruf passiert beim App-Start und im Rollen-Manager.
-from archon.core.roles_data import DEFAULT_ROLES
-
 @ttl_cache(seconds=60)
-def load_roles() -> List[Dict]: return _load_json(ROLES_FILE, DEFAULT_ROLES)
+def load_roles() -> List[Dict]:
+    return _load_json(ROLES_FILE, DEFAULT_ROLES)
 
 def save_roles(roles: List[Dict]):
-    # Rueckweg zum GET: das Frontend postet die materialisierte Antwort
-    # unveraendert zurueck. Ohne diese Umkehrung stuenden /static-Pfade in
-    # roles.json und die data-URI (einzige Kopie fuer Rollen ohne Profil)
-    # waere verloren. Vorlage ist der Stand, der gleich ueberschrieben wird:
-    # nur Pfade, die aus genau diesem data-URI entstehen, werden zurueckgedreht.
     vorher = _load_json(ROLES_FILE, [])
     _save_json(ROLES_FILE, restore_data_uri_avatars(roles, vorher))
-    # Invalidierung an der Schreibstelle: der naechste Leser sieht die Aenderung
-    # sofort statt erst nach Ablauf der TTL.
     invalidate_ttl_cache(load_roles)
-
 
 def load_services() -> List[Dict]:
     if os.path.exists(COUPLED_AGENTS_FILE):
@@ -1907,36 +1777,7 @@ async def _run_synthesis_cascade(parent_project_id: str):
 
 
 
-# =============================================================
-# PROMPT-TEMPLATES, KI-OPTIMIZER & PROMPTFOO GOVERNANCE API
-# =============================================================
-
-PROMPT_TEMPLATES_PATHS = [
-    "/opt/data/prompt_templates.json",
-    os.path.join(MEMORY_DIR, "prompt_templates.json"),
-    os.path.join(WORKSPACE_DIR, "data", "prompt_templates.json"),
-    "./data/prompt_templates.json",
-    "prompt_templates.json"
-]
-
-
-# -------------------------------------------------------------
-# FABRIC PATTERNS API (255+ kuratierte & übersetzte Muster)
-# -------------------------------------------------------------
-
-_FABRIC_CACHE: Optional[List[Dict[str, Any]]] = None
-
-
-# -------------------------------------------------------------
-# ARCHON PROMPT STUDIO FORMULAR-BAUKASTEN API (824 Enterprise-Templates)
-# -------------------------------------------------------------
-
-_PROMPT_STUDIO_CACHE: Optional[List[Dict[str, Any]]] = None
-
-
-class TemplateRenderRequest(BaseModel):
-    values: Dict[str, Any]
-    options: Optional[Dict[str, Any]] = None
+# (Prompt Templates & Studio Variablen in archon.routers.templates)
 
 
 from archon.routers.prompts import (
@@ -2149,24 +1990,7 @@ async def api_attempt_task_healing(request: Request, payload: Dict = Body(...)):
     )
 
 
-# Feature 23: Dynamisches Modell-Routing nach Echtzeit-Telemetrie (Bandit-Router)
-
-
-# Feature 24: Dynamisches Ephemeral-Team-Spawning (Ad-hoc Task-Force)
-
-
-# Feature 25: Live-Ressourcen-Protector (Host CPU/RAM/Disk-Backpressure)
-
-
-# --- CORPORATE MANAGER & MULTI-COMPANY HUB ---
-
-
-# --- SÄULE 3: WIRTSCHAFT & ERP (MULTI-TENANT CRM, ARTIKEL, BELEGE & POCKETBASE SYNC) ---
-
-
-# =========================================================================
-# NATIVE POCKETBASE CRM API (KAUFMÄNNISCHES ADRESS- & CRM-ÖKOSYSTEM)
-# =========================================================================
+# (Features 23-25, Corporate, ERP & CRM in archon/routers/ modularisiert)
 
 
 # =========================================================================

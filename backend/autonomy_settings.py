@@ -356,15 +356,19 @@ def get_module_config(section: str) -> Dict[str, Any]:
 
 
 def save_autonomy_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
-    """Aktualisiert einen oder mehrere Modul-Blöcke in settings.json und gibt den neuen Gesamtstand zurück."""
-    current = load_all_settings()
-    for key, val in updates.items():
-        if isinstance(val, dict) and isinstance(current.get(key), dict):
-            current[key].update(val)
-        else:
-            current[key] = val
+    """Aktualisiert einen oder mehrere Modul-Blöcke in settings.json und gibt den neuen Gesamtstand zurück.
 
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(current, f, indent=2, ensure_ascii=False)
+    F-07: atomar + gelockt via backend.settings_json (vorher direkter Write
+    ohne os.replace/Lock — Parallel-Schreiber setzten fremde Sektionen zurueck).
+    """
+    from backend.settings_json import atomic_update_settings
 
-    return current
+    def _apply(current: Dict[str, Any]):
+        for key, val in updates.items():
+            if isinstance(val, dict) and isinstance(current.get(key), dict):
+                current[key].update(val)
+            else:
+                current[key] = val
+        return current  # Rueckgabe: voller Settings-Stand (wie vorher)
+
+    return atomic_update_settings(SETTINGS_FILE, _apply, loader=load_all_settings)

@@ -140,7 +140,7 @@ class TestContractManager(unittest.TestCase):
         ContractManager.create_or_update(c_data)
         renewed = ContractManager.renew_contract("ct-renew-01")
         self.assertIsNotNone(renewed)
-        self.assertEqual(renewed["end_date"], "2026-12-28") # Monatsanpassung
+        self.assertEqual(renewed["end_date"], "2026-12-31") # Korrekter Monatsletzter (R-31)
         self.assertEqual(renewed["status"], "renewed")
         ContractManager.delete("ct-renew-01")
 

@@ -122,13 +122,23 @@ class GDPRComplianceEngine:
                     conn.row_factory = sqlite3.Row
                     cur = conn.cursor()
                     cur.execute("""
+                        SELECT COUNT(*) FROM messages WHERE content LIKE ?
+                    """, (f"%{term}%",))
+                    total_msg_count = cur.fetchone()[0]
+
+                    cur.execute("""
                         SELECT id, session_id, role, content, timestamp
                         FROM messages
                         WHERE content LIKE ?
                         LIMIT 100
                     """, (f"%{term}%",))
-                    for r in cur.fetchall():
-                        export["sources"]["chat_messages"].append(dict(r))
+                    msgs = [dict(r) for r in cur.fetchall()]
+                    export["sources"]["chat_messages"] = msgs
+                    if total_msg_count > len(msgs):
+                        export["sources"]["chat_messages_truncated"] = True
+                        export["sources"]["chat_messages_total_count"] = total_msg_count
+                        export["is_truncated"] = True
+                        export["truncation_notice"] = f"Auskunft unvollständig: {total_msg_count - len(msgs)} Chat-Nachrichten durch Limit 100 abgeschnitten."
             except Exception as e:
                 export["sources"]["chat_messages_error"] = str(e)
 
@@ -211,6 +221,9 @@ class GDPRComplianceEngine:
                 export["sources"]["obsidian_error"] = str(e)
 
         total = sum(len(v) for k, v in export["sources"].items() if isinstance(v, list))
+        # R-33: Gesamtanzahl beruecksichtigt ungedeckelte Zaehler
+        if export.get("is_truncated") and "chat_messages_total_count" in export["sources"]:
+            total = total - len(export["sources"]["chat_messages"]) + export["sources"]["chat_messages_total_count"]
         export["total_records_found"] = total
         return export
 

@@ -554,7 +554,9 @@ class ContractManager:
         # Nächstes Enddatum berechnen
         new_year = end_dt.year + (end_dt.month + renewal_months - 1) // 12
         new_month = (end_dt.month + renewal_months - 1) % 12 + 1
-        new_day = min(end_dt.day, 28)
+        import calendar
+        max_day = calendar.monthrange(new_year, new_month)[1]
+        new_day = min(end_dt.day, max_day)
         new_end_dt = datetime.date(new_year, new_month, new_day)
 
         new_end_str = new_end_dt.strftime("%Y-%m-%d")

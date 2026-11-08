@@ -286,19 +286,26 @@ def select_llm_provider(request: Request, req: LLMProviderSelectRequest):
 @router.post("/api/llm-providers/save-key")
 def save_llm_provider_key(request: Request, req: LLMProviderSaveKeyRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    env_key = req.env_name.strip()
+    val = req.key_value.strip()
+    # R-15: Validierung AUSSERHALB des try/except — das blanket-except verwandelte
+    # das HTTPException(400) sonst in HTTP 200 mit {"status": "error"}.
+    if not env_key or not val:
+        raise HTTPException(status_code=400, detail="Missing key name or value")
     try:
         import api_provider
-        env_key = req.env_name.strip()
-        val = req.key_value.strip()
-        if not env_key or not val:
-            raise HTTPException(status_code=400, detail="Missing key name or value")
-        
         os.environ[env_key] = val
         env_path = api_provider.ENV_PATH
         if env_path:
             api_provider.set_env_value(env_path, env_key, val)
             
         deploy_res = api_provider.deploy_keys(dry_run=False)
+        # R-15 (2. Teil): "erfolgreich hinterlegt und verteilt" nur melden, wenn
+        # deploy_keys wirklich ok ist — sonst wird ein Verteilungsfehler zur
+        # Erfolgsmeldung.
+        if deploy_res.get("status") != "ok":
+            logger.warning(f"[llm-providers] save-key: Verteilung meldet '{deploy_res.get('status')}'")
+            return {"status": "error", "message": f"{env_key} hinterlegt, aber Verteilung fehlgeschlagen ({deploy_res.get('status')}).", "deploy": deploy_res}
         return {"status": "ok", "message": f"{env_key} erfolgreich hinterlegt und verteilt", "deploy": deploy_res}
     except Exception as e:
         logger.error(f"[llm-providers] save-key error: {e}", exc_info=True)

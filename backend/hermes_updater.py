@@ -488,6 +488,22 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
     # Aktuelle Version ermitteln
     updated_info = get_installed_hermes_info(force_check=True)
 
+    # R-12: ein fehlgeschlagener Container-Recreate ist KEIN erfolgreiches Update.
+    # Vorher war `recreated` nur kosmetisch — Antwort war immer success mit
+    # "erfolgreich aktualisiert", obwohl der alte Container (und damit die alte
+    # Version) weiterlief.
+    if auto_restart and not recreated:
+        return {
+            "status": "error",
+            "message": f"Image aktualisiert, aber Container '{HERMES_CORE_CONTAINER}' konnte NICHT neu erstellt werden — die alte Version {updated_info['version']} ({updated_info['installed_sha_short']}) läuft weiter.",
+            "duration_seconds": duration,
+            "channel": channel,
+            "installed_version": updated_info["version"],
+            "installed_sha": updated_info["installed_sha"],
+            "container_restarted": False,
+            "logs": log_messages
+        }
+
     return {
         "status": "success",
         "message": f"Hermes Agent Core erfolgreich auf {updated_info['version']} ({updated_info['installed_sha_short']}) aktualisiert ({duration}s).",

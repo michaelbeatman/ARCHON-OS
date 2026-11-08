@@ -159,5 +159,5 @@ def atomic_write_json(filepath: str, data: Any, indent: int = 2) -> None:
 __all__ = [
     "APP_ROOT", "logger", "WORKSPACE_DIR", "MEMORY_DIR", "DATA_DIR", "SETTINGS_FILE", "OBSIDIAN_VAULT_DIR",
     "resolve_obsidian_vault_path", "ticker_entries", "add_ticker", "broadcast_event",
-    "_SSE_SUBSCRIBERS", "_load_json", "_save_json", "atomic_write_json",
+    "_SSE_SUBSCRIBERS", "_SSE_SUB_LOCK", "_load_json", "_save_json", "atomic_write_json",
 ]

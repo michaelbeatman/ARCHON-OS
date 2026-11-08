@@ -320,7 +320,7 @@ def prometheus_metrics():
 from archon.core.runtime import (  # noqa: E402
     WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, OBSIDIAN_VAULT_DIR,
     resolve_obsidian_vault_path, ticker_entries, add_ticker, broadcast_event,
-    _load_json, _save_json, atomic_write_json, _SSE_SUBSCRIBERS,
+    _load_json, _save_json, atomic_write_json, _SSE_SUBSCRIBERS, _SSE_SUB_LOCK,
 )
 
 # --- A5-Etappe 4b: Pfad-Konstanten ausgelagert -----------------------------
@@ -10992,7 +10992,8 @@ async def sse_events_stream():
     # Fix in main.py: unbeschaenkte Queue. Der Client kann dann nie
     # wegen eines vollen Puffers aus der Subscriber-Liste fliegen.
     queue = asyncio.Queue()
-    _SSE_SUBSCRIBERS.append(queue)
+    with _SSE_SUB_LOCK:
+        _SSE_SUBSCRIBERS.append(queue)
 
     async def event_generator():
         try:
@@ -11008,8 +11009,9 @@ async def sse_events_stream():
         except asyncio.CancelledError:
             pass
         finally:
-            if queue in _SSE_SUBSCRIBERS:
-                _SSE_SUBSCRIBERS.remove(queue)
+            with _SSE_SUB_LOCK:
+                if queue in _SSE_SUBSCRIBERS:
+                    _SSE_SUBSCRIBERS.remove(queue)
 
     return StreamingResponse(
         event_generator(),

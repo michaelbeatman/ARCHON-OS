@@ -20,6 +20,50 @@ from utils.docker_client import docker_client, DockerError, docker_cli_host_args
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SANDBOX_TEMP_DIR = "/opt/data/archon_sandbox_runs"
 
+# F5 (Cluster 3): Das Image war ungepinnt (`python:3.11-alpine`) — ein
+# nachgeschobener Tag haette beliebigen Code in die Sandbox gebracht.
+# Digest am 2026-11-08 per `docker image inspect python:3.11-alpine` ermittelt.
+# Override bleibt moeglich, wird aber gegen validate_image_ref geprueft und
+# muss einen @sha256:-Digest tragen.
+SANDBOX_IMAGE_DEFAULT = (
+    "python:3.11-alpine@sha256:bb1d70c1df30d8ee1e05214dbe82d6cdfd29833c1f47ce917f20991aca93acaa"
+)
+# Netz fuer den Opt-in-Fall: intern (kein Egress), eigener Name, kein Default-Bridge.
+SANDBOX_NETWORK = os.environ.get("ARCHON_SANDBOX_NETWORK", "archon-sandbox_net")
+# Nicht root in der Sandbox.
+SANDBOX_USER = os.environ.get("ARCHON_SANDBOX_USER", "1000:1000")
+SANDBOX_PIDS_LIMIT = 50
+
+
+def _sandbox_image() -> str:
+    """Gepinntes Sandbox-Image (Env-Override nur mit Digest)."""
+    ref = (os.environ.get("ARCHON_SANDBOX_IMAGE") or "").strip()
+    if not ref:
+        return SANDBOX_IMAGE_DEFAULT
+    if "@sha256:" not in ref or ".." in ref or " " in ref:
+        # Fail-safe: ungueltiger Override wird ignoriert, nicht "best effort" benutzt.
+        return SANDBOX_IMAGE_DEFAULT
+    return ref
+
+
+def _ensure_sandbox_network() -> None:
+    """Legt `archon-sandbox_net` als internes Docker-Netz an (idempotent).
+
+    `--internal` heisst: kein Gateway, kein NAT, kein Egress. Der Opt-in
+    `network_enabled=true` gibt Code also nur Kontakt zu anderem Sandbox-Code,
+    nicht ins Internet. Bereits vorhandenes Netz wird ignoriert.
+    """
+    try:
+        subprocess.run(
+            ["docker", *docker_cli_host_args(), "network", "create",
+             "--internal", SANDBOX_NETWORK],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        # Nicht fatal fuer den Start; das `docker run` scheitert sichtbar,
+        # falls das Netz wirklich fehlt.
+        pass
+
 
 def _ensure_sandbox_temp_dir():
     """Lazy directory creation - only when actually needed."""
@@ -103,6 +147,22 @@ def _resolve_host_path(container_path: str) -> Optional[str]:
     return os.path.join(src, rel)
 
 
+def _terminate_container(name: str) -> bool:
+    """Killt einen Sandbox-Container hart und entfernt ihn (Best effort)."""
+    killed = False
+    for action in (["kill", name], ["rm", "-f", name]):
+        try:
+            res = subprocess.run(
+                ["docker", *docker_cli_host_args(), *action],
+                capture_output=True, text=True, timeout=10,
+            )
+            if action[0] == "kill" and res.returncode == 0:
+                killed = True
+        except Exception:
+            continue
+    return killed
+
+
 class EphemeralSandbox:
     def __init__(self, temp_dir: Optional[str] = None):
         self.temp_dir = temp_dir or _ensure_sandbox_temp_dir()
@@ -147,7 +207,13 @@ class EphemeralSandbox:
                 f.write(code)
 
             t0 = time.time()
-            net_flag = ["--network", "none"] if not network_enabled else []
+            # Netz-Isolation: Default ist `none`. Der Opt-in-Fall haengt am
+            # internen Sandbox-Netz (kein Egress), nicht am Default-Bridge.
+            if network_enabled:
+                _ensure_sandbox_network()
+                net_flag = ["--network", SANDBOX_NETWORK]
+            else:
+                net_flag = ["--network", "none"]
 
             # Host-Pfad für den Volume-Mount auflösen
             host_temp_dir = _resolve_host_path(self.temp_dir)
@@ -175,14 +241,25 @@ class EphemeralSandbox:
             # dem globalen DOCKER_HOST und bricht erst mitten in der Ausführung ab.
             docker_cmd = [
                 "docker", *docker_cli_host_args(), "run", "--rm",
+                "--name", run_id,
             ]
             docker_cmd.extend(net_flag)
             docker_cmd.extend([
+                # F5: Container-Haertung. Ohne diese Flags lief Agenten-Code als
+                # root, mit vollen Capabilities, unbeschraenkter PID-Zahl und
+                # beschreibbarem Rootfs.
+                "--cap-drop=ALL",
+                "--security-opt=no-new-privileges:true",
+                "--read-only",
+                "--tmpfs", "/tmp:rw,nosuid,noexec,size=64m",
+                f"--pids-limit={SANDBOX_PIDS_LIMIT}",
+                f"--user={SANDBOX_USER}",
                 "-m", f"{memory_limit_mb}m",
                 "--cpus", str(cpu_limit),
-                "-v", f"{host_temp_dir}:/sandbox",
+                # Nur lesend: der Code liegt im Mount, die Sandbox schreibt nichts zurueck.
+                "-v", f"{host_temp_dir}:/sandbox:ro",
                 "-w", "/sandbox",
-                "python:3.11-alpine",
+                _sandbox_image(),
                 "python", f"/sandbox/{os.path.basename(run_file)}"
             ])
 
@@ -237,10 +314,16 @@ class EphemeralSandbox:
             }
 
         except subprocess.TimeoutExpired:
+            # `--rm` greift erst, wenn der Container endet. Der CLI-Timeout toetet
+            # nur den Client — der Container lief weiter. Deshalb hier explizit
+            # killen (und als Sicherheitsnetz entfernen).
+            terminated = _terminate_container(run_id)
             return {
                 "status": "timeout",
                 "run_id": run_id,
+                "container": run_id,
                 "error": f"Ausführung überschritt das Timeout-Limit von {timeout_seconds}s.",
+                "killed": terminated,
                 "destroyed": True
             }
         except Exception as e:

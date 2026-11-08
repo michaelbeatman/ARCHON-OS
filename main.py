@@ -754,71 +754,16 @@ from archon.routers.docker_services import (
 )
 app.include_router(_docker_services_router)
 
-# --- Run / Dispatcher ---
-class RunRequest(BaseModel):
-    prompt: str
-
-async def fetch_agent_response_api(agent: Dict, user_prompt: str) -> Dict:
-    agent_name = agent["name"]
-    model_combo = agent.get("model", "free-forever")
-    agent_id = agent["id"]
-    agent_role = agent.get("role", "Custom")
-    agent_prompt = agent.get("prompt", "")
-    
-    start_time = time.time()
-    
-    add_ticker(agent_name, f"Leite Anfrage an physischen Container '{agent_id}' weiter (Dispatcher)...")
-    
-    prompt_text = user_prompt
-    if isinstance(user_prompt, list):
-        prompt_text = "\n".join([f"{m.get('role', '')}: {m.get('content', '')}" for m in user_prompt])
-        
-    try:
-        # Dispatch to container or OmniRoute Gateway
-        res = await core_dispatcher.dispatch_to_external_agent(
-            agent_id=agent_id, 
-            agent_name=agent_name, 
-            prompt=prompt_text,
-            role=agent_role,
-            system_prompt=agent_prompt,
-            model=model_combo,
-            timeout=30
-        )
-    except Exception as e:
-        res = {"status": "error", "content": f"Dispatcher Fehler: {str(e)}"}
-    
-    duration = time.time() - start_time
-    
-    if res["status"] == "success":
-        add_ticker(agent_name, f"Antwort erfolgreich erhalten in {duration:.2f}s")
-        try:
-            if skills_engine:
-                note_title = f"run_{agent_id}_{int(start_time)}"
-                note_content = (
-                    f"# Agent Run Log - {agent_name}\n\n"
-                    f"- **Agent ID**: {agent_id}\n"
-                    f"- **Model**: {model_combo}\n"
-                    f"- **Role**: {agent_role}\n"
-                    f"- **Timestamp**: {datetime.datetime.now().isoformat()}\n"
-                    f"- **Duration**: {duration:.2f}s\n\n"
-                    f"## Prompt\n\n```\n{prompt_text}\n```\n\n"
-                    f"## Response\n\n```\n{res.get('content', '')}\n```\n"
-                )
-                skills_engine.obsidian.write_obsidian_note(note_title, note_content, ["run", agent_id, agent_role])
-        except Exception as obs_err:
-            print(f"Failed to write note to Obsidian: {obs_err}", file=sys.stderr)
-    else:
-        add_ticker(agent_name, f"Fehler: {res['content']}")
-        
-    return {
-        "agent_id": agent_id,
-        "agent_name": agent_name,
-        "status": res["status"],
-        "content": res["content"],
-        "duration": f"{duration:.2f}s",
-        "model": model_combo
-    }
-
+from archon.routers.agent_chat import (
+    router as _agent_chat_router,
+    RunRequest,
+    fetch_agent_response_api,
+    api_run_parallel,
+    DirectAgentChatRequest,
+    load_profiles_list,
+    api_direct_agent_chat,
+)
+app.include_router(_agent_chat_router)
 
 
 def load_boardroom_frameworks():
@@ -828,146 +773,6 @@ def load_boardroom_frameworks():
     else:
         _save_json(FRAMEWORKS_FILE, core_dispatcher.CATEGORIZED_FRAMEWORKS)
     return core_dispatcher.CATEGORIZED_FRAMEWORKS
-
-
-class BoardroomSlotItem(BaseModel):
-    role_name: str
-    profile_id: str
-    model_id: Optional[str] = None
-    provider: Optional[str] = None
-
-class BoardroomRequest(BaseModel):
-    task: str
-    rounds: int = 2
-    chairman_id: Optional[str] = "orchestrator"
-    chairman_provider: Optional[str] = "openrouter"
-    chairman_model: Optional[str] = None
-    framework: str = "Steffi Kieffer Boardroom"
-    slots: Optional[List[BoardroomSlotItem]] = None
-    reasoning_level: Optional[str] = "profile"
-    use_moa: bool = False
-    moa_reference_models: Optional[List[dict]] = None
-    moa_aggregator: Optional[dict] = None
-
-
-@app.post("/api/run")
-async def api_run_parallel(req: RunRequest):
-    agents = load_agents()
-    active_agents = [a for a in agents if a.get("active")]
-    if not active_agents:
-        raise HTTPException(status_code=400, detail="Keine aktiven Agenten konfiguriert.")
-    
-    add_ticker("System", f"Run gestartet für Befehl: '{req.prompt[:40]}'")
-    tasks = [fetch_agent_response_api(agent, req.prompt) for agent in active_agents]
-    results = await asyncio.gather(*tasks)
-    
-    memory = load_memory()
-    memory.append({
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "prompt": req.prompt,
-        "responses": {
-            res["agent_name"]: {
-                "model": res["model"],
-                "content": res["content"],
-                "duration": res["duration"],
-                "status": res["status"]
-            }
-            for res in results
-        }
-    })
-    save_memory(memory)
-    return results
-
-class DirectAgentChatRequest(BaseModel):
-    agent_id: str
-    message: str
-    attachment_name: Optional[str] = None
-    attachment_content: Optional[str] = None
-    history: Optional[List[Dict[str, Any]]] = []
-
-def load_profiles_list() -> List[Dict]:
-    _app_root = os.path.dirname(os.path.abspath(__file__))
-    for path in [
-        os.path.join(_app_root, "agent_profiles.json"),
-        "agent_profiles.json",
-        "/app/agent_profiles.json",
-        os.path.join(MEMORY_DIR, "agent_profiles.json"),
-        "/app/data/agent_profiles.json",
-        os.path.join(WORKSPACE_DIR, "agent_profiles.json")
-    ]:
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        return data
-                    elif isinstance(data, dict) and "profiles" in data:
-                        return data["profiles"]
-            except Exception:
-                pass
-    return []
-
-@app.post("/api/v1/agent/chat")
-async def api_direct_agent_chat(req: DirectAgentChatRequest):
-    # Load profile data
-    profiles = load_profiles_list()
-    prof = next((p for p in profiles if p.get("id") == req.agent_id), None)
-    if not prof:
-        prof = {
-            "id": req.agent_id,
-            "person_name": req.agent_id,
-            "name": req.agent_id,
-            "system_prompt": "Du bist ein intelligenter KI-Spezialist in Archon OS. Antworte präzise, strukturiert und direkt.",
-            "model": "gpt-4o-mini"
-        }
-    
-    agent_name = prof.get("person_name") or prof.get("name") or prof.get("id")
-    role_title = prof.get("name") or "IT-Spezialist & DevOps Auditor"
-    system_prompt = prof.get("system_prompt") or prof.get("prompt") or (
-        f"Du bist {agent_name} (Rolle: {role_title}) in Archon OS. "
-        "Du bist ein praxisorientierter, hochkompetenter IT-Administrator, Systemarchitekt und DevOps-Experte. "
-        "Wenn dir Log-Einträge, Fehlermeldungen oder Systemfragen übergeben werden, analysiere die Ursache sofort präzise "
-        "und erkläre dem Nutzer Schritt für Schritt, wie das Problem behoben werden kann (inklusive passender Konfigurations- oder Terminal-Befehle)."
-    )
-    
-    user_msg = req.message
-    if req.attachment_content:
-        user_msg = f"[Angehängte Datei: {req.attachment_name or 'Dokument'}]\n```\n{req.attachment_content[:6000]}\n```\n\n{req.message}"
-    
-    messages = [{"role": "system", "content": system_prompt}]
-    if req.history:
-        for h in req.history[-8:]:
-            messages.append({"role": h.get("role", "user"), "content": h.get("content", "")})
-    messages.append({"role": "user", "content": user_msg})
-    
-    model_to_use = prof.get("model") or "deepseek/deepseek-chat"
-    provider_to_use = prof.get("provider") or "openrouter"
-    
-    start_t = time.time()
-    try:
-        res = await core_dispatcher.dispatch_to_omniroute_or_container(
-            agent_id=prof["id"],
-            agent_name=agent_name,
-            prompt=user_msg,
-            role=prof.get("name", "Spezialist"),
-            system_prompt=system_prompt,
-            model=model_to_use,
-            provider=provider_to_use
-        )
-        reply_text = res.get("content", "Keine Antwort erhalten.")
-    except Exception as e:
-        reply_text = f"Fehler bei der Kommunikation mit {agent_name}: {str(e)}"
-    
-    duration = round(time.time() - start_t, 2)
-    add_ticker("Direct Chat", f"Nachricht an {agent_name} beantwortet ({duration}s)")
-    
-    return {
-        "agent_id": prof["id"],
-        "agent_name": agent_name,
-        "reply": str(reply_text),
-        "duration": duration,
-        "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
-    }
 
 # =====================================================================
 # GATEWAY MANAGER — Hermes Profile Start/Stop/Autostart/Idle-Timeout

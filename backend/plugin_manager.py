@@ -469,6 +469,9 @@ class PluginManager:
                 raise
             except Exception as e:
                 logger.error(f"Fehler in before_tool_execute von Plugin '{plugin.id}': {e}")
+                # Z-14: Fail-closed — wenn ein Audit/Security-Plugin crasht, darf das Tool nicht still ausgefuehrt werden
+                if "security" in getattr(plugin, "id", "").lower() or "audit" in getattr(plugin, "id", "").lower():
+                    raise PermissionError(f"Sicherheitspruefung in Plugin '{plugin.id}' fehlgeschlagen: {e}")
         return cur_args
 
     async def apply_after_tool_execute(self, tool_name: str, result: Any, context: Optional[Dict[str, Any]] = None) -> Any:

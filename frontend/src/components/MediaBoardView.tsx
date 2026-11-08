@@ -116,7 +116,22 @@ export function MediaBoardView({ themeMode = 'light' }: MediaBoardViewProps) {
         setRecords(prev => prev.filter(r => r.id !== e.record.id));
       }
     }).then((fn) => { unsub = fn; }).catch(() => {});
-    return () => { if (unsub) unsub(); };
+    return () => {
+      if (unsub) unsub();
+      // D-24: Unmount-Cleanup fuer laufende Diktat-Timer und Streams
+      if (dikttimerRef.current) { clearInterval(dikttimerRef.current); dikttimerRef.current = null; }
+      if (diktterRecorderRef.current && diktterRecorderRef.current.state !== 'inactive') {
+        try { diktterRecorderRef.current.stop(); } catch (_) {}
+      }
+      diktterStreamRef.current?.getTracks().forEach(t => t.stop());
+      diktterStreamRef.current = null;
+
+      if (lbDiktRecorderRef.current && lbDiktRecorderRef.current.state !== 'inactive') {
+        try { lbDiktRecorderRef.current.stop(); } catch (_) {}
+      }
+      lbDiktStreamRef.current?.getTracks().forEach(t => t.stop());
+      lbDiktStreamRef.current = null;
+    };
   }, []);
 
   const handleImageSelect = (file: File) => {

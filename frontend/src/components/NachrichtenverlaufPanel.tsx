@@ -208,6 +208,39 @@ export function NachrichtenverlaufPanel({
     onRecordingStateChange(active);
   }, [isRecording, isModalRecording, isMeetingRecording, isProcessingAudio, isModalProcessingAudio, isMeetingProcessingAudio, onRecordingStateChange]);
 
+  // D-24: Unmount-Cleanup fuer Audio-Timer und Streams
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (modalTimerRef.current) { clearInterval(modalTimerRef.current); modalTimerRef.current = null; }
+      if (meetingTimerRef.current) { clearInterval(meetingTimerRef.current); meetingTimerRef.current = null; }
+
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try { mediaRecorderRef.current.stop(); } catch (_) {}
+      }
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+
+      if (modalMediaRecorderRef.current && modalMediaRecorderRef.current.state !== 'inactive') {
+        try { modalMediaRecorderRef.current.stop(); } catch (_) {}
+      }
+      modalStreamRef.current?.getTracks().forEach(t => t.stop());
+      modalStreamRef.current = null;
+
+      if (meetingMicRecorderRef.current && meetingMicRecorderRef.current.state !== 'inactive') {
+        try { meetingMicRecorderRef.current.stop(); } catch (_) {}
+      }
+      meetingMicStreamRef.current?.getTracks().forEach(t => t.stop());
+      meetingMicStreamRef.current = null;
+
+      if (meetingTabRecorderRef.current && meetingTabRecorderRef.current.state !== 'inactive') {
+        try { meetingTabRecorderRef.current.stop(); } catch (_) {}
+      }
+      meetingTabStreamRef.current?.getTracks().forEach(t => t.stop());
+      meetingTabStreamRef.current = null;
+    };
+  }, []);
+
 
   // Timestamp robust parsen (beide Formate: "YYYY-MM-DD HH:mm:ss UTC" und ISO-T)
   const parseTs = (ts?: string) => {

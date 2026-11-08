@@ -12914,6 +12914,7 @@ ${logExcerpt}
     let _privacyPollingInterval = null;
 
     async function fetchPrivacyStatus() {
+      if (document.hidden) return; // F-19: Kein Polling im Hintergrund-Tab
       try {
         const res = await fetch("/api/llm-providers/privacy-status");
         if (!res.ok) return;

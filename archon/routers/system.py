@@ -408,6 +408,7 @@ async def api_run_morning_standup():
 @router.get("/api/system/standup/latest")
 async def api_get_latest_morning_standup():
     """Liefert das aktuellste Morgen-Briefing aus dem Obsidian Vault."""
+    out_dir = None
     try:
         from local_memory_bridge import LocalMemoryBridge
         bridge = LocalMemoryBridge()
@@ -421,8 +422,10 @@ async def api_get_latest_morning_standup():
                         return bf.read()
                 _content = await asyncio.to_thread(_read_latest)
                 return {"status": "success", "filename": files[0], "content": _content}
-    except Exception:
-        pass
+    except Exception as e:
+        # Z-16: Lesefehler beim Zugriff auf vorhandene Briefings nicht still verschlucken
+        logger.error(f"[Standup] Fehler beim Lesen vorhandener Briefings: {e}")
+        raise HTTPException(status_code=500, detail=f"Briefing konnte nicht gelesen werden: {e}")
     from backend.autonomous_standup import generate_morning_standup
     return await generate_morning_standup()
 

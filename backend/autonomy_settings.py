@@ -32,7 +32,9 @@ DEFAULT_AUTONOMY_SETTINGS: Dict[str, Dict[str, Any]] = {
     # Gruppe 3: Autonome Task-Selbstheilung & Git-Rollback
     "task_self_healer": {
         "enabled": True,
-        "auto_git_rollback": True,
+        # F2/N-12: Rollback ist opt-in (Default aus). Ein automatisches
+        # `git checkout` im Multi-Agenten-Repo verwirft fremde Arbeit.
+        "auto_git_rollback": False,
         "max_attempts": 3,
         "escalation_model": "deepseek/deepseek-chat"
     },

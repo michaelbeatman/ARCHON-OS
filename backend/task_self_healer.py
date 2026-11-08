@@ -6,6 +6,7 @@ und startet eine iterative Reparatur-Schleife (max. 3 Retries) vor der Eskalatio
 """
 
 import os
+import re
 import sys
 import json
 import sqlite3
@@ -15,6 +16,35 @@ from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+
+# F2 (Cluster 3): `git checkout -- <pfad>` nahm den Pfad aus dem Request-Body.
+# Erlaubt sind deshalb nur einfache Repo-relative Pfade; alles mit Shell-
+# Metazeichen, '~' oder absolutem Anfang faellt vor dem Aufruf raus.
+_SAFE_REL_PATH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,400}$")
+
+
+def validate_affected_file(file_path: Optional[str]) -> str:
+    """Prueft `affected_file` gegen WORKSPACE_DIR und liefert den Repo-relativen Pfad.
+
+    Raises:
+        ValueError: bei Metazeichen, absoluten Pfaden, Traversal oder Pfaden
+            ausserhalb von WORKSPACE_DIR (inkl. Symlink-Aufloesung).
+    """
+    raw = str(file_path or "").strip()
+    if not raw:
+        raise ValueError("affected_file ist leer")
+    if not _SAFE_REL_PATH_RE.match(raw) or ".." in raw.split("/"):
+        raise ValueError(f"affected_file enthaelt unzulaessige Zeichen: {raw!r}")
+    if os.path.isabs(raw) or raw.startswith("~"):
+        raise ValueError(f"affected_file muss repo-relativ sein: {raw!r}")
+
+    root = os.path.realpath(WORKSPACE_DIR)
+    target = os.path.realpath(os.path.join(root, raw))
+    if target == root or not target.startswith(root + os.sep):
+        raise ValueError(f"affected_file liegt ausserhalb des Arbeitsverzeichnisses: {raw!r}")
+    if not os.path.isfile(target):
+        raise ValueError(f"affected_file existiert nicht: {raw!r}")
+    return os.path.relpath(target, root)
 
 class TaskSelfHealer:
     def __init__(self, db_path: str = DB_PATH):
@@ -44,11 +74,27 @@ class TaskSelfHealer:
             conn.commit()
 
     def rollback_git_changes(self, file_path: Optional[str] = None) -> Dict[str, Any]:
-        """Setzt nicht committete Änderungen über Git zurück."""
-        cmd = f"git checkout -- {file_path}" if file_path else "git checkout -- ."
+        """Setzt nicht committete Aenderungen GENAU EINER validierten Datei zurueck.
+
+        Kein Shell-String (argv-Liste), kein `git checkout -- .` mehr: ohne
+        explizite, validierte Datei wird nichts zurueckgerollt (N-12).
+        """
         try:
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=WORKSPACE_DIR, timeout=10)
-            return {"status": "success" if res.returncode == 0 else "error", "output": res.stdout or res.stderr}
+            rel_path = validate_affected_file(file_path)
+        except ValueError as exc:
+            if not str(file_path or "").strip():
+                # N-12: ohne Pfad KEIN `git checkout -- .` (wuerde fremde,
+                # uncommittete Arbeit anderer Agenten verwerfen).
+                return {"status": "skipped", "reason": "kein affected_file angegeben"}
+            return {"status": "error", "error": str(exc), "output": ""}
+
+        cmd = ["git", "checkout", "--", rel_path]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True,
+                                 cwd=WORKSPACE_DIR, timeout=10)
+            return {"status": "success" if res.returncode == 0 else "error",
+                    "output": res.stdout or res.stderr,
+                    "file": rel_path}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
@@ -70,13 +116,15 @@ class TaskSelfHealer:
         2. Reflection & Code-Korrektur über LLM
         3. Protokollierung in task_healing_logs
         """
-        auto_rollback = True
+        auto_rollback = False
         try:
             from backend.autonomy_settings import get_module_config
             cfg = get_module_config("task_self_healer")
             if not cfg.get("enabled", True):
                 return {"status": "disabled", "task_id": task_id, "message": "Task-Selbstheilung ist in den Einstellungen deaktiviert."}
-            auto_rollback = bool(cfg.get("auto_git_rollback", True))
+            # F2/N-12: Rollback ist opt-in. Ohne explizites auto_git_rollback=true
+            # wird nichts zurueckgesetzt (kein `git checkout -- .` auf fremde Arbeit).
+            auto_rollback = bool(cfg.get("auto_git_rollback", False))
             if max_attempts is None:
                 max_attempts = int(cfg.get("max_attempts", 3))
             if not model:
@@ -88,8 +136,12 @@ class TaskSelfHealer:
                 model = "deepseek/deepseek-chat"
 
         # 1. Rollback
-        rollback_res = self.rollback_git_changes(affected_file) if auto_rollback else {"status": "skipped"}
+        if auto_rollback:
+            rollback_res = self.rollback_git_changes(affected_file)
+        else:
+            rollback_res = {"status": "skipped", "reason": "auto_git_rollback deaktiviert"}
         rollback_ok = rollback_res.get("status") in ("success", "skipped")
+        rollback_applied = auto_rollback and rollback_res.get("status") == "success"
 
         # 2. Reflection Prompt generieren
         healing_prompt = f"""Du bist der Auto-Repair & Self-Healing Supervisor von Archon OS.
@@ -160,7 +212,7 @@ Antworte strukturiert mit der korrigierten Fassung."""
             "task_id": task_id,
             "attempt": attempt,
             "max_attempts": max_attempts,
-            "rollback_applied": rollback_ok,
+            "rollback_applied": rollback_applied,
             "repaired_code_preview": repaired_code[:300] + ("..." if len(repaired_code) > 300 else ""),
             "repaired_code": repaired_code,
             "next_action": "Task weiterführen" if repaired_ok else ("Wiederholen" if attempt < max_attempts else "Auf Blockiert gesetzt (HITL)")

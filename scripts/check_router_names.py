@@ -80,6 +80,9 @@ CONFIGURE_PARAMS = {
     'system.py': {
         '_load_json', '_save_json', 'broadcast_event'
     },
+    'containers.py': {
+        'detect_container_port', 'post_docker_container_action'
+    },
 }
 
 # Names that are actually stdlib (shutil, copy)
@@ -169,7 +172,7 @@ def scan_file(filepath: Path):
                 for elt in node.target.elts:
                     if isinstance(elt, ast.Name):
                         comprehension_vars.add(elt.id)
-        elif isinstance(node, ast.With):
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
             for item in node.items:
                 if item.optional_vars:
                     if isinstance(item.optional_vars, ast.Name):

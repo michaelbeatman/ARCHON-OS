@@ -169,6 +169,10 @@ Regeln:
         for tid, tout in tier1_runs:
             results[tid] = tout
 
+        # M-09: final_report ist nur in der tier2-Schleife gebunden. Besteht ein
+        # DAG nur aus Stufe-1-Tasks, warf die Variable danach UnboundLocalError —
+        # Ergebnisse wurden verworfen, der Eltern-Task blieb in_progress.
+        final_report = ""
         # 2. Stufe 2: Synthese mit den Ergebnissen aus Stufe 1
         tier1_context = "\n\n".join([f"### [ERGEBNIS {tid}]:\n{tout}" for tid, tout in results.items()])
         for t in tier2:
@@ -198,16 +202,34 @@ Regeln:
             finally:
                 c.close()
 
+        # M-09: Besteht der DAG nur aus Stufe-1-Tasks, ist die Synthese aus den
+        # gesammelten Stufe-1-Ergebnissen der Abschlussbericht — sonst wuerden
+        # die bezahlten Ergebnisse verworfen.
+        if not final_report and results:
+            final_report = "\n\n".join(f"### [ERGEBNIS {tid}]:\n{tout}" for tid, tout in results.items())
+
         # In Obsidian Vault sichern
-        try:
-            vault_dir = os.path.join(self.workspace_dir, "agent_workspace", "obsidian_vault", "01_PROJEKTE", parent_id)
-            os.makedirs(vault_dir, exist_ok=True)
-            report_file = os.path.join(vault_dir, "03_Endprodukte", f"Abschlussbericht_{parent_id}.md")
-            os.makedirs(os.path.dirname(report_file), exist_ok=True)
-            with open(report_file, "w", encoding="utf-8") as rf:
-                rf.write(final_report)
-        except Exception:
-            pass
+        if final_report:
+            try:
+                vault_dir = os.path.join(self.workspace_dir, "agent_workspace", "obsidian_vault", "01_PROJEKTE", parent_id)
+                os.makedirs(vault_dir, exist_ok=True)
+                report_file = os.path.join(vault_dir, "03_Endprodukte", f"Abschlussbericht_{parent_id}.md")
+                os.makedirs(os.path.dirname(report_file), exist_ok=True)
+                with open(report_file, "w", encoding="utf-8") as rf:
+                    rf.write(final_report)
+            except Exception:
+                pass
+            # Eltern-Task auch ohne Stufe-2-Synthese als done markieren (M-09):
+            # vorher passierte das nur in der tier2-Schleife.
+            try:
+                c = self._get_kanban_conn()
+                try:
+                    c.execute("UPDATE tasks SET status = 'done', result = ? WHERE id = ?", (final_report, parent_id))
+                    c.commit()
+                finally:
+                    c.close()
+            except Exception:
+                pass
 
         return {
             "status": "success",

@@ -27,6 +27,8 @@ from archon.core.runtime import (  # noqa: F401
     atomic_write_json,
 )
 
+from archon.routers._rbac import require_admin_or_503
+
 router = APIRouter()
 
 @router.get("/api/corporate/companies")
@@ -45,14 +47,16 @@ def api_get_corporate_company(company_id: str):
 
 
 @router.post("/api/corporate/companies")
-def api_save_corporate_company(payload: Dict = Body(...)):
+def api_save_corporate_company(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.corporate_manager import corporate_manager
     saved = corporate_manager.save_company(payload)
     return {"success": True, "company": saved}
 
 
 @router.post("/api/corporate/companies/{company_id}/set-active")
-def api_set_active_corporate_company(company_id: str):
+def api_set_active_corporate_company(request: Request, company_id: str):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.corporate_manager import corporate_manager
     success = corporate_manager.set_active_company(company_id)
     if not success:
@@ -61,7 +65,8 @@ def api_set_active_corporate_company(company_id: str):
 
 
 @router.delete("/api/corporate/companies/{company_id}")
-def api_delete_corporate_company(company_id: str):
+def api_delete_corporate_company(request: Request, company_id: str):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.corporate_manager import corporate_manager
     success = corporate_manager.delete_company(company_id)
     if not success:
@@ -70,7 +75,8 @@ def api_delete_corporate_company(company_id: str):
 
 
 @router.post("/api/corporate/render-template")
-def api_render_corporate_template(payload: Dict = Body(...)):
+def api_render_corporate_template(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.corporate_manager import corporate_manager
     template_type = payload.get("template_type", "letterhead")
     company_id = payload.get("company_id")

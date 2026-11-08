@@ -27,6 +27,8 @@ from archon.core.runtime import (  # noqa: F401
     atomic_write_json,
 )
 
+from archon.routers._rbac import require_admin_or_503
+
 router = APIRouter()
 
 @router.get("/api/erp/documents/{doc_id}/print", response_class=HTMLResponse)
@@ -141,7 +143,8 @@ def api_erp_get_entity_detail(entity_id: str, company_id: Optional[str] = None):
 
 
 @router.post("/api/erp/entities")
-def api_erp_save_entity(payload: Dict = Body(...)):
+def api_erp_save_entity(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.save_entity(payload=payload, company_id=company_id)
@@ -149,7 +152,8 @@ def api_erp_save_entity(payload: Dict = Body(...)):
 
 
 @router.post("/api/erp/contacts")
-def api_erp_save_contact(payload: Dict = Body(...)):
+def api_erp_save_contact(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.save_contact(payload=payload, company_id=company_id)
@@ -157,7 +161,8 @@ def api_erp_save_contact(payload: Dict = Body(...)):
 
 
 @router.post("/api/erp/interactions")
-def api_erp_add_interaction(payload: Dict = Body(...)):
+def api_erp_add_interaction(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.add_interaction(payload=payload, company_id=company_id)
@@ -175,7 +180,8 @@ def api_erp_list_items(
 
 
 @router.post("/api/erp/items")
-def api_erp_save_item(payload: Dict = Body(...)):
+def api_erp_save_item(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.save_item(payload=payload, company_id=company_id)
@@ -205,7 +211,8 @@ def api_erp_get_document(doc_id: str, company_id: Optional[str] = None):
 
 
 @router.post("/api/erp/documents")
-def api_erp_save_document(payload: Dict = Body(...)):
+def api_erp_save_document(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.save_document(payload=payload, company_id=company_id)
@@ -213,7 +220,8 @@ def api_erp_save_document(payload: Dict = Body(...)):
 
 
 @router.post("/api/erp/documents/{doc_id}/convert")
-def api_erp_convert_document(doc_id: str, payload: Dict = Body(default={})):
+def api_erp_convert_document(request: Request, doc_id: str, payload: Dict = Body(default={})):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.erp_manager import erp_manager
     target_type = payload.get("target_doc_type", "invoice")
     company_id = payload.get("company_id")
@@ -224,7 +232,8 @@ def api_erp_convert_document(doc_id: str, payload: Dict = Body(default={})):
 
 
 @router.post("/api/erp/sync/pocketbase")
-def api_erp_sync_pocketbase(payload: Dict = Body(default={})):
+def api_erp_sync_pocketbase(request: Request, payload: Dict = Body(default={})):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     if "pocketbase_url" in payload or "collection_name" in payload:

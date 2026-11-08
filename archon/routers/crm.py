@@ -27,6 +27,8 @@ from archon.core.runtime import (  # noqa: F401
     atomic_write_json,
 )
 
+from archon.routers._rbac import require_admin_or_503
+
 router = APIRouter()
 
 @router.get("/api/crm/contacts")
@@ -58,26 +60,30 @@ def api_crm_get_contact(contact_id: str):
 
 
 @router.post("/api/crm/contacts")
-def api_crm_create_contact(payload: Dict = Body(...)):
+def api_crm_create_contact(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.crm_service import crm_service
     return crm_service.save_contact(contact_id=payload.get("id"), payload=payload)
 
 
 @router.put("/api/crm/contacts/{contact_id}")
-def api_crm_update_contact(contact_id: str, payload: Dict = Body(...)):
+def api_crm_update_contact(request: Request, contact_id: str, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.crm_service import crm_service
     return crm_service.save_contact(contact_id=contact_id, payload=payload)
 
 
 @router.delete("/api/crm/contacts/{contact_id}")
-def api_crm_delete_contact(contact_id: str):
+def api_crm_delete_contact(request: Request, contact_id: str):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.crm_service import crm_service
     ok = crm_service.delete_contact(contact_id)
     return {"success": ok}
 
 
 @router.post("/api/crm/contacts/{contact_id}/messages")
-def api_crm_add_message(contact_id: str, payload: Dict = Body(...)):
+def api_crm_add_message(request: Request, contact_id: str, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.crm_service import crm_service
     text = payload.get("text", "")
     channel = payload.get("channel", "note")
@@ -137,7 +143,8 @@ def api_crm_gdpr_export(contact_id: str):
 
 
 @router.post("/api/crm/contacts/{contact_id}/gdpr-anonymize")
-def api_crm_gdpr_anonymize(contact_id: str):
+def api_crm_gdpr_anonymize(request: Request, contact_id: str):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.crm_service import crm_service
     ok = crm_service.anonymize_gdpr(contact_id)
     if not ok:

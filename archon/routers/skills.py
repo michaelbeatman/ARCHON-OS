@@ -484,7 +484,9 @@ def api_skills_docker_restart(request: Request, container_name: str = Body(...))
 
 
 @router.post("/api/v1/skills/obsidian/write")
-def api_skills_obsidian_write(title: str = Body(...), content: str = Body(...), tags: List[str] = Body(None)):
+def api_skills_obsidian_write(request: Request, title: str = Body(...), content: str = Body(...), tags: List[str] = Body(None)):
+    # RBAC: schreibt Dateien in den Vault (Z-01) — wie alle Nachbarrouten.
+    require_admin_or_503(request)
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     return _DEPS["skills_engine"].obsidian.write_obsidian_note(title, content, tags)

@@ -27,6 +27,8 @@ from archon.core.runtime import (  # noqa: F401
     atomic_write_json,
 )
 
+from archon.routers._rbac import require_admin_or_503
+
 router = APIRouter()
 
 @router.get("/api/contracts")
@@ -55,7 +57,8 @@ def api_get_contract(contract_id: str):
 
 @router.post("/api/contracts")
 @router.post("/api/v1/contracts")
-def api_save_contract(payload: dict = Body(...)):
+def api_save_contract(request: Request, payload: dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.contract_manager import ContractManager
     saved = ContractManager.create_or_update(payload)
     return {"status": "success", "contract": saved}
@@ -63,7 +66,8 @@ def api_save_contract(payload: dict = Body(...)):
 
 @router.delete("/api/contracts/{contract_id}")
 @router.delete("/api/v1/contracts/{contract_id}")
-def api_delete_contract(contract_id: str):
+def api_delete_contract(request: Request, contract_id: str):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.contract_manager import ContractManager
     deleted = ContractManager.delete(contract_id)
     return {"status": "success" if deleted else "not_found", "deleted": deleted}
@@ -71,7 +75,8 @@ def api_delete_contract(contract_id: str):
 
 @router.post("/api/contracts/parse")
 @router.post("/api/v1/contracts/parse")
-def api_parse_contract(payload: dict = Body(...)):
+def api_parse_contract(request: Request, payload: dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.contract_manager import ContractParser
     text = payload.get("text", "")
     parsed = ContractParser.parse(text)
@@ -80,7 +85,8 @@ def api_parse_contract(payload: dict = Body(...)):
 
 @router.post("/api/contracts/scan-deadlines")
 @router.post("/api/v1/contracts/scan-deadlines")
-def api_scan_contract_deadlines(payload: dict = Body(default={})):
+def api_scan_contract_deadlines(request: Request, payload: dict = Body(default={})):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.contract_manager import ContractManager
     send_telegram = payload.get("send_telegram", True)
     create_kanban = payload.get("create_kanban_task", True)
@@ -90,7 +96,8 @@ def api_scan_contract_deadlines(payload: dict = Body(default={})):
 
 @router.post("/api/contracts/{contract_id}/renew")
 @router.post("/api/v1/contracts/{contract_id}/renew")
-def api_renew_contract(contract_id: str):
+def api_renew_contract(request: Request, contract_id: str):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.contract_manager import ContractManager
     renewed = ContractManager.renew_contract(contract_id)
     if not renewed:
@@ -99,7 +106,8 @@ def api_renew_contract(contract_id: str):
 
 
 @router.post("/api/contracts/create")
-def api_create_contract(payload: Dict = Body(...)):
+def api_create_contract(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.sla_contract_enforcer import sla_contract_enforcer
     return sla_contract_enforcer.create_contract(
         task_id=payload.get("task_id", "task-sla"),
@@ -113,7 +121,8 @@ def api_create_contract(payload: Dict = Body(...)):
 
 
 @router.post("/api/contracts/validate")
-def api_validate_contract(payload: Dict = Body(...)):
+def api_validate_contract(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.sla_contract_enforcer import sla_contract_enforcer
     return sla_contract_enforcer.validate_delivery(
         contract_id=payload.get("contract_id", ""),

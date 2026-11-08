@@ -21,6 +21,8 @@ from archon.core.runtime import (  # noqa: F401
     add_ticker, broadcast_event, ticker_entries, _load_json, _save_json, atomic_write_json,
 )
 
+from archon.routers._rbac import require_admin_or_503
+
 router = APIRouter()
 
 
@@ -301,12 +303,13 @@ async def get_template_schema(template_slug: str):
 
 
 @router.post("/api/templates/{template_slug}/render")
-async def render_template_prompt(template_slug: str, req: TemplateRenderRequest):
+async def render_template_prompt(request: Request, template_slug: str, req: TemplateRenderRequest):
     """
     Rendert das Archon_Prompt_Template mit den übergebenen Formularwerten.
     Verhalten A: Leere optionale Variablen und deren Zeilen werden rückstandslos entfernt.
     Inklusive Unterstützung für Advanced Options (Denk-Methodik, Ausgabe-Vorgaben, etc.).
     """
+    require_admin_or_503(request)  # RBAC: Prompt-Bibliothek ist Admin-Sache (R-09)
     catalog = _load_prompt_studio_catalog()
     tpl = next((t for t in catalog if t.get("id") == template_slug), None)
     if not tpl:
@@ -396,8 +399,9 @@ async def render_template_prompt(template_slug: str, req: TemplateRenderRequest)
 
 
 @router.post("/api/templates")
-async def save_prompt_template(req: TemplateSaveRequest):
+async def save_prompt_template(request: Request, req: TemplateSaveRequest):
     """Speichert eine neue oder angepasste Vorlage in der persistenten Template-Bibliothek."""
+    require_admin_or_503(request)  # RBAC: Prompt-Bibliothek ist Admin-Sache (R-09)
     data = _load_prompt_templates()
     if req.category not in data.get("categories", []):
         data.setdefault("categories", []).append(req.category)

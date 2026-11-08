@@ -27,10 +27,13 @@ from archon.core.runtime import (  # noqa: F401
     atomic_write_json,
 )
 
+from archon.routers._rbac import require_admin_or_503
+
 router = APIRouter()
 
 @router.post("/api/memory/harvest")
-def api_harvest_memory(payload: Dict = Body(...)):
+def api_harvest_memory(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from local_memory_bridge import LocalMemoryBridge
     bridge = LocalMemoryBridge()
     text = payload.get("text", "")
@@ -39,7 +42,8 @@ def api_harvest_memory(payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/compact-context")
-def api_compact_context(payload: Dict = Body(...)):
+def api_compact_context(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.context_compactor import context_compactor
     return context_compactor.compact_messages(
         messages=payload.get("messages", []),
@@ -49,7 +53,8 @@ def api_compact_context(payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/hybrid-index")
-def api_hybrid_index_doc(payload: Dict = Body(...)):
+def api_hybrid_index_doc(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.hybrid_search_engine import hybrid_search_engine
     return hybrid_search_engine.index_document(
         doc_id=payload.get("doc_id", "DOC-1"),
@@ -60,7 +65,8 @@ def api_hybrid_index_doc(payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/hybrid-search")
-def api_hybrid_search(payload: Dict = Body(...)):
+def api_hybrid_search(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.hybrid_search_engine import hybrid_search_engine
     return hybrid_search_engine.search(
         query=payload.get("query", ""),
@@ -70,7 +76,8 @@ def api_hybrid_search(payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/knowledge-graph/triple")
-def api_kg_add_triple(payload: Dict = Body(...)):
+def api_kg_add_triple(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.knowledge_graph_store import knowledge_graph_store
     return knowledge_graph_store.add_triple(
         subject=payload.get("subject", ""),
@@ -82,7 +89,8 @@ def api_kg_add_triple(payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/knowledge-graph/ingest")
-def api_kg_ingest_text(payload: Dict = Body(...)):
+def api_kg_ingest_text(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.knowledge_graph_store import knowledge_graph_store
     return knowledge_graph_store.ingest_text(
         text=payload.get("text", ""),
@@ -97,7 +105,8 @@ def api_kg_subgraph(entity: str, hops: Optional[int] = None):
 
 
 @router.post("/api/memory/crag-retrieve")
-def api_crag_retrieve(payload: Dict = Body(...)):
+def api_crag_retrieve(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.corrective_rag import corrective_rag_engine
     return corrective_rag_engine.retrieve_and_verify(
         query=payload.get("query", ""),
@@ -112,7 +121,8 @@ def api_get_core_memory_blocks():
 
 
 @router.post("/api/memory/core-blocks")
-def api_upsert_core_memory_block(payload: Dict = Body(...)):
+def api_upsert_core_memory_block(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.core_memory_manager import core_memory_manager
     return core_memory_manager.upsert_block(
         block_key=payload.get("block_key", "custom_block"),
@@ -123,7 +133,8 @@ def api_upsert_core_memory_block(payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/pin-citations")
-def api_pin_citations(payload: Dict = Body(...)):
+def api_pin_citations(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
     from backend.citation_pinner import citation_pinner
     return citation_pinner.pin_citations(
         response_text=payload.get("response_text", ""),

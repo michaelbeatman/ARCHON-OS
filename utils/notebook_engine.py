@@ -45,6 +45,11 @@ except ImportError:
         extract_txt
     )
 
+try:
+    from utils.path_jail import safe_path_within, safe_filename, PathJailError
+except ImportError:
+    from path_jail import safe_path_within, safe_filename, PathJailError
+
 
 def get_data_dir() -> str:
     """Ermittelt das Datenverzeichnis fuer persistente Notebook-Konfigurationen."""
@@ -178,14 +183,25 @@ def add_source_file(notebook_id: str, file_bytes: bytes, filename: str) -> dict:
 
     raw_dir = resolve_raw_docs_dir()
     os.makedirs(raw_dir, exist_ok=True)
-    saved_file_path = os.path.join(raw_dir, filename)
-    
+
+    # F19/M-03: Der Multipart-Filename ist Angreifer-Eingabe. Erst auf den
+    # Basisnamen reduzieren (Backslash wie Separator), dann den Zielpfad durch
+    # das Jail mit *nur* raw_dir schicken — wie beim Library-Upload in main.py.
+    safe_name = safe_filename(filename)
+    try:
+        saved_file_path = safe_path_within(
+            os.path.join(raw_dir, safe_name), [raw_dir],
+            must_exist=False, allow_write=True, allow_dirs=False,
+        )
+    except PathJailError as exc:
+        raise PathJailError(f"Dateiname nicht erlaubt: {exc}") from exc
+
     with open(saved_file_path, "wb") as f:
         f.write(file_bytes)
 
     # Extraktion
-    ext = os.path.splitext(filename)[1].lower()
-    doc_slug = slugify(os.path.splitext(filename)[0])
+    ext = os.path.splitext(safe_name)[1].lower()
+    doc_slug = slugify(os.path.splitext(safe_name)[0])
     vault_dir = resolve_vault_path()
     assets_dir = os.path.join(vault_dir, "02_Wissensbibliothek", "_assets")
     os.makedirs(assets_dir, exist_ok=True)
@@ -221,8 +237,8 @@ def add_source_file(notebook_id: str, file_bytes: bytes, filename: str) -> dict:
     source_id = f"src_{doc_slug}_{int(time.time())}"
     source_entry = {
         "id": source_id,
-        "title": os.path.splitext(filename)[0].replace("_", " ").replace("-", " ").title(),
-        "filename": filename,
+        "title": os.path.splitext(safe_name)[0].replace("_", " ").replace("-", " ").title(),
+        "filename": safe_name,
         "type": ext.lstrip("."),
         "status": "Bereit & Indexiert",
         "pages_count": extracted.get("total_pages", len(pages)),
@@ -253,7 +269,18 @@ def add_source_from_vault(notebook_id: str, rel_path: str) -> dict:
         raise ValueError(f"Notebook '{notebook_id}' existiert nicht.")
 
     vault_dir = resolve_vault_path()
-    full_path = os.path.join(vault_dir, "02_Wissensbibliothek", rel_path.lstrip("/\\"))
+    # M-02(c): `rel_path` kam ungefiltert in os.path.join — `../../` las ausserhalb
+    # der Wissensbibliothek und legte den Inhalt als Chunks im Notebook ab.
+    library_root = os.path.join(vault_dir, "02_Wissensbibliothek")
+    try:
+        full_path = safe_path_within(
+            os.path.join(library_root, str(rel_path).lstrip("/\\")),
+            [library_root], must_exist=False, allow_dirs=False,
+        )
+    except PathJailError as exc:
+        raise PathJailError(
+            f"Vault-Dokument ausserhalb der Wissensbibliothek: {rel_path!r}"
+        ) from exc
     if not os.path.exists(full_path):
         raise FileNotFoundError(f"Vault-Dokument '{rel_path}' nicht gefunden.")
 

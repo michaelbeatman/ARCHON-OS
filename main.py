@@ -367,7 +367,7 @@ from archon.routers.llm_providers import get_llm_prices  # noqa: E402
 
 # --- Pfad-Jail: jeder dateibasierte Endpunkt bleibt in erlaubten Wurzeln ---
 try:
-    from utils.path_jail import safe_path, PathJailError, allowed_roots
+    from utils.path_jail import safe_path, safe_path_within, safe_filename, PathJailError, allowed_roots
 except Exception as _pj_err:  # pragma: no cover - darf den Start nie blockieren
     print(f"[PathJail] Konnte utils.path_jail nicht laden: {_pj_err}", file=sys.stderr)
 
@@ -376,6 +376,12 @@ except Exception as _pj_err:  # pragma: no cover - darf den Start nie blockieren
 
     def safe_path(candidate, **kwargs):  # type: ignore[misc]
         return os.path.realpath(os.path.abspath(os.path.expanduser(str(candidate))))
+
+    def safe_path_within(candidate, roots, **kwargs):  # type: ignore[misc]
+        return os.path.realpath(os.path.abspath(os.path.expanduser(str(candidate))))
+
+    def safe_filename(name):  # type: ignore[misc]
+        return os.path.basename(str(name or "").replace("\\", "/"))
 
     def allowed_roots(extra=None):  # type: ignore[misc]
         return []
@@ -2515,6 +2521,8 @@ def api_get_notebook_sources(nb_id: str):
 
 @app.post("/api/v1/notebooks/{nb_id}/sources/upload")
 async def api_upload_notebook_source(nb_id: str, request: Request):
+    # RBAC: Upload schreibt in die Bibliothek -> Admin-Sache (F19/M-03).
+    require_admin_or_503(request)
     try:
         from utils.notebook_engine import add_source_file
         form = await request.form()
@@ -2524,6 +2532,10 @@ async def api_upload_notebook_source(nb_id: str, request: Request):
         file_bytes = await file.read()
         res = add_source_file(nb_id, file_bytes, file.filename)
         return res
+    except HTTPException:
+        raise
+    except PathJailError as pe:
+        raise HTTPException(status_code=400, detail=f"Dateiname nicht erlaubt: {pe}")
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:
@@ -2538,6 +2550,10 @@ def api_attach_vault_source(nb_id: str, payload: dict = Body(...)):
             raise HTTPException(status_code=400, detail="rel_path ist erforderlich.")
         res = add_source_from_vault(nb_id, rel_path)
         return res
+    except HTTPException:
+        raise
+    except PathJailError as pe:
+        raise HTTPException(status_code=400, detail=f"Pfad nicht erlaubt: {pe}")
     except (ValueError, FileNotFoundError) as ve:
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:
@@ -8662,25 +8678,42 @@ def on_shutdown_graceful():
 
 
 # --- DOKUMENTEN-PARSING & TABELLENEXTRAKTION (t-539b65) ---
+def _resolve_parser_input(filepath: str) -> str:
+    """Prueft den Parser-Eingabepfad gegen die Bibliotheks-Wurzel (D-05).
+
+    Der Parser liest beliebige Formate ein. Frueher wurde jeder angegebene Pfad
+    geoeffnet (``/opt/data/.env``, ``/app/.env.archon``). Erlaubt ist jetzt nur
+    noch ``library/raw_docs`` — die Wurzel, in die Uploads geschrieben werden.
+    """
+    if not filepath:
+        raise HTTPException(status_code=400, detail="Gültiger 'filepath' erforderlich.")
+    from utils.batch_library_importer import resolve_raw_docs_dir
+    try:
+        return safe_path_within(
+            filepath, [resolve_raw_docs_dir()], must_exist=True, allow_dirs=False,
+        )
+    except PathJailError as e:
+        raise HTTPException(status_code=403, detail=f"Pfad nicht erlaubt: {e}")
+
+
 @app.post("/api/documents/parse")
 @app.post("/api/v1/documents/parse")
-def api_parse_document(payload: dict = Body(...)):
+def api_parse_document(request: Request, payload: dict = Body(...)):
+    # RBAC: der Parser liest Dateien im Auftrag des Aufrufers -> Admin-Sache.
+    require_admin_or_503(request)
     from backend.document_parser import DocumentParserEngine
-    filepath = payload.get("filepath", "")
-    if not filepath or not os.path.exists(filepath):
-        raise HTTPException(status_code=400, detail="Gültiger 'filepath' erforderlich.")
-    res = DocumentParserEngine.parse_file(filepath)
+    real_path = _resolve_parser_input(payload.get("filepath", ""))
+    res = DocumentParserEngine.parse_file(real_path)
     return {"status": "success", "result": res}
 
 
 @app.post("/api/documents/extract-tables")
 @app.post("/api/v1/documents/extract-tables")
-def api_extract_tables(payload: dict = Body(...)):
+def api_extract_tables(request: Request, payload: dict = Body(...)):
+    require_admin_or_503(request)
     from backend.document_parser import DocumentParserEngine
-    filepath = payload.get("filepath", "")
-    if not filepath or not os.path.exists(filepath):
-        raise HTTPException(status_code=400, detail="Gültiger 'filepath' erforderlich.")
-    res = DocumentParserEngine.parse_file(filepath)
+    real_path = _resolve_parser_input(payload.get("filepath", ""))
+    res = DocumentParserEngine.parse_file(real_path)
     tables = res.get("tables") or res.get("tables_by_sheet") or []
     return {"status": "success", "tables": tables, "format": res.get("format")}
 
@@ -8775,8 +8808,13 @@ def api_get_vault_list():
 
 @app.get("/api/vault/file")
 def api_read_vault_file_direct(path: str = Query(...)):
+    # F3 (gleiche Klasse): `safe_path` zieht die Default-Wurzeln (/opt/data,
+    # /app/data, ~/.hermes) mit — damit waren .env und Configs lesbar. Erlaubt
+    # ist nur die Vault-Wurzel.
     try:
-        real_path = safe_path(path, must_exist=True, allow_dirs=False)
+        real_path = safe_path_within(
+            path, [OBSIDIAN_VAULT_DIR], must_exist=True, allow_dirs=False,
+        )
     except PathJailError as e:
         raise HTTPException(status_code=403, detail=str(e))
     if not os.path.isfile(real_path):
@@ -8786,13 +8824,20 @@ def api_read_vault_file_direct(path: str = Query(...)):
 
 
 @app.post("/api/vault/edit")
-def api_edit_vault_file_direct(payload: Dict = Body(...)):
+def api_edit_vault_file_direct(request: Request, payload: Dict = Body(...)):
+    # RBAC: Schreiben in den Vault ist Admin-Sache (vor jedem open()).
+    require_admin_or_503(request)
     path = payload.get("path", "")
     content = payload.get("content", "")
     if not path:
         raise HTTPException(status_code=400, detail="Pfad fehlt.")
+    # Reichweite verengen (F24): nur die Vault-Wurzel. `safe_path(...,
+    # extra_roots=[...])` ERWEITERT das Jail nur — die Default-Wurzeln
+    # (/opt/data, /app, ~/.hermes) blieben sonst beschreibbar.
     try:
-        real_path = safe_path(path, allow_write=True, allow_dirs=False)
+        real_path = safe_path_within(
+            path, [OBSIDIAN_VAULT_DIR], allow_write=True, allow_dirs=False,
+        )
     except PathJailError as e:
         raise HTTPException(status_code=403, detail=str(e))
     os.makedirs(os.path.dirname(real_path), exist_ok=True)

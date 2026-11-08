@@ -24,6 +24,12 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel
 
+try:
+    from utils.path_jail import safe_path_within, PathJailError
+except ImportError:  # pragma: no cover - direkter Aufruf ausserhalb des Repo-Roots
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from utils.path_jail import safe_path_within, PathJailError
+
 router = APIRouter(prefix="/api/views", tags=["views_core"])
 
 # Basispfade auflösen (Host vs. Docker)
@@ -144,16 +150,28 @@ async def get_inbox_items():
 
 
 @router.get("/inbox/file")
-async def get_inbox_file_content(path: str = Query(...)):
-    """Liest den vollen Dateiinhalt eines Inbox-Elements."""
-    if not os.path.exists(path):
+async def get_inbox_file_content(request: Request, path: str = Query(...)):
+    """Liest den vollen Dateiinhalt eines Inbox-Elements.
+
+    M-02(a): Vorher wurde jeder Pfad roh geoeffnet. Jetzt: Rollenzaun plus Jail
+    auf die beiden Inbox-Verzeichnisse.
+    """
+    require_admin_or_503(request)  # RBAC: Rohdatei-Lesen ist Admin-Sache
+    try:
+        real_path = safe_path_within(
+            path, [get_inbox_email_dir(), get_inbox_telegram_dir()],
+            must_exist=False, allow_dirs=False,
+        )
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Pfad nicht erlaubt: {exc}")
+    if not os.path.isfile(real_path):
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
     try:
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(real_path, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
         return {
-            "path": path,
-            "filename": os.path.basename(path),
+            "path": real_path,
+            "filename": os.path.basename(real_path),
             "content": content
         }
     except Exception as e:
@@ -430,15 +448,21 @@ async def get_showroom_tree():
 
 
 @router.get("/showroom/file-content")
-async def get_showroom_file_content(path: str = Query(...)):
-    """Lädt den Inhalt einer Datei für die Showroom-Vorschau."""
-    target = Path(path).resolve()
-    vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
-    base_dir = Path(BASE_DIR if 'BASE_DIR' in globals() else "/app").resolve()
+async def get_showroom_file_content(request: Request, path: str = Query(...)):
+    """Lädt den Inhalt einer Datei für die Showroom-Vorschau.
 
-    # Sicherheitsprüfung
-    if not (str(target).startswith(str(vault_dir)) or str(target).startswith(str(base_dir))):
-        raise HTTPException(status_code=403, detail="Unzulässiger Pfad.")
+    F3/M-02: Frueher erlaubte die Pruefung ``startswith("/app")`` den gesamten
+    Code-Baum (``.env.archon``, Service-Tokens). Erlaubt ist jetzt ausschliesslich
+    die Vault-Wurzel — dort liegt der Showroom-Baum.
+    """
+    require_admin_or_503(request)  # RBAC: Rohdatei-Lesen ist Admin-Sache
+    vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
+    try:
+        target = Path(safe_path_within(
+            path, [str(vault_dir)], must_exist=True, allow_dirs=False,
+        ))
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Unzulässiger Pfad: {exc}")
 
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
@@ -494,10 +518,23 @@ class DesktopExportPayload(BaseModel):
 
 
 @router.post("/showroom/export-desktop")
-async def export_showroom_to_desktop(payload: DesktopExportPayload):
-    """Kopiert eine Datei direkt auf den Desktop."""
+async def export_showroom_to_desktop(request: Request, payload: DesktopExportPayload):
+    """Kopiert eine Datei direkt auf den Desktop.
+
+    M-02(b): Der Handler nahm kein ``Request`` entgegen und konnte deshalb
+    keinen Rollenzaun pruefen; die Quelle war ein beliebiger Pfad. Beides ist
+    behoben — Quelle nur noch innerhalb der Vault-Wurzel.
+    """
+    require_admin_or_503(request)  # RBAC: Export ist Admin-Sache
     import shutil
-    source = Path(payload.filepath).resolve()
+    vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
+    try:
+        source = Path(safe_path_within(
+            payload.filepath, [str(vault_dir)], must_exist=True, allow_dirs=False,
+        ))
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Unzulässiger Pfad: {exc}")
+
     if not source.exists() or not source.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
 

@@ -7,6 +7,12 @@ import subprocess
 from typing import List, Dict, Optional
 
 try:
+    from utils.path_jail import safe_path_within, safe_filename, PathJailError
+except ImportError:  # pragma: no cover - direkter Aufruf ausserhalb des Repo-Roots
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from utils.path_jail import safe_path_within, safe_filename, PathJailError
+
+try:
     import docker
 except ImportError:
     docker = None
@@ -132,10 +138,24 @@ class ObsidianVaultSkill:
         os.makedirs(self.vault_dir, exist_ok=True)
 
     def write_obsidian_note(self, title: str, content: str, tags: Optional[List[str]] = None) -> Dict:
-        """Writes a structured markdown note with frontmatter and main backlink."""
+        """Writes a structured markdown note with frontmatter and main backlink.
+
+        Z-01: Der Titel ist Nutzereingabe und darf keinen Pfadanteil tragen.
+        Er wird auf einen Dateinamen reduziert (Basename, Backslash wie
+        Separator), der Zielpfad laeuft zusaetzlich durch das Jail mit *nur*
+        ``vault_dir`` — vorher blieb ``..`` stehen und schrieb ausserhalb.
+        """
         tags = tags or []
-        filename = f"{title.replace(' ', '_').replace('/', '_')}.md"
-        filepath = os.path.join(self.vault_dir, filename)
+        try:
+            filename = safe_filename(
+                f"{str(title).replace('/', '_').replace(' ', '_')}.md"
+            )
+            filepath = safe_path_within(
+                os.path.join(self.vault_dir, filename), [self.vault_dir],
+                allow_write=True, allow_dirs=False,
+            )
+        except PathJailError as exc:
+            return {"status": "error", "message": f"Ungueltiger Notiztitel: {exc}"}
         
         frontmatter = "---\n"
         frontmatter += f"title: \"{title}\"\n"

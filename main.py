@@ -2657,49 +2657,13 @@ def api_evict_stale_memory(payload: Dict = Body(None)):
 def api_get_models_v1():
     return ["free-forever", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-r1", "hermes-3", "llama-3.3-70b"]
 
-@app.post("/api/v1/security/scan-email")
-def api_scan_email_security(payload: Dict = Body(None)):
-    from local_security_guard import scan_prompt_injection
-    payload = payload or {}
-    text = payload.get("text") or payload.get("body") or ""
-    subject = payload.get("subject", "")
-    sender = payload.get("sender", "")
-    sensitivity = payload.get("sensitivity", "moderate")
-    use_llm = bool(payload.get("use_llm", False))
-    model = payload.get("model", "omniroute/free-forever")
-    res = scan_prompt_injection(text, subject=subject, sender=sender, sensitivity=sensitivity, use_llm=use_llm, model=model)
-    return {"status": "success", **res}
-
-@app.post("/api/v1/security/validate-output")
-def api_validate_output_security(payload: Dict = Body(None)):
-    from local_security_guard import validate_ai_output
-    payload = payload or {}
-    task = payload.get("task", "")
-    result = payload.get("result", "")
-    model_used = payload.get("model_used", "default")
-    min_score = int(payload.get("min_score", 7))
-    use_llm = bool(payload.get("use_llm", False))
-    judge_model = payload.get("judge_model", "omniroute/free-forever")
-    res = validate_ai_output(task, result, model_used=model_used, min_score=min_score, use_llm=use_llm, judge_model=judge_model)
-    return {"status": "success", **res}
-
-@app.get("/api/v1/security/stats")
-def api_get_security_stats():
-    # Zählt Mails im Posteingang und deren Sicherheitsstatus
-    from views.view_inbox import load_email_messages, load_telegram_messages
-    emails = load_email_messages()
-    telegrams = load_telegram_messages()
-    all_items = emails + telegrams
-    blocked_cnt = sum(1 for m in all_items if m.get("security_status") == "blocked")
-    suspicious_cnt = sum(1 for m in all_items if m.get("security_status") == "suspicious")
-    safe_cnt = sum(1 for m in all_items if m.get("security_status") == "safe")
-    return {
-        "status": "success",
-        "total_scanned": len(all_items),
-        "blocked_count": blocked_cnt,
-        "suspicious_count": suspicious_cnt,
-        "safe_count": safe_cnt
-    }
+from archon.routers.security_scanner import (
+    router as _security_scanner_router,
+    api_scan_email_security,
+    api_validate_output_security,
+    api_get_security_stats,
+)
+app.include_router(_security_scanner_router)
 
 from archon.routers.research import (
     router as _research_router,

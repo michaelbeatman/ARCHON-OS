@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -308,7 +309,7 @@ async def api_run_boardroom(req: BoardroomRequest):
         # Speichere strukturierten Eintrag in boardroom_history
         try:
             hist_entry = {
-                "id": f"deb_{int(time.time())}",
+                "id": f"deb_{int(time.time())}_{uuid.uuid4().hex[:6]}",
                 "timestamp": datetime.datetime.now().isoformat(),
                 "date_display": datetime.datetime.now().strftime("%d.%m.%Y · %H:%M Uhr"),
                 "task": req.task,
@@ -386,7 +387,7 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                 # Save structured debate entry to boardroom history
                 try:
                     hist_entry = {
-                        "id": f"deb_{int(time.time())}",
+                        "id": f"deb_{int(time.time())}_{uuid.uuid4().hex[:6]}",
                         "timestamp": datetime.datetime.now().isoformat(),
                         "date_display": datetime.datetime.now().strftime("%d.%m.%Y · %H:%M Uhr"),
                         "task": req.task,

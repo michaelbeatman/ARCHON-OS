@@ -1,5 +1,6 @@
 import os
 import secrets
+import uuid
 import sys
 import time
 import json
@@ -5378,7 +5379,7 @@ async def api_chat_stream(req: ChatStreamRequest):
 
     # 1. MISSIONS-MODUS: Task erzeugen & HITL Approval-Gate aktivieren
     if mode == "mission":
-        task_id = f"task-{int(time.time()) % 10000}"
+        task_id = f"task-{int(time.time())}-{uuid.uuid4().hex[:6]}"
         title = user_msg[:80] + ("..." if len(user_msg) > 80 else "")
 
         # Task in Archon OS erfassen mit status: approval

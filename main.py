@@ -701,6 +701,7 @@ from archon.routers.core_settings import (
     api_save_agents,
     api_get_roles,
     api_save_roles,
+    api_test_jev,
 )
 app.include_router(_core_settings_router)
 
@@ -749,6 +750,7 @@ from archon.routers.docker_services import (
     api_docker_stop,
     api_save_services,
     api_get_models,
+    api_get_models_v1,
 )
 app.include_router(_docker_services_router)
 
@@ -1219,6 +1221,7 @@ from archon.routers.ui import (
     FullHtmlSaveRequest,
     _full_html_target_files,
     api_save_full_html,
+    api_studio_upload_bg,
 )
 app.include_router(_quickchat_router)
 app.include_router(_ui_router)
@@ -2003,30 +2006,6 @@ def invalidate_paperclip_agents_cache():
 def api_get_paperclip_agents():
     return {"status": "success", "agents": []}
 
-# --- CSS Live Studio: Hintergrund-Bild-Upload (User-Wunsch 10.10.2026) ---
-
-@app.post("/api/studio/upload-bg")
-async def api_studio_upload_bg(file: UploadFile = File(...)):
-    """Lädt ein Hintergrundbild (JPG/PNG/WebP) für das CSS Live Studio hoch.
-    Speichert unter /static/uploads/ und liefert die URL zurück."""
-    allowed_ext = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-                   ".webp": "image/webp", ".gif": "image/gif"}
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in allowed_ext:
-        raise HTTPException(status_code=400, detail=f"Dateityp '{ext}' nicht erlaubt (jpg, jpeg, png, webp, gif).")
-    content = await file.read()
-    if len(content) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Bild zu groß (max. 8 MB).")
-    os.makedirs(STUDIO_BG_UPLOAD_DIR, exist_ok=True)
-    ts = int(time.time() * 1000)
-    safe_ext = ext if ext else ".jpg"
-    out_name = f"studio-bg_{ts}{safe_ext}"
-    out_path = os.path.join(STUDIO_BG_UPLOAD_DIR, out_name)
-    with open(out_path, "wb") as f:
-        f.write(content)
-    add_ticker("CSS Studio", f"Hintergrundbild hochgeladen: {out_name}")
-    return {"status": "success", "url": f"/static/uploads/{out_name}", "filename": out_name, "size": len(content)}
-
 
 # --- TALENT- & SKILL-MARKTPLATZ ENDPOINTS (ausgelagert nach archon.routers.marketplace) ---
 from archon.routers.marketplace import (
@@ -2043,17 +2022,6 @@ from archon.routers.marketplace import (
 )
 _marketplace_configure(save_all_agent_profiles=save_all_agent_profiles)
 app.include_router(_marketplace_router)
-
-
-@app.post("/api/v1/jev/test")
-async def api_test_jev(payload: Dict = Body(None)):
-    import jev_router
-    payload = payload or {}
-    res = jev_router.test_jev_connection(
-        api_key=payload.get("api_key"),
-        base_url=payload.get("base_url")
-    )
-    return res
 
 from archon.routers.memory_ops import (
     router as _memory_ops_router,
@@ -2079,12 +2047,6 @@ from archon.routers.email_settings import (
     api_sync_emails_endpoint,
 )
 app.include_router(_email_settings_router)
-
-
-
-@app.get("/api/v1/models")
-def api_get_models_v1():
-    return ["free-forever", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-r1", "hermes-3", "llama-3.3-70b"]
 
 from archon.routers.security_scanner import (
     router as _security_scanner_router,

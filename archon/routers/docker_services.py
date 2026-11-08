@@ -269,3 +269,8 @@ async def api_get_models(request: Request):
         return await app_main.forward_to_hermes(request)
 
     return ["free-forever", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "hermes-3", "gemini-1.5-pro"]
+
+
+@router.get("/api/v1/models")
+def api_get_models_v1():
+    return ["free-forever", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-r1", "hermes-3", "llama-3.3-70b"]

@@ -159,3 +159,15 @@ def api_save_roles(request: Request, roles: List[Dict]):
     import main as app_main
     app_main.save_roles(roles)
     return {"status": "success"}
+
+
+@router.post("/api/v1/jev/test")
+async def api_test_jev(payload: Dict = Body(None)):
+    import jev_router
+
+    payload = payload or {}
+    res = jev_router.test_jev_connection(
+        api_key=payload.get("api_key"),
+        base_url=payload.get("base_url"),
+    )
+    return res

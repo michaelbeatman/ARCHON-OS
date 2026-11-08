@@ -21,9 +21,21 @@ import logging
 import urllib.request
 import urllib.error
 import http.client
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Protocol
 
 logger = logging.getLogger("hermes.updater")
+
+
+class DockerApiClient(Protocol):
+    """Gemeinsame Oberflaeche von DockerSocketClient und DockerAdminAdapter."""
+
+    def _request(self, method: str, endpoint: str, body: Optional[bytes] = None,
+                 headers: Optional[dict] = None) -> Tuple[int, bytes]: ...
+
+    def get_json(self, endpoint: str) -> Optional[Dict[str, Any]]: ...
+
+    def post(self, endpoint: str, body: Optional[bytes] = None) -> Tuple[int, str]: ...
+
 
 HERMES_REPO = "NousResearch/hermes-agent"
 GITHUB_API_BASE = f"https://api.github.com/repos/{HERMES_REPO}"
@@ -37,6 +49,42 @@ HERMES_CORE_CONTAINER = "hermes-agent"
 DEFAULT_INSTALLED_VERSION = "v0.22.6"
 DEFAULT_INSTALLED_CODENAME = "2026.9.24"
 DEFAULT_INSTALLED_SHA = "f0d94882"
+
+# ---------------------------------------------------------------------------
+# Transport-Umschaltung (Etappe 1: vorbereitet, Default = heutiges Verhalten)
+#
+# HERMES_UPDATER_DOCKER_CLIENT:
+#   unset / "0"  -> roher Unix-Socket wie bisher (DockerSocketClient)
+#   "1" / "true" -> utils.docker_client.DockerAdminClient ueber DOCKER_HOST
+#                   bzw. Unix-Socket, mit eigener Admin-Allowlist
+# HERMES_UPDATER_PULL_TIMEOUT:
+#   Sekunden fuer den GESAMTEN Pull (Default 1800). Heute gilt pauschal
+#   settimeout(120) pro recv — ein langsam fliessender Pull bricht damit mit
+#   socket.timeout ab, obwohl der Daemon korrekt arbeitet.
+# ---------------------------------------------------------------------------
+_USE_DOCKER_CLIENT_ENV = "HERMES_UPDATER_DOCKER_CLIENT"
+_PULL_TIMEOUT_ENV = "HERMES_UPDATER_PULL_TIMEOUT"
+_REQUEST_TIMEOUT_ENV = "HERMES_UPDATER_REQUEST_TIMEOUT"
+
+_DEFAULT_PULL_TIMEOUT = 1800.0
+# Entspricht dem pauschalen Socket-Timeout des rohen Clients (hermes_updater.py:64).
+_DEFAULT_REQUEST_TIMEOUT = 120.0
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_seconds(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(f"[HermesUpdater] {name}={raw!r} ist keine Zahl — nutze {default}s")
+        return default
+    return value if value > 0 else default
 
 # In-Memory Cache gegen GitHub API Rate-Limits (15 Minuten TTL)
 _cache_lock_time = 0
@@ -91,6 +139,63 @@ class DockerSocketClient:
         return status, data.decode("utf-8", errors="ignore")
 
 
+class DockerAdminAdapter:
+    """Gleiche Oberflaeche wie DockerSocketClient, Transport ueber DockerAdminClient.
+
+    Zweck: der Updater (und nur der) bekommt die Admin-Allowlist, ohne dass sich
+    eine einzige Aufrufstelle aendern muss — `_request` liefert (status, bytes),
+    `post` liefert (status, str), `get_json` liefert dict|None. Genau diese
+    Signaturen nutzen `get_installed_hermes_info`, `recreate_container_with_new_image`
+    und `apply_hermes_update`.
+
+    Der Pull bekommt einen eigenen Timeout: die Retry-/Abbruchgrenze eines
+    Image-Transfers haengt an der Bildgroesse, nicht an der Daemon-Latenz.
+    """
+
+    _PULL_PATH_PREFIX = "/images/create"
+
+    def __init__(self, client=None) -> None:
+        if client is None:
+            from utils.docker_client import DockerAdminClient
+
+            client = DockerAdminClient()
+        self._client = client
+        self._request_timeout = _env_seconds(_REQUEST_TIMEOUT_ENV, _DEFAULT_REQUEST_TIMEOUT)
+        self._pull_timeout = _env_seconds(_PULL_TIMEOUT_ENV, _DEFAULT_PULL_TIMEOUT)
+
+    def _timeout_for(self, endpoint: str) -> float:
+        return self._pull_timeout if endpoint.startswith(self._PULL_PATH_PREFIX) else self._request_timeout
+
+    def _request(self, method: str, endpoint: str, body: Optional[bytes] = None,
+                 headers: Optional[dict] = None) -> Tuple[int, bytes]:
+        payload = None
+        if body:
+            payload = json.loads(body.decode("utf-8"))
+        return self._client.request_status(method, endpoint, payload,
+                                           timeout=self._timeout_for(endpoint))
+
+    def get_json(self, endpoint: str) -> Optional[Dict[str, Any]]:
+        try:
+            status, data = self._request("GET", endpoint)
+            if status in (200, 201):
+                return json.loads(data.decode("utf-8", errors="ignore"))
+            return None
+        except Exception as e:
+            logger.debug(f"[DockerAdminAdapter] GET {endpoint} error: {e}")
+            return None
+
+    def post(self, endpoint: str, body: Optional[bytes] = None) -> Tuple[int, str]:
+        status, data = self._request("POST", endpoint, body=body)
+        return status, data.decode("utf-8", errors="ignore")
+
+
+def _make_docker_client():
+    """Transport fuer den Updater: Schalter an = Admin-Client, aus = roher Socket (heute)."""
+    if _env_flag(_USE_DOCKER_CLIENT_ENV):
+        return DockerAdminAdapter()
+    return DockerSocketClient()
+
+
 def get_installed_hermes_info(force_check: bool = False) -> Dict[str, Any]:
     """
     Ermittelt die tatsächlich installierte Hermes Core Version und den Build-SHA.
@@ -109,7 +214,7 @@ def get_installed_hermes_info(force_check: bool = False) -> Dict[str, Any]:
     }
 
     try:
-        docker_cli = DockerSocketClient()
+        docker_cli = _make_docker_client()
         c_data = docker_cli.get_json(f"/containers/{HERMES_CORE_CONTAINER}/json")
         if c_data and isinstance(c_data, dict):
             state = c_data.get("State", {})
@@ -261,7 +366,7 @@ def check_hermes_updates(force_refresh: bool = False) -> Dict[str, Any]:
     return result
 
 
-def recreate_container_with_new_image(docker_cli: DockerSocketClient, container_name: str, new_image: str) -> Tuple[bool, str]:
+def recreate_container_with_new_image(docker_cli: "DockerApiClient", container_name: str, new_image: str) -> Tuple[bool, str]:
     """
     Erstellt den Docker-Container atomar mit dem neuen Image neu:
     1. Konfiguration des bestehenden Containers sichern
@@ -325,7 +430,7 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
     3. Erstellt den Core-Container (hermes-agent) atomar mit dem neuen Image neu
     """
     t0 = time.time()
-    docker_cli = DockerSocketClient()
+    docker_cli = _make_docker_client()
 
     log_messages = []
     log_messages.append(f"Starte Hermes Core Update ({HERMES_REPO})...")

@@ -23,9 +23,29 @@ import socket
 import struct
 from typing import Optional
 
-__all__ = ["DockerError", "DockerClient", "docker_client", "validate_container_name"]
+__all__ = [
+    "DockerError",
+    "DockerClient",
+    "DockerAdminClient",
+    "docker_client",
+    "validate_container_name",
+    "validate_image_ref",
+]
 
 _CONTAINER_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
+
+# Image-Referenzen (nousresearch/hermes-agent:latest, registry:5000/team/img@sha256:...).
+# Bewusst ohne '?', '#', '%', '&' und ohne Leerraum: das sind Query-/Fragment-Anfaenge
+# bzw. Encoding-Tricks, mit denen sich der API-Pfad umdeuten laesst.
+_IMAGE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,200}$")
+
+# Pfadbaustein fuer Container-Namen in Regex-Allowlists. Reserved-Woerter von
+# /containers/<x>, die keine Container-IDs sind, werden ausgeschlossen, damit
+# z.B. DELETE /containers/json nicht durch eine Namensregel faellt.
+_CN_PAT = r"(?!json$|create$|prune$)[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
+# Pfadbaustein fuer Image-Referenzen (darf '/' enthalten, weil Repos verschachtelt sind).
+_REF_PAT = r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,200}"
+
 
 # Erlaubte Operationen: (Methode, Pfad-Regex)
 _ALLOWED = [
@@ -38,6 +58,46 @@ _ALLOWED = [
     ("POST", re.compile(r"^/containers/[^/]+/(start|stop|restart)$")),
 ]
 
+# ---------------------------------------------------------------------------
+# Eigene, getrennte Allowlist fuer den privilegierten Admin-Client.
+#
+# Sie ist absichtlich NICHT in _ALLOWED eingerollt: _ALLOWED gilt fuer alle
+# normalen Aufrufer (main.py, archon/routers/*, ephemeral_sandbox). Wuerde man
+# 'Image pull' oder 'Container create/delete' dort hineinlegen, koennte jeder
+# dieser Aufrufer den kompletten Hermes-Core austauschen. Der Admin-Client ist
+# nur fuer den Updater gedacht (backend/hermes_updater.py).
+#
+# Genau die 12 Operationen, die Updater und Versionserkennung brauchen — nicht
+# mehr: kein kill, kein pause, kein prune, kein build, kein volume, kein exec
+# ausser dem Read-only-Versionsabruf.
+# ---------------------------------------------------------------------------
+_ADMIN_ALLOWED = [
+    # --- Lesen (Versionserkennung, Container-Backup-Konfiguration) ---
+    ("GET", re.compile(r"^/containers/json(\?.*)?$")),
+    ("GET", re.compile(rf"^/containers/{_CN_PAT}/json$")),
+    ("GET", re.compile(rf"^/images/{_REF_PAT}/json$")),
+    # --- exec nur fuer 'hermes --version' (Erstellen + Start, kein Aufraeumen) ---
+    ("POST", re.compile(rf"^/containers/{_CN_PAT}/exec$")),
+    ("POST", re.compile(r"^/exec/[A-Za-z0-9]+/start$")),
+    # --- Lebenszyklus des Core-Containers ---
+    ("POST", re.compile(rf"^/containers/{_CN_PAT}/start$")),
+    ("POST", re.compile(rf"^/containers/{_CN_PAT}/stop(\?.*)?$")),
+    # --- Rename als Rollback-Pfad: Zielname wird im Regex mitvalidiert ---
+    ("POST", re.compile(
+        rf"^/containers/{_CN_PAT}/rename\?name=[A-Za-z0-9][A-Za-z0-9_.-]{{0,127}}$")),
+    # --- Create: Name verpflichtend, damit kein unbenannter Nebenlaeufer entsteht ---
+    ("POST", re.compile(
+        rf"^/containers/create\?name=[A-Za-z0-9][A-Za-z0-9_.-]{{0,127}}$")),
+    # --- Entfernen des Backup-Containers (Rollback-Aufraeumen) ---
+    ("DELETE", re.compile(rf"^/containers/{_CN_PAT}(\?.*)?$")),
+    # --- Image: Pull und Tag ---
+    ("POST", re.compile(
+        rf"^/images/create\?fromImage={_REF_PAT}(&[A-Za-z0-9_.=&/-]*)?$")),
+    ("POST", re.compile(
+        rf"^/images/{_REF_PAT}/tag\?repo=[A-Za-z0-9][A-Za-z0-9_.:/-]{{0,200}}"
+        r"(&[A-Za-z0-9_.=&/-]*)?$")),
+]
+
 
 class DockerError(RuntimeError):
     pass
@@ -47,6 +107,25 @@ def validate_container_name(name: str) -> str:
     if not name or not _CONTAINER_RE.match(str(name)):
         raise DockerError(f"Ungültiger Container-Name: {name!r}")
     return str(name)
+
+
+def validate_image_ref(ref: str) -> str:
+    """Image-Referenz fuer API-Pfade (repo[/img][:tag][@digest])."""
+    text = str(ref or "")
+    if not _IMAGE_REF_RE.match(text) or ".." in text or "//" in text:
+        raise DockerError(f"Ungültige Image-Referenz: {ref!r}")
+    return text
+
+
+_TAG_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
+
+
+def _validate_tag(tag: str) -> str:
+    """Docker-Tag: kein '/', kein ':', kein Leerraum (Query-Sicherheit)."""
+    text = str(tag or "")
+    if not _TAG_RE.match(text):
+        raise DockerError(f"Ungültiger Image-Tag: {tag!r}")
+    return text
 
 
 def _decode_chunked(data: bytes) -> bytes:
@@ -74,6 +153,8 @@ def _decode_chunked(data: bytes) -> bytes:
 
 
 class DockerClient:
+    _rules = _ALLOWED
+
     def __init__(self) -> None:
         self._host = os.environ.get("DOCKER_HOST", "").strip()
         self._unix = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
@@ -92,7 +173,7 @@ class DockerClient:
         return "unix", self._unix
 
     def _check_allowed(self, method: str, path: str) -> None:
-        for m, rx in _ALLOWED:
+        for m, rx in self._rules:
             if m == method.upper() and rx.match(path):
                 return
         raise DockerError(f"Docker-Operation nicht erlaubt: {method} {path}")
@@ -226,6 +307,73 @@ class DockerClient:
             raise DockerError(f"Exec-Instanz konnte nicht erstellt werden: {e}")
         return self.request("POST", f"/exec/{exec_id}/start",
                             {"Detach": False, "Tty": False}, timeout=timeout)
+
+
+class DockerAdminClient(DockerClient):
+    """Privilegierter Client fuer Image- und Container-Verwaltung.
+
+    Gleicher Transport wie DockerClient (DOCKER_HOST bzw. Unix-Socket), aber
+    eigene Allowlist (_ADMIN_ALLOWED). Nur der Updater darf das nutzen.
+
+    Jede Methode validiert ihre Argumente, bevor sie den API-Pfad baut — ein
+    Aufrufer kann also keinen Query-Anhang an einen Namen kleben.
+    """
+
+    _rules = _ADMIN_ALLOWED
+
+    # ---------------- Assets ----------------
+
+    def image_json(self, ref: str) -> bytes:
+        return self.request("GET", f"/images/{validate_image_ref(ref)}/json")
+
+    def pull_image(self, ref: str, tag: str = "latest",
+                   timeout: float = 1800.0) -> tuple[int, bytes]:
+        """Image ziehen; der Timeout gilt fuer den GANZEN Transfer.
+
+        Die Dauer eines Pulls haengt an der Image-Groesse, nicht an der
+        Antwortzeit des Daemons. Deshalb ein eigener, explizit setzbarer Timeout
+        statt des pauschalen Socket-Timeouts (heute 120 s in hermes_updater.py:64).
+        """
+        ref = validate_image_ref(ref)
+        tag_part = f"&tag={_validate_tag(tag)}" if tag else ""
+        return self.request_status("POST", f"/images/create?fromImage={ref}{tag_part}",
+                                   timeout=timeout)
+
+    def tag_image(self, ref: str, repo: str, tag: str = "latest") -> tuple[int, bytes]:
+        return self.request_status(
+            "POST",
+            f"/images/{validate_image_ref(ref)}/tag?repo={validate_image_ref(repo)}"
+            f"&tag={_validate_tag(tag)}",
+            timeout=120.0,
+        )
+
+    # ---------------- Container ----------------
+
+    def create_container(self, name: str, payload: dict,
+                         timeout: float = 120.0) -> tuple[int, bytes]:
+        name = validate_container_name(name)
+        return self.request_status("POST", f"/containers/create?name={name}",
+                                   payload, timeout=timeout)
+
+    def rename_container(self, name: str, new_name: str) -> tuple[int, bytes]:
+        name = validate_container_name(name)
+        new_name = validate_container_name(new_name)
+        return self.request_status("POST", f"/containers/{name}/rename?name={new_name}",
+                                   timeout=120.0)
+
+    def remove_container(self, name: str, volumes: bool = False) -> tuple[int, bytes]:
+        name = validate_container_name(name)
+        flag = "true" if volumes else "false"
+        return self.request_status("DELETE", f"/containers/{name}?v={flag}", timeout=120.0)
+
+    def lifecycle(self, name: str, action: str, stop_timeout: int = 5) -> tuple[int, bytes]:
+        name = validate_container_name(name)
+        if action not in ("start", "stop"):
+            raise DockerError(f"Ungültige Admin-Aktion: {action}")
+        if action == "stop":
+            return self.request_status("POST", f"/containers/{name}/stop?t={int(stop_timeout)}",
+                                       timeout=120.0)
+        return self.request_status("POST", f"/containers/{name}/start", timeout=120.0)
 
 
 def parse_docker_stream(data: bytes) -> str:

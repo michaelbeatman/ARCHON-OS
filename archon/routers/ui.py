@@ -9,7 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from archon.core.paths import STUDIO_BG_UPLOAD_DIR
+from archon.core.constants import STUDIO_BG_UPLOAD_DIR
 
 logger = logging.getLogger("archon.routers.ui")
 

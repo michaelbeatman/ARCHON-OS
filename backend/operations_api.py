@@ -4,6 +4,7 @@ Provides Kanban (Hermes kanban.db), Org-Chart, and Inter-Agent Communication Fee
 """
 
 import os
+import base64
 
 from backend.platform_paths import HERMES_HOME
 import asyncio

@@ -99,8 +99,10 @@ class DockerControlSkill:
         Timeout aus ``utils.docker_client`` (der SDK-Default hier waere 5 s und
         damit knapp unter der Stop-Frist von Docker).
         """
-        if not self.client:
-            return {"status": "error", "message": "Docker SDK not initialized"}
+        # M-11: Der Docker-SDK-Client ist fuer den Neustart NICHT noetig —
+        # der eigentliche Pfad laeuft ueber ``utils.docker_client`` (HTTP). Die
+        # alte Vorpruefung auf ``self.client`` verweigerte jeden Neustart auf
+        # einem Stack ohne SDK-Init, obwohl stop+start technisch ginge.
         from utils.docker_client import docker_client as _dc, DockerError as _DockerError
         try:
             _dc.restart_container(container_name)
@@ -267,21 +269,46 @@ class LocalKnowledgeSkill:
 # MODULE 4: GIT & AUTOMATED TESTING
 # =====================================================================
 class GitTestingSkill:
+    # Z-06: Die Suite braucht gemessen ~60 s (971 Tests); der alte Timeout
+    # von 30 s hat ``git_safe_commit`` immer in den Fehlerzweig geschickt und
+    # die Commit-Pfade unerreichbar gemacht. Der Timeout ist jetzt
+    # konfigurierbar und liegt deutlich ueber der gemessenen Laufzeit.
+    DEFAULT_PYTEST_TIMEOUT = int(os.getenv("SKILL_PYTEST_TIMEOUT", "600"))
+
     def run_pytest(self, test_path: str = "tests/") -> Dict:
         """Runs unit test suites using pytest."""
+        timeout = self.DEFAULT_PYTEST_TIMEOUT
         try:
-            res = subprocess.run(["pytest", test_path], capture_output=True, text=True, timeout=30)
+            res = subprocess.run(
+                ["pytest", test_path], capture_output=True, text=True, timeout=timeout
+            )
             return {
                 "status": "success" if res.returncode == 0 else "failed",
                 "exit_code": res.returncode,
                 "stdout": res.stdout,
                 "stderr": res.stderr
             }
+        except subprocess.TimeoutExpired as e:
+            return {
+                "status": "error",
+                "message": f"pytest-Timeout nach {timeout}s: {e}",
+            }
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def git_safe_commit(self, message: str) -> Dict:
-        """Stages files and performs commit only if test suites pass successfully."""
+    def git_safe_commit(self, message: str, paths: Optional[List[str]] = None) -> Dict:
+        """Stages files and performs commit only if test suites pass successfully.
+
+        Z-06: Zwei Fehler behoben.
+
+        1. Der pytest-Timeout war kuerzer als die Suite — der Commit-Pfad war
+           dadurch toter Code (TimeoutExpired -> ``status: error``).
+        2. ``git add .`` staged den GESAMTEN Arbeitsbaum: Secrets, grosse
+           ZIP-Backups und untracked Review-Dokumente. Jetzt wird nur
+           explizit benannter Pfad gestaged; ohne Pfadliste werden nur
+           Aenderungen an bereits versionierten Dateien uebernommen
+           (``git add -u``) — keine untracked Dateien, keine Secrets.
+        """
         test_res = self.run_pytest()
         if test_res["status"] != "success":
             return {
@@ -289,10 +316,19 @@ class GitTestingSkill:
                 "message": "Commit aborted: local tests failed.",
                 "test_output": test_res
             }
-            
+
         try:
-            subprocess.run(["git", "add", "."], check=True)
-            res = subprocess.run(["git", "commit", "-m", message], capture_output=True, text=True)
+            if paths:
+                safe_paths = [str(p) for p in paths if str(p).strip()]
+                if not safe_paths:
+                    return {"status": "error", "message": "Keine gueltigen Pfade zum Stagen."}
+                subprocess.run(["git", "add", "--", *safe_paths], check=True)
+                commit_cmd = ["git", "commit", "-m", message, "--", *safe_paths]
+            else:
+                # Nur versionierte Dateien — keine untracked Secrets/Backups.
+                subprocess.run(["git", "add", "-u"], check=True)
+                commit_cmd = ["git", "commit", "-m", message]
+            res = subprocess.run(commit_cmd, capture_output=True, text=True)
             if res.returncode == 0:
                 return {"status": "success", "message": res.stdout.strip()}
             return {"status": "error", "message": res.stderr.strip()}
@@ -332,28 +368,40 @@ class MCPAdapterSkill:
         
         lock = self._get_lock(server_name)
         async with lock:
-            # TODO: Implement actual JSON-RPC over stdio via subprocess.
-            # Currently simulating execution as physical MCP scripts are being migrated.
-            await asyncio.sleep(0.5)
-            
-            if server_name == "omniroute":
-                if action_name == "omniroute_best_combo_for_task":
-                    result = "Recommendation: claude-3-5-sonnet for complex reasoning."
-                elif action_name == "omniroute_check_quota":
-                    result = "Quota remaining: 84%"
-                elif action_name == "omniroute_get_provider_metrics":
-                    result = "Latency metrics: OpenAI 300ms, Anthropic 450ms, Local 50ms"
-                else:
-                    result = f"OmniRoute executed {action_name}"
-            else:
-                result = f"Tool '{action_name}' executed via MCP Server '{server_name}'."
-                
+            # M-10/Z-07: Es gibt hier KEINEN echten JSON-RPC-Kanal. Die alte
+            # Fassung hat Quota-/Latenz-Zahlen erfunden und sie als
+            # ``status: success`` an die API-Grenze gegeben — ein Agent, der
+            # darauf entscheidet, arbeitet mit erfundenen Zahlen.
+            # Konnektivitaet/Registrierung wird geprueft, aber es wird KEIN
+            # Erfolg gemeldet, wenn kein Server wirklich ausgefuehrt wurde.
+            registered = next(
+                (state for key, state in self.servers.items() if server_name in key),
+                None,
+            )
+            if registered is None:
+                return {
+                    "status": "error",
+                    "error": "mcp_server_not_connected",
+                    "message": (
+                        f"Fuer '{server_name}' ist kein MCP-Server registriert "
+                        "(connect_mcp_server wurde nicht aufgerufen). "
+                        "Es wurde kein Tool ausgefuehrt."
+                    ),
+                    "tool": tool_name,
+                    "server": server_name,
+                    "arguments": arguments,
+                }
+
             return {
-                "status": "success",
+                "status": "error",
+                "error": "mcp_execution_not_implemented",
+                "message": (
+                    f"MCP-Ausfuehrung fuer '{tool_name}' ist nicht implementiert "
+                    "(kein JSON-RPC-Kanal). Es wurden keine Messwerte erhoben."
+                ),
                 "tool": tool_name,
                 "server": server_name,
                 "arguments": arguments,
-                "response": result
             }
 
 

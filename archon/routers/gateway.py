@@ -14,6 +14,118 @@ logger = logging.getLogger("archon.routers.gateway")
 
 router = APIRouter(prefix="/api/v1/gateway", tags=["gateway"])
 
+_idle_stop_running = False
+
+
+def _run_docker_exec(cmd: list) -> tuple[int, str, str]:
+    """Run a command inside the hermes container via docker_client (allowlisted)."""
+    import main as app_main
+
+    if hasattr(app_main, "_run_docker_exec") and app_main._run_docker_exec is not _run_docker_exec:
+        return app_main._run_docker_exec(cmd)
+
+    from utils.docker_client import DockerError, docker_client, parse_docker_stream
+
+    target_containers = ["hermes-webui", "hermes", "hermes-agent"]
+    for c_name in target_containers:
+        try:
+            output_bytes = docker_client.exec_command(c_name, cmd, timeout=25.0)
+            stdout = parse_docker_stream(output_bytes)
+            return 0, stdout, ""
+        except DockerError:
+            continue
+        except Exception:
+            continue
+
+    return 1, "", "Failed to execute in hermes container (tried hermes-agent, hermes)"
+
+
+def _parse_gateway_list(stdout: str) -> list:
+    """Parses the hermes gateway list output into a list of dicts."""
+    if not stdout:
+        return []
+
+    text = stdout.strip()
+    if not text:
+        return []
+
+    if text[0] in "[{":
+        try:
+            parsed = json.loads(text)
+        except (ValueError, TypeError):
+            parsed = None
+        if isinstance(parsed, list):
+            return [p for p in parsed if isinstance(p, dict)]
+        if isinstance(parsed, dict):
+            for key in ("profiles", "gateways", "data"):
+                value = parsed.get(key)
+                if isinstance(value, list):
+                    return [p for p in value if isinstance(p, dict)]
+
+    profiles = []
+    for index, line in enumerate(text.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        if set(line) <= set("-|=+ \t"):
+            continue
+        cells = [c for c in line.replace("|", " ").split() if c]
+        if len(cells) < 2:
+            continue
+        if index == 0 and cells[0].lower() in ("id", "profile", "name"):
+            continue
+        profile_id = cells[0].strip("* ")
+        status = cells[1].lower()
+        if not profile_id:
+            continue
+        profiles.append({
+            "id": profile_id,
+            "status": "running" if "run" in status or "up" in status or "active" in status else status,
+        })
+    return profiles
+
+
+async def _gateway_idle_stop_loop():
+    global _idle_stop_running
+    if _idle_stop_running:
+        logger.warning("[GatewayManager] Idle-Stop-Loop laeuft bereits - kein zweiter Start.")
+        return
+    _idle_stop_running = True
+    try:
+        while True:
+            await asyncio.sleep(300)
+            try:
+                cfg = _load_gateway_config()
+                timeout_min = cfg.get("idle_timeout_minutes", 30)
+                last_used = cfg.get("last_used", {})
+                autostart = cfg.get("autostart", {})
+                now = datetime.datetime.now()
+                rc, stdout, _ = _run_docker_exec(["hermes", "gateway", "list"])
+                if rc != 0:
+                    continue
+                running_profiles = [
+                    p["id"]
+                    for p in _parse_gateway_list(stdout)
+                    if p.get("status") == "running" and p["id"] != "default"
+                ]
+                for pid in running_profiles:
+                    if autostart.get(pid, False):
+                        continue
+                    last = last_used.get(pid)
+                    if last:
+                        try:
+                            last_dt = datetime.datetime.fromisoformat(last)
+                            idle_min = (now - last_dt).total_seconds() / 60
+                            if idle_min >= timeout_min:
+                                _run_docker_exec(["hermes", "gateway", "stop", pid])
+                                print(f"[GatewayManager] Auto-stopped idle gateway: {pid} (idle {idle_min:.0f}m)")
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"[GatewayManager] Idle-stop loop error: {e}")
+    finally:
+        _idle_stop_running = False
+
 
 def _require_admin(request: Request):
     import main as app_main

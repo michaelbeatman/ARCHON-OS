@@ -1007,25 +1007,30 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
             if json_match:
                 parsed = json.loads(json_match.group(0))
             else:
+                # Fail-closed (R-16): liefert der Reviewer kein JSON, darf das Gate
+                # NICHT freigeben — sonst gilt ein Timeout/Prosa-Antwort als Quality-Pass.
                 parsed = {
-                    "verdict": "approved",
-                    "score": 80,
-                    "summary": "Ergebnis erfolgreich gesichtet und freigegeben.",
-                    "critique_points": [],
-                    "actionable_next_steps": []
+                    "verdict": "changes_requested",
+                    "score": 0,
+                    "summary": "Reviewer-Antwort enthielt kein auswertbares JSON — Review gilt als nicht bestanden, Nachfassung erforderlich.",
+                    "critique_points": ["Reviewer-Lauf lieferte keine strukturierte Bewertung."],
+                    "actionable_next_steps": ["Review erneut anstoßen."]
                 }
         except Exception as e:
+            # Fail-closed (R-16): Fehler im Review-Dispatch darf die Freigabe nicht
+            # erfinden — der Task bleibt in 'review', damit kein ungeprüftes Ergebnis
+            # als done verbucht wird.
             parsed = {
-                "verdict": "approved",
-                "score": 75,
-                "summary": f"Standardprüfung durchgeführt ({e}).",
-                "critique_points": [],
-                "actionable_next_steps": []
+                "verdict": "changes_requested",
+                "score": 0,
+                "summary": f"Reviewer-Prüfung konnte nicht abgeschlossen werden ({e}).",
+                "critique_points": ["Reviewer-Lauf fehlgeschlagen."],
+                "actionable_next_steps": ["Review erneut anstoßen."]
             }
 
-        verdict = parsed.get("verdict", "approved")
+        verdict = parsed.get("verdict", "changes_requested")
         if verdict not in ("approved", "changes_requested"):
-            verdict = "approved"
+            verdict = "changes_requested"
 
         review_data = {
             "status": verdict,

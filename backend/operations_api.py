@@ -379,14 +379,28 @@ async def _execute_kanban_task_async(task_id: str):
     finally:
         conn.close()
 
+    # Task beim GracefulShutdownCoordinator registrieren (M-14)
+    try:
+        from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+        graceful_shutdown_coordinator.register_task(
+            task_id=task_id,
+            title=t_dict.get("title", task_id),
+            agent_name=t_dict.get("assignee", "system"),
+            total_steps=1,
+            current_step=0,
+            state_payload={"task_id": task_id, "status": t_dict.get("status")}
+        )
+    except Exception:
+        pass
+
     # Fall 1: Ist es ein DAG Epic?
     if t_dict["id"].startswith("dag-") and not any(t_dict["id"].endswith(f"-{s}") for s in ["1", "2", "3", "4", "syn"]):
-        try:
-            from backend.dag_scheduler import dag_scheduler_instance
-            await dag_scheduler_instance.execute_dag(task_id)
-            return
-        except Exception as e:
-            print(f"[OperationsAPI] DAG Execution error for {task_id}: {e}", file=sys.stderr)
+            try:
+                from backend.dag_scheduler import dag_scheduler_instance
+                await dag_scheduler_instance.execute_dag(task_id)
+                return
+            except Exception as e:
+                print(f"[OperationsAPI] DAG Execution error for {task_id}: {e}", file=sys.stderr)
 
     # Autonomie-Gate: der Eigentümer entscheidet, ob Operations selbst handeln dürfen.
     try:
@@ -558,6 +572,12 @@ async def _execute_kanban_task_async(task_id: str):
             import main
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": "blocked"})
+        except Exception:
+            pass
+    finally:
+        try:
+            from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+            graceful_shutdown_coordinator.unregister_task(task_id)
         except Exception:
             pass
 

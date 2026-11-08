@@ -60,7 +60,7 @@ Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 
 | Mandat | Profil | Stand |
 |---|---|---|
-| 1 | `senior_fullstack_engineer` | **Etappe 1 committet `eed82c6d`**: eigener `DockerAdminClient` (gemeinsame `_ALLOWED` bleibt 7), Updater hinter Schalter `HERMES_UPDATER_DOCKER_CLIENT` (Default aus = heutiges Verhalten), eigener Pull-Timeout, Proxy-Regelvorschlag mit `haproxy -c` geprüft. **Etappe 2 (Proxy anwenden) + 3 (umstellen, Socket-Mount raus) warten auf Go.** Etappe 3 braucht vorher ein eigenes `DOCKER_ADMIN_HOST` — `DOCKER_HOST` ist global und würde alle Aufrufer mitziehen |
+| 1 | `senior_fullstack_engineer` | **Etappe 1 `eed82c6d`, Etappe 2+3 `2d897605` — live geschaltet und geprüft**: Proxy lässt die sieben nötigen Ops durch (400/404/404/404/404/500/404 statt 403), die vier Grenzproben bleiben **403** (`DELETE` nur auf `*_old_backup`), `GET /images` bleibt 200, kein Probe-Container angelegt. App neu erzeugt: `HERMES_UPDATER_DOCKER_CLIENT=1`, `DOCKER_ADMIN_HOST=tcp://docker-socket-proxy:2375`, `DOCKER_HOST` bleibt leer; Updater-Client ist `DockerAdminAdapter`, `GET /containers/json` → 200. **Offen:** Socket-Mount bleibt (bewusst) — `main.py`, `governance.py`, `ephemeral_sandbox.py` und Plugins hängen am gemeinsamen Client; das ist eine eigene Etappe |
 | 2 | `devops_cloud_sec_specialist` | ✅ **`65a4a820`** — Rollenzaun für `POST …/avatar`, fail-closed, 9 Tests, Rot-Beweis gegen Altstand selbst reproduziert |
 | 3 | `senior_fullstack_engineer` | ✅ **`48d9b7db`** — Body-Beleg in `_decision_followup` + RAG-Key aus Env; 37 neue Tests, Rot-Beweis selbst reproduziert |
 
@@ -82,15 +82,22 @@ sonst `…/api/v1/api/v1` und HTML statt JSON), Workspace `mein-workspace` angel
 Logzeile jetzt `INFO [RAG-Sync] API-Key aus ANYTHINGLLM_API_KEY geladen`, Upload endet mit
 `custom-documents/Kapitel_01.md-<uuid>.json`.
 
-**Blocker:** `POST /api/v1/workspace/<slug>/update-embeddings` bringt den AnythingLLM-Node-Prozess zum
-Absturz — `Illegal instruction (core dumped)`, Container restartet. Ursache: kein Embedder konfiguriert,
-der eingebaute Embedder stirbt auf dieser CPU. Ollama hat nur Chat-Modelle (`gemma`, `qwen2.5:3b`, `qwen3:8b`),
-kein Embedding-Modell, und lauscht nur auf `127.0.0.1:11434` (aus dem Container nicht erreichbar).
-Ohne Embedder bleibt der Workspace bei **0 Dokumenten** — der Sync kann nichts indexieren.
+**Blocker gelöst (08.11.):** Ursache war **nicht** der Embedder allein, sondern die CPU — ein
+**i5-3470 (Ivy Bridge, nur AVX, kein AVX2)**. AnythingLLMs eingebauter LanceDB-Treiber ist ein
+natives Modul mit AVX2-Voraussetzung und killt den Node-Prozess mit `Illegal instruction (core dumped)`.
+Lösung, beides als Container in `docker-compose.yml` (`7cd524cb`):
+- `ollama-embed` (ollama/ollama) mit `nomic-embed-text` (274 MB, 768 Dimensionen) als Embedder,
+  AnythingLLM-Env `EMBEDDING_ENGINE=ollama` + `EMBEDDING_BASE_PATH=http://ollama-embed:11434`
+- `chroma` als Vektor-Store über HTTP (`VECTOR_DB=chroma`, `CHROMA_ENDPOINT=http://chroma:8000`)
+Beweis: `update-embeddings` → 11 Chunks eingebettet, `Successfully added 11 vectors to collection mein-workspace`,
+Prozess lebt, Workspace hat Dokumente. Sync-Batch (10 Dateien) läuft: Status `… -> OK`, Stand im
+State-File wächst (`/opt/data/synced_files.json`).
 
-**Rest bei Michael:** Embedder entscheiden (lokal Ollama + `nomic-embed-text` und `OLLAMA_HOST=0.0.0.0`,
-oder Cloud-Embedding mit Key, oder RAG bleiben lassen) und den Vault-Umfang festlegen — es stehen
-**4.436** qualifizierende Dateien aus `/opt/data/obsidian` an, nicht 277.
+**Offen (Michaels Entscheidung):** Tempo. Auf dieser CPU braucht ein Buchkapitel ~90–120 s
+(11 Chunks). Für **4.433** ausstehende Dateien wären das grob **100+ Stunden**. Sinnvoll sind
+kleine, priorisierte Pakete (z. B. nur `02_Wissensbibliothek`) oder ein Cloud-Embedder für den
+Massenlauf. Außerdem bei sehr großen Batches beobachten: `docker exec`-Läufe wurden mit 137 beendet,
+die Container selbst liefen weiter (kein Restart, kein OOM im Log).
 
 ---
 
@@ -98,7 +105,7 @@ oder Cloud-Embedding mit Key, oder RAG bleiben lassen) und den Vault-Umfang fest
 
 | Prio | Punkt | Messwert / Beleg | Aufwand |
 |---|---|---|---|
-| 1 | **`hermes_updater`-Socket am Proxy vorbei** — **Etappe 0, wartet auf Entscheidung A/B** | `backend/hermes_updater.py:63` `AF_UNIX`. Belegt: gemeinsamer Client kann 7 von 11 benötigten Endpunkt-Formen nicht (`utils/docker_client.py` `_ALLOWED`), und in `DOCKER_HOST`-Topologie liefert der Proxy für `images/create` **403** (`haproxy.cfg:135` nur `METH_GET`). Umstellung bricht das Update. Nötig wäre: privilegierter Admin-Client + Proxy-Cfg-Erweiterung + Umstellung. Dazu offen: `docker-compose.yml:31` mountet den Socket weiter als Legacy-Fallback → Proxy-Härtung für den Updater wirkungslos | 3–4 h gemessen zu knapp, eher 1 Tag |
+| 1 | ~~**`hermes_updater`-Socket am Proxy vorbei**~~ — **erledigt `eed82c6d` + `2d897605`** | Updater geht jetzt über den Proxy (`DockerAdminAdapter`), Grenzproben 403. **Rest:** der Socket-Mount in `docker-compose.dev.yml` bleibt, weil `main.py:1026/8894`, `archon/routers/governance.py:46`, `backend/ephemeral_sandbox.py:61/172-195` und zwei Plugins den gemeinsamen Client nutzen — eigene Etappe (Migration dieser Aufrufer auf den Proxy) |
 | 2 | ~~`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung~~ — **erledigt `48d9b7db`** | `main.py:3335` (Handover-Zahl 3267 war gedriftet) | — |
 | 3 | ~~Avatar-Upload-Route ohne Rollenzaun~~ — **erledigt `65a4a820`** | `archon/routers/hermes_profiles.py:100` | — |
 | 4 | **Tote UI-Pfade** | Handover: 166 von 1640 `getElementById`-Zielen ohne DOM-Element; von mir **nicht** nachgemessen | 2–4 h je Cluster |

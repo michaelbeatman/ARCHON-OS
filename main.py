@@ -781,26 +781,6 @@ def load_boardroom_frameworks():
 import subprocess
 import threading
 
-def _run_docker_exec(cmd: list) -> tuple[int, str, str]:
-    """Run a command inside the hermes container via docker_client (allowlisted)."""
-    target_containers = ["hermes-webui", "hermes", "hermes-agent"]
-    for c_name in target_containers:
-        try:
-            # Validate container name and use docker_client.exec_command
-            output_bytes = docker_client.exec_command(c_name, cmd, timeout=25.0)
-            # docker_client returns raw multiplexed stream - parse to text
-            stdout = parse_docker_stream(output_bytes)
-            return 0, stdout, ""
-        except DockerError:
-            # Container not found or invalid name - try next
-            continue
-        except Exception:
-            # Any other error - try next container
-            continue
-    
-    # All containers failed
-    return 1, "", "Failed to execute in hermes container (tried hermes-agent, hermes)"
-
 from archon.routers.gateway import (
     router as _gateway_router,
     _load_gateway_config,
@@ -814,6 +794,9 @@ from archon.routers.gateway import (
     api_save_gateway_config_endpoint,
     api_gateway_autostart,
     api_gateway_stop_all,
+    _run_docker_exec,
+    _parse_gateway_list,
+    _gateway_idle_stop_loop,
 )
 app.include_router(_gateway_router)
 
@@ -835,109 +818,21 @@ from archon.routers.watchdog import (
 app.include_router(_watchdog_router)
 
 
-# Background idle-stop task
 _idle_stop_running = False
 
 
-def _parse_gateway_list(stdout: str) -> list:
-    '''Parses the hermes gateway list output into a list of dicts.
-
-    Z-04: Die alte Fassung gab IMMER eine leere Liste zurueck ("return empty
-    list to prevent crash") — die dokumentierte Funktion "stoppe unbenutzte
-    Gateways nach idle_timeout_minutes" war damit tot.
-
-    Unterstuetzt die zwei realen Ausgabeformen von ``hermes gateway list``:
-      * JSON  — eine Liste von Objekten oder ein Objekt mit "profiles"/"gateways"
-      * Tabelle — Spalten "ID  STATUS  ..." (whitespace- oder pipe-getrennt)
-
-    Unbekanntes Format liefert eine leere Liste (kein Absturz) — dann faellt
-    der Idle-Stop in einen Status, in dem nichts gestoppt wird.
-    '''
-    if not stdout:
-        return []
-
-    text = stdout.strip()
-    if not text:
-        return []
-
-    # 1. JSON-Variante
-    if text[0] in "[{":
-        try:
-            parsed = json.loads(text)
-        except (ValueError, TypeError):
-            parsed = None
-        if isinstance(parsed, list):
-            return [p for p in parsed if isinstance(p, dict)]
-        if isinstance(parsed, dict):
-            for key in ("profiles", "gateways", "data"):
-                value = parsed.get(key)
-                if isinstance(value, list):
-                    return [p for p in value if isinstance(p, dict)]
-
-    # 2. Tabellen-Variante: erste Zeile ist der Header, danach eine Zeile
-    #    pro Gateway. Mindestens zwei Spalten noetig.
-    profiles = []
-    for index, line in enumerate(text.splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        if set(line) <= set("-|=+ \t"):  # Trennlinie
-            continue
-        cells = [c for c in line.replace("|", " ").split() if c]
-        if len(cells) < 2:
-            continue
-        if index == 0 and cells[0].lower() in ("id", "profile", "name"):
-            continue  # Header
-        profile_id = cells[0].strip("* ")
-        status = cells[1].lower()
-        if not profile_id:
-            continue
-        profiles.append({
-            "id": profile_id,
-            "status": "running" if "run" in status or "up" in status or "active" in status else status,
-        })
-    return profiles
-
 async def _gateway_idle_stop_loop():
-
     global _idle_stop_running
-    # F-13: Der Guard wurde gesetzt, aber nie gelesen. Beim Doppelstart
-    # (z. B. ``uvicorn --reload``) liefen zwei Idle-Stop-Loops und stoppten
-    # sich gegenseitig die Gateways. Ein zweiter Start beendet sich sofort.
     if _idle_stop_running:
         logger.warning("[GatewayManager] Idle-Stop-Loop laeuft bereits - kein zweiter Start.")
         return
     _idle_stop_running = True
     try:
-        while True:
-            await asyncio.sleep(300)  # check every 5 minutes
-            try:
-                cfg = _load_gateway_config()
-                timeout_min = cfg.get("idle_timeout_minutes", 30)
-                last_used = cfg.get("last_used", {})
-                autostart = cfg.get("autostart", {})
-                now = datetime.datetime.now()
-                rc, stdout, _ = _run_docker_exec(["hermes", "gateway", "list"])
-                if rc != 0:
-                    continue
-                running_profiles = [p["id"] for p in _parse_gateway_list(stdout) if p.get("status") == "running" and p["id"] != "default"]
-                for pid in running_profiles:
-                    if autostart.get(pid, False):
-                        continue  # autostart profiles stay up
-                    last = last_used.get(pid)
-                    if last:
-                        try:
-                            last_dt = datetime.datetime.fromisoformat(last)
-                            idle_min = (now - last_dt).total_seconds() / 60
-                            if idle_min >= timeout_min:
-                                _run_docker_exec(["hermes", "gateway", "stop", pid])
-                                print(f"[GatewayManager] Auto-stopped idle gateway: {pid} (idle {idle_min:.0f}m)")
-                        except Exception:
-                            pass
-            except Exception as e:
-                print(f"[GatewayManager] Idle-stop loop error: {e}")
+        from archon.routers.gateway import _gateway_idle_stop_loop as _impl
+        await _impl()
     finally:
         _idle_stop_running = False
+
 
 async def _email_imap_background_loop():
     await asyncio.sleep(15)

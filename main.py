@@ -2579,21 +2579,12 @@ app.include_router(_research_router)
 
 
 # --- HERMES AGENT CORE UPDATE (NousResearch/hermes-agent) ---
-@app.get("/api/v1/hermes/update/check")
-def api_hermes_update_check(force: bool = False):
-    from backend import hermes_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    return hermes_updater.check_hermes_updates(force_refresh=force)
-
-
-@app.post("/api/v1/hermes/update/apply")
-def api_hermes_update_apply(request: Request, payload: dict = Body(default={})):
-    curr_user = get_current_user_from_request(request)
-    if curr_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Hermes Core Updates einleiten.")
-    from backend import hermes_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
-    channel = payload.get("channel", "latest")
-    auto_restart = payload.get("restart", True)
-    return hermes_updater.apply_hermes_update(channel=channel, auto_restart=auto_restart)
+from archon.routers.updater import (
+    router as _updater_router,
+    api_hermes_update_check,
+    api_hermes_update_apply,
+)
+app.include_router(_updater_router)
 
 # --- VERTRAGS- & FRISTENMANAGEMENT (t-0a2171) ---
 

@@ -253,7 +253,12 @@ class CorporateManager:
                                     "desc": ln.get("title", ""),
                                     "qty": ln.get("quantity", 1),
                                     "unit": ln.get("unit", "Stk."),
-                                    "price": ln.get("unit_price_net", 0.0)
+                                    "price": ln.get("unit_price_net", 0.0),
+                                    # R-23: Zeilensteuersatz und -rabatt aus dem
+                                    # ERP-Beleg mitschleppen, sonst rechnet das
+                                    # Template fest mit 19 % ohne Rabatt.
+                                    "discount_pct": ln.get("discount_pct", 0.0),
+                                    "tax_rate_pct": ln.get("tax_rate_pct", 19.0)
                                 }
                                 for idx, ln in enumerate(doc["lines"])
                             ]
@@ -301,6 +306,43 @@ class CorporateManager:
         c_taxnum = tax.get("tax_number", "")
         c_vatid = tax.get("vat_id", "")
         is_small = tax.get("small_business", False)
+
+        # R-23: Positionen mit eigenem Steuersatz (z. B. 7 %) und Rabatt rechnen.
+        # Vorher: fest `0.0 if is_small else 0.19` und Summen aus qty*price —
+        # ein ERP-Beleg mit 7-%-Position druckte 19 % USt und einen hoheren
+        # Bruttobetrag als gespeichert (§14-UStG-Verstoß).
+        def _line_net(item):
+            qty = float(item.get("qty", 1) or 1)
+            price = float(item.get("price", 0) or 0)
+            disc = float(item.get("discount_pct", 0) or 0)
+            return round(max(0.0, qty * price * (1.0 - disc / 100.0)), 2)
+
+        def _line_tax_rate(item):
+            if is_small:
+                return 0.0
+            raw = item.get("tax_rate_pct")
+            if raw is None or raw == "":
+                return 0.19
+            return float(raw) / 100.0
+
+        def _tax_buckets(items):
+            buckets: Dict[float, float] = {}
+            for item in items:
+                r = _line_tax_rate(item)
+                buckets[r] = round(buckets.get(r, 0.0) + _line_net(item) * r, 2)
+            return buckets
+
+        def _tax_rows_html(buckets, small_note):
+            if is_small:
+                return small_note
+            return "\n".join(
+                f"""
+                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569;">
+                  <span>Umsatzsteuer ({int(round(r * 100))}%):</span>
+                  <span style="font-weight: 600;">{t:,.2f} €</span>
+                </div>
+                """ for r, t in sorted(buckets.items(), reverse=True)
+            )
 
         bank = company.get("bank", {})
         c_bankname = bank.get("bank_name", "")
@@ -410,10 +452,10 @@ class CorporateManager:
                 {"pos": 2, "desc": "Dedizierter Agenten-Cluster & Setup", "qty": 1, "unit": "Pauschal", "price": 1250.00}
             ])
 
-            net_total = sum(i["qty"] * i["price"] for i in items)
-            tax_rate = 0.0 if is_small else 0.19
-            tax_amount = net_total * tax_rate
-            gross_total = net_total + tax_amount
+            net_total = round(sum(_line_net(i) for i in items), 2)
+            tax_buckets = _tax_buckets(items)
+            tax_amount = round(sum(tax_buckets.values()), 2)
+            gross_total = round(net_total + tax_amount, 2)
 
             items_rows_html = "".join([
                 f"""
@@ -422,18 +464,13 @@ class CorporateManager:
                   <td style="padding: 10px 8px; font-size: 12px; font-weight: 600; color: #0f172a;">{item['desc']}</td>
                   <td style="padding: 10px 8px; font-size: 12px; text-align: center; color: #334155;">{item['qty']} {item.get('unit', 'Stk')}</td>
                   <td style="padding: 10px 8px; font-size: 12px; text-align: right; color: #334155;">{item['price']:,.2f} €</td>
-                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; font-weight: 700; color: #0f172a;">{(item['qty'] * item['price']):,.2f} €</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; font-weight: 700; color: #0f172a;">{_line_net(item):,.2f} €</td>
                 </tr>
                 """ for item in items
             ])
 
-            tax_row_html = (
-                f"""
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569;">
-                  <span>Umsatzsteuer (19%):</span>
-                  <span style="font-weight: 600;">{tax_amount:,.2f} €</span>
-                </div>
-                """ if not is_small else
+            tax_row_html = _tax_rows_html(
+                tax_buckets,
                 """
                 <div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 4px;">
                   Gemäß § 19 UStG wird keine Umsatzsteuer berechnet (Kleinunternehmerstatus).
@@ -548,10 +585,10 @@ class CorporateManager:
                 {"pos": 2, "desc": "Architektur-Consulting & Anbindung Primärsysteme", "qty": 16, "unit": "Std.", "price": 180.00}
             ])
 
-            net_total = sum(i["qty"] * i["price"] for i in items)
-            tax_rate = 0.0 if is_small else 0.19
-            tax_amount = net_total * tax_rate
-            gross_total = net_total + tax_amount
+            net_total = round(sum(_line_net(i) for i in items), 2)
+            tax_buckets = _tax_buckets(items)
+            tax_amount = round(sum(tax_buckets.values()), 2)
+            gross_total = round(net_total + tax_amount, 2)
 
             items_rows_html = "".join([
                 f"""
@@ -560,18 +597,13 @@ class CorporateManager:
                   <td style="padding: 10px 8px; font-size: 12px; font-weight: 600; color: #0f172a;">{item['desc']}</td>
                   <td style="padding: 10px 8px; font-size: 12px; text-align: center; color: #334155;">{item['qty']} {item.get('unit', 'Stk')}</td>
                   <td style="padding: 10px 8px; font-size: 12px; text-align: right; color: #334155;">{item['price']:,.2f} €</td>
-                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; font-weight: 700; color: #0f172a;">{(item['qty'] * item['price']):,.2f} €</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; font-weight: 700; color: #0f172a;">{_line_net(item):,.2f} €</td>
                 </tr>
                 """ for item in items
             ])
 
-            tax_row_html = (
-                f"""
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569;">
-                  <span>Umsatzsteuer (19%):</span>
-                  <span style="font-weight: 600;">{tax_amount:,.2f} €</span>
-                </div>
-                """ if not is_small else
+            tax_row_html = _tax_rows_html(
+                tax_buckets,
                 """
                 <div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 4px;">
                   Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.
@@ -703,10 +735,10 @@ class CorporateManager:
                 {"pos": 2, "desc": "Autonome Agenten-Workflows & Tool-Integration", "qty": 40, "unit": "Std.", "price": 180.00}
             ])
 
-            net_total = sum(i["qty"] * i["price"] for i in items)
-            tax_rate = 0.0 if is_small else 0.19
-            tax_amount = net_total * tax_rate
-            gross_total = net_total + tax_amount
+            net_total = round(sum(_line_net(i) for i in items), 2)
+            tax_buckets = _tax_buckets(items)
+            tax_amount = round(sum(tax_buckets.values()), 2)
+            gross_total = round(net_total + tax_amount, 2)
 
             items_rows_html = "".join([
                 f"""
@@ -715,18 +747,13 @@ class CorporateManager:
                   <td style="padding: 10px 8px; font-size: 12px; font-weight: 600; color: #0f172a;">{item['desc']}</td>
                   <td style="padding: 10px 8px; font-size: 12px; text-align: center; color: #334155;">{item['qty']} {item.get('unit', 'Stk')}</td>
                   <td style="padding: 10px 8px; font-size: 12px; text-align: right; color: #334155;">{item['price']:,.2f} €</td>
-                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; font-weight: 700; color: #0f172a;">{(item['qty'] * item['price']):,.2f} €</td>
+                  <td style="padding: 10px 8px; font-size: 12px; text-align: right; font-weight: 700; color: #0f172a;">{_line_net(item):,.2f} €</td>
                 </tr>
                 """ for item in items
             ])
 
-            tax_row_html = (
-                f"""
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569;">
-                  <span>Umsatzsteuer (19%):</span>
-                  <span style="font-weight: 600;">{tax_amount:,.2f} €</span>
-                </div>
-                """ if not is_small else
+            tax_row_html = _tax_rows_html(
+                tax_buckets,
                 """
                 <div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 4px;">
                   Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.

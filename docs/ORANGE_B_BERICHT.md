@@ -1,7 +1,7 @@
 # ORANGE-B-BERICHT — 🟠-Cluster Spur B (backend/ + archon/)
 
 **Worktree:** `/mnt/raid/archon-lane-b` · **Branch:** `fix/orange-b`
-**Basis-Commit:** `3269f7e1` · **Commits:** 38 (37 Code-/Fix-Commits + Schlussbericht, alle auf `fix/orange-b`)
+**Basis-Commit:** `3269f7e1` · **Commits:** 39 (37 Finding-/Fix-Commits + 2 Schlussbericht-Commits, alle auf `fix/orange-b`)
 
 **Rot-Beweise:** Rot-Nachweise gegen `3269f7e1` sind je Befund dokumentiert. Stichproben-
 Rotläufe der neuen Regressionstests (Test gegen ausgechecktes Basis-Code) ergaben
@@ -121,7 +121,7 @@ Befundsgruppen gegen `3269f7e1` erbracht. Keine Assertion bestehender Tests
 entschärft; eine bestehende Testanpassung an die neue SSOT-Auflösung (R-19) ist als
 solches dokumentiert.
 
-## 5. Commit-Liste (38, alle auf fix/orange-b)
+## 5. Commit-Liste (39, alle auf fix/orange-b)
 
 R-16 · R-20(+F-01) · M-12 · D-18 · F-14 · F-03 · R-23 · R-21 · N-03 · N-07 · R-15 ·
 D-14 · R-18 · R-19 · Z-03 · Z-02 · R-12 · R-13 · R-14 · R-17 · R-22 · M-09 · N-04 ·

@@ -3041,91 +3041,16 @@ def api_get_security_stats():
         "safe_count": safe_cnt
     }
 
-# --- RESEARCH LAB ENDPOINTS (SÄULE 2: KOGNITION & WISSEN) ---
-@app.get("/api/v1/research/providers")
-def api_get_research_providers():
-    import research_engine
-    return {"status": "success", "providers": research_engine.get_available_providers(_load_json(SETTINGS_FILE, {}))}
+from archon.routers.research import (
+    router as _research_router,
+    api_get_research_providers,
+    api_run_research_mission,
+    api_get_research_history,
+    api_get_research_dossier,
+    api_get_research_sources,
+)
+app.include_router(_research_router)
 
-@app.post("/api/v1/research/run")
-def api_run_research_mission(payload: dict):
-    import research_engine
-    query = payload.get("query", "").strip()
-    if not query:
-        raise HTTPException(status_code=400, detail="Query darf nicht leer sein.")
-    profile = payload.get("profile", "deep")
-    engines = payload.get("engines", ["duckduckgo", "grokipedia", "wikipedia", "arxiv"])
-    depth = int(payload.get("depth", 3))
-    adversarial = bool(payload.get("adversarial", True))
-    export_obsidian = bool(payload.get("export_obsidian", True))
-    model = payload.get("model", "omniroute/free-forever")
-    agent_role = payload.get("agent_role", "Lead Research Analyst")
-    settings = _load_json(SETTINGS_FILE, {})
-    vault_path = settings.get("memory", {}).get("vault_path", OBSIDIAN_VAULT)
-    workspace_dir = settings.get("workspace_dir", "/app/agent_workspace")
-    # Modus "reflect": Reflexionsschleife + Seiten-Scraper (research_engine_v2). Standard: klassische Pipeline.
-    use_reflect = bool(payload.get("reflect")) or payload.get("mode") == "reflect"
-    if use_reflect:
-        import research_engine_v2
-        return research_engine_v2.run_research_mission_reflect(
-            query=query,
-            profile=profile,
-            engines=engines,
-            depth=depth,
-            adversarial=adversarial,
-            export_obsidian=export_obsidian,
-            vault_path=vault_path,
-            workspace_dir=workspace_dir,
-            settings=settings,
-            model=model,
-            agent_role=agent_role,
-            fast_model=payload.get("fast_model") or None,
-            max_rounds=int(payload.get("max_rounds", 3)),
-            max_pages=int(payload.get("max_pages", 4)),
-        )
-    res = research_engine.run_research_mission(
-        query=query,
-        profile=profile,
-        engines=engines,
-        depth=depth,
-        adversarial=adversarial,
-        export_obsidian=export_obsidian,
-        vault_path=vault_path,
-        workspace_dir=workspace_dir,
-        settings=settings,
-        model=model,
-        agent_role=agent_role
-    )
-    return res
-
-@app.get("/api/v1/research/history")
-def api_get_research_history():
-    import research_engine
-    settings = _load_json(SETTINGS_FILE, {})
-    workspace_dir = settings.get("workspace_dir", "/app/agent_workspace")
-    items = research_engine.list_research_history(workspace_dir)
-    return {"status": "success", "dossiers": items}
-
-@app.get("/api/v1/research/dossier/{filename}")
-def api_get_research_dossier(filename: str):
-    settings = _load_json(SETTINGS_FILE, {})
-    workspace_dir = settings.get("workspace_dir", "/app/agent_workspace")
-    safe_name = os.path.basename(filename)
-    fpath = os.path.join(workspace_dir, "research", safe_name)
-    if not os.path.exists(fpath):
-        raise HTTPException(status_code=404, detail="Dossier nicht gefunden.")
-    with open(fpath, "r", encoding="utf-8") as f:
-        content = f.read()
-    return {"status": "success", "filename": safe_name, "content": content}
-
-@app.get("/api/v1/research/sources")
-def api_get_research_sources():
-    from backend.research_sources import get_curated_sources_pool, TRUST_TIERS
-    return {
-        "status": "success",
-        "sources": get_curated_sources_pool(),
-        "trust_tiers": TRUST_TIERS
-    }
 
 
 # --- SYSTEM UPDATE & RELEASE-LIFECYCLE (MEILENSTEIN 1) ---

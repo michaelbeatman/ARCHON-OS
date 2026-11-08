@@ -1,7 +1,7 @@
 services:
   archon:
     image: archon-os-dev:latest
-    container_name: ARCHON-OS
+    container_name: ARCHON-OS-dev
     user: "1000:1000"
     group_add:
       - "973"

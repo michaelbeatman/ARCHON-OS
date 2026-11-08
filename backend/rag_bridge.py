@@ -14,7 +14,7 @@ import urllib.parse
 from typing import Dict, Any, List, Optional
 
 ANYTHINGLLM_URL = os.environ.get("ANYTHINGLLM_URL", "http://127.0.0.1:3001/api/v1")
-ANYTHINGLLM_API_KEY = os.environ.get("ANYTHINGLLM_API_KEY", "R9YRVG7-FCFMRNK-NZ3FKSX-QKN5RHF")
+ANYTHINGLLM_API_KEY = os.environ.get("ANYTHINGLLM_API_KEY", "")
 WORKSPACE_SLUG = os.environ.get("ANYTHINGLLM_WORKSPACE", "mein-workspace")
 
 class RAGBridge:

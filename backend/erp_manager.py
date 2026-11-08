@@ -23,6 +23,7 @@ import sqlite3
 import datetime
 import urllib.request
 import urllib.error
+import collections
 from typing import Dict, Any, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -669,6 +670,27 @@ class ERPManager:
                 ORDER BY e.rating DESC, e.updated_at DESC
             """, params).fetchall()
 
+            # P-05: Batch-Query fuer Primary Contacts vermeidet N+1 SELECTs
+            entity_ids = [r["id"] for r in rows]
+            primary_contacts = {}
+            if entity_ids:
+                placeholders = ",".join("?" for _ in entity_ids)
+                contact_rows = conn.execute(f"""
+                    SELECT entity_id, id, full_name, role_title, email, phone_direct, linkedin_url, connection_status, rating
+                    FROM (
+                        SELECT entity_id, id, full_name, role_title, email, phone_direct, linkedin_url, connection_status, rating,
+                               ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY is_primary DESC, rating DESC) as rn
+                        FROM crm_contacts
+                        WHERE entity_id IN ({placeholders})
+                    )
+                    WHERE rn = 1
+                """, entity_ids).fetchall()
+                for cr in contact_rows:
+                    cd = dict(cr)
+                    cd.pop("rn", None)
+                    eid = cd.pop("entity_id")
+                    primary_contacts[eid] = cd
+
             items = []
             for r in rows:
                 d = dict(r)
@@ -677,14 +699,7 @@ class ERPManager:
                 except Exception:
                     d["tags"] = []
 
-                prim = conn.execute("""
-                    SELECT id, full_name, role_title, email, phone_direct, linkedin_url, connection_status, rating
-                    FROM crm_contacts
-                    WHERE entity_id = ?
-                    ORDER BY is_primary DESC, rating DESC
-                    LIMIT 1
-                """, (d["id"],)).fetchone()
-                d["primary_contact"] = dict(prim) if prim else None
+                d["primary_contact"] = primary_contacts.get(d["id"])
                 items.append(d)
 
             return {
@@ -1165,6 +1180,19 @@ class ERPManager:
                 ORDER BY d.issue_date DESC, d.created_at DESC
             """, params).fetchall()
 
+            # P-05: Batch-Query fuer Document-Lines vermeidet N+1 SELECTs
+            doc_ids = [r["id"] for r in rows]
+            lines_by_doc = collections.defaultdict(list)
+            if doc_ids:
+                placeholders = ",".join("?" for _ in doc_ids)
+                lines = conn.execute(
+                    f"SELECT * FROM erp_document_lines WHERE document_id IN ({placeholders}) ORDER BY pos_no ASC",
+                    doc_ids
+                ).fetchall()
+                for l in lines:
+                    ld = dict(l)
+                    lines_by_doc[ld["document_id"]].append(ld)
+
             docs = []
             for r in rows:
                 d = dict(r)
@@ -1172,11 +1200,7 @@ class ERPManager:
                     d["recipient_snapshot"] = json.loads(d.get("recipient_snapshot_json") or "{}")
                 except Exception:
                     d["recipient_snapshot"] = {}
-                lines = conn.execute(
-                    "SELECT * FROM erp_document_lines WHERE document_id = ? ORDER BY pos_no ASC",
-                    (d["id"],)
-                ).fetchall()
-                d["lines"] = [dict(l) for l in lines]
+                d["lines"] = lines_by_doc.get(d["id"], [])
                 docs.append(d)
 
             return {"company_id": cid, "total": len(docs), "items": docs}

@@ -1585,7 +1585,15 @@
         saveStudioOverrides(true);
       }, 800);
     }
+    let activeSaveAbortController = null;
+
     async function saveStudioOverrides(silent = false) {
+      if (activeSaveAbortController) {
+        activeSaveAbortController.abort();
+      }
+      activeSaveAbortController = new AbortController();
+      const signal = activeSaveAbortController.signal;
+
       const payload = {
         rules: studioRules,
         textOverrides: studioTextOverrides,
@@ -1597,7 +1605,8 @@
         const res = await fetch("/api/theme/live-overrides", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: signal
         });
         if (res.ok && !silent) {
           ['btn-studio-header-save', 'btn-studio-ribbon-save', 'btn-studio-footer-save'].forEach(id => {
@@ -1614,6 +1623,7 @@
           }
         }
       } catch (e) {
+        if (e.name === 'AbortError') return;
         console.error("Save overrides error:", e);
         if (!silent && typeof showNotification === "function") {
           showNotification("Speichern fehlgeschlagen", "Verbindungsfehler beim Speichern der Overrides.", "error");

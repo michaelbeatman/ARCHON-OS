@@ -2287,6 +2287,8 @@
         const res = await fetch(`/api/operations/kanban/tasks/${taskId}`);
         if (!res.ok) throw new Error('Task konnte nicht geladen werden');
         const data = await res.json();
+        // N-15: Stale-Response-Guard — bricht ab, wenn zwischenzeitlich ein anderer Task gewaehlt wurde
+        if (currentOpsDetailTaskId !== taskId) return;
         const task = data.task;
         currentOpsDetailTaskAssignee = task.assignee || 'default';
 
@@ -2321,6 +2323,7 @@
           fetch(`/api/operations/feedback/task/${encodeURIComponent(taskId)}`)
             .then(r => r.json())
             .then(d => {
+              if (currentOpsDetailTaskId !== taskId) return;
               if (d && d.feedbacks && d.feedbacks.length > 0) {
                 const latest = d.feedbacks[0];
                 fbStatusEl.innerHTML = latest.score > 0

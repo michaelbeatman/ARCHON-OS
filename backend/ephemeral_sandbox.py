@@ -15,7 +15,7 @@ import shlex
 import socket
 from typing import Dict, Any, Optional
 
-from utils.docker_client import docker_client, DockerError
+from utils.docker_client import docker_client, DockerError, docker_cli_host_args
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SANDBOX_TEMP_DIR = "/opt/data/archon_sandbox_runs"
@@ -169,8 +169,12 @@ class EphemeralSandbox:
 
             # Docker-Kommando als Liste bauen (kein shell=True, daher sicheres Quoting)
             # shlex.quote ist bei Liste nicht nötig, aber Host-Pfad kann Leerzeichen enthalten
+            # `-H <Socket>` ist Pflicht, nicht Kosmetik: `docker run --rm` braucht
+            # attach/wait, die der Proxy absichtlich sperrt (Klasse C, siehe
+            # utils.docker_client.docker_cli_host_args). Ohne die Bindung folgt die CLI
+            # dem globalen DOCKER_HOST und bricht erst mitten in der Ausführung ab.
             docker_cmd = [
-                "docker", "run", "--rm",
+                "docker", *docker_cli_host_args(), "run", "--rm",
             ]
             docker_cmd.extend(net_flag)
             docker_cmd.extend([
@@ -185,7 +189,8 @@ class EphemeralSandbox:
             # Prüfe, ob Docker verfügbar ist; andernfalls fail-closed
             use_docker = True
             try:
-                chk = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=3)
+                chk = subprocess.run(["docker", *docker_cli_host_args(), "info"],
+                                     capture_output=True, text=True, timeout=3)
                 if chk.returncode != 0:
                     use_docker = False
             except Exception:

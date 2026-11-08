@@ -46,11 +46,36 @@ def test_validate_container_name_invalid():
 
 
 def test_container_action_valid():
-    """container_action mit gültigen Parametern ruft request auf."""
-    with patch.object(docker_client, "request", return_value=b"{}") as mock_req:
+    """container_action mit gültigen Parametern ruft request_status auf und liefert den Body."""
+    with patch.object(docker_client, "request_status", return_value=(204, b"{}")) as mock_req:
         result = docker_client.container_action("test-container", "start")
         mock_req.assert_called_once_with("POST", "/containers/test-container/start")
         assert result == b"{}"
+
+
+def test_container_action_accepts_304_already_running():
+    """304 (start auf laufendem Container) ist Erfolg, kein Fehler."""
+    with patch.object(docker_client, "request_status", return_value=(304, b"")):
+        assert docker_client.container_action("test-container", "start") == b""
+
+
+def test_container_action_reports_proxy_denial():
+    """403 vom Proxy (z. B. restart, ALLOW_RESTARTS=0) wird als DockerError gemeldet.
+
+    Vorher wurde der HTTP-Status verworfen: der Aufrufer meldete 'success',
+    waehrend nichts passierte — an der Live-Instanz gemessen (08.11.2026).
+    """
+    body = b"<html><body><h1>403 Forbidden</h1></body></html>"
+    with patch.object(docker_client, "request_status", return_value=(403, body)):
+        with pytest.raises(DockerError, match="restart.*HTTP 403"):
+            docker_client.container_action("test-container", "restart")
+
+
+def test_container_action_reports_missing_container():
+    """404 (Container existiert nicht) ist ein Fehler, kein stiller Erfolg."""
+    with patch.object(docker_client, "request_status", return_value=(404, b'{"message":"No such container"}')):
+        with pytest.raises(DockerError, match="HTTP 404"):
+            docker_client.container_action("test-container", "stop")
 
 
 def test_container_action_invalid_action():

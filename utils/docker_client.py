@@ -31,6 +31,7 @@ __all__ = [
     "DockerClient",
     "DockerAdminClient",
     "docker_client",
+    "docker_cli_host_args",
     "validate_container_name",
     "validate_image_ref",
 ]
@@ -109,6 +110,26 @@ _ADMIN_ALLOWED = [
 
 class DockerError(RuntimeError):
     pass
+
+
+# Erfolgsstatus einer Lebenszyklus-Aktion. 304 = "laeuft bereits" (Docker-Antwort
+# auf `start` bei laufendem Container, gemessen 08.11.2026), 204 = "erledigt".
+_ACTION_OK_STATUS = frozenset({200, 204, 304})
+
+
+def docker_cli_host_args() -> list[str]:
+    """`-H`-Argumente fuer docker-CLI-Aufrufe, die den Unix-Socket brauchen.
+
+    Manche Pfade sind strukturell Klasse C und bleiben am Socket: ``docker run --rm``
+    in der Sandbox braucht ``attach``/``wait``, der Proxy gibt beides absichtlich nicht
+    frei (gemessen: 403). Die docker-CLI folgt aber **global** ``DOCKER_HOST`` — ohne
+    diese Bindung wuerden solche Aufrufe nach dem Setzen der Variable still ueber den
+    Proxy laufen und erst mitten in der Ausfuehrung abbrechen. Deshalb pinnt jeder
+    CLI-Aufruf hier explizit seinen Endpunkt; das ist keine Migration, sondern der
+    Erhalt des bisherigen Verhaltens.
+    """
+    sock = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
+    return ["-H", f"unix://{sock}"]
 
 
 def validate_container_name(name: str) -> str:
@@ -295,10 +316,24 @@ class DockerClient:
         return self.request("GET", f"/containers/{validate_container_name(name)}/stats?stream=false")
 
     def container_action(self, name: str, action: str) -> bytes:
+        """start/stop/restart ausfuehren — und den HTTP-Status pruefen.
+
+        Frueher wurde der Status verworfen (`request()` gibt nur den Body zurueck).
+        Ueber den Proxy ist das eine stille Falle: `POST .../restart` wird dort mit
+        **403** beantwortet (ALLOW_RESTARTS=0), der Body ist eine HTML-Fehlerseite —
+        der Aufrufer meldete trotzdem ``status: success``, waehrend nichts passierte.
+        Gemessen 08.11.2026 am laufenden Stack. Deshalb hier explizit auswerten.
+        """
         name = validate_container_name(name)
         if action not in ("start", "stop", "restart"):
             raise DockerError(f"Ungültige Aktion: {action}")
-        return self.request("POST", f"/containers/{name}/{action}")
+        status, body = self.request_status("POST", f"/containers/{name}/{action}")
+        if status not in _ACTION_OK_STATUS:
+            raise DockerError(
+                f"Docker-{action} fuer '{name}' abgelehnt (HTTP {status}): "
+                f"{body[:160].decode('utf-8', errors='replace')!r}"
+            )
+        return body
 
     def exec_command(self, name: str, cmd: list[str], working_dir: str = "/app",
                      timeout: float = 6.0) -> bytes:

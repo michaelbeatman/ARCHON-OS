@@ -318,7 +318,11 @@ def create_kanban_task(req: TaskCreateRequest):
         # Falls Decompose angefordert wurde und Hermes Container läuft:
         if req.decompose:
             try:
-                subprocess.Popen(["docker", "exec", "hermes", "hermes", "kanban", "decompose", task_id])
+                from utils.docker_client import docker_cli_host_args
+                # -H <Socket>: `docker exec` ist Klasse C und bleibt am Socket; ohne die
+                # Bindung folgt die CLI dem globalen DOCKER_HOST (siehe docker_cli_host_args).
+                subprocess.Popen(["docker", *docker_cli_host_args(),
+                                  "exec", "hermes", "hermes", "kanban", "decompose", task_id])
             except Exception as e:
                 print(f"[OperationsAPI] Decompose trigger error: {e}", file=sys.stderr)
         try:

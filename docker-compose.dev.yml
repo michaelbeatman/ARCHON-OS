@@ -13,11 +13,23 @@ services:
       HOME: /tmp
       ENVIRONMENT: development
       # Etappe 3: der Updater laeuft ueber den Proxy statt ueber den rohen Socket.
-      # DOCKER_ADMIN_HOST gilt nur fuer DockerAdminClient (utils/docker_client.py);
-      # DOCKER_HOST bleibt bewusst ungesetzt, damit main.py, archon/routers/* und
-      # ephemeral_sandbox ihren Transport behalten.
+      # DOCKER_ADMIN_HOST gilt nur fuer DockerAdminClient (utils/docker_client.py).
       HERMES_UPDATER_DOCKER_CLIENT: "1"
       DOCKER_ADMIN_HOST: "tcp://docker-socket-proxy:2375"
+      # Etappe 4 (Abloesung Socket-Mount): der gemeinsame DockerClient laeuft jetzt
+      # ebenfalls ueber den Proxy. Am 08.11.2026 live gegen den Proxy gemessen:
+      #   GET /containers/json, /containers/<c>/json, /logs?tail=…, /stats?stream=false
+      #   POST /containers/<c>/exec -> /exec/<id>/start, POST .../start, .../stop
+      #   -> alle 200/201/204/304, also deckungsgleich mit _ALLOWED in
+      #      utils/docker_client.py.
+      # NICHT gedeckt (deshalb bleibt der Socket-Mount unten stehen):
+      #   POST .../restart (403, ALLOW_RESTARTS=0), CLI-Pfade der Sandbox
+      #   (`docker run` braucht attach/wait -> 403) und der Update-Pfad des Updaters,
+      #   der bewusst schon ueber DOCKER_ADMIN_HOST geht.
+      # Die CLI-Aufrufe, die den Socket strukturell brauchen, pinnen ihn selbst ueber
+      # utils.docker_client.docker_cli_host_args() — die CLI wuerde DOCKER_HOST sonst
+      # global folgen und still degradieren.
+      DOCKER_HOST: "tcp://docker-socket-proxy:2375"
     ports:
       - "127.0.0.1:8501:8501"
     volumes:
@@ -26,10 +38,11 @@ services:
       - /mnt/raid/AgenticOS-2026/data:/app/data
       - /home/micha/.hermes:/opt/data
       - /mnt/raid/Mein Obsidian:/opt/data/obsidian
-      # BLEIBT (Blocker-Befund Etappe 3, Schritt 6): main.py, archon/routers/* und
-      # ephemeral_sandbox nutzen den gemeinsamen DockerClient ohne DOCKER_HOST und
-      # fallen damit auf diesen Socket zurueck. Zeile erst entfernen, wenn diese
-      # Aufrufer auf den Proxy umgestellt sind.
+      # BLEIBT (Stand Etappe 4, 08.11.2026): nur noch die Klasse-B/C-Aufrufer brauchen
+      # den Socket — restart (Proxy: 403, ALLOW_RESTARTS=0), die CLI-Pfade der
+      # Sandbox (attach/wait -> 403) und `docker exec` in operations_api.
+      # Die Klasse-A-Aufrufer (services/logs/stats/inspect/exec/start/stop) laufen
+      # ueber DOCKER_HOST. Zeile erst entfernen, wenn B und C entschieden sind.
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:

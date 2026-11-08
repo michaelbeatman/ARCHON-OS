@@ -6,6 +6,7 @@ Extrahiert aus main.py. Nutzt Core-Module für alle Dependencies.
 
 import asyncio
 import datetime
+import hashlib
 import os
 import time
 import uuid
@@ -134,7 +135,8 @@ async def get_mission_control_state():
     for t in in_progress_tasks:
         a_id = t.get("agent_id")
         prof = next((p for p in profiles if p.get("id") == a_id or p.get("person_name") == t.get("agent_name")), None)
-        avatar = (prof.get("avatar") if prof else None) or f"/static/avatars/avatar_{((hash(a_id or 'micha') % 8) + 1):03d}.jpg"
+        _av_idx = (int(hashlib.sha256(str(a_id or 'micha').encode('utf-8')).hexdigest(), 16) % 8) + 1
+        avatar = (prof.get("avatar") if prof else None) or f"/static/avatars/avatar_{_av_idx:03d}.jpg"
         cadre.append({
             "id": a_id or "worker",
             "name": t.get("agent_name") or (prof.get("person_name") if prof else "Hermes Worker"),
@@ -148,6 +150,7 @@ async def get_mission_control_state():
     # Falls keine Tasks aktiv sind: Lead-Agenten im Bereitschaftsmodus
     if not cadre and profiles:
         for p in profiles[:2]:
+            _lead_idx = (int(hashlib.sha256(str(p.get('id') or 'lead').encode('utf-8')).hexdigest(), 16) % 8) + 1
             cadre.append({
                 "id": p.get("id"),
                 "name": p.get("person_name") or p.get("name"),
@@ -155,7 +158,7 @@ async def get_mission_control_state():
                 "model": p.get("model", "Claude 3.7 Sonnet"),
                 "project": "Bereit",
                 "status": "Bereit",
-                "avatar": p.get("avatar") or f"/static/avatars/avatar_{((hash(p.get('id') or 'lead') % 8) + 1):03d}.jpg"
+                "avatar": p.get("avatar") or f"/static/avatars/avatar_{_lead_idx:03d}.jpg"
             })
 
     # 4. Kürzlich abgeschlossene Tasks (für UI-History)

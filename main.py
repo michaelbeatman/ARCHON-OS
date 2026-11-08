@@ -1150,6 +1150,7 @@ def detect_container_port(container_identifier: str, inspected_port: int = None)
     """Ermittelt den echten Host-Port eines Docker-Containers."""
     cid_lower = str(container_identifier).lower()
     known_ports = {
+        "hermes-agent": 8642,
         "prime-agent": 7681,
         "prime": 7681,
         "browser-use": 7788,

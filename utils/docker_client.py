@@ -52,6 +52,14 @@ _REF_PAT = r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,200}"
 
 
 # Erlaubte Operationen: (Methode, Pfad-Regex)
+#
+# Query-fähig, aber eng: `start`/`stop` nehmen optional genau EINEN Query-String
+# (`?t=5&...`), weil Docker `stop` die Frist als Query-Parameter erwartet. Der
+# Namensbaustein ist `_CN_PAT` (wie in der Admin-Allowlist) — ein Query-Anhang im
+# Namen ist damit ausgeschlossen, und keine Regel greift über den Aktionsteil hinaus.
+#
+# `restart` bleibt bewusst OHNE Query-String und unverändert: der Proxy gibt es
+# nicht frei (ALLOW_RESTARTS=0), Aufrufer stellen auf stop + start um (B2).
 _ALLOWED = [
     ("GET", re.compile(r"^/containers/[^/]+/json$")),
     ("GET", re.compile(r"^/containers/[^/]+/logs\?.*$")),
@@ -59,8 +67,19 @@ _ALLOWED = [
     ("GET", re.compile(r"^/containers/json(\?.*)?$")),
     ("POST", re.compile(r"^/containers/[^/]+/exec$")),
     ("POST", re.compile(r"^/exec/[^/]+/start$")),
-    ("POST", re.compile(r"^/containers/[^/]+/(start|stop|restart)$")),
+    ("POST", re.compile(rf"^/containers/{_CN_PAT}/(start|stop)(\?[^#]*)?$")),
+    ("POST", re.compile(rf"^/containers/{_CN_PAT}/restart$")),
 ]
+
+# Globaler Socket-Timeout bleibt klein (1 s): Lesepfade sollen schnell scheitern.
+_DEFAULT_TIMEOUT = 1.0
+
+# Nur Lebenszyklus-Aktionen, bei denen Docker die Verbindung offen hält, bis der
+# Container wirklich steht, bekommen einen eigenen Timeout. `stop` wartet bis zu
+# ~10 s auf SIGTERM/SIGKILL (gemessen: Aktion wirkt, Client meldete vorher
+# "Timeout nach 0 Bytes" beim 1-s-Default). 20 s = Stop-Frist + Startzeit.
+_ACTION_TIMEOUT = 20.0
+_ACTION_TIMEOUTS = {"start": _ACTION_TIMEOUT, "stop": _ACTION_TIMEOUT}
 
 # Eigener Transport-Schalter des Admin-Clients (Etappe 3). Bewusst NICHT
 # DOCKER_HOST: das ist global und wuerde main.py, archon/routers/* und
@@ -208,12 +227,12 @@ class DockerClient:
         raise DockerError(f"Docker-Operation nicht erlaubt: {method} {path}")
 
     def request(self, method: str, path: str, payload: Optional[dict] = None,
-                timeout: float = 1.0) -> bytes:
+                timeout: float = _DEFAULT_TIMEOUT) -> bytes:
         """Rohantwort-Body. Der HTTP-Status wird verworfen — wer ihn braucht: request_status()."""
         return self._request_raw(method, path, payload, timeout)[1]
 
     def request_status(self, method: str, path: str, payload: Optional[dict] = None,
-                       timeout: float = 1.0) -> tuple[int, bytes]:
+                       timeout: float = _DEFAULT_TIMEOUT) -> tuple[int, bytes]:
         """Wie request(), liefert aber (HTTP-Status, Body).
 
         Noetig, um "Container existiert nicht" (404) von "Abfrage erfolgreich" (200) zu
@@ -222,7 +241,7 @@ class DockerClient:
         return self._request_raw(method, path, payload, timeout)
 
     def _request_raw(self, method: str, path: str, payload: Optional[dict] = None,
-                     timeout: float = 1.0) -> tuple[int, bytes]:
+                     timeout: float = _DEFAULT_TIMEOUT) -> tuple[int, bytes]:
         self._check_allowed(method, path)
         kind, target = self._endpoint()
         body = json.dumps(payload) if payload is not None else ""
@@ -315,7 +334,8 @@ class DockerClient:
     def container_stats(self, name: str) -> bytes:
         return self.request("GET", f"/containers/{validate_container_name(name)}/stats?stream=false")
 
-    def container_action(self, name: str, action: str) -> bytes:
+    def container_action(self, name: str, action: str,
+                         timeout: Optional[float] = None) -> bytes:
         """start/stop/restart ausfuehren — und den HTTP-Status pruefen.
 
         Frueher wurde der Status verworfen (`request()` gibt nur den Body zurueck).
@@ -323,17 +343,52 @@ class DockerClient:
         **403** beantwortet (ALLOW_RESTARTS=0), der Body ist eine HTML-Fehlerseite —
         der Aufrufer meldete trotzdem ``status: success``, waehrend nichts passierte.
         Gemessen 08.11.2026 am laufenden Stack. Deshalb hier explizit auswerten.
+
+        Der Timeout ist pro Aktion gesetzt (_ACTION_TIMEOUTS) und nicht global
+        angehoben: `stop`/`start` brauchen Sekunden, alles andere soll schnell
+        scheitern. ``timeout`` ueberschreibt den Aktions-Default explizit.
         """
         name = validate_container_name(name)
         if action not in ("start", "stop", "restart"):
             raise DockerError(f"Ungültige Aktion: {action}")
-        status, body = self.request_status("POST", f"/containers/{name}/{action}")
+        effective_timeout = _ACTION_TIMEOUTS.get(action, _DEFAULT_TIMEOUT) \
+            if timeout is None else timeout
+        status, body = self.request_status("POST", f"/containers/{name}/{action}",
+                                           timeout=effective_timeout)
         if status not in _ACTION_OK_STATUS:
             raise DockerError(
                 f"Docker-{action} fuer '{name}' abgelehnt (HTTP {status}): "
                 f"{body[:160].decode('utf-8', errors='replace')!r}"
             )
         return body
+
+    def restart_container(self, name: str) -> bytes:
+        """Neustart als ``stop`` + ``start`` — fail-closed.
+
+        Der Proxy gibt ``restart`` nicht frei (ALLOW_RESTARTS=0, Entscheidung B2:
+        `restart` traefe jeden Container, den der Namensregex erwischt, inklusive
+        Proxy und App). Der Neustart wird deshalb aus zwei freigegebenen Schritten
+        gebaut.
+
+        Scheitert ``stop``, wird ``start`` **nicht** ausgefuehrt: ein halb
+        neugestarteter Container ist schlimmer als ein ehrlicher Fehler. Die
+        DockerError-Meldung nennt die gescheiterte Phase, damit der Aufrufer sie
+        weiterreichen kann.
+        """
+        name = validate_container_name(name)
+        try:
+            self.container_action(name, "stop")
+        except DockerError as e:
+            raise DockerError(
+                f"Neustart von '{name}' abgebrochen, stop fehlgeschlagen: {e}"
+            ) from e
+        try:
+            return self.container_action(name, "start")
+        except DockerError as e:
+            raise DockerError(
+                f"Neustart von '{name}' unvollstaendig (Container gestoppt), "
+                f"start fehlgeschlagen: {e}"
+            ) from e
 
     def exec_command(self, name: str, cmd: list[str], working_dir: str = "/app",
                      timeout: float = 6.0) -> bytes:

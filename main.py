@@ -1101,14 +1101,19 @@ def get_docker_containers_from_socket() -> List[Dict]:
 def post_docker_container_action(container_name: str, action: str = "start") -> dict:
     try:
         # validate_container_name is called inside container_action
-        raw = docker_client.container_action(container_name, action)
-        # docker_client returns raw bytes; we don't need the response body for start/stop/restart
+        if action == "restart":
+            # Der Proxy gibt `restart` nicht frei (ALLOW_RESTARTS=0, Entscheidung B2).
+            # Neustart = stop + start, fail-closed: scheitert stop, folgt kein start.
+            docker_client.restart_container(container_name)
+        else:
+            docker_client.container_action(container_name, action)
+        # docker_client returns raw bytes; we don't need the response body for start/stop
         # Just verify no DockerError was raised
 
         # Keep hermes-dashboard-proxy in sync if hermes-dashboard restarted
         if container_name in ["hermes-dashboard", "hermes"] and action in ["start", "restart"]:
             try:
-                docker_client.container_action("hermes-dashboard-proxy", "restart")
+                docker_client.restart_container("hermes-dashboard-proxy")
             except Exception:
                 pass
 

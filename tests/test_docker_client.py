@@ -2,7 +2,10 @@
 
 from unittest.mock import patch, MagicMock
 import pytest
-from utils.docker_client import docker_client, DockerError, validate_container_name, _ALLOWED
+from utils.docker_client import (
+    docker_client, DockerError, validate_container_name, _ALLOWED,
+    _ACTION_TIMEOUTS, _DEFAULT_TIMEOUT,
+)
 
 
 def test_allowlist_allows_containers_json_with_query():
@@ -49,7 +52,8 @@ def test_container_action_valid():
     """container_action mit gültigen Parametern ruft request_status auf und liefert den Body."""
     with patch.object(docker_client, "request_status", return_value=(204, b"{}")) as mock_req:
         result = docker_client.container_action("test-container", "start")
-        mock_req.assert_called_once_with("POST", "/containers/test-container/start")
+        mock_req.assert_called_once_with(
+            "POST", "/containers/test-container/start", timeout=_ACTION_TIMEOUTS["start"])
         assert result == b"{}"
 
 
@@ -98,14 +102,114 @@ def test_allowed_patterns_exact():
     """Explizite Prüfung der erlaubten Muster (Regression-Sicherheit)."""
     allowed_patterns = [(m, rx.pattern) for m, rx in _ALLOWED]
     
-    # Wichtige Muster vorhanden
+    # Unveraenderte Muster bleiben woertlich geprueft
     assert ("GET", r"^/containers/json(\?.*)?$") in allowed_patterns
-    assert ("POST", r"^/containers/[^/]+/(start|stop|restart)$") in allowed_patterns
     assert ("GET", r"^/containers/[^/]+/json$") in allowed_patterns
     assert ("POST", r"^/containers/[^/]+/exec$") in allowed_patterns
     
-    # Gesamtzahl unverändert (7 Einträge)
-    assert len(_ALLOWED) == 7
+    # start/stop sind query-faehig, restart nicht (B2)
+    docker_client._check_allowed("POST", "/containers/x/start")
+    docker_client._check_allowed("POST", "/containers/x/stop")
+    docker_client._check_allowed("POST", "/containers/x/stop?t=5")
+    docker_client._check_allowed("POST", "/containers/x/restart")
+    with pytest.raises(DockerError, match="nicht erlaubt"):
+        docker_client._check_allowed("POST", "/containers/x/restart?t=5")
+
+    # Gesamtzahl: 7 Muster wie vorher, start/stop und restart getrennt (+1)
+    assert len(_ALLOWED) == 8
+
+
+def test_allowlist_allows_stop_and_start_with_query():
+    """`stop?t=5` darf nicht am Client scheitern (vorher: 'nicht erlaubt')."""
+    docker_client._check_allowed("POST", "/containers/archon-quartz/stop?t=5")
+    docker_client._check_allowed("POST", "/containers/archon-quartz/stop?t=5&signal=SIGTERM")
+    docker_client._check_allowed("POST", "/containers/archon-quartz/start?t=5")
+
+
+def test_allowlist_rejects_query_injection_into_container_name():
+    """Der Query-Anhang gehoert hinter die Aktion, nicht in den Namen."""
+    with pytest.raises(DockerError, match="nicht erlaubt"):
+        docker_client._check_allowed("POST", "/containers/foo?t=5/stop")
+    with pytest.raises(DockerError, match="nicht erlaubt"):
+        docker_client._check_allowed("POST", "/containers/foo%20bar/stop?t=5")
+
+
+def test_action_timeouts_are_per_action_and_generous():
+    """stop/start bekommen >= 15 s, der globale Default bleibt bei 1 s."""
+    assert _ACTION_TIMEOUTS["stop"] >= 15.0
+    assert _ACTION_TIMEOUTS["start"] >= 15.0
+    # Der globale Default bleibt klein, Lesepfade erben ihn unveraendert
+    assert _DEFAULT_TIMEOUT <= 1.0
+    import inspect
+    assert inspect.signature(docker_client.request).parameters["timeout"].default == _DEFAULT_TIMEOUT
+    with patch.object(docker_client, "request", return_value=b"{}") as mock_req:
+        docker_client.container_json("test-container")
+        mock_req.assert_called_once_with("GET", "/containers/test-container/json")
+
+
+def test_container_action_passes_action_timeout():
+    """Auch stop nutzt den eigenen Timeout, nicht den 1-s-Default."""
+    with patch.object(docker_client, "request_status", return_value=(204, b"")) as mock_req:
+        docker_client.container_action("test-container", "stop")
+        mock_req.assert_called_once_with(
+            "POST", "/containers/test-container/stop", timeout=_ACTION_TIMEOUTS["stop"])
+
+
+# ---------------------------------------------------------------- B2: stop+start
+
+
+def test_restart_container_is_stop_then_start():
+    """restart wird als stop + start gefahren — Reihenfolge und Anzahl geprueft."""
+    calls = []
+
+    def _record(name, action, timeout=None):
+        calls.append((name, action))
+        return b""
+
+    with patch.object(docker_client, "container_action", side_effect=_record):
+        docker_client.restart_container("archon-quartz")
+
+    assert calls == [("archon-quartz", "stop"), ("archon-quartz", "start")]
+
+
+def test_restart_container_does_not_start_when_stop_fails():
+    """Fail-closed: scheitert stop, wird start NICHT aufgerufen."""
+    calls = []
+
+    def _record(name, action, timeout=None):
+        calls.append(action)
+        raise DockerError(f"Docker-{action} fuer '{name}' abgelehnt (HTTP 500)")
+
+    with patch.object(docker_client, "container_action", side_effect=_record):
+        with pytest.raises(DockerError, match="abgebrochen, stop fehlgeschlagen"):
+            docker_client.restart_container("archon-quartz")
+
+    assert calls == ["stop"], f"start darf nach gescheitertem stop nicht laufen: {calls}"
+
+
+def test_restart_container_reports_start_failure():
+    """stop ok, start scheitert -> ehrlicher Fehler statt 'success'."""
+    calls = []
+
+    def _record(name, action, timeout=None):
+        calls.append(action)
+        if action == "start":
+            raise DockerError(f"Docker-start fuer '{name}' abgelehnt (HTTP 500)")
+        return b""
+
+    with patch.object(docker_client, "container_action", side_effect=_record):
+        with pytest.raises(DockerError, match="start fehlgeschlagen"):
+            docker_client.restart_container("archon-quartz")
+
+    assert calls == ["stop", "start"]
+
+
+def test_restart_container_reports_proxy_403_as_error():
+    """403 vom Proxy (ALLOW_RESTARTS=0) ergibt DockerError, keinen Erfolg."""
+    body = b"<html><body><h1>403 Forbidden</h1></body></html>"
+    with patch.object(docker_client, "request_status", return_value=(403, body)):
+        with pytest.raises(DockerError, match="stop fehlgeschlagen"):
+            docker_client.restart_container("archon-quartz")
 
 
 def test_allowlist_allows_post_containers_exec():

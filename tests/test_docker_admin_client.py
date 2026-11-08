@@ -42,10 +42,16 @@ UPDATER_FORMS = [
     ("POST", "/exec/abc123/start"),
 ]
 
-# Formen, die die gemeinsame Allowlist heute schon zulaesst (4 von 11).
+# Formen, die die gemeinsame Allowlist heute schon zulaesst (5 von 11).
+#
+# `stop?t=5` ist seit B2 dabei: `stop` war fuer normale Aufrufer ohnehin schon
+# erlaubt (ohne Query); neu ist nur der Query-Anhang, den Docker fuer die
+# Stop-Frist verlangt. Kein neuer Blast-Radius — create/rename/delete/pull/tag
+# bleiben weiter Admin-Sache.
 ALLOWED_BY_SHARED = {
     ("GET", "/containers/hermes-agent/json"),
     ("POST", "/containers/hermes-agent/start"),
+    ("POST", "/containers/hermes-agent/stop?t=5"),
     ("POST", "/containers/hermes-agent/exec"),
     ("POST", "/exec/abc123/start"),
 }
@@ -62,11 +68,12 @@ def test_admin_allowlist_accepts_every_updater_form(method, path):
 
 @pytest.mark.parametrize("method,path", UPDATER_FORMS,
                          ids=[f"{m} {p}" for m, p in UPDATER_FORMS])
-def test_shared_allowlist_rejects_the_seven_admin_forms(method, path):
-    """Sicherheitsgrenze: die gemeinsame Allowlist bleibt bei 7 Eintraegen.
+def test_shared_allowlist_rejects_the_six_admin_forms(method, path):
+    """Sicherheitsgrenze: die gemeinsame Allowlist bleibt eng.
 
     Genau die Formen, die der Updater zusaetzlich braucht, muessen dort weiter
     scheitern — sonst koennte jeder normale Aufrufer den Core austauschen.
+    Ausnahme seit B2: `stop?t=5` (stop war ohnehin erlaubt, nur der Query ist neu).
     """
     if (method, path) in ALLOWED_BY_SHARED:
         docker_client._check_allowed(method, path)
@@ -75,8 +82,8 @@ def test_shared_allowlist_rejects_the_seven_admin_forms(method, path):
         docker_client._check_allowed(method, path)
 
 
-def test_seven_of_eleven_forms_are_newly_permitted():
-    """Bilanz: 7 der 11 Formen waren heute rot, 4 waren schon erlaubt."""
+def test_six_of_eleven_forms_are_newly_permitted():
+    """Bilanz: 6 der 11 Formen waren heute rot, 5 waren schon erlaubt."""
     denied_today = []
     for method, path in UPDATER_FORMS:
         try:
@@ -84,13 +91,17 @@ def test_seven_of_eleven_forms_are_newly_permitted():
         except DockerError:
             denied_today.append((method, path))
 
-    assert len(denied_today) == 7, denied_today
+    assert len(denied_today) == 6, denied_today
     assert set(denied_today) == set(UPDATER_FORMS) - ALLOWED_BY_SHARED
 
 
-def test_shared_allowlist_size_is_still_seven():
-    """Regression auf die Sicherheitsgrenze selbst (verstaerkt test_docker_client.py:83)."""
-    assert len(_ALLOWED) == 7
+def test_shared_allowlist_size_is_eight():
+    """Regression auf die Sicherheitsgrenze selbst (verstaerkt test_docker_client.py).
+
+    8 statt 7, weil start/stop (query-faehig) und restart (ohne Query, bleibt
+    gesperrt) seit B2 getrennte Muster sind. Kein zusaetzlicher Endpunkt.
+    """
+    assert len(_ALLOWED) == 8
 
 
 def test_admin_allowlist_does_not_contain_shared_rules():

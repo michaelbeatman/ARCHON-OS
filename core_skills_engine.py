@@ -85,13 +85,22 @@ class DockerControlSkill:
             return {"status": "error", "message": str(e)}
 
     def restart_service(self, container_name: str) -> Dict:
-        """Restarts an active or stopped container service."""
+        """Restarts an active or stopped container service.
+
+        Kein ``container.restart()`` mehr: der Proxy gibt ``restart`` nicht frei
+        (ALLOW_RESTARTS=0, Entscheidung B2). Der Neustart geht ueber den zentralen
+        Client als ``stop`` + ``start`` — fail-closed, mit dem aktionsspezifischen
+        Timeout aus ``utils.docker_client`` (der SDK-Default hier waere 5 s und
+        damit knapp unter der Stop-Frist von Docker).
+        """
         if not self.client:
             return {"status": "error", "message": "Docker SDK not initialized"}
+        from utils.docker_client import docker_client as _dc, DockerError as _DockerError
         try:
-            c = self.client.containers.get(container_name)
-            c.restart()
+            _dc.restart_container(container_name)
             return {"status": "success", "message": f"Container '{container_name}' restarted successfully."}
+        except _DockerError as e:
+            return {"status": "error", "message": str(e)}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 

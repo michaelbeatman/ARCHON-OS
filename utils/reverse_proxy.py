@@ -82,6 +82,17 @@ class ReverseProxy:
         headers = dict(request.headers)
         headers.pop("host", None)
         headers.pop("accept-encoding", None)
+        # F14: Archon-Session-Cookie und Auth-Header nicht an Fremd-Upstreams durchreichen
+        cookie_header = headers.get("cookie", "")
+        if "archon_session=" in cookie_header:
+            cleaned_cookies = [
+                c.strip() for c in cookie_header.split(";")
+                if not c.strip().startswith("archon_session=")
+            ]
+            if cleaned_cookies:
+                headers["cookie"] = "; ".join(cleaned_cookies)
+            else:
+                headers.pop("cookie", None)
         return headers
 
     def _rewrite_headers(self, upstream: httpx.Response) -> dict:
@@ -96,8 +107,9 @@ class ReverseProxy:
                 out["Location"] = value
             else:
                 out[key] = value
-        out["Access-Control-Allow-Origin"] = "*"
-        out["X-Frame-Options"] = "ALLOWALL"
+        # F14: Kein unbegrenztes Access-Control-Allow-Origin: * fuer Proxies
+        out.pop("Access-Control-Allow-Origin", None)
+        out["X-Frame-Options"] = "SAMEORIGIN"
         return out
 
     def _transform_content(self, upstream: httpx.Response, path: str) -> tuple[bytes, Optional[str]]:

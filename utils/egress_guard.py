@@ -94,7 +94,10 @@ def check_target_url(url: str, *, allowed: Optional[Iterable[str]] = None) -> st
     if not host:
         raise EgressBlocked("URL ohne Host", target)
 
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as err:
+        raise EgressBlocked(f"Ungültiger Port in URL: {err}", target)
 
     # IP-Literal? Dann ohne DNS direkt bewerten.
     literal_ip = None

@@ -30,8 +30,8 @@ def _key(fn: Callable, args: tuple, kwargs: dict) -> str:
         return f"{fn.__module__}.{fn.__qualname__}|fallback"
 
 
-def ttl_cache(seconds: float = 30.0):
-    """Cached das Ergebnis für `seconds`. None-Ergebnisse werden mitgecacht."""
+def ttl_cache(seconds: float = 30.0, maxsize: int = 256):
+    """Cached das Ergebnis für `seconds` (max `maxsize` Einträge). None-Ergebnisse werden mitgecacht."""
 
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
@@ -43,11 +43,22 @@ def ttl_cache(seconds: float = 30.0):
                 if hit and (now - hit[0]) < seconds:
                     return hit[1]
             value = fn(*args, **kwargs)
+            post_exec_now = time.time()
             with _LOCK:
-                _STORE[k] = (now, value)
+                # P-04: Bei Erreichen von maxsize abgelaufene Eintraege aufraeumen bzw. aelteste verwerfen
+                if len(_STORE) >= maxsize and k not in _STORE:
+                    # 1. Prune abgelaufen
+                    expired_keys = [ek for ek, ev in _STORE.items() if (post_exec_now - ev[0]) >= seconds]
+                    for ek in expired_keys:
+                        _STORE.pop(ek, None)
+                    # 2. Wenn immer noch voll, aeltesten Eintrag entfernen
+                    while len(_STORE) >= maxsize:
+                        _STORE.pop(next(iter(_STORE)), None)
+                _STORE[k] = (post_exec_now, value)
             return value
 
         wrapper._ttl_seconds = seconds  # type: ignore[attr-defined]
+        wrapper._maxsize = maxsize  # type: ignore[attr-defined]
         return wrapper
 
     return decorator

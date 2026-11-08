@@ -68,8 +68,9 @@ class DeadlockSupervisor:
         now = datetime.datetime.now()
         resolved = []
 
+        conn = self._get_conn()
         try:
-            with self._get_conn() as conn:
+            with conn:
                 cur = conn.cursor()
                 # N-06: 'last_heartbeat_at' existiert nicht in jedem Schema —
                 # Spalte optional ermitteln.
@@ -124,5 +125,7 @@ class DeadlockSupervisor:
             }
         except Exception as e:
             return {"status": "error", "message": str(e), "resolved_count": 0}
+        finally:
+            conn.close()
 
 deadlock_supervisor = DeadlockSupervisor()

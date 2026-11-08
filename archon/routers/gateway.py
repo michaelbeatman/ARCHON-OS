@@ -86,8 +86,9 @@ def _update_profile_status(profile_id: str, new_status: str):
 
 @router.get("/list")
 async def api_gateway_list():
-    all_profiles = _get_all_installed_profiles()
-    cfg = _load_gateway_config()
+    import main as app_main
+    all_profiles = app_main._get_all_installed_profiles()
+    cfg = app_main._load_gateway_config()
     autostart_map = cfg.get("autostart", {})
     last_used_map = cfg.get("last_used", {})
     active_gateways = cfg.get("active_gateways", {})
@@ -96,7 +97,6 @@ async def api_gateway_list():
     is_master_running = False
     if os.path.exists(gw_state_file):
         try:
-            import main as app_main
             gw_data = app_main._load_json(gw_state_file, {})
             is_master_running = gw_data.get("gateway_state") == "running"
         except Exception:
@@ -136,13 +136,13 @@ async def api_gateway_start(request: Request, payload: Dict = Body(...)):
             detail=f"Gateway-Start fehlgeschlagen: {(stderr or stdout or 'unbekannter Fehler').strip()[:400]}",
         )
 
-    cfg = _load_gateway_config()
+    cfg = app_main._load_gateway_config()
     cfg.setdefault("active_gateways", {})
     cfg["active_gateways"][profile_id] = True
     cfg.setdefault("last_used", {})
     cfg["last_used"][profile_id] = datetime.datetime.now().isoformat()
-    _save_gateway_config(cfg)
-    _update_profile_status(profile_id, "active")
+    app_main._save_gateway_config(cfg)
+    app_main._update_profile_status(profile_id, "active")
 
     return {"ok": True, "profile_id": profile_id, "output": stdout or stderr}
 
@@ -166,24 +166,26 @@ async def api_gateway_stop(request: Request, payload: Dict = Body(...)):
             detail=f"Gateway-Stop fehlgeschlagen: {(stderr or stdout or 'unbekannter Fehler').strip()[:400]}",
         )
 
-    cfg = _load_gateway_config()
+    cfg = app_main._load_gateway_config()
     cfg.setdefault("active_gateways", {})
     cfg["active_gateways"][profile_id] = False
-    _save_gateway_config(cfg)
-    _update_profile_status(profile_id, "standby")
+    app_main._save_gateway_config(cfg)
+    app_main._update_profile_status(profile_id, "standby")
 
     return {"ok": True, "profile_id": profile_id, "output": stdout or stderr}
 
 
 @router.get("/config")
 def api_get_gateway_config():
-    return _load_gateway_config()
+    import main as app_main
+    return app_main._load_gateway_config()
 
 
 @router.post("/config")
 def api_save_gateway_config_endpoint(request: Request, payload: Dict = Body(...)):
     _require_admin(request)
-    cfg = _load_gateway_config()
+    import main as app_main
+    cfg = app_main._load_gateway_config()
     if "idle_timeout_minutes" in payload:
         try:
             cfg["idle_timeout_minutes"] = max(1, int(payload["idle_timeout_minutes"]))
@@ -191,7 +193,7 @@ def api_save_gateway_config_endpoint(request: Request, payload: Dict = Body(...)
             pass
     if "autostart" in payload and isinstance(payload["autostart"], dict):
         cfg["autostart"].update(payload["autostart"])
-    _save_gateway_config(cfg)
+    app_main._save_gateway_config(cfg)
     return cfg
 
 
@@ -202,29 +204,30 @@ def api_gateway_autostart(request: Request, payload: Dict = Body(...)):
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")
     enable = bool(payload.get("autostart", False))
-    cfg = _load_gateway_config()
+    import main as app_main
+    cfg = app_main._load_gateway_config()
     cfg.setdefault("autostart", {})
     cfg["autostart"][profile_id] = enable
-    _save_gateway_config(cfg)
+    app_main._save_gateway_config(cfg)
     return {"ok": True, "profile_id": profile_id, "autostart": enable}
 
 
 @router.post("/stop-all")
 async def api_gateway_stop_all(request: Request):
     _require_admin(request)
-    cfg = _load_gateway_config()
+    import main as app_main
+    cfg = app_main._load_gateway_config()
     active_map = cfg.get("active_gateways", {})
     stopped = []
-    import main as app_main
     for pid, is_active in list(active_map.items()):
         if pid == "default" or not is_active:
             continue
         cfg["active_gateways"][pid] = False
-        _update_profile_status(pid, "standby")
+        app_main._update_profile_status(pid, "standby")
         try:
             app_main._run_docker_exec(["hermes", "--profile", pid, "gateway", "stop"])
         except Exception:
             pass
         stopped.append(pid)
-    _save_gateway_config(cfg)
+    app_main._save_gateway_config(cfg)
     return {"ok": True, "stopped": stopped}

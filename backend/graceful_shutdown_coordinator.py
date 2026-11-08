@@ -226,13 +226,18 @@ class GracefulShutdownCoordinator:
         flushed_dbs = []
 
         # 1. Async Write Batcher leeren
+        # N-03: das Modul exportiert die Singleton-INSTANZ (async_write_batcher),
+        # keinen get_write_batcher()-Factory. Der ImportError wurde vorher vom
+        # blanket-except geschluckt — der RAM-Puffer blieb liegen, das Log
+        # meldete trotzdem "WAL-Flush abgeschlossen".
         try:
-            from backend.async_write_batcher import get_write_batcher
-            wb = get_write_batcher()
-            wb.flush()
+            from backend.async_write_batcher import async_write_batcher as write_batcher
+            flush_info = write_batcher.flush()
             flushed_dbs.append("async_write_batcher_ram_queue")
-        except Exception:
-            pass
+            if isinstance(flush_info, dict) and flush_info.get("status") == "error":
+                print(f"[GracefulShutdown] Batcher-Flush meldet Fehler: {flush_info}", file=sys.stderr)
+        except Exception as e:
+            print(f"[GracefulShutdown] Batcher-Flush fehlgeschlagen: {e}", file=sys.stderr)
 
         # 2. Alle SQLite-Datenbanken einsammeln
         candidate_paths = [

@@ -80,21 +80,31 @@ DEFAULT_WATCHDOG_CONFIG: Dict[str, Any] = {
 }
 
 
-def _load_seen() -> set:
+def _load_seen():
+    """F-02: chronologisch geordnete Liste (aelteste IDs zuerst) statt set.
+
+    Ein set hat Hash-Ordnung: `list(seen)[-2000:]` warf beliebige IDs raus und
+    alte Artikel galten beim naechsten Lauf wieder als neu.
+    """
     if os.path.exists(SEEN_FILE):
         try:
             with open(SEEN_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return set(data.get("seen_ids", []))
+                raw = data.get("seen_ids", [])
+                if isinstance(raw, list):
+                    return list(raw)
+                if isinstance(raw, set):
+                    return list(raw)
+                return list(raw) if raw else []
         except Exception:
             pass
-    return set()
+    return []
 
 
-def _save_seen(seen_ids: set):
+def _save_seen(seen_ids):
     os.makedirs(os.path.dirname(SEEN_FILE), exist_ok=True)
-    # Behalte maximal 2000 IDs, um Speicherplatz zu schonen
-    trimmed = list(seen_ids)[-2000:]
+    # F-02: nur die aeltesten Eintraege fallen raus (chronologisch).
+    trimmed = seen_ids[-2000:]
     try:
         with open(SEEN_FILE, "w", encoding="utf-8") as f:
             json.dump({"seen_ids": trimmed, "updated_at": datetime.datetime.now().isoformat()}, f, indent=2)
@@ -280,7 +290,7 @@ def run_watchdog_scan(force: bool = False) -> Dict[str, Any]:
                 if item_id in seen_ids:
                     continue
 
-                seen_ids.add(item_id)
+                seen_ids.append(item_id)  # F-02: Liste statt set (chronologisch)
                 finding = {
                     "id": item_id,
                     "target_id": target_id,

@@ -337,8 +337,9 @@ def api_save_privacy_routing(request: Request, payload: Dict[str, Any] = Body(..
 
 
 @router.post("/api/llm-providers/test-connection")
-def api_test_provider_connection(payload: Dict[str, Any] = Body(...)):
+def api_test_provider_connection(request: Request, payload: Dict[str, Any] = Body(...)):
     """Testet die Live-Verbindung zu einem lokalen LLM oder Mistral AI (t-c4489c)."""
+    require_admin_or_503(request)  # D-14: Rollenzaun wie select/save-key/privacy-routing
     try:
         from backend.privacy_router import test_endpoint_sync
         provider = payload.get("provider", "local")

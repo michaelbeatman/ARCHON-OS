@@ -18,10 +18,13 @@ import re
 import json
 import sqlite3
 import datetime
+import threading
+import uuid
 from typing import Dict, Any, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CRM_SQLITE_PATH = os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data", "data.db")
+_CRM_MSG_LOCK = threading.Lock()
 
 
 def _get_sqlite_conn() -> sqlite3.Connection:
@@ -438,48 +441,49 @@ class CRMService:
         direction: str = "outbound",  # 'inbound', 'outbound'
         sender: str = "Michael Keller"
     ) -> Dict[str, Any]:
-        conn = _get_pb_conn()
-        try:
-            c = conn.cursor()
-            c.execute("SELECT nachrichtenverlauf, name FROM kontakte WHERE id = ?", (contact_id,))
-            row = c.fetchone()
-            if not row:
-                raise ValueError(f"Kontakt {contact_id} existiert nicht.")
+        with _CRM_MSG_LOCK:
+            conn = _get_pb_conn()
+            try:
+                with conn:
+                    c = conn.cursor()
+                    c.execute("SELECT nachrichtenverlauf, name FROM kontakte WHERE id = ?", (contact_id,))
+                    row = c.fetchone()
+                    if not row:
+                        raise ValueError(f"Kontakt {contact_id} existiert nicht.")
 
-            raw_nv = row[0]
-            contact_name = row[1] or "Kontakt"
-            messages = []
-            if raw_nv:
-                try:
-                    parsed = json.loads(raw_nv)
-                    if isinstance(parsed, list):
-                        messages = parsed
-                except Exception:
-                    pass
+                    raw_nv = row[0]
+                    contact_name = row[1] or "Kontakt"
+                    messages = []
+                    if raw_nv:
+                        try:
+                            parsed = json.loads(raw_nv)
+                            if isinstance(parsed, list):
+                                messages = parsed
+                        except Exception:
+                            pass
 
-            now_dt = datetime.datetime.now()
-            now_str = now_dt.strftime("%Y-%m-%d %H:%M")
-            new_msg = {
-                "id": f"msg_{int(now_dt.timestamp())}",
-                "date": now_str,
-                "timestamp": now_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
-                "sender": sender if direction == "outbound" else contact_name,
-                "text": text.strip(),
-                "type": channel,
-                "direction": direction,
-                "isStarred": False
-            }
-            messages.append(new_msg)
+                    now_dt = datetime.datetime.now()
+                    now_str = now_dt.strftime("%Y-%m-%d %H:%M")
+                    new_msg = {
+                        "id": f"msg_{int(now_dt.timestamp())}_{uuid.uuid4().hex[:6]}",
+                        "date": now_str,
+                        "timestamp": now_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                        "sender": sender if direction == "outbound" else contact_name,
+                        "text": text.strip(),
+                        "type": channel,
+                        "direction": direction,
+                        "isStarred": False
+                    }
+                    messages.append(new_msg)
 
-            with conn:
-                conn.execute(
-                    "UPDATE kontakte SET nachrichtenverlauf = ?, updated = ? WHERE id = ?",
-                    (json.dumps(messages, ensure_ascii=False), datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.000Z"), contact_id)
-                )
+                    conn.execute(
+                        "UPDATE kontakte SET nachrichtenverlauf = ?, updated = ? WHERE id = ?",
+                        (json.dumps(messages, ensure_ascii=False), datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.000Z"), contact_id)
+                    )
 
-            return {"success": True, "message": new_msg, "total_messages": len(messages)}
-        finally:
-            conn.close()
+                return {"success": True, "message": new_msg, "total_messages": len(messages)}
+            finally:
+                conn.close()
 
     def delete_contact(self, contact_id: str) -> bool:
         conn = _get_pb_conn()

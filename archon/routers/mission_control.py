@@ -8,6 +8,7 @@ import asyncio
 import datetime
 import os
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -191,7 +192,7 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
     if not req.title or not req.title.strip():
         raise HTTPException(status_code=400, detail="Aufgabentitel darf nicht leer sein.")
 
-    task_id = f"task-{int(time.time()) % 10000}"
+    task_id = f"task-{int(time.time())}-{uuid.uuid4().hex[:6]}"
     # Intelligente Hermes Triage & Schätzung
     title = req.title.strip()
     is_large = any(k in title.lower() for k in ["audit", "refactor", "vollständig", "sicherheit", "pipeline", "db", "analyse"])
@@ -291,9 +292,9 @@ async def move_mission_control_task(req: TaskMoveRequest):
             elif not task.get("result_summary"):
                 task["result_summary"] = f"Erfolgreich von {task['agent_name']} abgeschlossen. Alle Kriterien erfüllt."
 
-            obs_path = _DEPS["sync_obsidian"](task)
-            task["artifact_path"] = obs_path
-            plan["obs_path"] = obs_path
+            # N-10: sync_obsidian darf nicht unter _MC_DATA_LOCK ausgefuehrt werden (I/O-Blockade).
+            # Plan markieren und Ausfuehrung in Phase 2 ausserhalb des Locks verlagern.
+            plan["needs_sync_obsidian"] = True
 
             # FAN-IN (12.10.2026): Diese Task IST Lisas Entwurf-Freigabe
             # (synthesis_draft_path) -> beim Approved-Move finalisieren.
@@ -322,6 +323,22 @@ async def move_mission_control_task(req: TaskMoveRequest):
     # ---------------- Phase 2: Seiteneffekte ohne Lock ----------------
     if plan.get("ticker"):
         add_ticker(*plan["ticker"])
+
+    if plan.get("needs_sync_obsidian") and "sync_obsidian" in _DEPS:
+        try:
+            obs_path = await asyncio.to_thread(_DEPS["sync_obsidian"], task)
+            if obs_path:
+                task["artifact_path"] = obs_path
+                plan["obs_path"] = obs_path
+
+                def _update_artifact(d: dict):
+                    t = next((x for x in d.get("tasks", []) if x.get("id") == task["id"]), None)
+                    if t:
+                        t["artifact_path"] = obs_path
+
+                await asyncio.to_thread(update_mission_control_data, _update_artifact)
+        except Exception as e:
+            logger.warning(f"[MissionControl] sync_obsidian fehlgeschlagen: {e}")
 
     if plan.get("obs_path"):
         add_ticker("Obsidian", f"Projekt-Dokumentation {os.path.basename(plan['obs_path'])} geschrieben")

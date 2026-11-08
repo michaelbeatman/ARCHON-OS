@@ -178,6 +178,7 @@ Antworte strukturiert mit der korrigierten Fassung."""
             repaired_code = f"Reparatur-Versuch fehlgeschlagen: {err}"
 
         # 3. Loggen
+        action_desc = f"Rollback {affected_file}" if rollback_applied else ("Rollback übersprungen (keine Datei)" if not affected_file else f"Rollback {affected_file} ({rollback_res.get('status')})")
         with self._get_conn() as conn:
             conn.execute("""
                 INSERT INTO task_healing_logs 
@@ -187,7 +188,7 @@ Antworte strukturiert mit der korrigierten Fassung."""
                 task_id,
                 attempt,
                 error_output[:1000],
-                f"Rollback {affected_file or 'alle'} + Reflection Prompt",
+                f"{action_desc} + Reflection Prompt",
                 1 if rollback_ok else 0,
                 1 if repaired_ok else 0
             ))

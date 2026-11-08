@@ -377,3 +377,73 @@ async def get_hud_telemetry():
         },
         "logs": logs,
     }
+
+
+import time
+
+_TELEMETRY_CACHE = {"ts": 0.0, "containers": 0}
+
+
+def _count_running_containers() -> int:
+    """Echte Zahl laufender Container (60 s gecacht, damit der Endpunkt billig bleibt)."""
+    now = time.time()
+    if now - _TELEMETRY_CACHE["ts"] < 60 and _TELEMETRY_CACHE["ts"]:
+        return _TELEMETRY_CACHE["containers"]
+    count = 0
+    try:
+        import subprocess
+
+        out = subprocess.run(["docker", "ps", "-q"], capture_output=True, text=True, timeout=3)
+        count = len([x for x in out.stdout.splitlines() if x.strip()]) if out.returncode == 0 else 0
+    except Exception:
+        count = 0
+    if count == 0:
+        # Fallback: docker-socket-proxy im Docker-Netz
+        try:
+            import json as _json
+            import urllib.request as _url
+
+            for host in ("http://docker-socket-proxy:2375", "http://host.docker.internal:2375"):
+                try:
+                    with _url.urlopen(f"{host}/containers/json", timeout=3) as resp:
+                        count = len(_json.loads(resp.read()))
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+    _TELEMETRY_CACHE.update({"ts": now, "containers": count})
+    return count
+
+
+def _get_running_tasks_count() -> int:
+    try:
+        import sqlite3 as _sql
+
+        with _sql.connect("file:/opt/data/kanban.db?mode=ro", uri=True, timeout=2) as _conn:
+            return _conn.execute("SELECT count(*) FROM tasks WHERE status = 'in_progress'").fetchone()[0]
+    except Exception:
+        return 0
+
+
+@router.get("/api/v1/telemetry/dashboard")
+def api_telemetry_dashboard():
+    """Live-Kennzahlen. Keine festen Werte — alles wird zur Laufzeit ermittelt."""
+    import main as app_main
+
+    tasks_running = _get_running_tasks_count()
+    app_start_ts = getattr(app_main, "_APP_START_TS", time.time())
+    uptime_seconds = max(0, int(time.time() - app_start_ts))
+    hours, rest = divmod(uptime_seconds, 3600)
+    minutes = rest // 60
+
+    load_agents_fn = getattr(app_main, "load_agents", lambda: [])
+
+    return {
+        "active_agents": len(load_agents_fn()),
+        "tasks_running": tasks_running,
+        "network_ops": _count_running_containers(),
+        "avg_uptime": f"{hours}h {minutes}m",
+        "uptime_seconds": uptime_seconds,
+    }
+

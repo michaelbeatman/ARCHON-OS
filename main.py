@@ -319,6 +319,8 @@ from archon.routers.telemetry import (
     api_get_agent_activity,
     api_get_agent_projects,
     get_hud_telemetry,
+    _count_running_containers,
+    api_telemetry_dashboard,
 )
 app.include_router(_telemetry_router)
 
@@ -1287,65 +1289,6 @@ from archon.routers.kanban import (
 )
 app.include_router(_kanban_router)
 
-_TELEMETRY_CACHE = {"ts": 0.0, "containers": 0}
-
-
-def _count_running_containers() -> int:
-    """Echte Zahl laufender Container (60 s gecacht, damit der Endpunkt billig bleibt)."""
-    now = time.time()
-    if now - _TELEMETRY_CACHE["ts"] < 60 and _TELEMETRY_CACHE["ts"]:
-        return _TELEMETRY_CACHE["containers"]
-    count = 0
-    try:
-        import subprocess
-        out = subprocess.run(["docker", "ps", "-q"], capture_output=True, text=True, timeout=3)
-        count = len([x for x in out.stdout.splitlines() if x.strip()]) if out.returncode == 0 else 0
-    except Exception:
-        count = 0
-    if count == 0:
-        # Fallback: docker-socket-proxy im Docker-Netz
-        try:
-            import json as _json
-            import urllib.request as _url
-            for host in ("http://docker-socket-proxy:2375", "http://host.docker.internal:2375"):
-                try:
-                    with _url.urlopen(f"{host}/containers/json", timeout=3) as resp:
-                        count = len(_json.loads(resp.read()))
-                        break
-                except Exception:
-                    continue
-        except Exception:
-            pass
-    _TELEMETRY_CACHE.update({"ts": now, "containers": count})
-    return count
-
-
-@app.get("/api/v1/telemetry/dashboard")
-def api_telemetry_dashboard():
-    """Live-Kennzahlen. Keine festen Werte — alles wird zur Laufzeit ermittelt."""
-    tasks_running = 0
-    try:
-        import sqlite3 as _sql
-        _conn = _sql.connect("file:/opt/data/kanban.db?mode=ro", uri=True, timeout=2)
-        tasks_running = _conn.execute(
-            "SELECT count(*) FROM tasks WHERE status = 'in_progress'"
-        ).fetchone()[0]
-        _conn.close()
-    except Exception:
-        tasks_running = 0
-
-    uptime_seconds = max(0, int(time.time() - _APP_START_TS))
-    hours, rest = divmod(uptime_seconds, 3600)
-    minutes = rest // 60
-
-    return {
-        "active_agents": len(load_agents()),
-        "tasks_running": tasks_running,
-        "network_ops": _count_running_containers(),
-        "avg_uptime": f"{hours}h {minutes}m",
-        "uptime_seconds": uptime_seconds,
-    }
-
 # --- DOCKER CONTAINER MANAGEMENT ROUTER (ausgelagert nach archon.routers.containers) ---
 from archon.routers.containers import (
     router as _containers_router,
@@ -1418,198 +1361,12 @@ class OSKanbanTaskStatusUpdate(BaseModel):
 
 # Mission-Control-Store -> archon.core.mission_control (Import oben)
 
-def _slugify(text: str) -> str:
-    """Wandelt Text in sauberes, striktes ASCII um (ersetzt Umlaute) für sichere Dateinamen über Docker/NTFS."""
-    text = text.lower()
-    umlaut_map = {
-        'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss',
-        'Ä': 'ae', 'Ö': 'oe', 'Ü': 'ue'
-    }
-    for k, v in umlaut_map.items():
-        text = text.replace(k, v)
-    text = re.sub(r'[^a-z0-9_-]+', '-', text)
-    text = re.sub(r'-+', '-', text).strip('-')
-    if len(text) > 60:
-        text = text[:60].rstrip('-')
-    return text or "task"
-
-def _sync_task_to_obsidian(task: dict):
-    """
-    Führt die Post-Task-Pipeline aus:
-    1. Projektordner-Struktur (01_Zwischenberichte, 02_Medien, 03_Endprodukte) + PROJEKT.md
-    2. Personalakten-Aktualisierung (tasks_completed, Tabellen-Eintrag)
-    3. Self-Improvement Lerneffekt via LocalMemoryBridge
-    4. Paperclip-Status-Schließung
-    5. E-Mail-Versand (falls konfiguriert)
-    """
-    try:
-        from backend.post_task_pipeline import execute_post_task_pipeline
-        pipe_res = execute_post_task_pipeline(task)
-        if pipe_res and pipe_res.get("final_path"):
-            return pipe_res["final_path"]
-    except Exception as e_hook:
-        logger.warning(f"[PostTaskPipeline] Hook-Fehler, weiche auf Fallback aus: {e_hook}")
-
-    task_id = str(task.get("id") or "task-0").strip()
-    raw_title = task.get("title") or "task"
-    task_slug = _slugify(raw_title)
-    # User-Vorgabe 09.10.2026: Datum (YYYYMMDD-) als Präfix statt "task-"
-    _date_prefix = datetime.datetime.now().strftime("%Y%m%d")
-    _tid_core = task_id.replace("task-", "")
-    file_name = f"{_date_prefix}-{_tid_core}-{task_slug}.md"
-    
-    # Bevorzugt /opt/data/obsidian/01_PROJEKTE, fallbacks auf OBSIDIAN_VAULT_DIR und inbox
-    target_dirs = [
-        "/opt/data/obsidian/01_PROJEKTE",
-        os.path.join(OBSIDIAN_VAULT_DIR, "01_PROJEKTE"),
-        os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"),
-        "/opt/data/inbox"
-    ]
-    
-    written_paths = []
-    content = f"""---
-project_id: {task_id}
-date: {datetime.date.today().isoformat()}
-agent: {task.get('agent_name', 'Hermes Agent')}
-model: {task.get('model', 'Universal')}
-tokens_used: {task.get('estimated_tokens', 0)}
-cost_usd: ${task.get('estimated_cost_eur', 0.0):.2f}
-status: completed
----
-# {task.get('title', 'Ohne Titel')}
-
-## Ursprüngliche Anforderung
-{task.get('capture_input') or task.get('title', '')}
-
-## Umsetzungsplan & Ergebnisse
-{task.get('result_summary') or 'Erfolgreich von Archon OS ausgeführt und validiert.'}
-
-## Generierte Artefakte
-- Pfad: /opt/data/obsidian/01_PROJEKTE/{file_name}
-"""
-    for d in target_dirs:
-        try:
-            os.makedirs(d, exist_ok=True)
-            f_path = os.path.join(d, file_name)
-            tmp_path = os.path.join(d, f".{file_name}.tmp_{os.getpid()}_{int(time.time()*1000)}")
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                f.write(content)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, f_path)
-            if os.path.exists(f_path):
-                written_paths.append(f_path)
-                logger.info(f"[Obsidian Sync] Atomar und verifiziert gespeichert: {f_path}")
-        except Exception as err:
-            logger.warning(f"[Obsidian Sync] Fehler beim Schreiben in {d}: {err}")
-            
-    final_path = written_paths[0] if written_paths else f"/opt/data/obsidian/01_PROJEKTE/{file_name}"
-    print(f"[Obsidian Sync] Speicherpfad verifiziert: {final_path}")
-    return final_path
-
-_LIVE_TELEMETRY_CACHE = {"ts": 0.0, "data": None}
-
-def _get_live_telemetry_metrics():
-    now_ts = time.time()
-    if _LIVE_TELEMETRY_CACHE["data"] is not None and (now_ts - _LIVE_TELEMETRY_CACHE["ts"]) < 15.0:
-        return _LIVE_TELEMETRY_CACHE["data"]
-    import sqlite3, glob
-    all_dbs = sorted(glob.glob('/opt/data/profiles/*/state.db') + ['/opt/data/state.db'])
-    if not all_dbs:
-        all_dbs = sorted(glob.glob(os.path.expanduser('~/.hermes/profiles/*/state.db')) + [os.path.expanduser('~/.hermes/state.db')])
-    
-    fifteen_min_ago = now_ts - 900
-    # Tagesbeginn (00:00 Uhr lokaler Kalendertag)
-    today_dt = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_start_ts = today_dt.timestamp()
-
-    # Performance-Optimierung: Nur DBs öffnen, die heute modifiziert wurden oder die globale state.db
-    state_dbs = []
-    for db in all_dbs:
-        try:
-            if not os.path.exists(db):
-                continue
-            if db.endswith("state.db") and "/profiles/" not in db:
-                state_dbs.append(db)
-            elif os.path.getmtime(db) >= today_start_ts:
-                state_dbs.append(db)
-        except Exception:
-            pass
-    if not state_dbs:
-        state_dbs = [d for d in all_dbs if d.endswith("state.db") and "/profiles/" not in d] or all_dbs[:1]
-    
-    tokens_last_15m = 0
-    today_cost = 0.0
-    latest_model = "deepseek/deepseek-v4-flash-0731"
-    latest_tokens = 0
-    model_breakdown = {}
-    all_sessions = []
-    
-    # Minuten-Buckets für die 15-Minuten Sparkline
-    minute_buckets = [0.0] * 15
-    
-    for db in state_dbs:
-        con = None
-        try:
-            con = sqlite3.connect(db, timeout=5.0)
-            con.execute("PRAGMA busy_timeout=5000;")
-            rows = con.execute('''
-                SELECT model, input_tokens, output_tokens, estimated_cost_usd, last_seen 
-                FROM session_model_usage 
-                WHERE last_seen >= ?
-                ORDER BY last_seen DESC LIMIT 200
-            ''', (today_start_ts,)).fetchall()
-            if not rows:
-                rows = con.execute('''
-                    SELECT model, input_tokens, output_tokens, estimated_cost_usd, last_seen 
-                    FROM session_model_usage 
-                    ORDER BY last_seen DESC LIMIT 50
-                ''').fetchall()
-            for r in rows:
-                m, inp, out, cost, lseen = r[0], r[1] or 0, r[2] or 0, r[3] or 0.0, r[4] or 0
-                tot = inp + out
-                all_sessions.append((lseen, m, inp, out, cost, tot))
-                if m:
-                    model_breakdown[m] = model_breakdown.get(m, 0.0) + cost
-                # Echte Aktivität heute
-                if lseen and lseen >= today_start_ts:
-                    today_cost += cost
-                # Echte Aktivität der letzten 15 Minuten
-                if lseen and lseen >= fifteen_min_ago:
-                    tokens_last_15m += tot
-                    bucket_idx = min(14, max(0, int((now_ts - lseen) / 60)))
-                    minute_buckets[14 - bucket_idx] += round(tot / 1000.0, 1)
-        except Exception:
-            pass
-        finally:
-            if con:
-                con.close()
-            
-    all_sessions.sort(key=lambda x: x[0], reverse=True)
-    if all_sessions:
-        latest_model = all_sessions[0][1] or latest_model
-        latest_tokens = all_sessions[0][5] or latest_tokens
-
-    # Echter Durchsatz: Tokens der letzten 15 Min geteilt durch 15 Minuten
-    tpm_real = int(tokens_last_15m / 15) if tokens_last_15m > 0 else 0
-
-    # Sparkline: Wenn in den letzten 15 Min aktiv, dann die echten Minuten-Buckets. Sonst flache Null-Linie.
-    sparkline_vals = minute_buckets
-
-    top_models_cost = sorted(model_breakdown.items(), key=lambda x: x[1], reverse=True)[:5]
-
-    res = {
-        "sparkline_data": sparkline_vals,
-        "today_cost": round(today_cost, 2),
-        "tpm_est": tpm_real,
-        "tokens_15m": tokens_last_15m,
-        "latest_model": latest_model,
-        "latest_tokens": latest_tokens,
-        "top_models_cost": [{"model": m, "cost": round(c, 4)} for m, c in top_models_cost]
-    }
-    _LIVE_TELEMETRY_CACHE["ts"] = time.time()
-    _LIVE_TELEMETRY_CACHE["data"] = res
-    return res
+from archon.services.mission_sync import (
+    _slugify,
+    _sync_task_to_obsidian,
+    _get_live_telemetry_metrics,
+    _LIVE_TELEMETRY_CACHE,
+)
 
 @app.get("/api/v1/events/stream")
 async def sse_events_stream():
@@ -1806,46 +1563,13 @@ from archon.routers.proxies import (
 app.include_router(_proxies_router)
 
 
-@app.get("/hud")
-def get_hud_page():
-    hud_file = os.path.join("static", "hermes-hud", "index.html")
-    if os.path.exists(hud_file):
-        return FileResponse(hud_file)
-    return FileResponse(os.path.join("static", "index.html"))
-
-@app.get("/mobile")
-@app.get("/m")
-def get_mobile_cockpit():
-    return FileResponse(
-        os.path.join("static", "mobile.html"),
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
-    )
-
-@app.get("/manifest.json")
-def get_manifest():
-    manifest_path = os.path.join("static", "manifest.json")
-    if os.path.exists(manifest_path):
-        return FileResponse(manifest_path, media_type="application/manifest+json")
-    return JSONResponse({"name": "Archon Mobile", "short_name": "Archon", "start_url": "/mobile", "display": "standalone"})
-
-@app.get("/v2")
-def get_index_v2():
-    return FileResponse("static/index.html")
-
-@app.get("/")
-def get_index():
-    return FileResponse(
-        os.path.join("static", "index.html"),
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
-    )
+from archon.routers.ui import (
+    get_hud_page,
+    get_mobile_cockpit,
+    get_manifest,
+    get_index_v2,
+    get_index,
+)
 
 try:
     from views_core import router as views_core_router, get_apps_dir

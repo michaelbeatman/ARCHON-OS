@@ -7,6 +7,7 @@ import time
 from typing import List, Optional
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from archon.core.constants import STUDIO_BG_UPLOAD_DIR
@@ -171,3 +172,52 @@ async def api_studio_upload_bg(file: UploadFile = File(...)):
     if hasattr(app_main, "add_ticker"):
         app_main.add_ticker("CSS Studio", f"Hintergrundbild hochgeladen: {out_name}")
     return {"status": "success", "url": f"/static/uploads/{out_name}", "filename": out_name, "size": len(content)}
+
+
+@router.get("/hud")
+def get_hud_page():
+    hud_file = os.path.join("static", "hermes-hud", "index.html")
+    if os.path.exists(hud_file):
+        return FileResponse(hud_file)
+    return FileResponse(os.path.join("static", "index.html"))
+
+
+@router.get("/mobile")
+@router.get("/m")
+def get_mobile_cockpit():
+    return FileResponse(
+        os.path.join("static", "mobile.html"),
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+@router.get("/manifest.json")
+def get_manifest():
+    manifest_path = os.path.join("static", "manifest.json")
+    if os.path.exists(manifest_path):
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    return JSONResponse(
+        {"name": "Archon Mobile", "short_name": "Archon", "start_url": "/mobile", "display": "standalone"}
+    )
+
+
+@router.get("/v2")
+def get_index_v2():
+    return FileResponse("static/index.html")
+
+
+@router.get("/")
+def get_index():
+    return FileResponse(
+        os.path.join("static", "index.html"),
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+

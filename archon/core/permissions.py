@@ -20,6 +20,7 @@ import datetime
 import json
 import os
 import secrets
+import threading
 from typing import Callable, Dict, Optional
 
 from archon.core.runtime import APP_ROOT, add_ticker, logger
@@ -44,6 +45,11 @@ def get_decision_factory() -> Optional[Callable[..., dict]]:
     return _decision_factory
 
 
+# F-09: Load->Append->Save muss unter einer Sperre laufen (zwei gleichzeitige
+# Gate-Anlagen oder Gate-Anlage parallel zur Freigabe sonst verlustbehaftet).
+_GATES_LOCK = threading.Lock()
+
+
 def load_permission_gates() -> dict:
     try:
         if os.path.exists(PERMISSION_GATES_FILE):
@@ -54,13 +60,35 @@ def load_permission_gates() -> dict:
     return {"gates": []}
 
 
-def save_permission_gates(data: dict) -> None:
+def save_permission_gates(data: dict) -> bool:
+    """Schreibt die Gates atomar.
+
+    F-09: Rueckgabe True/False statt stiller Exception-Schluckung —
+    create_permission_gate muss wissen, dass das Gate wirklich auf Platte steht,
+    bevor der Owner per Telegram zur Freigabe aufgefordert wird.
+    """
     try:
         os.makedirs(os.path.dirname(PERMISSION_GATES_FILE), exist_ok=True)
-        with open(PERMISSION_GATES_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        target = PERMISSION_GATES_FILE
+        d = os.path.dirname(os.path.abspath(target)) or "."
+        import tempfile
+        fd, tmp = tempfile.mkstemp(dir=d, prefix=".permission_gates_", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, target)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+        return True
     except Exception as e:
         logger.warning(f"[Gate] Konnte permission_gates nicht speichern: {e}")
+        return False
 
 
 def create_permission_gate(kind: str, detail: str, requested_by: str, payload: dict) -> dict:
@@ -69,19 +97,27 @@ def create_permission_gate(kind: str, detail: str, requested_by: str, payload: d
     Bevorzugt eine echte Kanban-Entscheidung (Status 'review' mit Buttons);
     ohne Decision-Factory oder bei Fehler wird direkt per Telegram gepingt.
     """
-    gates = load_permission_gates()
-    gate_id = f"gate-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2)}"
-    gate = {
-        "id": gate_id,
-        "kind": kind,
-        "detail": detail,
-        "requested_by": requested_by,
-        "payload": payload,
-        "status": "pending",
-        "created_at": datetime.datetime.now().isoformat(),
-    }
-    gates.setdefault("gates", []).append(gate)
-    save_permission_gates(gates)
+    with _GATES_LOCK:
+        gates = load_permission_gates()
+        gate_id = f"gate-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2)}"
+        gate = {
+            "id": gate_id,
+            "kind": kind,
+            "detail": detail,
+            "requested_by": requested_by,
+            "payload": payload,
+            "status": "pending",
+            "created_at": datetime.datetime.now().isoformat(),
+        }
+        gates.setdefault("gates", []).append(gate)
+        saved = save_permission_gates(gates)
+        if not saved:
+            # F-09: liegt das Gate nicht auf Platte, darf der Owner auch nicht
+            # zur Freigabe aufgefordert werden — er wuerde eine Ablehnung sehen,
+            # obwohl er freigegeben hat.
+            raise RuntimeError(
+                f"Permission-Gate {gate_id} konnte nicht gespeichert werden — Anlage abgebrochen."
+            )
 
     knopf_text = {
         "tools_erweiterung": "🧰 Neue Tools vergeben",

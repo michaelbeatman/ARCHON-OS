@@ -497,6 +497,14 @@ def delete_profile(profile_id: str, *, approved_gate_id: str = "") -> dict:
             return {"status": "pending_owner_approval", "gate_id": gate["id"],
                     "message": "Loeschen braucht deine Telegram-Bestätigung. "
                                f"Antworte: 'Erlauben {gate['id']}' oder 'Verbieten {gate['id']}'."}
+        else:
+            gate = _pend[0]
+            return {
+                "status": "pending_owner_approval",
+                "gate_id": gate.get("id", ""),
+                "message": "Loeschen wartet bereits auf deine Telegram-Bestätigung. "
+                           f"Antworte: 'Erlauben {gate.get('id', '')}' oder 'Verbieten {gate.get('id', '')}'."
+            }
 
     archived_locations = []
     for p_base in get_hermes_profiles_base_dirs():

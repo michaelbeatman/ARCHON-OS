@@ -11350,6 +11350,21 @@ async def n8n_proxy(request: Request, path: str = ""):
 
 @app.api_route("/assets/{path:path}", methods=["GET", "HEAD"])
 async def n8n_assets_proxy(request: Request, path: str = ""):
+    if path:
+        try:
+            from utils.path_jail import safe_path
+            assets_root = os.path.abspath("assets")
+            if os.path.exists(assets_root):
+                target = safe_path(
+                    os.path.join(assets_root, path),
+                    must_exist=True,
+                    extra_roots=[assets_root],
+                    allow_dirs=False
+                )
+                if target and os.path.isfile(target):
+                    return FileResponse(target)
+        except Exception:
+            pass
     return await forward_to_n8n(request, f"assets/{path}")
 
 @app.api_route("/rest/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])

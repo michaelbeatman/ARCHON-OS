@@ -5,9 +5,9 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`; Code-Stand `48d9b7db` (Session 5) —
+Stand: Branch `refactor/a5-di-config`; Code-Stand `0edc2870` (Session 5) —
 `git log --oneline -1` liefert den aktuellen Kopf, bewusst kein Sha hier.
-Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **789 passed / 8 skipped**, Working Tree sauber.
+Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **860 passed / 8 skipped**, Working Tree sauber.
 
 ---
 

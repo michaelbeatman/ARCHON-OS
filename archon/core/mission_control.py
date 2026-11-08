@@ -71,7 +71,10 @@ def _load_mission_control_data() -> dict:
         try:
             with open(MISSION_CONTROL_FILE, "r", encoding="utf-8") as f:
                 d = json.load(f)
-                if d and isinstance(d, dict) and d.get("tasks"):
+                # F-04: Ein Store mit tasks-Liste (auch LEER nach Archivierung)
+                # ist autoritativ — vorher belebte ein bewusst leeres Board alte
+                # SQLite-Tasks wieder.
+                if isinstance(d, dict) and isinstance(d.get("tasks"), list):
                     return d
         except Exception as e:
             print(f"Error loading mission_control_data: {e}")

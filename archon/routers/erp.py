@@ -73,7 +73,11 @@ def api_erp_document_print(
                 {"pos": 1, "desc": f"Dienstleistung / Projektleistungen gem. Vorgang {doc_id}", "qty": 1, "unit": "Pauschal", "price": float(amount_net)}
             ]
 
-    rendered = corporate_manager.render_template(template_type=tmpl_type, company_id=company_id, custom=custom)
+    try:
+        rendered = corporate_manager.render_template(template_type=tmpl_type, company_id=company_id, custom=custom)
+    except ValueError as verr:
+        # R-21: unbekannte explizite company_id -> 404 statt falscher Stammdaten.
+        raise HTTPException(status_code=404, detail=str(verr))
     doc_num = custom.get("offer_num") or custom.get("order_num") or custom.get("invoice_num") or doc_id
     autoprint_script = "<script>window.onload = function() { window.print(); };</script>" if autoprint else ""
     html_content = f"""<!DOCTYPE html>

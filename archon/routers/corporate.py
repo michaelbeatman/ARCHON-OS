@@ -81,5 +81,10 @@ def api_render_corporate_template(request: Request, payload: Dict = Body(...)):
     template_type = payload.get("template_type", "letterhead")
     company_id = payload.get("company_id")
     custom = payload.get("custom", {})
-    result = corporate_manager.render_template(template_type=template_type, company_id=company_id, custom=custom)
+    try:
+        result = corporate_manager.render_template(template_type=template_type, company_id=company_id, custom=custom)
+    except ValueError as verr:
+        # R-21: explizit angefragte, unbekannte Company darf nicht still die
+        # Stammdaten einer anderen Rechtsperson drucken.
+        raise HTTPException(status_code=404, detail=str(verr))
     return result

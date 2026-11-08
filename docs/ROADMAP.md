@@ -93,11 +93,13 @@ Beweis: `update-embeddings` → 11 Chunks eingebettet, `Successfully added 11 ve
 Prozess lebt, Workspace hat Dokumente. Sync-Batch (10 Dateien) läuft: Status `… -> OK`, Stand im
 State-File wächst (`/opt/data/synced_files.json`).
 
-**Offen (Michaels Entscheidung):** Tempo. Auf dieser CPU braucht ein Buchkapitel ~90–120 s
-(11 Chunks). Für **4.433** ausstehende Dateien wären das grob **100+ Stunden**. Sinnvoll sind
-kleine, priorisierte Pakete (z. B. nur `02_Wissensbibliothek`) oder ein Cloud-Embedder für den
-Massenlauf. Außerdem bei sehr großen Batches beobachten: `docker exec`-Läufe wurden mit 137 beendet,
-die Container selbst liefen weiter (kein Restart, kein OOM im Log).
+**Tempo (gemessen, nicht geschätzt):** ein Buchkapitel = **176 s** (Upload + 18 Chunks einbetten).
+Zwei Verbesserungen sind drin: Client-Timeout konfigurierbar (`RAG_SYNC_TIMEOUT`, Default 900 s statt 180 s
+hatte den Client abgebrochen, während der Server fertig einbettete — `3b0650f1`) und
+`OLLAMA_EMBEDDING_BATCH_SIZE=16` statt 1 (`859127c0`, jetzt 2 Aufrufe statt 18 pro Kapitel).
+Der Rest ist reine CPU-Zeit: **100 Dateien ≈ 5 h, 500 ≈ 24 h, alle 4.433 ≈ 217 h.** Auf dieser Hardware
+ist der Vollsync kein sinnvoller Einzelvorgang — entweder ein kuratiertes Paket über Nacht oder ein
+schnelleres Embedding-Modell (`all-minilm`, 384 Dimensionen) bzw. ein Cloud-Embedder für den Massenlauf.
 
 ---
 

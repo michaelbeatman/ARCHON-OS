@@ -137,15 +137,20 @@ def _load_mission_control_data() -> dict:
         except Exception:
             pass
 
+    # Z-08: Der Fallback-Store darf KEINE erfundene Telemetrie liefern. Vorher
+    # stand hier tpm_current=184200 / tpm_limit=2000000 — die Kacheln zeigten
+    # "184k TPM" als Messwert, obwohl nie gemessen wurde. Jetzt: 0-Werte plus
+    # expliziter source-Hinweis, damit Clients den Fallback erkennen koennen.
     return {
         "tasks": real_tasks,
         "metrics": {
-            "tpm_current": 184200,
-            "tpm_limit": 2000000,
-            "cost_today_usd": 0.00,
-            "cost_limit_usd": 5.00
+            "tpm_current": 0,
+            "tpm_limit": 0,
+            "cost_today_usd": 0.0,
+            "cost_limit_usd": 0.0
         },
-        "audit_logs": []
+        "audit_logs": [],
+        "source": "fallback_no_store"
     }
 
 def _save_mission_control_data(data: dict):

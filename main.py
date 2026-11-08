@@ -6932,7 +6932,10 @@ def _safe_config_target(path: Optional[str]) -> Optional[str]:
 def api_get_hermes_form_config(path: Optional[str] = None):
     import yaml
     active_path, all_configs = _get_hermes_config_paths()
-    target_path = path if (path and os.path.exists(path)) else active_path
+    if path:
+        target_path = _safe_config_target(path)
+    else:
+        target_path = active_path
     
     parsed = {}
     content = ""
@@ -7557,10 +7560,14 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
     }
 
 @app.get("/api/hermes/raw_config")
-def api_get_hermes_raw_config(path: Optional[str] = None):
+def api_get_hermes_raw_config(request: Request, path: Optional[str] = None):
+    require_admin(request)  # RBAC: Admin-Sache (R-11)
     import yaml
     active_path, all_configs = _get_hermes_config_paths()
-    target_path = path if (path and os.path.exists(path)) else active_path
+    if path:
+        target_path = _safe_config_target(path)
+    else:
+        target_path = active_path
     
     content = ""
     parsed = {}
@@ -7568,7 +7575,6 @@ def api_get_hermes_raw_config(path: Optional[str] = None):
         try:
             with open(target_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            parsed = yaml.safe_load(content) or {}
         except Exception as e:
             content = f"# Fehler beim Lesen von {target_path}:\n# {str(e)}"
             
@@ -7578,6 +7584,14 @@ def api_get_hermes_raw_config(path: Optional[str] = None):
         _masked_content = mask_yaml_secrets(content)
     except Exception:
         _masked_content = content
+
+    try:
+        parsed = yaml.safe_load(_masked_content) or {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+    except Exception:
+        parsed = {}
+
     return {
         "active_path": active_path,
         "loaded_path": target_path,

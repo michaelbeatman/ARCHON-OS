@@ -282,6 +282,10 @@ def api_delete_hermes_profile(request: Request, profile_id: str, gate_approved_i
 
 @router.post("/api/hermes/profiles/{profile_id}/favorite")
 def api_toggle_hermes_profile_favorite(profile_id: str, is_fav: Optional[bool] = None):
+    # F-11: keine Erfolgsmeldung ohne Schreibbeleg. Vorher meldete der Endpoint
+    # {"status": "success", "is_favorite": False}, wenn kein profile.yaml gefunden
+    # oder der Write fehlschlug.
+    updated_path = None
     new_fav_state = None
     for p_base in get_hermes_profiles_base_dirs():
         yaml_path = os.path.join(p_base, profile_id, "profile.yaml")
@@ -294,11 +298,21 @@ def api_toggle_hermes_profile_favorite(profile_id: str, is_fav: Optional[bool] =
                 else:
                     ydata["is_favorite"] = not ydata.get("is_favorite", False)
                 new_fav_state = ydata["is_favorite"]
-                with open(yaml_path, "w", encoding="utf-8") as f:
+                # F-11: Temp + os.replace statt direktem Write (kein Halbstand).
+                tmp_path = yaml_path + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as f:
                     yaml.dump(ydata, f, allow_unicode=True, sort_keys=False)
+                os.replace(tmp_path, yaml_path)
+                updated_path = yaml_path
+                break
             except Exception as e:
                 logger.warning(f"[Profiles] Error updating favorite in {yaml_path}: {e}")
 
+    if updated_path is None:
+        # F-11: weder geschrieben noch gefunden -> ehrlicher Fehler (404), damit
+        # das UI eine falsche Profil-ID nicht als Erfolg zeigt.
+        raise HTTPException(status_code=404, detail=f"Profil {profile_id} nicht gefunden oder nicht beschreibbar.")
+
     invalidate_hermes_profiles_cache()
     api_get_hermes_profiles()
-    return {"status": "success", "profile_id": profile_id, "is_favorite": new_fav_state if new_fav_state is not None else False}
+    return {"status": "success", "profile_id": profile_id, "is_favorite": new_fav_state, "path": updated_path}

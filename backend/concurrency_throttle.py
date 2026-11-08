@@ -35,13 +35,12 @@ def get_concurrency_config() -> Dict[str, Any]:
 
 def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:
     try:
-        current = {}
-        if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                current = json.load(f)
-        current["concurrency"] = new_cfg
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(current, f, indent=2, ensure_ascii=False)
+        from backend.settings_json import atomic_update_settings
+
+        def _apply(current):
+            current["concurrency"] = new_cfg
+
+        atomic_update_settings(SETTINGS_FILE, _apply)
         return True
     except Exception as e:
         print(f"[ConcurrencyThrottle] Config save error: {e}", file=sys.stderr)

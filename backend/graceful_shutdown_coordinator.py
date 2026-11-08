@@ -210,8 +210,12 @@ class GracefulShutdownCoordinator:
             if os.path.exists(dbp):
                 try:
                     with sqlite3.connect(dbp, timeout=2.0) as conn:
+                        # N-07: 'tasks' hat KEINE Spalte 'updated_at' (pragma
+                        # table_info(tasks) -> 0 Treffer). Das SET auf die
+                        # fehlende Spalte warf OperationalError, wurde geschluckt
+                        # und der Task nie als 'checkpointed' markiert.
                         conn.execute(
-                            "UPDATE tasks SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            "UPDATE tasks SET status = ? WHERE id = ?",
                             (new_status, task_id)
                         )
                         conn.commit()
@@ -226,13 +230,18 @@ class GracefulShutdownCoordinator:
         flushed_dbs = []
 
         # 1. Async Write Batcher leeren
+        # N-03: das Modul exportiert die Singleton-INSTANZ (async_write_batcher),
+        # keinen get_write_batcher()-Factory. Der ImportError wurde vorher vom
+        # blanket-except geschluckt — der RAM-Puffer blieb liegen, das Log
+        # meldete trotzdem "WAL-Flush abgeschlossen".
         try:
-            from backend.async_write_batcher import get_write_batcher
-            wb = get_write_batcher()
-            wb.flush()
+            from backend.async_write_batcher import async_write_batcher as write_batcher
+            flush_info = write_batcher.flush()
             flushed_dbs.append("async_write_batcher_ram_queue")
-        except Exception:
-            pass
+            if isinstance(flush_info, dict) and flush_info.get("status") == "error":
+                print(f"[GracefulShutdown] Batcher-Flush meldet Fehler: {flush_info}", file=sys.stderr)
+        except Exception as e:
+            print(f"[GracefulShutdown] Batcher-Flush fehlgeschlagen: {e}", file=sys.stderr)
 
         # 2. Alle SQLite-Datenbanken einsammeln
         candidate_paths = [
@@ -324,8 +333,10 @@ class GracefulShutdownCoordinator:
             if os.path.exists(dbp):
                 try:
                     with sqlite3.connect(dbp, timeout=5.0) as conn:
+                        # N-07: gleicher Fix wie in _update_task_db_status —
+                        # 'updated_at' existiert in tasks nicht.
                         cur = conn.execute(
-                            "UPDATE tasks SET status = 'todo', updated_at = CURRENT_TIMESTAMP WHERE status = 'in_progress'"
+                            "UPDATE tasks SET status = 'todo' WHERE status = 'in_progress'"
                         )
                         count += cur.rowcount
                         conn.commit()

@@ -22,7 +22,7 @@ from archon.core.mission_control import (
     _save_mission_control_data as _default_save_mc,
     _write_mc_atomic,
 )
-from archon.core.runtime import logger
+from archon.core.runtime import APP_ROOT, logger
 
 
 # Type aliases für DI
@@ -49,7 +49,7 @@ def _task_by_id(data: dict, task_id: str):
     return next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
 
 
-def _merge_task_delta(fresh: dict, local_data: dict, task_id: str, local_tasks: list) -> None:
+def _merge_task_delta(fresh: dict, local_data: dict, task_id: str, local_tasks: list, orig_ids: Optional[set] = None) -> None:
     """Uebertraegt nur die Aenderungen DIESES Tasks in den frisch geladenen Store.
 
     Der Task wird ueber einen langen await (LLM-Dispatch) hinweg als Snapshot
@@ -70,8 +70,16 @@ def _merge_task_delta(fresh: dict, local_data: dict, task_id: str, local_tasks: 
         else:
             fresh_tasks.insert(0, local_task)
 
+    # R-18: Es werden NUR Tasks ergaenzt, die WAEHREND dieses Laufs neu
+    # entstanden sind (nicht in orig_ids, eigenes Kind). Vorher wurde die
+    # komplette alte Snapshot-Liste mitgegeben — Tasks, die der Nutzer
+    # waehrend des awaits verworfen hatte, wurden dadurch wiederbelebt.
+    if orig_ids is None:
+        orig_ids = set()
     for sub in local_tasks or []:
-        if sub.get("id") not in fresh_ids:
+        if sub.get("id") not in fresh_ids \
+                and sub.get("id") not in orig_ids \
+                and sub.get("parent_task_id") == task_id:
             fresh_tasks.insert(0, sub)
 
 
@@ -113,6 +121,9 @@ async def _execute_mission_control_task(
         fan_in = _fan_in_maybe_start_synthesis
     data = load_mc()
     tasks = data.get("tasks", [])
+    # R-18: Schnappschuss der Task-IDs VOR dem LLM-await — nur waerend des Laufs
+    # neu erzeugte Tasks duerfen im Merge wieder eingefuegt werden.
+    orig_task_ids = {t.get("id") for t in tasks}
     task = next((t for t in tasks if t.get("id") == task_id), None)
     if not task:
         return
@@ -125,7 +136,7 @@ async def _execute_mission_control_task(
         Ohne update_mc: RuntimeError (wie in Commit a4267fa2 an anderer Stelle).
         """
         if update_mc is not None:
-            update_mc(lambda fresh: _merge_task_delta(fresh, data, task_id, tasks))
+            update_mc(lambda fresh: _merge_task_delta(fresh, data, task_id, tasks, orig_task_ids))
         else:
             raise RuntimeError(
                 "_execute_mission_control_task: Parameter 'update_mc' fehlt. "
@@ -287,7 +298,12 @@ def _paperclip_hire_profile_by_id(
         from archon.core.runtime import add_ticker as ticker
 
     try:
-        set_status(profile_id, "active", current_task_id)
+        ok = set_status(profile_id, "active", current_task_id)
+        if not ok:
+            # R-19: kein Ticker/Erfolgslog, wenn das Status-Update den Agenten
+            # nicht wirklich aktiviert hat (SSOT weg, Profil fehlt, Schreibfehler).
+            logger.warning(f"[AutoHire] Status-Update für '{profile_id}' wirkungslos — Agent bleibt inaktiv.")
+            return False
         prof = next((p for p in profiles if p.get("id") == profile_id), None)
         person_name = (prof.get("person_name") or prof.get("name") or profile_id) if prof else profile_id
         ticker("AutoHire", f"'{person_name}' aktiviert & Status -> active")
@@ -305,18 +321,26 @@ def _set_agent_profile_status(
     *,
     rolling_backup: RollingBackup = None,
     invalidate_profiles: InvalidateProfiles = None,
-) -> None:
+) -> bool:
     """Setzt status (und optional current_task_id) in agent_profiles.json (mit Rolling Backup)."""
     if rolling_backup is None:
-        from archon.core.runtime import create_rolling_backup as rolling_backup
+        # R-19: create_rolling_backup lebt in archon.core.profiles, NICHT in
+        # archon.core.runtime — der falsche Default-Import flog in den
+        # blanket-except und der Auto-Hire meldete still "aktiviert", obwohl
+        # nichts geschrieben wurde.
+        from archon.core.profiles import create_rolling_backup as rolling_backup
     if invalidate_profiles is None:
         from archon.core.profiles import invalidate_hermes_profiles_cache as invalidate_profiles
 
     try:
-        _app_root = os.path.dirname(os.path.abspath(__file__))
-        ssot = os.path.join(_app_root, "agent_profiles.json")
+        # R-19: SSOT ist agent_profiles.json im REPO-ROOT (runtime.APP_ROOT).
+        # Vorher stand hier os.path.dirname(__file__) = archon/core — die
+        # Schattenkopie archon/core/agent_profiles.json wurde in git versioniert,
+        # die Wurzeldatei blieb unberuehrt.
+        ssot = os.path.join(APP_ROOT, "agent_profiles.json")
         if not os.path.exists(ssot):
-            return
+            logger.warning(f"[ProfileStatus] SSOT fehlt: {ssot} — Status-Update nicht moeglich.")
+            return False
         with open(ssot, "r", encoding="utf-8") as f:
             all_profiles = json.load(f)
         changed = False
@@ -335,8 +359,12 @@ def _set_agent_profile_status(
                 json.dump(all_profiles, f, indent=2, ensure_ascii=False)
             invalidate_profiles()
             logger.info(f"[ProfileStatus] '{profile_id}' → status='{status}'" + (f", task={task_id}" if task_id else ""))
+            return True
+        logger.warning(f"[ProfileStatus] Profil '{profile_id}' nicht in {ssot} gefunden.")
+        return False
     except Exception as e:
         logger.warning(f"[ProfileStatus] Fehler beim Status-Update für '{profile_id}': {e}")
+        return False
 
 
 def _merge_sandy_delta(fresh: dict, local_data: dict, parent_id: str, created_sub_ids: list, local_tasks: list) -> None:

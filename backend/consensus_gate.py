@@ -119,9 +119,10 @@ Regeln:
             clean_json = clean_json.split("```")[1].split("```")[0].strip()
 
         parsed = json.loads(clean_json)
-        approved = bool(parsed.get("approved", True))
-        score = int(parsed.get("score", 8))
-        verdict = parsed.get("verdict", "APPROVED")
+        # D-06: fehlende Felder duerfen NICHT als Zustimmung gelesen werden.
+        approved = bool(parsed.get("approved", False))
+        score = int(parsed.get("score", 0))
+        verdict = parsed.get("verdict", "REJECTED_REVISION_REQUIRED")
         critique = parsed.get("critique", "Keine gravierenden Mängel gefunden.")
 
         _record_decision(task_id, task_title, "dual_gate", approved, verdict, score, [parsed], critique)
@@ -135,13 +136,15 @@ Regeln:
             "risks": parsed.get("risks", [])
         }
     except Exception as e:
+        # D-06: Fail-closed — ein ausgefallener Revisor darf die Freigabe nicht
+        # erfinden. Vorher: {"approved": True, "score": 7, "APPROVED_WITH_WARNING"}.
         return {
             "task_id": task_id,
-            "approved": True,
-            "score": 7,
-            "verdict": "APPROVED_WITH_WARNING",
+            "approved": False,
+            "score": 0,
+            "verdict": "REVIEW_FAILED",
             "critique": f"Automatisierte Revisor-Prüfung konnte nicht abgeschlossen werden: {e}",
-            "risks": ["Manueller Check empfohlen"]
+            "risks": ["Manueller Check zwingend erforderlich"]
         }
 
 async def run_tri_agent_council(
@@ -205,7 +208,8 @@ Antworte NUR mit JSON:
                 c = c.split("```")[1].split("```")[0].strip()
             return json.loads(c)
         except Exception as e:
-            return {"juror": j["role"], "approved": True, "score": 7, "reason": f"Fallback: {e}"}
+            # D-06: Ein ausgefallener Juror stimmt NICHT zu (fail-closed).
+            return {"juror": j["role"], "approved": False, "score": 0, "reason": f"Fallback: {e}"}
 
     votes = await asyncio.gather(*[_get_juror_vote(j) for j in jurors])
     yes_votes = sum(1 for v in votes if v.get("approved") is True)

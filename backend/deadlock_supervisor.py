@@ -14,6 +14,29 @@ from typing import Dict, Any, List, Optional
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KANBAN_DB = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
 
+def _to_dt(value) -> Optional[datetime.datetime]:
+    """Wandelt einen Zeitstempel (Epoch-Float/Int oder ISO-String) in datetime um.
+
+    N-06: die Kanban-DB deklariert created_at als INTEGER/Epoch; andere Quellen
+    liefern ISO-Strings. fromisoformat allein uebersprang jede Zeile.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return datetime.datetime.fromtimestamp(float(value))
+    s = str(value).strip()
+    try:
+        return datetime.datetime.fromtimestamp(float(s))
+    except ValueError:
+        pass
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        return datetime.datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
 class DeadlockSupervisor:
     def __init__(self, db_path: str = KANBAN_DB):
         self.db_path = db_path
@@ -48,20 +71,33 @@ class DeadlockSupervisor:
         try:
             with self._get_conn() as conn:
                 cur = conn.cursor()
-                cur.execute("""
-                    SELECT id, title, assignee, status, created_at, body
-                    FROM tasks
-                    WHERE status IN ('in_progress', 'blocked')
-                """)
+                # N-06: 'last_heartbeat_at' existiert nicht in jedem Schema —
+                # Spalte optional ermitteln.
+                cols = [r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()]
+                has_heartbeat = "last_heartbeat_at" in cols
+                sel = "id, title, assignee, status, created_at, body" + (", last_heartbeat_at" if has_heartbeat else "")
+                cur.execute(
+                    f"SELECT {sel} FROM tasks WHERE status IN ('in_progress', 'blocked')"
+                )
                 active_tasks = cur.fetchall()
 
                 for t in active_tasks:
                     t_id = t["id"]
-                    c_at_str = t["created_at"]
-                    try:
-                        c_at = datetime.datetime.fromisoformat(c_at_str)
-                    except Exception:
+                    # N-06: kanban.db speichert created_at als INTEGER (Epoch),
+                    # nicht als ISO-String — fromisoformat warf, das except
+                    # uebersprang jede Zeile: "Keine Deadlocks" fuer immer.
+                    c_at = _to_dt(t["created_at"])
+                    if c_at is None:
                         continue
+
+                    # Stagnation ab dem LETZTEN Heartbeat messen, nicht ab
+                    # Erstellung: ein legitim langer Task mit lebendem Worker
+                    # wurde vorher auf 'todo' zurueckgesetzt, waehrend er noch
+                    # claim_lock/worker_pid hielt (Doppelausfuehrung).
+                    if has_heartbeat and t["last_heartbeat_at"]:
+                        last_beacon = _to_dt(t["last_heartbeat_at"])
+                        if last_beacon is not None:
+                            c_at = max(c_at, last_beacon)
 
                     age_sec = (now - c_at).total_seconds()
                     if age_sec > stagnation_threshold_seconds:

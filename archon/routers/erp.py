@@ -7,6 +7,7 @@ Helfer kommen aus archon.core.runtime.
 
 import asyncio
 import datetime
+import html
 import json
 import os
 import re
@@ -56,31 +57,42 @@ def api_erp_document_print(
             tmpl_type = "invoice"
     else:
         # Fallback für dynamische / simulierte Belege aus CRM Vorgänge
+        # D-15: doc_id ist ein Pfadsegment und darf nicht roh in HTML landen
+        # (Reflected XSS im App-Origin).
+        safe_doc_id = html.escape(doc_id)
         if doc_id.upper().startswith("ANG") or doc_type in ("offer", "ang"):
             tmpl_type = "offer"
-            custom["offer_num"] = doc_id
+            custom["offer_num"] = safe_doc_id
         elif doc_id.upper().startswith("AB") or doc_type in ("order", "order_confirmation", "ab"):
             tmpl_type = "order_confirmation"
-            custom["order_num"] = doc_id
+            custom["order_num"] = safe_doc_id
         else:
             tmpl_type = "invoice"
-            custom["invoice_num"] = doc_id
+            custom["invoice_num"] = safe_doc_id
             
         if entity_name:
-            custom["recipient_name"] = entity_name
+            custom["recipient_name"] = html.escape(entity_name)
         if amount_net and amount_net > 0:
             custom["items"] = [
-                {"pos": 1, "desc": f"Dienstleistung / Projektleistungen gem. Vorgang {doc_id}", "qty": 1, "unit": "Pauschal", "price": float(amount_net)}
+                {"pos": 1, "desc": f"Dienstleistung / Projektleistungen gem. Vorgang {safe_doc_id}", "qty": 1, "unit": "Pauschal", "price": float(amount_net)}
             ]
 
-    rendered = corporate_manager.render_template(template_type=tmpl_type, company_id=company_id, custom=custom)
-    doc_num = custom.get("offer_num") or custom.get("order_num") or custom.get("invoice_num") or doc_id
+    try:
+        rendered = corporate_manager.render_template(template_type=tmpl_type, company_id=company_id, custom=custom)
+    except ValueError as verr:
+        # R-21: unbekannte explizite company_id -> 404 statt falscher Stammdaten.
+        raise HTTPException(status_code=404, detail=str(verr))
     autoprint_script = "<script>window.onload = function() { window.print(); };</script>" if autoprint else ""
+    # D-15: Das Pfadsegment doc_id ist die Angreifer-Kontrolle — im <title>
+    # GENAU EINMAL escapen (nicht die bereits escapten custom-Werte verwenden,
+    # sonst Doppel-Escaping). Die custom-Werte (invoice_num etc.) sind fuer den
+    # HTML-Body von render_template bereits escapt.
+    safe_doc_num = html.escape(str(doc_id))
     html_content = f"""<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Belegdruck - {doc_num}</title>
+  <title>Belegdruck - {safe_doc_num}</title>
   <style>
     @page {{ size: A4; margin: 12mm; }}
     body {{ margin: 0; padding: 24px; background: #f8fafc; display: flex; justify-content: center; font-family: system-ui, -apple-system, sans-serif; }}

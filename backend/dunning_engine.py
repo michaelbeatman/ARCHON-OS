@@ -309,6 +309,26 @@ class DunningEngine:
             lvl = d_dict["level"]
             now_iso = datetime.datetime.now().isoformat()
 
+            # R-22: Status- und Stufenpruefung VOR dem Versand.
+            # (a) Eine bezahlte/abgeschriebene Rechnung darf nie gemahnt werden.
+            inv_stat = conn.execute(
+                "SELECT status, dunning_level FROM invoices WHERE invoice_id = ?", (inv_id,)
+            ).fetchone()
+            if not inv_stat:
+                raise ValueError(f"Rechnung {inv_id} nicht gefunden.")
+            inv_status, inv_level = inv_stat[0], inv_stat[1]
+            if inv_status in ("paid", "written_off"):
+                raise ValueError(f"Rechnung {inv_id} ist {inv_status} — keine Mahnung zulaessig.")
+            # (b) Stufe N setzt Stufe N-1 voraus (kein Stufe-3-Versand ohne 1/2).
+            if lvl >= 2 and inv_level != lvl - 1:
+                raise ValueError(
+                    f"Mahnstufe {lvl} fuer Rechnung {inv_id} erfordert zuerst Stufe {lvl - 1} "
+                    f"(aktueller Rechnungsstand: Stufe {inv_level})."
+                )
+            # (c) Ein bereits versandter Entwurf wird nicht erneut versendet.
+            if d_dict["status"] == "sent":
+                raise ValueError(f"Mahnentwurf {dunning_id} wurde bereits versendet.")
+
             # 1. Mahnung auf sent setzen
             conn.execute("""
                 UPDATE dunning_history

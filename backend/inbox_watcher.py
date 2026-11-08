@@ -10,6 +10,7 @@ import sys
 import time
 import json
 import asyncio
+import uuid
 import datetime
 import shutil
 from typing import Dict, Any, List
@@ -38,13 +39,12 @@ def get_inbox_config() -> Dict[str, Any]:
 
 def save_inbox_config(new_cfg: Dict[str, Any]) -> bool:
     try:
-        current = {}
-        if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                current = json.load(f)
-        current["inbox_watcher"] = new_cfg
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(current, f, indent=2, ensure_ascii=False)
+        from backend.settings_json import atomic_update_settings
+
+        def _apply(current):
+            current["inbox_watcher"] = new_cfg
+
+        atomic_update_settings(SETTINGS_FILE, _apply)
         return True
     except Exception as e:
         print(f"[InboxWatcher] Error saving config: {e}", file=sys.stderr)
@@ -106,7 +106,9 @@ async def scan_and_process_inbox() -> Dict[str, Any]:
             content_preview = f"[Binaerdatei {fname}, Typ: {ext}, Groesse: {fsize} Bytes]"
 
         # Task in Kanban & Operations erstellen
-        task_id = f"inbox-{datetime.datetime.now().strftime('%m%d%H%M%S')}"
+        # D-20: sekundengenaue IDs kollidierten (zwei Drops in derselben
+        # Sekunde -> UPDATE statt INSERT -> nur der letzte Dateiname ueberlebte).
+        task_id = f"inbox-{datetime.datetime.now().strftime('%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
         title = f"[INBOX-DROP] {fname}"
         body = (
             f"Automatisch ueber den Ingest-Watcher erfasst:\n"

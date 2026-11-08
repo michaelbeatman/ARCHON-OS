@@ -360,16 +360,11 @@ async def get_mission_control_task_artifact(task_id: str):
         raise HTTPException(status_code=404, detail="Task nicht gefunden.")
 
     p = task.get("artifact_path")
-    if p and os.path.exists(p):
+    if p and os.path.exists(p) and os.path.isfile(p):
         with open(p, "r", encoding="utf-8") as f:
             return {"status": "ok", "content": f.read(), "path": p}
 
-    # Falls Datei noch nicht existiert, live generieren
-    content = f"""# {task.get('title')}
-Status: {task.get('status')}
-Agent: {task.get('agent_name')} ({task.get('model')})
-
-## Ergebnisbericht
-{task.get('result_summary') or 'Aufgabe erfolgreich abgeschlossen.'}
-"""
-    return {"status": "ok", "content": content, "path": p or "/opt/data/obsidian/01_PROJEKTE/"}
+    # R-13: existiert kein Artefakt, wird KEIN synthetischer Erfolgsbericht
+    # ("Aufgabe erfolgreich abgeschlossen.") erfunden — ein Task ohne Ergebnis
+    # muss im Cockpit als ergebnislos erkennbar bleiben.
+    raise HTTPException(status_code=404, detail="Artefakt nicht gefunden.")

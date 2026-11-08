@@ -4,6 +4,7 @@ Provides Kanban (Hermes kanban.db), Org-Chart, and Inter-Agent Communication Fee
 """
 
 import os
+import base64
 
 from backend.platform_paths import HERMES_HOME
 import asyncio
@@ -64,6 +65,31 @@ def _get_kanban_connection():
         _KANBAN_JOURNAL_INIT = True
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _parse_kanban_ts(value) -> Optional[float]:
+    """Wandelt einen Kanban-Zeitstempel in Epoch-Sekunden um.
+
+    Das Modul schreibt ISO-Strings (``datetime.now().isoformat()``), aeltere
+    Zeilen koennen aber auch float-Epochs enthalten. Fuer die KPI-Berechnung
+    (R-20/F-01) ist beides noetig — ``float('2026-11-08T09:00:00')`` wirft
+    sonst ValueError und die KPIs bleiben dauerhaft leer.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip()
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        pass
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        return datetime.datetime.fromisoformat(s).timestamp()
+    except (TypeError, ValueError):
+        return None
 
 
 def _sync_to_memory_bridge(task_id: str, title: Optional[str], assignee: Optional[str], status: str, result: Optional[str] = None):
@@ -133,12 +159,13 @@ def _load_kanban_meta() -> Dict:
 
 
 def _save_kanban_meta(meta: Dict) -> None:
-    # 12.10.2026 (Fix Punkt 1, Datenrisiko): atomares Schreiben (Temp+replace).
-    # HINWEIS: Wer load-aendern-speichern als SEQUENZ braucht, muss
-    # backend.kanban_sidecar.update_kanban_meta nutzen (Lock!) — diese Funktion
-    # schreibt nur, sie sperrt nicht.
-    from backend.kanban_sidecar import _write_atomic
-    _write_atomic(meta)
+    # M-12: Diese Funktion war ein zweiter, UNGESPERRTER Writer neben
+    # backend.kanban_sidecar.update_kanban_meta. Damit der naechste Aufrufer die
+    # Sperre nicht umgehen kann, schreiben wir jetzt ausschliesslich ueber den
+    # gelockten update_kanban_meta-Pfad (Load-Modify-Write unter threading.Lock,
+    # atomar via Temp+os.replace).
+    from backend.kanban_sidecar import update_kanban_meta
+    update_kanban_meta(lambda _current: meta)
 
 
 def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
@@ -982,25 +1009,30 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
             if json_match:
                 parsed = json.loads(json_match.group(0))
             else:
+                # Fail-closed (R-16): liefert der Reviewer kein JSON, darf das Gate
+                # NICHT freigeben — sonst gilt ein Timeout/Prosa-Antwort als Quality-Pass.
                 parsed = {
-                    "verdict": "approved",
-                    "score": 80,
-                    "summary": "Ergebnis erfolgreich gesichtet und freigegeben.",
-                    "critique_points": [],
-                    "actionable_next_steps": []
+                    "verdict": "changes_requested",
+                    "score": 0,
+                    "summary": "Reviewer-Antwort enthielt kein auswertbares JSON — Review gilt als nicht bestanden, Nachfassung erforderlich.",
+                    "critique_points": ["Reviewer-Lauf lieferte keine strukturierte Bewertung."],
+                    "actionable_next_steps": ["Review erneut anstoßen."]
                 }
         except Exception as e:
+            # Fail-closed (R-16): Fehler im Review-Dispatch darf die Freigabe nicht
+            # erfinden — der Task bleibt in 'review', damit kein ungeprüftes Ergebnis
+            # als done verbucht wird.
             parsed = {
-                "verdict": "approved",
-                "score": 75,
-                "summary": f"Standardprüfung durchgeführt ({e}).",
-                "critique_points": [],
-                "actionable_next_steps": []
+                "verdict": "changes_requested",
+                "score": 0,
+                "summary": f"Reviewer-Prüfung konnte nicht abgeschlossen werden ({e}).",
+                "critique_points": ["Reviewer-Lauf fehlgeschlagen."],
+                "actionable_next_steps": ["Review erneut anstoßen."]
             }
 
-        verdict = parsed.get("verdict", "approved")
+        verdict = parsed.get("verdict", "changes_requested")
         if verdict not in ("approved", "changes_requested"):
-            verdict = "approved"
+            verdict = "changes_requested"
 
         review_data = {
             "status": verdict,
@@ -1749,10 +1781,10 @@ def kanban_stats():
         for s, e in cur.execute(
             "SELECT started_at, completed_at FROM tasks WHERE started_at IS NOT NULL AND completed_at IS NOT NULL"
         ):
-            try:
-                cycles.append((float(e) - float(s)) / 3600.0)
-            except (TypeError, ValueError):
-                pass
+            s_ts = _parse_kanban_ts(s)
+            e_ts = _parse_kanban_ts(e)
+            if s_ts is not None and e_ts is not None:
+                cycles.append((e_ts - s_ts) / 3600.0)
         avg_cycle = round(sum(cycles) / len(cycles), 1) if cycles else None
         now = datetime.datetime.now()
         created_7d = cur.execute(
@@ -1761,11 +1793,9 @@ def kanban_stats():
         epoch_7d = (now - datetime.timedelta(days=7)).timestamp()
         done_7d = 0
         for (e,) in cur.execute("SELECT completed_at FROM tasks WHERE completed_at IS NOT NULL"):
-            try:
-                if float(e) >= epoch_7d:
-                    done_7d += 1
-            except (TypeError, ValueError):
-                pass
+            e_ts = _parse_kanban_ts(e)
+            if e_ts is not None and e_ts >= epoch_7d:
+                done_7d += 1
         return {
             "status": "ok",
             "active_total": sum(active.values()),
@@ -2655,20 +2685,6 @@ def api_get_suppressed_digest(since_hours: int = 24):
             "since_hours": since_hours,
             "suppressed_notifications": items
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/metrics")
-def api_get_prometheus_metrics():
-    """Gibt Prometheus-kompatible System- und Operations-Metriken im Text-Format 0.0.4 aus."""
-    from fastapi.responses import Response
-    try:
-        from backend.metrics_collector import metrics_collector
-        return Response(
-            content=metrics_collector.generate_prometheus_metrics(),
-            media_type="text/plain; version=0.0.4; charset=utf-8"
-        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

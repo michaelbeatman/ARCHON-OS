@@ -1571,251 +1571,27 @@ async def _cancel_background_tasks():
         print(f"[Shutdown] {len(pending)} Hintergrund-Task(s) beendet.")
     _BACKGROUND_TASKS.clear()
 
-# =====================================================================
-# QUICKCHAT — Persistent Per-Profile Sessions
-# =====================================================================
-
-def _quickchat_session_path(profile_id: str) -> str:
-    # Sanitize profile_id to avoid path traversal
-    safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", profile_id)
-    return os.path.join(QUICKCHAT_SESSIONS_DIR, f"{safe_id}.json")
-
-def _load_quickchat_session(profile_id: str) -> Dict:
-    path = _quickchat_session_path(profile_id)
-    if os.path.exists(path):
-        data = _load_json(path, {})
-        if isinstance(data, dict):
-            return data
-    return {
-        "profile_id": profile_id,
-        "messages": [],
-        "created_at": datetime.datetime.now().isoformat(),
-        "updated_at": datetime.datetime.now().isoformat()
-    }
-
-def _save_quickchat_session(session: Dict):
-    session["updated_at"] = datetime.datetime.now().isoformat()
-    _save_json(_quickchat_session_path(session["profile_id"]), session)
-
-@app.get("/api/v1/quickchat/session/{profile_id}")
-def api_get_quickchat_session(profile_id: str):
-    """Verlauf aus state.db (identisch mit Master-/Agentenchat)."""
-    sid = _quickchat_state_session_id(profile_id)
-    msgs = []
-    try:
-        with _get_state_db() as conn:
-            rows = conn.execute(
-                "SELECT role, content, timestamp FROM messages WHERE session_id = ? AND active = 1 "
-                "ORDER BY timestamp ASC LIMIT 200",
-                (sid,),
-            ).fetchall()
-        for role, content, ts in rows:
-            msgs.append({
-                "role": "user" if role == "user" else "agent",
-                "text": content,
-                "ts": datetime.datetime.fromtimestamp(float(ts or 0)).isoformat() if ts else None,
-            })
-    except Exception as e:
-        logger.warning(f"[QuickChat] Verlauf laden fehlgeschlagen: {e}")
-    return {"profile_id": profile_id, "session_id": sid, "messages": msgs}
-
-class QuickchatSendRequest(BaseModel):
-    profile_id: str
-    message: str
-    attachment_content: Optional[str] = None
-    attachment_name: Optional[str] = None
-
-@app.post("/api/v1/quickchat/send")
-async def api_quickchat_send(req: QuickchatSendRequest):
-    # Gemeinsamer Verlauf mit Master-/Agentenchat: state.db statt JSON-Schatulle.
-    state_sid = _quickchat_state_session_id(req.profile_id)
-    _ensure_state_session(state_sid, source="quickchat", profile_name=req.profile_id, title=req.message)
-    history = _load_state_history(state_sid, limit=12)
-    session = _load_quickchat_session(req.profile_id)
-
-    # Update last_used for idle-stop tracking
-    cfg = _load_gateway_config()
-    cfg["last_used"][req.profile_id] = datetime.datetime.now().isoformat()
-    _save_gateway_config(cfg)
-
-    # Load profile for system prompt
-    profiles = load_profiles_list()
-    prof = next((p for p in profiles if p.get("id") == req.profile_id), None)
-    if not prof:
-        prof = {"id": req.profile_id, "name": req.profile_id, "model": "gpt-4o-mini", "provider": "openrouter"}
-
-    agent_name = prof.get("person_name") or prof.get("name") or prof.get("id")
-    role_title = prof.get("name") or req.profile_id
-    system_prompt = prof.get("system_prompt") or prof.get("prompt") or (
-        f"Du bist {agent_name} (Rolle: {role_title}) in Archon OS. "
-        "Antworte präzise, kompetent und direkt. Halte den Kontext der bisherigen Konversation."
-    )
-    model = prof.get("model") or "gpt-4o-mini"
-    provider = prof.get("provider") or "openrouter"
-
-    user_msg = req.message
-    if req.attachment_content:
-        user_msg = f"[Angehängte Datei: {req.attachment_name or 'Dokument'}]\n```\n{req.attachment_content[:6000]}\n```\n\n{req.message}"
-
-    start_t = time.time()
-    try:
-        res = await core_dispatcher.dispatch_to_omniroute_or_container(
-            agent_id=prof["id"],
-            agent_name=agent_name,
-            prompt=user_msg,
-            role=role_title,
-            system_prompt=system_prompt,
-            model=model,
-            provider=provider
-        )
-        reply_text = res.get("content", "Keine Antwort erhalten.")
-    except Exception as e:
-        reply_text = f"⚠ Fehler: {str(e)}"
-
-    duration = round(time.time() - start_t, 2)
-
-    # Gemeinsamer Verlauf (state.db) — identisch mit Master-/Agentenchat
-    try:
-        _save_message_to_db(state_sid, "user", req.message)
-        if reply_text:
-            _save_message_to_db(state_sid, "assistant", str(reply_text))
-    except Exception as _pc_err:
-        logger.warning(f"[QuickChat] Speichern im gemeinsamen Verlauf fehlgeschlagen: {_pc_err}")
-
-    # Append to persistent session
-    session["messages"].append({"role": "user", "text": req.message, "ts": datetime.datetime.now().isoformat()})
-    session["messages"].append({"role": "agent", "text": str(reply_text), "ts": datetime.datetime.now().isoformat()})
-    # Keep last 200 messages to cap disk usage
-    if len(session["messages"]) > 200:
-        session["messages"] = session["messages"][-200:]
-    _save_quickchat_session(session)
-
-    add_ticker("Quickchat", f"{agent_name}: {req.message[:40]}… ({duration}s)")
-
-    return {
-        "agent_id": prof["id"],
-        "agent_name": agent_name,
-        "reply": str(reply_text),
-        "duration": duration,
-        "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
-    }
-
-@app.delete("/api/v1/quickchat/session/{profile_id}")
-def api_delete_quickchat_session(profile_id: str):
-    path = _quickchat_session_path(profile_id)
-    if os.path.exists(path):
-        os.remove(path)
-    return {"ok": True, "profile_id": profile_id}
-
-class TextReplacementItem(BaseModel):
-    original: str
-    replacement: str
-
-class TextReplacementsRequest(BaseModel):
-    replacements: List[TextReplacementItem]
-
-@app.post("/api/v1/ui/save-text-replacements")
-def api_save_text_replacements(request: Request, req: TextReplacementsRequest):
-    require_admin(request)  # RBAC: Admin-Sache
-    candidates = [
-        "/app/static/index.html",
-        "static/index.html",
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html"),
-        os.path.join(WORKSPACE_DIR, "static", "index.html")
-    ]
-    target_files = [p for p in set(candidates) if os.path.exists(p)]
-    if not target_files:
-        raise HTTPException(status_code=404, detail="Keine static/index.html Datei gefunden.")
-    
-    total_replaced = 0
-    for target_path in target_files:
-        try:
-            with open(target_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            
-            file_replaced = 0
-            for item in req.replacements:
-                orig = item.original
-                repl = item.replacement
-                if orig and repl and orig != repl and orig in content:
-                    content = content.replace(orig, repl)
-                    file_replaced += 1
-            
-            with open(target_path, "w", encoding="utf-8") as f:
-                f.write(content)
-            total_replaced = max(total_replaced, file_replaced)
-        except Exception as err:
-            print(f"Error saving replacements to {target_path}: {err}")
-            
-    add_ticker("Live UI Editor", f"{total_replaced} Texte dauerhaft in index.html eingefroren & gespeichert.")
-    return {"status": "success", "replaced_count": total_replaced}
-
-class FullHtmlSaveRequest(BaseModel):
-    html: Optional[str] = None
-    custom_css: Optional[str] = None
-
-def _full_html_target_files() -> list:
-    """Die Zieldateien fuer "HTML einfrieren" (existierende Kandidaten).
-
-    Als eigene Funktion, damit der Schreibpfad testbar bleibt (der Handler
-    darf nicht ungefragt die echte ``static/index.html`` anfassen).
-    """
-    candidates = [
-        "/app/static/index.html",
-        "static/index.html",
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html"),
-        os.path.join(WORKSPACE_DIR, "static", "index.html")
-    ]
-    return [p for p in set(candidates) if os.path.exists(p)]
-
-
-@app.post("/api/v1/ui/save-full-html")
-def api_save_full_html(request: Request, req: FullHtmlSaveRequest):
-    require_admin(request)  # RBAC: Admin-Sache
-    target_files = _full_html_target_files()
-    if not target_files:
-        raise HTTPException(status_code=404, detail="Keine static/index.html Datei gefunden.")
-
-    if not req.html or len(req.html.strip()) <= 100:
-        raise HTTPException(
-            status_code=400,
-            detail="HTML fehlt oder ist zu kurz (< 100 Zeichen) — es wurde nichts geschrieben.",
-        )
-
-    # D-08: Die alte Fassung truncatete die Datei vor dem Schreiben
-    # (``open(...,"w")``) — ein Crash/Disk-full hinterliess eine halbe
-    # index.html. Schreibfehler wurden nur geprintet, danach kam
-    # "erfolgreich eingefroren" + {"status":"success"}.
-    # Jetzt: atomarer Write (tmp + os.replace), Fehler werden gesammelt
-    # und als HTTP-Fehler gemeldet.
-    written, failed = [], {}
-    for target_path in target_files:
-        tmp_path = f"{target_path}.tmp.{os.getpid()}"
-        try:
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                f.write(req.html)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, target_path)
-            written.append(target_path)
-        except Exception as err:
-            failed[target_path] = str(err)
-            if os.path.exists(tmp_path):
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-
-    if not written:
-        raise HTTPException(
-            status_code=500,
-            detail=f"HTML konnte in keinem Ziel gespeichert werden: {failed}",
-        )
-    if failed:
-        logger.warning(f"[Design Studio] HTML nur teilweise gespeichert: {failed}")
-
-    add_ticker("Design Studio", "HTML & Design-Stand erfolgreich eingefroren und gespeichert.")
-    return {"status": "success", "written_to": written, "failed": failed}
+from archon.routers.quickchat import (
+    router as _quickchat_router,
+    _quickchat_session_path,
+    _load_quickchat_session,
+    _save_quickchat_session,
+    QuickchatSendRequest,
+    api_get_quickchat_session,
+    api_quickchat_send,
+    api_delete_quickchat_session,
+)
+from archon.routers.ui import (
+    router as _ui_router,
+    TextReplacementItem,
+    TextReplacementsRequest,
+    api_save_text_replacements,
+    FullHtmlSaveRequest,
+    _full_html_target_files,
+    api_save_full_html,
+)
+app.include_router(_quickchat_router)
+app.include_router(_ui_router)
 
 # ============================================================================
 # BRAIN & ARCHIV ROUTER (ausgelagert nach archon.routers.brain)

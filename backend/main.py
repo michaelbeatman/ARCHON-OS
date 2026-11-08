@@ -92,18 +92,10 @@ def save_teams_data(teams: List[Dict[str, Any]]):
     with open(TEAMS_PATH, "w", encoding="utf-8") as f:
         json.dump({"teams": teams}, f, indent=2, ensure_ascii=False)
 
-@app.get("/")
-def read_root():
-    return {"status": "ok", "service": "Archon OS FastAPI Engine v2.0", "version": "2.0.0"}
-
-@app.get("/api/agents")
-def get_agents():
-    return get_archon_agents_internal()
-
-def get_archon_agents_internal():
-    agents = load_agents_data()
-    return {"status": "success", "count": len(agents), "agents": agents}
-
+# F-14: Die Kollisionen GET / und GET /api/agents sind entfernt — beide werden
+# von der Haupt-App (main.py, Routen / und /api/agents) bedient. Dieser
+# Standalone-Backend-Runner bedient nur noch /api/teams*, damit keine
+# Pfad+Methode-Dublette mehr existiert (AST-Scan: "doppelte Pfad+Methode").
 @app.get("/api/teams")
 def get_teams():
     teams = load_teams_data()

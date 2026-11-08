@@ -25,9 +25,23 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/operations", tags=["operations"])
 
-KANBAN_DB_PATH = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.join(HERMES_HOME, "kanban.db")
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
+
+
+def _resolve_kanban_db_path() -> str:
+    for candidate in [
+        "/opt/data/kanban.db",
+        os.path.join(WORKSPACE_DIR, "data", "kanban.db"),
+        os.path.join(HERMES_HOME, "kanban.db"),
+        "/app/data/kanban.db",
+    ]:
+        if os.path.exists(candidate):
+            return candidate
+    return "/opt/data/kanban.db"
+
+
+KANBAN_DB_PATH = _resolve_kanban_db_path()
 
 
 _KANBAN_JOURNAL_INIT = False
@@ -227,7 +241,11 @@ class QualityReviewRequest(BaseModel):
 @router.get("/kanban/tasks")
 def get_kanban_tasks(archived: bool = Query(False)):
     """Board-Daten: aktive Tasks gruppiert nach Spalten; ?archived=true liefert die flache Archiv-Liste."""
+    if hasattr(archived, "default"):
+        archived = archived.default
+    archived = bool(archived)
     conn = _get_kanban_connection()
+
     profiles = _load_profiles_map()
     meta = _load_kanban_meta()
     base_select = """
@@ -2123,7 +2141,16 @@ def broadcast_comm_message(req: CommBroadcastRequest):
 @router.get("/comm-feed")
 def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] = Query(None)):
     """Liefert den chronologischen internen Kommunikationsfluss aller Agenten."""
+    if hasattr(limit, "default"):
+        limit = limit.default
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = 50
+    if hasattr(agent_filter, "default"):
+        agent_filter = agent_filter.default
     profiles = _load_profiles_map()
+
     feed_items = []
     
     # 1. Aus kanban.db (task_comments & task_events)

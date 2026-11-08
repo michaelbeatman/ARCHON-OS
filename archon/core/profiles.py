@@ -330,10 +330,11 @@ def api_get_hermes_profiles():
     HERMES_PROFILES_DIR = get_primary_hermes_profiles_dir()
     os.makedirs(HERMES_PROFILES_DIR, exist_ok=True)
 
-    # 1. Fallback-Map aus agent_profiles.json laden
-    _APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+    # F-20: lokale _APP_ROOT-Schattenkopie entfernt — der Mirror landete so in
+    # archon/core/agent_profiles.json (im git versioniert), statt in der SSOT
+    # agent_profiles.json im Repo-Root (APP_ROOT aus archon.core.runtime).
     json_fallback_map = {}
-    for cand in [os.path.join(_APP_ROOT, "agent_profiles.json"), "agent_profiles.json"]:
+    for cand in [os.path.join(APP_ROOT, "agent_profiles.json"), "agent_profiles.json"]:
         if os.path.exists(cand):
             try:
                 with open(cand, "r", encoding="utf-8") as f:
@@ -544,7 +545,9 @@ def api_get_hermes_profiles():
 
     # Hintergrund-Spiegelung nach agent_profiles.json (nur schreiben, wenn sich Inhalt geändert hat)
     try:
-        _ssot = os.path.join(_APP_ROOT, "agent_profiles.json")
+        # F-20: Ziel ist die SSOT im Repo-Root (runtime.APP_ROOT), nicht die
+        # git-versionierte Schattenkopie im Modulverzeichnis.
+        _ssot = os.path.join(APP_ROOT, "agent_profiles.json")
         new_json_str = json.dumps(enriched_profiles, indent=2, ensure_ascii=False)
         old_json_str = ""
         if os.path.exists(_ssot):

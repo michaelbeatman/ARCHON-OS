@@ -1364,204 +1364,22 @@ def _run_docker_exec(cmd: list) -> tuple[int, str, str]:
     # All containers failed
     return 1, "", "Failed to execute in hermes container (tried hermes-agent, hermes)"
 
-def _load_gateway_config() -> Dict:
-    cfg = _load_json(GATEWAY_CONFIG_FILE, {})
-    if not isinstance(cfg, dict):
-        cfg = {}
-    cfg.setdefault("idle_timeout_minutes", 30)
-    cfg.setdefault("autostart", {"default": True})
-    cfg.setdefault("last_used", {})
-    return cfg
+from archon.routers.gateway import (
+    router as _gateway_router,
+    _load_gateway_config,
+    _save_gateway_config,
+    _get_all_installed_profiles,
+    _update_profile_status,
+    api_gateway_list,
+    api_gateway_start,
+    api_gateway_stop,
+    api_get_gateway_config,
+    api_save_gateway_config_endpoint,
+    api_gateway_autostart,
+    api_gateway_stop_all,
+)
+app.include_router(_gateway_router)
 
-def _save_gateway_config(cfg: Dict):
-    _save_json(GATEWAY_CONFIG_FILE, cfg)
-
-def _get_all_installed_profiles() -> list[str]:
-    """List profile names from the mounted profiles volume directory."""
-    candidates = ["/opt/data/profiles", os.path.join(MEMORY_DIR, "hermes_profiles")]
-    for d in candidates:
-        if os.path.exists(d) and os.path.isdir(d):
-            try:
-                entries = [e for e in os.listdir(d) if os.path.isdir(os.path.join(d, e))]
-                if entries:
-                    if "default" not in entries:
-                        entries.insert(0, "default")
-                    return sorted(entries)
-            except Exception:
-                pass
-    return ["default"]
-
-@app.get("/api/v1/gateway/list")
-async def api_gateway_list():
-    all_profiles = _get_all_installed_profiles()
-    cfg = _load_gateway_config()
-    autostart_map = cfg.get("autostart", {})
-    last_used_map = cfg.get("last_used", {})
-    active_gateways = cfg.get("active_gateways", {})
-
-    # Read live state from volume
-    gw_state_file = "/opt/data/gateway_state.json"
-    served_profiles = []
-    is_master_running = False
-    if os.path.exists(gw_state_file):
-        try:
-            gw_data = _load_json(gw_state_file, {})
-            is_master_running = gw_data.get("gateway_state") == "running"
-            served_profiles = gw_data.get("served_profiles", [])
-        except Exception:
-            pass
-
-    profiles = []
-    for pid in all_profiles:
-        # Default is running if master gateway is up; others according to active_gateways or explicit state
-        if pid == "default":
-            status = "running" if is_master_running else "stopped"
-        else:
-            status = "running" if active_gateways.get(pid, False) else "stopped"
-
-        profiles.append({
-            "id": pid,
-            "status": status,
-            "autostart": autostart_map.get(pid, pid == "default"),
-            "last_used": last_used_map.get(pid, None)
-        })
-
-    return {"profiles": profiles, "idle_timeout_minutes": cfg.get("idle_timeout_minutes", 30)}
-
-def _update_profile_status(profile_id: str, new_status: str):
-    try:
-        prof_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
-        if os.path.exists(prof_file):
-            with open(prof_file, "r", encoding="utf-8") as f:
-                profs = json.load(f)
-            updated = False
-            for p in profs:
-                if p.get("id") == profile_id:
-                    p["status"] = new_status
-                    updated = True
-                    break
-            if updated:
-                with open(prof_file, "w", encoding="utf-8") as f:
-                    json.dump(profs, f, indent=2, ensure_ascii=False)
-        hier_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "org_hierarchy.json")
-        if os.path.exists(hier_file):
-            with open(hier_file, "r", encoding="utf-8") as f:
-                hier = json.load(f)
-            for n in hier.get("nodes", []):
-                if n.get("id") == profile_id:
-                    n["status"] = new_status
-                    break
-            with open(hier_file, "w", encoding="utf-8") as f:
-                json.dump(hier, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        logger.warning(f"Error updating profile status for {profile_id}: {e}")
-
-@app.post("/api/v1/gateway/start")
-async def api_gateway_start(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    profile_id = payload.get("profile_id", "").strip()
-    if not profile_id:
-        raise HTTPException(status_code=400, detail="profile_id required")
-
-    # D-09: Erst ausfuehren, DANN den Zustand setzen. Die alte Fassung
-    # schrieb "active" VOR dem Kommando und ignorierte dessen Exitcode —
-    # ein fehlgeschlagener Start zeigte "active", obwohl kein Prozess lief.
-    cmd = ["hermes", "gateway", "start"] if profile_id == "default" else ["hermes", "--profile", profile_id, "gateway", "start"]
-    rc, stdout, stderr = await asyncio.to_thread(_run_docker_exec, cmd)
-    if rc != 0:
-        logger.error(f"[Gateway] Start fuer '{profile_id}' fehlgeschlagen (rc={rc}): {stderr or stdout}")
-        raise HTTPException(
-            status_code=502,
-            detail=f"Gateway-Start fehlgeschlagen: {(stderr or stdout or 'unbekannter Fehler').strip()[:400]}",
-        )
-
-    cfg = _load_gateway_config()
-    cfg.setdefault("active_gateways", {})
-    cfg["active_gateways"][profile_id] = True
-    cfg.setdefault("last_used", {})
-    cfg["last_used"][profile_id] = datetime.datetime.now().isoformat()
-    _save_gateway_config(cfg)
-    _update_profile_status(profile_id, "active")
-
-    return {"ok": True, "profile_id": profile_id, "output": stdout or stderr}
-
-@app.post("/api/v1/gateway/stop")
-async def api_gateway_stop(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    profile_id = payload.get("profile_id", "").strip()
-    if not profile_id:
-        raise HTTPException(status_code=400, detail="profile_id required")
-    if profile_id == "default":
-        raise HTTPException(status_code=400, detail="default gateway cannot be stopped")
-
-    # D-09: siehe api_gateway_start — Zustand erst nach erfolgreichem
-    # Kommando, kein Rollback-Zustand "standby" bei fehlgeschlagenem Stop.
-    cmd = ["hermes", "--profile", profile_id, "gateway", "stop"]
-    rc, stdout, stderr = await asyncio.to_thread(_run_docker_exec, cmd)
-    if rc != 0:
-        logger.error(f"[Gateway] Stop fuer '{profile_id}' fehlgeschlagen (rc={rc}): {stderr or stdout}")
-        raise HTTPException(
-            status_code=502,
-            detail=f"Gateway-Stop fehlgeschlagen: {(stderr or stdout or 'unbekannter Fehler').strip()[:400]}",
-        )
-
-    cfg = _load_gateway_config()
-    cfg.setdefault("active_gateways", {})
-    cfg["active_gateways"][profile_id] = False
-    _save_gateway_config(cfg)
-    _update_profile_status(profile_id, "standby")
-
-    return {"ok": True, "profile_id": profile_id, "output": stdout or stderr}
-
-@app.get("/api/v1/gateway/config")
-def api_get_gateway_config():
-    return _load_gateway_config()
-
-@app.post("/api/v1/gateway/config")
-def api_save_gateway_config_endpoint(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    cfg = _load_gateway_config()
-    if "idle_timeout_minutes" in payload:
-        try:
-            cfg["idle_timeout_minutes"] = max(1, int(payload["idle_timeout_minutes"]))
-        except (ValueError, TypeError):
-            pass
-    if "autostart" in payload and isinstance(payload["autostart"], dict):
-        cfg["autostart"].update(payload["autostart"])
-    _save_gateway_config(cfg)
-    return cfg
-
-@app.post("/api/v1/gateway/autostart")
-def api_gateway_autostart(request: Request, payload: Dict = Body(...)):
-    require_admin(request)  # RBAC: Admin-Sache
-    profile_id = str(payload.get("profile_id", "")).strip()
-    if not profile_id:
-        raise HTTPException(status_code=400, detail="profile_id required")
-    enable = bool(payload.get("autostart", False))
-    cfg = _load_gateway_config()
-    cfg.setdefault("autostart", {})
-    cfg["autostart"][profile_id] = enable
-    _save_gateway_config(cfg)
-    return {"ok": True, "profile_id": profile_id, "autostart": enable}
-
-@app.post("/api/v1/gateway/stop-all")
-async def api_gateway_stop_all(request: Request):
-    require_admin(request)  # RBAC: Admin-Sache
-    cfg = _load_gateway_config()
-    active_map = cfg.get("active_gateways", {})
-    stopped = []
-    for pid, is_active in list(active_map.items()):
-        if pid == "default" or not is_active:
-            continue
-        cfg["active_gateways"][pid] = False
-        _update_profile_status(pid, "standby")
-        try:
-            _run_docker_exec(["hermes", "--profile", pid, "gateway", "stop"])
-        except Exception:
-            pass
-        stopped.append(pid)
-    _save_gateway_config(cfg)
-    return {"ok": True, "stopped": stopped}
 
 # =====================================================================
 # INTERNET WATCHDOG (SÄULE 4 DER KOGNITION: AUTONOMER WEB-RADAR)

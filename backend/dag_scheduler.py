@@ -7,6 +7,7 @@ Teilaufgaben parallel aus und fasst die Ergebnisse in einer abschließenden Synt
 import os
 import sys
 import json
+import uuid
 import asyncio
 import datetime
 import sqlite3
@@ -25,7 +26,7 @@ class DAGScheduler:
         conn.row_factory = sqlite3.Row
         return conn
 
-    async def decompose_task(self, parent_title: str, parent_body: str, assignee: str = "orchestrator") -> dict:
+    async def decompose_task(self, parent_title: str, parent_body: str, assignee: str = "orchestrator", task_id: Optional[str] = None) -> dict:
         """
         Zerlegt eine komplexe Aufgabe über den Orchestrator in 2-4 Teilaufgaben mit Abhängigkeiten.
         """
@@ -46,6 +47,7 @@ Regeln:
   {{"id_suffix": "syn", "title": "Synthese & Endbericht", "body": "...", "assignee": "hermes-orchestrator", "depends_on": ["1", "2"]}}
 ]"""
 
+        tid = task_id or f"decomp-{uuid.uuid4().hex[:8]}"
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=assignee or "orchestrator",
             agent_name="Master Orchestrator",
@@ -53,7 +55,7 @@ Regeln:
             role="System-Architekt",
             system_prompt="Du bist der Chefplaner. Gib nur JSON aus.",
             model="deepseek/deepseek-chat",
-            task_id=task_id
+            task_id=tid
         )
 
         content = res.get("content", "")
@@ -72,7 +74,7 @@ Regeln:
             ]
 
         # In kanban.db eintragen
-        parent_id = f"dag-{datetime.datetime.now().strftime('%m%d%H%M')}"
+        parent_id = f"dag-{datetime.datetime.now().strftime('%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
         created_subtasks = []
 
         conn = self._get_kanban_conn()

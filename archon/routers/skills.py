@@ -575,5 +575,8 @@ async def api_skills_mcp_execute(request: Request, tool_name: str = Body(...), a
     except PermissionError as pe:
         raise HTTPException(status_code=403, detail=str(pe))
     
-    raw_res = await skills_engine.mcp.execute_mcp_tool(tool_name, arguments)
+    engine = _DEPS.get("skills_engine")
+    if not engine:
+        raise HTTPException(status_code=503, detail="skills_engine dependency not configured")
+    raw_res = await engine.mcp.execute_mcp_tool(tool_name, arguments)
     return await pm.apply_after_tool_execute(tool_name, raw_res, {"agent_id": agent_id})

@@ -191,13 +191,13 @@ def api_update_hermes_profile_status(request: Request, profile_id: str, body: Op
 @router.post("/api/hermes/profiles/{profile_id}/hire-paperclip")
 def api_hire_hermes_profile_paperclip(request: Request, profile_id: str):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    return api_update_hermes_profile_status(profile_id, ProfileStatusUpdate(status="active"))
+    return api_update_hermes_profile_status(request, profile_id, ProfileStatusUpdate(status="active"))
 
 
 @router.post("/api/hermes/profiles/{profile_id}/fire-paperclip")
 def api_fire_hermes_profile_paperclip(request: Request, profile_id: str):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    return api_update_hermes_profile_status(profile_id, ProfileStatusUpdate(status="inactive"))
+    return api_update_hermes_profile_status(request, profile_id, ProfileStatusUpdate(status="inactive"))
 
 
 @router.post("/api/hermes/profiles/{profile_id}/model")

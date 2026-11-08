@@ -142,11 +142,24 @@ class GracefulShutdownCoordinator:
         }
 
     async def drain_active_tasks(self, timeout_seconds: Optional[float] = None) -> Dict[str, Any]:
-        """Asynchrone Variante für FastAPI Lifespan Events."""
-        try:
-            return await asyncio.to_thread(self.drain_active_tasks_sync, timeout_seconds)
-        except Exception:
-            return self.drain_active_tasks_sync(timeout_seconds)
+        """Asynchrone Variante für FastAPI Lifespan Events. Blockiert den Event-Loop nicht."""
+        timeout = timeout_seconds if timeout_seconds is not None else self._default_grace_seconds
+        start = time.time()
+        initial_count = len(self._active_tasks)
+
+        print(f"[GracefulShutdown] Task-Draining gestartet ({initial_count} aktive Aufgaben, Timeout {timeout}s)...")
+        while len(self._active_tasks) > 0 and (time.time() - start) < timeout:
+            await asyncio.sleep(0.1)
+
+        remaining = len(self._active_tasks)
+        completed = initial_count - remaining
+        print(f"[GracefulShutdown] Draining beendet: {completed} abgeschlossen, {remaining} verbleibend.")
+        return {
+            "initial_tasks": initial_count,
+            "completed_during_grace": completed,
+            "remaining_for_checkpoint": remaining,
+            "time_spent_seconds": round(time.time() - start, 2)
+        }
 
     def checkpoint_remaining_tasks(self) -> List[Dict[str, Any]]:
         """
@@ -286,11 +299,19 @@ class GracefulShutdownCoordinator:
         }
 
     async def execute_graceful_shutdown(self, reason: str = "Server shutdown", grace_seconds: Optional[float] = None) -> Dict[str, Any]:
-        """Vollständige Orchestrierung: Draining -> Grace Wait -> Checkpointing -> WAL-Flush."""
-        try:
-            return await asyncio.to_thread(self.execute_graceful_shutdown_sync, reason, grace_seconds)
-        except Exception:
-            return self.execute_graceful_shutdown_sync(reason=reason, grace_seconds=grace_seconds)
+        """Vollständige asynchrone Orchestrierung: Draining -> Grace Wait -> Checkpointing -> WAL-Flush."""
+        self.start_draining(reason=reason, grace_seconds=grace_seconds)
+        drain_result = await self.drain_active_tasks(timeout_seconds=grace_seconds)
+        checkpoints = await asyncio.to_thread(self.checkpoint_remaining_tasks)
+        flush_result = await asyncio.to_thread(self.flush_all_databases)
+
+        return {
+            "status": "shutdown_ready",
+            "reason": reason,
+            "draining": drain_result,
+            "checkpoints_created": checkpoints,
+            "wal_flush": flush_result
+        }
 
     def auto_resume_on_startup(self) -> Dict[str, Any]:
         """

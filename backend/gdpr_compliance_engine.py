@@ -221,6 +221,7 @@ class GDPRComplianceEngine:
             raise ValueError("Suchbegriff muss mindestens 3 Zeichen lang sein.")
 
         replacement = "[ANONYMISIERT_DSGVO_ART17]" if anonymize else ""
+        errors = []
         results = {
             "requested_identifier": term,
             "dry_run": dry_run,
@@ -261,6 +262,7 @@ class GDPRComplianceEngine:
                         conn.commit()
             except Exception as e:
                 print(f"[GDPR] Fehler bei Kanban-Löschung: {e}", file=sys.stderr)
+                errors.append(f"Kanban: {e}")
 
         # 2. Chat Nachrichten (state.db)
         if os.path.exists(self.state_db):
@@ -278,6 +280,7 @@ class GDPRComplianceEngine:
                         conn.commit()
             except Exception as e:
                 print(f"[GDPR] Fehler bei Chat-Löschung: {e}", file=sys.stderr)
+                errors.append(f"Chat: {e}")
 
         # 3. Langzeitgedächtnis (agentic_memory.db)
         if os.path.exists(self.memory_db):
@@ -307,6 +310,13 @@ class GDPRComplianceEngine:
                         conn.commit()
             except Exception as e:
                 print(f"[GDPR] Fehler bei Memory-Löschung: {e}", file=sys.stderr)
+                errors.append(f"Memory: {e}")
+
+        if errors:
+            results["errors"] = errors
+            results["status"] = "failed"
+            results["receipt"] = None
+            raise RuntimeError(f"DSGVO Art. 17 Löschung unvollständig, Fehler in Stores: {', '.join(errors)}")
 
         total = sum(results["affected"].values())
         results["total_affected"] = total

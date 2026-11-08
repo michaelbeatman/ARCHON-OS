@@ -8978,10 +8978,10 @@ def on_startup_drain_recovery():
         print(f"[Archon] Startup Recovery Fehler: {e}", file=sys.stderr)
 
 
-def on_shutdown_graceful():
+async def on_shutdown_graceful():
     try:
         from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-        res = graceful_shutdown_coordinator.execute_graceful_shutdown_sync(reason="Server shutdown / restart")
+        res = await graceful_shutdown_coordinator.execute_graceful_shutdown(reason="Server shutdown / restart")
         print(f"[Archon] Graceful Shutdown ausgeführt: {res}")
     except Exception as e:
         print(f"[Archon] Graceful Shutdown Fehler: {e}", file=sys.stderr)
@@ -12100,8 +12100,8 @@ _STARTUP_HOOKS.extend([
 ])
 
 _SHUTDOWN_HOOKS.extend([
-    _cancel_background_tasks,    # laeuft zuletzt (reversed)
-    on_shutdown_graceful,        # laeuft zuerst: Draining
+    on_shutdown_graceful,        # laeuft nach Loop-Stopp: Draining & Flush
+    _cancel_background_tasks,    # laeuft zuerst (reversed): stoppt Hintergrund-Loops
 ])
 
 

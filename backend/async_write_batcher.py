@@ -107,18 +107,23 @@ class AsyncWriteBatcher:
             self._last_flush_time = time.time()
 
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with sqlite3.connect(DB_PATH, timeout=15.0) as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.executemany("""
-                INSERT INTO batched_telemetry_events
-                (event_type, source_module, payload_json, created_at, flushed_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, [
-                (item["event_type"], item["source_module"], item["payload_json"], item["created_at"], now_iso)
-                for item in batch
-            ])
-            conn.commit()
+        try:
+            with sqlite3.connect(DB_PATH, timeout=15.0) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.executemany("""
+                    INSERT INTO batched_telemetry_events
+                    (event_type, source_module, payload_json, created_at, flushed_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, [
+                    (item["event_type"], item["source_module"], item["payload_json"], item["created_at"], now_iso)
+                    for item in batch
+                ])
+                conn.commit()
+        except Exception as e:
+            with self._lock:
+                self._buffer = batch + self._buffer
+            raise e
 
         with self._lock:
             self._total_flushed_events += len(batch)

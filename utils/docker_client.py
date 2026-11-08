@@ -203,22 +203,35 @@ def _decode_chunked(data: bytes) -> bytes:
 class DockerClient:
     _rules = _ALLOWED
 
-    def __init__(self) -> None:
-        self._host = os.environ.get("DOCKER_HOST", "").strip()
-        self._unix = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
+    def __init__(self, host: Optional[str] = None, unix_socket: Optional[str] = None) -> None:
+        self._custom_host = host
+        self._custom_unix = unix_socket
+
+    @property
+    def _effective_host(self) -> str:
+        # M-20: Dynamische Erkennung von DOCKER_HOST, damit Singleton nicht einfriert
+        if self._custom_host is not None:
+            return self._custom_host.strip()
+        return os.environ.get("DOCKER_HOST", "").strip()
+
+    @property
+    def _effective_unix(self) -> str:
+        if self._custom_unix is not None:
+            return self._custom_unix
+        return os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
 
     # ---------------- Transport ----------------
 
     def _endpoint(self) -> tuple[str, str]:
         """(kind, target) - kind = 'tcp' | 'unix'."""
-        host = self._host
+        host = self._effective_host
         if host.startswith("tcp://"):
             return "tcp", host[len("tcp://"):]
         if host.startswith("http://"):
             return "tcp", host[len("http://"):]
         if host.startswith("unix://"):
             return "unix", host[len("unix://"):]
-        return "unix", self._unix
+        return "unix", self._effective_unix
 
     def _check_allowed(self, method: str, path: str) -> None:
         for m, rx in self._rules:
@@ -424,11 +437,17 @@ class DockerAdminClient(DockerClient):
 
     _rules = _ADMIN_ALLOWED
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, host: Optional[str] = None, unix_socket: Optional[str] = None) -> None:
+        super().__init__(host=host, unix_socket=unix_socket)
+
+    @property
+    def _effective_host(self) -> str:
         admin_host = os.environ.get(_ADMIN_HOST_ENV, "").strip()
         if admin_host:
-            self._host = admin_host
+            return admin_host
+        if self._custom_host is not None:
+            return self._custom_host.strip()
+        return os.environ.get("DOCKER_HOST", "").strip()
 
     # ---------------- Assets ----------------
 

@@ -9,6 +9,9 @@
       if (!force && (document.hidden || (mcRoot && mcRoot.classList.contains("hidden")))) {
         return;
       }
+      // M-22: In-Flight Guard verhindert ueberlappende parallele Polling-Anfragen
+      if (window.__mc_is_fetching) return;
+      window.__mc_is_fetching = true;
       if (force) {
         showLoadingOverlay("System-Status wird aktualisiert...", "Live-Metriken, Docker-Container & Agenten-Status werden synchronisiert");
       }
@@ -25,6 +28,7 @@
       } catch (e) {
         console.error("Error fetching mission control state:", e);
       } finally {
+        window.__mc_is_fetching = false;
         if (force) {
           setTimeout(() => hideLoadingOverlay(), 200);
         }

@@ -13,6 +13,8 @@ import hashlib
 import sqlite3
 import datetime
 import logging
+import re
+import html
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -139,6 +141,8 @@ class AuthService:
         username = (username or "").strip().lower()
         if not username:
             raise ValueError("Benutzername darf nicht leer sein.")
+        if not re.match(r"^[a-zA-Z0-9._-]+$", username):
+            raise ValueError("Ungueltiger Benutzername. Nur Buchstaben, Ziffern, Punkt, Unterstrich und Bindestrich erlaubt.")
         if len(password or "") < 6:
             raise ValueError("Das Passwort muss mindestens 6 Zeichen lang sein.")
 
@@ -146,7 +150,9 @@ class AuthService:
         if role not in ("admin", "operator", "viewer"):
             role = "operator"
 
-        display_name = (display_name or "").strip() or username.capitalize()
+        import html
+        raw_display = (display_name or "").strip() or username.capitalize()
+        display_name = html.escape(raw_display)
         email = (email or "").strip().lower()
 
         pwd_hash, salt = _hash_password(password)

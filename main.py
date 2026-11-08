@@ -570,6 +570,7 @@ DEFAULT_SERVICES = [
 # _load_json/_save_json -> app.core.runtime
 
 GHOST_AGENT_IDS = {"prime-agent", "autogen-studio", "openhands", "openclaw", "gpt-researcher", "a-01", "a-02"}
+SYSTEM_INTERNAL_IDS = {"agent-os-container", "agent-os-ui", "agent-os", "agent_os", "agent_os_ui", "agent_os_container"}
 
 def load_agents() -> List[Dict]:
     agents_root = os.path.join(WORKSPACE_DIR, "agents.json")
@@ -583,7 +584,18 @@ def load_agents() -> List[Dict]:
     return cleaned if len(cleaned) > 0 else DEFAULT_AGENTS
 
 def save_agents(agents: List[Dict]):
-    cleaned = [a for a in agents if str(a.get("id", "")).lower() not in GHOST_AGENT_IDS]
+    existing = load_agents()
+    # M-16: Inaktive und interne System-Agenten duerfen nicht geloescht werden,
+    # wenn ein Frontend (z.B. skill_markt.js) nur ein gefiltertes Array sendet.
+    incoming_ids = {str(a.get("id")) for a in agents if a.get("id")}
+    preserved = [
+        a for a in existing
+        if str(a.get("id")) not in incoming_ids and (
+            a.get("active") is False or str(a.get("id", "")).lower() in SYSTEM_INTERNAL_IDS
+        )
+    ]
+    merged = preserved + list(agents)
+    cleaned = [a for a in merged if str(a.get("id", "")).lower() not in GHOST_AGENT_IDS]
     agents_root = os.path.join(WORKSPACE_DIR, "agents.json")
     _save_json(agents_root, cleaned)
     _save_json(AGENTS_FILE, cleaned)
@@ -993,9 +1005,28 @@ def api_get_theme_live_overrides():
 
 @app.post("/api/theme/live-overrides")
 def api_save_theme_live_overrides(payload: Dict = Body(...)):
-    _save_json(THEME_LIVE_FILE, payload)
-    # [ARCHIVED] Überschreiben von static/custom_studio.css deaktiviert zugunsten
-    # der zentralen 15-Bausteine-Engine (/api/design/themes).
+    existing = _load_json(THEME_LIVE_FILE, {"rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {}})
+    merged = dict(existing) if isinstance(existing, dict) else {}
+
+    if "rawCss" in payload:
+        merged["rawCss"] = payload["rawCss"]
+
+    for field in ("rules", "textOverrides", "htmlOverrides"):
+        if field in payload:
+            new_val = payload[field]
+            if isinstance(new_val, dict):
+                if new_val:
+                    if not isinstance(merged.get(field), dict):
+                        merged[field] = {}
+                    merged[field].update(new_val)
+            else:
+                merged[field] = new_val
+
+    for meta_key in ("migration_version", "updated_at"):
+        if meta_key in payload:
+            merged[meta_key] = payload[meta_key]
+
+    _save_json(THEME_LIVE_FILE, merged)
     return {"status": "success"}
 
 @app.post("/api/theme/bake-into-main-design")

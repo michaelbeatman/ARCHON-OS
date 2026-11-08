@@ -832,7 +832,7 @@
         await fetch("/api/theme/live-overrides", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rawCss: cssText, rules: {}, textOverrides: {}, htmlOverrides: {} })
+          body: JSON.stringify({ rawCss: cssText })
         });
       } catch (e) {
         console.warn("[CustomCSS] Server sync notice:", e);

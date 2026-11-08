@@ -519,7 +519,7 @@
         loadServicesFromServer();
         const res = await fetch("/api/agents");
         const loadedAgents = await res.json();
-        agents = loadedAgents.filter(a => a.active !== false && !SYSTEM_INTERNAL_IDS.includes((a.id || '').toLowerCase()));
+        agents = loadedAgents.filter(a => !SYSTEM_INTERNAL_IDS.includes((a.id || '').toLowerCase()));
         
         // Sicherstellen, dass standardmäßig Rollen zugewiesen sind
         agents.forEach(a => {

@@ -8,6 +8,7 @@ Ereignisse direkt einzuspeisen und autonome Workflows zu triggern.
 import os
 import sys
 import json
+import uuid
 import sqlite3
 import datetime
 import urllib.request
@@ -60,7 +61,9 @@ class EventMesh:
         # 2. Wenn es ein n8n-Trigger ist -> Aufgabe in Kanban erstellen
         task_id = None
         if "task" in event_type.lower() or channel == "n8n":
-            task_id = f"evt-{channel}-{datetime.datetime.now().strftime('%m%d%H%M%S')}"
+            # N-05: Zwei Webhooks in derselben Sekunde kollidierten vorher in
+            # evt-{channel}-%m%d%H%M%S — der zweite UEBERSCHRIEB den ersten Task.
+            task_id = f"evt-{channel}-{datetime.datetime.now().strftime('%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
             try:
                 from local_memory_bridge import LocalMemoryBridge
                 bridge = LocalMemoryBridge()
@@ -122,22 +125,56 @@ class EventMesh:
         if not os.path.exists(target_dir):
             return {"status": "ok", "scanned_files": 0, "events_created": 0}
 
+        # N-05: Cursor-Datei (Name, Groesse, mtime) — nur NEUE/veraenderte Dateien
+        # werden verarbeitet. Vorher erzeugte jeder Scan fuer jede noch liegende
+        # Datei ein neues Event, einen neuen Kanban-Task und einen Agent-Run.
+        cursor_file = os.path.join(target_dir, ".event_mesh_processed.json")
+        seen = {}
+        try:
+            if os.path.exists(cursor_file):
+                with open(cursor_file, "r", encoding="utf-8") as f:
+                    seen = json.load(f) or {}
+        except Exception:
+            pass
+        if not isinstance(seen, dict):
+            seen = {}
+
         created = []
+        new_seen = dict(seen)
         for fname in os.listdir(target_dir):
             fpath = os.path.join(target_dir, fname)
             if os.path.isfile(fpath) and not fname.startswith("."):
-                fsize = os.path.getsize(fpath)
+                try:
+                    fsize = os.path.getsize(fpath)
+                    mtime_ns = os.path.getmtime(fpath)
+                except OSError:
+                    continue
+                # Fingerabdruck der Datei; identischer Stand = bereits verarbeitet.
+                fingerprint = f"{fsize}:{mtime_ns}"
+                if seen.get(fname) == fingerprint:
+                    continue
                 evt = self.ingest_inbound_event(
                     channel="file_watcher",
                     event_type="document_received",
                     payload={"file_name": fname, "file_path": fpath, "file_size": fsize, "title": f"Posteingang: {fname}"}
                 )
                 created.append(evt)
+                if evt.get("status") not in ("error",):
+                    new_seen[fname] = fingerprint
+
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            with open(cursor_file, "w", encoding="utf-8") as f:
+                json.dump(new_seen, f, indent=2, ensure_ascii=False)
+        except Exception:
+            # Cursor-Schreibfehler duerfen den Scan nicht abbrechen; der naechste
+            # Lauf verarbeitet die Dateien dann erneut (sicher, nur teuer).
+            pass
 
         return {
             "status": "success",
             "inbox_directory": target_dir,
-            "scanned_files": len(created),
+            "scanned_files": len([n for n in os.listdir(target_dir) if os.path.isfile(os.path.join(target_dir, n)) and not n.startswith(".")]),
             "events_created": len(created),
             "events": created
         }

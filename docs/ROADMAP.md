@@ -60,7 +60,7 @@ Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 
 | Mandat | Profil | Stand |
 |---|---|---|
-| 1 | `senior_fullstack_engineer` | `backend/hermes_updater.py:63` — **Etappe 0: nichts geändert**, mit Belegen (siehe §3 Prio 1). Wartet auf Michaels Entscheidung A/B. |
+| 1 | `senior_fullstack_engineer` | **Etappe 1 committet `eed82c6d`**: eigener `DockerAdminClient` (gemeinsame `_ALLOWED` bleibt 7), Updater hinter Schalter `HERMES_UPDATER_DOCKER_CLIENT` (Default aus = heutiges Verhalten), eigener Pull-Timeout, Proxy-Regelvorschlag mit `haproxy -c` geprüft. **Etappe 2 (Proxy anwenden) + 3 (umstellen, Socket-Mount raus) warten auf Go.** Etappe 3 braucht vorher ein eigenes `DOCKER_ADMIN_HOST` — `DOCKER_HOST` ist global und würde alle Aufrufer mitziehen |
 | 2 | `devops_cloud_sec_specialist` | ✅ **`65a4a820`** — Rollenzaun für `POST …/avatar`, fail-closed, 9 Tests, Rot-Beweis gegen Altstand selbst reproduziert |
 | 3 | `senior_fullstack_engineer` | ✅ **`48d9b7db`** — Body-Beleg in `_decision_followup` + RAG-Key aus Env; 37 neue Tests, Rot-Beweis selbst reproduziert |
 
@@ -72,6 +72,25 @@ Zusätzlich erledigt, ohne eigenen Commit (weil Teil der obigen):
 schreibt der Startcheck eine **ERROR-Zeile**, kippt den Start aber **nicht**. Ein harter
 Abbruch hätte einen Lifespan-Umbau gebraucht — `main.py:78` fängt Hook-Exceptions und loggt nur.
 Der RAG-Sync selbst ist fail-fast: ohne Key wird kein `subprocess` gestartet.
+
+### 2b. RAG-Zugang: eingerichtet, aber durch den Embedder blockiert (Stand 08.11. früh)
+
+Erledigt und belegt: API-Key **von AnythingLLM selbst** ausgestellt (`POST /api/system/generate-api-key` —
+diese Version prüft gegen die Tabelle `api_keys`, **nicht** gegen eine Env-Variable), Key in `.env.archon`,
+`ANYTHINGLLM_URL=http://anything-llm:3001` (**ohne** `/api/v1` — das Sync-Skript hängt den Suffix selbst an,
+sonst `…/api/v1/api/v1` und HTML statt JSON), Workspace `mein-workspace` angelegt, Container neu erzeugt,
+Logzeile jetzt `INFO [RAG-Sync] API-Key aus ANYTHINGLLM_API_KEY geladen`, Upload endet mit
+`custom-documents/Kapitel_01.md-<uuid>.json`.
+
+**Blocker:** `POST /api/v1/workspace/<slug>/update-embeddings` bringt den AnythingLLM-Node-Prozess zum
+Absturz — `Illegal instruction (core dumped)`, Container restartet. Ursache: kein Embedder konfiguriert,
+der eingebaute Embedder stirbt auf dieser CPU. Ollama hat nur Chat-Modelle (`gemma`, `qwen2.5:3b`, `qwen3:8b`),
+kein Embedding-Modell, und lauscht nur auf `127.0.0.1:11434` (aus dem Container nicht erreichbar).
+Ohne Embedder bleibt der Workspace bei **0 Dokumenten** — der Sync kann nichts indexieren.
+
+**Rest bei Michael:** Embedder entscheiden (lokal Ollama + `nomic-embed-text` und `OLLAMA_HOST=0.0.0.0`,
+oder Cloud-Embedding mit Key, oder RAG bleiben lassen) und den Vault-Umfang festlegen — es stehen
+**4.436** qualifizierende Dateien aus `/opt/data/obsidian` an, nicht 277.
 
 ---
 

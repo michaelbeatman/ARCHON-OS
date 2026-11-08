@@ -6,7 +6,16 @@
     let activeProfileCategoryFilter = "all";
     let isLoadingProfiles = false;
     let _profilesLoadingPromise = null;
+    // F-15: Schutz gegen die Endlosschleife renderHermesProfilesList() ->
+    // loadHermesProfilesFromServer() -> renderHermesProfilesList(). Ist der
+    // Kader legitim leer (frisches Profil), feuerte der Browser dauerhaft
+    // GET /api/hermes/profiles (110 KB je Runde). Der Guard haelt fest, dass
+    // ein Abruf laeuft bzw. bereits gelaufen ist.
+    let _profilesFetchInFlight = false;
+    let _profilesFetchSettled = false;
     async function loadHermesProfilesView(force = false) {
+      // F-15: ein ausdrueckliches Neuladen setzt den Einmal-Guard zurueck.
+      if (force) _profilesFetchSettled = false;
       if (_profilesLoadingPromise && !force) {
         return _profilesLoadingPromise;
       }
@@ -82,14 +91,22 @@
       }
     }
     async function loadHermesProfilesFromServer() {
+      // F-15: nur ein Abruf gleichzeitig, und nach einem abgeschlossenen Abruf
+      // kein automatischer Neustart aus dem Rendern heraus.
+      if (_profilesFetchInFlight || _profilesFetchSettled) return;
+      _profilesFetchInFlight = true;
       try {
         const res = await fetch("/api/hermes/profiles");
         if (res.ok) {
           hermesProfilesData = await res.json();
           window.hermesProfilesData = hermesProfilesData;
         }
+        _profilesFetchSettled = true;
       } catch (e) {
         console.error("[DEBUG PROFILES] Error loading hermes profiles:", e);
+        _profilesFetchSettled = true;   // kein Retry-Sturm: der Nutzer kann manuell neu laden
+      } finally {
+        _profilesFetchInFlight = false;
       }
       if (currentSelectedProfileId) {
         selectProfileForEditor(currentSelectedProfileId);
@@ -383,10 +400,14 @@
       container.innerHTML = "";
       // Fallback: Wenn noch keine Daten geladen wurden, lade sie vom Server
       if (!Array.isArray(hermesProfilesData) || hermesProfilesData.length === 0) {
-        if (!isLoadingProfiles) {
+        // F-15: nur einmal anstossen. Danach steht ein echter Leerzustand,
+        // statt dauerhaft "Lade ..." zu pulsen und den Server zu haemmern.
+        if (!_profilesFetchSettled) {
           loadHermesProfilesFromServer();
+          container.innerHTML = `<div class="text-center py-8 text-xs text-[var(--muted-foreground)] font-mono animate-pulse">Lade Agenten-Kader...</div>`;
+        } else {
+          container.innerHTML = `<div class="text-center py-8 text-xs text-[var(--muted-foreground)] font-mono">Keine Agentenprofile vorhanden.</div>`;
         }
-        container.innerHTML = `<div class="text-center py-8 text-xs text-[var(--muted-foreground)] font-mono animate-pulse">Lade Agenten-Kader...</div>`;
         return;
       }
       const query = (document.getElementById("profile-search-input")?.value || "").toLowerCase().trim();

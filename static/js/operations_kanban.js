@@ -1373,7 +1373,7 @@
       todo: ['todo', 'ready', 'triage', 'scheduled'],
       in_progress: ['in_progress'],
       review: ['review'],
-      blocked: ['blocked'],
+      blocked: ['blocked', 'failed'],
       done: ['done']
     };
     const OPS_STATUS_BADGES = {

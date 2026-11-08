@@ -28,11 +28,19 @@ def estimate_prompt_cost(
     input_tokens = max(1, len(prompt) // 4)
     m_key = model_name.lower().strip()
 
-    rates = MODEL_PRICING.get("free-forever")
+    rates = None
     for k, v in MODEL_PRICING.items():
         if k in m_key:
             rates = v
             break
+
+    if rates is None:
+        # Fallback: Kostenfrei nur wenn explizit lokal / free im Modellnamen
+        if any(tok in m_key for tok in ("free", "local", "ollama")):
+            rates = MODEL_PRICING["free-forever"]
+        else:
+            # Konservativer Standardtarif fuer unbekannte kommerzielle Modelle (Pillar 5 / FinOps)
+            rates = {"in_per_m": 2.50, "out_per_m": 10.00}
 
     in_cost = (input_tokens / 1_000_000.0) * rates["in_per_m"]
     out_cost = (expected_output_tokens / 1_000_000.0) * rates["out_per_m"]

@@ -73,7 +73,18 @@ class MCTSEngine:
             child = MCTSNode(action=name, parent=root, description=desc)
             child.details = cand
             child.estimated_tokens = cand.get("estimated_tokens", 500)
-            child.risk_score = cand.get("risk_score", 0.2)
+            
+            # Heuristische Risiko-Ermittlung, falls kein expliziter risk_score angegeben ist
+            risk = cand.get("risk_score")
+            if risk is None:
+                comb_text = f"{name} {desc}".lower()
+                if any(w in comb_text for w in ["drop", "delete", "destroy", "wipe", "loeschen", "truncate", "format"]):
+                    risk = 0.85
+                elif any(w in comb_text for w in ["safe", "backup", "verify", "schrittweise", "dry_run"]):
+                    risk = 0.1
+                else:
+                    risk = 0.2
+            child.risk_score = risk
             root.children.append(child)
 
         # 2. Rollout & Simulation Loops
@@ -112,6 +123,12 @@ class MCTSEngine:
             "best_action": best_child.action,
             "best_action_description": best_child.description,
             "highest_confidence_q": round(best_child.q_value, 3),
+            "recommended_path": {
+                "action": best_child.action,
+                "description": best_child.description,
+                "risk_score": round(best_child.risk_score, 2),
+                "q_value": round(best_child.q_value, 3)
+            },
             "ranking": evaluation_ranking,
             "total_simulations": rollouts * len(root.children),
             "simulated_at": datetime.datetime.now().isoformat()

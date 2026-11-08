@@ -343,30 +343,47 @@ async def dispatch_to_omniroute_or_container(
     Instrumentiert mit OpenTelemetry- / Langfuse-Spans.
     """
     t_start = time.time()
-    async with _TASK_SEMAPHORE:
-        res = await _dispatch_to_omniroute_or_container_exec(
-            agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id
-        )
-        duration_ms = (time.time() - t_start) * 1000.0
-        try:
-            from backend.otel_tracer import tracer
-            tr_id = f"task-{task_id}" if task_id else tracer.start_trace(f"exec.{agent_id}", task_id=task_id, agent_id=agent_id)
-            tracer.record_span(
-                trace_id=tr_id,
-                name=f"llm.{agent_id}",
-                span_type="llm",
-                agent_id=agent_id,
-                model=res.get("model") or model,
-                input_data=prompt[:500],
-                output_data=(res.get("content") or "")[:500],
-                input_tokens=res.get("input_tokens", 0),
-                output_tokens=res.get("output_tokens", 0),
-                duration_ms=duration_ms,
-                status="OK" if res.get("status") == "success" else "ERROR"
+    slot_id = task_id or f"{agent_id}-{t_start}"
+    has_throttle_slot = False
+    try:
+        from backend.concurrency_throttle import concurrency_throttle
+        await concurrency_throttle.acquire_slot(agent_id, slot_id, priority=2)
+        has_throttle_slot = True
+    except Exception:
+        has_throttle_slot = False
+
+    try:
+        async with _TASK_SEMAPHORE:
+            res = await _dispatch_to_omniroute_or_container_exec(
+                agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id
             )
-        except Exception:
-            pass
-        return res
+            duration_ms = (time.time() - t_start) * 1000.0
+            try:
+                from backend.otel_tracer import tracer
+                tr_id = f"task-{task_id}" if task_id else tracer.start_trace(f"exec.{agent_id}", task_id=task_id, agent_id=agent_id)
+                tracer.record_span(
+                    trace_id=tr_id,
+                    name=f"llm.{agent_id}",
+                    span_type="llm",
+                    agent_id=agent_id,
+                    model=res.get("model") or model,
+                    input_data=prompt[:500],
+                    output_data=(res.get("content") or "")[:500],
+                    input_tokens=res.get("input_tokens", 0),
+                    output_tokens=res.get("output_tokens", 0),
+                    duration_ms=duration_ms,
+                    status="OK" if res.get("status") == "success" else "ERROR"
+                )
+            except Exception:
+                pass
+            return res
+    finally:
+        if has_throttle_slot:
+            try:
+                from backend.concurrency_throttle import concurrency_throttle
+                await concurrency_throttle.release_slot(slot_id)
+            except Exception:
+                pass
 
 AUTO_MODEL_MAP = {
     "auto/best-reasoning": "deepseek/deepseek-r1",

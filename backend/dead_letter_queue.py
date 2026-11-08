@@ -93,7 +93,7 @@ class DeadLetterQueueManager:
             "next_backoff_seconds": base_backoff
         }
 
-    def replay_job(self, dlq_id: str, simulate_success: bool = True) -> Dict[str, Any]:
+    def replay_job(self, dlq_id: str, simulate_success: bool = False) -> Dict[str, Any]:
         cfg = _get_cfg()
         base_backoff = int(cfg.get("backoff_base_seconds", 10))
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -132,14 +132,16 @@ class DeadLetterQueueManager:
         with sqlite3.connect(DB_PATH, timeout=15.0) as conn:
             conn.row_factory = sqlite3.Row
             if status_filter:
+                total = conn.execute("SELECT COUNT(*) FROM dead_letter_queue WHERE status = ?", (status_filter,)).fetchone()[0]
                 rows = conn.execute(
-                    "SELECT * FROM dead_letter_queue WHERE status = ? ORDER BY created_at DESC",
+                    "SELECT * FROM dead_letter_queue WHERE status = ? ORDER BY created_at DESC LIMIT 50",
                     (status_filter,)
                 ).fetchall()
             else:
+                total = conn.execute("SELECT COUNT(*) FROM dead_letter_queue").fetchone()[0]
                 rows = conn.execute("SELECT * FROM dead_letter_queue ORDER BY created_at DESC LIMIT 50").fetchall()
             items = [dict(r) for r in rows]
-        return {"total": len(items), "items": items}
+        return {"total": total, "items": items}
 
 
 dead_letter_queue_manager = DeadLetterQueueManager()

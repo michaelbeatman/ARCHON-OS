@@ -42,6 +42,27 @@
       if (subtab === 'master-chat' || subtab === 'masterchat') subtab = 'chat';
       currentOpsTab = subtab;
 
+      const mountEl = document.getElementById('view-operations-mount');
+      if (mountEl && (subtab === 'kanban' || subtab === 'org' || subtab === 'comm')) {
+        fetch('/static/views/operations_view.html?v=' + Date.now()).then(r => r.text()).then(html => {
+          const el = document.getElementById('view-operations-mount');
+          if (el) el.outerHTML = html;
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+          setOperationsTab(subtab);
+        });
+        return;
+      }
+      const chatMountEl = document.getElementById('view-master-chat-mount');
+      if (chatMountEl && subtab === 'chat') {
+        fetch('/static/views/master_chat_view.html?v=' + Date.now()).then(r => r.text()).then(html => {
+          const el = document.getElementById('view-master-chat-mount');
+          if (el) el.outerHTML = html;
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+          setOperationsTab('chat');
+        });
+        return;
+      }
+
       const tabs = ['projects', 'chat', 'kanban', 'org', 'automation', 'comm'];
       const headerMeta = {
         projects: {
@@ -136,29 +157,43 @@
       if (subtab === 'projects') {
         if (typeof loadOperationsProjects === 'function') loadOperationsProjects();
       } else if (subtab === 'chat') {
+        const vmc = document.getElementById('view-master-chat');
+        if (vmc) {
+          vmc.classList.remove('hidden');
+          vmc.style.display = 'flex';
+        }
         if (typeof initMasterChat === 'function') initMasterChat();
       } else if (subtab === 'automation') {
         const iframe = document.getElementById('automation-n8n-iframe');
-        const expectedHost = window.location.hostname || 'localhost';
-        const expectedSrc = `http://${expectedHost}:5678`;
-        if (iframe && (!iframe.src || iframe.src === 'about:blank' || !iframe.src.includes(':5678'))) {
-          iframe.src = expectedSrc;
+        const extLink = document.getElementById("n8n-external-link");
+        if (extLink) extLink.href = "/n8n-proxy/";
+        if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.indexOf('/n8n-proxy') === -1)) {
+          iframe.src = '/n8n-proxy/';
         }
       } else if (subtab === 'kanban') {
-        if (!opsKanbanData && typeof loadOperationsData === 'function') {
+        const colContainer = document.getElementById('ops-kanban-columns-container');
+        if (opsKanbanData && typeof renderOperationsKanban === 'function' && colContainer && colContainer.children.length === 0) {
+          renderOperationsKanban(opsKanbanData);
+        }
+        if (typeof loadOperationsData === 'function') {
           loadOperationsData(false);
         }
       }
 
       if (subtab === 'org') {
-        if (opsOrgViewMode === 'flow') {
-          if (!currentHierarchyData || !currentHierarchyData.nodes || currentHierarchyData.nodes.length === 0) {
-            loadOrgHierarchyData();
-          } else {
-            renderOpsOrgFlowchart();
-          }
-        } else if (opsOrgData) {
+        if (typeof loadOrgHierarchyData === 'function') {
+          loadOrgHierarchyData();
+        } else if (opsOrgViewMode === 'flow' && typeof renderOpsOrgFlowchart === 'function') {
+          renderOpsOrgFlowchart();
+        } else if (opsOrgData && typeof renderOperationsOrgChart === 'function') {
           renderOperationsOrgChart(opsOrgData);
+        }
+      } else if (subtab === 'comm') {
+        if (typeof renderOperationsCommFeed === 'function' && opsCommData) {
+          renderOperationsCommFeed(opsCommData, activeCommFilter);
+        }
+        if (typeof loadOperationsData === 'function') {
+          loadOperationsData(false);
         }
       }
       if (window.lucide) lucide.createIcons();
@@ -3539,3 +3574,13 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
       if (window.lucide) lucide.createIcons();
     }
+
+    // Expose functions globally for index.html and onclick handlers
+    window.setOperationsTab = setOperationsTab;
+    window._opsKanbanSetTab = setOperationsTab;
+    window.loadOperationsData = loadOperationsData;
+    window.renderOperationsKanban = renderOperationsKanban;
+    window.loadOrgHierarchyData = loadOrgHierarchyData;
+    window.renderOpsOrgFlowchart = renderOpsOrgFlowchart;
+    window.renderOperationsOrgChart = renderOperationsOrgChart;
+

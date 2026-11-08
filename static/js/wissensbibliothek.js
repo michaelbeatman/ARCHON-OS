@@ -704,7 +704,7 @@
         if (data.status !== "ok") return;
         const activeCfg = data.active_config || {};
         const activeProvider = activeCfg.provider || "groq";
-        const activeModel = activeCfg.model || "evey-session-guard:";
+        const activeModel = activeCfg.model || "auto/best-coding";
         const activeBaseUrl = activeCfg.base_url || "";
         if (activeContainer) {
           activeContainer.innerHTML = `

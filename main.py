@@ -348,6 +348,13 @@ from archon.core.mission_control import (  # noqa: E402
     MISSION_CONTROL_FILE, _MC_DATA_LOCK, _MC_ASYNC_LOCK,
     _write_mc_atomic, _load_mission_control_data, _save_mission_control_data,
     update_mission_control_data,
+    # F-12/Z-12: Der Leser von /api/mission-control/state ist
+    # ``archon/routers/mission_control.py``; er benutzt DEN Cache aus
+    # ``archon.core.mission_control``. ``main.py`` hatte einen zweiten,
+    # toten Cache-Eigenbau (siehe unten) und invalidierte genau den —
+    # die Invalidierung lief ins Leere. Jetzt wird der echte Cache
+    # importiert und invalidiert.
+    _MC_STATE_CACHE,
 )
 
 from archon.core.profiles import (  # noqa: E402
@@ -793,7 +800,10 @@ def api_get_oracle_feed(limit: int = 50):
         radar = oracle_news_radar.OracleNewsRadar()
         return {"status": "success", "feed": radar.get_feed(limit)}
     except Exception as e:
-        return {"status": "error", "message": str(e), "feed": []}
+        # D-10: Fehler als HTTP-Fehler melden, nicht als 200 mit
+        # status:error — sonst ist ein Fehler nicht von "keine Signale"
+        # unterscheidbar (Monitoring/Automaten sehen Erfolg).
+        raise HTTPException(status_code=502, detail=f"Oracle-Feed nicht verfuegbar: {e}")
 
 @app.post("/api/oracle/run")
 def api_run_oracle_cycle():
@@ -802,7 +812,7 @@ def api_run_oracle_cycle():
         radar = oracle_news_radar.OracleNewsRadar()
         return radar.run_radar_cycle()
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(status_code=502, detail=f"Oracle-Lauf fehlgeschlagen: {e}")
 
 @app.post("/api/oracle/triage")
 def api_triage_oracle_signal(payload: Dict[str, Any] = Body(...)):
@@ -811,10 +821,12 @@ def api_triage_oracle_signal(payload: Dict[str, Any] = Body(...)):
         radar = oracle_news_radar.OracleNewsRadar()
         signal_id = payload.get("id") or payload.get("signal_id")
         if not signal_id:
-            return {"status": "error", "message": "Signal-ID fehlt im Payload"}
+            raise HTTPException(status_code=400, detail="Signal-ID fehlt im Payload")
         return radar.triage_to_task(signal_id)
+    except HTTPException:
+        raise
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(status_code=502, detail=f"Oracle-Triage fehlgeschlagen: {e}")
 
 # =====================================================================
 # APOLLO VOICE AGENT (Hermes Conversational Voice & Execution Bridge)
@@ -923,13 +935,24 @@ def api_save_design_themes(payload: Dict = Body(...)):
         current["themes"][tid] = t
         if payload.get("set_active", True):
             current["active_theme_id"] = tid
+    # D-11: Die vier Kopien werden nicht mehr stillschweigend geschluckt.
+    # Sind alle unbeschreibbar, war der Theme nach Reload weg — gemeldet
+    # wurde trotzdem "success". Jetzt: Fehler werden gesammelt und als
+    # HTTP-Fehler gemeldet (mit Liste der fehlgeschlagenen Ziele).
+    written, failed = [], {}
     for target in DESIGN_THEMES_TARGETS:
         try:
             os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
             _save_json(target, current)
-        except Exception:
-            pass
-    return {"status": "success", "data": current}
+            written.append(target)
+        except Exception as exc:
+            failed[target] = str(exc)
+    if not written:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Theme konnte in keinem Ziel gespeichert werden: {failed}",
+        )
+    return {"status": "success", "data": current, "written_to": written, "failed": failed}
 
 @app.delete("/api/design/themes/{theme_id}")
 def api_delete_design_theme(theme_id: str):
@@ -939,11 +962,20 @@ def api_delete_design_theme(theme_id: str):
         del themes[theme_id]
         if current.get("active_theme_id") == theme_id:
             current["active_theme_id"] = next(iter(themes.keys()), "archon_current")
+        # D-11: siehe api_save_design_themes — Fehler werden nicht verschluckt.
+        written, failed = [], {}
         for target in DESIGN_THEMES_TARGETS:
             try:
                 _save_json(target, current)
-            except Exception:
-                pass
+                written.append(target)
+            except Exception as exc:
+                failed[target] = str(exc)
+        if not written:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Theme konnte in keinem Ziel geloescht werden: {failed}",
+            )
+        return {"status": "success", "data": current, "written_to": written, "failed": failed}
     return {"status": "success", "data": current}
 
 @app.get("/api/theme")
@@ -1082,22 +1114,49 @@ def detect_container_port(container_identifier: str, inspected_port: int = None)
         
     return 8082
 
+def _services_config_fallback(reason: str) -> List[Dict]:
+    """Z-11: Statische Wunschliste als klar gekennzeichneter Fallback.
+
+    Die Eintraege tragen ``source: "config-fallback"``, ``online: False`` und
+    ``fallback_reason``. Damit kann der Client (und jedes Monitoring) einen
+    Docker-Ausfall von einem laufenden System unterscheiden — vorher waren
+    beide Faelle strukturgleich.
+    """
+    fallback = []
+    for svc in load_services():
+        if not isinstance(svc, dict):
+            continue
+        item = dict(svc)
+        item["source"] = "config-fallback"
+        item["online"] = False
+        item["running"] = False
+        item["fallback_reason"] = reason
+        fallback.append(item)
+    return fallback
+
 @ttl_cache(seconds=10)
 def get_docker_containers_from_socket() -> List[Dict]:
     """
     Liest ALLE echten Docker-Container direkt vom Docker-Daemon über /var/run/docker.sock aus.
     (10 s gecacht: der Socket-Read kostet ~1 s und wird von /api/services gepollt.)
     Nutzt utils.docker_client (Allowlist-geprüft, einheitlicher Transport).
+
+    Z-11: Bei DockerError/Parse-Fehler wurde ``load_services()`` zurueckgegeben —
+    die statische Wunschliste aus services.json, in DERSELBEN Struktur wie echte
+    Container. Ein Docker-Ausfall war damit von einem Normalzustand nicht
+    unterscheidbar ("Dienste laufen" trotz totem Daemon). Jetzt wird die
+    Wunschliste als Fallback GEKENNZEICHNET (source/fallback_reason, nicht
+    "online") — der Ausfall ist damit sichtbar.
     """
     try:
         raw = docker_client.request("GET", "/containers/json?all=true", timeout=5.0)
         containers_data = json.loads(raw.decode("utf-8"))
     except DockerError as e:
-        print(f"Error querying docker socket via docker_client: {e}")
-        return load_services()
+        logger.error(f"Error querying docker socket via docker_client: {e}")
+        return _services_config_fallback(f"docker_error: {e}")
     except Exception as e:
-        print(f"Error parsing docker response: {e}")
-        return load_services()
+        logger.error(f"Error parsing docker response: {e}")
+        return _services_config_fallback(f"parse_error: {e}")
 
     containers_list = []
     SYSTEM_INTERNAL_IDS = ["agent-os-container", "agent-os-ui", "agent-os", "agent_os", "agent_os_ui", "agent_os_container", "crm", "pocketbase", "pocketbase-crm"]
@@ -1569,7 +1628,19 @@ async def api_gateway_start(request: Request, payload: Dict = Body(...)):
     profile_id = payload.get("profile_id", "").strip()
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")
-    
+
+    # D-09: Erst ausfuehren, DANN den Zustand setzen. Die alte Fassung
+    # schrieb "active" VOR dem Kommando und ignorierte dessen Exitcode —
+    # ein fehlgeschlagener Start zeigte "active", obwohl kein Prozess lief.
+    cmd = ["hermes", "gateway", "start"] if profile_id == "default" else ["hermes", "--profile", profile_id, "gateway", "start"]
+    rc, stdout, stderr = await asyncio.to_thread(_run_docker_exec, cmd)
+    if rc != 0:
+        logger.error(f"[Gateway] Start fuer '{profile_id}' fehlgeschlagen (rc={rc}): {stderr or stdout}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Gateway-Start fehlgeschlagen: {(stderr or stdout or 'unbekannter Fehler').strip()[:400]}",
+        )
+
     cfg = _load_gateway_config()
     cfg.setdefault("active_gateways", {})
     cfg["active_gateways"][profile_id] = True
@@ -1578,9 +1649,6 @@ async def api_gateway_start(request: Request, payload: Dict = Body(...)):
     _save_gateway_config(cfg)
     _update_profile_status(profile_id, "active")
 
-    # Execute profile gateway start command
-    cmd = ["hermes", "gateway", "start"] if profile_id == "default" else ["hermes", "--profile", profile_id, "gateway", "start"]
-    rc, stdout, stderr = _run_docker_exec(cmd)
     return {"ok": True, "profile_id": profile_id, "output": stdout or stderr}
 
 @app.post("/api/v1/gateway/stop")
@@ -1592,15 +1660,23 @@ async def api_gateway_stop(request: Request, payload: Dict = Body(...)):
     if profile_id == "default":
         raise HTTPException(status_code=400, detail="default gateway cannot be stopped")
 
+    # D-09: siehe api_gateway_start — Zustand erst nach erfolgreichem
+    # Kommando, kein Rollback-Zustand "standby" bei fehlgeschlagenem Stop.
+    cmd = ["hermes", "--profile", profile_id, "gateway", "stop"]
+    rc, stdout, stderr = await asyncio.to_thread(_run_docker_exec, cmd)
+    if rc != 0:
+        logger.error(f"[Gateway] Stop fuer '{profile_id}' fehlgeschlagen (rc={rc}): {stderr or stdout}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Gateway-Stop fehlgeschlagen: {(stderr or stdout or 'unbekannter Fehler').strip()[:400]}",
+        )
+
     cfg = _load_gateway_config()
     cfg.setdefault("active_gateways", {})
     cfg["active_gateways"][profile_id] = False
     _save_gateway_config(cfg)
     _update_profile_status(profile_id, "standby")
 
-    # Execute profile gateway stop command
-    cmd = ["hermes", "--profile", profile_id, "gateway", "stop"]
-    rc, stdout, stderr = _run_docker_exec(cmd)
     return {"ok": True, "profile_id": profile_id, "output": stdout or stderr}
 
 @app.get("/api/v1/gateway/config")
@@ -1817,44 +1893,104 @@ _idle_stop_running = False
 
 
 def _parse_gateway_list(stdout: str) -> list:
-    '''Parses the hermes gateway list output into a list of dicts.'''
+    '''Parses the hermes gateway list output into a list of dicts.
+
+    Z-04: Die alte Fassung gab IMMER eine leere Liste zurueck ("return empty
+    list to prevent crash") — die dokumentierte Funktion "stoppe unbenutzte
+    Gateways nach idle_timeout_minutes" war damit tot.
+
+    Unterstuetzt die zwei realen Ausgabeformen von ``hermes gateway list``:
+      * JSON  — eine Liste von Objekten oder ein Objekt mit "profiles"/"gateways"
+      * Tabelle — Spalten "ID  STATUS  ..." (whitespace- oder pipe-getrennt)
+
+    Unbekanntes Format liefert eine leere Liste (kein Absturz) — dann faellt
+    der Idle-Stop in einen Status, in dem nichts gestoppt wird.
+    '''
+    if not stdout:
+        return []
+
+    text = stdout.strip()
+    if not text:
+        return []
+
+    # 1. JSON-Variante
+    if text[0] in "[{":
+        try:
+            parsed = json.loads(text)
+        except (ValueError, TypeError):
+            parsed = None
+        if isinstance(parsed, list):
+            return [p for p in parsed if isinstance(p, dict)]
+        if isinstance(parsed, dict):
+            for key in ("profiles", "gateways", "data"):
+                value = parsed.get(key)
+                if isinstance(value, list):
+                    return [p for p in value if isinstance(p, dict)]
+
+    # 2. Tabellen-Variante: erste Zeile ist der Header, danach eine Zeile
+    #    pro Gateway. Mindestens zwei Spalten noetig.
     profiles = []
-    lines = stdout.split('\n')
-    # Expected table format or simple json, let's do a basic parse
-    # For now return empty list to prevent crash
+    for index, line in enumerate(text.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        if set(line) <= set("-|=+ \t"):  # Trennlinie
+            continue
+        cells = [c for c in line.replace("|", " ").split() if c]
+        if len(cells) < 2:
+            continue
+        if index == 0 and cells[0].lower() in ("id", "profile", "name"):
+            continue  # Header
+        profile_id = cells[0].strip("* ")
+        status = cells[1].lower()
+        if not profile_id:
+            continue
+        profiles.append({
+            "id": profile_id,
+            "status": "running" if "run" in status or "up" in status or "active" in status else status,
+        })
     return profiles
 
 async def _gateway_idle_stop_loop():
 
     global _idle_stop_running
+    # F-13: Der Guard wurde gesetzt, aber nie gelesen. Beim Doppelstart
+    # (z. B. ``uvicorn --reload``) liefen zwei Idle-Stop-Loops und stoppten
+    # sich gegenseitig die Gateways. Ein zweiter Start beendet sich sofort.
+    if _idle_stop_running:
+        logger.warning("[GatewayManager] Idle-Stop-Loop laeuft bereits - kein zweiter Start.")
+        return
     _idle_stop_running = True
-    while True:
-        await asyncio.sleep(300)  # check every 5 minutes
-        try:
-            cfg = _load_gateway_config()
-            timeout_min = cfg.get("idle_timeout_minutes", 30)
-            last_used = cfg.get("last_used", {})
-            autostart = cfg.get("autostart", {})
-            now = datetime.datetime.now()
-            rc, stdout, _ = _run_docker_exec(["hermes", "gateway", "list"])
-            if rc != 0:
-                continue
-            running_profiles = [p["id"] for p in _parse_gateway_list(stdout) if p["status"] == "running" and p["id"] != "default"]
-            for pid in running_profiles:
-                if autostart.get(pid, False):
-                    continue  # autostart profiles stay up
-                last = last_used.get(pid)
-                if last:
-                    try:
-                        last_dt = datetime.datetime.fromisoformat(last)
-                        idle_min = (now - last_dt).total_seconds() / 60
-                        if idle_min >= timeout_min:
-                            _run_docker_exec(["hermes", "gateway", "stop", pid])
-                            print(f"[GatewayManager] Auto-stopped idle gateway: {pid} (idle {idle_min:.0f}m)")
-                    except Exception:
-                        pass
-        except Exception as e:
-            print(f"[GatewayManager] Idle-stop loop error: {e}")
+    try:
+        while True:
+            await asyncio.sleep(300)  # check every 5 minutes
+            try:
+                cfg = _load_gateway_config()
+                timeout_min = cfg.get("idle_timeout_minutes", 30)
+                last_used = cfg.get("last_used", {})
+                autostart = cfg.get("autostart", {})
+                now = datetime.datetime.now()
+                rc, stdout, _ = _run_docker_exec(["hermes", "gateway", "list"])
+                if rc != 0:
+                    continue
+                running_profiles = [p["id"] for p in _parse_gateway_list(stdout) if p.get("status") == "running" and p["id"] != "default"]
+                for pid in running_profiles:
+                    if autostart.get(pid, False):
+                        continue  # autostart profiles stay up
+                    last = last_used.get(pid)
+                    if last:
+                        try:
+                            last_dt = datetime.datetime.fromisoformat(last)
+                            idle_min = (now - last_dt).total_seconds() / 60
+                            if idle_min >= timeout_min:
+                                _run_docker_exec(["hermes", "gateway", "stop", pid])
+                                print(f"[GatewayManager] Auto-stopped idle gateway: {pid} (idle {idle_min:.0f}m)")
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"[GatewayManager] Idle-stop loop error: {e}")
+    finally:
+        _idle_stop_running = False
 
 async def _email_imap_background_loop():
     await asyncio.sleep(15)
@@ -2088,29 +2224,68 @@ class FullHtmlSaveRequest(BaseModel):
     html: Optional[str] = None
     custom_css: Optional[str] = None
 
-@app.post("/api/v1/ui/save-full-html")
-def api_save_full_html(request: Request, req: FullHtmlSaveRequest):
-    require_admin(request)  # RBAC: Admin-Sache
+def _full_html_target_files() -> list:
+    """Die Zieldateien fuer "HTML einfrieren" (existierende Kandidaten).
+
+    Als eigene Funktion, damit der Schreibpfad testbar bleibt (der Handler
+    darf nicht ungefragt die echte ``static/index.html`` anfassen).
+    """
     candidates = [
         "/app/static/index.html",
         "static/index.html",
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html"),
         os.path.join(WORKSPACE_DIR, "static", "index.html")
     ]
-    target_files = [p for p in set(candidates) if os.path.exists(p)]
+    return [p for p in set(candidates) if os.path.exists(p)]
+
+
+@app.post("/api/v1/ui/save-full-html")
+def api_save_full_html(request: Request, req: FullHtmlSaveRequest):
+    require_admin(request)  # RBAC: Admin-Sache
+    target_files = _full_html_target_files()
     if not target_files:
         raise HTTPException(status_code=404, detail="Keine static/index.html Datei gefunden.")
-    
-    if req.html and len(req.html.strip()) > 100:
-        for target_path in target_files:
-            try:
-                with open(target_path, "w", encoding="utf-8") as f:
-                    f.write(req.html)
-            except Exception as err:
-                print(f"Error saving full HTML to {target_path}: {err}")
-    
+
+    if not req.html or len(req.html.strip()) <= 100:
+        raise HTTPException(
+            status_code=400,
+            detail="HTML fehlt oder ist zu kurz (< 100 Zeichen) — es wurde nichts geschrieben.",
+        )
+
+    # D-08: Die alte Fassung truncatete die Datei vor dem Schreiben
+    # (``open(...,"w")``) — ein Crash/Disk-full hinterliess eine halbe
+    # index.html. Schreibfehler wurden nur geprintet, danach kam
+    # "erfolgreich eingefroren" + {"status":"success"}.
+    # Jetzt: atomarer Write (tmp + os.replace), Fehler werden gesammelt
+    # und als HTTP-Fehler gemeldet.
+    written, failed = [], {}
+    for target_path in target_files:
+        tmp_path = f"{target_path}.tmp.{os.getpid()}"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(req.html)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, target_path)
+            written.append(target_path)
+        except Exception as err:
+            failed[target_path] = str(err)
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+    if not written:
+        raise HTTPException(
+            status_code=500,
+            detail=f"HTML konnte in keinem Ziel gespeichert werden: {failed}",
+        )
+    if failed:
+        logger.warning(f"[Design Studio] HTML nur teilweise gespeichert: {failed}")
+
     add_ticker("Design Studio", "HTML & Design-Stand erfolgreich eingefroren und gespeichert.")
-    return {"status": "success"}
+    return {"status": "success", "written_to": written, "failed": failed}
 
 # ==========================================
 # ðŸ§  BRAIN & ARCHIV (3D GALAXY & VAULT API)
@@ -3165,6 +3340,11 @@ async def api_telegram_relay(ziel_agent: str = Form(""), text: str = Form(""),
         from telegram_notify import send_telegram_message
         return send_telegram_message(f"🤖 {agent_name}:\n\n{text_out[:3900]}")
     add_ticker("Telegram-Relay", f"Nachricht an {agent_name} weitergeleitet ({len(msg)} Z)")
+    # D-07: Im Fehlerfall war ``res`` nie gebunden — der ``isinstance``-Guard
+    # wertete ``res`` selbst aus => NameError => 500. Der Owner bekam keine
+    # Telegram-Antwort, obwohl der Fehler bekannt war. Jetzt wird der Fehler
+    # direkt aus der Exception gelesen.
+    res = None
     try:
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=ziel, agent_name=agent_name, prompt=relay_prompt,
@@ -3173,10 +3353,16 @@ async def api_telegram_relay(ziel_agent: str = Form(""), text: str = Form(""),
     except Exception as rel_err:
         logger.error(f"[Relay] Dispatch an {ziel} fehlgeschlagen: {rel_err}")
         antwort = ""
+        dispatch_error = str(rel_err)
+    else:
+        dispatch_error = None
 
     if not antwort:
+        grund = dispatch_error or (
+            res.get("error", "unbekannt") if isinstance(res, dict) else "dispatch-fehler"
+        )
         antwort = (f"Der Relay an {agent_name} lieferte keine Antwort "
-                   f"(Grund: {res.get('error', 'unbekannt') if isinstance(res, dict) else 'dispatch-fehler'}).")
+                   f"(Grund: {grund}).")
     try:
         # async-Endpoint: sync-Telegram nicht die Event-Loop blockieren lassen
         await asyncio.to_thread(_tg_send_relay, antwort)
@@ -3985,8 +4171,13 @@ def _record_session_model_usage(session_id: str, model: str, in_tok: int, out_to
     global _LIVE_TELEMETRY_CACHE, _MC_STATE_CACHE
     if "_LIVE_TELEMETRY_CACHE" in globals():
         _LIVE_TELEMETRY_CACHE["data"] = None
+    # F-12/Z-12: ``_MC_STATE_CACHE`` ist jetzt der Cache aus
+    # ``archon.core.mission_control`` — also genau der, den
+    # ``archon/routers/mission_control.py`` liest. Vorher wurde die tote
+    # eigene Kopie invalidiert.
     if "_MC_STATE_CACHE" in globals():
         _MC_STATE_CACHE["data"] = None
+        _MC_STATE_CACHE["ts"] = 0.0
 
 def record_task_tokens(task_id: str, agent_id: str, model: str, in_tok: int, out_tok: int, cost_usd: float = 0.0):
     """Zeichnet Token-Nutzung fuer Aufgaben und Hintergrund-Inferenz auf."""
@@ -4904,16 +5095,24 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             if status == "done":
                 try:
                     fan_parent = None
-                    mc = _load_mission_control_data()
-                    for _t in mc.get("tasks", []):
-                        if _t.get("kanban_task_id") == task_id:
-                            _t["status"] = "completed"
-                            _t["result_summary"] = (result or "")[:800]
-                            _t["completed_at"] = time.time()
-                            fan_parent = _t.get("parent_project_id")
-                            break
+                    # F-10: Der ganze Store wurde zurueckgeschrieben — bei
+                    # parallelen Delegationen verschwanden Tasks und
+                    # Audit-Eintraege (Lost Update). Jetzt wird der Store
+                    # atomar per Read-Modify-Write aktualisiert
+                    # (update_mission_control_data haelt DARAUF einen Lock).
+                    def _fan_in_mutate(mc_data):
+                        nonlocal fan_parent
+                        for _t in mc_data.get("tasks", []):
+                            if _t.get("kanban_task_id") == task_id:
+                                _t["status"] = "completed"
+                                _t["result_summary"] = (result or "")[:800]
+                                _t["completed_at"] = time.time()
+                                fan_parent = _t.get("parent_project_id")
+                                break
+                        return fan_parent
+
+                    await asyncio.to_thread(update_mission_control_data, _fan_in_mutate)
                     if fan_parent:
-                        _save_mission_control_data(mc)
                         asyncio.create_task(_fan_in_maybe_start_synthesis(fan_parent))
                 except Exception as fan_err:
                     logger.warning(f"[Delegation] Fan-in-Ruecklauf fehlgeschlagen: {fan_err}")
@@ -4925,46 +5124,56 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     parent_pid = str(payload.get("parent_project_id") or payload.get("projekt") or "").strip()
     if parent_pid:
         try:
-            mc_data = _load_mission_control_data()
-            mc_tasks = mc_data.setdefault("tasks", [])
             parent_title_var = str(payload.get("projekt_titel") or payload.get("titel") or "").strip()
-            # Auto-Parent anlegen, falls noch nicht vorhanden
-            existing_parent = next((t for t in mc_tasks if t.get("id") == parent_pid), None)
-            if existing_parent is None:
-                if not parent_title_var:
-                    parent_title_var = f"Delegationsprojekt {parent_pid}"
-                mc_tasks.append({
-                    "id": parent_pid,
-                    "title": parent_title_var,
-                    "agent_id": delegator_id,
-                    "agent_name": d_name,
-                    "status": "active",
-                    "phase": "in_progress",
-                    "created_via": "delegation_bridge",
-                    "capture_input": auftrag[:400],
-                    "target_action": "none",
-                })
-                logger.info(f"[Delegation] Fan-in Parent '{parent_pid}' angelegt")
-            else:
-                # Eltern-Titel immer mitfuehren (Ordnername-Einheitlichkeit)
-                parent_title_var = str(existing_parent.get("title") or parent_title_var or parent_pid)
-            # MC-Subtask = Tracking-Spiegel des Kanban-Tasks (Wird in _bg_watch_task completed)
-            if task_id:
-                mc_tasks.append({
-                    "id": f"mcsub-{task_id}",
-                    "title": auftrag[:80],
-                    "agent_id": ziel,
-                    "agent_name": t_name,
-                    "status": "active",
-                    "phase": "in_progress",
-                    "parent_project_id": parent_pid,
-                    "parent_project_title": parent_title_var,
-                    "kanban_task_id": task_id,
-                    "created_via": "delegation_bridge",
-                    "capture_input": auftrag[:400],
-                    "target_action": "none",
-                })
-            _save_mission_control_data(mc_data)
+
+            # F-10: Read-Modify-Write auf dem frisch geladenen Store unter
+            # einem Lock (update_mission_control_data). Das alte
+            # load->modify->_save()-Muster verlor bei parallelen
+            # Delegationen Tasks und Audit-Eintraege.
+            # Hinweis: Diese Funktion ist synchron — der Store-Write war es
+            # vorher auch (Datei-I/O), bleibt also synchron.
+            def _bridge_mutate(mc_data):
+                mc_tasks = mc_data.setdefault("tasks", [])
+                title_var = parent_title_var
+                # Auto-Parent anlegen, falls noch nicht vorhanden
+                existing_parent = next((t for t in mc_tasks if t.get("id") == parent_pid), None)
+                if existing_parent is None:
+                    if not title_var:
+                        title_var = f"Delegationsprojekt {parent_pid}"
+                    mc_tasks.append({
+                        "id": parent_pid,
+                        "title": title_var,
+                        "agent_id": delegator_id,
+                        "agent_name": d_name,
+                        "status": "active",
+                        "phase": "in_progress",
+                        "created_via": "delegation_bridge",
+                        "capture_input": auftrag[:400],
+                        "target_action": "none",
+                    })
+                    logger.info(f"[Delegation] Fan-in Parent '{parent_pid}' angelegt")
+                else:
+                    # Eltern-Titel immer mitfuehren (Ordnername-Einheitlichkeit)
+                    title_var = str(existing_parent.get("title") or title_var or parent_pid)
+                # MC-Subtask = Tracking-Spiegel des Kanban-Tasks (Wird in _bg_watch_task completed)
+                if task_id:
+                    mc_tasks.append({
+                        "id": f"mcsub-{task_id}",
+                        "title": auftrag[:80],
+                        "agent_id": ziel,
+                        "agent_name": t_name,
+                        "status": "active",
+                        "phase": "in_progress",
+                        "parent_project_id": parent_pid,
+                        "parent_project_title": title_var,
+                        "kanban_task_id": task_id,
+                        "created_via": "delegation_bridge",
+                        "capture_input": auftrag[:400],
+                        "target_action": "none",
+                    })
+                return title_var
+
+            update_mission_control_data(_bridge_mutate)
             # Kanban: project_id + Eltern-Kind-Beziehung (task_links war bisher immer leer)
             from backend.operations_api import _get_kanban_connection as _kg_link
             kc_link = _kg_link()
@@ -5065,7 +5274,12 @@ async def api_chat_stream(req: ChatStreamRequest):
         elif provider == "groq":
             model = "llama-3.3-70b-versatile"
         elif provider == "omniroute":
-            model = "evey-session-guard:"
+            # D-12: "evey-session-guard:" war kein Modellname, sondern ein
+            # Plugin-Key mit angehaengtem Doppelpunkt — als Modell-ID war
+            # jeder Aufruf ein erwartbarer Upstream-400. Der Default ist jetzt
+            # ein Alias, den OmniRoute tatsaechlich kennt (vgl.
+            # api_provider._list_provider_models_uncached).
+            model = "auto/best-coding"
         else:
             model = "auto/best-coding"
 
@@ -5089,13 +5303,12 @@ async def api_chat_stream(req: ChatStreamRequest):
         title = user_msg[:80] + ("..." if len(user_msg) > 80 else "")
 
         # Task in Archon OS erfassen mit status: approval
-        data = _load_mission_control_data()
         est_tokens = 95000 if len(user_msg) > 200 else 45000
         est_cost = 0.18 if len(user_msg) > 200 else 0.05
-        
+
         # Operative Zielaktion erkennen (z.B. ACTION: POST_LINKEDIN)
         detected_action = core_dispatcher.detect_target_action(user_msg)
-        
+
         # Phase bestimmen: Falls Robert (executive_decision_architect), startet Kaskade mit strategy
         initial_phase = "strategy" if agent_id in ("executive_decision_architect", "robert") else "execution"
 
@@ -5124,17 +5337,22 @@ async def api_chat_stream(req: ChatStreamRequest):
             "target_action": detected_action,
             "phase": initial_phase
         }
-        data.setdefault("tasks", []).insert(0, new_task)
-        
+
         # Audit Log
         now_t = datetime.datetime.now().strftime("%H:%M:%S")
-        data.setdefault("audit_logs", []).insert(0, {
-            "time": now_t,
-            "source": "Approval Gate",
-            "msg": f"Missions-Modus: Task #{task_id} erfordert Freigabe vor Ausführung!"
-        })
-        data["audit_logs"] = data["audit_logs"][:25]
-        _save_mission_control_data(data)
+
+        # F-10: Read-Modify-Write unter Lock statt load->modify->save.
+        def _approval_mutate(mc_data):
+            mc_data.setdefault("tasks", []).insert(0, new_task)
+            mc_data.setdefault("audit_logs", []).insert(0, {
+                "time": now_t,
+                "source": "Approval Gate",
+                "msg": f"Missions-Modus: Task #{task_id} erfordert Freigabe vor Ausführung!"
+            })
+            mc_data["audit_logs"] = mc_data["audit_logs"][:25]
+            return new_task
+
+        await asyncio.to_thread(update_mission_control_data, _approval_mutate)
         
         # --- 2c: Mission liegt im HITL-Approval-Gate -> ueber den zentralen
         # Entscheidungs-Service (echter Kanban-Task, EIN Schreibpfad) ---
@@ -5295,6 +5513,13 @@ async def api_chat_stream(req: ChatStreamRequest):
         from backend.agent_router import router_instance
 
         # Delegate LLM execution to the Hardware Abstraction Layer (AgentRouter)
+        # F-05: Ein Provider-Fehler wurde als erfolgreicher Turn verbucht — die
+        # Fehlermeldung landete in ``full_assistant_text``, wurde als
+        # Assistenten-Antwort persistiert, "done" gesendet und die Nutzung
+        # gebucht. Jetzt wird der Fehler als solcher markiert: die
+        # Fehlermeldung wird NICHT als Antwort gespeichert und es wird keine
+        # Nutzung gebucht.
+        provider_failed = False
         try:
             async for chunk in router_instance.stream_chat_completion(
                 messages=payload_messages,
@@ -5304,21 +5529,24 @@ async def api_chat_stream(req: ChatStreamRequest):
                 reasoning_level=reasoning_level
             ):
                 if chunk.startswith("ERROR: "):
+                    provider_failed = True
                     yield f"data: {json.dumps({'type': 'error', 'error': chunk[7:]})}\n\n"
                     full_assistant_text += chunk[7:]
                 else:
                     full_assistant_text += chunk
                     completion_tokens += 1
                     yield f"data: {json.dumps({'type': 'delta', 'delta': chunk}, ensure_ascii=False)}\n\n"
-                    
+
             if not full_assistant_text:
                 full_assistant_text = f"Keine Antwort von {provider.capitalize()} erhalten."
                 yield f"data: {json.dumps({'type': 'delta', 'delta': full_assistant_text})}\n\n"
 
         except Exception as exc:
+            provider_failed = True
             err_msg = f"Verbindungsfehler zu {provider.capitalize()}: {str(exc)}"
             logger.error(f"[Chat Stream] {err_msg}")
-            full_assistant_text = err_msg
+            # Die Fehlermeldung gehoert in den Fehlerkanal, nicht in die
+            # Antwort (sonst wird sie als Antwort gespeichert/gebucht).
             yield f"data: {json.dumps({'type': 'error', 'error': err_msg})}\n\n"
 
         # Kosten-Berechnung und Transparenz-Anzeige (Pillar 3/6)
@@ -5397,17 +5625,21 @@ async def api_chat_stream(req: ChatStreamRequest):
         yield f"data: {payload_trans}\n\n"
         full_assistant_text += transparency_tag
 
-        _save_message_to_db(session_id, "assistant", full_assistant_text, completion_tokens)
-        
+        # F-05: Bei Provider-Fehler wird die Fehlermeldung NICHT als
+        # Assistenten-Antwort gespeichert und es wird keine Nutzung gebucht.
+        if not provider_failed:
+            _save_message_to_db(session_id, "assistant", full_assistant_text, completion_tokens)
+
         # Parse total_cost if possible
         try:
             total_cost_val = float(cost_str)
         except:
             total_cost_val = 0.0
-            
-        _record_session_model_usage(session_id, model, prompt_tokens, completion_tokens, total_cost_val)
+
+        if not provider_failed:
+            _record_session_model_usage(session_id, model, prompt_tokens, completion_tokens, total_cost_val)
         payload_done = json.dumps({"type": "done", "session_id": session_id, "tokens": completion_tokens})
-        yield f"data: {payload_done}\n\n" 
+        yield f"data: {payload_done}\n\n"
 
     return StreamingResponse(chat_event_stream(), media_type="text/event-stream")
 
@@ -5478,15 +5710,30 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
     raise HTTPException(status_code=400, detail=f"Provider '{provider}' für Bildgenerierung aktuell nicht unterstützt. Bitte 'openrouter' wählen.")
 
 _GUARDIAN_STATS_CACHE = {}
+# D-21: Der Cache war unbeschaenzt und der Schluessel ein freier
+# Query-Parameter. Jeder neue ``?timeframe=``-Wert erzeugte einen
+# dauerhaft gehaltenen Eintrag und loeste einen Vollscan ueber alle
+# Profil-DBs im Request aus. Jetzt: nur definierte Timeframes, Cache mit
+# TTL und fester Groessengrenze.
+_GUARDIAN_ALLOWED_TIMEFRAMES = ("all", "24h", "7d", "30d")
+_GUARDIAN_CACHE_TTL = 10.0
+_GUARDIAN_CACHE_MAX_ENTRIES = len(_GUARDIAN_ALLOWED_TIMEFRAMES)
 
 @app.get("/api/guardian/stats")
 def api_get_guardian_stats(timeframe: str = "all"):
     """Aggregiert Token-, Kosten- und Verlaufsstatistiken aller Profile aus SQLite state.db."""
     import sqlite3, glob, datetime
-    
+
+    # D-21: Freier Query-Parameter -> unbeschaenkter Cache + Vollscan pro Miss.
+    if timeframe not in _GUARDIAN_ALLOWED_TIMEFRAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unbekannter Timeframe '{timeframe}'. Erlaubt: {', '.join(_GUARDIAN_ALLOWED_TIMEFRAMES)}.",
+        )
+
     now_ts = datetime.datetime.now().timestamp()
     cached = _GUARDIAN_STATS_CACHE.get(timeframe)
-    if cached and (now_ts - cached["ts"]) < 10.0:
+    if cached and (now_ts - cached["ts"]) < _GUARDIAN_CACHE_TTL:
         return cached["data"]
     
     profiles_stats = []
@@ -5668,7 +5915,15 @@ def api_get_guardian_stats(timeframe: str = "all"):
         "sessions": all_sessions_list,
         "trend": sorted_trend
     }
+    # D-21: Cache-Groesse bleibt begrenzt (nur definierte Timeframes).
     _GUARDIAN_STATS_CACHE[timeframe] = {"ts": now_ts, "data": result}
+    if len(_GUARDIAN_STATS_CACHE) > _GUARDIAN_CACHE_MAX_ENTRIES:
+        # aelteste Eintraege verwerfen
+        for key in sorted(
+            _GUARDIAN_STATS_CACHE,
+            key=lambda k: _GUARDIAN_STATS_CACHE[k]["ts"],
+        )[: len(_GUARDIAN_STATS_CACHE) - _GUARDIAN_CACHE_MAX_ENTRIES]:
+            _GUARDIAN_STATS_CACHE.pop(key, None)
     return result
 
 @app.get("/api/guardian/config")
@@ -7265,10 +7520,26 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
                             if r_eff:
                                 item["reasoning_level"] = r_eff
                             break
-                    with open(ap_file, "w", encoding="utf-8") as fap:
-                        json.dump(ap_list, f, indent=2, ensure_ascii=False) if False else None
-                    with open(ap_file, "w", encoding="utf-8") as fap:
-                        json.dump(ap_list, fap, indent=2, ensure_ascii=False)
+                    # F-06: Vorher stand hier ein Toter Zweig
+                    # (``json.dump(ap_list, f, ...) if False else None``) in
+                    # einem zweiten ``open(ap_file, "w")`` — der truncate
+                    # LEERTE die Profildatei, geschrieben wurde nichts, und
+                    # erst der folgende Write fuellte sie wieder. Crash oder
+                    # volle Platte in diesem Fenster = 0-Byte-Profildatei.
+                    # Jetzt: EIN atomarer Write (tmp + os.replace).
+                    ap_tmp = f"{ap_file}.tmp.{os.getpid()}"
+                    try:
+                        with open(ap_tmp, "w", encoding="utf-8") as fap:
+                            json.dump(ap_list, fap, indent=2, ensure_ascii=False)
+                            fap.flush()
+                            os.fsync(fap.fileno())
+                        os.replace(ap_tmp, ap_file)
+                    finally:
+                        if os.path.exists(ap_tmp):
+                            try:
+                                os.unlink(ap_tmp)
+                            except OSError:
+                                pass
             _sync_org_hierarchy_node(prof_id, provider=m_prov or None, model=m_def or None, reasoning_level=r_eff or None)
             invalidate_hermes_profiles_cache()
     except Exception as sync_err:
@@ -8780,13 +9051,28 @@ _VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
 
 
 @app.post("/api/theme/upload-background")
-async def api_upload_theme_background(file: UploadFile = File(...)):
+async def api_upload_theme_background(request: Request, file: UploadFile = File(...)):
+    # D-13: Ohne Typ-/Groessenfilter landete eine .svg/.html im Web-Root
+    # (same-origin) — Stored XSS; ``await file.read()`` ohne Limit fraess
+    # zusaetzlich RAM. Jetzt wie die Schwester-Route
+    # (api_studio_upload_bg): Endungs-Whitelist + 8-MB-Limit.
+    require_admin(request)  # RBAC: Upload ist Admin-Sache
+    allowed_ext = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                   ".webp": "image/webp", ".gif": "image/gif"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed_ext:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dateityp '{ext}' nicht erlaubt (jpg, jpeg, png, webp, gif).",
+        )
+    content = await file.read(8 * 1024 * 1024 + 1)
+    if len(content) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Bild zu gross (max. 8 MB).")
     uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "uploads")
     os.makedirs(uploads_dir, exist_ok=True)
     safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", file.filename or "background.png")
     fname = f"bg_{int(time.time())}_{safe_name}"
     dest = os.path.join(uploads_dir, fname)
-    content = await file.read()
     with open(dest, "wb") as f:
         f.write(content)
     return {"status": "success", "url": f"/static/uploads/{fname}"}
@@ -10543,7 +10829,14 @@ async def sse_events_stream():
     Server-Sent Events Stream für Realtime Push-Updates (Kanban, Telegram-Decisions, Ticker).
     Ersetzt clientseitiges aggressives Polling.
     """
-    queue = asyncio.Queue(maxsize=100)
+    # Z-05: Die Queue war auf 100 Eintraege begrenzt. ``broadcast_event``
+    # (archon/core/runtime.py) behandelt ein volles ``put_nowait`` als
+    # "Subscriber tot" und entfernt den Client — ein Rueckstand von 100
+    # Events (Tab im Hintergrund, langsames Netz, Kanban-Burst) trennte
+    # den Client damit DAUERHAFT und ohne Fehlermeldung.
+    # Fix in main.py: unbeschaenkte Queue. Der Client kann dann nie
+    # wegen eines vollen Puffers aus der Subscriber-Liste fliegen.
+    queue = asyncio.Queue()
     _SSE_SUBSCRIBERS.append(queue)
 
     async def event_generator():
@@ -10573,9 +10866,10 @@ async def sse_events_stream():
         }
     )
 
-_MC_STATE_CACHE = {"ts": 0.0, "data": None}
-
-
+# F-12/Z-12: Die zweite, tote Cache-Instanz hier ist entfernt. Der Leser
+# (``archon/routers/mission_control.py``) nutzt den Cache aus
+# ``archon.core.mission_control`` — der wird jetzt in ``main.py``
+# importiert (siehe Import-Block oben) und dort auch invalidiert.
 
 
 

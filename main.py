@@ -3660,115 +3660,20 @@ from archon.routers.prompts import (
 app.include_router(_prompts_router)
 
 
-# -------------------------------------------------------------
-# OMNIROUTE EMBEDDED REVERSE PROXY (STRIPS X-FRAME-OPTIONS & CSP)
-# -------------------------------------------------------------
-# -------------------------------------------------------------
-# OMNIROUTE EMBEDDED REVERSE PROXY (STRIPS X-FRAME-OPTIONS & CSP)
-# -------------------------------------------------------------
-_PROXY_HTTP_CLIENTS: Dict[int, httpx.AsyncClient] = {}
-
-def _get_shared_proxy_client() -> httpx.AsyncClient:
-    loop_id = id(asyncio.get_running_loop())
-    c = _PROXY_HTTP_CLIENTS.get(loop_id)
-    if c is None or c.is_closed:
-        c = httpx.AsyncClient(
-            follow_redirects=False,
-            timeout=60.0,
-            limits=httpx.Limits(max_keepalive_connections=30, max_connections=120)
-        )
-        _PROXY_HTTP_CLIENTS[loop_id] = c
-    return c
-
-_OMNIROUTE_PROXY = None
-
-
-def _get_omniroute_proxy():
-    global _OMNIROUTE_PROXY
-    if _OMNIROUTE_PROXY is None:
-        from utils.reverse_proxy import ReverseProxy
-        _OMNIROUTE_PROXY = ReverseProxy(
-            name="OmniRoute",
-            target_host="omniroute:20128",
-            mount_prefix="/omniroute-proxy",
-            fallback_host="host.docker.internal:20128",
-        )
-    return _OMNIROUTE_PROXY
-
-
-async def forward_to_omniroute(request: Request, path: str):
-    return await _get_omniroute_proxy().forward(request, path)
-
-
-@app.api_route("/omniroute-proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
-async def omniroute_proxy(request: Request, path: str = ""):
-    return await forward_to_omniroute(request, path)
-
-@app.api_route("/_next/{path:path}", methods=["GET", "HEAD"])
-async def omniroute_next_assets(request: Request, path: str = ""):
-    return await forward_to_omniroute(request, f"_next/{path}")
-
-# -------------------------------------------------------------
-# N8N AUTOMATION EMBEDDED REVERSE PROXY (STRIPS X-FRAME-OPTIONS & CSP)
-# -------------------------------------------------------------
-_N8N_PROXY = None
-
-
-def _get_n8n_proxy():
-    global _N8N_PROXY
-    if _N8N_PROXY is None:
-        from utils.reverse_proxy import ReverseProxy
-        _N8N_PROXY = ReverseProxy(
-            name="n8n",
-            target_host="n8n:5678",
-            mount_prefix="/n8n-proxy",
-            fallback_host="host.docker.internal:5678",
-            html_replacements=(
-                ('href="/assets/',  'href="/n8n-proxy/assets/'),
-                ('src="/assets/',   'src="/n8n-proxy/assets/'),
-                ('href="/static/',  'href="/n8n-proxy/static/'),
-                ('src="/static/',   'src="/n8n-proxy/static/'),
-                ('data-src="/assets/', 'data-src="/n8n-proxy/assets/'),
-                ('href="/favicon.ico"', 'href="/n8n-proxy/favicon.ico"'),
-            ),
-            static_overrides={
-                "base-path.js": ("window.BASE_PATH = '/n8n-proxy/';", "application/javascript"),
-            },
-        )
-    return _N8N_PROXY
-
-
-async def forward_to_n8n(request: Request, path: str):
-    return await _get_n8n_proxy().forward(request, path)
-
-
-@app.api_route("/n8n-proxy", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
-@app.api_route("/n8n-proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
-async def n8n_proxy(request: Request, path: str = ""):
-    return await forward_to_n8n(request, path)
-
-@app.api_route("/assets/{path:path}", methods=["GET", "HEAD"])
-async def n8n_assets_proxy(request: Request, path: str = ""):
-    if path:
-        try:
-            from utils.path_jail import safe_path
-            assets_root = os.path.abspath("assets")
-            if os.path.exists(assets_root):
-                target = safe_path(
-                    os.path.join(assets_root, path),
-                    must_exist=True,
-                    extra_roots=[assets_root],
-                    allow_dirs=False
-                )
-                if target and os.path.isfile(target):
-                    return FileResponse(target)
-        except Exception:
-            pass
-    return await forward_to_n8n(request, f"assets/{path}")
-
-@app.api_route("/rest/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
-async def n8n_rest_proxy(request: Request, path: str = ""):
-    return await forward_to_n8n(request, f"rest/{path}")
+from archon.routers.proxies import (
+    router as _proxies_router,
+    _get_shared_proxy_client,
+    _get_omniroute_proxy,
+    forward_to_omniroute,
+    omniroute_proxy,
+    omniroute_next_assets,
+    _get_n8n_proxy,
+    forward_to_n8n,
+    n8n_proxy,
+    n8n_assets_proxy,
+    n8n_rest_proxy,
+)
+app.include_router(_proxies_router)
 
 
 @app.get("/hud")

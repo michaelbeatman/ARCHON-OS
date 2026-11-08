@@ -1267,7 +1267,22 @@ class ERPManager:
             tax_regime = payload.get("tax_regime") or ent.get("tax_regime") or "standard_19"
             zero_tax = tax_regime in ("reverse_charge", "intra_eu", "export_0", "small_business")
 
-            raw_lines = payload.get("lines", [])
+            if "lines" in payload:
+                raw_lines = payload.get("lines", [])
+                lines_provided = True
+            elif ex:
+                # Bestehende Positionen laden, damit Summen bei reinem Metadaten-Update
+                # (z. B. Notizen, Fälligkeit) nicht auf 0.00 genullt werden (R-03)
+                existing_lines = conn.execute(
+                    "SELECT * FROM erp_document_lines WHERE document_id = ? ORDER BY pos_no ASC",
+                    (doc_id,)
+                ).fetchall()
+                raw_lines = [dict(r) for r in existing_lines]
+                lines_provided = False
+            else:
+                raw_lines = []
+                lines_provided = True
+
             computed_lines = []
             total_net = 0.0
             total_tax = 0.0
@@ -1320,9 +1335,14 @@ class ERPManager:
                     "line_gross": line_gross
                 })
 
-            total_net = round(total_net, 2)
-            total_tax = round(total_tax, 2)
-            total_gross = round(total_net + total_tax, 2)
+            if not lines_provided and ex:
+                total_net = float(ex.get("amount_net", 0.0))
+                total_tax = float(ex.get("tax_amount", 0.0))
+                total_gross = float(ex.get("amount_gross", 0.0))
+            else:
+                total_net = round(total_net, 2)
+                total_tax = round(total_tax, 2)
+                total_gross = round(total_net + total_tax, 2)
 
             issue_date = payload.get("issue_date") or ex.get("issue_date") or datetime.date.today().isoformat()
             pay_days = int(payload.get("payment_terms_days", ent.get("payment_terms_days", 14)))
@@ -1395,7 +1415,7 @@ class ERPManager:
                     now
                 ))
 
-                if computed_lines:
+                if lines_provided and computed_lines:
                     conn.execute("DELETE FROM erp_document_lines WHERE document_id = ?", (doc_id,))
                     for cl in computed_lines:
                         conn.execute("""

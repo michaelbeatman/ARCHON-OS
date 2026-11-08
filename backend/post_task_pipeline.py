@@ -347,7 +347,8 @@ primary_document: "[[{task_id}_{task_slug}]]"
         print(f"[PostTaskPipeline] Warning: Could not mirror to Einzelberichte: {e}")
 
     return {
-        "final_doc_path": str(end_doc_path),
+        "final_doc_path": str(dest_doc_path),
+        "final_path": str(dest_doc_path),
         "project_dir": str(proj_dir),
         "file_stem": f"{task_id}_{task_slug}",
         "file_name": file_name,
@@ -594,6 +595,7 @@ Archon OS Autonomous Engine
     return {
         "status": "success",
         "final_path": final_path,
+        "final_doc_path": final_path,
         "project_dir": file_info["project_dir"],
         "file_stem": file_stem,
         "learning": learning_res,

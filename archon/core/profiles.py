@@ -510,7 +510,8 @@ def api_get_hermes_profiles():
             except Exception:
                 pass
 
-        enriched_profiles.append({
+        profile_data = dict(fallback)
+        profile_data.update({
             "id": p_id,
             "name": name,
             "person_name": person_name,
@@ -528,6 +529,7 @@ def api_get_hermes_profiles():
             "status": status_val,
             "is_favorite": is_fav
         })
+        enriched_profiles.append(profile_data)
 
     # Sortierung: default zuerst, micha als zweiter, danach alphabetisch nach Kategorie & Name
     def _sort_key(p):
@@ -543,23 +545,19 @@ def api_get_hermes_profiles():
     _HERMES_PROFILES_CACHE = enriched_profiles
     _HERMES_PROFILES_CACHE_TIME = now
 
-    # Hintergrund-Spiegelung nach agent_profiles.json (nur schreiben, wenn sich Inhalt geändert hat)
+    # D-01: Der Leser darf den SSOT nicht bei jedem GET überschreiben und dabei
+    # Felder wie current_task_id oder system_prompt verwerfen. Nur wenn die SSOT-Datei
+    # gar nicht existiert, wird sie initial aus den Profilen angelegt.
     try:
-        # F-20: Ziel ist die SSOT im Repo-Root (runtime.APP_ROOT), nicht die
-        # git-versionierte Schattenkopie im Modulverzeichnis.
         _ssot = os.path.join(APP_ROOT, "agent_profiles.json")
-        new_json_str = json.dumps(enriched_profiles, indent=2, ensure_ascii=False)
-        old_json_str = ""
-        if os.path.exists(_ssot):
-            with open(_ssot, "r", encoding="utf-8") as f_old:
-                old_json_str = f_old.read()
-        if new_json_str != old_json_str:
+        if not os.path.exists(_ssot):
+            new_json_str = json.dumps(enriched_profiles, indent=2, ensure_ascii=False)
             create_rolling_backup(_ssot, max_backups=3)
             with open(_ssot, "w", encoding="utf-8") as f:
                 f.write(new_json_str)
         _HERMES_PROFILES_CACHE_MTIME = _compute_profiles_mtime()
     except Exception as e:
-        logger.warning(f"[Profiles] Error mirroring to agent_profiles.json: {e}")
+        logger.warning(f"[Profiles] Error initializing agent_profiles.json: {e}")
 
     return enriched_profiles
 

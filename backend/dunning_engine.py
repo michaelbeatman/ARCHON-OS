@@ -8,6 +8,7 @@ and enforces Human-in-the-Loop approval before dispatch.
 import os
 import sys
 import time
+import uuid
 import json
 import sqlite3
 import datetime
@@ -94,24 +95,43 @@ class DunningEngine:
 
         tax_amount = round(amount_net * (tax_rate_pct / 100.0), 2)
         amount_gross = round(amount_net + tax_amount, 2)
-        invoice_id = f"RE-{datetime.date.today().year}-{int(time.time()) % 10000:04d}"
+        year = datetime.date.today().year
+
+        inserted = False
+        last_error = None
+        invoice_id = ""
 
         if os.path.exists(self.memory_db):
-            try:
-                with sqlite3.connect(self.memory_db, timeout=5.0) as conn:
-                    conn.execute("""
-                        INSERT INTO invoices (
-                            invoice_id, customer_name, customer_email, recipient_address,
-                            invoice_date, due_date, amount_net, tax_amount, amount_gross,
-                            currency, status, dunning_level, dunning_fee
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', 'open', 0, 0.0)
-                    """, (
-                        invoice_id, customer_name, customer_email, recipient_address or "",
-                        inv_date, due_date, amount_net, tax_amount, amount_gross
-                    ))
-                    conn.commit()
-            except Exception as e:
-                print(f"[DunningEngine] Error inserting invoice: {e}", file=sys.stderr)
+            with sqlite3.connect(self.memory_db, timeout=10.0) as conn:
+                for attempt in range(5):
+                    # Kollisionsfreie Rechnungsnummer (R-04): Zeit + Zufallssuffix
+                    suffix = f"{int(time.time() * 1000) % 1000000:06d}-{uuid.uuid4().hex[:4].upper()}"
+                    invoice_id = f"RE-{year}-{suffix}"
+                    try:
+                        conn.execute("""
+                            INSERT INTO invoices (
+                                invoice_id, customer_name, customer_email, recipient_address,
+                                invoice_date, due_date, amount_net, tax_amount, amount_gross,
+                                currency, status, dunning_level, dunning_fee
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', 'open', 0, 0.0)
+                        """, (
+                            invoice_id, customer_name, customer_email, recipient_address or "",
+                            inv_date, due_date, amount_net, tax_amount, amount_gross
+                        ))
+                        conn.commit()
+                        inserted = True
+                        break
+                    except sqlite3.IntegrityError as ie:
+                        last_error = ie
+                        time.sleep(0.01)
+                    except Exception as e:
+                        last_error = e
+                        break
+
+            if not inserted:
+                raise RuntimeError(f"Rechnung konnte nicht angelegt werden: {last_error}")
+        else:
+            invoice_id = f"RE-{year}-{int(time.time() * 1000) % 1000000:06d}-{uuid.uuid4().hex[:4].upper()}"
 
         return {
             "invoice_id": invoice_id,

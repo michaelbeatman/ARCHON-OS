@@ -321,11 +321,16 @@ def route_sensitive_payload(category: str, messages: List[Dict], default_provide
             "reason": f"Lokales LLM offline: Sicheres Ausweichen auf EU-DSGVO-Provider Mistral AI."
         }
 
-    logger.error(f"[PrivacyRouter] ACHTUNG: Lokales LLM offline und kein EU-Fallback hinterlegt für {category}!")
+    # R-17: Sensible Daten duerfen bei aktivem Routing NICHT still auf den
+    # Standard-Provider (US-Cloud) fallen. Routing ist eine Grenze, keine
+    # Empfehlung — ohne lokales LLM und ohne EU-Fallback wird geblockt.
+    logger.error(
+        f"[PrivacyRouter] BLOCKIERT: Lokales LLM offline und kein EU-Fallback hinterlegt für {category}!"
+    )
     return {
         "routed": False,
-        "provider": default_provider,
-        "model": default_model,
-        "warning": "Lokal-LLM offline: Sensible Daten fließen über Standard-Cloud!",
-        "reason": "Fallback auf Standard-Cloud wegen Nichterreichbarkeit des lokalen Endpunkts."
+        "blocked": True,
+        "provider": None,
+        "model": None,
+        "reason": "Sensibles Routing aktiv, aber lokales LLM offline und kein EU-Fallback hinterlegt — Anfrage blockiert (DSGVO-Fail-Closed)."
     }

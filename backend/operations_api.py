@@ -2689,20 +2689,6 @@ def api_get_suppressed_digest(since_hours: int = 24):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/metrics")
-def api_get_prometheus_metrics():
-    """Gibt Prometheus-kompatible System- und Operations-Metriken im Text-Format 0.0.4 aus."""
-    from fastapi.responses import Response
-    try:
-        from backend.metrics_collector import metrics_collector
-        return Response(
-            content=metrics_collector.generate_prometheus_metrics(),
-            media_type="text/plain; version=0.0.4; charset=utf-8"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/metrics/summary")
 def api_get_metrics_summary():
     """Liefert aggregierte System-, Queue- und Telemetrie-Metriken als strukturiertes JSON."""

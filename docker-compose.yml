@@ -229,9 +229,61 @@ services:
       - STORAGE_DIR=/app/server/storage
       - SERVER_PORT=3001
       - DISABLE_TELEMETRY=true
+      # Embedder: lokaler Ollama-Container (sonst stirbt der eingebaute "native"
+      # Embedder auf dieser CPU mit SIGILL und reisst den Node-Prozess mit).
+      - EMBEDDING_ENGINE=ollama
+      - EMBEDDING_BASE_PATH=http://ollama-embed:11434
+      - EMBEDDING_MODEL_PREF=nomic-embed-text
+      - EMBEDDING_MODEL_MAX_CHUNK_LENGTH=2048
+      # Vektor-Store: Chroma ueber HTTP statt LanceDB. LanceDB zieht ein natives
+      # Modul, das AVX2 voraussetzt — die CPU dieses Hosts (i5-3470) hat nur AVX
+      # und der Node-Prozess stirbt mit "Illegal instruction".
+      - VECTOR_DB=chroma
+      - CHROMA_ENDPOINT=http://chroma:8000
     volumes:
       - anythingllm_storage:/app/server/storage
       - /mnt/raid/AgenticOS-2026/agent_workspace/obsidian_vault:/app/server/storage/obsidian_vault:ro
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: "2.0"
+
+  # Embedding-Backend fuer AnythingLLM. Bewusst als eigener Container: der
+  # native Embedder von AnythingLLM stirbt auf dieser CPU (Illegal instruction),
+  # und das Ollama auf dem Host lauscht nur auf 127.0.0.1 — aus dem Netz nicht
+  # erreichbar. Modell: nomic-embed-text (768 Dimensionen, CPU-tauglich).
+  ollama-embed:
+    image: ollama/ollama:latest
+    container_name: ollama-embed
+    restart: unless-stopped
+    networks:
+      - agentic_mesh
+    volumes:
+      - ollama_embed_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=2
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
+          cpus: "3.0"
+
+  # Vektor-Store fuer AnythingLLM. Chroma laeuft als eigener Dienst ueber HTTP —
+  # bewusst nicht LanceDB: dessen natives Modul setzt AVX2 voraus, diese CPU
+  # (i5-3470) hat nur AVX und der Node-Prozess stirbt mit SIGILL.
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: chroma
+    restart: unless-stopped
+    networks:
+      - agentic_mesh
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
     deploy:
       resources:
         limits:
@@ -464,6 +516,8 @@ volumes:
   n8n_data:
   paperclip_volume:
   anythingllm_storage:
+  ollama_embed_data:
+  chroma_data:
   prometheus_data:
   grafana_data:
   uptime_kuma_data:

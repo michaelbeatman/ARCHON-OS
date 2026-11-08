@@ -1255,7 +1255,7 @@ def get_docker_containers_from_socket() -> List[Dict]:
 
     return containers_list if len(containers_list) > 0 else load_services()
 
-def post_docker_container_action(container_name: str, action: str = "start") -> dict:
+def post_docker_container_action(container_name: str, action: str = "start", raise_on_error: bool = False) -> dict:
     try:
         # validate_container_name is called inside container_action
         if action == "restart":
@@ -1283,8 +1283,15 @@ def post_docker_container_action(container_name: str, action: str = "start") -> 
 
         return {"status": "success", "message": f"Container {container_name} {action}ed."}
     except DockerError as e:
+        if raise_on_error:
+            status = 502 if (getattr(e, "status_code", 0) in (500, 502, 503) or "connection" in str(e).lower() or "socket" in str(e).lower()) else (getattr(e, "status_code", 0) or 400)
+            raise HTTPException(status_code=status, detail=str(e))
         return {"status": "error", "message": str(e)}
+    except HTTPException:
+        raise
     except Exception as e:
+        if raise_on_error:
+            raise HTTPException(status_code=500, detail=str(e))
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/v1/services")
@@ -1296,15 +1303,15 @@ def api_get_services():
 def api_docker_start(payload: Dict, request: Request):
     require_admin(request)  # RBAC-Pilot: Container-Lebenszyklus ist Admin-Sache
     c_name = payload.get("container_name") or payload.get("id")
-    if not c_name: return {"status": "error", "message": "Missing container_name"}
-    return post_docker_container_action(c_name, "start")
+    if not c_name: raise HTTPException(status_code=400, detail="Missing container_name")
+    return post_docker_container_action(c_name, "start", raise_on_error=True)
 
 @app.post("/api/docker/stop")
 def api_docker_stop(payload: Dict, request: Request):
     require_admin(request)  # RBAC-Pilot: Container-Lebenszyklus ist Admin-Sache
     c_name = payload.get("container_name") or payload.get("id")
-    if not c_name: return {"status": "error", "message": "Missing container_name"}
-    return post_docker_container_action(c_name, "stop")
+    if not c_name: raise HTTPException(status_code=400, detail="Missing container_name")
+    return post_docker_container_action(c_name, "stop", raise_on_error=True)
 
 @app.post("/api/v1/services")
 def api_save_services(request: Request, services: List[Dict]):
@@ -9265,8 +9272,40 @@ def api_get_kanban():
 async def api_save_kanban(request: Request):
     try:
         cards = await request.json()
-        with open(KANBAN_CARDS_FILE, "w", encoding="utf-8") as f:
-            json.dump(cards, f, indent=2, ensure_ascii=False)
+        atomic_write_json(KANBAN_CARDS_FILE, cards)
+        kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.join(HERMES_HOME, "kanban.db")
+        if os.path.exists(kanban_db) and isinstance(cards, list):
+            kconn = None
+            try:
+                kconn = sqlite3.connect(kanban_db, timeout=5.0)
+                kconn.execute("PRAGMA busy_timeout=5000;")
+                for c in cards:
+                    if not isinstance(c, dict) or not c.get("id"):
+                        continue
+                    kconn.execute("""
+                        INSERT INTO tasks (id, title, body, assignee, status, priority, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+                        ON CONFLICT(id) DO UPDATE SET
+                            title=excluded.title,
+                            body=excluded.body,
+                            assignee=excluded.assignee,
+                            status=excluded.status,
+                            priority=excluded.priority
+                    """, (
+                        c.get("id"),
+                        c.get("title", ""),
+                        c.get("description") or c.get("body", ""),
+                        c.get("assignee", "coder"),
+                        c.get("status", "todo"),
+                        c.get("priority", 1),
+                        c.get("created_at")
+                    ))
+                kconn.commit()
+            except Exception:
+                pass
+            finally:
+                if kconn:
+                    kconn.close()
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}

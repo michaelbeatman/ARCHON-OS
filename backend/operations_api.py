@@ -255,7 +255,8 @@ def get_kanban_tasks(archived: bool = Query(False)):
             "review": [],
             "done": [],
             "blocked": [],
-            "scheduled": []
+            "scheduled": [],
+            "failed": []
         }
 
         active_rows = 0
@@ -590,17 +591,21 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
                     detail=f"4-Augen-Review blockiert Abschluss: {q_rev.get('reviewer', 'Qualitätsprüfer')} fordert Nachbesserung! ({critique_msg})"
                 )
 
-        completed_at = now_iso if new_status == "done" else None
-        started_at = now_iso if new_status == "in_progress" else None
-
         cursor.execute("""
             UPDATE tasks
             SET status = ?,
-                started_at = COALESCE(?, started_at),
-                completed_at = COALESCE(?, completed_at),
+                started_at = CASE
+                    WHEN ? = 'todo' THEN NULL
+                    WHEN ? = 'in_progress' AND started_at IS NULL THEN ?
+                    ELSE started_at
+                END,
+                completed_at = CASE
+                    WHEN ? = 'done' THEN ?
+                    ELSE NULL
+                END,
                 result = COALESCE(?, result)
             WHERE id = ?
-        """, (new_status, started_at, completed_at, req.result, task_id))
+        """, (new_status, new_status, new_status, now_iso, new_status, now_iso, req.result, task_id))
 
         cursor.execute("""
             INSERT INTO task_events (task_id, kind, payload, created_at)
@@ -3979,6 +3984,9 @@ def resume_from_human_takeover(request: Request):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     _bot_screen_state["takeover_requested"] = False
     _bot_screen_state["takeover_reason"] = ""
+    _bot_screen_state["aborted"] = False
+    _bot_screen_state["mouse_control_enabled"] = True
+    _bot_screen_state["agent_authorized"] = True
     _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
 
     conn = _get_kanban_connection()
@@ -4012,6 +4020,8 @@ class ScreenInteractionModel(BaseModel):
 def interact_with_bot_screen(request: Request, action_data: ScreenInteractionModel):
     """Nimmt Benutzerinteraktionen (Klick, Tasteneingabe) entgegen."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    if _bot_screen_state.get("aborted") or not _bot_screen_state.get("agent_authorized", True) or not _bot_screen_state.get("mouse_control_enabled", True):
+        raise HTTPException(status_code=409, detail="Interaktion blockiert: Notfall-Abbruch aktiv oder Steuerung gesperrt.")
     _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
     return {"status": "success", "echo": action_data.dict()}
 
@@ -4020,6 +4030,7 @@ def interact_with_bot_screen(request: Request, action_data: ScreenInteractionMod
 def abort_bot_screen_execution(request: Request):
     """Notfall-Abbruch: Entzieht dem Agenten sofort alle Rechte und stoppt aktive Browser-Aktionen."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    _bot_screen_state["aborted"] = True
     _bot_screen_state["takeover_requested"] = False
     _bot_screen_state["mouse_control_enabled"] = False
     _bot_screen_state["agent_authorized"] = False

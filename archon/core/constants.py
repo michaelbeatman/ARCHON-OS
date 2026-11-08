@@ -24,6 +24,14 @@ from archon.core.runtime import APP_ROOT
 # Oeffentliche Praefixe ohne Login. Bewusst Tupel, nicht Set: Sets sind mutabel.
 _AUTH_PUBLIC_PREFIXES = ("/static/", "/api/auth/login", "/api/auth/status", "/docs", "/redoc")
 
+# API-Pfade, die *unter* einem oeffentlichen Prefix liegen und deshalb wie
+# "/api/" behandelt werden (401 statt Durchreichen). F1/R-34:
+# "/static/hermes-webui/api/*" reicht an das Hermes-Dashboard durch, das dabei
+# den internen Session-Token einsetzt — das ist API, kein Asset. "/static/" als
+# Ganzes bleibt oeffentlich, weil die App-Shell (index.html, JS, CSS) ohne Login
+# laden muss; ein Verengen auf "/static/assets/" wuerde sie aussperren.
+_AUTH_API_PREFIXES = ("/static/hermes-webui/api/",)
+
 # Nicht-/api-Pfade, die trotzdem geschuetzt sein muessen: eingebettete
 # Admin-Oberflaechen (n8n-Editor, OmniRoute-Konsole) und App-Shells.
 _AUTH_PROTECTED_PREFIXES = (

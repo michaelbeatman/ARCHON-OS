@@ -12,10 +12,13 @@ import hmac
 import hashlib
 import sqlite3
 import datetime
+import logging
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+
+logger = logging.getLogger("archon.auth")
 
 
 def _get_db() -> sqlite3.Connection:
@@ -42,6 +45,14 @@ class AuthService:
 
     @staticmethod
     def is_auth_enabled() -> bool:
+        """True = Login-Pflicht aktiv.
+
+        Fail-closed (R-08): eine vorhandene, aber unlesbare oder strukturell
+        defekte ``settings.json`` ist ein Fehlerfall und schaltet die
+        Authentifizierung **nicht** ab — sonst genügt eine abgeschnittene Datei
+        für anonymen Zugriff auf die gesamte API. Fehlt jede Konfigurationsdatei,
+        bleibt der Entwicklungsdefault (Auth aus).
+        """
         possible_paths = [
             os.path.join(WORKSPACE_DIR, "agent_workspace", "settings.json"),
             "/app/agent_workspace/settings.json",
@@ -52,14 +63,25 @@ class AuthService:
         ]
         import json
         for p in possible_paths:
-            if os.path.exists(p):
-                try:
-                    with open(p, "r", encoding="utf-8") as f:
-                        s = json.load(f)
-                        if isinstance(s, dict) and "auth" in s:
-                            return bool(s.get("auth", {}).get("enabled", False))
-                except Exception:
-                    pass
+            if not os.path.exists(p):
+                continue
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    s = json.load(f)
+            except Exception as err:  # noqa: BLE001 - Fail-closed ist die Absicht
+                logger.error(f"[Auth] {p} nicht lesbar ({err}) — Auth bleibt aktiv.")
+                return True
+            if not isinstance(s, dict):
+                logger.error(f"[Auth] {p} hat kein Objekt als Wurzel — Auth bleibt aktiv.")
+                return True
+            if "auth" not in s:
+                # Lesbare Datei ohne auth-Block: kein Fehler, naechster Kandidat.
+                continue
+            auth_cfg = s.get("auth")
+            if not isinstance(auth_cfg, dict):
+                logger.error(f"[Auth] {p}: 'auth' ist kein Objekt — Auth bleibt aktiv.")
+                return True
+            return bool(auth_cfg.get("enabled", False))
         return False
 
     def _init_tables(self):

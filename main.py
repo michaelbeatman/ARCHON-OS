@@ -51,6 +51,7 @@ from archon.core.orchestration import (
 from archon.core.constants import (
     _AUTH_PUBLIC_PREFIXES,
     _AUTH_PROTECTED_PREFIXES,
+    _AUTH_API_PREFIXES,
     _DECISION_TYPEN,
     DELEGATION_PROTOCOL_PROMPT,
     STUDIO_BG_UPLOAD_DIR,
@@ -226,6 +227,17 @@ def _request_has_service_token(request: Request) -> bool:
     return hmac.compare_digest(provided, expected)
 
 
+def _auth_unavailable_response() -> JSONResponse:
+    """Einheitliche 503-Antwort des Gates, wenn die Prüfung selbst ausfällt.
+
+    Fail-closed: lieber eine ehrliche 503 als ein stilles Durchlassen.
+    """
+    return JSONResponse(
+        status_code=503,
+        content={"error": "auth_unavailable", "detail": "Auth unavailable"},
+    )
+
+
 @app.middleware("http")
 async def auth_gate(request: Request, call_next):
     """Blockt API-Aufrufe ohne gültige Session, sobald Multi-User aktiv ist.
@@ -233,16 +245,27 @@ async def auth_gate(request: Request, call_next):
     Die HTML-Hülle und /api/auth/* bleiben erreichbar, damit das Frontend den
     Login zeigen kann. Interne Automaten (n8n, Telegram-Adapter) weisen sich
     über den Header X-Archon-Service-Token aus.
+
+    Fail-closed (R-08): schlaegt die Prüfung selbst fehl (Importfehler, kaputte
+    ``settings.json``, DB-Fehler), antwortet das Gate mit 503 statt
+    durchzulassen. Ein Gate, das bei einem Fehler öffnet, ist keines.
     """
     try:
         from backend.auth_service import auth_service as _auth
-        if not _auth.is_auth_enabled():
-            return await call_next(request)
-    except Exception:
+        auth_enabled = _auth.is_auth_enabled()
+    except Exception as err:  # noqa: BLE001 - Fail-closed ist hier die Absicht
+        logger.error(f"[Auth] Gate kann die Konfiguration nicht lesen: {err}")
+        return _auth_unavailable_response()
+
+    if not auth_enabled:
         return await call_next(request)
 
     path = request.url.path
-    if path in _AUTH_PUBLIC_EXACT or path.startswith(_AUTH_PUBLIC_PREFIXES):
+    # API-Pfade unter einem oeffentlichen Prefix (F1/R-34) werden wie /api/
+    # behandelt: sie reichen an fremde Admin-Oberflaechen durch und dürfen
+    # nicht ungeprüft bleiben.
+    is_forced_api = path.startswith(_AUTH_API_PREFIXES)
+    if not is_forced_api and (path in _AUTH_PUBLIC_EXACT or path.startswith(_AUTH_PUBLIC_PREFIXES)):
         return await call_next(request)
 
     if _request_has_service_token(request):
@@ -260,10 +283,11 @@ async def auth_gate(request: Request, call_next):
     try:
         if token and _auth.verify_session(token):
             return await call_next(request)
-    except Exception:
-        pass
+    except Exception as err:  # noqa: BLE001 - Fail-closed auch beim Prüfen
+        logger.error(f"[Auth] Session-Prüfung fehlgeschlagen: {err}")
+        return _auth_unavailable_response()
 
-    if path.startswith("/api/"):
+    if path.startswith("/api/") or is_forced_api:
         return JSONResponse(
             status_code=401,
             content={"error": "unauthorized", "detail": "Login erforderlich", "login_url": "/login"},
@@ -592,6 +616,24 @@ def save_theme(theme_data: Dict): _save_json(THEME_FILE, theme_data)
 # REST ENDPOINTS
 # =====================================================================
 
+# Methoden, die ueber den Hermes-Proxy schreiben — sie brauchen den Rollenzaun.
+_PROXY_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _hermes_proxy_token() -> str:
+    """Token fuer den Hermes-Dashboard-Forward — ausschliesslich aus der Umgebung.
+
+    F1/R-34: kein hartkodierter Fallback mehr. Ein Literal-Token im Quelltext ist
+    ein geteiltes Geheimnis, das mit dem Repo wandert und den Proxy zum
+    Admin-Zugang macht; fehlt die Konfiguration, ist 502 die ehrliche Antwort.
+    """
+    for name in ("HERMES_SESSION_TOKEN", "HERMES_DASHBOARD_SESSION_TOKEN", "OMNIROUTE_API_KEY"):
+        value = (os.getenv(name) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 async def forward_to_hermes(request: Request) -> Response:
     path_to_use = request.url.path
     if path_to_use.startswith("/static/hermes-webui"):
@@ -608,10 +650,25 @@ async def forward_to_hermes(request: Request) -> Response:
         
     fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length", "authorization"]}
     fwd_headers["Host"] = "localhost:8787"
-    _hermes_tok = (os.getenv("HERMES_SESSION_TOKEN") or os.getenv("HERMES_DASHBOARD_SESSION_TOKEN")
-                   or os.getenv("OMNIROUTE_API_KEY") or "sk-archon-session-dev")
-    fwd_headers["X-Hermes-Session-Token"] = _hermes_tok
-    fwd_headers["Authorization"] = f"Bearer {_hermes_tok}"
+
+    hermes_token = _hermes_proxy_token()
+    if not hermes_token:
+        logger.error(
+            "[Hermes-Proxy] Kein Session-Token konfiguriert "
+            "(HERMES_SESSION_TOKEN / HERMES_DASHBOARD_SESSION_TOKEN / OMNIROUTE_API_KEY) — "
+            "Request abgewiesen."
+        )
+        return Response(
+            content=json.dumps({
+                "error": "proxy_not_configured",
+                "detail": "Kein Hermes-Session-Token konfiguriert; Forward abgewiesen.",
+            }),
+            status_code=502,
+            media_type="application/json",
+        )
+
+    fwd_headers["X-Hermes-Session-Token"] = hermes_token
+    fwd_headers["Authorization"] = f"Bearer {hermes_token}"
     
     body = await request.body()
     last_err = None
@@ -629,7 +686,11 @@ async def forward_to_hermes(request: Request) -> Response:
         except Exception as e:
             last_err = e
             continue
-    return Response(content=f'{{"error": "{last_err}"}}', status_code=502, media_type="application/json")
+    return Response(
+        content=json.dumps({"error": "proxy_unreachable", "detail": str(last_err)}),
+        status_code=502,
+        media_type="application/json",
+    )
 
 @app.get("/api/settings")
 async def get_settings(request: Request):
@@ -7616,19 +7677,36 @@ HELP_CONTEXT_DATA = {
 from backend.auth_service import auth_service
 
 def get_current_user_from_request(request: Request) -> dict:
+    """Ermittelt die Identitaet aus der Session.
+
+    Kandidaten in dieser Reihenfolge: ``Authorization``-Header,
+    ``X-Archon-Session``, ``archon_session``-Cookie. Der Cookie wird auch dann
+    geprueft, wenn ein ``Authorization``-Header vorhanden ist, der **keine**
+    Archon-Session traegt — sonst verliert eine angemeldete Sitzung ihre Rolle,
+    sobald ein Client einen fremden Bearer-Header mitsendet (etwa das
+    eingebettete Hermes-Dashboard). Akzeptiert wird ausschliesslich eine
+    gueltige Archon-Session; an den Rechten aendert das nichts.
+    """
+    candidates: List[str] = []
     auth_header = request.headers.get("authorization", "")
-    token = ""
     if auth_header.lower().startswith("bearer "):
-        token = auth_header[7:].strip()
-    elif "x-archon-session" in request.headers:
-        token = request.headers.get("x-archon-session", "").strip()
-    elif "archon_session" in request.cookies:
-        token = request.cookies.get("archon_session", "").strip()
+        candidates.append(auth_header[7:].strip())
+    header_session = request.headers.get("x-archon-session", "").strip()
+    if header_session:
+        candidates.append(header_session)
+    cookie_session = (request.cookies.get("archon_session", "") or "").strip()
+    if cookie_session:
+        candidates.append(cookie_session)
 
     is_enabled = auth_service.is_auth_enabled()
 
-    if token:
-        user = auth_service.verify_session(token)
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            user = auth_service.verify_session(candidate)
+        except Exception:
+            user = None
         if user:
             user["auth_enabled"] = is_enabled
             return user
@@ -9623,7 +9701,16 @@ class LLMProviderSaveKeyRequest(BaseModel):
 @app.api_route("/api/health/agent", methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"])
 @app.api_route("/static/hermes-webui/api/{path:path}", methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"])
 async def proxy_hermes_api_endpoints(request: Request, path: str = ""):
-    """Forward frontend API calls from embedded iFrame to active Hermes backend with full header preservation."""
+    """Forward frontend API calls from embedded iFrame to active Hermes backend.
+
+    F11: Der Handler traegt einen gemischten Methodensatz (GET/POST/OPTIONS/
+    PUT/DELETE). Ein pauschaler Zaun wuerde das Dashboard auch fuers Lesen
+    sperren, ein fehlender oeffnet die Schreibmethoden. Deshalb wird pro Methode
+    verzweigt: lesen darf jede angemeldete Rolle, schreiben nur ``admin`` —
+    und zwar **vor** dem Forward, damit nichts weitergereicht wird.
+    """
+    if request.method in _PROXY_WRITE_METHODS:
+        require_admin_or_503(request)
     return await forward_to_hermes(request)
 
 class ContainerActionRequest(BaseModel):

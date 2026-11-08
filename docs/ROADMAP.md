@@ -193,14 +193,15 @@ Modellseitig ist `senior_fullstack_engineer` auf `meta/muse-spark-1.3-contributo
 
 ## 1d. 🔴-Fix-Cluster (Session Antigravity, 08.11.2026)
 
-7 kritische Befunde behoben mit lückenlosem Rot-Beweis vor dem Fix, isolierten Tests und voller Testsuite-Validierung.
-**2 Commits:** `9d459bf9` und `7785d2fa`.
-Suite-Stand nach beiden Commits: **1136 passed / 8 skipped, EXIT=0** (`.venv/bin/python -m pytest tests/ -q` in 64s).
+12 kritische Befunde behoben mit lückenlosem Rot-Beweis vor dem Fix, isolierten Tests und voller Testsuite-Validierung.
+**3 Commits:** `9d459bf9`, `7785d2fa`, `fbe44dcf`.
+Suite-Stand nach drittem Commit: **1141 passed / 8 skipped, EXIT=0** (`.venv/bin/python -m pytest tests/ -q` in 66s).
 
 | Commit | Befunde | Was | Beleg |
 |---|---|---|---|
 | `9d459bf9` | **K-1**, **R-11** | Rollenzaun für `voice.py` (`speak`, `command`, `synthesize`), Traversal-Schutz für `/api/voice/audio/{filename}`, `require_admin` für `GET /api/hermes/raw_config`, `_safe_config_target` für freien `path`-Parameter, Maskierung von API-Keys in `parsed` | `tests/test_fix_k1_r11.py` (4/4 passed). Vorher: 3 failed, 1 failed (Audio FileResponse auf `main.py`). |
 | `7785d2fa` | **D-01**, **D-02**, **D-03**, **R-03**, **R-04** | **D-01:** `api_get_hermes_profiles()` verwirft keine Custom-Felder (`current_task_id`, `system_prompt` etc.) mehr und überschreibt bestehende SSOT nicht auf GET. **D-02:** Concurrency-Lock (`_lock` + `BEGIN IMMEDIATE`) verhindert Gabelung der SHA-256 Audit-Hashkette. **D-03:** `end_doc_path` NameError in `post_task_pipeline.py` behoben, `final_path` und `final_doc_path` garantiert. **R-03:** ERP `save_document` lädt bestehende Positionen bei alleinigem Notiz-Update statt Summen auf 0,00 € zu nullen. **R-04:** Dunning `create_invoice` nutzt kollisionsfreie IDs (Zeitstempel + UUID) und wirft bei INSERT-Fehlern. | `tests/test_fix_batch2.py` (5/5 passed). Vorher: alle 5 Tests rot. |
+| `fbe44dcf` | **M-06**, **M-07**, **M-08**, **M-16**, **M-17** | **M-06:** `backend/dag_scheduler.py` – `task_id` Parameter ergänzt und Fallback-ID definiert, kollisionsfreie Parent-IDs. **M-07:** `archon/routers/skills.py` – `_DEPS.get("skills_engine")` Injektion statt ungebundenem globalen Namen. **M-08:** `archon/routers/hermes_profiles.py` – `request` an `api_update_hermes_profile_status` weitergegeben. **M-16:** `main.py` & `static/js/skill_markt.js` – `save_agents` verwirft inaktive & System-Agenten nicht mehr. **M-17:** `main.py` & `static/js/customizer.js` – `api_save_theme_live_overrides` merged Teil-Updates statt nicht übergebene Regeln/Overrides zu leeren. | `tests/test_fix_batch3.py` (5/5 passed). Vorher: alle Tests rot. |
 
 ---
 

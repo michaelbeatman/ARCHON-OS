@@ -49,7 +49,7 @@ def _task_by_id(data: dict, task_id: str):
     return next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
 
 
-def _merge_task_delta(fresh: dict, local_data: dict, task_id: str, local_tasks: list) -> None:
+def _merge_task_delta(fresh: dict, local_data: dict, task_id: str, local_tasks: list, orig_ids: Optional[set] = None) -> None:
     """Uebertraegt nur die Aenderungen DIESES Tasks in den frisch geladenen Store.
 
     Der Task wird ueber einen langen await (LLM-Dispatch) hinweg als Snapshot
@@ -70,8 +70,16 @@ def _merge_task_delta(fresh: dict, local_data: dict, task_id: str, local_tasks: 
         else:
             fresh_tasks.insert(0, local_task)
 
+    # R-18: Es werden NUR Tasks ergaenzt, die WAEHREND dieses Laufs neu
+    # entstanden sind (nicht in orig_ids, eigenes Kind). Vorher wurde die
+    # komplette alte Snapshot-Liste mitgegeben — Tasks, die der Nutzer
+    # waehrend des awaits verworfen hatte, wurden dadurch wiederbelebt.
+    if orig_ids is None:
+        orig_ids = set()
     for sub in local_tasks or []:
-        if sub.get("id") not in fresh_ids:
+        if sub.get("id") not in fresh_ids \
+                and sub.get("id") not in orig_ids \
+                and sub.get("parent_task_id") == task_id:
             fresh_tasks.insert(0, sub)
 
 
@@ -113,6 +121,9 @@ async def _execute_mission_control_task(
         fan_in = _fan_in_maybe_start_synthesis
     data = load_mc()
     tasks = data.get("tasks", [])
+    # R-18: Schnappschuss der Task-IDs VOR dem LLM-await — nur waerend des Laufs
+    # neu erzeugte Tasks duerfen im Merge wieder eingefuegt werden.
+    orig_task_ids = {t.get("id") for t in tasks}
     task = next((t for t in tasks if t.get("id") == task_id), None)
     if not task:
         return
@@ -125,7 +136,7 @@ async def _execute_mission_control_task(
         Ohne update_mc: RuntimeError (wie in Commit a4267fa2 an anderer Stelle).
         """
         if update_mc is not None:
-            update_mc(lambda fresh: _merge_task_delta(fresh, data, task_id, tasks))
+            update_mc(lambda fresh: _merge_task_delta(fresh, data, task_id, tasks, orig_task_ids))
         else:
             raise RuntimeError(
                 "_execute_mission_control_task: Parameter 'update_mc' fehlt. "

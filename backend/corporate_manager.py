@@ -136,8 +136,15 @@ class CorporateManager:
                 res = dict(c)
                 res["is_active"] = (c.get("id") == data.get("active_company_id"))
                 return res
-        if data.get("companies"):
-            return data["companies"][0]
+        # R-21: Eine EXPLIZIT angefragte, unbekannte company_id darf NICHT still
+        # auf eine andere Rechtsperson (companies[0]) ausweichen — sonst druckt
+        # ein vertipptes/deaktiviertes Firmenprofil die falschen Stammdaten
+        # (Steuernummer, IBAN) auf Rechnung/Angebot. Nur die Aufloesung ohne
+        # company_id (aktive Firma) darf auf den ersten Eintrag zurueckfallen.
+        if not company_id and data.get("companies"):
+            res = dict(data["companies"][0])
+            res["is_active"] = res.get("id") == data.get("active_company_id")
+            return res
         return None
 
     def set_active_company(self, company_id: str) -> bool:
@@ -245,6 +252,10 @@ class CorporateManager:
         """
         company = self.get_company(company_id)
         if not company:
+            # R-21: unbekannte, explizit angefragte company_id -> Fehler statt
+            # stillem Ausweichen auf eine andere Rechtsperson (falsche USt/IBAN).
+            if company_id:
+                raise ValueError(f"Unbekannte Company-ID: {company_id}")
             company = DEFAULT_PRIMARY_COMPANY
 
         custom = dict(custom or {})

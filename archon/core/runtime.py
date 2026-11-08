@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -69,20 +70,36 @@ OBSIDIAN_VAULT_DIR = resolve_obsidian_vault_path()
 # --------------------------------------------------------------------------
 ticker_entries: List[str] = []
 _SSE_SUBSCRIBERS: List[asyncio.Queue] = []
+# F-08: broadcast_event laeuft aus mehreren Threads (main.py-Hintergrund,
+# operations_api); Appends/Removes auf der Liste brauchen eine Sperre.
+_SSE_SUB_LOCK = threading.Lock()
 
 
 def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None) -> None:
-    """Typisiertes Server-Sent Event an alle verbundenen Web-Clients."""
+    """Typisiertes Server-Sent Event an alle verbundenen Web-Clients.
+
+    F-08: Ein voller Client-Puffer (QueueFull) trennt den Client NICHT mehr ab.
+    Vorher wurde jeder put_nowait-Fehler als "toter Subscriber" gewertet und
+    der langsame Client dauerhaft entfernt — ohne Meldung auf beiden Seiten.
+    Volle Queues bekommen das Event einfach nicht (naechstes Event kommt an).
+    """
     payload = json.dumps({"type": event_type, "timestamp": time.time(), "data": data or {}})
     dead = []
-    for q in _SSE_SUBSCRIBERS:
-        try:
-            q.put_nowait(payload)
-        except Exception:
-            dead.append(q)
-    for dq in dead:
-        if dq in _SSE_SUBSCRIBERS:
-            _SSE_SUBSCRIBERS.remove(dq)
+    with _SSE_SUB_LOCK:
+        for q in list(_SSE_SUBSCRIBERS):
+            try:
+                q.put_nowait(payload)
+            except asyncio.QueueFull:
+                # Client haengt im Rueckstand — Event fuer DIESEN Client droppen,
+                # Verbindung bleibt bestehen.
+                continue
+            except Exception:
+                dead.append(q)
+        for dq in dead:
+            try:
+                _SSE_SUBSCRIBERS.remove(dq)
+            except ValueError:
+                pass
 
 
 def add_ticker(agent_name: str, message: str) -> None:

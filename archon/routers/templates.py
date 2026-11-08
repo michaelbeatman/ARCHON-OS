@@ -73,17 +73,28 @@ def _load_prompt_templates() -> dict:
     }
 
 
-def _save_prompt_templates(data: dict):
-    saved = False
-    for p in ["/opt/data/prompt_templates.json", os.path.join(MEMORY_DIR, "prompt_templates.json"), os.path.join(WORKSPACE_DIR, "data", "prompt_templates.json"), "./data/prompt_templates.json"]:
-        try:
-            os.makedirs(os.path.dirname(p), exist_ok=True)
-            with open(p, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            saved = True
-        except Exception:
-            pass
-    return saved
+def _save_prompt_templates(data: dict) -> str:
+    """Schreibt atomar in GENAU die Datei, die der Leser auch liest (Z-03).
+
+    Vorher wurden vier Ziele beschrieben (jeder Fehler einzeln verschluckt und
+    'saved' zurueckgegeben), gelesen wurde aber nur die erste existierende
+    Datei — Lese- und Schreibziel divergierten dauerhaft, und ein
+    Read-only-Mount kam als Erfolgsmeldung zurueck.
+    """
+    target = PROMPT_TEMPLATES_PATHS[0]
+    for p in PROMPT_TEMPLATES_PATHS:
+        if os.path.exists(p):
+            target = p
+            break
+    tdir = os.path.dirname(os.path.abspath(target))
+    os.makedirs(tdir, exist_ok=True)
+    tmp = os.path.join(tdir, ".prompt_templates.json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, target)
+    return target
 
 
 @router.get("/api/templates")
@@ -425,5 +436,10 @@ async def save_prompt_template(request: Request, req: TemplateSaveRequest):
         "raw_text": raw_text
     }
     data.setdefault("templates", []).insert(0, new_tpl)
-    _save_prompt_templates(data)
-    return {"status": "ok", "template": new_tpl}
+    try:
+        saved_to = _save_prompt_templates(data)
+    except Exception as serr:
+        # Z-03: Schreibfehler ehrlich melden statt {"status": "ok"}.
+        logger.error(f"[Templates] Speichern fehlgeschlagen: {serr}")
+        raise HTTPException(status_code=503, detail=f"Vorlagen konnten nicht gespeichert werden: {serr}")
+    return {"status": "ok", "template": new_tpl, "saved_to": saved_to}

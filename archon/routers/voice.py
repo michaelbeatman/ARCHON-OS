@@ -26,6 +26,8 @@ from archon.core.runtime import (  # noqa: F401
     add_ticker, broadcast_event, ticker_entries, _load_json, _save_json,
     atomic_write_json,
 )
+from archon.routers._rbac import require_admin_or_503
+from utils.path_jail import safe_path, PathJailError
 
 router = APIRouter()
 
@@ -35,7 +37,8 @@ class VoiceSynthesizePayload(BaseModel):
     voice: Optional[str] = "de-DE-ConradNeural"
 
 @router.post("/api/voice/speak")
-async def api_voice_speak(payload: Dict[str, Any] = Body(...)):
+async def api_voice_speak(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache (K-1)
     text = payload.get("text", "")
     voice = payload.get("voice")
     if not text:
@@ -50,7 +53,8 @@ async def api_voice_speak(payload: Dict[str, Any] = Body(...)):
 
 
 @router.post("/api/voice/command")
-async def api_voice_command(payload: Dict[str, Any] = Body(...)):
+async def api_voice_command(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache (K-1)
     transcript = payload.get("transcript", "")
     if not transcript:
         raise HTTPException(status_code=400, detail="Transkript ist erforderlich")
@@ -64,15 +68,28 @@ async def api_voice_command(payload: Dict[str, Any] = Body(...)):
 
 @router.get("/api/voice/audio/{filename}")
 def api_get_voice_audio(filename: str):
-    audio_file = os.path.join("data", "audio_cache", filename)
-    if os.path.exists(audio_file):
+    clean_name = os.path.basename(filename)
+    if not clean_name or clean_name != filename:
+        raise HTTPException(status_code=403, detail="Ungültiger Dateiname")
+    audio_dir = os.path.abspath(os.path.join("data", "audio_cache"))
+    try:
+        audio_file = safe_path(
+            os.path.join(audio_dir, clean_name),
+            allow_write=False,
+            allow_dirs=False,
+            extra_roots=[audio_dir],
+        )
+    except PathJailError as e:
+        raise HTTPException(status_code=403, detail=f"Pfad nicht erlaubt: {e}")
+    if os.path.exists(audio_file) and os.path.isfile(audio_file):
         return FileResponse(audio_file, media_type="audio/mpeg")
     raise HTTPException(status_code=404, detail="Audio-Datei nicht gefunden")
 
 
 @router.post("/api/voice/synthesize")
-async def api_voice_synthesize(payload: VoiceSynthesizePayload):
+async def api_voice_synthesize(request: Request, payload: VoiceSynthesizePayload):
     """Generiert eine Audiodatei aus Text via edge-tts."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache (K-1)
     from backend.voice_pipeline import synthesize_speech
     try:
         mp3_path = await synthesize_speech(payload.text, voice=payload.voice or "de-DE-ConradNeural")

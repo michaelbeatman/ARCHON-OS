@@ -38,15 +38,14 @@ def get_consolidation_config() -> Dict[str, Any]:
         return DEFAULT_CONSOLIDATION_CONFIG.copy()
 
 def save_consolidation_config(cfg: Dict[str, Any]) -> bool:
-    """Speichert die Einstellungen in settings.json."""
+    """Speichert die Einstellungen in settings.json (F-07: atomar + gelockt)."""
     try:
-        current = {}
-        if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                current = json.load(f)
-        current["memory_consolidation"] = cfg
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(current, f, indent=2, ensure_ascii=False)
+        from backend.settings_json import atomic_update_settings
+
+        def _apply(current: Dict[str, Any]):
+            current["memory_consolidation"] = cfg
+
+        atomic_update_settings(SETTINGS_FILE, _apply)
         return True
     except Exception as e:
         print(f"[MemoryConsolidator] Fehler beim Speichern der Settings: {e}", file=sys.stderr)

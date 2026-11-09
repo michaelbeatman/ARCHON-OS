@@ -2771,6 +2771,7 @@
         `;
         lucide.createIcons();
       }
+    }
 
     // =========================================================================
     // OPENROUTER & LLM PREIS-KATALOG MODAL CONTROLLER

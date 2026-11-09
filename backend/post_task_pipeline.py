@@ -211,7 +211,7 @@ def project_folder_name(task: dict) -> str:
 
 
 def write_project_folder_artifact(task: dict) -> Dict[str, str]:
-    """
+    r"""
     Erstellt die 3-Ordner-Struktur in C:\Mein Obsidian\Projects\<folder_name>:
     - 01_Zwischenberichte/
     - 02_Medien/
@@ -357,7 +357,7 @@ primary_document: "[[{task_id}_{task_slug}]]"
 
 
 def update_agent_personalakte(agent_id: str, task_id: str, raw_title: str, file_stem: str) -> bool:
-    """
+    r"""
     Aktualisiert die Personalakte unter C:\Mein Obsidian\00_HR_Agenten\Personalakten\{agent_id}.md:
     - Inkrementiert tasks_completed
     - Setzt last_evaluation auf heute

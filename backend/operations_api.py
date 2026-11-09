@@ -701,7 +701,7 @@ class KanbanBulkUndoRequest(BaseModel):
     undo_token: str
 
 @router.post("/kanban/bulk")
-async def api_kanban_bulk_action(req: KanbanBulkActionRequest):
+def api_kanban_bulk_action(req: KanbanBulkActionRequest):
     """Führt eine Mehrfachaktion auf ausgewählten Kanban-Tasks aus mit 10-Minuten-Undo-Puffer (t-c2b384)."""
     task_ids = [tid.strip() for tid in req.task_ids if tid and tid.strip()]
     if not task_ids:
@@ -853,7 +853,7 @@ async def api_kanban_bulk_action(req: KanbanBulkActionRequest):
 
 
 @router.post("/kanban/bulk/undo")
-async def api_kanban_bulk_undo(req: KanbanBulkUndoRequest):
+def api_kanban_bulk_undo(req: KanbanBulkUndoRequest):
     """Macht eine Mehrfachaktion innerhalb des 10-Minuten-Zeitfensters rückgängig (t-c2b384)."""
     token = req.undo_token.strip()
     entry = _KANBAN_UNDO_STORE.get(token)
@@ -929,7 +929,7 @@ async def api_kanban_bulk_undo(req: KanbanBulkUndoRequest):
 
 
 @router.post("/kanban/tasks/{task_id}/approve")
-async def approve_kanban_task(task_id: str):
+def approve_kanban_task(task_id: str):
     """Erteilt die Autonomie-Freigabe (approval) und startet die Aufgabe."""
     conn = _get_kanban_connection()
     try:

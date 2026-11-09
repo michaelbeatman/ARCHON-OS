@@ -393,8 +393,10 @@ async def api_library_upload(request: Request):
                         detail=f"Dateiname nicht erlaubt: {e}"
                     )
                 content = await file.read()
-                with open(file_path, "wb") as f:
-                    f.write(content)
+                def _save_file(target_path: str, data: bytes) -> None:
+                    with open(target_path, "wb") as f:
+                        f.write(data)
+                await asyncio.to_thread(_save_file, file_path, content)
                     
                 item_info = {
                     "filename": name,
@@ -404,7 +406,7 @@ async def api_library_upload(request: Request):
                 
                 if auto_ingest:
                     try:
-                        ingest_res = process_document(file_path, vault_dir, target_category=category)
+                        ingest_res = await asyncio.to_thread(process_document, file_path, vault_dir, target_category=category)
                         item_info["ingest"] = ingest_res
                     except Exception as err:
                         item_info["ingest"] = {"status": "error", "error": str(err)}

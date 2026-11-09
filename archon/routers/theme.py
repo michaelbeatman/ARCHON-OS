@@ -4,6 +4,7 @@ Verwaltet Custom-Themes, Live-Studio-Overrides, CSS-Baking
 und Background-Uploads.
 """
 
+import asyncio
 import os
 import re
 import sys
@@ -342,6 +343,8 @@ async def api_upload_theme_background(request: Request, file: UploadFile = File(
     safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", file.filename or "background.png")
     fname = f"bg_{int(time.time())}_{safe_name}"
     dest = os.path.join(uploads_dir, fname)
-    with open(dest, "wb") as f:
-        f.write(content)
+    def _write_bg(path: str, data: bytes) -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+    await asyncio.to_thread(_write_bg, dest, content)
     return {"status": "success", "url": f"/static/uploads/{fname}"}

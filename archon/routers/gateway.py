@@ -197,7 +197,7 @@ def _update_profile_status(profile_id: str, new_status: str):
 
 
 @router.get("/list")
-async def api_gateway_list():
+def api_gateway_list():
     import main as app_main
     all_profiles = app_main._get_all_installed_profiles()
     cfg = app_main._load_gateway_config()
@@ -325,7 +325,7 @@ def api_gateway_autostart(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/stop-all")
-async def api_gateway_stop_all(request: Request):
+def api_gateway_stop_all(request: Request):
     _require_admin(request)
     import main as app_main
     cfg = app_main._load_gateway_config()

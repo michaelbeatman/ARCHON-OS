@@ -98,7 +98,7 @@ def _save_prompt_templates(data: dict) -> str:
 
 
 @router.get("/api/templates")
-async def get_prompt_templates():
+def get_prompt_templates():
     """Liefert alle Prompt-Vorlagen und Kategorien strukturiert zurück."""
     return _load_prompt_templates()
 
@@ -140,7 +140,7 @@ def _load_fabric_patterns_data() -> List[Dict[str, Any]]:
 
 
 @router.get("/api/fabric/patterns")
-async def get_fabric_patterns(category: Optional[str] = None, q: Optional[str] = None):
+def get_fabric_patterns(category: Optional[str] = None, q: Optional[str] = None):
     """Liefert alle Fabric-Patterns strukturiert mit Kategorien zurück."""
     patterns = _load_fabric_patterns_data()
     categories = sorted(list({p["category"] for p in patterns}))
@@ -165,7 +165,7 @@ async def get_fabric_patterns(category: Optional[str] = None, q: Optional[str] =
 
 
 @router.get("/api/fabric/pattern/{pattern_id}")
-async def get_fabric_pattern_detail(pattern_id: str):
+def get_fabric_pattern_detail(pattern_id: str):
     """Liefert den detaillierten System-Prompt und Felder eines spezifischen Fabric-Patterns."""
     patterns = _load_fabric_patterns_data()
     pat = next((p for p in patterns if p["id"] == pattern_id), None)
@@ -260,7 +260,7 @@ def _load_prompt_studio_catalog() -> List[Dict[str, Any]]:
 
 
 @router.get("/api/templates/catalog")
-async def get_prompt_studio_catalog(category: Optional[str] = None, q: Optional[str] = None):
+def get_prompt_studio_catalog(category: Optional[str] = None, q: Optional[str] = None):
     """Liefert den gesamten Archon Prompt Studio Katalog (824 Vorlagen) gefiltert nach Kategorie/Suche."""
     catalog = _load_prompt_studio_catalog()
     categories = sorted(list({t["category"] for t in catalog if "category" in t}))
@@ -301,7 +301,7 @@ async def get_prompt_studio_catalog(category: Optional[str] = None, q: Optional[
 
 
 @router.get("/api/templates/{template_slug}/schema")
-async def get_template_schema(template_slug: str):
+def get_template_schema(template_slug: str):
     """Gibt das Formular-Schema und den Template-Text für ein einzelnes Template zurück."""
     catalog = _load_prompt_studio_catalog()
     tpl = next((t for t in catalog if t.get("id") == template_slug), None)
@@ -314,7 +314,7 @@ async def get_template_schema(template_slug: str):
 
 
 @router.post("/api/templates/{template_slug}/render")
-async def render_template_prompt(request: Request, template_slug: str, req: TemplateRenderRequest):
+def render_template_prompt(request: Request, template_slug: str, req: TemplateRenderRequest):
     """
     Rendert das Archon_Prompt_Template mit den übergebenen Formularwerten.
     Verhalten A: Leere optionale Variablen und deren Zeilen werden rückstandslos entfernt.
@@ -413,7 +413,7 @@ async def render_template_prompt(request: Request, template_slug: str, req: Temp
 async def save_prompt_template(request: Request, req: TemplateSaveRequest):
     """Speichert eine neue oder angepasste Vorlage in der persistenten Template-Bibliothek."""
     require_admin_or_503(request)  # RBAC: Prompt-Bibliothek ist Admin-Sache (R-09)
-    data = _load_prompt_templates()
+    data = await asyncio.to_thread(_load_prompt_templates)
     if req.category not in data.get("categories", []):
         data.setdefault("categories", []).append(req.category)
     
@@ -448,7 +448,7 @@ async def save_prompt_template(request: Request, req: TemplateSaveRequest):
     }
     data.setdefault("templates", []).insert(0, new_tpl)
     try:
-        saved_to = _save_prompt_templates(data)
+        saved_to = await asyncio.to_thread(_save_prompt_templates, data)
     except Exception as serr:
         # Z-03: Schreibfehler ehrlich melden statt {"status": "ok"}.
         logger.error(f"[Templates] Speichern fehlgeschlagen: {serr}")

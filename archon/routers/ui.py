@@ -1,6 +1,7 @@
 """Router fuer Live UI Editor und Design Studio (Text Replacement, HTML Freeze)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -165,8 +166,10 @@ async def api_studio_upload_bg(file: UploadFile = File(...)):
     safe_ext = ext if ext else ".jpg"
     out_name = f"studio-bg_{ts}{safe_ext}"
     out_path = os.path.join(STUDIO_BG_UPLOAD_DIR, out_name)
-    with open(out_path, "wb") as f:
-        f.write(content)
+    def _write_studio_bg(path: str, data: bytes) -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+    await asyncio.to_thread(_write_studio_bg, out_path, content)
     import main as app_main
 
     if hasattr(app_main, "add_ticker"):

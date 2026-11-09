@@ -32,7 +32,7 @@ def api_get_inbox_watcher_config():
 
 
 @router.post("/api/inbox-watcher/config")
-async def api_save_inbox_watcher_config(request: Request, payload: Dict = Body(...)):
+def api_save_inbox_watcher_config(request: Request, payload: Dict = Body(...)):
     _require_admin(request)
     from backend.inbox_watcher import get_inbox_config, save_inbox_config
 

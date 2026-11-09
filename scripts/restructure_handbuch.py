@@ -33,7 +33,7 @@ Die Parsing-Engine (`backend/document_parser.py`) verarbeitet komplexe heterogen
   - `POST /api/documents/parse`: Gibt Volltext, Markdown, Absatz- und Tabellenanzahl zurück.
   - `POST /api/documents/extract-tables`: Liefert spezifisch alle extrahierten Tabellen als JSON-Matrizen."""
 
-deal_pipeline_doc = """### 2.2 Deal-Pipeline mit Stufen & Forecast-Engine (t-5b159d)
+deal_pipeline_doc = r"""### 2.2 Deal-Pipeline mit Stufen & Forecast-Engine (t-5b159d)
 
 Die Vertriebs-Pipeline (`backend/deal_pipeline.py`, `data/deals.db`) strukturiert Geschäftschancen und berechnet automatisierte Umsatzprognosen:
 - **Die 6 Vertriebsphasen:**

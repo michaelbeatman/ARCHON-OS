@@ -1958,643 +1958,80 @@ router.include_router(_org_router)
 
 
 # =========================================================================
-# 6. ADVANCED AGENTIC MECHANICS: DAG-SCHEDULER & WORKFLOW CHECKPOINTS
+# DAG-SCHEDULER, WORKFLOW CHECKPOINTS & OTEL TRACING
+# Ausgelagert nach archon/routers/operations_dag.py
 # =========================================================================
-
-class DecomposeTaskRequest(BaseModel):
-    title: str
-    body: Optional[str] = ""
-    assignee: Optional[str] = "orchestrator"
-
-@router.post("/kanban/dag/decompose")
-async def api_dag_decompose_task(req: DecomposeTaskRequest):
-    """Zerlegt eine komplexe Aufgabe in einen Directed Acyclic Graph (DAG) mit parallelen Teilaufgaben."""
-    from backend.dag_scheduler import dag_scheduler_instance
-    return await dag_scheduler_instance.decompose_task(req.title, req.body or "", req.assignee or "orchestrator")
-
-@router.post("/kanban/dag/execute/{parent_id}")
-async def api_dag_execute_task(parent_id: str):
-    """Führt einen zerlegten DAG aus: Parallele Vorstufen -> abhängige Stufen -> Abschluss-Synthese."""
-    from backend.dag_scheduler import dag_scheduler_instance
-    return await dag_scheduler_instance.execute_dag(parent_id)
-
-class WorkflowCheckpointCreateRequest(BaseModel):
-    checkpoint_id: str
-    workflow_id: str
-    agent_id: str
-    current_step: int
-    total_steps: int
-    state_data: Dict[str, Any]
-    status: Optional[str] = "running"
-    pause_reason: Optional[str] = None
-
-@router.post("/workflows/checkpoints")
-def api_create_workflow_checkpoint(req: WorkflowCheckpointCreateRequest):
-    """Speichert einen atomaren Workflow-Snapshot für unterbrechbare Langzeitprozesse."""
-    from local_memory_bridge import LocalMemoryBridge
-    bridge = LocalMemoryBridge()
-    bridge.save_workflow_checkpoint(
-        req.checkpoint_id, req.workflow_id, req.agent_id,
-        req.current_step, req.total_steps, req.state_data,
-        req.status or "running", req.pause_reason
-    )
-    return {"status": "success", "checkpoint_id": req.checkpoint_id}
-
-@router.get("/workflows/checkpoints")
-def api_list_workflow_checkpoints(status: Optional[str] = None):
-    """Liefert aktive oder pausierte Workflow-Snapshots."""
-    from local_memory_bridge import LocalMemoryBridge
-    bridge = LocalMemoryBridge()
-    return {"status": "success", "checkpoints": bridge.list_workflow_checkpoints(status=status)}
-
-@router.post("/workflows/checkpoints/{checkpoint_id}/resume")
-def api_resume_workflow_checkpoint(checkpoint_id: str):
-    """Reaktiviert einen pausierten Workflow-Snapshot für die Weiterführung ab Schritt N."""
-    from local_memory_bridge import LocalMemoryBridge
-    bridge = LocalMemoryBridge()
-    cp = bridge.get_workflow_checkpoint(checkpoint_id)
-    if not cp:
-        raise HTTPException(status_code=404, detail="Checkpoint nicht gefunden.")
-    bridge.save_workflow_checkpoint(
-        checkpoint_id, cp["workflow_id"], cp["agent_id"],
-        cp["current_step"], cp["total_steps"], cp.get("state", {}),
-        status="resumed", pause_reason=None
-    )
-    return {"status": "success", "message": f"Workflow {cp['workflow_id']} ab Schritt {cp['current_step']} reaktiviert.", "checkpoint": cp}
-
-
-@router.get("/traces/otel")
-def api_list_otel_traces(limit: int = Query(25, ge=1, le=100)):
-    """OpenTelemetry & Langfuse Tracing: Liefert jüngste Traces mit Token-, Latenz- und Kosten-Metriken."""
-    try:
-        from backend.otel_tracer import tracer
-        traces = tracer.list_recent_traces(limit=limit)
-        return {"status": "success", "total": len(traces), "traces": traces}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/traces/otel/{trace_or_task_id}")
-def api_get_otel_trace_tree(trace_or_task_id: str):
-    """OpenTelemetry & Langfuse Tracing: Liefert den vollständigen hierarchischen Trace- und Span-Baum."""
-    try:
-        from backend.otel_tracer import tracer
-        tree = tracer.get_trace_tree(trace_or_task_id)
-        if not tree:
-            raise HTTPException(status_code=404, detail="Trace nicht gefunden.")
-        return {"status": "success", "trace": tree}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class HumanFeedbackSubmitRequest(BaseModel):
-    agent_id: str
-    score: int  # +1 (positiv / Daumen hoch) oder -1 (negativ / Daumen runter)
-    task_id: Optional[str] = None
-    comment: Optional[str] = None
-    corrected_text: Optional[str] = None
-    source: Optional[str] = "kanban_card"
-    task_prompt: Optional[str] = None
-
-
-@router.post("/feedback")
-def api_submit_human_feedback(req: HumanFeedbackSubmitRequest):
-    """
-    Nimmt menschliches Feedback (Daumen hoch/runter, Korrekturhinweise) entgegen.
-    Negative Bewertungen (-1) werden automatisch als Gold-Standard-Regressionstestfall angelegt.
-    """
-    try:
-        from backend.human_feedback_engine import feedback_engine
-        res = feedback_engine.submit_feedback(
-            agent_id=req.agent_id,
-            score=req.score,
-            task_id=req.task_id,
-            comment=req.comment,
-            corrected_text=req.corrected_text,
-            source=req.source or "kanban_card",
-            task_prompt=req.task_prompt
-        )
-        return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/feedback/stats")
-def api_get_feedback_stats():
-    """Gibt globale Feedback-Statistiken, Zustimmungsquoten und Agenten-Metriken zurück."""
-    try:
-        from backend.human_feedback_engine import feedback_engine
-        return {"status": "success", "stats": feedback_engine.get_stats()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/feedback/task/{task_id}")
-def api_get_task_feedback(task_id: str):
-    """Liefert alle Feedback-Einträge für eine bestimmte Aufgabe."""
-    try:
-        from backend.human_feedback_engine import feedback_engine
-        entries = feedback_engine.get_task_feedback(task_id)
-        return {"status": "success", "task_id": task_id, "feedbacks": entries}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/config/validate")
-def api_validate_system_config():
-    """Führt eine vollständige Pre-Flight-Konfigurationsprüfung aller System-JSONs durch."""
-    try:
-        from backend.config_validator import validator
-        res = validator.validate_all(strict=False)
-        return {"status": "success", "report": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/notifications/policy")
-def api_get_notification_policy():
-    """Liefert die aktuellen Benachrichtigungs- und Ruhezeit-Regeln."""
-    try:
-        from backend.notification_hub import get_notification_hub
-        hub = get_notification_hub()
-        return {
-            "status": "success",
-            "policy": hub.get_policy(),
-            "in_quiet_hours": hub.is_in_quiet_hours()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/notifications/policy")
-def api_update_notification_policy(request: Request, req: Dict[str, Any] = Body(...)):
-    """Aktualisiert die Benachrichtigungs- und Ruhezeit-Regeln in settings.json."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    try:
-        from backend.notification_hub import get_notification_hub
-        hub = get_notification_hub()
-        updated = hub.update_policy(req)
-        return {
-            "status": "success",
-            "policy": updated,
-            "in_quiet_hours": hub.is_in_quiet_hours()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/notifications/digest")
-def api_get_suppressed_digest(since_hours: int = 24):
-    """Liefert alle während der Ruhezeiten gepufferten Benachrichtigungen als Sammel-Digest."""
-    try:
-        from backend.notification_hub import get_notification_hub
-        hub = get_notification_hub()
-        items = hub.get_suppressed_digest(since_hours=since_hours)
-        return {
-            "status": "success",
-            "count": len(items),
-            "since_hours": since_hours,
-            "suppressed_notifications": items
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/metrics/summary")
-def api_get_metrics_summary():
-    """Liefert aggregierte System-, Queue- und Telemetrie-Metriken als strukturiertes JSON."""
-    try:
-        from backend.metrics_collector import metrics_collector
-        return {"status": "success", "metrics": metrics_collector.get_summary_json()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/prompts/{agent_id}/versions")
-def api_list_prompt_versions(agent_id: str):
-    """Listet alle Versionen des System-Prompts für den angegebenen Agenten auf."""
-    try:
-        from backend.prompt_registry import prompt_registry
-        versions = prompt_registry.list_versions(agent_id)
-        return {"status": "success", "agent_id": agent_id, "versions": versions}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/prompts/{agent_id}/versions")
-def api_save_prompt_version(request: Request, agent_id: str, req: Dict[str, Any] = Body(...)):
-    """Speichert eine neue Version des System-Prompts für einen Agenten."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    try:
-        from backend.prompt_registry import prompt_registry
-        prompt_text = req.get("prompt")
-        if not prompt_text:
-            raise HTTPException(status_code=400, detail="Feld 'prompt' ist erforderlich.")
-        res = prompt_registry.save_version(
-            agent_id=agent_id,
-            prompt=prompt_text,
-            commit_message=req.get("commit_message", ""),
-            created_by=req.get("created_by", "manual_api"),
-            model=req.get("model"),
-            make_active=req.get("make_active", True),
-            canary_percentage=req.get("canary_percentage", 0)
-        )
-        return res
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/prompts/{agent_id}/diff")
-def api_diff_prompt_versions(agent_id: str, v1: int = Query(...), v2: int = Query(...)):
-    """Gibt ein Unified Diff zwischen zwei Prompt-Versionen zurück."""
-    try:
-        from backend.prompt_registry import prompt_registry
-        diff_text = prompt_registry.diff_versions(agent_id, v1, v2)
-        return {"status": "success", "agent_id": agent_id, "v1": v1, "v2": v2, "diff": diff_text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/prompts/{agent_id}/rollback")
-def api_rollback_prompt_version(request: Request, agent_id: str, req: Dict[str, Any] = Body(...)):
-    """Führt einen 1-Click Rollback auf eine frühere Prompt-Version durch."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    try:
-        from backend.prompt_registry import prompt_registry
-        target_v = req.get("target_version")
-        if not target_v:
-            raise HTTPException(status_code=400, detail="Feld 'target_version' erforderlich.")
-        reason = req.get("reason", "Manuelles Rollback über UI/API")
-        res = prompt_registry.rollback_to_version(agent_id, int(target_v), reason=reason)
-        return res
-    except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/prompts/{agent_id}/canary")
-def api_set_prompt_canary(request: Request, agent_id: str, req: Dict[str, Any] = Body(...)):
-    """Konfiguriert eine Prompt-Version als Canary mit Prozentsatz (1-99%)."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    try:
-        from backend.prompt_registry import prompt_registry
-        version = req.get("version")
-        pct = req.get("percentage")
-        if version is None or pct is None:
-            raise HTTPException(status_code=400, detail="Felder 'version' und 'percentage' erforderlich.")
-        res = prompt_registry.set_canary(agent_id, int(version), int(pct))
-        return res
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/prompts/{agent_id}/promote")
-def api_promote_prompt_canary(request: Request, agent_id: str, req: Dict[str, Any] = Body(...)):
-    """Befördert eine Canary-Version zur vollwertigen stabilen Version (100% Traffic)."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    try:
-        from backend.prompt_registry import prompt_registry
-        version = req.get("version")
-        if version is None:
-            raise HTTPException(status_code=400, detail="Feld 'version' erforderlich.")
-        res = prompt_registry.promote_canary(agent_id, int(version))
-        return res
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/mcp/tools")
-def api_get_mcp_tools():
-    """Gibt alle über den Archon MCP-Server exponierten Werkzeuge und deren Schemas zurück."""
-    try:
-        from scripts.archon_mcp_server import ArchonMcpServer
-        server = ArchonMcpServer()
-        return {
-            "status": "success",
-            "server": server.server_name,
-            "version": server.server_version,
-            "protocol": server.protocol_version,
-            "tools": server.get_tool_definitions()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/mcp/call")
-def api_call_mcp_tool(request: Request, req: Dict[str, Any] = Body(...)):
-    """Führt ein Archon MCP-Werkzeug über eine HTTP-REST-Schnittstelle aus."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    try:
-        from scripts.archon_mcp_server import ArchonMcpServer
-        tool_name = req.get("name")
-        arguments = req.get("arguments", {})
-        if not tool_name:
-            raise HTTPException(status_code=400, detail="Feld 'name' ist erforderlich.")
-        server = ArchonMcpServer()
-        result = server.execute_tool(tool_name, arguments)
-        return {"status": "success", "result": result}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/tasks/{task_id}/stream")
-async def api_stream_task_execution(task_id: str):
-    """
-    Server-Sent Events (SSE) Stream für die Live-Beobachtung einer laufenden Task-Ausführung.
-    Ermöglicht Token-Streaming in Echtzeit ohne Polling.
-    """
-    import asyncio
-    import time
-    from fastapi.responses import StreamingResponse
-
-    q = asyncio.Queue(maxsize=50)
-
-    # Global registrieren oder queue verknüpfen
-    try:
-        import main
-        if hasattr(main, "_SSE_SUBSCRIBERS"):
-            main._SSE_SUBSCRIBERS.append(q)
-    except Exception:
-        pass
-
-    async def event_generator():
-        try:
-            yield f"data: {json.dumps({'type': 'connected', 'task_id': task_id, 'timestamp': time.time()})}\n\n"
-            while True:
-                try:
-                    payload = await asyncio.wait_for(q.get(), timeout=20.0)
-                    # Prüfen, ob Payload für diese Task oder global relevant ist
-                    try:
-                        p_dict = json.loads(payload)
-                        p_data = p_dict.get("data", {})
-                        if p_data.get("task_id") == task_id or p_dict.get("type") in ("ticker_update", "ping"):
-                            yield f"data: {payload}\n\n"
-                            if p_dict.get("type") == "task_status" and p_data.get("status") in ("done", "failed"):
-                                break
-                    except Exception:
-                        yield f"data: {payload}\n\n"
-                except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
-        except asyncio.CancelledError:
-            pass
-        finally:
-            try:
-                import main
-                if hasattr(main, "_SSE_SUBSCRIBERS") and q in main._SSE_SUBSCRIBERS:
-                    main._SSE_SUBSCRIBERS.remove(q)
-            except Exception:
-                pass
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
-
-
-@router.post("/tasks/{task_id}/chunk")
-def api_broadcast_task_chunk(task_id: str, req: Dict[str, Any] = Body(...)):
-    """Broadcastet ein Token oder Teilergebnis für einen laufenden Task."""
-    chunk = req.get("chunk", "")
-    agent_id = req.get("agent_id", "")
-    status = req.get("status", "in_progress")
-    try:
-        import main
-        if hasattr(main, "broadcast_event"):
-            main.broadcast_event("task_chunk", {"task_id": task_id, "agent_id": agent_id, "chunk": chunk, "status": status})
-            if status in ("done", "failed"):
-                main.broadcast_event("task_status", {"task_id": task_id, "status": status})
-        return {"status": "success", "task_id": task_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/backup/restore-test")
-def api_get_restore_test_history():
-    """Gibt die Historie der automatisierten Restore- und Integritätstests zurück."""
-    try:
-        from scripts.automated_restore_test import HISTORY_FILE
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                history = json.load(f)
-            return {"status": "success", "history": history, "latest": history[0] if history else None}
-        return {"status": "success", "history": [], "latest": None}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/backup/restore-test")
-def api_trigger_restore_test(request: Request, notify: bool = Query(default=True)):
-    """Führt einen On-Demand Restore- und Integritätstest in einer Sandbox aus."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    try:
-        from scripts.automated_restore_test import restore_tester
-        report = restore_tester.run_restore_test(notify=notify)
-        return {"status": "success", "report": report}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/gdpr/export")
-def api_gdpr_export(request: Request, req: Dict[str, Any] = Body(...)):
-    """Art. 15 DSGVO: Erstellt einen vollständigen Datenauszug für eine Person über alle Speicherschichten."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    identifier = req.get("identifier", "").strip()
-    if not identifier:
-        raise HTTPException(status_code=400, detail="Feld 'identifier' ist erforderlich.")
-    try:
-        from backend.gdpr_compliance_engine import gdpr_engine
-        res = gdpr_engine.export_subject_data(identifier)
-        return {"status": "success", "export": res}
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/gdpr/erase")
-def api_gdpr_erase(request: Request, req: Dict[str, Any] = Body(...)):
-    """Art. 17 DSGVO: Löscht/anonymisiert Daten zu einer Person und erzeugt eine kryptografische Quittung."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    identifier = req.get("identifier", "").strip()
-    dry_run = bool(req.get("dry_run", False))
-    anonymize = bool(req.get("anonymize", True))
-    if not identifier:
-        raise HTTPException(status_code=400, detail="Feld 'identifier' ist erforderlich.")
-    try:
-        from backend.gdpr_compliance_engine import gdpr_engine
-        res = gdpr_engine.erase_subject_data(identifier, dry_run=dry_run, anonymize=anonymize)
-        return {"status": "success", "result": res}
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/gdpr/audit-log")
-def api_gdpr_audit_log(limit: int = Query(default=50)):
-    """Art. 30 DSGVO: Gibt manipulationssichere Löschquittungen aus dem Audit-Log zurück."""
-    try:
-        from backend.gdpr_compliance_engine import gdpr_engine
-        receipts = gdpr_engine.list_audit_receipts(limit=limit)
-        return {"status": "success", "count": len(receipts), "receipts": receipts}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/chaos/run")
-def api_chaos_run(request: Request, req: Dict[str, Any] = Body(default={})):
-    """Führt automatisierte Chaos- und Resilienz-Tests gegen Container, DB und Watchdog aus."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    dry_run = bool(req.get("dry_run", True))
-    try:
-        import sys
-        sys.path.insert(0, os.path.join(WORKSPACE_DIR, "scripts"))
-        from chaos_tester import ArchonChaosTester
-        tester = ArchonChaosTester(dry_run=dry_run)
-        results = tester.run_all()
-        return {"status": "success", "chaos_results": results}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chaos-Testlauf fehlgeschlagen: {e}")
-
-
-@router.get("/chaos/results")
-def api_chaos_results():
-    """Gibt das letzte Ergebnis der Chaos- und Resilienz-Suite zurück."""
-    res_file = os.path.join(WORKSPACE_DIR, "data", "chaos_test_results.json")
-    if not os.path.exists(res_file):
-        raise HTTPException(status_code=404, detail="Noch keine Chaos-Testergebnisse vorhanden.")
-    try:
-        with open(res_file, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-        return {"status": "success", "results": data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/receipts/process")
-def api_receipts_process(req: Dict[str, Any] = Body(...)):
-    """Verarbeitet einen Beleg: Extrahiert Buchhaltungs-Metadaten via Vision OCR und legt Task an."""
-    b64_data = req.get("image_base64")
-    image_path = req.get("image_path")
-    filename = req.get("filename", "receipt.jpg")
-    source = req.get("source", "api")
-    sender = req.get("sender", "Operator")
-    create_task = bool(req.get("create_kanban_task", True))
-
-    img_bytes = None
-    if b64_data:
-        try:
-            if "," in b64_data:
-                b64_data = b64_data.split(",", 1)[1]
-            img_bytes = base64.b64decode(b64_data)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Ungültige Base64-Bilddaten: {e}")
-    elif image_path and os.path.exists(image_path):
-        try:
-            with open(image_path, "rb") as fh:
-                img_bytes = fh.read()
-            filename = os.path.basename(image_path)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Konnte Bilddatei nicht lesen: {e}")
-    else:
-        raise HTTPException(status_code=400, detail="Entweder 'image_base64' oder ein existierender 'image_path' ist erforderlich.")
-
-    try:
-        from backend.receipt_ocr_engine import receipt_ocr_engine
-        result = receipt_ocr_engine.process_receipt(
-            image_bytes=img_bytes,
-            filename=filename,
-            source=source,
-            sender=sender,
-            create_kanban_task=create_task
-        )
-        return {"status": "success", "receipt": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Belegverarbeitung fehlgeschlagen: {e}")
-
-
-@router.get("/receipts")
-def api_receipts_list(limit: int = Query(default=50)):
-    """Gibt die Liste der archivierten Belege zurück."""
-    try:
-        from backend.receipt_ocr_engine import receipt_ocr_engine
-        receipts = receipt_ocr_engine.list_receipts(limit=limit)
-        return {"status": "success", "count": len(receipts), "receipts": receipts}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/receipts/{receipt_id}/image")
-def api_receipt_image(receipt_id: str):
-    """Gibt die Belegdatei als Bild aus."""
-    from backend.receipt_ocr_engine import receipt_ocr_engine
-    rcpt = receipt_ocr_engine.get_receipt(receipt_id)
-    if not rcpt or not rcpt.get("image_path") or not os.path.exists(rcpt["image_path"]):
-        # 1x1 transparent SVG fallback
-        svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="#1e293b"/><text x="50%" y="50%" fill="#94a3b8" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14">Kein Bild</text></svg>'
-        return Response(content=svg, media_type="image/svg+xml")
-    return FileResponse(rcpt["image_path"])
-
-
-@router.patch("/receipts/{receipt_id}")
-def api_receipt_patch(receipt_id: str, updates: Dict[str, Any] = Body(...)):
-    """Aktualisiert Belegdaten wie Status (approved/rejected), Kategorie oder Betrag."""
-    from backend.receipt_ocr_engine import receipt_ocr_engine
-    ok = receipt_ocr_engine.update_receipt(receipt_id, updates)
-    if not ok:
-        raise HTTPException(status_code=400, detail="Aktualisierung fehlgeschlagen oder keine gültigen Felder.")
-    try:
-        from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
-            category="finance",
-            action="receipt_updated",
-            agent_id="finance_operator",
-            payload={"receipt_id": receipt_id, "updates": updates}
-        )
-    except Exception:
-        pass
-    return {"status": "success", "receipt_id": receipt_id, "updated": updates}
-
-
-@router.post("/receipts/upload")
-async def api_receipts_upload(file: UploadFile = File(...), sender: str = "WebUI", category: Optional[str] = None):
-    """Upload von Belegen via Drag & Drop aus der Weboberfläche."""
-    contents = await file.read()
-    if not contents:
-        raise HTTPException(status_code=400, detail="Datei ist leer.")
-    try:
-        from backend.receipt_ocr_engine import receipt_ocr_engine
-        result = receipt_ocr_engine.process_receipt(
-            image_bytes=contents,
-            filename=file.filename or "receipt.jpg",
-            source="web_upload",
-            sender=sender,
-            create_kanban_task=True
-        )
-        if category and result.get("receipt_id"):
-            receipt_ocr_engine.update_receipt(result["receipt_id"], {"category": category})
-            result["category"] = category
-        return {"status": "success", "receipt": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload-Verarbeitung fehlgeschlagen: {e}")
+from archon.routers.operations_dag import (
+    router as _dag_router,
+    DecomposeTaskRequest,
+    api_dag_decompose_task,
+    api_dag_execute_task,
+    WorkflowCheckpointCreateRequest,
+    api_create_workflow_checkpoint,
+    api_list_workflow_checkpoints,
+    api_resume_workflow_checkpoint,
+    api_list_otel_traces,
+    api_get_otel_trace_tree,
+)
+router.include_router(_dag_router)
+
+# =========================================================================
+# PROMPT REGISTRY, VERSIONING, CANARY & ROLLBACK
+# Ausgelagert nach archon/routers/operations_prompts.py
+# =========================================================================
+from archon.routers.operations_prompts import (
+    router as _prompts_router,
+    api_list_prompt_versions,
+    api_save_prompt_version,
+    api_diff_prompt_versions,
+    api_rollback_prompt_version,
+    api_set_prompt_canary,
+    api_promote_prompt_canary,
+)
+router.include_router(_prompts_router)
+
+# =========================================================================
+# BELEGVERARBEITUNG & OCR (RECEIPTS ENGINE)
+# Ausgelagert nach archon/routers/operations_receipts.py
+# =========================================================================
+from archon.routers.operations_receipts import (
+    router as _receipts_router,
+    api_receipts_process,
+    api_receipts_list,
+    api_receipt_image,
+    api_receipt_patch,
+    api_receipts_upload,
+)
+router.include_router(_receipts_router)
+
+# =========================================================================
+# FEEDBACK, NOTIFICATIONS, MCP, STREAMING, BACKUP, GDPR & CHAOS
+# Ausgelagert nach archon/routers/operations_sysops.py
+# =========================================================================
+from archon.routers.operations_sysops import (
+    router as _sysops_router,
+    HumanFeedbackSubmitRequest,
+    api_submit_human_feedback,
+    api_get_feedback_stats,
+    api_get_task_feedback,
+    api_validate_system_config,
+    api_get_metrics_summary,
+    api_get_notification_policy,
+    api_update_notification_policy,
+    api_get_suppressed_digest,
+    api_get_mcp_tools,
+    api_call_mcp_tool,
+    api_stream_task_execution,
+    api_broadcast_task_chunk,
+    api_get_restore_test_history,
+    api_trigger_restore_test,
+    api_gdpr_export,
+    api_gdpr_erase,
+    api_gdpr_audit_log,
+    api_chaos_run,
+    api_chaos_results,
+)
+router.include_router(_sysops_router)
 
 
 

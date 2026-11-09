@@ -1,13 +1,12 @@
-<div id="view-library" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+<div id="view-library" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="height: 100vh !important; max-height: 100vh !important;">
 
   <!-- ========================================================================= -->
   <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR ZENTRALBIBLIOTHEK        -->
   <!-- ========================================================================= -->
-  <header id="library-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
-    <!-- Links: Status-Pulse, Titel & Subtitel -->
+  <header id="library-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+    <!-- Links: Titel & Subtitel -->
     <div class="flex items-center gap-3 min-w-0 flex-1">
-      <div class="relative shrink-0 flex items-center justify-center">
-        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      <div class="hidden" aria-hidden="true">
         <img id="library-main-header-img" src="/static/img/cadre_icons/library_rag.png" alt="Bibliothek" class="hidden">
       </div>
       <div class="min-w-0">
@@ -79,7 +78,7 @@
   <!-- ========================================================================= -->
   <!-- HAUPT-CONTENT-BEREICH: SUB-VIEWS (RAG INDEX, ERFASSER, OBSIDIAN VAULT)     -->
   <!-- ========================================================================= -->
-  <div id="library-main-area" class="flex-1 h-full min-h-0 flex flex-col gap-2 min-w-0 overflow-hidden w-full">
+  <div id="library-main-area" class="flex-1 h-full min-h-0 flex flex-col p-2 gap-2 min-w-0 overflow-hidden w-full">
       
       <!-- SUB-VIEW 1: RAG WISSENS-INDEX (ANYTHINGLLM IFRAME) -->
       <main id="library-subtab-rag" class="flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs">

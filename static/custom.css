@@ -621,8 +621,8 @@ aside .theme-border-strong[class*="my-"] {
    12. FESTE DESIGN-REGELN AUS DEM CSS-LIVE-STUDIO
    -------------------------------------------------------------------------- */
 #view-showroom {
-  padding-top: 5px !important;
-  padding-bottom: 5px !important;
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
 }
 
 div > div.flex > span.w-2\.5 {
@@ -695,6 +695,43 @@ aside.flex-shrink-0 > nav.flex-1 {
 [id^="mc-task-"],
 div#master-chat-sessions-list > div.group {
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15), 0 2px 4px -2px rgba(0,0,0,0.15) !important;
+}
+
+/* Unified 80px Flush Header Architecture across ALL Views */
+[id$="-global-header"] {
+  height: 80px !important;
+  min-height: 80px !important;
+  max-height: 80px !important;
+  box-sizing: border-box !important;
+  background-color: var(--card) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+#main-viewport-scroll,
+#view-mission-control,
+#view-operations,
+#view-inbox,
+#view-agent-profiles,
+#view-showroom,
+#view-watchdog,
+#view-research,
+#view-library,
+#view-ai-mastermind,
+#view-addresses,
+#view-items,
+#view-operations-erp,
+#view-finance,
+#view-corporate,
+#view-approval-policies,
+#view-guardian,
+#view-log-stream {
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
 }
 
 /* Mission Control 80px Continuous Header */

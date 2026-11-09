@@ -1,14 +1,11 @@
 <!-- VIEW CONTAINER: ADRESSEN & CRM (SÄULE 3: WIRTSCHAFT & ERP) -->
-<div id="view-addresses" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+<div id="view-addresses" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="height: 100vh !important; max-height: 100vh !important;">
 
   <!-- ========================================================================= -->
   <!-- 80px HEADER: ADRESSEN, CRM, KUNDEN, LIEFERANTEN, NACHRICHTEN, KALENDER & BERICHT -->
   <!-- ========================================================================= -->
-  <header id="addresses-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+  <header id="addresses-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
     <div class="flex items-center gap-3 min-w-0 flex-1">
-      <div class="relative shrink-0 flex items-center justify-center">
-        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-      </div>
       <div class="min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
           <h2 id="addresses-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">
@@ -116,6 +113,7 @@
     </div>
   </header>
 
+  <div class="flex-1 min-h-0 w-full flex flex-col p-2 gap-2 overflow-hidden">
   <!-- ========================================================================= -->
   <!-- SUB-VIEW 1: KONTAKTE (Screenshot 1: Vollständige CRM-Tabelle)              -->
   <!-- ========================================================================= -->
@@ -1249,6 +1247,7 @@
       </div>
 
     </div>
+  </div>
   </div>
 
 </div>

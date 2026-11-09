@@ -546,7 +546,7 @@
       </div>
     </div>
     <!-- MAIN VIEWPORT CONTENT -->
-    <div class="flex-1 h-full min-h-0 flex flex-col overflow-hidden px-2.5 pt-1.5 pb-2.5 space-y-2.5" id="main-viewport-scroll" style="height: 100%;">
+    <div class="flex-1 h-full min-h-0 flex flex-col overflow-hidden p-0" id="main-viewport-scroll" style="height: 100%; padding: 0 !important;">
       
       <!-- ========================================================================= -->
       <!-- VIEW 1: EINGANG (TRIAGE & INTAKE)                                         -->
@@ -582,7 +582,7 @@
         <!-- ========================================================================= -->
         <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, DURCHGEHEND)                -->
         <!-- ========================================================================= -->
-        <div id="mission-control-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
+        <div id="mission-control-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
           <!-- LINKSBÜNDIG: ÜBERSCHRIFT DER ANSICHT & STATUS -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
             <h2 id="mc-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
@@ -1059,7 +1059,7 @@
         <!-- ========================================================================= -->
         <!-- 1. OPERATIONS HEADER (80px FLUCHTLINIE MIT DEN 6 ICON-TABS)               -->
         <!-- ========================================================================= -->
-        <div id="operations-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
+        <div id="operations-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
 
           <!-- LINKSBÜNDIG: ÜBERSCHRIFT & STATUS -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -1493,7 +1493,7 @@
         <!-- ========================================================================= -->
         <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR DECISION ENGINE         -->
         <!-- ========================================================================= -->
-        <div id="boardroom-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
+        <div id="boardroom-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
           <!-- Links: Titel & Subtitel -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
             <div class="hidden" aria-hidden="true">
@@ -2958,7 +2958,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (selectedView) {
         selectedView.classList.remove("hidden");
         selectedView.style.display = (tabId === "kanban" || tabId === "agent-profiles") ? "block" : "flex";
-        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream" || tabId === "finance" || tabId === "addresses" || tabId === "items" || tabId === "operations-erp") {
+        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream" || tabId === "finance" || tabId === "addresses" || tabId === "items" || tabId === "operations-erp" || tabId === "approval-policies" || tabId === "corporate" || tabId === "plugins") {
           selectedView.style.height = "100%";
           selectedView.style.flex = "1 1 0%";
           selectedView.style.minHeight = "0";

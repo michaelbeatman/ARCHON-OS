@@ -2279,6 +2279,87 @@ def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] =
     }
 
 
+@router.get("/comm-feed/stream")
+async def stream_comm_feed(request: Request):
+    """
+    Server-Sent Events (SSE) Stream für Realtime-Inter-Agenten-Kommunikation.
+    Pusht neue Nachrichten aus kanban.db sofort in den Client ohne Polling.
+    """
+    from fastapi.responses import StreamingResponse
+    import asyncio
+
+    async def sse_event_generator():
+        last_seen_time = datetime.datetime.now().isoformat()
+        # Initial handshake
+        yield f"data: {json.dumps({'type': 'init', 'timestamp': last_seen_time, 'message': 'Comm-Feed Stream verbunden'})}\n\n"
+
+        while True:
+            if await request.is_disconnected():
+                break
+
+            try:
+                conn = _get_kanban_connection()
+                cursor = conn.cursor()
+                # Prüfe auf neue Events seit last_seen_time
+                cursor.execute("""
+                    SELECT e.id, e.task_id, e.kind, e.payload, e.created_at, t.title as task_title, t.assignee
+                    FROM task_events e
+                    LEFT JOIN tasks t ON e.task_id = t.id
+                    WHERE e.created_at > ?
+                    ORDER BY e.created_at ASC
+                    LIMIT 20
+                """, (last_seen_time,))
+                new_events = cursor.fetchall()
+                profiles = _load_profiles_map()
+
+                for r in new_events:
+                    row = dict(r)
+                    last_seen_time = max(last_seen_time, row["created_at"])
+                    payload_data = {}
+                    try:
+                        payload_data = json.loads(row["payload"])
+                    except Exception:
+                        pass
+
+                    kind = row.get("kind") or "event"
+                    author_id = payload_data.get("author") or "commander"
+                    prof = profiles.get(author_id, {})
+                    author_name = prof.get("name") or ("Commander (Leitstand)" if author_id == "commander" else author_id)
+                    author_avatar = prof.get("avatar") or ("/static/avatars/avatar_001.jpg" if author_id == "commander" else _get_fallback_avatar(author_id))
+
+                    item = {
+                        "type": "new_message",
+                        "id": f"event_{row['id']}",
+                        "timestamp": row["created_at"],
+                        "author_id": author_id,
+                        "author_name": author_name,
+                        "author_avatar": author_avatar,
+                        "target_id": payload_data.get("target") or row.get("assignee"),
+                        "task_id": row["task_id"],
+                        "task_title": row.get("task_title") or "System",
+                        "kind": kind,
+                        "message": payload_data.get("message") or str(payload_data),
+                        "takeover_requested": kind == "human_takeover_requested"
+                    }
+                    yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+                conn.close()
+            except Exception as e:
+                pass
+
+            await asyncio.sleep(1.2)
+
+    return StreamingResponse(
+        sse_event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
 # =========================================================================
 # 4. INTERACTIVE ORG-CHART / FLOWCHART HIERARCHY PERSISTENCE
 # =========================================================================
@@ -3652,712 +3733,101 @@ def api_get_keys_audit(limit: int = 50):
 
 # ==============================================================================
 # EMAIL DRAFT APPROVAL QUEUE (t-7ca8cd)
+# Ausgelagert nach archon/routers/operations_emails.py
 # ==============================================================================
-
-@router.get("/email-drafts")
-def api_list_email_drafts(status: Optional[str] = None):
-    """Gibt alle E-Mail-Entwürfe der Freigabe-Queue zurück."""
-    try:
-        from backend.email_draft_engine import email_draft_engine
-        drafts = email_draft_engine.list_drafts(status=status)
-        return {"status": "success", "drafts": drafts}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/email-drafts")
-def api_create_email_draft(req: Dict[str, Any] = Body(...)):
-    """Erstellt einen neuen E-Mail-Entwurf (z. B. durch einen Agenten)."""
-    subject = req.get("subject", "").strip()
-    recipient = req.get("recipient", "").strip()
-    body_text = req.get("body_text", "").strip()
-    agent_id = req.get("agent_id", "default").strip()
-    agent_name = req.get("agent_name", "Hermes Orchestrator").strip()
-    sender = req.get("sender", "system@archon-os.internal").strip()
-    source_task_id = req.get("source_task_id")
-    created_by = req.get("created_by", "admin").strip()
-
-    if not subject or not recipient or not body_text:
-        raise HTTPException(status_code=400, detail="Betreff, Empfänger und Text sind erforderlich.")
-
-    try:
-        from backend.email_draft_engine import email_draft_engine
-        draft = email_draft_engine.create_draft(
-            subject=subject,
-            recipient=recipient,
-            body_text=body_text,
-            agent_id=agent_id,
-            agent_name=agent_name,
-            sender=sender,
-            source_task_id=source_task_id,
-            created_by=created_by
-        )
-        return {"status": "success", "draft": draft}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/email-drafts/{draft_id}")
-def api_get_email_draft(draft_id: str):
-    """Ruft Details zu einem E-Mail-Entwurf ab."""
-    try:
-        from backend.email_draft_engine import email_draft_engine
-        draft = email_draft_engine.get_draft(draft_id)
-        if not draft:
-            raise HTTPException(status_code=404, detail="Entwurf nicht gefunden.")
-        return {"status": "success", "draft": draft}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/email-drafts/{draft_id}/approve")
-def api_approve_email_draft(draft_id: str, req: Dict[str, Any] = Body(default={})):
-    """Aktion 1: Freigeben & Senden via SMTP."""
-    approver_id = req.get("approver_id", "admin").strip()
-    try:
-        from backend.email_draft_engine import email_draft_engine
-        draft = email_draft_engine.approve_and_send(draft_id, approver_id=approver_id)
-        return {"status": "success", "draft": draft, "message": "E-Mail freigegeben und versendet."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.put("/email-drafts/{draft_id}")
-def api_edit_email_draft(draft_id: str, req: Dict[str, Any] = Body(...)):
-    """Aktion 2: Entwurf im Editor anpassen."""
-    from backend.email_draft_engine import email_draft_engine
-    existing = email_draft_engine.get_draft(draft_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Entwurf nicht gefunden.")
-
-    subject = req.get("subject", existing.get("subject", "")).strip()
-    recipient = req.get("recipient", existing.get("recipient", "")).strip()
-    body_text = req.get("body_text", existing.get("body_text", "")).strip()
-    editor_id = req.get("editor_id", req.get("updated_by", "admin")).strip()
-
-    if not subject or not recipient or not body_text:
-        raise HTTPException(status_code=400, detail="Betreff, Empfänger und Text dürfen nicht leer sein.")
-
-    try:
-        draft = email_draft_engine.edit_draft(draft_id, subject, recipient, body_text, editor_id=editor_id)
-        return {"status": "success", "draft": draft, "message": "Entwurf erfolgreich aktualisiert."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/email-drafts/{draft_id}/snooze")
-def api_snooze_email_draft(draft_id: str, req: Dict[str, Any] = Body(default={})):
-    """Aktion 3: Später erinnern (Snooze)."""
-    hours = int(req.get("hours", 1))
-    user_id = req.get("user_id", "admin").strip()
-    try:
-        from backend.email_draft_engine import email_draft_engine
-        draft = email_draft_engine.snooze_draft(draft_id, hours=hours, user_id=user_id)
-        return {"status": "success", "draft": draft, "message": f"Entwurf für {hours} Stunde(n) zurückgestellt."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/email-drafts/{draft_id}/regenerate")
-def api_regenerate_email_draft(draft_id: str, req: Dict[str, Any] = Body(...)):
-    """Aktion 4: Neu generieren mit Prompt-Feedback."""
-    feedback = req.get("feedback", "").strip()
-    user_id = req.get("user_id", "admin").strip()
-    if not feedback:
-        raise HTTPException(status_code=400, detail="Feedback für den Agenten ist erforderlich.")
-
-    try:
-        from backend.email_draft_engine import email_draft_engine
-        draft = email_draft_engine.regenerate_draft(draft_id, feedback_text=feedback, user_id=user_id)
-        return {"status": "success", "draft": draft, "message": "Überarbeitungsauftrag an Agenten übergeben."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/email-drafts/{draft_id}/reject")
-def api_reject_email_draft(draft_id: str, req: Dict[str, Any] = Body(default={})):
-    """Aktion 5: Abbrechen / Verwerfen."""
-    reason = req.get("reason", "Vom Nutzer verworfen").strip()
-    user_id = req.get("user_id", "admin").strip()
-    try:
-        from backend.email_draft_engine import email_draft_engine
-        draft = email_draft_engine.reject_draft(draft_id, reason=reason, user_id=user_id)
-        return {"status": "success", "draft": draft, "message": "Entwurf verworfen."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+from archon.routers.operations_emails import (
+    router as _emails_router,
+    api_list_email_drafts,
+    api_create_email_draft,
+    api_get_email_draft,
+    api_approve_email_draft,
+    api_edit_email_draft,
+    api_snooze_email_draft,
+    api_regenerate_email_draft,
+    api_reject_email_draft,
+)
+router.include_router(_emails_router)
 
 # =========================================================================
-# AGENT SCORECARDS & PERSONALAKTE INTEGRATION (t-f257ba)
+# AGENT SCORECARDS, DUAL-LLM GUARD & BREAK-GLASS PROTOCOL
+# Ausgelagert nach archon/routers/operations_security.py
 # =========================================================================
+from archon.routers.operations_security import (
+    router as _sec_router,
+    api_get_agent_scorecard,
+    api_save_agent_operator_notes,
+    api_sanitize_input,
+    api_get_trusted_sources,
+    api_toggle_trusted_source,
+    api_get_break_glass_status,
+    api_create_break_glass_vault,
+    api_download_break_glass_kit,
+)
+router.include_router(_sec_router)
 
-@router.get("/agents/{agent_id}/scorecard")
-def api_get_agent_scorecard(agent_id: str):
-    """Liefert aggregierte Leistungsmetriken, KPIs und Projektdaten für die Personalakte."""
-    try:
-        from backend.agent_scorecard_engine import agent_scorecard_engine
-        data = agent_scorecard_engine.get_scorecard(agent_id)
-        return {"status": "success", "scorecard": data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/agents/{agent_id}/operator-notes")
-def api_save_agent_operator_notes(agent_id: str, req: Dict[str, Any] = Body(...)):
-    """Speichert Operator-Beurteilungen persistent und synchronisiert sie mit Obsidian."""
-    notes = req.get("notes", "").strip()
-    try:
-        from backend.agent_scorecard_engine import agent_scorecard_engine
-        agent_scorecard_engine.save_operator_notes(agent_id, notes)
-        return {"status": "success", "message": "Operator-Beurteilung gespeichert und mit Obsidian synchronisiert."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# =========================================================================
-# DUAL-LLM GUARD & PROMPT INJECTION SANITIZER (t-d3f2d2)
-# =========================================================================
-
-@router.post("/security/sanitize")
-def api_sanitize_input(req: Dict[str, Any] = Body(...)):
-    """Stufe 1 Quarantäne: Untersucht externe Inputs auf Prompt Injections."""
-    text = req.get("text", "")
-    source_id = req.get("source_id", "unknown")
-    source_type = req.get("source_type", "external")
-    try:
-        from backend.dual_llm_sanitizer import sanitize_external_input
-        result = sanitize_external_input(raw_text=text, source_id=source_id, source_type=source_type)
-        return {"status": "success", "result": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/security/trusted-sources")
-def api_get_trusted_sources():
-    """Gibt die Whitelist vertrauenswürdiger Absender [T] zurück."""
-    try:
-        from backend.dual_llm_sanitizer import load_trusted_sources
-        sources = load_trusted_sources()
-        return {"status": "success", "trusted_sources": sources}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/security/trusted-sources/toggle")
-def api_toggle_trusted_source(request: Request, req: Dict[str, Any] = Body(...)):
-    """Schaltet den Trusted-Status [T] für einen Absender um."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    source_id = req.get("source_id", "").strip()
-    if not source_id:
-        raise HTTPException(status_code=400, detail="Keine source_id angegeben.")
-    try:
-        from backend.dual_llm_sanitizer import toggle_trusted_source
-        res = toggle_trusted_source(source_id)
-        return {"status": "success", **res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# =========================================================================
-# NOTFALLZUGANG / BREAK-GLASS PROTOCOL (t-8efcf3)
-# =========================================================================
-
-@router.get("/security/break-glass/status")
-def api_get_break_glass_status():
-    """Liefert den Integritäts- und Initialisierungsstatus des Break-Glass Vaults."""
-    try:
-        from scripts.break_glass_recovery import get_vault_status
-        return {"status": "success", "vault": get_vault_status()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/security/break-glass/create")
-def api_create_break_glass_vault(request: Request):
-    """Generiert ein neues verschlüsseltes Notfall-Backup und einen einmaligen Recovery-Key."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    try:
-        from scripts.break_glass_recovery import create_break_glass_vault
-        res = create_break_glass_vault(operator="admin")
-        return {"status": "success", **res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/security/break-glass/kit")
-def api_download_break_glass_kit():
-    """Liefert das druckbare Notfall-Dokument (BREAK_GLASS_RECOVERY_KIT.md) als Download."""
-    try:
-        from scripts.break_glass_recovery import KIT_DOC_FILE
-        if not os.path.exists(KIT_DOC_FILE):
-            raise HTTPException(status_code=404, detail="Recovery-Kit noch nicht generiert.")
-        with open(KIT_DOC_FILE, "r", encoding="utf-8") as f:
-            content = f.read()
-        return Response(
-            content=content,
-            media_type="text/markdown; charset=utf-8",
-            headers={"Content-Disposition": 'attachment; filename="ARCHON_BREAK_GLASS_RECOVERY_KIT.md"'}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 
 # =========================================================================
 # BOT SCREEN & HUMAN TAKEOVER (VIRTUAL DESKTOP INTEGRATION)
+# Ausgelagert nach archon/routers/operations_bot_screen.py
 # =========================================================================
+from archon.routers.operations_bot_screen import (
+    router as _bot_screen_router,
+    _bot_screen_state,
+    TakeoverRequestModel,
+    ScreenInteractionModel,
+    get_bot_screen_status,
+    request_human_takeover,
+    resume_from_human_takeover,
+    interact_with_bot_screen,
+    abort_bot_screen_execution,
+)
+router.include_router(_bot_screen_router)
 
-_bot_screen_state = {
-    "active": True,
-    "session_id": "hermes-desktop-main",
-    "display": ":99",
-    "resolution": "1920x1080",
-    "agent_name": "Hermes Web & Desktop Agent",
-    "current_url": "https://dashboard.service.internal",
-    "takeover_requested": False,
-    "takeover_reason": "",
-    "takeover_timestamp": None,
-    "last_interaction": None,
-    "mouse_control_enabled": True
-}
-
-@router.get("/comm-feed/stream")
-async def stream_comm_feed(request: Request):
-    """
-    Server-Sent Events (SSE) Stream für Realtime-Inter-Agenten-Kommunikation.
-    Pusht neue Nachrichten aus kanban.db sofort in den Client ohne Polling.
-    """
-    from fastapi.responses import StreamingResponse
-    import asyncio
-
-    async def sse_event_generator():
-        last_seen_time = datetime.datetime.now().isoformat()
-        # Initial handshake
-        yield f"data: {json.dumps({'type': 'init', 'timestamp': last_seen_time, 'message': 'Comm-Feed Stream verbunden'})}\n\n"
-
-        while True:
-            if await request.is_disconnected():
-                break
-
-            try:
-                conn = _get_kanban_connection()
-                cursor = conn.cursor()
-                # Prüfe auf neue Events seit last_seen_time
-                cursor.execute("""
-                    SELECT e.id, e.task_id, e.kind, e.payload, e.created_at, t.title as task_title, t.assignee
-                    FROM task_events e
-                    LEFT JOIN tasks t ON e.task_id = t.id
-                    WHERE e.created_at > ?
-                    ORDER BY e.created_at ASC
-                    LIMIT 20
-                """, (last_seen_time,))
-                new_events = cursor.fetchall()
-                profiles = _load_profiles_map()
-
-                for r in new_events:
-                    row = dict(r)
-                    last_seen_time = max(last_seen_time, row["created_at"])
-                    payload_data = {}
-                    try:
-                        payload_data = json.loads(row["payload"])
-                    except Exception:
-                        pass
-
-                    kind = row.get("kind") or "event"
-                    author_id = payload_data.get("author") or "commander"
-                    prof = profiles.get(author_id, {})
-                    author_name = prof.get("name") or ("Commander (Leitstand)" if author_id == "commander" else author_id)
-                    author_avatar = prof.get("avatar") or ("/static/avatars/avatar_001.jpg" if author_id == "commander" else _get_fallback_avatar(author_id))
-
-                    item = {
-                        "type": "new_message",
-                        "id": f"event_{row['id']}",
-                        "timestamp": row["created_at"],
-                        "author_id": author_id,
-                        "author_name": author_name,
-                        "author_avatar": author_avatar,
-                        "target_id": payload_data.get("target") or row.get("assignee"),
-                        "task_id": row["task_id"],
-                        "task_title": row.get("task_title") or "System",
-                        "kind": kind,
-                        "message": payload_data.get("message") or str(payload_data),
-                        "takeover_requested": kind == "human_takeover_requested"
-                    }
-                    yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
-
-                conn.close()
-            except Exception as e:
-                pass
-
-            await asyncio.sleep(1.2)
-
-    return StreamingResponse(
-        sse_event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
-
-@router.get("/bot-screen/status")
-def get_bot_screen_status():
-    """Liefert den aktuellen Status des virtuellen Desktops & Human Takeover."""
-    return _bot_screen_state
-
-class TakeoverRequestModel(BaseModel):
-    reason: str
-    url: Optional[str] = None
-    agent_name: Optional[str] = None
-
-@router.post("/bot-screen/takeover/request")
-def request_human_takeover(request: Request, req: TakeoverRequestModel):
-    """Wird von einem Agenten ausgelöst, wenn ein Captcha oder 2FA-Schranke erkannt wird."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    _bot_screen_state["takeover_requested"] = True
-    _bot_screen_state["takeover_reason"] = req.reason
-    _bot_screen_state["takeover_timestamp"] = datetime.datetime.now().isoformat()
-    if req.url:
-        _bot_screen_state["current_url"] = req.url
-    if req.agent_name:
-        _bot_screen_state["agent_name"] = req.agent_name
-
-    # Event in comm-feed eintragen
-    conn = _get_kanban_connection()
-    try:
-        now_iso = datetime.datetime.now().isoformat()
-        cur = conn.cursor()
-        payload = json.dumps({
-            "author": "bot_desktop",
-            "message": f"🚨 Human Takeover angefordert: {req.reason} ({_bot_screen_state['current_url']})",
-            "target": "commander",
-            "broadcast": True,
-            "takeover_requested": True,
-            "url": _bot_screen_state["current_url"]
-        }, ensure_ascii=False)
-        cur.execute("""
-            INSERT INTO task_events (task_id, kind, payload, created_at)
-            VALUES ('bot_desktop', 'human_takeover_requested', ?, ?)
-        """, (payload, now_iso))
-        conn.commit()
-    finally:
-        conn.close()
-
-    return {"status": "takeover_active", "state": _bot_screen_state}
-
-@router.post("/bot-screen/takeover/resume")
-def resume_from_human_takeover(request: Request):
-    """Wird vom Nutzer per Klick auf 'Agent fortsetzen' aufgerufen."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    _bot_screen_state["takeover_requested"] = False
-    _bot_screen_state["takeover_reason"] = ""
-    _bot_screen_state["aborted"] = False
-    _bot_screen_state["mouse_control_enabled"] = True
-    _bot_screen_state["agent_authorized"] = True
-    _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
-
-    conn = _get_kanban_connection()
-    try:
-        now_iso = datetime.datetime.now().isoformat()
-        cur = conn.cursor()
-        payload = json.dumps({
-            "author": "commander",
-            "message": "✅ Human Takeover abgeschlossen: Nutzer hat Freigabe erteilt. Agent setzt Ausführung fort.",
-            "target": "all",
-            "broadcast": True,
-            "takeover_resolved": True
-        }, ensure_ascii=False)
-        cur.execute("""
-            INSERT INTO task_events (task_id, kind, payload, created_at)
-            VALUES ('bot_desktop', 'human_takeover_resolved', ?, ?)
-        """, (payload, now_iso))
-        conn.commit()
-    finally:
-        conn.close()
-
-    return {"status": "resumed", "state": _bot_screen_state}
-
-class ScreenInteractionModel(BaseModel):
-    action: str = "click"  # click, key, scroll
-    x: Optional[int] = None
-    y: Optional[int] = None
-    text: Optional[str] = None
-
-@router.post("/bot-screen/interact")
-def interact_with_bot_screen(request: Request, action_data: ScreenInteractionModel):
-    """Nimmt Benutzerinteraktionen (Klick, Tasteneingabe) entgegen."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    if _bot_screen_state.get("aborted") or not _bot_screen_state.get("agent_authorized", True) or not _bot_screen_state.get("mouse_control_enabled", True):
-        raise HTTPException(status_code=409, detail="Interaktion blockiert: Notfall-Abbruch aktiv oder Steuerung gesperrt.")
-    _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
-    return {"status": "success", "echo": action_data.dict()}
-
-
-@router.post("/bot-screen/abort")
-def abort_bot_screen_execution(request: Request):
-    """Notfall-Abbruch: Entzieht dem Agenten sofort alle Rechte und stoppt aktive Browser-Aktionen."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    _bot_screen_state["aborted"] = True
-    _bot_screen_state["takeover_requested"] = False
-    _bot_screen_state["mouse_control_enabled"] = False
-    _bot_screen_state["agent_authorized"] = False
-    now_iso = datetime.datetime.now().isoformat()
-    try:
-        conn = _get_kanban_connection()
-        cur = conn.cursor()
-        payload = json.dumps({
-            "author": "commander",
-            "message": "🛑 Notfall-Abbruch: Sofortiger Stopp aller Browser- und Desktop-Aktionen. Volle Kontrolle liegt wieder beim Nutzer.",
-            "target": "all",
-            "broadcast": True,
-            "aborted": True
-        }, ensure_ascii=False)
-        cur.execute("""
-            INSERT INTO task_events (task_id, kind, payload, created_at)
-            VALUES ('bot_desktop', 'emergency_abort', ?, ?)
-        """, (payload, now_iso))
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
-    return {"status": "aborted", "state": _bot_screen_state}
 
 
 # ==============================================================================
 # AUTONOMIE-SYSTEME (Features 6, 8, 10, 13)
+# Ausgelagert nach archon/routers/operations_autonomy.py
 # ==============================================================================
+from archon.routers.operations_autonomy import (
+    router as _autonomy_router,
+    ToolEvolutionRequest,
+    MCTSSimulationRequest,
+    PrefetchRequest,
+    JITPersonaTaskRequest,
+    list_evolved_tools,
+    trigger_tool_evolution,
+    simulate_mcts_trajectories,
+    trigger_speculative_prefetch,
+    execute_jit_persona_task,
+    list_ephemeral_personas,
+)
+router.include_router(_autonomy_router)
 
-class ToolEvolutionRequest(BaseModel):
-    tool_name: str
-    description: str
-    sample_usage_prompt: str = ""
-    creator_agent: str = "default"
-    max_retries: int = 3
-    # Die Engine kann KEINEN Code aus einer Beschreibung erzeugen. Sie testet und
-    # repariert fertigen Code. Ohne diese Felder ist keine Synthese möglich.
-    implementation_code: Optional[str] = None
-    verification_test_code: Optional[str] = None
-
-class MCTSSimulationRequest(BaseModel):
-    task_goal: str
-    candidate_actions: List[Dict[str, Any]]
-    simulations_per_candidate: int = 10
-    agent_id: str = "default"
-
-class PrefetchRequest(BaseModel):
-    user_prompt: str
-    agent_id: str = "default"
-
-class JITPersonaTaskRequest(BaseModel):
-    task_description: str
-    creator_agent: str = "default"
-    auto_purge_on_complete: bool = True
-    context: Dict[str, Any] = {}
-
-
-@router.get("/autonomy/evolved-tools")
-def list_evolved_tools():
-    """Gibt alle autonom synthetisierten Voyager-Werkzeuge zurück."""
-    from backend.self_evolving_tooling import get_self_evolving_tool_engine
-    engine = get_self_evolving_tool_engine()
-    return {"status": "success", "tools": engine.list_evolved_tools()}
-
-
-@router.post("/autonomy/evolve-tool")
-def trigger_tool_evolution(request: Request, req: ToolEvolutionRequest):
-    """Voyager-Zyklus für FERTIGEN Code: Sandbox-Test, Reparaturversuche, Registrierung.
-
-    Historie: Dieser Endpunkt übergab `sample_usage_prompt`/`max_retries` an
-    `synthesize_and_evolve_tool()`, die diese Parameter nicht kennt und stattdessen
-    `implementation_code` + `verification_test_code` verlangt → TypeError (HTTP 500)
-    bei jedem Aufruf. Die Engine kann aus einer Beschreibung keinen Code erzeugen;
-    deshalb wird hier ehrlich mit 400 abgelehnt statt einen Erfolg vorzutäuschen.
-    """
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    from backend.self_evolving_tooling import get_self_evolving_tool_engine
-    implementation_code = (req.implementation_code or "").strip()
-    verification_test_code = (req.verification_test_code or "").strip()
-    if not implementation_code:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Keine Synthese möglich: die Selbst-Evolutions-Engine erzeugt keinen "
-                "Code aus einer Beschreibung. 'implementation_code' (und sinnvollerweise "
-                "'verification_test_code') müssen mitgeschickt werden — die Engine testet "
-                "und repariert fertigen Code in der Sandbox."
-            ),
-        )
-    engine = get_self_evolving_tool_engine()
-    return engine.synthesize_and_evolve_tool(
-        creator_agent=req.creator_agent,
-        tool_name=req.tool_name,
-        description=req.description,
-        implementation_code=implementation_code,
-        verification_test_code=verification_test_code,
-        max_repair_iterations=req.max_retries,
-    )
-
-
-@router.post("/autonomy/mcts-simulate")
-def simulate_mcts_trajectories(req: MCTSSimulationRequest):
-    """Simuliert Handlungsstränge mittels Monte Carlo Tree Search vor deren Ausführung."""
-    from backend.mcts_engine import get_mcts_engine
-    engine = get_mcts_engine()
-    res = engine.evaluate_action_paths(
-        task_goal=req.task_goal,
-        candidate_actions=req.candidate_actions,
-        simulations_per_candidate=req.simulations_per_candidate,
-        agent_id=req.agent_id
-    )
-    return res
-
-
-@router.post("/autonomy/prefetch")
-def trigger_speculative_prefetch(req: PrefetchRequest):
-    """Erkennt spekulativ Entitäten (CRM, ERP, Learnings) und legt sie in den schnellen RAM-Cache."""
-    from backend.speculative_prefetcher import get_speculative_prefetcher
-    prefetcher = get_speculative_prefetcher()
-    res = prefetcher.prefetch_for_prompt(
-        user_prompt=req.user_prompt,
-        agent_id=req.agent_id
-    )
-    return res
-
-
-@router.post("/autonomy/jit-persona/execute")
-def execute_jit_persona_task(request: Request, req: JITPersonaTaskRequest):
-    """Erzeugt ad-hoc eine flüchtige Spezialisten-Persona und führt die Aufgabe isoliert aus."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    from backend.jit_persona_engine import get_jit_persona_engine
-    engine = get_jit_persona_engine()
-    res = engine.execute_ephemeral_task(
-        task_description=req.task_description,
-        creator_agent=req.creator_agent,
-        auto_purge_on_complete=req.auto_purge_on_complete,
-        context=req.context
-    )
-    return res
-
-
-@router.get("/autonomy/jit-persona/ephemeral")
-def list_ephemeral_personas():
-    """Gibt alle aktuell aktiven flüchtigen Spezialisten-Personas zurück."""
-    from backend.jit_persona_engine import get_jit_persona_engine
-    engine = get_jit_persona_engine()
-    return {"status": "success", "ephemeral_personas": engine.list_active_ephemeral_personas()}
 
 
 # ==============================================================================
 # MEILENSTEIN 26: AUTONOMOUS COMPUTER-USE & PbD (Programming by Demonstration)
+# Ausgelagert nach archon/routers/operations_pbd.py
 # ==============================================================================
+from archon.routers.operations_pbd import (
+    router as _pbd_router,
+    PBDStartRequest,
+    PBDEventRequest,
+    PBDStopRequest,
+    TrajectoryRequest,
+    A11yPruneRequest,
+    start_pbd_recording,
+    record_pbd_event,
+    get_pbd_status,
+    stop_pbd_and_synthesize,
+    calculate_ghost_cursor_trajectory,
+    prune_a11y_tree,
+)
+router.include_router(_pbd_router)
 
-class PBDStartRequest(BaseModel):
-    title: str
-    target_url: str = ""
-    creator_agent: str = "default"
-
-class PBDEventRequest(BaseModel):
-    action_type: str  # click, type, navigate, scroll, voice_instruction
-    details: Dict[str, Any] = {}
-    commentary: str = ""
-
-class PBDStopRequest(BaseModel):
-    skill_slug: Optional[str] = None
-
-class TrajectoryRequest(BaseModel):
-    start_x: float
-    start_y: float
-    end_x: float
-    end_y: float
-    target_width: float = 40.0
-    target_height: float = 24.0
-    apply_jitter: bool = True
-    steps: int = 20
-
-class A11yPruneRequest(BaseModel):
-    html: str
-    max_depth: int = 5
-
-
-@router.post("/bot-screen/pbd/start")
-def start_pbd_recording(req: PBDStartRequest):
-    """Startet eine Vormach- und Aufnahmesitzung (Programming by Demonstration)."""
-    from backend.computer_use_pbd import get_pbd_recorder
-    recorder = get_pbd_recorder()
-    res = recorder.start_recording(
-        session_title=req.title,
-        target_url=req.target_url,
-        creator_agent=req.creator_agent
-    )
-    return res
-
-
-@router.post("/bot-screen/pbd/event")
-def record_pbd_event(req: PBDEventRequest):
-    """Zeichnet ein Bediener-Ereignis (Klick, Eingabe, Sprachkommentar) auf."""
-    from backend.computer_use_pbd import get_pbd_recorder
-    recorder = get_pbd_recorder()
-    res = recorder.record_event(
-        action_type=req.action_type,
-        details=req.details,
-        commentary=req.commentary
-    )
-    return res
-
-
-@router.get("/bot-screen/pbd/status")
-def get_pbd_status():
-    """Liefert den aktuellen Aufnahmestatus und bisherige Schritte."""
-    from backend.computer_use_pbd import get_pbd_recorder
-    recorder = get_pbd_recorder()
-    session = recorder.get_current_session()
-    return {
-        "is_recording": session is not None,
-        "session": session
-    }
-
-
-@router.post("/bot-screen/pbd/stop-and-synthesize")
-def stop_pbd_and_synthesize(req: PBDStopRequest):
-    """Beendet die Demonstration und synthetisiert einen Skill (SKILL.md + Python-Skript)."""
-    from backend.computer_use_pbd import get_pbd_recorder
-    recorder = get_pbd_recorder()
-    res = recorder.stop_and_synthesize_skill(skill_slug=req.skill_slug)
-    return res
-
-
-@router.post("/bot-screen/trajectory")
-def calculate_ghost_cursor_trajectory(req: TrajectoryRequest):
-    """Berechnet biomechanische Bézier-Punkte mit Fitts's Law und Bounding-Box Jitter."""
-    from backend.computer_use_pbd import get_ghost_cursor
-    engine = get_ghost_cursor()
-
-    end_x, end_y = req.end_x, req.end_y
-    if req.apply_jitter:
-        end_x, end_y = engine.apply_bounding_box_jitter(
-            center_x=req.end_x,
-            center_y=req.end_y,
-            width=req.target_width,
-            height=req.target_height
-        )
-
-    points = engine.calculate_bezier_trajectory(
-        start=(req.start_x, req.start_y),
-        end=(end_x, end_y),
-        steps=req.steps
-    )
-
-    return {
-        "status": "success",
-        "target_point": {"x": end_x, "y": end_y},
-        "trajectory": points,
-        "jitter_applied": req.apply_jitter
-    }
-
-
-@router.post("/bot-screen/a11y-prune")
-def prune_a11y_tree(req: A11yPruneRequest):
-    """Reduziert rohes HTML auf einen kompakten semantischen Accessibility-Tree."""
-    from backend.computer_use_pbd import get_observation_pruner
-    pruner = get_observation_pruner()
-    return pruner.prune_html_to_a11y_tree(raw_html=req.html, max_depth=req.max_depth)
 
 
 

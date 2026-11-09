@@ -44,7 +44,8 @@
 
   const ALL_TABS = [
     { id: 'mission-control', title: 'Mission Control', desc: 'System-Cockpit, Status & Metriken', icon: 'layout-dashboard', cat: 'tab', action: () => setTab('mission-control') },
-    { id: 'operations', title: 'Operations (Kanban)', desc: 'Hermes Kanban-Board, Orga & Teams', icon: 'kanban', cat: 'tab', action: () => setTab('operations') },
+    { id: 'operations', title: 'Operations (Projekte)', desc: 'Projekt-Zentrale, Fortschritt & Vault-Artefakte', icon: 'folder-kanban', cat: 'tab', action: () => setTab('operations', 'projects') },
+    { id: 'kanban', title: 'Operations (Kanban)', desc: 'Hermes Kanban-Board, Sprints & Aufgaben', icon: 'kanban', cat: 'tab', action: () => setTab('operations', 'kanban') },
     { id: 'agent-profiles', title: 'Agenten-Kader', desc: '54 Spezialistenprofile & Disposition', icon: 'users', cat: 'tab', action: () => setTab('agent-profiles') },
     { id: 'inbox', title: 'Eingang (Intake)', desc: 'Triage, E-Mail- & Telegram-Sync', icon: 'inbox', cat: 'tab', action: () => setTab('inbox') },
     { id: 'automation', title: 'Workflow-Engine', desc: 'n8n Automations-Pipelines', icon: 'workflow', cat: 'tab', action: () => setTab('automation') },

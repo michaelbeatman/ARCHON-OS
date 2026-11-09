@@ -41,6 +41,8 @@
       if (subtab === 'n8n') subtab = 'automation';
       if (subtab === 'master-chat' || subtab === 'masterchat') subtab = 'chat';
       currentOpsTab = subtab;
+      window.currentOpsTab = subtab;
+      try { localStorage.setItem("archon_ops_tab", subtab); } catch (e) {}
 
       const mountEl = document.getElementById('view-operations-mount');
       if (mountEl && (subtab === 'kanban' || subtab === 'org' || subtab === 'comm')) {

@@ -2703,7 +2703,7 @@ print('Ausführung erfolgreich!')</textarea>
           fetch('/static/views/agent_profiles_view.html?v=202610310725').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/master_chat_view.html?v=202610311048').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/operations_view.html?v=202610271358').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/library_view.html?v=202610280928').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
+          fetch('/static/views/library_view.html?v=202611091117').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/inbox_view.html?v=202610311048').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/view_showroom.html?v=202610271952').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
           fetch('/static/views/log_stream_view.html?v=202610311015').then(r => r.text()).then(html => { const el = document.getElementById('view-log-stream-mount'); if (el) el.outerHTML = html; }),
@@ -4601,11 +4601,14 @@ print('Ausführung erfolgreich!')</textarea>
         const iframe = document.getElementById('anythingllm-iframe');
         const rawHost = window.location.hostname;
         const host = (!rawHost || rawHost === 'localhost') ? '127.0.0.1' : rawHost;
-        const targetUrl = `http://${host}:3001`;
+        const targetUrl = `http://${host}:3001/workspace/mein-workspace`;
         const extLink = document.getElementById('library-rag-external-link');
         if (extLink) extLink.href = targetUrl;
-        if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.includes('localhost:3001') || iframe.src === '')) {
-          iframe.src = targetUrl;
+        if (iframe) {
+          const currentAttr = iframe.getAttribute('src') || '';
+          if (!iframe.src || !iframe.src.includes(':3001') || currentAttr === '' || currentAttr === 'about:blank') {
+            iframe.src = targetUrl;
+          }
         }
       } else if (tab === 'erfasser') {
         if (erfasserPane) erfasserPane.classList.remove('hidden');
@@ -4626,7 +4629,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (iframe) {
         const rawHost = window.location.hostname;
         const host = (!rawHost || rawHost === 'localhost') ? '127.0.0.1' : rawHost;
-        iframe.src = `http://${host}:3001?t=` + Date.now();
+        iframe.src = `http://${host}:3001/workspace/mein-workspace?t=` + Date.now();
       }
     };
 
@@ -4638,8 +4641,8 @@ print('Ausführung erfolgreich!')</textarea>
         const iframe = document.getElementById('anythingllm-iframe');
         const rawHost = window.location.hostname;
         const host = (!rawHost || rawHost === 'localhost') ? '127.0.0.1' : rawHost;
-        const targetUrl = `http://${host}:3001`;
-        if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.includes('localhost:3001') || iframe.src === '')) {
+        const targetUrl = `http://${host}:3001/workspace/mein-workspace`;
+        if (iframe) {
           iframe.src = targetUrl;
         }
       }

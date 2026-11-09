@@ -50,7 +50,7 @@
     { id: 'inbox', title: 'Eingang (Intake)', desc: 'Triage, E-Mail- & Telegram-Sync', icon: 'inbox', cat: 'tab', action: () => setTab('inbox') },
     { id: 'automation', title: 'Workflow-Engine', desc: 'n8n Automations-Pipelines', icon: 'workflow', cat: 'tab', action: () => setTab('automation') },
     { id: 'showroom', title: 'Showroom (Apps)', desc: 'Micro-Apps & Generierte Werkzeuge', icon: 'layout', cat: 'tab', action: () => setTab('showroom') },
-    { id: 'library', title: 'Bibliothek & Vault', desc: 'Obsidian Second Brain & Markdown Notes', icon: 'book-open', cat: 'tab', action: () => setTab('library') },
+    { id: 'library', title: 'Bibliothek & Vault', desc: 'AnythingLLM RAG, Dokumenten-Erfasser & Obsidian Notes', icon: 'book-open', cat: 'tab', action: () => setTab('library') },
     { id: 'research', title: 'Research Vault', desc: 'Markt- & Wettbewerbs-Dossiers', icon: 'globe', cat: 'tab', action: () => setTab('research') },
     { id: 'token-guard', title: 'Token Guard & Limits', desc: 'Raten- & Budgetwächter Telemetrie', icon: 'gauge', cat: 'tab', action: () => setTab('guardian') },
     { id: 'log-stream', title: 'Telemetrie & Logs', desc: 'Echtzeit Audit-Logs & Traces', icon: 'activity', cat: 'tab', action: () => setTab('log-stream') }

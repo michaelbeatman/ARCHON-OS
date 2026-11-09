@@ -13,7 +13,7 @@
       <div class="min-w-0">
         <div class="flex items-center gap-2">
           <h2 id="library-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">
-            Zentralbibliothek · RAG Index
+            Zentralbibliothek · AnythingLLM (RAG)
           </h2>
           <button type="button" onclick="openContextHelp('library')" title="Hilfe zur Zentralbibliothek" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
             <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
@@ -31,18 +31,18 @@
     <!-- Rechts: 3 Subtab-Icon-Tiles (RAG, Erfasser, Obsidian) im 72px Kachel-Stil -->
     <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
       
-      <!-- 1. RAG Index -->
+      <!-- 1. AnythingLLM (RAG) -->
       <button 
         type="button" 
         id="library-tab-btn-rag" 
         onclick="switchLibrarySubTab('rag')" 
         class="library-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-        title="AnythingLLM RAG Wissens-Index"
+        title="AnythingLLM RAG Vektor-Wissensbasis"
       >
         <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-          <img src="/static/img/cadre_icons/library_rag.png" alt="RAG Index" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+          <img src="/static/img/cadre_icons/library_rag.png" alt="AnythingLLM RAG" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
         </div>
-        <span class="library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">RAG Index</span>
+        <span class="library-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">AnythingLLM</span>
       </button>
 
       <!-- 2. Dokumenten-Erfasser -->

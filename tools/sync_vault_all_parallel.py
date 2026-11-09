@@ -6,9 +6,9 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-API_KEY = "R9YRVG7-FCFMRNK-NZ3FKSX-QKN5RHF"
-BASE_URL = "http://localhost:3001/api/v1"
-WORKSPACE = "mein-workspace"
+API_KEY = os.environ.get("ANYTHINGLLM_API_KEY", "")
+BASE_URL = os.environ.get("ANYTHINGLLM_URL", "http://localhost:3001/api/v1")
+WORKSPACE = os.environ.get("ANYTHINGLLM_WORKSPACE", "mein-workspace")
 VAULT_PATH = r"C:\Mein Obsidian"
 STATE_FILE = r"C:\Mein Obsidian\synced_vault_all.json"
 

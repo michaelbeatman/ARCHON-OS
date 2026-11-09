@@ -304,7 +304,7 @@ def main():
   python tools/sync_vault_to_rag.py --api-key <KEY> --all
         """
     )
-    parser.add_argument("--api-key", required=True, help="AnythingLLM API-Key (Pflichtfeld)")
+    parser.add_argument("--api-key", default=os.environ.get("ANYTHINGLLM_API_KEY"), help="AnythingLLM API-Key (Standard: aus ANYTHINGLLM_API_KEY)")
     parser.add_argument("--limit", type=int, default=None, help="Maximale Anzahl an zu verarbeitenden Dateien")
     parser.add_argument("--all", action="store_true", help="Synchronisiert alle noch nicht verarbeiteten Dateien ohne Limit")
     parser.add_argument("--vault-path", type=str, default=None, help="Optionaler Pfad zum Obsidian Vault")
@@ -313,6 +313,13 @@ def main():
     parser.add_argument("--state-file", type=str, default=None, help="Pfad zur Status-Datei (Standard: /opt/data/synced_files.json)")
 
     args = parser.parse_args()
+
+    api_key = (args.api_key or "").strip()
+    if not api_key:
+        print("\n[FEHLER] Kein API-Key angegeben!", file=sys.stderr)
+        print("Bitte gib entweder einen API-Key mit '--api-key <KEY>' an oder setze ANYTHINGLLM_API_KEY als Umgebungsvariable.\n", file=sys.stderr)
+        parser.print_help(sys.stderr)
+        sys.exit(2)
 
     # Validierung: Weder --limit noch --all angegeben
     if not args.all and args.limit is None:

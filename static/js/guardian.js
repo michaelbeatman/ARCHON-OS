@@ -43,17 +43,22 @@
         const cfg = await cfgRes.json();
         
         if (stats.status === "success") {
-          document.getElementById("guard-kpi-tokens").innerText = (stats.grand_total_tokens || 0).toLocaleString();
-          document.getElementById("guard-kpi-calls").innerText = `${(stats.grand_total_calls || 0).toLocaleString()} Calls`;
-          document.getElementById("guard-kpi-cost").innerText = `$${(stats.grand_total_cost || 0).toFixed(2)}`;
+          const elTokens = document.getElementById("guard-kpi-tokens");
+          if (elTokens) elTokens.innerText = (stats.grand_total_tokens || 0).toLocaleString();
+          const elCalls = document.getElementById("guard-kpi-calls");
+          if (elCalls) elCalls.innerText = `${(stats.grand_total_calls || 0).toLocaleString()} Calls`;
+          const elCost = document.getElementById("guard-kpi-cost");
+          if (elCost) elCost.innerText = `$${(stats.grand_total_cost || 0).toFixed(2)}`;
           
+          const elTopProfile = document.getElementById("guard-kpi-top-profile");
+          const elTopTokens = document.getElementById("guard-kpi-top-tokens");
           if (stats.profiles && stats.profiles.length > 0) {
             const topP = stats.profiles[0];
-            document.getElementById("guard-kpi-top-profile").innerText = topP.profile;
-            document.getElementById("guard-kpi-top-tokens").innerText = `${(topP.total_tokens || 0).toLocaleString()} Tokens`;
+            if (elTopProfile) elTopProfile.innerText = topP.profile;
+            if (elTopTokens) elTopTokens.innerText = `${(topP.total_tokens || 0).toLocaleString()} Tokens`;
           } else {
-            document.getElementById("guard-kpi-top-profile").innerText = "Keine Daten";
-            document.getElementById("guard-kpi-top-tokens").innerText = "0 Tokens";
+            if (elTopProfile) elTopProfile.innerText = "Keine Daten";
+            if (elTopTokens) elTopTokens.innerText = "0 Tokens";
           }
           
           // Ungenutzte Zeit / Inaktivitätsanzeige
@@ -91,9 +96,11 @@
           const plugins = cfg.plugins || [];
           guardianPluginsCache = plugins;
           
-          document.getElementById("guard-kpi-daily-budget").innerText = `$${(budget.daily_budget || 2.0).toFixed(2)}`;
+          const elDailyKpi = document.getElementById("guard-kpi-daily-budget");
+          if (elDailyKpi) elDailyKpi.innerText = `$${(budget.daily_budget || 2.0).toFixed(2)}`;
           const activePluginsCount = plugins.filter(p => p.enabled).length;
-          document.getElementById("guard-kpi-plugins-count").innerText = `${activePluginsCount} / ${plugins.length}`;
+          const elPluginsCount = document.getElementById("guard-kpi-plugins-count") || document.getElementById("guard-kpi-plugins");
+          if (elPluginsCount) elPluginsCount.innerText = `${activePluginsCount} / ${plugins.length}`;
           const badgeEl = document.getElementById("guard-plugin-total-badge");
           if (badgeEl) badgeEl.innerText = plugins.length;
           
@@ -419,14 +426,14 @@
       if (e) e.preventDefault();
       try {
         const payload = {
-          max_context_tokens: parseInt(document.getElementById("guard-set-max-context").value) || 32000,
-          max_history_messages: parseInt(document.getElementById("guard-set-max-history").value) || 20,
-          daily_budget: parseFloat(document.getElementById("guard-set-daily-budget").value) || 2.0,
-          task_budget: parseFloat(document.getElementById("guard-set-task-budget").value) || 0.5,
-          max_steps_per_task: parseInt(document.getElementById("guard-set-max-steps").value) || 15,
-          session_timeout_seconds: parseInt(document.getElementById("guard-set-timeout").value) || 60,
-          cache_ttl_hours: parseInt(document.getElementById("guard-set-cache-ttl").value) || 24,
-          watchdog_interval_seconds: parseInt(document.getElementById("guard-set-watchdog-interval").value) || 30
+          max_context_tokens: parseInt(document.getElementById("guard-set-max-context")?.value) || 32000,
+          max_history_messages: parseInt(document.getElementById("guard-set-max-history")?.value) || 20,
+          daily_budget: parseFloat(document.getElementById("guard-set-daily-budget")?.value) || 2.0,
+          task_budget: parseFloat(document.getElementById("guard-set-task-budget")?.value) || 0.5,
+          max_steps_per_task: parseInt(document.getElementById("guard-set-max-steps")?.value) || 15,
+          session_timeout_seconds: parseInt(document.getElementById("guard-set-timeout")?.value) || 60,
+          cache_ttl_hours: parseInt(document.getElementById("guard-set-cache-ttl")?.value) || 24,
+          watchdog_interval_seconds: parseInt(document.getElementById("guard-set-watchdog-interval")?.value) || 30
         };
         const res = await fetch('/api/guardian/config', {
           method: 'POST',

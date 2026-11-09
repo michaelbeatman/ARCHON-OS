@@ -476,7 +476,8 @@
       if (value === "new_template") {
         openCreateAgentModal();
         // Setze Auswahl zurück auf das vorher selektierte Preset
-        document.getElementById("agent-preset-select").value = selectedPresetId;
+        const elPreset = document.getElementById("agent-preset-select");
+        if (elPreset) elPreset.value = selectedPresetId;
       } else {
         selectedPresetId = value;
       }
@@ -3106,9 +3107,12 @@
     function handleDockerContainerSelectChange(containerId) {
       const service = servicesList.find(s => s.id === containerId);
       if (service) {
-        document.getElementById("new-agent-name").value = service.name || containerId;
-        if (service.model) document.getElementById("new-agent-model").value = service.model;
-        if (service.role) document.getElementById("new-agent-role").value = service.role;
+        const nameEl = document.getElementById("new-agent-name");
+        if (nameEl) nameEl.value = service.name || containerId;
+        const modelEl = document.getElementById("new-agent-model");
+        if (modelEl && service.model) modelEl.value = service.model;
+        const roleEl = document.getElementById("new-agent-role");
+        if (roleEl && service.role) roleEl.value = service.role;
       }
     }
     function applyTemplateToFields(serviceId) {
@@ -3116,9 +3120,12 @@
       if (service) {
         const cSelect = document.getElementById("new-agent-id");
         if (cSelect) cSelect.value = service.id;
-        document.getElementById("new-agent-name").value = service.name;
-        if (service.model) document.getElementById("new-agent-model").value = service.model;
-        if (service.role) document.getElementById("new-agent-role").value = service.role;
+        const nameEl = document.getElementById("new-agent-name");
+        if (nameEl) nameEl.value = service.name;
+        const modelEl = document.getElementById("new-agent-model");
+        if (modelEl && service.model) modelEl.value = service.model;
+        const roleEl = document.getElementById("new-agent-role");
+        if (roleEl && service.role) roleEl.value = service.role;
       }
     }
     function openCreateAgentModal() {
@@ -3127,10 +3134,15 @@
     }
     function closeCreateAgentModal() {}
     async function submitCreateAgent() {
-      const id = document.getElementById("new-agent-id").value.trim();
-      const name = document.getElementById("new-agent-name").value.trim();
-      const model = document.getElementById("new-agent-model").value;
-      const role = document.getElementById("new-agent-role").value;
+      const idEl = document.getElementById("new-agent-id");
+      const nameEl = document.getElementById("new-agent-name");
+      const modelEl = document.getElementById("new-agent-model");
+      const roleEl = document.getElementById("new-agent-role");
+      if (!idEl || !nameEl) return;
+      const id = idEl.value.trim();
+      const name = nameEl.value.trim();
+      const model = modelEl ? modelEl.value : "";
+      const role = roleEl ? roleEl.value : "";
       if (!id || !name) {
         alert("Bitte wählen Sie einen Docker-Container und geben Sie einen Namen an.");
         return;

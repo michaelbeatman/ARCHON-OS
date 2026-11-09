@@ -7,8 +7,8 @@ import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-API_KEY = "R9YRVG7-FCFMRNK-NZ3FKSX-QKN5RHF"
-BASE_URL = "http://localhost:3001/api/v1"
+API_KEY = os.environ.get("ANYTHINGLLM_API_KEY", "")
+BASE_URL = os.environ.get("ANYTHINGLLM_URL", "http://localhost:3001/api/v1")
 WORKSPACE = "mein-workspace"
 VAULT_PATH = r"C:\Mein Obsidian"
 TARGET_DIR = os.path.join(VAULT_PATH, "02_Wissensbibliothek", "06_Cannabis_Wirtschaft_Medizin")

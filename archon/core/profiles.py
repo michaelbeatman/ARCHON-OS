@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
 from archon.core.runtime import APP_ROOT, MEMORY_DIR, logger
 
 DEFAULT_HERMES_TOOLS = [
@@ -47,10 +48,10 @@ _AVATAR_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 # Env-Override fuer das Laufzeit-Ablageverzeichnis der Avatare.
 AVATARS_DIR_ENV = "ARCHON_AVATARS_DIR"
 
-# Im Container ist /opt/data der beschreibbare Laufzeitspeicher (= Host ~/.hermes).
+# Im Container ist OPT_DATA_DIR der beschreibbare Laufzeitspeicher (= Host ~/.hermes).
 # Auf dem Host gibt es /opt/data nicht, dort ist ~/.hermes das Pendant.
-_CONTAINER_DATA_DIR = "/opt/data"
-_CONTAINER_AVATARS_DIR = "/opt/data/webui/static_avatars"
+_CONTAINER_DATA_DIR = OPT_DATA_DIR
+_CONTAINER_AVATARS_DIR = os.path.join(OPT_DATA_DIR, "webui", "static_avatars")
 _HOST_AVATARS_DIR = "~/.hermes/webui/static_avatars"
 
 
@@ -261,7 +262,7 @@ def restore_data_uri_avatars(roles: Any, stored: Any = None) -> Any:
 def get_hermes_profiles_base_dirs() -> List[str]:
     """Liefert alle aktiven Hermes-Profil-Pfade (Container-Mounts und Host-Pfade)."""
     candidates = [
-        "/opt/data/profiles",
+        HERMES_PROFILES_BASE,
         os.path.expanduser("~/.hermes/profiles"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "profiles")
     ]
@@ -270,7 +271,7 @@ def get_hermes_profiles_base_dirs() -> List[str]:
         if c and os.path.exists(c) and c not in valid_dirs:
             valid_dirs.append(c)
     if not valid_dirs:
-        primary = "/opt/data/profiles" if os.path.exists("/opt/data") else os.path.expanduser("~/.hermes/profiles")
+        primary = HERMES_PROFILES_BASE if os.path.exists(OPT_DATA_DIR) else os.path.expanduser("~/.hermes/profiles")
         try:
             os.makedirs(primary, exist_ok=True)
         except Exception:

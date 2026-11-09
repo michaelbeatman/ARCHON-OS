@@ -210,7 +210,6 @@ def api_brain_galaxy_data(vault_limit: int = Query(600, description="Max. Vault-
     vault_candidates = [
         OBSIDIAN_VAULT,
         OBSIDIAN_VAULT_ALT,
-        "/opt/data/obsidian",
         OBSIDIAN_VAULT_DIR,
         os.path.join(WORKSPACE_DIR, "agent_workspace", "obsidian_vault"),
         "agent_workspace/obsidian_vault",
@@ -301,7 +300,6 @@ def api_brain_vault_file(path: str):
     vault_candidates = [
         OBSIDIAN_VAULT,
         OBSIDIAN_VAULT_ALT,
-        "/opt/data/obsidian",
         OBSIDIAN_VAULT_DIR,
         os.path.join(WORKSPACE_DIR, "agent_workspace", "obsidian_vault"),
         "agent_workspace/obsidian_vault",

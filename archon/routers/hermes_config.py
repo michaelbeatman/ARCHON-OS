@@ -13,7 +13,13 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request
 from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import add_ticker, logger
-from archon.core.paths import SETTINGS_FILE, HERMES_PROFILES_DIR
+from archon.core.paths import (
+    HERMES_CONFIG_YAML,
+    HERMES_PROFILES_BASE,
+    HERMES_PROFILES_DIR,
+    OPT_DATA_DIR,
+    SETTINGS_FILE,
+)
 from archon.core.profiles import invalidate_hermes_profiles_cache
 from backend.platform_paths import HERMES_HOME
 from utils.path_jail import safe_path, PathJailError
@@ -29,7 +35,7 @@ router = APIRouter(tags=["hermes-config"])
 
 def _get_hermes_config_paths():
     base_dirs = [
-        "/opt/data",
+        OPT_DATA_DIR,
         os.path.expanduser("~/.hermes"),
         HERMES_HOME
     ]
@@ -80,7 +86,7 @@ def _safe_config_target(path: Optional[str]) -> Optional[str]:
             path,
             allow_write=True,
             allow_dirs=False,
-            extra_roots=["/opt/data", "/app", os.path.expanduser("~/.hermes"), "/root/.hermes"],
+            extra_roots=[OPT_DATA_DIR, "/app", os.path.expanduser("~/.hermes"), "/root/.hermes"],
         )
     except PathJailError as e:
         raise HTTPException(status_code=403, detail=f"Config-Pfad nicht erlaubt: {e}")
@@ -611,10 +617,10 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
         with open(target_path, "w", encoding="utf-8") as f:
             yaml.dump(existing_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
-        # Wenn die globale Basis-Konfiguration (/opt/data/config.yaml) gespeichert wird,
-        # synchronisiere model.default & model.provider auch nach /opt/data/profiles/default/config.yaml
-        if os.path.abspath(target_path) == "/opt/data/config.yaml":
-            def_prof_cfg = "/opt/data/profiles/default/config.yaml"
+        # Wenn die globale Basis-Konfiguration (HERMES_CONFIG_YAML) gespeichert wird,
+        # synchronisiere model.default & model.provider auch nach default/config.yaml
+        if os.path.abspath(target_path) == os.path.abspath(HERMES_CONFIG_YAML):
+            def_prof_cfg = os.path.join(HERMES_PROFILES_BASE, "default", "config.yaml")
             if os.path.exists(def_prof_cfg):
                 try:
                     with open(def_prof_cfg, "r", encoding="utf-8") as f_dp:

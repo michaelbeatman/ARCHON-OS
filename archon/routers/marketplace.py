@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request
 from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import add_ticker, logger
-from archon.core.paths import HERMES_PROFILES_DIR
+from archon.core.paths import HERMES_PROFILES_BASE, HERMES_PROFILES_DIR
 from archon.core.profiles import (
     DEFAULT_HERMES_TOOLS,
     api_get_hermes_profiles,
@@ -122,7 +122,7 @@ def api_assign_skill_to_profile(request: Request, data: Dict = Body(...)):
     invalidate_hermes_profiles_cache()
 
     # 2. Synchronize skill directory/tag in profile folders
-    for p_base in [HERMES_PROFILES_DIR, "/opt/data/profiles", os.path.expanduser("~/.hermes/profiles")]:
+    for p_base in [HERMES_PROFILES_DIR, HERMES_PROFILES_BASE, os.path.expanduser("~/.hermes/profiles")]:
         prof_skills_dir = os.path.join(p_base, profile_id, "skills")
         if os.path.exists(os.path.join(p_base, profile_id)):
             os.makedirs(prof_skills_dir, exist_ok=True)

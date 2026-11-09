@@ -10,6 +10,8 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, Body, HTTPException
 
+from archon.core.paths import OBSIDIAN_VAULT, PERSONALAKTEN_DIR
+
 logger = logging.getLogger("archon.routers.memory_ops")
 
 router = APIRouter(tags=["memory_ops"])
@@ -59,9 +61,9 @@ def api_get_agent_real_stats(agent_id: str):
     """Liefert echte Leistungsdaten aus der Personalakte und den Datenbanken."""
     import main as app_main
 
-    obsidian_vault = getattr(app_main, "OBSIDIAN_VAULT", "/opt/data/obsidian")
-    vault_dir = Path("/opt/data/obsidian") if Path("/opt/data/obsidian").exists() else Path(obsidian_vault)
-    akte = vault_dir / "00_HR_Agenten" / "Personalakten" / f"{agent_id}.md"
+    obsidian_vault = getattr(app_main, "OBSIDIAN_VAULT", OBSIDIAN_VAULT)
+    vault_dir = Path(OBSIDIAN_VAULT) if Path(OBSIDIAN_VAULT).exists() else Path(obsidian_vault)
+    akte = Path(PERSONALAKTEN_DIR) / f"{agent_id}.md" if Path(PERSONALAKTEN_DIR).exists() else (vault_dir / "00_HR_Agenten" / "Personalakten" / f"{agent_id}.md")
     tasks_completed = 0
     if akte.exists():
         try:

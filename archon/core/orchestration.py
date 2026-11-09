@@ -22,6 +22,7 @@ from archon.core.mission_control import (
     _save_mission_control_data as _default_save_mc,
     _write_mc_atomic,
 )
+from archon.core.paths import OBSIDIAN_VAULT, PROJEKTE_DIR
 from archon.core.runtime import APP_ROOT, logger
 
 
@@ -41,7 +42,7 @@ BuildDossier = Callable[[str, str, str, str, str], str]
 CreateDecision = Callable[..., Any]
 
 # Pfad-Konstanten (können via paths-Dict überschrieben werden)
-DEFAULT_OBSIDIAN_VAULT_DIR = "/opt/data/obsidian"
+DEFAULT_OBSIDIAN_VAULT_DIR = OBSIDIAN_VAULT
 DEFAULT_WORKSPACE_DIR = "/mnt/raid/AgenticOS-2026"
 
 
@@ -625,7 +626,7 @@ async def _finalize_synthesis_after_approval(
                       f"**Freigabe:** {approver_note}\n")
         final_name = f"{safe_pid}_final_beschlussvorlage.md"
         target_dirs = [
-            "/opt/data/obsidian/01_PROJEKTE",
+            PROJEKTE_DIR,
             os.path.join(paths["OBSIDIAN_VAULT_DIR"], "01_PROJEKTE"),
             os.path.join(paths["WORKSPACE_DIR"], "obsidian_vault", "01_PROJEKTE"),
         ]
@@ -634,8 +635,8 @@ async def _finalize_synthesis_after_approval(
             _fan_ordner = folder_namer({"parent_project_id": parent_pid, "parent_project_title": parent_title})
         except Exception:
             _fan_ordner = ""
-        final_obs_path = (f"/opt/data/obsidian/01_PROJEKTE/{_fan_ordner}/03_Endprodukte/{final_name}"
-                          if _fan_ordner else f"/opt/data/obsidian/01_PROJEKTE/{final_name}")
+        final_obs_path = (os.path.join(PROJEKTE_DIR, _fan_ordner, "03_Endprodukte", final_name)
+                          if _fan_ordner else os.path.join(PROJEKTE_DIR, final_name))
         for d in target_dirs:
             try:
                 d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d
@@ -1050,7 +1051,7 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     safe_pid = re.sub(r'[^a-zA-Z0-9_\-]+', '-', parent_project_id).strip('-') or "projekt"
     draft_name = f"{safe_pid}_synthese_lisa_entwurf.md"
     target_dirs = [
-        "/opt/data/obsidian/01_PROJEKTE",
+        PROJEKTE_DIR,
         os.path.join(paths["OBSIDIAN_VAULT_DIR"], "01_PROJEKTE"),
         os.path.join(paths["WORKSPACE_DIR"], "obsidian_vault", "01_PROJEKTE"),
     ]
@@ -1068,8 +1069,8 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
                                         _fan_ordner, "01_Zwischenberichte")
     except Exception:
         _tg_doss_dir = None
-    draft_path = (f"/opt/data/obsidian/01_PROJEKTE/{_fan_ordner}/03_Endprodukte/{draft_name}"
-                  if _fan_ordner else f"/opt/data/obsidian/01_PROJEKTE/{draft_name}")
+    draft_path = (os.path.join(PROJEKTE_DIR, _fan_ordner, "03_Endprodukte", draft_name)
+                  if _fan_ordner else os.path.join(PROJEKTE_DIR, draft_name))
     for d in target_dirs:
         try:
             d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d

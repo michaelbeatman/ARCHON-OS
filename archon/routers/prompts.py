@@ -12,6 +12,8 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from archon.core.paths import OPT_DATA_DIR
+
 logger = logging.getLogger("archon.routers.prompts")
 
 router = APIRouter(tags=["prompts"])
@@ -22,7 +24,7 @@ async def upload_prompt_studio_context(file: UploadFile = File(...)):
     """Nimmt eine Kontext-Datei (.pdf, .docx, .txt, .csv, .json, .md, .py, .js, etc.) entgegen,
     speichert sie unter /opt/data/temp_uploads/ ab und extrahiert den Text.
     """
-    upload_dir = "/opt/data/temp_uploads"
+    upload_dir = os.path.join(OPT_DATA_DIR, "temp_uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
     filename = os.path.basename(file.filename or "upload.txt")

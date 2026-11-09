@@ -18,6 +18,8 @@ import math
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
+from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
+
 try:
     import httpx
 except ImportError:
@@ -55,7 +57,7 @@ def get_data_dir() -> str:
     """Ermittelt das Datenverzeichnis fuer persistente Notebook-Konfigurationen."""
     candidates = [
         "/app/data",
-        "/opt/data",
+        OPT_DATA_DIR,
         "data",
         "agent_workspace"
     ]
@@ -601,7 +603,7 @@ citations: "{citations}"
         vault_dir,
         r"C:\Mein Obsidian",
         r"C:\.Mein Obsidian",
-        "/opt/data/obsidian",
+        OBSIDIAN_VAULT,
         os.path.abspath("agent_workspace/obsidian_vault"),
         "/app/agent_workspace/obsidian_vault"
     ]

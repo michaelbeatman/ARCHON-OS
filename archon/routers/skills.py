@@ -15,6 +15,7 @@ from utils.path_jail import safe_filename, PathJailError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
+from archon.core.paths import OPT_DATA_DIR
 from archon.core.runtime import DATA_DIR, MEMORY_DIR, WORKSPACE_DIR, add_ticker, logger
 
 # --------------------------------------------------
@@ -47,7 +48,7 @@ def get_all_skill_search_roots():
         os.path.join(MEMORY_DIR, "hermes_skills"),
         os.path.expanduser("~/.hermes/skills"),
         "/app/skills",
-        "/opt/data/skills"
+        os.path.join(OPT_DATA_DIR, "skills")
     ]
 
 

@@ -17,6 +17,8 @@ import shutil
 import datetime
 from pathlib import Path
 
+from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
+
 # Optional dependencies with graceful fallback
 try:
     import pdfplumber
@@ -55,7 +57,7 @@ def resolve_vault_path() -> str:
         return env_path
     
     candidates = [
-        "/opt/data/obsidian",
+        OBSIDIAN_VAULT,
         r"C:\Mein Obsidian",
         r"C:\Users\micha\OneDrive\_Privat\Dokumente\_Mein Obsidian\Mein Obsidian",
         "/app/agent_workspace/obsidian_vault",
@@ -75,7 +77,7 @@ def resolve_vault_path() -> str:
 def resolve_raw_docs_dir() -> str:
     """Ermittelt das Verzeichnis für hochgeladene Rohdokumente."""
     candidates = [
-        "/opt/data/workspace/library/raw_docs",
+        os.path.join(OPT_DATA_DIR, "workspace", "library", "raw_docs"),
         "/app/library/raw_docs",
         "library/raw_docs",
         r"C:\Mein Obsidian\02_Wissensbibliothek\raw_docs"

@@ -17,6 +17,8 @@ import os
 import tempfile
 from typing import Iterable, List, Tuple
 
+from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
+
 __all__ = ["SECRET_FILE_MODES", "harden_file", "harden_known_secrets",
            "audit_known_secrets", "write_secret_file", "is_secret_name",
            "mask_secret", "mask_value", "mask_yaml_secrets", "restore_masked_values"]
@@ -56,8 +58,8 @@ def candidate_secret_paths(extra_roots: Iterable[str] = ()) -> List[str]:
     out = [
         "/app/.env.archon",
         "/app/.env",
-        "/opt/data/.env",
-        "/opt/data/profiles",
+        os.path.join(OPT_DATA_DIR, ".env"),
+        HERMES_PROFILES_BASE,
         os.path.join(home, ".hermes"),
         "/app/data/.archon_service_token",
         "/app/config/permission_gates.json",

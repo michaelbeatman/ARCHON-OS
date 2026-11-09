@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+r"""
 scripts/deploy_v035_and_backup.py
 
 1. Erstellt ein vollständiges Tages-Backup auf dem NAS:

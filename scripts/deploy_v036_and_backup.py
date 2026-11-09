@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+r"""
 scripts/deploy_v036_and_backup.py
 
 Vollstaendiges Release- und Backup-Skript fuer Archon OS v0.3.6 (Sentinel Release).

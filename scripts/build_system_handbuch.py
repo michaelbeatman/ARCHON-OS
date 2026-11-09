@@ -600,7 +600,7 @@ Das System Control Center (Settings) ist die zentrale Schaltstelle zur Konfigura
     md.append("## " + text_anhang3 + "\n\n---\n")
 
     # ANHANG IV & V
-    md.append("""## ANHANG IV: SPEZIAL-LEITFÄDEN: IT-SICHERHEIT & COMPLIANCE
+    md.append(r"""## ANHANG IV: SPEZIAL-LEITFÄDEN: IT-SICHERHEIT & COMPLIANCE
 
 ### IV.1 DSGVO / GDPR Compliance-Leitfaden für Agenten-Systeme
 - **Datenminimierung:** Agenten erhalten über den Context-Filter nur diejenigen personenbezogenen Daten, die für den konkreten Task erforderlich sind.

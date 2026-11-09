@@ -20,7 +20,23 @@ from __future__ import annotations
 
 import os
 
-from archon.core.runtime import DATA_DIR, MEMORY_DIR, WORKSPACE_DIR
+from archon.core.runtime import DATA_DIR, MEMORY_DIR, WORKSPACE_DIR, OBSIDIAN_VAULT_DIR
+from backend.platform_paths import (
+    HERMES_HOME,
+    OBSIDIAN_VAULT,
+    PERSONALAKTEN_DIR,
+    PROJEKTE_DIR,
+    soul_path,
+    profile_dir,
+    agent_log_path,
+)
+
+# --- Basisverzeichnisse Plattform & Host ------------------------------------
+OPT_DATA_DIR = HERMES_HOME
+HERMES_PROFILES_BASE = os.path.join(HERMES_HOME, "profiles")
+STATE_DB_PATH = os.path.join(HERMES_HOME, "state.db")
+KANBAN_DB_PATH = os.path.join(HERMES_HOME, "kanban.db")
+HERMES_CONFIG_YAML = os.path.join(HERMES_HOME, "config.yaml")
 
 # --- Daten unter MEMORY_DIR (/app/data im Container, "." auf dem Host) ------
 MEMORY_FILE = os.path.join(MEMORY_DIR, "agent_memory.json")
@@ -47,6 +63,16 @@ SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
 CONFIG_FILE = os.path.join(WORKSPACE_DIR, "obsidian_vault", "agent_configs.json")
 
 __all__ = (
+    "OPT_DATA_DIR",
+    "HERMES_PROFILES_BASE",
+    "STATE_DB_PATH",
+    "KANBAN_DB_PATH",
+    "HERMES_CONFIG_YAML",
+    "PERSONALAKTEN_DIR",
+    "PROJEKTE_DIR",
+    "soul_path",
+    "profile_dir",
+    "agent_log_path",
     "MEMORY_FILE",
     "AGENTS_FILE",
     "KANBAN_FILE",

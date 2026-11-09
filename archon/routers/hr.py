@@ -44,7 +44,7 @@ def api_get_personalakte(agent_id: str):
     vault_dir = app_main.OBSIDIAN_VAULT_DIR
     candidates = [
         os.path.join(vault_dir, "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
-        os.path.join("/opt/data/obsidian", "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
+        os.path.join(app_main.PERSONALAKTEN_DIR, f"{agent_id}.md"),
         os.path.join(app_main.OBSIDIAN_VAULT, "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
     ]
     file_path = None
@@ -81,7 +81,7 @@ def api_save_personalakte(agent_id: str, req: SavePersonalakteReq):
     vault_dir = app_main.OBSIDIAN_VAULT_DIR
     target_dirs = [
         os.path.join(vault_dir, "00_HR_Agenten", "Personalakten"),
-        "/opt/data/obsidian/00_HR_Agenten/Personalakten",
+        app_main.PERSONALAKTEN_DIR,
     ]
     if sys.platform == "win32" or os.path.exists(app_main.OBSIDIAN_VAULT):
         target_dirs.append(app_main.PERSONALAKTEN_DIR)
@@ -107,7 +107,6 @@ def api_get_hermes_soul(agent_id: str):
     import main as app_main
 
     candidates = [
-        f"/opt/data/profiles/{agent_id}/SOUL.md",
         app_main.soul_path(agent_id),
         f"/root/.hermes/profiles/{agent_id}/SOUL.md",
         f"/home/streamlituser/.hermes/profiles/{agent_id}/SOUL.md",
@@ -145,11 +144,7 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
     _require_admin(request)
     import main as app_main
 
-    target_dir = f"/opt/data/profiles/{agent_id}"
-    if not os.path.exists(target_dir):
-        alt_dir = app_main.profile_dir(agent_id)
-        if os.path.exists(os.path.dirname(alt_dir)):
-            target_dir = alt_dir
+    target_dir = app_main.profile_dir(agent_id)
     os.makedirs(target_dir, exist_ok=True)
     target_path = os.path.join(target_dir, "SOUL.md")
 

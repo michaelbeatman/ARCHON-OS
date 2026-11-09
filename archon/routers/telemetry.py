@@ -49,7 +49,6 @@ def api_get_agent_activity(agent_id: str):
     import main as app_main
 
     log_candidates = [
-        f"/opt/data/profiles/{agent_id}/logs/agent.log",
         app_main.agent_log_path(agent_id),
     ]
     log_lines = []
@@ -125,7 +124,6 @@ def api_get_agent_projects(agent_id: str):
         match_terms.add("keller")
 
     candidate_dirs = [
-        "/opt/data/obsidian/01_PROJEKTE",
         os.path.join(app_main.OBSIDIAN_VAULT_DIR, "01_PROJEKTE")
         if app_main.OBSIDIAN_VAULT_DIR
         else None,
@@ -215,7 +213,6 @@ def api_get_agent_projects(agent_id: str):
             pass
 
     personalakten_dirs = [
-        "/opt/data/obsidian/00_HR_Agenten/Personalakten",
         os.path.join(app_main.OBSIDIAN_VAULT_DIR, "00_HR_Agenten", "Personalakten")
         if app_main.OBSIDIAN_VAULT_DIR
         else None,

@@ -1,18 +1,16 @@
 {
-  "version": "v0.4.3",
-  "codename": "Sentinel",
-  "released_at": "2026-11-07 22:21",
-  "previous_version": "v0.4.2",
-  "commit": "dee4100f",
+  "version": "v0.5.0",
+  "codename": "Archon Hardened",
+  "released_at": "2026-11-09 15:30",
+  "previous_version": "v0.4.3",
+  "commit": "9ef750a1",
   "features": [
-    "Revisionssicheres GoBD & ISO 27001 Audit-Log mit SHA-256 Hashkette",
-    "Datenschutz-Routing (Zero Egress) fuer sensible Daten mit DSGVO-Statusleuchten",
-    "Dual-LLM Guard gegen Prompt Injection mit [T]-Trusted Badges",
-    "Verschluesselter Notfallzugang (Break-Glass Protocol)",
-    "API-Tokens mit Scopes und Token-Bucket Rate-Limiting",
-    "E-Mail-Freigabe-Queue vor SMTP-Versand",
-    "Kanban-Mehrfachaktionen mit 10-Minuten-Undo Puffer",
-    "Agent-Scorecards & Obsidian-Synchronisation in der Personalakte",
-    "Inspektor fuer ungespeicherte lokale Aenderungen"
+    "Modulare Router-Architektur: main.py von 16.254 auf 1.875 Zeilen reduziert (-88%)",
+    "Sicherheits-Haertung: 25 kritische (Rot) und 68 hohe (Orange) Review-Befunde vollstaendig geschlossen",
+    "Zentralisierte Umgebungs-Konfiguration in archon/core/config.py und B10-Pfadkonsolidierung",
+    "Starlette Threadpool & Async-Event-Loop-Entlastung (A6)",
+    "Robuste UI-Fehlerbehandlung: 1.140 DOM-Pfade analysiert und alle Eigenschaftszugriffe gehaertet",
+    "Docker-Admin-Proxy fuer hermes_updater und Container-Steuerung (Klasse A)",
+    "1.225 automatisierte Unittests mit 100% Erfolgsquote"
   ]
 }

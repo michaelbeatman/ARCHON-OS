@@ -28,6 +28,8 @@ import os
 from typing import Iterable, Optional, Set, Tuple
 from urllib.parse import urlparse
 
+from archon.core.config import config
+
 __all__ = ["EgressBlocked", "check_target_url", "allowed_targets"]
 
 # Hosts, die per Definition lokal sind (eingebettete UIs im Container).
@@ -50,7 +52,7 @@ class EgressBlocked(ValueError):
 
 
 def _env_targets() -> Set[str]:
-    raw = os.environ.get("ARCHON_PROXY_ALLOWED_TARGETS", "")
+    raw = config.proxy_allowed_targets
     return {item.strip().lower() for item in raw.split(",") if item.strip()}
 
 

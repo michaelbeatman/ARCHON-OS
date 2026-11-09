@@ -15,6 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, HTTPExcepti
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from archon.core.cache import ttl_cache
+from archon.core.config import config
 from archon.core.runtime import MEMORY_DIR, SETTINGS_FILE, WORKSPACE_DIR, add_ticker, logger
 from archon.core.state_db import STATE_DB_PATH, get_state_db_dep
 
@@ -59,11 +60,7 @@ def _require_admin(request: Request) -> None:
 # container_name "hermes". In DIESEM Stack laeuft er als `hermes-agent`
 # (Container-Name und Netz-Alias, per docker inspect); "hermes" existiert nicht.
 # Die Route ist bewusst eine Diagnose: sie startet nichts (siehe Docstring dort).
-HERMES_CORE_CANDIDATES: tuple = tuple(
-    c.strip()
-    for c in os.environ.get("ARCHON_HERMES_CORE_CONTAINER", "hermes-agent,hermes").split(",")
-    if c.strip()
-)
+HERMES_CORE_CANDIDATES: tuple = tuple(config.hermes_core_containers)
 
 
 def _inspect_hermes_core(name: str) -> Optional[Dict[str, Any]]:

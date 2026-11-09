@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Query, Body, Request
 from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import add_ticker, logger, WORKSPACE_DIR
+from archon.core.config import config
 from archon.core.paths import CONFIG_FILE, OPT_DATA_DIR
 from archon.core.cache import ttl_cache
 from utils.docker_client import (
@@ -171,7 +172,7 @@ def get_all_container_logs_api(tail: int = 40):
 @router.get("/api/v1/hermes/profile-logs")
 def get_hermes_profile_logs_api(profile_id: str, tail: int = 150):
     lines = []
-    hermes_home = os.environ.get("HERMES_HOME", OPT_DATA_DIR)
+    hermes_home = config.hermes_home
     profile_dir = os.path.join(hermes_home, "profiles", profile_id)
     
     # 1. Profile specific logs

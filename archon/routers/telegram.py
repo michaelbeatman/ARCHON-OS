@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from archon.core.config import config
 from archon.routers._rbac import require_admin_or_503
 
 logger = logging.getLogger("archon.routers.telegram")
@@ -25,10 +26,9 @@ def _redact_telegram_secrets(text: object) -> str:
     out = str(text)
     out = re.sub(r"https?://api\.telegram\.org/\S*", "<telegram-api-url>", out)
     out = re.sub(r"bot[0-9]{3,}:[A-Za-z0-9_-]{10,}", "bot<redacted>", out)
-    for env_key in ("TELEGRAM_BOT_TOKEN",):
-        secret = (os.environ.get(env_key) or "").strip()
-        if secret:
-            out = out.replace(secret, "<redacted>")
+    bot_token = config.telegram_bot_token
+    if bot_token:
+        out = out.replace(bot_token, "<redacted>")
     return out
 
 
@@ -218,7 +218,7 @@ async def api_telegram_voice_relay(
 
     # 4. Sprachantwort erzeugen & an Telegram senden
     voice_sent = False
-    tgt_chat = clean_chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")
+    tgt_chat = clean_chat_id or config.telegram_chat_id
     if (
         reply_voice
         and tgt_chat

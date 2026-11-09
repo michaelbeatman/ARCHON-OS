@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 from typing import Iterable, Optional
 
+from archon.core.config import config
 from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
 
 __all__ = ["PathJailError", "safe_path", "safe_path_within", "allowed_roots", "is_allowed"]
@@ -27,8 +28,7 @@ class PathJailError(PermissionError):
 
 
 def _env_roots() -> list[str]:
-    raw = os.environ.get("ARCHON_FILE_ROOTS", "")
-    return [r.strip() for r in raw.split(os.pathsep) if r.strip()]
+    return config.file_roots
 
 
 def _default_roots() -> list[str]:

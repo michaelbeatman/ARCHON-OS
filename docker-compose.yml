@@ -268,15 +268,12 @@ services:
       - STORAGE_DIR=/app/server/storage
       - SERVER_PORT=3001
       - DISABLE_TELEMETRY=true
-      # Embedder: lokaler Ollama-Container (sonst stirbt der eingebaute "native"
-      # Embedder auf dieser CPU mit SIGILL und reisst den Node-Prozess mit).
-      - EMBEDDING_ENGINE=ollama
-      - EMBEDDING_BASE_PATH=http://ollama-embed:11434
-      - EMBEDDING_MODEL_PREF=nomic-embed-text
-      - EMBEDDING_MODEL_MAX_CHUNK_LENGTH=2048
-      # Default ist 1 Chunk pro Embedding-Aufruf — auf dieser CPU der Flaschenhals
-      # (~3 min pro Buchkapitel). 16 Chunks pro Aufruf.
-      - OLLAMA_EMBEDDING_BATCH_SIZE=16
+      # Embedder: Omniroute (Qwen3-Embedding-8B ueber OpenRouter, 4096 Dimensionen, ultra-schnell)
+      - EMBEDDING_ENGINE=generic-openai
+      - EMBEDDING_BASE_PATH=http://omniroute:20128/v1
+      - EMBEDDING_MODEL_PREF=openrouter/qwen/qwen3-embedding-8b
+      - GENERIC_OPEN_AI_EMBEDDING_API_KEY=dummy
+      - EMBEDDING_MODEL_MAX_CHUNK_LENGTH=8192
       # Vektor-Store: Chroma ueber HTTP statt LanceDB. LanceDB zieht ein natives
       # Modul, das AVX2 voraussetzt — die CPU dieses Hosts (i5-3470) hat nur AVX
       # und der Node-Prozess stirbt mit "Illegal instruction".

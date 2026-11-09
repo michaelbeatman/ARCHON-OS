@@ -538,7 +538,7 @@ async def api_chat_stream(req: ChatStreamRequest):
     try:
         akte_candidates = [
             os.path.join(OBSIDIAN_VAULT_DIR, "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
-            f"/opt/data/obsidian/00_HR_Agenten/Personalakten/{agent_id}.md",
+            os.path.join(PERSONALAKTEN_DIR, f"{agent_id}.md"),
             os.path.join(OBSIDIAN_VAULT, "00_HR_Agenten", "Personalakten", f"{agent_id}.md")
         ]
         akte_content = None

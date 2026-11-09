@@ -162,7 +162,7 @@ def api_save_roles(request: Request, roles: List[Dict]):
 
 
 @router.post("/api/v1/jev/test")
-async def api_test_jev(payload: Dict = Body(None)):
+def api_test_jev(payload: Dict = Body(None)):
     import jev_router
 
     payload = payload or {}

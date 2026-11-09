@@ -374,15 +374,18 @@ async def move_mission_control_task(req: TaskMoveRequest):
 
 @router.get("/api/mission-control/task/{task_id}/artifact")
 async def get_mission_control_task_artifact(task_id: str):
-    data = _load_mission_control_data()
+    data = await asyncio.to_thread(_load_mission_control_data)
     task = next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
     if not task:
         raise HTTPException(status_code=404, detail="Task nicht gefunden.")
 
     p = task.get("artifact_path")
     if p and os.path.exists(p) and os.path.isfile(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return {"status": "ok", "content": f.read(), "path": p}
+        def _read_file_content(path: str) -> str:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        content = await asyncio.to_thread(_read_file_content, p)
+        return {"status": "ok", "content": content, "path": p}
 
     # R-13: existiert kein Artefakt, wird KEIN synthetischer Erfolgsbericht
     # ("Aufgabe erfolgreich abgeschlossen.") erfunden — ein Task ohne Ergebnis

@@ -429,7 +429,7 @@ async def api_save_single_hermes_skill(skill_id: str, request: Request):
 
 
 @router.post("/api/hermes/skills/{skill_id}/reset")
-async def api_reset_single_hermes_skill(request: Request, skill_id: str):
+def api_reset_single_hermes_skill(request: Request, skill_id: str):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     global _HERMES_SKILLS_CACHE
     file_path = find_skill_file(skill_id)

@@ -1,6 +1,7 @@
 """Router fuer Prompt Studio Upload und Prompt-Optimierung."""
 from __future__ import annotations
 
+import asyncio
 import csv
 import logging
 import os
@@ -30,18 +31,20 @@ async def upload_prompt_studio_context(file: UploadFile = File(...)):
     saved_filename = f"{timestamp}_{safe_name}"
     filepath = os.path.join(upload_dir, saved_filename)
 
+    def _save_uploaded_file(path: str, data: bytes) -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+
     try:
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        await asyncio.to_thread(_save_uploaded_file, filepath, content)
     except Exception as e:
         logger.error(f"[Prompt Studio Upload] Fehler beim Speichern der Datei: {e}")
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {e}")
 
     ext = os.path.splitext(filename)[1].lower()
-    extracted_text = ""
 
-    try:
+    def _extract() -> str:
         if ext == ".pdf":
             try:
                 import pypdf
@@ -52,7 +55,7 @@ async def upload_prompt_studio_context(file: UploadFile = File(...)):
                     t = p.extract_text()
                     if t:
                         pages_text.append(t)
-                extracted_text = "\n\n".join(pages_text).strip()
+                return "\n\n".join(pages_text).strip()
             except Exception as pe:
                 logger.warning(f"[Prompt Studio Upload] pypdf Fehler: {pe}")
                 raise HTTPException(status_code=400, detail=f"PDF konnte nicht gelesen werden: {pe}")
@@ -69,7 +72,7 @@ async def upload_prompt_studio_context(file: UploadFile = File(...)):
                         row_vals = [cell.text.strip() for cell in row.cells]
                         if any(row_vals):
                             tables_text.append(" | ".join(row_vals))
-                extracted_text = "\n".join(paragraphs + tables_text).strip()
+                return "\n".join(paragraphs + tables_text).strip()
             except Exception as de:
                 logger.warning(f"[Prompt Studio Upload] docx Fehler: {de}")
                 raise HTTPException(status_code=400, detail=f"Word-Dokument konnte nicht gelesen werden: {de}")
@@ -95,20 +98,22 @@ async def upload_prompt_studio_context(file: UploadFile = File(...)):
                         md_lines.append(
                             f"\n*(Tabelle gekürzt: {len(rows)-1} Datensätze insgesamt, erste 100 dargestellt)*"
                         )
-                    extracted_text = "\n".join(md_lines).strip()
-                else:
-                    extracted_text = ""
+                    return "\n".join(md_lines).strip()
+                return ""
             except Exception as ce:
                 logger.warning(f"[Prompt Studio Upload] CSV Fehler: {ce}")
                 raise HTTPException(status_code=400, detail=f"CSV konnte nicht gelesen werden: {ce}")
 
         elif ext in [".txt", ".md", ".py", ".js", ".json", ".html", ".yaml", ".yml", ".ts"]:
             with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-                extracted_text = f.read().strip()
+                return f.read().strip()
 
         else:
             with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-                extracted_text = f.read().strip()
+                return f.read().strip()
+
+    try:
+        extracted_text = await asyncio.to_thread(_extract)
 
     except HTTPException:
         raise

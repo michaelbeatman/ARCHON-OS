@@ -28,7 +28,7 @@ class LLMProviderSelectRequest(BaseModel):
     base_url: Optional[str] = None
 
 @router.get("/api/llm-providers/models")
-async def api_get_llm_provider_models(provider: str = Query("openrouter")):
+def api_get_llm_provider_models(provider: str = Query("openrouter")):
     p = (provider or "openrouter").lower().strip()
     # 1. Vollständiger OpenRouter-Katalog aus Preiscache oder Live-API
     if p == "openrouter":

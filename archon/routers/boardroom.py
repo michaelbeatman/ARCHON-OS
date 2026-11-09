@@ -302,8 +302,10 @@ async def api_run_boardroom(req: BoardroomRequest):
         md_content += f"## Diskussionsprotokoll\n\n{res.get('transcript', '')}\n\n"
         md_content += f"## Finale Synthese\n\n{res.get('synthesis', '')}\n"
         
-        with open(vault_file, "w", encoding="utf-8") as f:
-            f.write(md_content)
+        def _write_vault_note(path: str, text: str) -> None:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+        await asyncio.to_thread(_write_vault_note, vault_file, md_content)
         add_ticker("AI Boardroom", f"Protokoll im Vault gespeichert: boardroom_debatte_{ts_str}.md")
 
         # Speichere strukturierten Eintrag in boardroom_history
@@ -377,8 +379,10 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                     md_content += f"## Diskussionsprotokoll\n\n{running_transcript}\n\n"
                     md_content += f"## Finale Synthese\n\n{synthesis_text}\n"
                     
-                    with open(vault_file, "w", encoding="utf-8") as f:
-                        f.write(md_content)
+                    def _write_vault_note_stream(path: str, text: str) -> None:
+                        with open(path, "w", encoding="utf-8") as f:
+                            f.write(text)
+                    await asyncio.to_thread(_write_vault_note_stream, vault_file, md_content)
                     add_ticker("AI Boardroom", f"Protokoll im Vault gespeichert: {vault_file_name}")
                     ev["vault_file"] = vault_file_name
                 except Exception as e:

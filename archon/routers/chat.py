@@ -466,7 +466,7 @@ def api_rename_chat_session(session_id: str, req: RenameSessionRequest):
 
 
 @router.post("/api/chat/upload")
-async def api_chat_upload(file: UploadFile = File(...)):
+def api_chat_upload(file: UploadFile = File(...)):
     """Empfängt Datei-Uploads und legt sie im Agent-Workspace (/projects/ bzw. ./agent_workspace) ab."""
     try:
         target_dir = "/projects" if os.path.exists("/projects") else os.path.join(WORKSPACE_DIR, "uploads")

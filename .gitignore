@@ -126,3 +126,6 @@ Thumbs.db
 # Verzeichnis nie getrackt werden.
 **/webui/static_avatars/
 
+# Laufzeit-Gateway Config
+gateway_config.json
+

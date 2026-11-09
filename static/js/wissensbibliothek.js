@@ -1497,8 +1497,10 @@
       currentEditingRoleSettingsId = roleId;
       const role = roles.find(r => r.id === roleId);
       if (role) {
-        document.getElementById("setting-role-name").value = role.name;
-        document.getElementById("setting-role-prompt").value = role.prompt;
+        const nameEl = document.getElementById("setting-role-name");
+        if (nameEl) nameEl.value = role.name;
+        const promptEl = document.getElementById("setting-role-prompt");
+        if (promptEl) promptEl.value = role.prompt;
         const catSelect = document.getElementById("setting-role-category");
         if (catSelect) catSelect.value = role.category || "1. Management & Architektur";
       }
@@ -1530,9 +1532,13 @@
       loadRoleIntoSettingsEditor(currentEditingRoleSettingsId);
     }
     async function saveRoleSettingsChanges() {
-      const name = document.getElementById("setting-role-name").value.trim();
-      const prompt = document.getElementById("setting-role-prompt").value.trim();
-      const category = document.getElementById("setting-role-category").value;
+      const nameEl = document.getElementById("setting-role-name");
+      const promptEl = document.getElementById("setting-role-prompt");
+      const catEl = document.getElementById("setting-role-category");
+      if (!nameEl || !promptEl) return;
+      const name = nameEl.value.trim();
+      const prompt = promptEl.value.trim();
+      const category = catEl ? catEl.value : "";
       if (!name || !prompt) {
         alert("Bitte fülle Rollenname und System Prompt aus!");
         return;

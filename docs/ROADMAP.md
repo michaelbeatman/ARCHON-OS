@@ -5,9 +5,9 @@ Stelle: was erledigt ist (mit Commit und Beleg), was offen ist (mit Messwert), w
 Arbeit ist, und was **nicht** belegt ist. Alles hier ist am 07.11.2026 abends gegen den
 laufenden Stand gemessen; Zahlen ohne Messbefehl sind als „ungeprüft" markiert.
 
-Stand: Branch `refactor/a5-di-config`; Code-Stand `0f6c762f` (Session 6, 08.11. abends) —
+Stand: Branch `refactor/a5-di-config`; Code-Stand `ee31529d` (Paket 3 Struktur abgeschlossen) —
 `git log --oneline -1` liefert den aktuellen Kopf, bewusst kein Sha hier.
-Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **1121 passed / 8 skipped**,
+Test-Soll: `.venv/bin/python -m pytest tests/ -q` → **1225 passed / 8 skipped**,
 Working Tree sauber bis auf die drei Doku-Dateien dieser Sitzung (`HANDOVER_…_session2.md`,
 `REVIEW_2026-11-08_security.md`, `scripts/audit_route_guards.py`).
 
@@ -231,6 +231,21 @@ Suite-Stand nach 18. Batch-Commit: **1204 passed / 8 skipped, EXIT=0** (`.venv/b
 
 ---
 
+## 1f. Paket 3 — Struktur-Refactoring (09.11.2026)
+
+Planmäßig nach `docs/PLAN_STRUKTUR_2026-11-07.md` umgesetzt, alle Guards und Paritätsprüfungen grün.
+Suite-Stand nach Abschluss: **1225 passed / 8 skipped, EXIT=0** (`.venv/bin/python -m pytest tests/ -q` in 66s).
+
+| Etappe | Commit | Was | Beleg |
+|---|---|---|---|
+| **Etappe 1** | `eed82c6d`, `2d897605` | `hermes_updater` auf Allowlist-Client (`DockerAdminAdapter`) migriert | Proxy lässt die 7 Admin-Operationen durch, Grenzproben 403, AST: kein `socket.AF_UNIX` außerhalb `utils/docker_client.py` |
+| **Etappe 5** | `15b57965` | **A6**: Event-Loop-Entlastung: 9 blockierende `async def`-Handler zu `def` (Starlette Threadpool) gewandelt, blockierende File-I/O in verbleibenden `async def` per `asyncio.to_thread` gekapselt | 1214 passed / 8 skipped. SQLite-Thread-Affinity und Depends-Signaturen verifiziert. |
+| **Etappe 2** | `9124e676` | **B10**: 145 hartkodierte `/opt/data`-Pfade in `archon/` und `utils/` eliminiert | AST-Scan: 0 Treffer für `"/opt/data"` in `archon/` und `utils/`. `scripts/path_constants_snapshot.py` unverändert. 1214 passed / 8 skipped. |
+| **Etappe 4** | `ee31529d` | **A8**: Config-Zentralisierung in `archon/core/config.py` (`ArchonConfig` / `config`) | 14 Dateien in `archon/` und `utils/` migriert; dynamische `os.environ`-Abfrage für Test-Monkeypatching; `tests/test_a8_config.py` (11/11 passed). 1225 passed / 8 skipped. |
+| **Etappe 3** | `9fdf0e6c` | **B9**: Inventur doppelter Routen & Aliase | Inventur ergab: `main.py` hat 0 Duplikate; verbleibende 29 Handler in Sub-Routern sind legitime Abwärtskompatibilitäts-Aliase (`/api/services` vs `/api/v1/services` aktiv im Frontend; `/api/...` vs `/api/v1/...` in 398 RBAC-Tests vertraglich gesichert). Gemäß Abbruchregel unverändert geschützt. `scripts/check_router_names.py` exit 0. |
+
+---
+
 ## 2. In Arbeit — Mandat 1 wartet auf Entscheidung, Mandate 2+3 sind committet
 
 | Mandat | Profil | Stand |
@@ -287,7 +302,7 @@ schnelleres Embedding-Modell (`all-minilm`, 384 Dimensionen) bzw. ein Cloud-Embe
 | 2 | ~~`_decision_followup` meldet „ausgeführt" ohne Body-Prüfung~~ — **erledigt `48d9b7db`** | `main.py:3335` (Handover-Zahl 3267 war gedriftet) | — |
 | 3 | ~~Avatar-Upload-Route ohne Rollenzaun~~ — **erledigt `65a4a820`** | `archon/routers/hermes_profiles.py:100` | — |
 | 4 | **Tote UI-Pfade** | Handover: 166 von 1640 `getElementById`-Zielen ohne DOM-Element; von mir **nicht** nachgemessen | 2–4 h je Cluster |
-| 5 | **Paket 3 (Struktur)** | `docs/PLAN_STRUKTUR_2026-11-07.md`, 5 Etappen, nicht gestartet | 1–2 Wochen |
+| 5 | ~~**Paket 3 (Struktur)**~~ — **erledigt (09.11.)** | `docs/PLAN_STRUKTUR_2026-11-07.md`: alle 5 Etappen abgeschlossen (Etappe 1 `eed82c6d`, Etappe 5 `15b57965`, Etappe 2 `9124e676`, Etappe 4 `ee31529d`, Etappe 3 Inventur & Guard `9fdf0e6c`). Suite 1225/8 passed. | — |
 | 6 | **Mikro-Performance** (DB 1,25 ms, N+1 max 8 Queries, 411 `fetch`) | aus Grundprüfung, nicht neu gemessen | niedrig |
 | — | ~~RAG-API-Key `main.py:2287` Klartext~~ — **erledigt `48d9b7db`** (Env, fail-fast) | **Rest bei Michael:** (a) `ANYTHINGLLM_API_KEY` in `.env.archon` setzen + Recreate, sonst läuft der Hintergrund-RAG-Sync im Container nicht mehr; (b) Key **rotieren** — er ist in der Git-Historie (`98bebb10`, `85d01934`, `45c295eb`, `4cc38f31`), in `.archon_backup_20261105_1015/main.py` (versioniert) und in 3 `omniroute_data/…/call_logs/2026-11-06/*.json` | 30 min |
 | 7 | **`POST /api/hermes/profiles/{id}/favorite` ohne Rollenzaun** (neu, Vorschlag des DevOps-Laufs) | `archon/routers/hermes_profiles.py:283` schreibt `profile.yaml` — dieselbe Klasse wie der Avatar-Befund | 15 min + Test |

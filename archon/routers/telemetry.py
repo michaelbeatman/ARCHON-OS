@@ -10,6 +10,8 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from archon.core.paths import KANBAN_DB_PATH
+
 logger = logging.getLogger("archon.routers.telemetry")
 
 router = APIRouter(tags=["telemetry"])
@@ -417,7 +419,7 @@ def _get_running_tasks_count() -> int:
     try:
         import sqlite3 as _sql
 
-        with _sql.connect("file:/opt/data/kanban.db?mode=ro", uri=True, timeout=2) as _conn:
+        with _sql.connect(f"file:{KANBAN_DB_PATH}?mode=ro", uri=True, timeout=2) as _conn:
             return _conn.execute("SELECT count(*) FROM tasks WHERE status = 'in_progress'").fetchone()[0]
     except Exception:
         return 0

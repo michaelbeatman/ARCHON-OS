@@ -10,6 +10,12 @@ import sqlite3
 import time
 from typing import Any, Dict
 
+from archon.core.paths import (
+    HERMES_PROFILES_BASE,
+    OPT_DATA_DIR,
+    PROJEKTE_DIR,
+    STATE_DB_PATH,
+)
 from archon.core.runtime import OBSIDIAN_VAULT_DIR, WORKSPACE_DIR
 
 logger = logging.getLogger("archon.services.mission_sync")
@@ -66,12 +72,12 @@ def _sync_task_to_obsidian(task: dict) -> str:
     _tid_core = task_id.replace("task-", "")
     file_name = f"{_date_prefix}-{_tid_core}-{task_slug}.md"
 
-    # Bevorzugt /opt/data/obsidian/01_PROJEKTE, fallbacks auf OBSIDIAN_VAULT_DIR und inbox
+    # Bevorzugt PROJEKTE_DIR, fallbacks auf OBSIDIAN_VAULT_DIR und inbox
     target_dirs = [
-        "/opt/data/obsidian/01_PROJEKTE",
+        PROJEKTE_DIR,
         os.path.join(obs_vault_dir, "01_PROJEKTE"),
         os.path.join(workspace_dir, "obsidian_vault", "01_PROJEKTE"),
-        "/opt/data/inbox",
+        os.path.join(OPT_DATA_DIR, "inbox"),
     ]
 
     written_paths = []
@@ -93,7 +99,7 @@ status: completed
 {task.get('result_summary') or 'Erfolgreich von Archon OS ausgeführt und validiert.'}
 
 ## Generierte Artefakte
-- Pfad: /opt/data/obsidian/01_PROJEKTE/{file_name}
+- Pfad: {os.path.join(PROJEKTE_DIR, file_name)}
 """
     for d in target_dirs:
         try:
@@ -111,7 +117,7 @@ status: completed
         except Exception as err:
             logger.warning(f"[Obsidian Sync] Fehler beim Schreiben in {d}: {err}")
 
-    final_path = written_paths[0] if written_paths else f"/opt/data/obsidian/01_PROJEKTE/{file_name}"
+    final_path = written_paths[0] if written_paths else os.path.join(PROJEKTE_DIR, file_name)
     print(f"[Obsidian Sync] Speicherpfad verifiziert: {final_path}")
     return final_path
 
@@ -123,7 +129,7 @@ def _get_live_telemetry_metrics() -> Dict[str, Any]:
     now_ts = time.time()
     if _LIVE_TELEMETRY_CACHE["data"] is not None and (now_ts - _LIVE_TELEMETRY_CACHE["ts"]) < 15.0:
         return _LIVE_TELEMETRY_CACHE["data"]
-    all_dbs = sorted(glob.glob("/opt/data/profiles/*/state.db") + ["/opt/data/state.db"])
+    all_dbs = sorted(glob.glob(os.path.join(HERMES_PROFILES_BASE, "*", "state.db")) + [STATE_DB_PATH])
     if not all_dbs:
         all_dbs = sorted(
             glob.glob(os.path.expanduser("~/.hermes/profiles/*/state.db"))

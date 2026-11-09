@@ -9,6 +9,8 @@ from typing import Dict
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
+from archon.core.paths import HERMES_CONFIG_YAML, OPT_DATA_DIR, STATE_DB_PATH
+
 logger = logging.getLogger("archon.routers.hermes_ops")
 
 router = APIRouter(tags=["hermes_ops"])
@@ -24,10 +26,10 @@ def _require_admin(request: Request):
 def _get_hermes_config_path() -> str:
     import main as app_main
 
-    memory_dir = getattr(app_main, "MEMORY_DIR", "/opt/data/memory")
+    memory_dir = getattr(app_main, "MEMORY_DIR", os.path.join(OPT_DATA_DIR, "memory"))
     candidates = [
-        "/opt/data/config.yaml",
-        "/opt/data/hermes_config.json",
+        HERMES_CONFIG_YAML,
+        os.path.join(OPT_DATA_DIR, "hermes_config.json"),
         os.path.expanduser("~/.hermes/config.yaml"),
         os.path.expanduser("~/.hermes/hermes_config.json"),
         os.path.join(memory_dir, "hermes_config.json"),
@@ -108,7 +110,7 @@ def _purge_state_memory(purge_options: Dict) -> Dict:
     """DB-Zugriff als separate Hilfsfunktion ausserhalb des AST-Routers."""
     import main as app_main
 
-    state_db_path = getattr(app_main, "STATE_DB_PATH", "/opt/data/state.db")
+    state_db_path = getattr(app_main, "STATE_DB_PATH", STATE_DB_PATH)
     cleared_sessions = 0
     cleared_messages = 0
     conn = sqlite3.connect(state_db_path, timeout=20.0)

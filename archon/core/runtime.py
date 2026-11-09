@@ -46,7 +46,7 @@ def resolve_obsidian_vault_path() -> str:
 
     if sys.platform != "win32":
         candidates = [
-            "/opt/data/obsidian",
+            OBSIDIAN_VAULT,
             "/app/data/obsidian",
             os.path.join(WORKSPACE_DIR, "obsidian_vault"),
         ]
@@ -60,7 +60,7 @@ def resolve_obsidian_vault_path() -> str:
     for candidate in candidates:
         if candidate and os.path.exists(candidate) and os.path.isdir(candidate):
             return candidate
-    return "/opt/data/obsidian" if sys.platform != "win32" else OBSIDIAN_VAULT
+    return OBSIDIAN_VAULT
 
 
 OBSIDIAN_VAULT_DIR = resolve_obsidian_vault_path()

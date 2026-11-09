@@ -11,7 +11,7 @@ import sqlite3
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from archon.core.runtime import atomic_write_json, logger
-from archon.core.paths import KANBAN_CARDS_FILE
+from archon.core.paths import KANBAN_CARDS_FILE, KANBAN_DB_PATH
 from backend.platform_paths import HERMES_HOME
 from backend.db_paths import get_db_connection
 
@@ -42,7 +42,7 @@ def _atomic_write_json(path, data):
 @router.get("/api/kanban")
 def api_get_kanban():
     hermes_home = _get_hermes_home()
-    kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.join(hermes_home, "kanban.db")
+    kanban_db = KANBAN_DB_PATH if os.path.exists(KANBAN_DB_PATH) else os.path.join(hermes_home, "kanban.db")
     if os.path.exists(kanban_db):
         kconn = None
         try:
@@ -74,7 +74,7 @@ async def api_save_kanban(request: Request):
         cards_file = _get_kanban_cards_file()
         _atomic_write_json(cards_file, cards)
         hermes_home = _get_hermes_home()
-        kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.join(hermes_home, "kanban.db")
+        kanban_db = KANBAN_DB_PATH if os.path.exists(KANBAN_DB_PATH) else os.path.join(hermes_home, "kanban.db")
         if os.path.exists(kanban_db) and isinstance(cards, list):
             kconn = None
             try:

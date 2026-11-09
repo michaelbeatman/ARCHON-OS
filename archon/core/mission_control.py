@@ -16,6 +16,7 @@ import tempfile
 import threading
 from typing import Any, Dict
 
+from archon.core.paths import OPT_DATA_DIR
 from archon.core.runtime import MEMORY_DIR
 
 MISSION_CONTROL_FILE = os.path.join(MEMORY_DIR, "mission_control_data.json")
@@ -86,7 +87,7 @@ def _load_mission_control_data() -> dict:
     if not real_tasks:
         try:
             import sqlite3
-            for db in ["/opt/data/agentic_memory.db", "./data/agentic_memory.db"]:
+            for db in [os.path.join(OPT_DATA_DIR, "agentic_memory.db"), "./data/agentic_memory.db"]:
                 if os.path.exists(db):
                     conn = sqlite3.connect(db, timeout=5.0)
                     conn.execute("PRAGMA busy_timeout=5000;")

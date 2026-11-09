@@ -21,13 +21,14 @@ from archon.core.runtime import (  # noqa: F401
     add_ticker, broadcast_event, ticker_entries, _load_json, _save_json, atomic_write_json,
 )
 
+from archon.core.paths import OPT_DATA_DIR
 from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter()
 
 
 PROMPT_TEMPLATES_PATHS = [
-    "/opt/data/prompt_templates.json",
+    os.path.join(OPT_DATA_DIR, "prompt_templates.json"),
     os.path.join(MEMORY_DIR, "prompt_templates.json"),
     os.path.join(WORKSPACE_DIR, "data", "prompt_templates.json"),
     "./data/prompt_templates.json",
@@ -242,7 +243,7 @@ def _load_prompt_studio_catalog() -> List[Dict[str, Any]]:
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "prompt_studio_catalog.json"),
         "./prompt_studio_catalog.json",
         "./data/prompt_studio_catalog.json",
-        "/opt/data/prompt_templates.json"
+        os.path.join(OPT_DATA_DIR, "prompt_templates.json")
     ]
     records = []
     for p in paths:

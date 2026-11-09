@@ -10,6 +10,8 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
+from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
+
 logger = logging.getLogger("archon.routers.gateway")
 
 router = APIRouter(prefix="/api/v1/gateway", tags=["gateway"])
@@ -152,7 +154,7 @@ def _save_gateway_config(cfg: Dict):
 def _get_all_installed_profiles() -> list[str]:
     """List profile names from the mounted profiles volume directory."""
     import main as app_main
-    candidates = ["/opt/data/profiles", os.path.join(app_main.MEMORY_DIR, "hermes_profiles")]
+    candidates = [HERMES_PROFILES_BASE, os.path.join(app_main.MEMORY_DIR, "hermes_profiles")]
     for d in candidates:
         if os.path.exists(d) and os.path.isdir(d):
             try:
@@ -205,7 +207,7 @@ def api_gateway_list():
     last_used_map = cfg.get("last_used", {})
     active_gateways = cfg.get("active_gateways", {})
 
-    gw_state_file = "/opt/data/gateway_state.json"
+    gw_state_file = os.path.join(OPT_DATA_DIR, "gateway_state.json")
     is_master_running = False
     if os.path.exists(gw_state_file):
         try:

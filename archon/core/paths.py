@@ -63,11 +63,13 @@ SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
 CONFIG_FILE = os.path.join(WORKSPACE_DIR, "obsidian_vault", "agent_configs.json")
 
 __all__ = (
+    "HERMES_HOME",
     "OPT_DATA_DIR",
     "HERMES_PROFILES_BASE",
     "STATE_DB_PATH",
     "KANBAN_DB_PATH",
     "HERMES_CONFIG_YAML",
+    "OBSIDIAN_VAULT",
     "PERSONALAKTEN_DIR",
     "PROJEKTE_DIR",
     "soul_path",

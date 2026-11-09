@@ -17,6 +17,8 @@ from __future__ import annotations
 import os
 from typing import Iterable, Optional
 
+from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
+
 __all__ = ["PathJailError", "safe_path", "safe_path_within", "allowed_roots", "is_allowed"]
 
 
@@ -33,7 +35,7 @@ def _default_roots() -> list[str]:
     roots: list[str] = []
     # Daten- und Workspace-Bereiche (Hauptarbeitsflaeche des Systems)
     roots += [
-        "/opt/data",
+        OPT_DATA_DIR,
         "/app/data",
         "/app/agent_workspace",
         "./agent_workspace",
@@ -42,7 +44,7 @@ def _default_roots() -> list[str]:
     ]
     # Obsidian-Vaults (Host-Mounts)
     roots += [
-        "/opt/data/obsidian",
+        OBSIDIAN_VAULT,
         "/mnt/c/Mein Obsidian",
         os.path.expanduser("~/Documents/Mein Obsidian"),
     ]

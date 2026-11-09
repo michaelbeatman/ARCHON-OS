@@ -24,6 +24,7 @@ from archon.core.constants import DELEGATION_PROTOCOL_PROMPT
 from archon.core.mission_control import _load_mission_control_data, update_mission_control_data
 from archon.core.orchestration import _fan_in_maybe_start_synthesis
 from archon.core.profiles import api_get_hermes_profiles
+from archon.core.paths import OPT_DATA_DIR
 from archon.core.runtime import WORKSPACE_DIR, broadcast_event, logger
 from archon.core.state_db import _get_state_db
 from backend.platform_paths import OBSIDIAN_VAULT, PROJEKTE_DIR
@@ -406,7 +407,7 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
             return
 
         obs_dir = None
-        for cand in ("/opt/data/obsidian/01_PROJEKTE", os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"), PROJEKTE_DIR):
+        for cand in (PROJEKTE_DIR, os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE")):
             if os.path.isdir(cand):
                 obs_dir = cand
                 break
@@ -628,7 +629,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             # Ergebnis-Dateien des Hermes-Workers einsammeln (Attachments)
             attach_note = ""
             try:
-                attach_dir = os.path.join("/opt/data/kanban/attachments", task_id)
+                attach_dir = os.path.join(OPT_DATA_DIR, "kanban", "attachments", task_id)
                 if os.path.isdir(attach_dir):
                     files = [f for f in os.listdir(attach_dir) if os.path.isfile(os.path.join(attach_dir, f))]
                     if files:
@@ -640,9 +641,8 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             try:
                 title = (final_title or "Delegation")[:80]
                 slug = re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")[:50] or "auftrag"
-                for cand in ("/opt/data/obsidian/01_PROJEKTE",
-                              os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE"),
-                              PROJEKTE_DIR):
+                for cand in (PROJEKTE_DIR,
+                              os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE")):
                     try:
                         os.makedirs(cand, exist_ok=True)
                         obsidian_rel = cand
@@ -678,7 +678,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     for sub in ("01_Zwischenberichte", "02_Medien", "03_Endprodukte"):
                         os.makedirs(os.path.join(proj_folder, sub), exist_ok=True)
                     try:
-                        att_src = os.path.join("/opt/data/kanban/attachments", task_id)
+                        att_src = os.path.join(OPT_DATA_DIR, "kanban", "attachments", task_id)
                         if os.path.isdir(att_src):
                             for f in os.listdir(att_src):
                                 src_f = os.path.join(att_src, f)

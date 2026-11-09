@@ -23,7 +23,9 @@ class ClosingConnection(sqlite3.Connection):
             self.close()
 
 
-STATE_DB_PATH = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
+from archon.core.paths import STATE_DB_PATH as _PATHS_STATE_DB_PATH
+
+STATE_DB_PATH = _PATHS_STATE_DB_PATH if os.path.exists(_PATHS_STATE_DB_PATH) else os.path.expanduser("~/.hermes/state.db")
 
 
 def _get_state_db():

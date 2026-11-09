@@ -10,6 +10,8 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
+from archon.core.paths import KANBAN_DB_PATH
+
 logger = logging.getLogger("archon.routers.watchdog")
 
 router = APIRouter(prefix="/api/v1/watchdog", tags=["watchdog"])
@@ -72,7 +74,7 @@ def _db_insert_watchdog_task(
     for kanban_db in [
         "/mnt/raid/AgenticOS-2026/data/kanban.db",
         "/home/micha/.hermes/kanban.db",
-        "/opt/data/kanban.db",
+        KANBAN_DB_PATH,
     ]:
         if not os.path.exists(kanban_db):
             continue

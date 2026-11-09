@@ -38,11 +38,12 @@ def api_finetuning_status():
     try:
         from scripts.prepare_finetuning_dataset import DEFAULT_DB_PATH, DEFAULT_OUTPUT_DIR
 
-        db_path = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else DEFAULT_DB_PATH
+        opt_agentic_db = os.path.join(OPT_DATA_DIR, "agentic_memory.db")
+        db_path = opt_agentic_db if os.path.exists(opt_agentic_db) else DEFAULT_DB_PATH
         feedback_count, learnings_count = _query_feedback_and_learnings_counts(db_path)
 
         files_info = []
-        out_dir = "/opt/data/finetuning" if os.path.exists("/opt/data") else DEFAULT_OUTPUT_DIR
+        out_dir = os.path.join(OPT_DATA_DIR, "finetuning") if os.path.exists(OPT_DATA_DIR) else DEFAULT_OUTPUT_DIR
         if os.path.exists(out_dir):
             for f in os.listdir(out_dir):
                 if f.endswith(".jsonl"):
@@ -69,8 +70,9 @@ def api_finetuning_prepare(req: Dict[str, Any] = Body(...)):
     try:
         from scripts.prepare_finetuning_dataset import DEFAULT_DB_PATH, DEFAULT_OUTPUT_DIR, prepare_dataset
 
-        db_path = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else DEFAULT_DB_PATH
-        out_dir = "/opt/data/finetuning" if os.path.exists("/opt/data") else DEFAULT_OUTPUT_DIR
+        opt_agentic_db = os.path.join(OPT_DATA_DIR, "agentic_memory.db")
+        db_path = opt_agentic_db if os.path.exists(opt_agentic_db) else DEFAULT_DB_PATH
+        out_dir = os.path.join(OPT_DATA_DIR, "finetuning") if os.path.exists(OPT_DATA_DIR) else DEFAULT_OUTPUT_DIR
 
         fmt = req.get("format", "chat")
         min_score = int(req.get("min_score", 0))

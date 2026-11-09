@@ -15,7 +15,15 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request
 from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import add_ticker, logger, MEMORY_DIR
-from archon.core.paths import SETTINGS_FILE, HERMES_PROFILES_DIR
+from archon.core.paths import (
+    HERMES_CONFIG_YAML,
+    HERMES_PROFILES_BASE,
+    HERMES_PROFILES_DIR,
+    OBSIDIAN_VAULT,
+    OPT_DATA_DIR,
+    SETTINGS_FILE,
+    STATE_DB_PATH,
+)
 from backend.db_paths import get_db_connection
 
 router = APIRouter(tags=["guardian"])
@@ -65,7 +73,7 @@ def api_get_guardian_stats(timeframe: str = "all"):
     elif timeframe == "30d":
         min_ts = now_ts - (30 * 86400)
     
-    state_dbs = sorted(glob.glob('/opt/data/profiles/*/state.db') + ['/opt/data/state.db'])
+    state_dbs = sorted(glob.glob(os.path.join(HERMES_PROFILES_BASE, "*", "state.db")) + [STATE_DB_PATH])
     if not state_dbs:
         state_dbs = sorted(glob.glob(os.path.expanduser('~/.hermes/profiles/*/state.db')) + [os.path.expanduser('~/.hermes/state.db')])
     
@@ -242,7 +250,7 @@ def api_get_guardian_config():
     import yaml, glob
     config_file = os.path.expanduser("~/.hermes/config.yaml")
     if not os.path.exists(config_file):
-        config_file = "/opt/data/config.yaml"
+        config_file = HERMES_CONFIG_YAML
         
     cfg = {}
     if os.path.exists(config_file):
@@ -260,7 +268,7 @@ def api_get_guardian_config():
     # Cost budget json
     cost_budget_file = os.path.expanduser("~/.hermes/cost-budget.json")
     if not os.path.exists(cost_budget_file):
-        cost_budget_file = "/opt/data/cost-budget.json"
+        cost_budget_file = os.path.join(OPT_DATA_DIR, "cost-budget.json")
     budget_data = {"daily_budget": 2.0, "task_budget": 0.5}
     if os.path.exists(cost_budget_file):
         try:
@@ -292,7 +300,7 @@ def api_get_guardian_config():
     # Dynamische Plugin-Erkennung aus allen Plugin-Ordnern
     plugins_dir = os.path.expanduser("~/.hermes/plugins")
     if not os.path.exists(plugins_dir):
-        plugins_dir = "/opt/data/plugins"
+        plugins_dir = os.path.join(OPT_DATA_DIR, "plugins")
         
     discovered_plugins = []
     category_map = {
@@ -476,7 +484,7 @@ def api_save_guardian_config(request: Request, payload: dict):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     cost_budget_file = os.path.expanduser("~/.hermes/cost-budget.json")
     if not os.path.exists(cost_budget_file):
-        cost_budget_file = "/opt/data/cost-budget.json"
+        cost_budget_file = os.path.join(OPT_DATA_DIR, "cost-budget.json")
     
     if "daily_budget" in payload or "task_budget" in payload:
         b_data = {
@@ -505,7 +513,7 @@ def api_save_guardian_config(request: Request, payload: dict):
         # Aktualisiere auch config.yaml für Hermes Core
         config_file = os.path.expanduser("~/.hermes/config.yaml")
         if not os.path.exists(config_file):
-            config_file = "/opt/data/config.yaml"
+            config_file = HERMES_CONFIG_YAML
         if os.path.exists(config_file):
             import yaml
             with open(config_file, "r", encoding="utf-8") as f:
@@ -542,7 +550,7 @@ def api_toggle_guardian_plugin(request: Request, payload: dict):
         
     config_file = os.path.expanduser("~/.hermes/config.yaml")
     if not os.path.exists(config_file):
-        config_file = "/opt/data/config.yaml"
+        config_file = HERMES_CONFIG_YAML
         
     try:
         cfg = {}
@@ -651,8 +659,8 @@ DEFAULT_PLUGIN_CONFIGS = {
         "allowed_end_hour": 20
     },
     "evey-sandbox": {
-        "allowed_folders": ["/opt/data/workspace", "/tmp"],
-        "allowed_folders_str": "/opt/data/workspace, /tmp",
+        "allowed_folders": [os.path.join(OPT_DATA_DIR, "workspace"), "/tmp"],
+        "allowed_folders_str": f"{os.path.join(OPT_DATA_DIR, 'workspace')}, /tmp",
         "max_exec_seconds": 60,
         "pii_filter": True
     },
@@ -734,7 +742,7 @@ DEFAULT_PLUGIN_CONFIGS = {
         "topic_prefix": "archon/events"
     },
     "evey-moltbook": {
-        "vault_path": "/opt/data/obsidian",
+        "vault_path": OBSIDIAN_VAULT,
         "sync_interval_minutes": 30
     },
     "evey-telegram-ux": {
@@ -810,7 +818,7 @@ def api_get_plugin_config(plugin_id: str):
     if plugin_id == "evey-cost-guard":
         path = os.path.expanduser("~/.hermes/cost-budget.json")
         if not os.path.exists(path):
-            path = "/opt/data/cost-budget.json"
+            path = os.path.join(OPT_DATA_DIR, "cost-budget.json")
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -834,7 +842,7 @@ def api_get_plugin_config(plugin_id: str):
     elif plugin_id == "evey-autonomy":
         path = os.path.expanduser("~/.hermes/evey-autonomy.json")
         if not os.path.exists(path):
-            path = "/opt/data/evey-autonomy.json"
+            path = os.path.join(OPT_DATA_DIR, "evey-autonomy.json")
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -845,7 +853,7 @@ def api_get_plugin_config(plugin_id: str):
     elif plugin_id == "evey-watchdog":
         path = os.path.expanduser("~/.hermes/workspace/watchdog-state.json")
         if not os.path.exists(path):
-            path = "/opt/data/workspace/watchdog-state.json"
+            path = os.path.join(OPT_DATA_DIR, "workspace", "watchdog-state.json")
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -856,7 +864,7 @@ def api_get_plugin_config(plugin_id: str):
     elif plugin_id == "evey-proactive":
         path = os.path.expanduser("~/.hermes/workspace/manager/proactive-state.json")
         if not os.path.exists(path):
-            path = "/opt/data/workspace/manager/proactive-state.json"
+            path = os.path.join(OPT_DATA_DIR, "workspace", "manager", "proactive-state.json")
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -867,7 +875,7 @@ def api_get_plugin_config(plugin_id: str):
     elif plugin_id == "evey-sandbox":
         path = os.path.expanduser("~/.hermes/config/sandbox.yaml")
         if not os.path.exists(path):
-            path = "/opt/data/config/sandbox.yaml"
+            path = os.path.join(OPT_DATA_DIR, "config", "sandbox.yaml")
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -883,7 +891,7 @@ def api_get_plugin_config(plugin_id: str):
     elif plugin_id == "evey-wallet":
         path = os.path.expanduser("~/.hermes/wallet-balances.json")
         if not os.path.exists(path):
-            path = "/opt/data/wallet-balances.json"
+            path = os.path.join(OPT_DATA_DIR, "wallet-balances.json")
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -893,7 +901,7 @@ def api_get_plugin_config(plugin_id: str):
 
     elif plugin_id == "evey-telegram-ux":
         # Synchronisiere mit echter Telegram-Bot-Umgebung wenn vorhanden
-        tg_env = "/opt/data/profiles/telegram_bot/.env"
+        tg_env = os.path.join(HERMES_PROFILES_BASE, "telegram_bot", ".env")
         if os.path.exists(tg_env):
             try:
                 with open(tg_env, "r", encoding="utf-8") as f:
@@ -976,9 +984,9 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
         with open(gfile, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
 
-        # Auch unter /opt/data spiegeln falls Container-Volume aktiv
-        if os.path.exists("/opt/data") and os.path.isdir("/opt/data"):
-            opt_dir = "/opt/data/plugins_config"
+        # Auch unter OPT_DATA_DIR spiegeln falls Container-Volume aktiv
+        if os.path.exists(OPT_DATA_DIR) and os.path.isdir(OPT_DATA_DIR):
+            opt_dir = os.path.join(OPT_DATA_DIR, "plugins_config")
             os.makedirs(opt_dir, exist_ok=True)
             with open(os.path.join(opt_dir, f"{plugin_id}.json"), "w", encoding="utf-8") as f:
                 json.dump(cfg, f, indent=2)
@@ -986,8 +994,8 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
         # 2. Spezifische Live-Systemdateien synchronisieren
         if plugin_id == "evey-cost-guard":
             path = os.path.expanduser("~/.hermes/cost-budget.json")
-            if not os.path.exists(path) and os.path.exists("/opt/data"):
-                path = "/opt/data/cost-budget.json"
+            if not os.path.exists(path) and os.path.exists(OPT_DATA_DIR):
+                path = os.path.join(OPT_DATA_DIR, "cost-budget.json")
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             b_data = {
                 "daily_budget": float(cfg.get("daily_budget", 2.0)),
@@ -1006,15 +1014,15 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
                         cur = json.load(f)
                 except Exception:
                     pass
-            cur["cache_ttl_hours"] = int(cfg.get("cache_ttl_hours", 24))
-            cur["max_cache_entries"] = int(cfg.get("max_cache_entries", 100))
-            with open(limits_file, "w", encoding="utf-8") as f:
-                json.dump(cur, f, indent=2)
+                cur["cache_ttl_hours"] = int(cfg.get("cache_ttl_hours", 24))
+                cur["max_cache_entries"] = int(cfg.get("max_cache_entries", 100))
+                with open(limits_file, "w", encoding="utf-8") as f:
+                    json.dump(cur, f, indent=2)
 
         elif plugin_id == "evey-autonomy":
             path = os.path.expanduser("~/.hermes/evey-autonomy.json")
-            if not os.path.exists(path) and os.path.exists("/opt/data"):
-                path = "/opt/data/evey-autonomy.json"
+            if not os.path.exists(path) and os.path.exists(OPT_DATA_DIR):
+                path = os.path.join(OPT_DATA_DIR, "evey-autonomy.json")
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             data = {
                 "operator_name": str(cfg.get("operator_name", "Michael")),
@@ -1028,8 +1036,8 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
 
         elif plugin_id == "evey-watchdog":
             path = os.path.expanduser("~/.hermes/workspace/watchdog-state.json")
-            if not os.path.exists(path) and os.path.exists("/opt/data/workspace"):
-                path = "/opt/data/workspace/watchdog-state.json"
+            if not os.path.exists(path) and os.path.exists(os.path.join(OPT_DATA_DIR, "workspace")):
+                path = os.path.join(OPT_DATA_DIR, "workspace", "watchdog-state.json")
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             data = {
                 "silent_threshold_minutes": int(cfg.get("silent_threshold_minutes", 120)),
@@ -1042,8 +1050,8 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
 
         elif plugin_id == "evey-proactive":
             path = os.path.expanduser("~/.hermes/workspace/manager/proactive-state.json")
-            if not os.path.exists(path) and os.path.exists("/opt/data/workspace/manager"):
-                path = "/opt/data/workspace/manager/proactive-state.json"
+            if not os.path.exists(path) and os.path.exists(os.path.join(OPT_DATA_DIR, "workspace", "manager")):
+                path = os.path.join(OPT_DATA_DIR, "workspace", "manager", "proactive-state.json")
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             data = {
                 "max_messages_per_day": int(cfg.get("max_messages_per_day", 5)),
@@ -1056,8 +1064,8 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
 
         elif plugin_id == "evey-sandbox":
             path = os.path.expanduser("~/.hermes/config/sandbox.yaml")
-            if not os.path.exists(path) and os.path.exists("/opt/data/config"):
-                path = "/opt/data/config/sandbox.yaml"
+            if not os.path.exists(path) and os.path.exists(os.path.join(OPT_DATA_DIR, "config")):
+                path = os.path.join(OPT_DATA_DIR, "config", "sandbox.yaml")
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             raw_folders = cfg.get("allowed_folders_str", "")
             folders = [f.strip() for f in raw_folders.split(",") if f.strip()] if isinstance(raw_folders, str) else cfg.get("allowed_folders", [])
@@ -1070,8 +1078,8 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
 
         elif plugin_id == "evey-wallet":
             path = os.path.expanduser("~/.hermes/wallet-balances.json")
-            if not os.path.exists(path) and os.path.exists("/opt/data"):
-                path = "/opt/data/wallet-balances.json"
+            if not os.path.exists(path) and os.path.exists(OPT_DATA_DIR):
+                path = os.path.join(OPT_DATA_DIR, "wallet-balances.json")
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             data = {
                 "btc_address": str(cfg.get("btc_address", "")).strip(),
@@ -1082,7 +1090,7 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
                 json.dump(data, f, indent=2)
 
         elif plugin_id == "evey-telegram-ux":
-            tg_env = "/opt/data/profiles/telegram_bot/.env"
+            tg_env = os.path.join(HERMES_PROFILES_BASE, "telegram_bot", ".env")
             if os.path.exists(tg_env) and ("bot_token" in cfg or "allowed_chat_ids" in cfg):
                 try:
                     with open(tg_env, "r", encoding="utf-8") as f:
@@ -1168,7 +1176,7 @@ def api_clear_guardian_cache():
     """Leert den Delegation- und Prompt-Cache."""
     cache_file = os.path.expanduser("~/.hermes/workspace/orchestrator/delegation-cache.json")
     if not os.path.exists(cache_file):
-        cache_file = "/opt/data/workspace/orchestrator/delegation-cache.json"
+        cache_file = os.path.join(OPT_DATA_DIR, "workspace", "orchestrator", "delegation-cache.json")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, "w", encoding="utf-8") as f:

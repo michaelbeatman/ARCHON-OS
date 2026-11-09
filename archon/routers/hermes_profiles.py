@@ -21,6 +21,7 @@ from archon.services.profiles_service import (
 from utils.path_jail import safe_filename, PathJailError
 from pydantic import BaseModel
 
+from archon.core.paths import OPT_DATA_DIR
 from archon.core.runtime import add_ticker, logger
 from archon.core.profiles import (
     api_get_hermes_profiles,
@@ -143,7 +144,7 @@ def api_upload_hermes_profile_avatar(request: Request, profile_id: str, data: Di
             import sqlite3
             avatars_db_path = os.path.expanduser("~/.hermes/webui/avatars.db")
             if not os.path.exists(avatars_db_path):
-                avatars_db_path = "/opt/data/webui/avatars.db"
+                avatars_db_path = os.path.join(OPT_DATA_DIR, "webui", "avatars.db")
             if os.path.exists(os.path.dirname(avatars_db_path)):
                 with sqlite3.connect(avatars_db_path) as av_conn:
                     av_etag = '"' + hashlib.sha256(raw_bytes).hexdigest()[:32] + '"'

@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, List, Optional
 import yaml
 from pydantic import BaseModel
 
+from archon.core.paths import OPT_DATA_DIR
 from archon.core.runtime import APP_ROOT, MEMORY_DIR, add_ticker, logger
 from archon.core.permissions import (
     create_permission_gate as _create_permission_gate,
@@ -439,7 +440,7 @@ def save_profile(profile_data: Dict[str, Any], *,
         import sqlite3, hashlib, time
         avatars_db_path = os.path.expanduser("~/.hermes/webui/avatars.db")
         if not os.path.exists(avatars_db_path):
-            avatars_db_path = "/opt/data/webui/avatars.db"
+            avatars_db_path = os.path.join(OPT_DATA_DIR, "webui", "avatars.db")
         if os.path.exists(os.path.dirname(avatars_db_path)):
             with sqlite3.connect(avatars_db_path) as av_conn:
                 if not av_blob and clean_avatar and clean_avatar.startswith("/static/avatars/"):

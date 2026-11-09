@@ -1102,9 +1102,8 @@ async function initMasterChat() {
 
     window.openPriceCatalogForMasterChat = function() {
       const modelSelect = document.getElementById("master-chat-model-select");
-      const provSelect = document.getElementById("master-chat-provider-select");
       if (typeof window.openPriceCatalogModal === "function") {
-        window.openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+        window.openPriceCatalogModal(modelSelect, "");
       }
     };
 

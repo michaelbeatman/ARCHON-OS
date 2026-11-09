@@ -32,6 +32,7 @@ def _init_db() -> None:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with sqlite3.connect(DB_PATH, timeout=15.0) as conn:
         conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous = NORMAL;")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS knowledge_graph_triples (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

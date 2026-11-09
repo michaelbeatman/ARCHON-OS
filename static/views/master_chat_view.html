@@ -161,6 +161,9 @@
                     <option value="openai">OpenAI</option>
                     <option value="nvidia">NVIDIA NIM</option>
                   </select>
+                  <button type="button" onclick="openPriceCatalogForMasterChat()" class="p-1 rounded-md bg-[var(--secondary)] hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-[var(--border)] cursor-pointer transition shrink-0 flex items-center justify-center shadow-2xs" title="Preise &amp; Modell-Katalog öffnen">
+                    <i data-lucide="circle-dollar-sign" class="w-3.5 h-3.5"></i>
+                  </button>
                   <span class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide ml-1">Modell:</span>
                   <div class="inline-flex items-center gap-1">
                     <select 
@@ -173,9 +176,6 @@
                       <option value="deepseek/deepseek-v3">deepseek/deepseek-v3</option>
                       <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
                     </select>
-                    <button type="button" onclick="openPriceCatalogForMasterChat()" class="p-1 rounded-md bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-[var(--border)] cursor-pointer transition shrink-0 flex items-center justify-center shadow-2xs" title="Modelle durchsuchen &amp; Preise vergleichen (Lupe)">
-                      <i data-lucide="search" class="w-3.5 h-3.5"></i>
-                    </button>
                   </div>
                   <span id="master-chat-model-cost" class="text-[9.5px] text-amber-500 font-mono font-bold ml-1 bg-amber-500/10 px-1.5 py-0.5 rounded hidden"></span>
                   <button type="button" id="master-chat-refresh-prices-btn" onclick="refreshMasterChatPrices(this)" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-emerald-500 transition cursor-pointer shrink-0 ml-0.5" title="Tokenpreise jetzt live aktualisieren">

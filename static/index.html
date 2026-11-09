@@ -585,7 +585,6 @@
         <div id="mission-control-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
           <!-- LINKSBÜNDIG: ÜBERSCHRIFT DER ANSICHT & STATUS -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0 animate-pulse"></span>
             <h2 id="mc-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
               Dashboard
             </h2>
@@ -1064,7 +1063,6 @@
 
           <!-- LINKSBÜNDIG: ÜBERSCHRIFT & STATUS -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0 animate-pulse"></span>
             <h2 id="ops-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
               Operations
             </h2>
@@ -1490,18 +1488,17 @@
       <div id="view-agent-profiles-mount"></div>
 
       <!-- VIEW CONTAINER: AI MASTERMIND (BOARDROOM / DECISION ENGINE) -->
-      <div id="view-ai-mastermind" class="hidden flex-1 h-full min-h-0 w-full max-w-full p-2 flex flex-col gap-2 overflow-hidden shadcn-view" style="height: 100%; min-height: 0;">
+      <div id="view-ai-mastermind" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="height: 100vh !important; max-height: 100vh !important;">
         
         <!-- ========================================================================= -->
         <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR DECISION ENGINE         -->
         <!-- ========================================================================= -->
-        <header id="boardroom-global-header" class="h-20 shrink-0 p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
-          <!-- Links: Status-Pulse, Titel & Subtitel -->
+        <div id="boardroom-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shadow-xs shrink-0 flex items-center justify-between relative overflow-visible z-20">
+          <!-- Links: Titel & Subtitel -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
-            <div class="relative shrink-0 flex items-center justify-center">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <img id="boardroom-main-header-img" src="/static/img/cadre_icons/overview.png" alt="Decision Engine" class="hidden">
-              <div id="boardroom-header-status-dot" class="hidden"></div>
+            <div class="hidden" aria-hidden="true">
+              <img id="boardroom-main-header-img" src="/static/img/cadre_icons/overview.png" alt="Decision Engine">
+              <div id="boardroom-header-status-dot"></div>
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -1564,12 +1561,12 @@
               <i data-lucide="help-circle" class="w-4 h-4"></i>
             </button>
           </div>
-        </header>
+        </div>
 
         <!-- ========================================================================= -->
         <!-- HAUPT-PANELE (TAB-ROUTING) -->
         <!-- ========================================================================= -->
-        <div class="flex-1 min-h-0 w-full overflow-hidden relative">
+        <div class="flex-1 min-h-0 w-full p-2 overflow-hidden relative">
 
           <!-- ========================================================================= -->
           <!-- TAB 1: ÜBERSICHT & HISTORIE (FRÜHERE DEBATTEN) -->
@@ -1946,10 +1943,12 @@
           </div>
         </div>
 
-        <!-- ========================================================================= -->
-        <!-- MODAL: OPENROUTER & LLM MODELL-PREISLISTE / KATALOG MIT DOLLAR-ICON AUFRUF -->
-        <!-- ========================================================================= -->
-        <div id="llm-price-catalog-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      </div>
+
+      <!-- ========================================================================= -->
+      <!-- MODAL: OPENROUTER & LLM MODELL-PREISLISTE / KATALOG MIT DOLLAR-ICON AUFRUF -->
+      <!-- ========================================================================= -->
+      <div id="llm-price-catalog-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div class="w-full max-w-4xl h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <!-- Modal Header -->
             <div class="flex items-center justify-between p-4 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
@@ -1975,13 +1974,17 @@
               <div class="flex items-center gap-2.5">
                 <div class="relative flex-1">
                   <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] pointer-events-none"></i>
-                  <input type="text" id="llm-price-search" oninput="filterPriceModalTable()" placeholder="Modell durchsuchen (z.B. deepseek, claude, gpt-4o, flash, qwen)..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-medium shadow-2xs">
+                  <input type="text" id="llm-price-search" oninput="filterPriceModalTable()" placeholder="Modell durchsuchen (z.B. deepseek, claude, gpt-4o, flash, qwen)..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl pl-9 pr-8 py-1.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-medium shadow-2xs">
+                  <button type="button" onclick="document.getElementById('llm-price-search').value=''; filterPriceModalTable();" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs cursor-pointer p-0.5" title="Suchfeld leeren">✕</button>
                 </div>
-                <select id="llm-price-sort" onchange="filterPriceModalTable()" class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-medium cursor-pointer shadow-2xs focus:outline-none shrink-0" title="Sortierung w?hlen">
-                  <option value="price_asc" selected>Sortierung: G?nstigste zuerst</option>
+                <select id="llm-price-vendor-select" onchange="filterPriceModalTable()" class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-medium cursor-pointer shadow-2xs focus:outline-none shrink-0" title="Nach Anbieter filtern">
+                  <option value="" selected>Anbieter: Alle</option>
+                </select>
+                <select id="llm-price-sort" onchange="filterPriceModalTable()" class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-medium cursor-pointer shadow-2xs focus:outline-none shrink-0" title="Sortierung wählen">
+                  <option value="price_asc" selected>Sortierung: Günstigste zuerst</option>
                   <option value="price_desc">Sortierung: Teuerste zuerst</option>
                   <option value="alpha_asc">Sortierung: Alphabetisch (A - Z)</option>
-                  <option value="context_desc">Sortierung: Gr??ter Kontext</option>
+                  <option value="context_desc">Sortierung: Größter Kontext</option>
                 </select>
                 <span id="llm-price-modal-count" class="text-xs font-mono text-[var(--muted-foreground)] shrink-0 font-medium">Lade Preise...</span>
               </div>
@@ -2004,7 +2007,8 @@
               <table class="w-full border-collapse text-left">
                 <thead class="sticky top-0 bg-[var(--card)] z-10 border-b border-[var(--border)]">
                   <tr class="text-[10px] font-mono font-bold uppercase text-[var(--muted-foreground)]">
-                    <th class="py-2 px-3">Modell &amp; Anbieter</th>
+                    <th class="py-2 px-3">Modell-Name &amp; ID</th>
+                    <th class="py-2 px-3">Anbieter</th>
                     <th class="py-2 px-3">Kontext</th>
                     <th class="py-2 px-3 text-right">Input / 1M Tokens</th>
                     <th class="py-2 px-3 text-right">Output / 1M Tokens</th>
@@ -2027,7 +2031,6 @@
           </div>
         </div>
 
-      </div>
       <!-- VIEW CONTAINER: RESEARCH LAB (SÄULE 2: KOGNITION & WISSEN) -->
       <!-- VIEW: VIEW-RESEARCH (Extracted) -->
       <div id="view-research-mount"></div>

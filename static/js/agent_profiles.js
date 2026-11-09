@@ -171,34 +171,34 @@
       return withAvatarRevision(`/static/avatars/avatar_${String(avatarIndex).padStart(3, '0')}.jpg`);
     }
     const AVAILABLE_SYSTEM_TOOLS = [
-      { id: "web_search", name: "Web Search & Scraping", icon: "globe", desc: "web_search, web_extract", subtools: ["web_search", "web_extract"], mode: "sandbox", timeout: 30 },
-      { id: "browser", name: "Browser Automation", icon: "chrome", desc: "navigate, click, type, scroll, snapshot", subtools: ["browser_back", "browser_cdp", "browser_click", "browser_console", "browser_dialog", "browser_exec", "browser_get_images", "browser_navigate", "browser_press", "browser_scroll", "browser_snapshot", "browser_type", "browser_vision"], mode: "sandbox", timeout: 90 },
-      { id: "terminal", name: "Terminal & Processes", icon: "terminal", desc: "terminal, process", subtools: ["process", "terminal"], mode: "direct", timeout: 120 },
-      { id: "filesystem", name: "File Operations", icon: "folder-tree", desc: "read, write, patch, search", subtools: ["patch", "read_file", "search_files", "write_file"], mode: "direct", timeout: 60 },
-      { id: "execute_code", name: "Code Execution", icon: "code-2", desc: "execute_code (Polyglot Runtime)", subtools: ["execute_code"], mode: "sandbox", timeout: 60 },
-      { id: "vision_analyze", name: "Vision / Image Analysis", icon: "eye", desc: "vision_analyze", subtools: ["vision_analyze"], mode: "sandbox", timeout: 60 },
-      { id: "video_analyze", name: "Video Analysis", icon: "video", desc: "video_analyze (requires video-capable model)", subtools: ["video_analyze"], mode: "sandbox", timeout: 120 },
-      { id: "image_generate", name: "Image Generation", icon: "image", desc: "image_generate", subtools: ["image_generate"], mode: "sandbox", timeout: 60 },
-      { id: "video_generate", name: "Video Generation", icon: "film", desc: "video_generate (text/image/reference)", subtools: ["video_generate", "xai_video_edit", "xai_video_extend"], mode: "sandbox", timeout: 180 },
-      { id: "bfl_flux3", name: "BFL FLUX 3 Video", icon: "clapperboard", desc: "bfl_flux3_* (Text/Image/Keyframes to Video)", subtools: ["bfl_flux3_get_result", "bfl_flux3_image_to_video", "bfl_flux3_keyframes_to_video", "bfl_flux3_prompting_guide", "bfl_flux3_text_to_video", "bfl_flux3_video_continuation"], mode: "sandbox", timeout: 180 },
-      { id: "x_search", name: "X (Twitter) Search", icon: "twitter", desc: "x_search (xAI OAuth / XAI_API_KEY)", subtools: ["x_search"], mode: "sandbox", timeout: 30 },
-      { id: "text_to_speech", name: "Text-to-Speech", icon: "volume-2", desc: "text_to_speech (Voice Output)", subtools: ["text_to_speech"], mode: "sandbox", timeout: 30 },
-      { id: "speech_to_text", name: "Speech-to-Text", icon: "mic", desc: "voice transcription (gateway messages + voice mode)", subtools: ["stt_toolset"], mode: "sandbox", timeout: 30 },
-      { id: "skills", name: "Skills", icon: "sparkles", desc: "list, view, manage", subtools: ["skill_manage", "skill_view", "skills_list"], mode: "direct", timeout: 30 },
-      { id: "task_planning", name: "Task Planning", icon: "check-square", desc: "todo planning & task breakdown", subtools: ["todo"], mode: "direct", timeout: 30 },
-      { id: "memory", name: "Memory", icon: "database", desc: "persistent memory across sessions", subtools: ["memory"], mode: "direct", timeout: 30 },
-      { id: "context_engine", name: "Context Engine", icon: "cpu", desc: "runtime tools from active context engine", subtools: ["context_engine"], mode: "direct", timeout: 30 },
-      { id: "session_search", name: "Session Search", icon: "search", desc: "search past conversations", subtools: ["session_search"], mode: "direct", timeout: 30 },
-      { id: "clarify", name: "Clarifying Questions", icon: "help-circle", desc: "clarify user requirements & ambiguous intent", subtools: ["clarify"], mode: "direct", timeout: 30 },
-      { id: "delegate_task", name: "Task Delegation", icon: "share-2", desc: "delegate_task to specialized subagents", subtools: ["delegate_task"], mode: "direct", timeout: 60 },
-      { id: "cronjob", name: "Cron Jobs", icon: "clock", desc: "create/list/update/pause/resume/run cronjobs", subtools: ["cronjob"], mode: "direct", timeout: 60 },
-      { id: "home_assistant", name: "Home Assistant", icon: "home", desc: "smart home device control", subtools: ["ha_call_service", "ha_get_state", "ha_list_entities", "ha_list_services"], mode: "sandbox", timeout: 45 },
-      { id: "spotify", name: "Spotify", icon: "music", desc: "playback, search, playlists, library", subtools: ["spotify_albums", "spotify_devices", "spotify_library", "spotify_playback", "spotify_playlists", "spotify_queue", "spotify_search"], mode: "sandbox", timeout: 45 },
-      { id: "discord", name: "Discord (read/participate)", icon: "message-circle", desc: "fetch messages, search members, create thread", subtools: ["discord"], mode: "sandbox", timeout: 45 },
-      { id: "discord_admin", name: "Discord Server Admin", icon: "shield", desc: "list channels/roles, pin, assign roles", subtools: ["discord_admin"], mode: "sandbox", timeout: 45 },
-      { id: "yuanbao", name: "Yuanbao", icon: "messages-square", desc: "group info, member queries, DM", subtools: ["yb_query_group_info", "yb_query_group_members", "yb_search_sticker", "yb_send_dm", "yb_send_sticker"], mode: "sandbox", timeout: 45 },
-      { id: "computer_use", name: "Computer Use (macOS/Win/Linux)", icon: "monitor", desc: "background desktop control via cua-driver", subtools: ["computer_use"], mode: "direct", timeout: 120 },
-      { id: "a2a", name: "A2A Protocol (Agent-to-Agent)", icon: "network", desc: "A2A standard v1.0 (discover, call, orchestrate)", subtools: ["a2a_call", "a2a_discover", "a2a_history", "a2a_list", "a2a_orchestrate"], mode: "direct", timeout: 60 }
+      { id: "web_search", name: "Web Search & Scraping", icon: "globe", desc: "Live-Websuche und Inhalts-Extraktion via DuckDuckGo und Brave für aktuelle Online-Recherchen.", subtools: ["web_search", "web_extract"], mode: "sandbox", timeout: 30 },
+      { id: "browser", name: "Browser Automation", icon: "chrome", desc: "Headless Chrome-Steuerung über CDP: Klicks, Navigation, Formulareingaben, DOM-Inspektion und Screenshots.", subtools: ["browser_back", "browser_cdp", "browser_click", "browser_console", "browser_dialog", "browser_exec", "browser_get_images", "browser_navigate", "browser_press", "browser_scroll", "browser_snapshot", "browser_type", "browser_vision"], mode: "sandbox", timeout: 90 },
+      { id: "terminal", name: "Terminal & Shell", icon: "terminal", desc: "Sichere Ausführung von Bash-Befehlen, Systemdiagnosen und langlebigen Hintergrundprozessen.", subtools: ["process", "terminal"], mode: "direct", timeout: 120 },
+      { id: "filesystem", name: "Dateisystem-Operationen", icon: "folder-tree", desc: "Dateien und Projektordner lesen, schreiben, strukturiert durchsuchen und zeilenweise patchen.", subtools: ["patch", "read_file", "search_files", "write_file"], mode: "direct", timeout: 60 },
+      { id: "execute_code", name: "Code-Sandbox (Polyglot)", icon: "code-2", desc: "Isolierte Ausführung von Python-, Node.js- und Shell-Skripten mit Rückgabe von Stdout und Exit-Code.", subtools: ["execute_code"], mode: "sandbox", timeout: 60 },
+      { id: "vision_analyze", name: "Vision & Bildanalyse", icon: "eye", desc: "Multimodale optische Analyse von Screenshots, UI-Mockups, Diagrammen und Fotos via Vision-LLM.", subtools: ["vision_analyze"], mode: "sandbox", timeout: 60 },
+      { id: "video_analyze", name: "Video-Analyse", icon: "video", desc: "Frame-basierte Erkennung von Szenen, Textinhalten und Handlungsabläufen in Videodateien.", subtools: ["video_analyze"], mode: "sandbox", timeout: 120 },
+      { id: "image_generate", name: "Bildgenerierung", icon: "image", desc: "Synthetisiert hochauflösende Grafiken, Diagramme und Visualisierungen anhand von Textprompts.", subtools: ["image_generate"], mode: "sandbox", timeout: 60 },
+      { id: "video_generate", name: "Videogenerierung", icon: "film", desc: "Erstellt KI-Videoclips aus Textprompts, Standbildern oder Referenzsequenzen.", subtools: ["video_generate", "xai_video_edit", "xai_video_extend"], mode: "sandbox", timeout: 180 },
+      { id: "bfl_flux3", name: "BFL FLUX Studio", icon: "clapperboard", desc: "Professionelle Black Forest Labs FLUX Bild- und Videogeneration mit Frame-Fortsetzung und Keyframes.", subtools: ["bfl_flux3_get_result", "bfl_flux3_image_to_video", "bfl_flux3_keyframes_to_video", "bfl_flux3_prompting_guide", "bfl_flux3_text_to_video", "bfl_flux3_video_continuation"], mode: "sandbox", timeout: 180 },
+      { id: "x_search", name: "X (Twitter) Live-Suche", icon: "twitter", desc: "Echtzeit-Abfrage von Tweets, Profilen, Trends und Diskussionen auf X via xAI API.", subtools: ["x_search"], mode: "sandbox", timeout: 30 },
+      { id: "text_to_speech", name: "Sprachausgabe (TTS)", icon: "volume-2", desc: "Wandelt Agenten-Antworten in natürliche Sprachausgabe via ElevenLabs oder Edge-TTS um.", subtools: ["text_to_speech"], mode: "sandbox", timeout: 30 },
+      { id: "speech_to_text", name: "Spracherkennung (STT)", icon: "mic", desc: "Transkribiert gesprochene Sprachnachrichten und Audioaufnahmen präzise in Fließtext via Whisper.", subtools: ["stt_toolset"], mode: "sandbox", timeout: 30 },
+      { id: "skills", name: "Skill-Verwaltung", icon: "sparkles", desc: "Verwaltet modulare Fach-Skills, lädt Handbücher und führt domänenspezifische Instruktionen aus.", subtools: ["skill_manage", "skill_view", "skills_list"], mode: "direct", timeout: 30 },
+      { id: "task_planning", name: "Aufgabenplanung (WBS)", icon: "check-square", desc: "Zerlegt übergeordnete Ziele in messbare Meilensteine, Arbeitspakete und To-Do-Checklisten.", subtools: ["todo"], mode: "direct", timeout: 30 },
+      { id: "memory", name: "Persistentes Gedächtnis", icon: "database", desc: "Sichert Fakten, Entscheidungen und Nutzerpräferenzen dauerhaft in der SQLite-Datenbank.", subtools: ["memory"], mode: "direct", timeout: 30 },
+      { id: "context_engine", name: "Kontext-Engine", icon: "cpu", desc: "Injiziert dynamisch passende Wissens-Chunks, Systemrichtlinien und Vault-Inhalte zur Laufzeit.", subtools: ["context_engine"], mode: "direct", timeout: 30 },
+      { id: "session_search", name: "Sitzungs-Archivsuche", icon: "search", desc: "Volltextsuche in vergangenen Konversationen, Transkripten und Beschlüssen aller Agenten.", subtools: ["session_search"], mode: "direct", timeout: 30 },
+      { id: "clarify", name: "Präzisierungs-Rückfragen", icon: "help-circle", desc: "Stellt gezielte Rückfragen an den Nutzer, wenn Aufgabenstellungen mehrdeutig oder unvollständig sind.", subtools: ["clarify"], mode: "direct", timeout: 30 },
+      { id: "delegate_task", name: "Aufgaben-Delegation", icon: "share-2", desc: "Übergibt Teilaufgaben autonom an spezialisierte Subagenten und führt Zwischenergebnisse zusammen.", subtools: ["delegate_task"], mode: "direct", timeout: 60 },
+      { id: "cronjob", name: "Automations-Scheduler", icon: "clock", desc: "Erstellt und überwacht zeitgesteuerte Hintergrundaufträge, Cron-Jobs und Intervalle.", subtools: ["cronjob"], mode: "direct", timeout: 60 },
+      { id: "home_assistant", name: "Home Assistant (IoT)", icon: "home", desc: "Interagiert mit Smart-Home-Entitäten, liest Sensoren aus und schaltet Geräte im lokalen Netzwerk.", subtools: ["ha_call_service", "ha_get_state", "ha_list_entities", "ha_list_services"], mode: "sandbox", timeout: 45 },
+      { id: "spotify", name: "Spotify Mediensteuerung", icon: "music", desc: "Sucht Musik, steuert Wiedergabe und kuratiert Playlists auf verbundenen Spotify-Geräten.", subtools: ["spotify_albums", "spotify_devices", "spotify_library", "spotify_playback", "spotify_playlists", "spotify_queue", "spotify_search"], mode: "sandbox", timeout: 45 },
+      { id: "discord", name: "Discord Messenger", icon: "message-circle", desc: "Liest Nachrichten, durchsucht Server-Kanäle und sendet Beiträge in Discord-Threads.", subtools: ["discord"], mode: "sandbox", timeout: 45 },
+      { id: "discord_admin", name: "Discord Server-Admin", icon: "shield", desc: "Verwaltet Rollen, Berechtigungen und Kanalstrukturen auf autorisierten Discord-Servern.", subtools: ["discord_admin"], mode: "sandbox", timeout: 45 },
+      { id: "yuanbao", name: "Yuanbao Integration", icon: "messages-square", desc: "Interagiert mit Tencent Yuanbao Workflows, Gruppeninformationen und Kommunikationskanälen.", subtools: ["yb_query_group_info", "yb_query_group_members", "yb_search_sticker", "yb_send_dm", "yb_send_sticker"], mode: "sandbox", timeout: 45 },
+      { id: "computer_use", name: "Desktop CUA-Automation", icon: "monitor", desc: "Autonome Steuerung von Mauszeiger, Klicks und Tastatureingaben für grafische Betriebssystem-Aufgaben.", subtools: ["computer_use"], mode: "direct", timeout: 120 },
+      { id: "a2a", name: "A2A Inter-Agent Protokoll", icon: "network", desc: "Standardisierte Peer-to-Peer Kommunikation für kooperative Agententeams und Föderationen.", subtools: ["a2a_call", "a2a_discover", "a2a_history", "a2a_list", "a2a_orchestrate"], mode: "direct", timeout: 60 }
     ];
     const DEFAULT_HERMES_TOOLS = [
       "web_search", "browser", "terminal", "filesystem", "execute_code", "vision_analyze",
@@ -389,6 +389,12 @@
           loadInlinePersonalakte(currentSelectedProfileId);
         } else if (activeAgentCadreTab === 'chat') {
           loadAgentTabChatSessions(currentSelectedProfileId);
+        } else if (activeAgentCadreTab === 'skills') {
+          const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+          if (prof) {
+            renderActiveProfileSkillsTags(prof.skills || []);
+            renderActiveProfileTools(prof.tools || []);
+          }
         }
       }
       
@@ -865,9 +871,8 @@
     window.fetchProviderModelsList = loadLlmModelsForProvider;
     window.openPriceCatalogForAgentTab = function() {
       const modelSelect = document.getElementById('agent-tab-model-select');
-      const provSelect = document.getElementById('agent-tab-provider-select');
       if (typeof window.openPriceCatalogModal === 'function') {
-        window.openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+        window.openPriceCatalogModal(modelSelect, '');
       } else {
         const modal = document.getElementById('llm-price-catalog-modal');
         if (modal) modal.classList.remove('hidden');
@@ -1100,6 +1105,8 @@
           });
       }
       // Reiter 2: Skills & Tools befüllen
+      currentInspectedSkillId = "";
+      currentInspectedToolId = "";
       renderActiveProfileSkillsTags(prof.skills || []);
       renderActiveProfileTools(prof.tools || []);
       // Dispatch Tab-spezifischer Lader
@@ -2086,6 +2093,9 @@
         if (data && data.prices) {
           agentTabModelPrices = data.prices;
           agentTabModelPricesLoaded = true;
+          window.masterChatModelPrices = data.prices;
+          if (typeof updateProfileModelCost === "function") updateProfileModelCost();
+          if (typeof updateAgentTabModelCost === "function") updateAgentTabModelCost();
         }
       } catch (e) {
         console.warn("Tokenpreise konnten nicht geladen werden:", e);
@@ -2545,99 +2555,444 @@
         return assignSelectedMarketplaceSkill();
       }
     }
-    function renderActiveProfileSkillsTags(skillsList) {
+    let currentInspectedSkillId = "";
+    let currentInspectedToolId = "";
+    let availableSkillsSearchFilter = "";
+    let availableToolsSearchFilter = "";
+
+    function filterAvailableSkillsCatalog(query) {
+      availableSkillsSearchFilter = (query || "").trim().toLowerCase();
+      renderAvailableSkillsCatalog(availableSkillsSearchFilter);
+    }
+
+    function filterAvailableToolsCatalog(query) {
+      availableToolsSearchFilter = (query || "").trim().toLowerCase();
+      renderAvailableToolsCatalog(availableToolsSearchFilter);
+    }
+
+    function openSkillDetailModalFromInspector() {
+      if (currentInspectedSkillId) {
+        openSkillDetailModal(currentInspectedSkillId);
+      } else {
+        showArchonToast("Bitte wähle zuerst einen Skill aus.", "info");
+      }
+    }
+
+    function openToolConfigModalFromInspector(event) {
+      if (currentInspectedToolId) {
+        openToolConfigModal(currentInspectedToolId, event);
+      } else {
+        showArchonToast("Bitte wähle zuerst ein Tool aus.", "info");
+      }
+    }
+
+    async function saveProfileChangesDirectly() {
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (!prof) return;
+      try {
+        const payload = {
+          id: prof.id,
+          old_id: prof.id,
+          name: prof.name || prof.person_name || "Agent",
+          person_name: prof.person_name || prof.name || "Agent",
+          callsign: prof.callsign || "",
+          category: prof.category || "1. Strategie, Führung & Lebensplanung",
+          description: prof.description || "",
+          avatar: prof.avatar || "/static/avatars/avatar_001.jpg",
+          prompt: prof.prompt || prof.system_prompt || "",
+          system_prompt: prof.prompt || prof.system_prompt || "",
+          provider: prof.provider || "openrouter",
+          model: prof.model || "deepseek/deepseek-v4-flash-0731",
+          reasoning_level: prof.reasoning_level || "high",
+          skills: Array.isArray(prof.skills) ? prof.skills : [],
+          tools: Array.isArray(prof.tools) ? prof.tools : []
+        };
+        await fetch("/api/hermes/profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        console.warn("[Profile AutoSave] Failed to save skills/tools changes:", err);
+      }
+    }
+
+    function renderActiveProfileSkillsTags(skillsList = []) {
       const tagsContainer = document.getElementById("prof-active-skills-tags");
       const countEl = document.getElementById("prof-skills-count");
+      const summaryEl = document.getElementById("prof-skills-summary-badge");
       if (!tagsContainer) return;
       tagsContainer.innerHTML = "";
-      if (countEl) countEl.innerText = `${skillsList.length} ${skillsList.length === 1 ? 'Skill aktiv' : 'Skills aktiv'}`;
-      if (skillsList.length === 0) {
-        tagsContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-1">Noch keine Skills zugeordnet. Wähle unten einen Skill aus dem Katalog.</span>`;
-        return;
-      }
-      skillsList.forEach(skId => {
-        const skObj = hermesGlobalSkillsData.find(s => s.id === skId) || { name: skId, category: "Skill" };
-        const badge = document.createElement("span");
-        badge.className = "prof-skill-tag inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 shadow-xs bg-[var(--card)] border border-[var(--border)] rounded-md";
-        badge.innerHTML = `
-          <span class="truncate max-w-[150px]">${skObj.name}</span>
-          <span class="inline-flex items-center gap-1 ml-1 shrink-0">
-            <button type="button" onclick="openSkillDetailModal('${skId}')" class="text-[var(--foreground)] opacity-75 hover:opacity-100 transition cursor-pointer flex items-center justify-center p-0.5" title="Skill-Details & Code bearbeiten">
-              <i data-lucide="info" class="w-3 h-3"></i>
-            </button>
-            <button type="button" onclick="removeSkillFromProfile('${skId}')" class="opacity-60 hover:opacity-100 text-[var(--foreground)] font-bold cursor-pointer transition p-0.5" title="Skill entfernen">✕</button>
-          </span>
-        `;
-        tagsContainer.appendChild(badge);
-      });
-      if (window.lucide) lucide.createIcons();
-    }
-    function renderActiveProfileTools(toolsList = []) {
-      const tagsContainer = document.getElementById("prof-active-tools-tags");
-      const countEl = document.getElementById("prof-tools-count");
-      if (!tagsContainer) return;
-      tagsContainer.innerHTML = "";
-      const activeTools = Array.isArray(toolsList) && toolsList.length > 0 ? toolsList : (typeof DEFAULT_HERMES_TOOLS !== 'undefined' ? DEFAULT_HERMES_TOOLS : []);
-      if (countEl) {
-        countEl.innerText = `${activeTools.length} ${activeTools.length === 1 ? 'Tool aktiv' : 'Tools aktiv'}`;
-      }
-      if (activeTools.length === 0) {
-        tagsContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-1">Noch keine Tools zugeordnet. Wähle unten ein Tool aus dem Katalog.</span>`;
+      
+      const count = Array.isArray(skillsList) ? skillsList.length : 0;
+      if (countEl) countEl.innerText = `${count} aktiv`;
+      if (summaryEl) summaryEl.innerText = `${count} zugewiesen`;
+      
+      if (!skillsList || skillsList.length === 0) {
+        tagsContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-2 px-1">Keine Fach-Skills zugeteilt. Klicke rechts auf (+) um Skills zuzuweisen.</span>`;
       } else {
-        activeTools.forEach(toolId => {
-          const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { id: toolId, name: toolId, icon: "wrench", desc: "System Tool" };
-          const badge = document.createElement("span");
-          badge.className = "prof-tool-card-active inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-md border border-[var(--border)] bg-[var(--card)] shadow-xs select-none";
-          badge.innerHTML = `
-            <i data-lucide="${tool.icon || 'wrench'}" class="w-3 h-3 shrink-0 text-[var(--foreground)]"></i>
-            <span class="truncate max-w-[150px] text-[11px] font-bold">${tool.name}</span>
-            <span class="inline-flex items-center gap-1 ml-1 shrink-0">
-              <button type="button" onclick="openToolConfigModal('${tool.id}', event)" class="tool-settings-trigger opacity-75 hover:opacity-100 text-[var(--foreground)] transition cursor-pointer flex items-center justify-center p-0.5" title="Tool-Einstellungen & Parameter öffnen">
-                <i data-lucide="settings" class="w-3 h-3"></i>
-              </button>
-              <button type="button" onclick="removeToolFromProfile('${tool.id}')" class="opacity-60 hover:opacity-100 text-[var(--foreground)] font-bold cursor-pointer transition p-0.5" title="Tool entfernen">✕</button>
-            </span>
+        skillsList.forEach(skId => {
+          const skObj = hermesGlobalSkillsData.find(s => s.id === skId || s.id === `skill-${skId}`) || { id: skId, name: skId.replace(/-/g, ' ').replace(/^skill /i, ''), category: "Fachkompetenz" };
+          const isSelected = currentInspectedSkillId === skId || currentInspectedSkillId === skObj.id;
+          
+          const pill = document.createElement("div");
+          pill.className = `prof-skill-pill-assigned group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-emerald-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
+          pill.title = `Klicken für Details / SKILL.md Preview`;
+          pill.onclick = () => selectSkillForInspector(skId);
+          
+          pill.innerHTML = `
+            <span class="truncate max-w-[130px]">${skObj.name}</span>
+            <button type="button" onclick="removeSkillFromProfile('${skId}', event)" class="w-4 h-4 rounded hover:bg-rose-500/20 text-rose-500 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="Zuweisung lösen">
+              −
+            </button>
           `;
-          tagsContainer.appendChild(badge);
+          tagsContainer.appendChild(pill);
         });
       }
-      populateGlobalToolsDropdown(activeTools);
+      
+      renderAvailableSkillsCatalog(availableSkillsSearchFilter);
+      
+      if (!currentInspectedSkillId && skillsList && skillsList.length > 0) {
+        selectSkillForInspector(skillsList[0]);
+      } else if (currentInspectedSkillId) {
+        highlightInspectedSkillPill(currentInspectedSkillId);
+      }
+      
       if (window.lucide) lucide.createIcons();
     }
-    function populateGlobalToolsDropdown(activeTools = []) {
-      const select = document.getElementById("prof-add-tool-select");
-      if (!select) return;
-      select.innerHTML = '<option value="" disabled selected>+ Tool aus Katalog hinzufügen...</option>';
-      AVAILABLE_SYSTEM_TOOLS.forEach(tool => {
-        if (!activeTools.includes(tool.id)) {
-          const opt = document.createElement("option");
-          opt.value = tool.id;
-          opt.innerText = `${tool.name} - ${tool.desc}`;
-          select.appendChild(opt);
+
+    function renderAvailableSkillsCatalog(filter = "") {
+      const container = document.getElementById("prof-available-skills-tags");
+      const countEl = document.getElementById("prof-skills-available-count");
+      if (!container) return;
+      container.innerHTML = "";
+      
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const activeSkills = prof && Array.isArray(prof.skills) ? prof.skills : [];
+      
+      let available = hermesGlobalSkillsData.filter(s => {
+        const id = s.id;
+        const altId = id.startsWith("skill-") ? id.replace(/^skill-/, '') : `skill-${id}`;
+        return !activeSkills.includes(id) && !activeSkills.includes(altId);
+      });
+      
+      if (filter) {
+        const q = filter.toLowerCase();
+        available = available.filter(s => 
+          (s.name && s.name.toLowerCase().includes(q)) ||
+          (s.id && s.id.toLowerCase().includes(q)) ||
+          (s.description && s.description.toLowerCase().includes(q)) ||
+          (s.category && s.category.toLowerCase().includes(q)) ||
+          (s.tags && s.tags.some(t => t.toLowerCase().includes(q)))
+        );
+      }
+      
+      if (countEl) countEl.innerText = `${available.length}`;
+      
+      if (available.length === 0) {
+        container.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-2 px-1">Keine weiteren Skills im Katalog gefunden.</span>`;
+        return;
+      }
+      
+      available.forEach(sk => {
+        const isSelected = currentInspectedSkillId === sk.id;
+        const pill = document.createElement("div");
+        pill.className = `prof-skill-pill-available group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-emerald-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
+        pill.title = `Klicken für Details / SKILL.md Preview`;
+        pill.onclick = () => selectSkillForInspector(sk.id);
+        
+        pill.innerHTML = `
+          <span class="truncate max-w-[130px]">${sk.name}</span>
+          <button type="button" onclick="addSelectedSkillById('${sk.id}', event)" class="w-4 h-4 rounded hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="Skill zuweisen">
+            +
+          </button>
+        `;
+        container.appendChild(pill);
+      });
+      
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function selectSkillForInspector(skillId) {
+      if (!skillId) return;
+      currentInspectedSkillId = skillId;
+      highlightInspectedSkillPill(skillId);
+      
+      const titleEl = document.getElementById("prof-skill-inspector-title");
+      const catEl = document.getElementById("prof-skill-inspector-category");
+      const descEl = document.getElementById("prof-skill-inspector-desc");
+      const pathEl = document.getElementById("prof-skill-inspector-path");
+      const contentEl = document.getElementById("prof-skill-inspector-content");
+      
+      const skObj = hermesGlobalSkillsData.find(s => s.id === skillId || s.id === `skill-${skillId}`) || { id: skillId, name: skillId.replace(/-/g, ' '), category: "Allgemein", description: "" };
+      
+      if (titleEl) titleEl.innerText = skObj.name || skillId;
+      if (catEl) catEl.innerText = skObj.category || "Allgemein";
+      if (descEl) descEl.innerText = skObj.description || "Fach-Skill für den Agenten-Workflow.";
+      if (pathEl) pathEl.innerText = skObj.file_path || "";
+      if (contentEl) contentEl.innerText = "Lade Spezifikationsdatei (SKILL.md)...";
+      
+      try {
+        const res = await fetch(`/api/hermes/skills/${encodeURIComponent(skillId)}`);
+        if (res.ok) {
+          const full = await res.json();
+          if (titleEl) titleEl.innerText = full.name || skObj.name || skillId;
+          if (catEl) catEl.innerText = full.category || skObj.category || "Allgemein";
+          if (descEl) descEl.innerText = full.description || skObj.description || "Fach-Skill für den Agenten-Workflow.";
+          if (pathEl) pathEl.innerText = full.file_path || "";
+          if (contentEl) {
+            contentEl.innerText = full.content || full.description || "# Keine SKILL.md Datei gefunden.";
+          }
+        }
+      } catch (err) {
+        console.warn("Inspector load skill error:", err);
+        if (contentEl) contentEl.innerText = skObj.description || "Fehler beim Laden der Datei.";
+      }
+    }
+
+    function highlightInspectedSkillPill(skillId) {
+      document.querySelectorAll(".prof-skill-pill-assigned, .prof-skill-pill-available").forEach(el => {
+        el.classList.remove("border-emerald-500", "bg-emerald-500/10", "font-bold");
+        el.classList.add("border-[var(--border)]", "bg-[var(--card)]");
+      });
+      document.querySelectorAll(".prof-skill-pill-assigned, .prof-skill-pill-available").forEach(el => {
+        const btn = el.querySelector("button");
+        if (btn && btn.getAttribute("onclick") && btn.getAttribute("onclick").includes(`'${skillId}'`)) {
+          el.classList.remove("border-[var(--border)]", "bg-[var(--card)]");
+          el.classList.add("border-emerald-500", "bg-emerald-500/10", "font-bold");
         }
       });
     }
-    function addSelectedToolToProfile() {
-      const select = document.getElementById("prof-add-tool-select");
-      const toolId = select.value;
+
+    async function addSelectedSkillById(skillId, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!skillId) return;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (!prof) {
+        showArchonToast("Bitte wähle zuerst einen Agenten aus.", "error");
+        return;
+      }
+      if (!prof.skills) prof.skills = [];
+      if (!prof.skills.includes(skillId)) {
+        prof.skills.push(skillId);
+        renderActiveProfileSkillsTags(prof.skills);
+        selectSkillForInspector(skillId);
+        
+        await saveProfileChangesDirectly();
+        const skObj = hermesGlobalSkillsData.find(s => s.id === skillId) || { name: skillId };
+        showArchonToast(`Skill '${skObj.name}' zugewiesen!`, "success");
+      }
+    }
+
+    async function removeSkillFromProfile(skillId, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!skillId) return;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (!prof || !prof.skills) return;
+      
+      prof.skills = prof.skills.filter(s => s !== skillId && s !== `skill-${skillId}`);
+      renderActiveProfileSkillsTags(prof.skills);
+      
+      await saveProfileChangesDirectly();
+      showArchonToast(`Zuweisung für '${skillId}' gelöst.`, "info");
+    }
+
+    function renderActiveProfileTools(toolsList = []) {
+      const tagsContainer = document.getElementById("prof-active-tools-tags");
+      const countEl = document.getElementById("prof-tools-count");
+      const summaryEl = document.getElementById("prof-tools-summary-badge");
+      if (!tagsContainer) return;
+      tagsContainer.innerHTML = "";
+      
+      const activeTools = Array.isArray(toolsList) && toolsList.length > 0 ? toolsList : (typeof DEFAULT_HERMES_TOOLS !== 'undefined' ? DEFAULT_HERMES_TOOLS : []);
+      const count = activeTools.length;
+      if (countEl) countEl.innerText = `${count} aktiv`;
+      if (summaryEl) summaryEl.innerText = `${count} zugewiesen`;
+      
+      if (count === 0) {
+        tagsContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-2 px-1">Keine Tools zugeteilt. Klicke rechts auf (+) um Tools zuzuweisen.</span>`;
+      } else {
+        activeTools.forEach(toolId => {
+          const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { id: toolId, name: toolId, icon: "wrench", desc: "System Tool" };
+          const isSelected = currentInspectedToolId === toolId;
+          
+          const pill = document.createElement("div");
+          pill.className = `prof-tool-pill-assigned group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-blue-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
+          pill.title = `Klicken für Spezifikation & Parameter`;
+          pill.onclick = () => selectToolForInspector(toolId);
+          
+          pill.innerHTML = `
+            <div class="flex items-center gap-1.5 min-w-0">
+              <i data-lucide="${tool.icon || 'wrench'}" class="w-3.5 h-3.5 shrink-0 text-blue-500"></i>
+              <span class="truncate max-w-[110px]">${tool.name}</span>
+            </div>
+            <button type="button" onclick="removeToolFromProfile('${tool.id}', event)" class="w-4 h-4 rounded hover:bg-rose-500/20 text-rose-500 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="Zuweisung lösen">
+              −
+            </button>
+          `;
+          tagsContainer.appendChild(pill);
+        });
+      }
+      
+      renderAvailableToolsCatalog(availableToolsSearchFilter);
+      
+      if (!currentInspectedToolId && activeTools.length > 0) {
+        selectToolForInspector(activeTools[0]);
+      } else if (currentInspectedToolId) {
+        highlightInspectedToolPill(currentInspectedToolId);
+      }
+      
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderAvailableToolsCatalog(filter = "") {
+      const container = document.getElementById("prof-available-tools-tags");
+      const countEl = document.getElementById("prof-tools-available-count");
+      if (!container) return;
+      container.innerHTML = "";
+      
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const activeTools = prof && Array.isArray(prof.tools) ? prof.tools : (typeof DEFAULT_HERMES_TOOLS !== 'undefined' ? DEFAULT_HERMES_TOOLS : []);
+      
+      let available = AVAILABLE_SYSTEM_TOOLS.filter(t => !activeTools.includes(t.id));
+      
+      if (filter) {
+        const q = filter.toLowerCase();
+        available = available.filter(t => 
+          t.name.toLowerCase().includes(q) ||
+          t.id.toLowerCase().includes(q) ||
+          (t.desc && t.desc.toLowerCase().includes(q)) ||
+          (t.subtools && t.subtools.some(st => st.toLowerCase().includes(q)))
+        );
+      }
+      
+      if (countEl) countEl.innerText = `${available.length}`;
+      
+      if (available.length === 0) {
+        container.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-2 px-1">Keine weiteren Tools im Katalog gefunden.</span>`;
+        return;
+      }
+      
+      available.forEach(tool => {
+        const isSelected = currentInspectedToolId === tool.id;
+        const pill = document.createElement("div");
+        pill.className = `prof-tool-pill-available group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-blue-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
+        pill.title = `Klicken für Spezifikation & Parameter`;
+        pill.onclick = () => selectToolForInspector(tool.id);
+        
+        pill.innerHTML = `
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i data-lucide="${tool.icon || 'wrench'}" class="w-3.5 h-3.5 shrink-0 text-blue-500"></i>
+            <span class="truncate max-w-[110px]">${tool.name}</span>
+          </div>
+          <button type="button" onclick="addToolToProfileById('${tool.id}', event)" class="w-4 h-4 rounded hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="Tool zuweisen">
+            +
+          </button>
+        `;
+        container.appendChild(pill);
+      });
+      
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function selectToolForInspector(toolId) {
+      if (!toolId) return;
+      currentInspectedToolId = toolId;
+      highlightInspectedToolPill(toolId);
+      
+      const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { id: toolId, name: toolId, desc: "System Tool", mode: "direct", timeout: 60, subtools: [toolId] };
+      
+      const titleEl = document.getElementById("prof-tool-inspector-title");
+      const modeEl = document.getElementById("prof-tool-inspector-mode");
+      const descEl = document.getElementById("prof-tool-inspector-desc");
+      const timeoutEl = document.getElementById("prof-tool-inspector-timeout");
+      const subtoolsEl = document.getElementById("prof-tool-inspector-subtools");
+      
+      if (titleEl) titleEl.innerText = tool.name;
+      if (modeEl) {
+        modeEl.innerText = tool.mode === "sandbox" ? "Isolierte Sandbox" : "Direkter Host-Zugriff";
+        modeEl.className = `text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${tool.mode === 'sandbox' ? 'bg-amber-500/10 text-amber-600 border-amber-500/30' : 'bg-blue-500/10 text-blue-600 border-blue-500/30'}`;
+      }
+      if (descEl) descEl.innerText = tool.desc || "Keine detaillierte Beschreibung vorhanden.";
+      if (timeoutEl) timeoutEl.innerText = `Timeout: ${tool.timeout || 60}s | ID: ${tool.id}`;
+      
+      if (subtoolsEl) {
+        subtoolsEl.innerHTML = "";
+        const subs = tool.subtools && tool.subtools.length > 0 ? tool.subtools : [tool.id];
+        subs.forEach(st => {
+          const chip = document.createElement("span");
+          chip.className = "inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] shadow-2xs";
+          chip.innerHTML = `<i data-lucide="terminal" class="w-2.5 h-2.5 text-blue-500"></i> ${st}`;
+          subtoolsEl.appendChild(chip);
+        });
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function highlightInspectedToolPill(toolId) {
+      document.querySelectorAll(".prof-tool-pill-assigned, .prof-tool-pill-available").forEach(el => {
+        el.classList.remove("border-blue-500", "bg-blue-500/10", "font-bold");
+        el.classList.add("border-[var(--border)]", "bg-[var(--card)]");
+      });
+      document.querySelectorAll(".prof-tool-pill-assigned, .prof-tool-pill-available").forEach(el => {
+        const btn = el.querySelector("button");
+        if (btn && btn.getAttribute("onclick") && btn.getAttribute("onclick").includes(`'${toolId}'`)) {
+          el.classList.remove("border-[var(--border)]", "bg-[var(--card)]");
+          el.classList.add("border-blue-500", "bg-blue-500/10", "font-bold");
+        }
+      });
+    }
+
+    async function addToolToProfileById(toolId, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       if (!toolId) return;
       const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
       if (!prof) {
-        alert("Bitte wähle zuerst ein Profil aus.");
+        showArchonToast("Bitte wähle zuerst einen Agenten aus.", "error");
         return;
       }
       if (!prof.tools) prof.tools = [];
       if (!prof.tools.includes(toolId)) {
         prof.tools.push(toolId);
         renderActiveProfileTools(prof.tools);
-        select.selectedIndex = 0;
+        selectToolForInspector(toolId);
+        
+        await saveProfileChangesDirectly();
+        const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { name: toolId };
+        showArchonToast(`Tool '${tool.name}' zugewiesen!`, "success");
       }
     }
-    function removeToolFromProfile(toolId) {
+
+    async function removeToolFromProfile(toolId, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!toolId) return;
       const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
       if (!prof || !prof.tools) return;
+      
       prof.tools = prof.tools.filter(t => t !== toolId);
       renderActiveProfileTools(prof.tools);
+      
+      await saveProfileChangesDirectly();
+      showArchonToast(`Tool '${toolId}' entfernt.`, "info");
+    }
+
+    function populateGlobalToolsDropdown(activeTools = []) {
+      // Legacy wrapper, UI nutzt jetzt verfügbare Spalte
+    }
+    function addSelectedToolToProfile() {
+      // Legacy wrapper
     }
     let currentConfiguringToolId = "";
     function openToolConfigModal(toolId, event) {
@@ -2817,24 +3172,7 @@
     function addSelectedSkillToProfile() {
       const select = document.getElementById("prof-add-skill-select");
       const skillId = select?.value;
-      if (!skillId) return;
-      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
-      if (!prof) {
-        alert("Bitte wähle zuerst ein Profil aus.");
-        return;
-      }
-      if (!prof.skills) prof.skills = [];
-      if (!prof.skills.includes(skillId)) {
-        prof.skills.push(skillId);
-        renderActiveProfileSkillsTags(prof.skills);
-        select.selectedIndex = 0;
-      }
-    }
-    function removeSkillFromProfile(skillId) {
-      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
-      if (!prof || !prof.skills) return;
-      prof.skills = prof.skills.filter(s => s !== skillId);
-      renderActiveProfileSkillsTags(prof.skills);
+      if (skillId) addSelectedSkillById(skillId);
     }
     function showArchonToast(msg, type = "success") {
       let container = document.getElementById("archon-global-toast-container");
@@ -3063,6 +3401,18 @@ window.applyProfileModelSelection = typeof applyProfileModelSelection !== 'undef
 window.renameCurrentAgentTabSession = typeof renameCurrentAgentTabSession !== 'undefined' ? renameCurrentAgentTabSession : null;
 window.loadAgentTabChatSessions = typeof loadAgentTabChatSessions !== 'undefined' ? loadAgentTabChatSessions : null;
 window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'undefined' ? loadAgentTabChatSessions : null;
+
+window.addSelectedSkillById = typeof addSelectedSkillById !== 'undefined' ? addSelectedSkillById : null;
+window.removeSkillFromProfile = typeof removeSkillFromProfile !== 'undefined' ? removeSkillFromProfile : null;
+window.selectSkillForInspector = typeof selectSkillForInspector !== 'undefined' ? selectSkillForInspector : null;
+window.filterAvailableSkillsCatalog = typeof filterAvailableSkillsCatalog !== 'undefined' ? filterAvailableSkillsCatalog : null;
+window.openSkillDetailModalFromInspector = typeof openSkillDetailModalFromInspector !== 'undefined' ? openSkillDetailModalFromInspector : null;
+
+window.addToolToProfileById = typeof addToolToProfileById !== 'undefined' ? addToolToProfileById : null;
+window.removeToolFromProfile = typeof removeToolFromProfile !== 'undefined' ? removeToolFromProfile : null;
+window.selectToolForInspector = typeof selectToolForInspector !== 'undefined' ? selectToolForInspector : null;
+window.filterAvailableToolsCatalog = typeof filterAvailableToolsCatalog !== 'undefined' ? filterAvailableToolsCatalog : null;
+window.openToolConfigModalFromInspector = typeof openToolConfigModalFromInspector !== 'undefined' ? openToolConfigModalFromInspector : null;
 
     function onAgentTabReasoningChange(val) {
       const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);

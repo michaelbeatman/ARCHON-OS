@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from archon.core.paths import OPT_DATA_DIR
-from archon.core.runtime import DATA_DIR, MEMORY_DIR, WORKSPACE_DIR, add_ticker, logger
+from archon.core.runtime import APP_ROOT, DATA_DIR, MEMORY_DIR, WORKSPACE_DIR, add_ticker, logger
 
 # --------------------------------------------------
 # Dependency-Injektion statt Kopie
@@ -39,16 +39,23 @@ router = APIRouter()
 
 def get_all_skill_search_roots():
     return [
+        os.path.join(APP_ROOT, "antigravity_complete_skills_package"),
+        os.path.join(APP_ROOT, "templates", "skills"),
+        os.path.join(APP_ROOT, ".agents", "skills"),
+        os.path.join(APP_ROOT, "config", "skills"),
+        os.path.join(APP_ROOT, "paperclip", "skills"),
+        os.path.join(APP_ROOT, "paperclip", ".agents", "skills"),
+        os.path.join(APP_ROOT, "paperclip", "packages", "skills-catalog"),
+        os.path.join(APP_ROOT, "OpenMontage", ".agents", "skills"),
+        os.path.join(APP_ROOT, "OpenMontage", "skills"),
+        os.path.join(APP_ROOT, "agent_workspace", "obsidian_vault", "Skripte"),
+        os.path.join(OPT_DATA_DIR, "skills"),
+        os.path.expanduser("~/.hermes/skills"),
         os.path.join(WORKSPACE_DIR, "data", "hermes_skills"),
         os.path.join(WORKSPACE_DIR, "templates", "skills"),
         os.path.join(WORKSPACE_DIR, ".agents", "skills"),
-        os.path.join(WORKSPACE_DIR, "config", "skills"),
-        os.path.join(WORKSPACE_DIR, "antigravity_complete_skills_package"),
-        os.path.join(WORKSPACE_DIR, "data", "hermes_profiles"),
         os.path.join(MEMORY_DIR, "hermes_skills"),
-        os.path.expanduser("~/.hermes/skills"),
-        "/app/skills",
-        os.path.join(OPT_DATA_DIR, "skills")
+        "/app/skills"
     ]
 
 
@@ -135,8 +142,9 @@ def build_skills_file_index(force: bool = False):
                 # traversiert und erst pro Knoten per continue verworfen -
                 # gemessen: 10.2s Walk ueber 1671 Verzeichnisse / 4 .git-Baeume.
                 dirs[:] = [d for d in dirs if d not in
-                           ("node_modules", ".git", "backups", "__pycache__", ".venv", "venv")]
-                if "node_modules" in root or ".git" in root or "backups" in root:
+                           ("node_modules", ".git", "backups", "__pycache__", ".venv", "venv")
+                           and not d.endswith(".bak") and not d.startswith(".")]
+                if "node_modules" in root or ".git" in root or "backups" in root or root.endswith(".bak"):
                     continue
                 if "SKILL.md" in files:
                     folder_name = os.path.basename(root)
@@ -206,34 +214,45 @@ def parse_skill_frontmatter_and_content(raw_content: str, default_id: str):
     description = ""
     tags = []
     
-    lines = raw_content.splitlines()
-    in_frontmatter = False
-    fm_lines = []
-    body_lines = []
-    
-    for i, line in enumerate(lines):
-        line_str = line.strip()
-        if i == 0 and line_str == "---":
-            in_frontmatter = True
-            continue
-        if in_frontmatter:
-            if line_str == "---":
-                in_frontmatter = False
-                continue
-            fm_lines.append(line)
-            if line_str.startswith("name:"):
-                name = line_str.split("name:", 1)[1].strip().strip('"\'')
-            elif line_str.startswith("category:"):
-                category = line_str.split("category:", 1)[1].strip().strip('"\'')
-            elif line_str.startswith("description:"):
-                description = line_str.split("description:", 1)[1].strip().strip('"\'|')
-            elif line_str.startswith("tags:"):
-                raw_tags = line_str.split("tags:", 1)[1].strip().strip("[]")
-                tags = [t.strip().strip('"\'') for t in raw_tags.split(",") if t.strip()]
-        else:
-            body_lines.append(line)
-            if not description and line_str and not line_str.startswith("#"):
-                description = line_str[:120]
+    parts = raw_content.split("---", 2) if raw_content.startswith("---") else []
+    if len(parts) >= 3:
+        try:
+            fm_data = yaml.safe_load(parts[1])
+            if isinstance(fm_data, dict):
+                if fm_data.get("name"):
+                    name = str(fm_data["name"]).strip()
+                if fm_data.get("category"):
+                    category = str(fm_data["category"]).strip()
+                if fm_data.get("description"):
+                    raw_desc = str(fm_data["description"]).strip()
+                    if not any(k in raw_desc.lower() for k in ["hermes agent skill", "placeholder", "one paragraph describing"]):
+                        description = raw_desc
+                if fm_data.get("tags"):
+                    t = fm_data["tags"]
+                    if isinstance(t, list):
+                        tags = [str(x).strip() for x in t if x]
+                    elif isinstance(t, str):
+                        tags = [x.strip() for x in t.split(",") if x.strip()]
+                elif isinstance(fm_data.get("metadata"), dict) and "hermes" in fm_data["metadata"]:
+                    h_tags = fm_data["metadata"]["hermes"].get("tags", [])
+                    if isinstance(h_tags, list):
+                        tags = [str(x).strip() for x in h_tags if x]
+        except Exception:
+            pass
+            
+    # Fallback für description falls nicht vorhanden oder leer
+    if not description:
+        body = parts[2] if len(parts) >= 3 else raw_content
+        for line in body.splitlines():
+            line_s = line.strip()
+            if line_s and not line_s.startswith("#") and not line_s.startswith("```") and not line_s.startswith("-") and not line_s.startswith(">"):
+                if len(line_s) > 15:
+                    description = line_s[:160]
+                    break
+
+    if not description:
+        clean_name = name or default_id.replace("-", " ").title()
+        description = f"Fach-Skill für {clean_name} im operativen Agenten-Workflow."
                 
     return {
         "name": name,
@@ -270,14 +289,30 @@ def compose_skill_frontmatter(name: str, category: str, tags: List[str], descrip
 _SKILLS_CACHE_DISK_PATH = os.path.join(DATA_DIR, "hermes_skills_cache.json")
 
 
+_DOMAIN_COMPETENCIES: Dict[str, tuple] = {
+    "devops": ("DevOps & CI/CD", "Technik & Infrastruktur", "Orchestriert Container, Builds, Bereitstellungen und Infrastruktur-Automatisierungen."),
+    "productivity": ("Produktivität & Workflows", "Organisation & Führung", "Strukturiert Arbeitsabläufe, Task-Priorisierungen und Zeiterfassung."),
+    "note-taking": ("Notizen & Wissensmanagement", "Wissen & Dokumentation", "Dokumentiert Erkenntnisse, strukturierte Memos und Obsidian-Notizen."),
+    "smart-home": ("Smart Home & IoT", "Automation", "Steuert Sensoren, Aktoren und Hausautomatisierungen via Home Assistant."),
+    "creative": ("Kreation & Design", "Design & Medien", "Erstellt Medien-Konzepte, visuelle Layouts und Prompt-Architekturen."),
+    "web": ("Web & Recherche", "Web & Recherche", "Entwickelt Webanwendungen und führt strukturierte Online-Recherchen durch."),
+    "mlops": ("MLOps & KI-Betrieb", "KI & Data", "Trainiert, evaluiert und betreibt Modelle und Inferenz-Pipelines."),
+    "media": ("Medien-Produktion", "Design & Medien", "Verarbeitet, transformiert und konvertiert Audio-, Video- und Bildinhalte."),
+    "social-media": ("Social Media Management", "Marketing & Growth", "Konzipiert und plant Beiträge für Twitter/X, LinkedIn und Communitys."),
+    "apple": ("Apple Ecosystem", "Betriebssysteme", "Nutzt macOS- und iOS-Schnittstellen für systemnahe Aufgaben."),
+    "software-development": ("Software-Entwicklung", "Software", "Konzipiert, implementiert und testet modulare Softwarekomponenten."),
+    "email": ("E-Mail & Kommunikation", "Kommunikation", "Verwaltet Postfächer, filtert relevante E-Mails und verfasst Entwürfe.")
+}
+
+
 @router.get("/api/hermes/skills")
-def api_get_hermes_skills():
+def api_get_hermes_skills(force: bool = False):
     global _HERMES_SKILLS_CACHE, _HERMES_SKILLS_CACHE_TIME
     now = time.time()
-    if _HERMES_SKILLS_CACHE is not None and (now - _HERMES_SKILLS_CACHE_TIME) < _HERMES_SKILLS_CACHE_TTL:
+    if not force and _HERMES_SKILLS_CACHE is not None and (now - _HERMES_SKILLS_CACHE_TIME) < _HERMES_SKILLS_CACHE_TTL:
         return _HERMES_SKILLS_CACHE
 
-    if not _HERMES_SKILLS_CACHE and os.path.exists(_SKILLS_CACHE_DISK_PATH):
+    if not force and not _HERMES_SKILLS_CACHE and os.path.exists(_SKILLS_CACHE_DISK_PATH):
         try:
             with open(_SKILLS_CACHE_DISK_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -288,23 +323,25 @@ def api_get_hermes_skills():
         except Exception:
             pass
 
-    index = build_skills_file_index()
+    index = build_skills_file_index(force=force)
     discovered_skills = []
+    seen_paths = set()
     seen_ids = set()
 
     for skill_id, file_path in index.items():
-        if skill_id in seen_ids:
+        if not file_path or file_path in seen_paths or skill_id in seen_ids:
             continue
         try:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 raw = f.read()
             parsed = parse_skill_frontmatter_and_content(raw, skill_id)
+            seen_paths.add(file_path)
             seen_ids.add(skill_id)
             discovered_skills.append({
                 "id": skill_id,
                 "name": parsed["name"],
                 "category": parsed["category"],
-                "description": parsed["description"] or f"Hermes Agent Skill ({skill_id})",
+                "description": parsed["description"],
                 "tags": parsed["tags"] or [parsed["category"].split(" ")[0]],
                 "file_path": file_path
             })
@@ -318,7 +355,7 @@ def api_get_hermes_skills():
     _HERMES_SKILLS_CACHE_TIME = now
     try:
         with open(_SKILLS_CACHE_DISK_PATH, "w", encoding="utf-8") as f:
-            json.dump(discovered_skills, f)
+            json.dump(discovered_skills, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
     return discovered_skills
@@ -356,14 +393,29 @@ def api_get_single_hermes_skill(skill_id: str):
                 "file_path": "",
                 "has_original_backup": False
             }
+
+    # Bekannte Domänen-Kompetenzen
+    if skill_id.lower() in _DOMAIN_COMPETENCIES:
+        d_name, d_cat, d_desc = _DOMAIN_COMPETENCIES[skill_id.lower()]
+        return {
+            "id": skill_id,
+            "name": d_name,
+            "category": d_cat,
+            "description": d_desc,
+            "tags": [d_cat, "Kompetenz"],
+            "content": f"# {d_name}\n\n{d_desc}\n\n## Status\nAktive Kernkompetenz im Profil dieses Agenten.",
+            "file_path": "",
+            "has_original_backup": False
+        }
             
+    clean_title = skill_id.replace("-", " ").replace("_", " ").title()
     return {
         "id": skill_id,
-        "name": skill_id.replace("-", " ").title(),
-        "category": "Allgemein",
-        "description": f"Hermes Skill {skill_id}",
-        "tags": ["Allgemein"],
-        "content": f"# Skill: {skill_id}\n\nAutomatisch registrierter Hermes-Skill.",
+        "name": clean_title,
+        "category": "Fachkompetenz",
+        "description": f"Spezialisierte Fachkompetenz '{clean_title}' für diesen Agenten.",
+        "tags": ["Fachkompetenz"],
+        "content": f"# Fachkompetenz: {clean_title}\n\nSpezialisierte Handlungsanweisung und Fachkompetenz für diesen Agenten.",
         "file_path": "",
         "has_original_backup": False
     }

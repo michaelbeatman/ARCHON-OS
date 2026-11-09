@@ -2796,10 +2796,6 @@
         console.warn("Could not fetch latest prices for modal:", e);
       }
 
-      if (Object.keys(pricesMap).length === 0 && typeof window.findModelPriceInfo === 'function') {
-        // Fallback
-      }
-
       _cachedPriceModalList = Object.entries(pricesMap).map(([id, info]) => {
         return {
           id: id,
@@ -2811,9 +2807,23 @@
         };
       });
 
+      // Anbieter/Vendor-Dropdown befüllen
+      const vendorSelect = document.getElementById("llm-price-vendor-select");
+      if (vendorSelect) {
+        const vendors = Array.from(new Set(_cachedPriceModalList.map(m => m.vendor))).filter(Boolean).sort();
+        vendorSelect.innerHTML = '<option value="" selected>Anbieter: Alle</option>';
+        vendors.forEach(v => {
+          const opt = document.createElement("option");
+          opt.value = v;
+          opt.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+          vendorSelect.appendChild(opt);
+        });
+      }
+
       const modal = document.getElementById("llm-price-catalog-modal");
       const searchInput = document.getElementById("llm-price-search");
       if (searchInput) {
+        // Standardmäßig leer lassen, damit alle Modelle sofort sichtbar sind
         searchInput.value = initialFilter || "";
       }
       filterPriceModalTable();
@@ -2831,21 +2841,38 @@
 
     function setPriceModalFilter(chip) {
       const searchInput = document.getElementById("llm-price-search");
+      const vendorSelect = document.getElementById("llm-price-vendor-select");
       if (!searchInput) return;
-      if (chip === 'all') searchInput.value = "";
-      else if (chip === 'free') searchInput.value = "free";
-      else if (chip === 'deepseek') searchInput.value = "deepseek";
-      else if (chip === 'openai') searchInput.value = "openai";
-      else if (chip === 'anthropic') searchInput.value = "anthropic";
-      else if (chip === 'google') searchInput.value = "google";
-      else if (chip === 'meta') searchInput.value = "meta-llama";
-      else if (chip === 'cheap') searchInput.value = "cheap";
+
+      if (chip === 'all') {
+        searchInput.value = "";
+        if (vendorSelect) vendorSelect.value = "";
+      } else if (chip === 'free') {
+        searchInput.value = "free";
+      } else if (chip === 'cheap') {
+        searchInput.value = "cheap";
+      } else {
+        // Vendor-Filter gezielt ansprechen falls vorhanden
+        if (vendorSelect) {
+          const matchingOpt = Array.from(vendorSelect.options).find(o => o.value.toLowerCase().includes(chip.toLowerCase()));
+          if (matchingOpt) {
+            vendorSelect.value = matchingOpt.value;
+            searchInput.value = "";
+          } else {
+            searchInput.value = chip;
+          }
+        } else {
+          searchInput.value = chip;
+        }
+      }
       filterPriceModalTable();
     }
     window.setPriceModalFilter = setPriceModalFilter;
 
     function filterPriceModalTable() {
       const searchInput = document.getElementById("llm-price-search");
+      const vendorSelect = document.getElementById("llm-price-vendor-select");
+      const selectedVendor = vendorSelect ? vendorSelect.value.toLowerCase().trim() : "";
       const query = (searchInput ? searchInput.value : "").toLowerCase().trim();
       const tbody = document.getElementById("llm-price-table-body");
       const countEl = document.getElementById("llm-price-modal-count");
@@ -2853,6 +2880,9 @@
       tbody.innerHTML = "";
 
       let filtered = _cachedPriceModalList;
+      if (selectedVendor) {
+        filtered = filtered.filter(m => m.vendor.toLowerCase() === selectedVendor);
+      }
       if (query === "free") {
         filtered = filtered.filter(m => m.prompt_1m === 0 && m.completion_1m === 0);
       } else if (query === "cheap") {
@@ -2888,7 +2918,7 @@
       }
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs text-[var(--muted-foreground)]">Keine Modelle für "${query}" gefunden.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-xs text-[var(--muted-foreground)]">Keine Modelle für diese Auswahl gefunden.</td></tr>`;
         return;
       }
 
@@ -2904,6 +2934,11 @@
           <td class="py-2.5 px-3 font-mono">
             <div class="font-bold text-[var(--foreground)] truncate max-w-[280px]" title="${m.id}">${m.id}</div>
             <div class="text-[10px] text-[var(--muted-foreground)] truncate max-w-[280px]">${m.name}</div>
+          </td>
+          <td class="py-2.5 px-3 font-mono">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] truncate max-w-[110px] inline-block">
+              ${m.vendor}
+            </span>
           </td>
           <td class="py-2.5 px-3 font-mono text-[11px] text-[var(--muted-foreground)]">${ctx}</td>
           <td class="py-2.5 px-3 font-mono text-right ${isFree ? 'text-emerald-500 font-bold' : 'text-emerald-600 dark:text-emerald-400 font-bold'}">
@@ -2942,9 +2977,29 @@
           opt.selected = true;
         }
         sel.dispatchEvent(new Event("change", { bubbles: true }));
+
+        // Zugehörigen Provider automatisch auf openrouter setzen
+        const targetId = sel.id;
+        let provSelect = null;
+        if (targetId === "prof-edit-model") {
+          provSelect = document.getElementById("prof-edit-provider");
+        } else if (targetId === "agent-tab-model-select") {
+          provSelect = document.getElementById("agent-tab-provider-select");
+        } else if (targetId === "master-chat-model-select") {
+          provSelect = document.getElementById("master-chat-provider-select");
+        } else if (targetId === "boardroom-chair-model-select") {
+          provSelect = document.getElementById("boardroom-chair-provider-select");
+        } else if (sel.closest && sel.closest('.boardroom-slot-row')) {
+          provSelect = sel.closest('.boardroom-slot-row').querySelector('.boardroom-slot-provider-select');
+        }
+
+        if (provSelect) {
+          provSelect.value = "openrouter";
+          provSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        }
       }
       if (typeof showArchonToast === "function") {
-        showArchonToast(`Modell '${modelId}' übernommen.`, "success");
+        showArchonToast(`Modell '${modelId}' (OpenRouter) übernommen.`, "success");
       }
       closePriceCatalogModal();
     }
@@ -2952,8 +3007,7 @@
 
     function openPriceCatalogForChairman() {
       const modelSelect = document.getElementById("boardroom-chair-model-select");
-      const provSelect = document.getElementById("boardroom-chair-provider-select");
-      openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+      openPriceCatalogModal(modelSelect, "");
     }
     window.openPriceCatalogForChairman = openPriceCatalogForChairman;
 
@@ -2961,22 +3015,19 @@
       const row = btn.closest('.boardroom-slot-row');
       if (!row) return;
       const modelSelect = row.querySelector('.boardroom-slot-model-select');
-      const provSelect = row.querySelector('.boardroom-slot-provider-select');
-      openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+      openPriceCatalogModal(modelSelect, "");
     }
     window.openPriceCatalogForSlot = openPriceCatalogForSlot;
 
     function openPriceCatalogForProfileEditor() {
       const modelSelect = document.getElementById("prof-edit-model");
-      const provSelect = document.getElementById("prof-edit-provider");
-      openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+      openPriceCatalogModal(modelSelect, "");
     }
     window.openPriceCatalogForProfileEditor = openPriceCatalogForProfileEditor;
 
     function openPriceCatalogForAgentTab() {
       const modelSelect = document.getElementById("agent-tab-model-select");
-      const provSelect = document.getElementById("agent-tab-provider-select");
-      openPriceCatalogModal(modelSelect, provSelect ? (provSelect.value === 'openrouter' ? '' : provSelect.value) : '');
+      openPriceCatalogModal(modelSelect, "");
     }
     window.openPriceCatalogForAgentTab = openPriceCatalogForAgentTab;
 

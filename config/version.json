@@ -1,8 +1,8 @@
 {
   "version": "v0.5.0",
   "codename": "Archon Hardened",
-  "released_at": "2026-11-09 15:30",
-  "previous_version": "v0.4.3",
+  "released_at": "2026-11-09 18:26",
+  "previous_version": "v0.5.0",
   "commit": "9ef750a1",
   "features": [
     "Modulare Router-Architektur: main.py von 16.254 auf 1.875 Zeilen reduziert (-88%)",

@@ -51,7 +51,7 @@ from archon.routers.skills import (
     build_skills_file_index,
     find_skill_file,
 )
-from backend.platform_paths import OBSIDIAN_VAULT
+from backend.platform_paths import OBSIDIAN_VAULT, PERSONALAKTEN_DIR
 
 router = APIRouter(tags=["chat"])
 

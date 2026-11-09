@@ -18,6 +18,7 @@ from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 from archon.core.cache import ttl_cache
+from archon.core.config import config
 from archon.core.roles_data import DEFAULT_ROLES
 from archon.core.runtime import (
     OBSIDIAN_VAULT_DIR,
@@ -88,7 +89,7 @@ def _delegate_get_rag_api_key() -> str:
             fn = getattr(main_mod, "_get_rag_api_key")
     if fn:
         return fn()
-    key = (os.environ.get("ANYTHINGLLM_API_KEY") or "").strip()
+    key = config.anythingllm_api_key
     if not key:
         raise RuntimeError("ANYTHINGLLM_API_KEY fehlt in der Umgebung.")
     return key

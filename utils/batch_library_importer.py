@@ -17,6 +17,7 @@ import shutil
 import datetime
 from pathlib import Path
 
+from archon.core.config import config
 from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
 
 # Optional dependencies with graceful fallback
@@ -52,7 +53,7 @@ except ImportError:
 
 def resolve_vault_path() -> str:
     """Ermittelt den aktiven Obsidian Vault Pfad."""
-    env_path = os.environ.get("OBSIDIAN_VAULT_PATH")
+    env_path = config.obsidian_vault_path
     if env_path and os.path.exists(env_path):
         return env_path
     

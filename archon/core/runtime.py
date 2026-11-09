@@ -19,6 +19,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
+from archon.core.config import config
 
 # --------------------------------------------------------------------------
 # Pfade
@@ -40,7 +41,7 @@ SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
 
 
 def resolve_obsidian_vault_path() -> str:
-    env_path = os.environ.get("OBSIDIAN_VAULT_PATH")
+    env_path = config.obsidian_vault_path
     if env_path and os.path.exists(env_path):
         return env_path
 

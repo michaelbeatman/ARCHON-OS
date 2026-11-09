@@ -11,6 +11,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from archon.core.config import config
 from archon.routers._rbac import require_admin_or_503
 
 logger = logging.getLogger("archon.routers.hermes_proxy")
@@ -27,7 +28,7 @@ def _hermes_proxy_token() -> str:
         "HERMES_DASHBOARD_SESSION_TOKEN",
         "OMNIROUTE_API_KEY",
     ):
-        value = (os.getenv(name) or "").strip()
+        value = config.get_hermes_proxy_token(name)
         if value:
             return value
     return ""

@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, List, Optional
 import yaml
 from pydantic import BaseModel
 
+from archon.core.config import config
 from archon.core.paths import OPT_DATA_DIR
 from archon.core.runtime import APP_ROOT, MEMORY_DIR, add_ticker, logger
 from archon.core.permissions import (
@@ -351,13 +352,13 @@ def save_profile(profile_data: Dict[str, Any], *,
                         "default": model_val,
                         "provider": provider_val,
                         "base_url": "http://omniroute:20128/v1",
-                        "api_key": os.getenv("OMNIROUTE_API_KEY", "sk-archon-local-dev")
+                        "api_key": config.omniroute_api_key
                     },
                     "providers": {
                         "omniroute": {
                             "name": "OmniRoute",
                             "base_url": "http://omniroute:20128/v1",
-                            "api_key": os.getenv("OMNIROUTE_API_KEY", "sk-archon-local-dev"),
+                            "api_key": config.omniroute_api_key,
                             "key_env": "OMNIROUTE_API_KEY"
                         }
                     }

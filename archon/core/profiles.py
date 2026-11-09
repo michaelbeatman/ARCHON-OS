@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from archon.core.config import config
 from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
 from archon.core.runtime import APP_ROOT, MEMORY_DIR, logger
 
@@ -77,7 +78,7 @@ def avatars_dir() -> str:
     (:func:`materialize_data_uri_avatar`), nicht hier — diese Funktion bleibt
     billig und lesbar, damit Lesepfade sie ohne Nebenwirkung rufen koennen.
     """
-    env = os.environ.get(AVATARS_DIR_ENV, "").strip()
+    env = config.avatars_dir
     if env:
         return os.path.expanduser(env)
     if _container_data_available():

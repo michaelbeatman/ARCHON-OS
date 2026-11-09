@@ -37,6 +37,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from archon.core.config import config
+
 __all__ = ["RateLimitMiddleware", "STRICT_PREFIXES", "EXEMPT_PREFIXES"]
 
 # Teure oder gefaehrliche Ziele: enges Limit.
@@ -71,18 +73,15 @@ _PRIVATE_PREFIXES = ("127.", "10.", "192.168.", "172.16.", "172.17.", "172.18.",
 
 
 def _env_int(name: str, default: int) -> int:
-    try:
-        return max(1, int(os.environ.get(name, default)))
-    except (TypeError, ValueError):
-        return default
+    return config.rate_limit_value(name, default)
 
 
 def _enabled() -> bool:
-    return os.environ.get("ARCHON_RATE_LIMIT_ENABLED", "1") not in ("0", "false", "False", "no")
+    return config.rate_limit_enabled
 
 
 def _trust_forwarded() -> bool:
-    return os.environ.get("ARCHON_RATE_LIMIT_TRUST_FORWARDED", "0") in ("1", "true", "True", "yes")
+    return config.rate_limit_trust_forwarded
 
 
 class _Bucket:

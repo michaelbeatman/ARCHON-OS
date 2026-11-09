@@ -17,6 +17,7 @@ from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from backend.auth_service import auth_service
+from archon.core.config import config
 from archon.core.paths import SETTINGS_FILE
 from archon.core.runtime import atomic_write_json, logger
 
@@ -38,7 +39,7 @@ def _request_has_service_token(request: Request) -> bool:
     if main_mod and hasattr(main_mod, "_request_has_service_token"):
         return main_mod._request_has_service_token(request)
     provided = request.headers.get("x-archon-service-token", "")
-    expected = os.environ.get("ARCHON_SERVICE_TOKEN", "")
+    expected = config.archon_service_token
     if not expected or not provided:
         return False
     import hmac

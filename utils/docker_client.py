@@ -26,6 +26,8 @@ import socket
 import struct
 from typing import Optional
 
+from archon.core.config import config
+
 __all__ = [
     "DockerError",
     "DockerClient",
@@ -147,7 +149,7 @@ def docker_cli_host_args() -> list[str]:
     CLI-Aufruf hier explizit seinen Endpunkt; das ist keine Migration, sondern der
     Erhalt des bisherigen Verhaltens.
     """
-    sock = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
+    sock = config.docker_socket
     return ["-H", f"unix://{sock}"]
 
 
@@ -212,13 +214,13 @@ class DockerClient:
         # M-20: Dynamische Erkennung von DOCKER_HOST, damit Singleton nicht einfriert
         if self._custom_host is not None:
             return self._custom_host.strip()
-        return os.environ.get("DOCKER_HOST", "").strip()
+        return config.docker_host
 
     @property
     def _effective_unix(self) -> str:
         if self._custom_unix is not None:
             return self._custom_unix
-        return os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
+        return config.docker_socket
 
     # ---------------- Transport ----------------
 
@@ -442,12 +444,12 @@ class DockerAdminClient(DockerClient):
 
     @property
     def _effective_host(self) -> str:
-        admin_host = os.environ.get(_ADMIN_HOST_ENV, "").strip()
+        admin_host = config.docker_admin_host
         if admin_host:
             return admin_host
         if self._custom_host is not None:
             return self._custom_host.strip()
-        return os.environ.get("DOCKER_HOST", "").strip()
+        return config.docker_host
 
     # ---------------- Assets ----------------
 

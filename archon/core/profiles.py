@@ -396,25 +396,25 @@ def api_get_hermes_profiles():
             except Exception:
                 pass
 
-        # Skills aus Ordner und YAML aggregieren
+        # Skills auflösen: Wenn profile.yaml explizit 'skills' definiert, ist das der SSOT
         skills_sub = os.path.join(prof_dir, "skills")
-        active_skills = []
-        if isinstance(ydata.get("skills"), list):
-            active_skills.extend(ydata["skills"])
-        if os.path.exists(skills_sub):
-            discovered_in_folder = [
-                d for d in os.listdir(skills_sub)
-                if os.path.isdir(os.path.join(skills_sub, d)) and not d.startswith(".")
-            ]
-            discovered_files = [
-                os.path.splitext(f)[0] for f in os.listdir(skills_sub)
-                if os.path.isfile(os.path.join(skills_sub, f)) and f.endswith(".md") and not f.startswith(".")
-            ]
-            active_skills.extend(discovered_in_folder + discovered_files)
-
         fallback = json_fallback_map.get(p_id, {})
-        if isinstance(fallback.get("skills"), list):
-            active_skills.extend(fallback["skills"])
+        active_skills = []
+        if "skills" in ydata and isinstance(ydata.get("skills"), list):
+            active_skills = list(ydata["skills"])
+        else:
+            if os.path.exists(skills_sub):
+                discovered_in_folder = [
+                    d for d in os.listdir(skills_sub)
+                    if os.path.isdir(os.path.join(skills_sub, d)) and not d.startswith(".")
+                ]
+                discovered_files = [
+                    os.path.splitext(f)[0] for f in os.listdir(skills_sub)
+                    if os.path.isfile(os.path.join(skills_sub, f)) and f.endswith(".md") and not f.startswith(".")
+                ]
+                active_skills.extend(discovered_in_folder + discovered_files)
+            if isinstance(fallback.get("skills"), list):
+                active_skills.extend(fallback["skills"])
         active_skills = list(dict.fromkeys([s for s in active_skills if s]))
 
         # Attribute auflösen (YAML -> Disk -> JSON Fallback -> Defaults)
@@ -623,13 +623,34 @@ class AgentProfileValidationSchema(BaseModel):
 
 
 def save_all_agent_profiles(profiles_list: List[Dict[str, Any]]):
+    import tempfile
     invalidate_hermes_profiles_cache()
+    written_realpaths = set()
+
+    def _atomic_write_json(target_path: str):
+        abs_t = os.path.abspath(target_path)
+        real_t = os.path.realpath(abs_t)
+        if real_t in written_realpaths:
+            return
+        d = os.path.dirname(real_t)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        create_rolling_backup(real_t, max_backups=3)
+        fd, tmp_p = tempfile.mkstemp(dir=d or ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(profiles_list, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_p, real_t)
+            written_realpaths.add(real_t)
+        except Exception:
+            if os.path.exists(tmp_p):
+                os.unlink(tmp_p)
+            raise
+
     # SSOT: Projekt-Wurzel immer primär schreiben.
     try:
         _ssot = os.path.join(APP_ROOT, "agent_profiles.json")
-        create_rolling_backup(_ssot, max_backups=3)
-        with open(_ssot, "w", encoding="utf-8") as f:
-            json.dump(profiles_list, f, indent=2, ensure_ascii=False)
+        _atomic_write_json(_ssot)
     except Exception as e:
         logger.error(f"[Save Profiles] Error writing SSOT agent_profiles.json: {e}")
 
@@ -645,12 +666,7 @@ def save_all_agent_profiles(profiles_list: List[Dict[str, Any]]):
     ]
     for cand in candidates:
         try:
-            d = os.path.dirname(cand)
-            if d:
-                os.makedirs(d, exist_ok=True)
-            create_rolling_backup(cand, max_backups=3)
-            with open(cand, "w", encoding="utf-8") as f:
-                json.dump(profiles_list, f, indent=2, ensure_ascii=False)
+            _atomic_write_json(cand)
         except Exception:
             pass
 

@@ -796,6 +796,33 @@
             </div>
           </div>
 
+          <!-- Globaler SOUL.md Experten-Tiefe Schalter (Standard ~3k | Pro ~6.8k | Full-SOUL ~17k) -->
+          <div id="settings-soul-mode-card" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <i data-lucide="dna" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs uppercase font-mono tracking-wider text-[var(--foreground)] flex items-center gap-2">
+                  <span>SOUL.md Experten-Tiefe (Alle 59 Agenten-Profile)</span>
+                  <span id="settings-soul-mode-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">⚡ Standard aktiv (~3.100 Zeichen/Agent)</span>
+                </h4>
+                <p class="text-[11px] text-[var(--muted-foreground)]">Wähle zwischen <strong>⚡ Standard (~3.100 Zeichen)</strong>, <strong>🎯 Pro / Skills+ (~6.800 Zeichen inkl. SKILL.md-Blaupausen &amp; Tool-Matrix)</strong> und <strong>🔥 Full-SOUL (~17.200 Zeichen inkl. vollem 59-Agenten-Verzeichnis)</strong>. Änderungen im Reiter „Fähigkeiten“ werden automatisch mit der SOUL.md verdrahtet.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 flex-wrap">
+              <button type="button" id="settings-soul-btn-compact" onclick="switchGlobalOrAgentSoulMode('compact', true)" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 shadow-2xs">
+                ⚡ Standard (~3.100 Zeichen)
+              </button>
+              <button type="button" id="settings-soul-btn-pro" onclick="switchGlobalOrAgentSoulMode('pro', true)" class="px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]">
+                🎯 Pro / Skills+ (~6.800 Zeichen)
+              </button>
+              <button type="button" id="settings-soul-btn-full" onclick="switchGlobalOrAgentSoulMode('full', true)" class="px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]">
+                🔥 Full-SOUL (~17.200 Zeichen)
+              </button>
+            </div>
+          </div>
+
           <!-- Section 1: Standard-Modell & Routing -->
           <div id="hermes-sec-1" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)] space-y-3.5 shadow-xs">
             <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">

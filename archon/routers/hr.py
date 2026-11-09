@@ -29,6 +29,11 @@ class SaveSoulReq(BaseModel):
     markdown: str
 
 
+class SetSoulModeReq(BaseModel):
+    mode: str = "compact"
+    agent_id: Optional[str] = None
+
+
 class LogActivityReq(BaseModel):
     task_title: str
     task_id: Optional[str] = "heartbeat"
@@ -101,6 +106,28 @@ def api_save_personalakte(agent_id: str, req: SavePersonalakteReq):
     return {"status": "success", "agent_id": agent_id, "file_paths": saved_paths}
 
 
+@router.get("/api/v1/hermes/soul-mode")
+def api_get_soul_mode():
+    """Liefert den aktuell aktiven SOUL-Modus ('full' vs 'compact')."""
+    from scripts.sync_soul_modes import get_current_soul_mode_status
+    return get_current_soul_mode_status()
+
+
+@router.post("/api/v1/hermes/soul-mode")
+def api_set_soul_mode(req: SetSoulModeReq):
+    """Schaltet global oder pro Agent zwischen 'full' (Original/Voll-Experte) und 'compact' (Token-Spar) um."""
+    from scripts.sync_soul_modes import apply_soul_mode
+    from archon.core.profiles import invalidate_hermes_profiles_cache
+
+    res = apply_soul_mode(mode=req.mode, target_agent_id=req.agent_id)
+    invalidate_hermes_profiles_cache()
+    if req.agent_id:
+        soul_data = api_get_hermes_soul(req.agent_id)
+        res["agent_markdown"] = soul_data.get("markdown", "")
+        res["agent_id"] = req.agent_id
+    return res
+
+
 @router.get("/api/v1/hermes/soul/{agent_id}")
 def api_get_hermes_soul(agent_id: str):
     """Liest die echte SOUL.md Direktive des Hermes-Profils aus."""
@@ -123,16 +150,42 @@ def api_get_hermes_soul(agent_id: str):
             "agent_id": agent_id,
             "markdown": "",
             "file_path": candidates[0],
+            "mode": "compact",
+            "chars": 0,
         }
 
     try:
         with open(found_path, "r", encoding="utf-8") as f:
             content = f.read()
+        pdir = os.path.dirname(found_path)
+        full_len = len(content)
+        pro_len = len(content)
+        compact_len = len(content)
+        if os.path.exists(os.path.join(pdir, "SOUL_FULL.md")):
+            with open(os.path.join(pdir, "SOUL_FULL.md"), "r", encoding="utf-8", errors="ignore") as ff:
+                full_len = len(ff.read())
+        if os.path.exists(os.path.join(pdir, "SOUL_PRO.md")):
+            with open(os.path.join(pdir, "SOUL_PRO.md"), "r", encoding="utf-8", errors="ignore") as fp:
+                pro_len = len(fp.read())
+        if os.path.exists(os.path.join(pdir, "SOUL_COMPACT.md")):
+            with open(os.path.join(pdir, "SOUL_COMPACT.md"), "r", encoding="utf-8", errors="ignore") as fc:
+                compact_len = len(fc.read())
+        if len(content) > 10500 or "SOUL-DIREKTIVE (FULL-EXPERT)" in content:
+            detected_mode = "full"
+        elif len(content) > 4500 or "SOUL-DIREKTIVE (PRO-MODUS)" in content:
+            detected_mode = "pro"
+        else:
+            detected_mode = "compact"
         return {
             "status": "success",
             "agent_id": agent_id,
             "markdown": content,
             "file_path": found_path,
+            "mode": detected_mode,
+            "chars": len(content),
+            "full_chars": full_len,
+            "pro_chars": pro_len,
+            "compact_chars": compact_len,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -140,9 +193,14 @@ def api_get_hermes_soul(agent_id: str):
 
 @router.post("/api/v1/hermes/soul/{agent_id}")
 def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
-    """Speichert die SOUL.md Datei fuer ein Hermes-Profil."""
+    """Speichert die SOUL.md Datei fuer ein Hermes-Profil und synchronisiert Cache + agent_profiles.json."""
     _require_admin(request)
     import main as app_main
+    from archon.core.profiles import (
+        invalidate_hermes_profiles_cache,
+        load_all_agent_profiles,
+        save_all_agent_profiles,
+    )
 
     target_dir = app_main.profile_dir(agent_id)
     os.makedirs(target_dir, exist_ok=True)
@@ -151,14 +209,33 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
     try:
         with open(target_path, "w", encoding="utf-8") as f:
             f.write(req.markdown)
-        host_dir = app_main.profile_dir(agent_id)
-        if os.path.exists(os.path.dirname(host_dir)):
-            try:
-                os.makedirs(host_dir, exist_ok=True)
-                with open(os.path.join(host_dir, "SOUL.md"), "w", encoding="utf-8") as f2:
-                    f2.write(req.markdown)
-            except Exception:
-                pass
+        for mirror_root in ("/opt/data/profiles", "/home/micha/.hermes/profiles", "/mnt/raid/AgenticOS-2026/data/hermes_profiles"):
+            if os.path.exists(mirror_root):
+                m_dir = os.path.join(mirror_root, agent_id)
+                os.makedirs(m_dir, exist_ok=True)
+                m_path = os.path.join(m_dir, "SOUL.md")
+                if os.path.realpath(m_path) != os.path.realpath(target_path):
+                    try:
+                        with open(m_path, "w", encoding="utf-8") as fm:
+                            fm.write(req.markdown)
+                    except Exception:
+                        pass
+
+        # Synchronisiere prompt/system_prompt in agent_profiles.json und leere den 30s-Cache
+        try:
+            profiles = load_all_agent_profiles()
+            changed = False
+            for p in profiles:
+                if isinstance(p, dict) and p.get("id") == agent_id:
+                    p["prompt"] = req.markdown
+                    p["system_prompt"] = req.markdown
+                    changed = True
+            if changed:
+                save_all_agent_profiles(profiles)
+        except Exception:
+            pass
+        invalidate_hermes_profiles_cache()
+
         return {"status": "success", "agent_id": agent_id, "file_path": target_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

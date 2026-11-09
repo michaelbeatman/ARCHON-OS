@@ -347,7 +347,7 @@
     function switchAgentCadreTab(tabName) {
       activeAgentCadreTab = tabName || 'overview';
       
-      const tabNames = ['overview', 'chat', 'botscreen', 'skills', 'operations', 'soul', 'personalakte', 'marketplace'];
+      const tabNames = ['overview', 'chat', 'operations', 'botscreen', 'skills', 'soul', 'personalakte', 'marketplace'];
       tabNames.forEach(t => {
         const btn = document.getElementById(`agent-tab-btn-${t}`);
         const pane = document.getElementById(`agent-pane-${t}`);
@@ -1185,8 +1185,150 @@
       }
     }
     // =========================================================================
-    // INLINE SOUL.MD LOGIK (REITER 4)
+    // INLINE SOUL.MD LOGIK (REITER 4) & 3-STUFEN SOUL-TIEFE UMSCHALTER
     // =========================================================================
+    function updateSoulModeUI(mode, charsCount) {
+      const normalized = mode === "full" ? "full" : (mode === "pro" ? "pro" : "compact");
+      const isFull = normalized === "full";
+      const isPro = normalized === "pro";
+      const isCompact = normalized === "compact";
+
+      const charBadge = document.getElementById("prof-soul-char-badge");
+      if (charBadge && typeof charsCount === "number") {
+        const modeTitle = isFull ? "Full-SOUL" : (isPro ? "Pro / Skills+" : "Standard");
+        charBadge.innerText = `${charsCount.toLocaleString("de-DE")} Zeichen (${modeTitle})`;
+        charBadge.className = isFull
+          ? "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0"
+          : isPro
+          ? "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 shrink-0"
+          : "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0";
+      }
+
+      const settingsBadge = document.getElementById("settings-soul-mode-status-badge");
+      if (settingsBadge) {
+        settingsBadge.innerText = isFull
+          ? "🔥 Full-SOUL aktiv (~17.200 Zeichen/Agent)"
+          : isPro
+          ? "🎯 Pro / Skills+ aktiv (~6.800 Zeichen/Agent)"
+          : "⚡ Standard aktiv (~3.100 Zeichen/Agent)";
+        settingsBadge.className = isFull
+          ? "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+          : isPro
+          ? "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30"
+          : "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30";
+      }
+
+      const fullButtons = [
+        "prof-soul-mode-btn-full",
+        "agent-chat-soul-btn-full",
+        "master-chat-soul-btn-full",
+        "settings-soul-btn-full"
+      ];
+      const proButtons = [
+        "prof-soul-mode-btn-pro",
+        "agent-chat-soul-btn-pro",
+        "master-chat-soul-btn-pro",
+        "settings-soul-btn-pro"
+      ];
+      const compactButtons = [
+        "prof-soul-mode-btn-compact",
+        "agent-chat-soul-btn-compact",
+        "master-chat-soul-btn-compact",
+        "settings-soul-btn-compact"
+      ];
+
+      fullButtons.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isFull) {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40 shadow-2xs"
+            : "px-2 py-0.5 rounded font-bold transition-all bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 cursor-pointer";
+        } else {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
+            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+        }
+      });
+
+      proButtons.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isPro) {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/40 shadow-2xs"
+            : "px-2 py-0.5 rounded font-bold transition-all bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 cursor-pointer";
+        } else {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
+            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+        }
+      });
+
+      compactButtons.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isCompact) {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 shadow-2xs"
+            : "px-2 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer";
+        } else {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
+            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+        }
+      });
+    }
+
+    async function switchGlobalOrAgentSoulMode(mode, applyGlobal = true) {
+      const targetMode = mode === "full" ? "full" : (mode === "pro" ? "pro" : "compact");
+      const statusEl = document.getElementById("prof-soul-save-status");
+      if (statusEl) statusEl.innerText = "Schalte SOUL-Modus um...";
+      try {
+        const payload = {
+          mode: targetMode,
+          agent_id: applyGlobal ? null : (currentSelectedProfileId || "default")
+        };
+        const res = await fetch("/api/v1/hermes/soul-mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          await loadHermesProfilesFromServer();
+          if (currentSelectedProfileId) {
+            await loadInlineSoulMarkdown(currentSelectedProfileId);
+            const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+            if (prof) {
+              const prevEl = document.getElementById("prof-edit-prompt-preview");
+              if (prevEl) prevEl.innerText = prof.prompt || "";
+            }
+          }
+          updateSoulModeUI(targetMode, data.avg_active_chars ? Math.round(data.avg_active_chars) : undefined);
+          const label = targetMode === "full"
+            ? "🔥 Full-SOUL (~17.200 Zeichen)"
+            : targetMode === "pro"
+            ? "🎯 Pro / Skills+ (~6.800 Zeichen)"
+            : "⚡ Standard-SOUL (~3.100 Zeichen)";
+          showArchonToast(
+            applyGlobal
+              ? `Alle ${data.updated_profiles || 59} Agenten auf ${label} umgeschaltet!`
+              : `Agent '${currentSelectedProfileId}' auf ${label} umgeschaltet!`,
+            "success"
+          );
+        } else {
+          showArchonToast("Fehler beim Umschalten des SOUL-Modus.", "error");
+        }
+      } catch (err) {
+        console.error("switchGlobalOrAgentSoulMode error:", err);
+        showArchonToast(`Fehler: ${err.message}`, "error");
+      }
+    }
+
+    window.switchGlobalOrAgentSoulMode = switchGlobalOrAgentSoulMode;
+    window.updateSoulModeUI = updateSoulModeUI;
+
     async function loadInlineSoulMarkdown(agentId) {
       const id = agentId || currentSelectedProfileId || "hermes_default";
       const pathLabel = document.getElementById("prof-soul-path-label");
@@ -1202,6 +1344,8 @@
           if (data && typeof data.markdown === "string") {
             if (textarea) textarea.value = data.markdown;
             if (statusEl) statusEl.innerText = "Synchronisiert";
+            const detectedMode = data.mode || (data.markdown.length > 6000 ? "full" : "compact");
+            updateSoulModeUI(detectedMode, data.chars || data.markdown.length);
           }
         } else {
           if (statusEl) statusEl.innerText = "Standard / Neu";
@@ -2607,11 +2751,23 @@
           skills: Array.isArray(prof.skills) ? prof.skills : [],
           tools: Array.isArray(prof.tools) ? prof.tools : []
         };
-        await fetch("/api/hermes/profiles", {
+        const res = await fetch("/api/hermes/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.status === "pending_owner_approval") {
+            showArchonToast(data.message || "Neue Tool-Freigabe wartet auf Telegram-Bestätigung.", "info");
+          } else if (data && data.profile && data.profile.prompt) {
+            prof.prompt = data.profile.prompt;
+            prof.system_prompt = data.profile.prompt;
+            const prevEl = document.getElementById("prof-edit-prompt-preview");
+            if (prevEl) prevEl.innerText = prof.prompt;
+            await loadInlineSoulMarkdown(prof.id);
+          }
+        }
       } catch (err) {
         console.warn("[Profile AutoSave] Failed to save skills/tools changes:", err);
       }

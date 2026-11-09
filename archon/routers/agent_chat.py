@@ -160,8 +160,15 @@ def load_profiles_list() -> List[Dict]:
 
 @router.post("/api/v1/agent/chat")
 async def api_direct_agent_chat(req: DirectAgentChatRequest):
-    profiles = load_profiles_list()
+    from archon.core.profiles import api_get_hermes_profiles
+    try:
+        profiles = api_get_hermes_profiles()
+    except Exception:
+        profiles = load_profiles_list()
     prof = next((p for p in profiles if p.get("id") == req.agent_id), None)
+    if not prof:
+        fallback_list = load_profiles_list()
+        prof = next((p for p in fallback_list if p.get("id") == req.agent_id), None)
     if not prof:
         prof = {
             "id": req.agent_id,

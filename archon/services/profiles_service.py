@@ -302,6 +302,23 @@ def save_profile(profile_data: Dict[str, Any], *,
         if not found_custom:
             clean_avatar = "/static/avatars/avatar_001.jpg"
 
+    # Wenn Skills oder Tools über den Reiter 'Fähigkeiten' geändert wurden,
+    # synchronisiere diese sofort in SOUL_COMPACT.md, SOUL_PRO.md, SOUL_FULL.md und SOUL.md
+    try:
+        if any(os.path.exists(os.path.join(b, p_id, "SOUL_COMPACT.md")) for b in get_hermes_profiles_base_dirs()):
+            from scripts.sync_soul_modes import sync_single_agent_capabilities_to_soul
+            synced_soul = sync_single_agent_capabilities_to_soul(
+                p_id,
+                profile_data,
+                base_dirs=get_hermes_profiles_base_dirs(),
+            )
+            if synced_soul:
+                prompt_text = synced_soul
+                profile_data["prompt"] = synced_soul
+                profile_data["system_prompt"] = synced_soul
+    except Exception as soul_sync_err:
+        logger.warning(f"[Profiles] Could not auto-sync SOUL capabilities for {p_id}: {soul_sync_err}")
+
     for p_base in get_hermes_profiles_base_dirs():
         try:
             target_pdir = os.path.join(p_base, p_id)
@@ -378,8 +395,23 @@ def save_profile(profile_data: Dict[str, Any], *,
                 except Exception as cfg_err:
                     logger.warning(f"[Profiles] Could not sync config.yaml for {p_id}: {cfg_err}")
 
-            # Skills synchronisieren
+            # Skills synchronisieren (inkl. Entfernen abgewählter Skills aus dem Profil-Ordner)
             skills_sub = os.path.join(target_pdir, "skills")
+            if os.path.exists(skills_sub):
+                assigned_set = set(assigned_skills) | {s.replace("skill-", "") for s in assigned_skills} | {f"skill-{s}" for s in assigned_skills}
+                for existing_entry in os.listdir(skills_sub):
+                    if existing_entry.startswith("."):
+                        continue
+                    entry_base = os.path.splitext(existing_entry)[0]
+                    if existing_entry not in assigned_set and entry_base not in assigned_set:
+                        full_entry = os.path.join(skills_sub, existing_entry)
+                        try:
+                            if os.path.isdir(full_entry):
+                                shutil.rmtree(full_entry, ignore_errors=True)
+                            else:
+                                os.unlink(full_entry)
+                        except Exception:
+                            pass
             global_skills_dir = os.path.join(MEMORY_DIR, "hermes_skills")
             if not os.path.exists(global_skills_dir):
                 global_skills_dir = os.path.expanduser("~/.hermes/skills")
@@ -417,6 +449,10 @@ def save_profile(profile_data: Dict[str, Any], *,
                         item["provider"] = provider_val
                         item["reasoning_level"] = reasoning_val
                         item["status"] = status_val
+                        item["skills"] = assigned_skills
+                        item["tools"] = assigned_tools
+                        item["prompt"] = prompt_text
+                        item["system_prompt"] = prompt_text
                         updated_ap = True
                         break
                 if not updated_ap:
@@ -429,7 +465,11 @@ def save_profile(profile_data: Dict[str, Any], *,
                         "avatar": clean_avatar,
                         "model": model_val,
                         "provider": provider_val,
-                        "status": status_val
+                        "status": status_val,
+                        "skills": assigned_skills,
+                        "tools": assigned_tools,
+                        "prompt": prompt_text,
+                        "system_prompt": prompt_text,
                     })
                 with open(ap_file, "w", encoding="utf-8") as f:
                     json.dump(ap_list, f, indent=2, ensure_ascii=False)

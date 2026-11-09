@@ -123,7 +123,21 @@
         <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Chat</span>
       </button>
 
-      <!-- 2b. Bot Screen (Desktop & Web Navigator) -->
+      <!-- 3. Operations -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-operations" 
+        onclick="switchAgentCadreTab('operations')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Operations & Disposition"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/operations.png?v=3" alt="Operations" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Operations</span>
+      </button>
+
+      <!-- 4. Bot Screen (Desktop & Web Navigator) -->
       <button 
         type="button" 
         id="agent-tab-btn-botscreen" 
@@ -138,7 +152,7 @@
         <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Screen</span>
       </button>
 
-      <!-- 3. Fähigkeiten -->
+      <!-- 5. Fähigkeiten -->
       <button 
         type="button" 
         id="agent-tab-btn-skills" 
@@ -150,20 +164,6 @@
           <img src="/static/img/cadre_icons/skills.png" alt="Fähigkeiten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
         </div>
         <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Fähigkeiten</span>
-      </button>
-
-      <!-- 4. Operations -->
-      <button 
-        type="button" 
-        id="agent-tab-btn-operations" 
-        onclick="switchAgentCadreTab('operations')" 
-        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-        title="Operations & Disposition"
-      >
-        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
-          <img src="/static/img/cadre_icons/operations.png?v=3" alt="Operations" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
-        </div>
-        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none">Operations</span>
       </button>
 
       <!-- 5. SOUL -->
@@ -835,6 +835,16 @@
                           </select>
                         </div>
                         <span class="text-[var(--border)]">|</span>
+                        <!-- SOUL.md Modus Umschalter (Standard ~3k | Pro ~6.8k | Full-SOUL ~17k) -->
+                        <div class="flex items-center gap-1" title="SOUL.md Experten-Tiefe umschalten (Standard ~3k Zeichen | Pro ~6.8k Zeichen inkl. Skill-Blaupausen | Full-SOUL ~17k Zeichen inkl. 59-Agenten-Verzeichnis)">
+                          <span class="font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide">🧬 SOUL:</span>
+                          <div id="agent-tab-soul-mode-switch" class="flex items-center rounded border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono select-none shadow-2xs">
+                            <button type="button" id="agent-chat-soul-btn-compact" onclick="switchGlobalOrAgentSoulMode('compact', false)" class="px-2 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer">⚡ Standard (~3k)</button>
+                            <button type="button" id="agent-chat-soul-btn-pro" onclick="switchGlobalOrAgentSoulMode('pro', false)" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">🎯 Pro (~6.8k)</button>
+                            <button type="button" id="agent-chat-soul-btn-full" onclick="switchGlobalOrAgentSoulMode('full', false)" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">🔥 Full-SOUL</button>
+                          </div>
+                        </div>
+                        <span class="text-[var(--border)]">|</span>
                         <!-- Flat-Version Direkt / Mission Switch -->
                         <div 
                           id="agent-tab-mode-flat-switch" 
@@ -1081,13 +1091,26 @@
               <div id="agent-pane-soul" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
                 <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
                   
-                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0 gap-2 flex-wrap">
                     <div class="flex items-center gap-2 min-w-0">
                       <i data-lucide="dna" class="w-4 h-4 text-purple-500 shrink-0"></i>
                       <span class="text-xs font-mono font-bold text-[var(--foreground)] truncate">SOUL.md Direktiven & System-Prompt</span>
                       <code id="prof-soul-path-label" class="text-[10px] font-mono text-[var(--muted-foreground)] px-2 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] truncate">~/.hermes/profiles/SOUL.md</code>
+                      <span id="prof-soul-char-badge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0">~2.200 Zeichen</span>
                     </div>
-                    <div class="flex items-center gap-2 shrink-0">
+                    <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                      <!-- SOUL-Tiefe Umschalter (Standard ~3k | Pro ~6.8k | Full-SOUL ~17k) -->
+                      <div class="flex items-center rounded-lg border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10.5px] font-mono select-none shadow-2xs" title="Zwischen Standard (~3.100 Zeichen), Pro (~6.800 Zeichen inkl. SKILL.md-Volltexten & Tool-Matrix) und Full-SOUL (~17.200 Zeichen inkl. 59-Agenten-Verzeichnis) wechseln">
+                        <button type="button" id="prof-soul-mode-btn-compact" onclick="switchGlobalOrAgentSoulMode('compact', true)" class="px-2.5 py-0.5 rounded-md font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer">
+                          ⚡ Standard (~3k)
+                        </button>
+                        <button type="button" id="prof-soul-mode-btn-pro" onclick="switchGlobalOrAgentSoulMode('pro', true)" class="px-2.5 py-0.5 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">
+                          🎯 Pro / Skills+ (~6.8k)
+                        </button>
+                        <button type="button" id="prof-soul-mode-btn-full" onclick="switchGlobalOrAgentSoulMode('full', true)" class="px-2.5 py-0.5 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">
+                          🔥 Full-SOUL (~17k)
+                        </button>
+                      </div>
                       <span id="prof-soul-save-status" class="text-[10px] font-mono text-[var(--muted-foreground)]">Bereit</span>
                       <button type="button" onclick="copyInlineSoulMarkdown(this)" class="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-1.5" title="SOUL.md in Zwischenablage kopieren">
                         <i data-lucide="copy" class="w-3.5 h-3.5"></i>

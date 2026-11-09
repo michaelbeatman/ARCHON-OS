@@ -203,6 +203,16 @@
                       </select>
                     </div>
                     <span class="text-[var(--border)]">|</span>
+                    <!-- SOUL.md Modus Umschalter (Standard ~3k | Pro ~6.8k | Full-SOUL ~17k) -->
+                    <div class="flex items-center gap-1" title="SOUL.md Experten-Tiefe umschalten (Standard ~3k | Pro ~6.8k inkl. Skill-Blaupausen | Full-SOUL ~17k)">
+                      <span class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide">🧬 SOUL:</span>
+                      <div class="flex items-center rounded-md border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono select-none shadow-2xs">
+                        <button type="button" id="master-chat-soul-btn-compact" onclick="switchGlobalOrAgentSoulMode('compact', true)" class="px-2 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer">⚡ Standard (~3k)</button>
+                        <button type="button" id="master-chat-soul-btn-pro" onclick="switchGlobalOrAgentSoulMode('pro', true)" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">🎯 Pro (~6.8k)</button>
+                        <button type="button" id="master-chat-soul-btn-full" onclick="switchGlobalOrAgentSoulMode('full', true)" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">🔥 Full-SOUL</button>
+                      </div>
+                    </div>
+                    <span class="text-[var(--border)]">|</span>
                     <div class="flex items-center gap-1.5">
                       <span id="master-chat-current-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Online</span>
                     </div>

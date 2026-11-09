@@ -218,14 +218,17 @@ def resolve_and_prepare_skill_context(
     # Build prompt blocks
     blocks = []
     
-    # 1. Assigned skills manifest (shows the agent its official toolkit from the Kader)
-    if assigned_skills:
+    # 1. Assigned skills & tools manifest (shows the agent its official toolkit from the Kader)
+    assigned_tools = (agent_prof.get("tools", []) if agent_prof and isinstance(agent_prof.get("tools"), list) else [])
+    if assigned_skills or assigned_tools:
         manifest_lines = [f"- `{s}`" for s in assigned_skills]
+        tools_str = ", ".join(f"`{t}`" for t in assigned_tools) if assigned_tools else "Standard-Tools"
         blocks.append(
-            "### DEIN ZUGEWIESENES FACH-SKILLSET (OFFIZIELLE KADER-FÄHIGKEITEN) ###\n"
-            f"Du wurdest im Agenten-Kader mit {len(assigned_skills)} spezialisierten Fach-Fähigkeiten ausgestattet:\n"
-            + "\n".join(manifest_lines) + "\n"
-            "Agiere stets gemäß den Best Practices und Standards dieser Fach-Skills!"
+            "### DEIN ZUGEWIESENES FACH-SKILLSET & WERKZEUG-ARSENAL (OFFIZIELLE KADER-FÄHIGKEITEN) ###\n"
+            f"Du wurdest im Agenten-Kader mit {len(assigned_skills)} spezialisierten Fach-Skills und {len(assigned_tools)} System-Tools ausgestattet:\n"
+            + ("\n".join(manifest_lines) + "\n" if manifest_lines else "")
+            + f"**Autorisierte System-Tools & MCP-Server:** {tools_str}\n"
+            "Agiere stets gemäß den Best Practices und Standards dieser Fach-Skills und Werkzeuge!"
         )
         
     # 2. Fully loaded active skills (full text of SKILL.md)

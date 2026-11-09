@@ -3325,410 +3325,64 @@ def api_esign_webhook(request: Request, payload: Dict[str, Any] = Body(...)):
 
 # =========================================================================
 # MAHNWESEN & DEBITORENMANAGEMENT (DUNNING ENGINE)
+# Ausgelagert nach archon/routers/operations_dunning.py
 # =========================================================================
-
-@router.get("/dunning/invoices")
-def api_dunning_invoices():
-    """Gibt alle Ausgangsrechnungen inklusive Fälligkeits- und Mahnstufenstatus zurück."""
-    try:
-        from backend.dunning_engine import dunning_engine
-        invoices = dunning_engine.check_overdue_invoices()
-        return {"status": "success", "count": len(invoices), "invoices": invoices}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/dunning/invoices")
-def api_dunning_create_invoice(req: Dict[str, Any] = Body(...)):
-    """Erstellt eine neue Ausgangsrechnung."""
-    customer_name = req.get("customer_name", "").strip()
-    customer_email = req.get("customer_email", "").strip()
-    amount_net = float(req.get("amount_net", 0.0))
-    due_days = int(req.get("due_days", 14))
-    invoice_date = req.get("invoice_date")
-    recipient_address = req.get("recipient_address")
-
-    if not customer_name or amount_net <= 0:
-        raise HTTPException(status_code=400, detail="customer_name und ein positiver amount_net sind erforderlich.")
-
-    try:
-        from backend.dunning_engine import dunning_engine
-        inv = dunning_engine.create_invoice(
-            customer_name=customer_name,
-            customer_email=customer_email,
-            amount_net=amount_net,
-            due_days=due_days,
-            invoice_date=invoice_date,
-            recipient_address=recipient_address
-        )
-        return {"status": "success", "invoice": inv}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/dunning/draft")
-def api_dunning_generate_draft(req: Dict[str, Any] = Body(...)):
-    """Erzeugt einen rechtssicheren 3-stufigen Mahnentwurf zur manuellen Prüfung."""
-    invoice_id = req.get("invoice_id", "").strip()
-    level = int(req.get("level", 1))
-
-    if not invoice_id:
-        raise HTTPException(status_code=400, detail="invoice_id ist erforderlich.")
-
-    try:
-        from backend.dunning_engine import dunning_engine
-        draft = dunning_engine.generate_dunning_draft(invoice_id, level)
-        return {"status": "success", "draft": draft}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/dunning/approve")
-def api_dunning_approve(req: Dict[str, Any] = Body(...)):
-    """Gibt einen Mahnentwurf frei und aktualisiert den Rechnungsstatus (HITL-Freigabe)."""
-    dunning_id = req.get("dunning_id", "").strip()
-    if not dunning_id:
-        raise HTTPException(status_code=400, detail="dunning_id ist erforderlich.")
-
-    try:
-        from backend.dunning_engine import dunning_engine
-        res = dunning_engine.approve_and_send_dunning(dunning_id)
-        return {"status": "success", "result": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/dunning/mark-paid")
-def api_dunning_mark_paid(req: Dict[str, Any] = Body(...)):
-    """Markiert eine Ausgangsrechnung als bezahlt."""
-    invoice_id = req.get("invoice_id", "").strip()
-    if not invoice_id:
-        raise HTTPException(status_code=400, detail="invoice_id ist erforderlich.")
-
-    try:
-        from backend.dunning_engine import dunning_engine
-        ok = dunning_engine.mark_invoice_paid(invoice_id)
-        if not ok:
-            raise HTTPException(status_code=404, detail="Rechnung nicht gefunden oder Update fehlgeschlagen.")
-        return {"status": "success", "invoice_id": invoice_id, "paid": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+from archon.routers.operations_dunning import (
+    router as _dunning_router,
+    api_dunning_invoices,
+    api_dunning_create_invoice,
+    api_dunning_generate_draft,
+    api_dunning_approve,
+    api_dunning_mark_paid,
+)
+router.include_router(_dunning_router)
 
 # ==============================================================================
 # FINE-TUNING PIPELINE ENDPOINTS (t-56ff9d)
+# Ausgelagert nach archon/routers/operations_finetuning.py
 # ==============================================================================
+from archon.routers.operations_finetuning import (
+    router as _finetuning_router,
+    api_finetuning_status,
+    api_finetuning_prepare,
+)
+router.include_router(_finetuning_router)
 
-@router.get("/finetuning/status")
-def api_finetuning_status():
-    """Gibt Status- und Metrik-Informationen über den Feintuning-Datensatz zurück."""
-    try:
-        from scripts.prepare_finetuning_dataset import DEFAULT_DB_PATH, DEFAULT_OUTPUT_DIR
-        import sqlite3
-
-        db_path = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else DEFAULT_DB_PATH
-        feedback_count = 0
-        learnings_count = 0
-
-        if os.path.exists(db_path):
-            conn = sqlite3.connect(db_path)
-            try:
-                feedback_count = conn.execute("SELECT COUNT(*) FROM human_feedback").fetchone()[0]
-            except Exception:
-                pass
-            try:
-                learnings_count = conn.execute("SELECT COUNT(*) FROM learnings").fetchone()[0]
-            except Exception:
-                pass
-            conn.close()
-
-        files_info = []
-        out_dir = "/opt/data/finetuning" if os.path.exists("/opt/data") else DEFAULT_OUTPUT_DIR
-        if os.path.exists(out_dir):
-            for f in os.listdir(out_dir):
-                if f.endswith(".jsonl"):
-                    f_path = os.path.join(out_dir, f)
-                    with open(f_path, "r", encoding="utf-8") as fp:
-                        lines = len(fp.readlines())
-                    files_info.append({"filename": f, "lines": lines, "size_bytes": os.path.getsize(f_path)})
-
-        return {
-            "status": "success",
-            "db_path": db_path,
-            "feedback_samples": feedback_count,
-            "learnings_samples": learnings_count,
-            "generated_datasets": files_info,
-            "config_template": "config/finetuning/lora_config.yml"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/finetuning/prepare-dataset")
-def api_finetuning_prepare(req: Dict[str, Any] = Body(...)):
-    """Extrahiert Datensätze aus Feedback & Learnings für das Modell-Feintuning."""
-    try:
-        from scripts.prepare_finetuning_dataset import prepare_dataset, DEFAULT_DB_PATH, DEFAULT_OUTPUT_DIR
-        
-        db_path = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else DEFAULT_DB_PATH
-        out_dir = "/opt/data/finetuning" if os.path.exists("/opt/data") else DEFAULT_OUTPUT_DIR
-        
-        fmt = req.get("format", "chat")
-        min_score = int(req.get("min_score", 0))
-        include_learnings = bool(req.get("include_learnings", True))
-        split_ratio = float(req.get("split_ratio", 0.9))
-
-        res = prepare_dataset(
-            db_path=db_path,
-            output_dir=out_dir,
-            fmt=fmt,
-            min_score=min_score,
-            include_learnings=include_learnings,
-            split_ratio=split_ratio
-        )
-        return {"status": "success", "result": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==============================================================================
 # APPROVAL POLICIES & ESKALATION ENDPOINTS (t-5596bd)
+# Ausgelagert nach archon/routers/operations_approvals.py
 # ==============================================================================
-
-@router.get("/approvals/policies")
-def api_get_approval_policies(domain: Optional[str] = None):
-    """Gibt alle aktiven Freigaberegeln (optional gefiltert nach Domain) zurück."""
-    try:
-        from backend.approval_policy_engine import approval_engine
-        policies = approval_engine.get_policies(domain=domain)
-        return {"status": "success", "policies": policies}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/approvals/policies")
-def api_update_approval_policy(request: Request, req: Dict[str, Any] = Body(...)):
-    """Aktualisiert eine Freigaberegel revisionssicher mit SHA-256 Hash-Kette."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    policy_key = req.get("policy_key", "").strip()
-    new_value = str(req.get("new_value", "")).strip()
-    user_id = req.get("user_id", "admin").strip()
-
-    if not policy_key or new_value == "":
-        raise HTTPException(status_code=400, detail="policy_key und new_value sind erforderlich.")
-
-    try:
-        from backend.approval_policy_engine import approval_engine
-        res = approval_engine.update_policy(policy_key, new_value, user_id=user_id)
-        return {"status": "success", "result": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/approvals/requests")
-def api_get_approval_requests(status: Optional[str] = None, domain: Optional[str] = None):
-    """Gibt Freigabeanfragen aus der Warteschlange zurück."""
-    try:
-        from backend.approval_policy_engine import approval_engine
-        requests = approval_engine.get_requests(status=status, domain=domain)
-        return {"status": "success", "requests": requests}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/approvals/requests")
-def api_create_approval_request(req: Dict[str, Any] = Body(...)):
-    """Erstellt eine neue Freigabeanfrage und evaluiert Auto-Freigabe Schwellenwerte."""
-    domain = req.get("domain", "finance").strip()
-    title = req.get("title", "").strip()
-    amount = float(req.get("amount", 0.0))
-    reference_id = req.get("reference_id")
-    payload = req.get("payload")
-
-    if not title:
-        raise HTTPException(status_code=400, detail="title ist erforderlich.")
-
-    try:
-        from backend.approval_policy_engine import approval_engine
-        res = approval_engine.evaluate_and_enqueue(
-            domain=domain,
-            title=title,
-            amount=amount,
-            reference_id=reference_id,
-            payload=payload
-        )
-        return {"status": "success", "result": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/approvals/requests/{request_id}/approve")
-def api_approve_request(request_id: str, req: Dict[str, Any] = Body(default={})):
-    """Gibt eine anhängige Anfrage frei (unterstützt 1. und 2. Prüfer)."""
-    approver_id = req.get("approver_id", "admin").strip()
-    try:
-        from backend.approval_policy_engine import approval_engine
-        res = approval_engine.approve_request(request_id, approver_id=approver_id)
-        return {"status": "success", "result": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/approvals/requests/{request_id}/reject")
-def api_reject_request(request_id: str, req: Dict[str, Any] = Body(...)):
-    """Lehnt eine anhängige Freigabeanfrage mit Begründung ab."""
-    rejected_by = req.get("rejected_by", "admin").strip()
-    reason = req.get("reason", "").strip()
-    if not reason:
-        raise HTTPException(status_code=400, detail="Begründung (reason) ist erforderlich.")
-
-    try:
-        from backend.approval_policy_engine import approval_engine
-        res = approval_engine.reject_request(request_id, rejected_by=rejected_by, reason=reason)
-        return {"status": "success", "result": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/approvals/delegation")
-def api_get_delegation(user_id: str = "admin"):
-    """Ruft den Urlaubs- und Vertretungsmodus ab."""
-    try:
-        from backend.approval_policy_engine import approval_engine
-        res = approval_engine.get_delegation(user_id=user_id)
-        return {"status": "success", "delegation": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/approvals/delegation")
-def api_set_delegation(req: Dict[str, Any] = Body(...)):
-    """Aktiviert oder deaktiviert den Urlaubsmodus mit Stellvertretung."""
-    user_id = req.get("user_id", "admin").strip()
-    is_active = bool(req.get("is_active", False))
-    substitute_id = req.get("substitute_id", "katharina").strip()
-    substitute_name = req.get("substitute_name", "Katharina Völk (QM)").strip()
-
-    try:
-        from backend.approval_policy_engine import approval_engine
-        res = approval_engine.set_delegation(
-            user_id=user_id,
-            is_active=is_active,
-            substitute_id=substitute_id,
-            substitute_name=substitute_name
-        )
-        return {"status": "success", "result": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/approvals/audit-chain")
-def api_get_approval_audit_chain(limit: int = 50):
-    """Liefert die kryptografisch verkettete Revisionshistorie (GoBD/ISO 27001)."""
-    try:
-        from backend.approval_policy_engine import approval_engine
-        chain = approval_engine.get_audit_chain(limit=limit)
-        return {"status": "success", "chain": chain}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/approvals/audit-verify")
-def api_verify_approval_audit():
-    """Überprüft die mathematische Gültigkeit der gesamten SHA-256 Hash-Kette."""
-    try:
-        from backend.approval_policy_engine import approval_engine
-        integrity = approval_engine.verify_audit_integrity()
-        return {"status": "success", "integrity": integrity}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+from archon.routers.operations_approvals import (
+    router as _approvals_router,
+    api_get_approval_policies,
+    api_update_approval_policy,
+    api_get_approval_requests,
+    api_create_approval_request,
+    api_approve_request,
+    api_reject_request,
+    api_get_delegation,
+    api_set_delegation,
+    api_get_approval_audit_chain,
+    api_verify_approval_audit,
+)
+router.include_router(_approvals_router)
 
 # ==============================================================================
 # API-KEYS & SCOPES ACCESS MANAGEMENT (t-6fad7a)
+# Ausgelagert nach archon/routers/operations_keys.py
 # ==============================================================================
+from archon.routers.operations_keys import (
+    router as _keys_router,
+    api_list_keys,
+    api_create_key,
+    api_revoke_key,
+    api_delete_key,
+    api_get_keys_audit,
+)
+router.include_router(_keys_router)
 
-@router.get("/keys")
-def api_list_keys():
-    """Gibt alle registrierten API-Keys ohne Klardaten zurück."""
-    try:
-        from backend.api_key_manager import api_key_manager
-        keys = api_key_manager.list_keys()
-        return {"status": "success", "keys": keys}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/keys")
-def api_create_key(request: Request, req: Dict[str, Any] = Body(...)):
-    """Erstellt einen neuen API-Key und gibt den Klartext-Token einmalig zurück."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    name = req.get("name", "").strip()
-    scopes = req.get("scopes", ["read_only"])
-    rate_limit_rpm = int(req.get("rate_limit_rpm", 60))
-    rate_limit_rpd = int(req.get("rate_limit_rpd", 5000))
-    created_by = req.get("created_by", "admin").strip()
-
-    if not name:
-        raise HTTPException(status_code=400, detail="Name/Zweck des API-Keys ist erforderlich.")
-
-    try:
-        from backend.api_key_manager import api_key_manager
-        res = api_key_manager.create_key(
-            name=name,
-            scopes=scopes,
-            rate_limit_rpm=rate_limit_rpm,
-            rate_limit_rpd=rate_limit_rpd,
-            created_by=created_by
-        )
-        return {"status": "success", "result": res}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/keys/{key_id}/revoke")
-def api_revoke_key(request: Request, key_id: str, req: Dict[str, Any] = Body(default={})):
-    """Deaktiviert einen API-Key dauerhaft und revisionssicher."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    revoked_by = req.get("revoked_by", "admin").strip()
-    try:
-        from backend.api_key_manager import api_key_manager
-        success = api_key_manager.revoke_key(key_id, revoked_by=revoked_by)
-        if not success:
-            raise HTTPException(status_code=404, detail="Key nicht gefunden oder bereits inaktiv.")
-        return {"status": "success", "message": "API-Key erfolgreich widerrufen."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/keys/{key_id}")
-def api_delete_key(request: Request, key_id: str, req: Dict[str, Any] = Body(default={})):
-    """Löscht einen Key vollständig aus der aktiven Liste."""
-    require_admin_or_503(request)  # RBAC: Admin-Sache
-    deleted_by = req.get("deleted_by", "admin").strip()
-    try:
-        from backend.api_key_manager import api_key_manager
-        success = api_key_manager.delete_key(key_id, deleted_by=deleted_by)
-        if not success:
-            raise HTTPException(status_code=404, detail="Key nicht gefunden.")
-        return {"status": "success", "message": "API-Key gelöscht."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/keys/audit")
-def api_get_keys_audit(limit: int = 50):
-    """Liefert das revisionssichere SHA-256 Audit-Log der Key-Verwaltung."""
-    try:
-        from backend.api_key_manager import api_key_manager
-        trail = api_key_manager.get_audit_trail(limit=limit)
-        return {"status": "success", "audit_log": trail}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==============================================================================

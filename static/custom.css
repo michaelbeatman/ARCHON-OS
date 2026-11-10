@@ -711,6 +711,37 @@ div#master-chat-sessions-list > div.group {
   margin: 0 !important;
 }
 
+[id$="-global-header"] div.min-w-0 {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  height: auto !important;
+  max-height: 76px !important;
+}
+
+[id$="-global-header"] div.min-w-0 h2 {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: var(--foreground) !important;
+  font-size: 20px !important;
+  line-height: 24px !important;
+  margin: 0 !important;
+}
+
+[id$="-global-header"] p,
+[id$="-global-header"] div.min-w-0 > p,
+[id$="-global-header"] div.min-w-0 > div[id$="-main-subtitle"] {
+  width: auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: 20px !important;
+  line-height: 16px !important;
+  margin-top: 3px !important;
+  margin-bottom: 0 !important;
+}
+
 #main-viewport-scroll,
 #view-mission-control,
 #view-operations,

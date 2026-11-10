@@ -196,10 +196,42 @@ def _make_docker_client():
     return DockerSocketClient()
 
 
+def _exec_hermes_version(docker_cli: "DockerApiClient", container_name: str) -> Optional[Tuple[str, str, Optional[str]]]:
+    """Fragt `hermes --version` in einem laufenden Container ab."""
+    try:
+        exec_payload = {
+            "AttachStdout": True,
+            "AttachStderr": True,
+            "Cmd": ["hermes", "--version"],
+        }
+        s, res = docker_cli.post(
+            f"/containers/{container_name}/exec",
+            body=json.dumps(exec_payload).encode("utf-8"),
+        )
+        if s in (200, 201):
+            exec_id = json.loads(res).get("Id")
+            if exec_id:
+                start_payload = {"Detach": False, "Tty": True}
+                _, out = docker_cli.post(
+                    f"/exec/{exec_id}/start",
+                    body=json.dumps(start_payload).encode("utf-8"),
+                )
+                m = re.search(
+                    r"Hermes Agent (v[0-9.]+)\s*\(([^)]+)\)\s*(?:·\s*upstream\s*([0-9a-fA-F]+))?",
+                    out,
+                )
+                if m:
+                    return m.group(1), m.group(2), m.group(3)
+    except Exception as ex_err:
+        logger.debug(f"[HermesUpdater] Exec version error ({container_name}): {ex_err}")
+    return None
+
+
 def get_installed_hermes_info(force_check: bool = False) -> Dict[str, Any]:
     """
     Ermittelt die tatsächlich installierte Hermes Core Version und den Build-SHA.
-    Fragt den aktiven Core-Container (`hermes-agent`) direkt per `hermes --version` ab.
+    Fragt den Core-Container (`hermes-agent`) ab und weicht bei gestopptem Core
+    auf laufende Hermes-Laufzeitcontainer (`hermes-webui`, `hermes-dashboard`) aus.
     """
     info = {
         "version": DEFAULT_INSTALLED_VERSION,
@@ -210,11 +242,12 @@ def get_installed_hermes_info(force_check: bool = False) -> Dict[str, Any]:
         "container_status": "unknown",
         "image": "hermes-agent-plus:latest",
         "install_method": "docker",
-        "repo": HERMES_REPO
+        "repo": HERMES_REPO,
     }
 
     try:
         docker_cli = _make_docker_client()
+        version_resolved = False
         c_data = docker_cli.get_json(f"/containers/{HERMES_CORE_CONTAINER}/json")
         if c_data and isinstance(c_data, dict):
             state = c_data.get("State", {})
@@ -222,31 +255,36 @@ def get_installed_hermes_info(force_check: bool = False) -> Dict[str, Any]:
             info["container_status"] = state.get("Status", "exited")
             info["image"] = c_data.get("Config", {}).get("Image", info["image"])
 
-            # 1. Wenn der Container läuft, Version dynamisch per 'hermes --version' abfragen
+            # 1. Wenn der Core-Container läuft, Version dynamisch per 'hermes --version' abfragen
             if is_running:
-                try:
-                    exec_payload = {
-                        "AttachStdout": True,
-                        "AttachStderr": True,
-                        "Cmd": ["hermes", "--version"]
-                    }
-                    s, res = docker_cli.post(f"/containers/{HERMES_CORE_CONTAINER}/exec", body=json.dumps(exec_payload).encode("utf-8"))
-                    if s in (200, 201):
-                        exec_id = json.loads(res).get("Id")
-                        if exec_id:
-                            start_payload = {"Detach": False, "Tty": True}
-                            s2, out = docker_cli.post(f"/exec/{exec_id}/start", body=json.dumps(start_payload).encode("utf-8"))
-                            m = re.search(r'Hermes Agent (v[0-9.]+)\s*\(([^)]+)\)\s*(?:·\s*upstream\s*([0-9a-fA-F]+))?', out)
-                            if m:
-                                info["version"] = m.group(1)
-                                info["version_codename"] = m.group(2)
-                                if m.group(3):
-                                    info["installed_sha"] = m.group(3)
-                                    info["installed_sha_short"] = m.group(3)[:8]
-                except Exception as ex_err:
-                    logger.debug(f"[HermesUpdater] Exec version error: {ex_err}")
+                parsed = _exec_hermes_version(docker_cli, HERMES_CORE_CONTAINER)
+                if parsed:
+                    info["version"], info["version_codename"], sha = parsed
+                    if sha:
+                        info["installed_sha"] = sha
+                        info["installed_sha_short"] = sha[:8]
+                    version_resolved = True
 
-        # 2. Image Labels als Fallback
+        # 2. Fallback auf aktive Hermes-Container (hermes-webui / hermes-dashboard), falls Core gestoppt ist
+        if not version_resolved:
+            for cand in ("hermes-webui", "hermes-dashboard"):
+                cand_data = docker_cli.get_json(f"/containers/{cand}/json")
+                if not cand_data or not isinstance(cand_data, dict):
+                    continue
+                cand_state = cand_data.get("State", {})
+                if not cand_state.get("Running", False):
+                    continue
+                parsed = _exec_hermes_version(docker_cli, cand)
+                if parsed:
+                    info["version"], info["version_codename"], sha = parsed
+                    if sha:
+                        info["installed_sha"] = sha
+                        info["installed_sha_short"] = sha[:8]
+                    if info["container_status"] in ("unknown", "exited"):
+                        info["container_status"] = f"{cand_state.get('Status', 'running')} ({cand})"
+                    break
+
+        # 3. Image Labels als Fallback
         img_data = docker_cli.get_json(f"/images/{info['image']}/json")
         if img_data and isinstance(img_data, dict):
             labels = img_data.get("Config", {}).get("Labels", {}) or {}
@@ -391,7 +429,22 @@ def recreate_container_with_new_image(docker_cli: "DockerApiClient", container_n
     # 2. Umbenennen als Backup
     backup_name = f"{container_name}_old_backup"
     docker_cli._request("DELETE", f"/containers/{backup_name}?v=false")
-    docker_cli.post(f"/containers/{container_name}/rename?name={backup_name}")
+    rename_status, rename_resp = docker_cli.post(f"/containers/{container_name}/rename?name={backup_name}")
+    if rename_status not in (200, 204):
+        if was_running:
+            docker_cli.post(f"/containers/{container_name}/start")
+        return False, f"Fehler beim Backup-Rename von '{container_name}' ({rename_status}): {rename_resp[:200]}"
+
+    # Laufzeitfelder aus EndpointsConfig entfernen, damit Docker saubere Endpunkte anlegt
+    clean_networks = {}
+    for net_name, net_vals in (net_config or {}).items():
+        if isinstance(net_vals, dict):
+            clean_networks[net_name] = {
+                k: v for k, v in net_vals.items()
+                if k in ("Aliases", "Links", "IPAMConfig", "DriverOpts") and v is not None
+            }
+        else:
+            clean_networks[net_name] = {}
 
     # 3. Create Payload mit neuem Image
     create_body = {
@@ -403,9 +456,12 @@ def recreate_container_with_new_image(docker_cli: "DockerApiClient", container_n
         "Labels": config.get("Labels"),
         "HostConfig": host_config,
         "NetworkingConfig": {
-            "EndpointsConfig": net_config
+            "EndpointsConfig": clean_networks
         }
     }
+    for opt_key in ("ExposedPorts", "User", "Tty", "OpenStdin"):
+        if config.get(opt_key):
+            create_body[opt_key] = config.get(opt_key)
 
     status, resp = docker_cli.post(f"/containers/create?name={container_name}", body=json.dumps(create_body).encode("utf-8"))
     if status in (200, 201):
@@ -427,7 +483,7 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
     Führt das Hermes Agent Core Update aus:
     1. Zieht das neueste Docker Image von Docker Hub (nousresearch/hermes-agent:latest)
     2. Kennzeichnet/Taggt das Image als hermes-agent-plus:latest
-    3. Erstellt den Core-Container (hermes-agent) atomar mit dem neuen Image neu
+    3. Erstellt den Core-Container (hermes-agent) sowie ein laufendes hermes-webui atomar neu
     """
     t0 = time.time()
     docker_cli = _make_docker_client()
@@ -444,6 +500,23 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
             return {
                 "status": "error",
                 "message": f"Docker Pull fehlgeschlagen (HTTP {status}): {resp[:300]}",
+                "logs": log_messages
+            }
+        stream_error = None
+        for line in (resp or "").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                if obj.get("error"):
+                    stream_error = obj["error"]
+            except Exception:
+                pass
+        if stream_error:
+            return {
+                "status": "error",
+                "message": f"Docker Pull abgebrochen: {stream_error}",
                 "logs": log_messages
             }
         log_messages.append("Neues Hermes Docker Image erfolgreich empfangen.")
@@ -472,6 +545,14 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
             ok, msg = recreate_container_with_new_image(docker_cli, HERMES_CORE_CONTAINER, "hermes-agent-plus:latest")
             log_messages.append(msg)
             recreated = ok
+            # Laufendes hermes-webui bei Vorhandensein ebenfalls auf das neue Image ziehen
+            if docker_cli.get_json("/containers/hermes-webui/json"):
+                w_ok, w_msg = recreate_container_with_new_image(
+                    docker_cli, "hermes-webui", f"nousresearch/hermes-agent:{channel}"
+                )
+                log_messages.append(w_msg)
+                if not w_ok:
+                    recreated = False
             # hermes-dashboard wird bewusst NICHT mit neu instanziiert: der Container laeuft,
             # und seine Compose-Datei (docker-compose.hermes.yml) fehlt — ein Recreate waere
             # nicht rueckholbar. Wer das aendert, muss die Compose-Datei zuerst wiederherstellen.

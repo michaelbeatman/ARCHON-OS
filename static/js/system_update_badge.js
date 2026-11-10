@@ -288,20 +288,44 @@
           await renderUpdateDialogContent(true);
         }, 1500);
       } else {
-        alert(`Update fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`);
+        const errText = data.message || data.detail || 'Unbekannter Fehler';
+        const logsText = Array.isArray(data.logs) && data.logs.length ? `\n\nLogs:\n${data.logs.join('\n')}` : '';
+        const fullErr = `Update fehlgeschlagen: ${errText}${logsText}`;
+        if (progMsg) {
+          progMsg.className = 'mt-2 p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-left text-xs font-mono text-rose-500 select-text';
+          progMsg.innerHTML = `
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="font-bold">Update fehlgeschlagen</span>
+              <button type="button" onclick="navigator.clipboard.writeText(this.dataset.err); this.innerText='Kopiert ✓';" data-err="${escapeHtml(fullErr)}" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[10px] font-bold cursor-pointer">
+                Fehler kopieren
+              </button>
+            </div>
+            <pre class="whitespace-pre-wrap break-words text-[11px] max-h-36 overflow-y-auto select-text">${escapeHtml(fullErr)}</pre>
+          `;
+        }
         if (btn) {
           btn.disabled = false;
           btn.innerHTML = '<i data-lucide="download" class="w-4 h-4"></i> <span>Erneut versuchen</span>';
         }
-        if (progMsg) progMsg.classList.add('hidden');
       }
     } catch (err) {
-      alert(`Netzwerkfehler beim Anwenden des Hermes Updates: ${err.message}`);
+      const fullErr = `Netzwerkfehler beim Anwenden des Hermes Updates: ${err.message}`;
+      if (progMsg) {
+        progMsg.className = 'mt-2 p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-left text-xs font-mono text-rose-500 select-text';
+        progMsg.innerHTML = `
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="font-bold">Netzwerkfehler</span>
+            <button type="button" onclick="navigator.clipboard.writeText(this.dataset.err); this.innerText='Kopiert ✓';" data-err="${escapeHtml(fullErr)}" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[10px] font-bold cursor-pointer">
+              Fehler kopieren
+            </button>
+          </div>
+          <pre class="whitespace-pre-wrap break-words text-[11px] select-text">${escapeHtml(fullErr)}</pre>
+        `;
+      }
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i data-lucide="download" class="w-4 h-4"></i> <span>Erneut versuchen</span>';
       }
-      if (progMsg) progMsg.classList.add('hidden');
     }
   }
 

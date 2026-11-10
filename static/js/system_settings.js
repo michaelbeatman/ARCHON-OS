@@ -2281,7 +2281,7 @@
     // =========================================================================
     // SYSTEM UPDATE & RELEASE-LIFECYCLE (MEILENSTEIN 1)
     // =========================================================================
-    async function checkSystemUpdateStatus() {
+    async function checkSystemUpdateStatus(force = false) {
       const badge = document.getElementById("update-status-badge");
       const curCommit = document.getElementById("update-current-commit");
       const branchEl = document.getElementById("update-current-branch");
@@ -2296,7 +2296,7 @@
       }
 
       try {
-        const res = await fetch("/api/v1/system/update/check");
+        const res = await fetch(force ? "/api/v1/system/update/check?force=true" : "/api/v1/system/update/check");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
@@ -2625,7 +2625,7 @@
             badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20";
           }
           if (msgInput) msgInput.value = "";
-          await checkSystemUpdateStatus();
+          await checkSystemUpdateStatus(true);
         } else if (data.status === "nothing_to_commit") {
           alert(data.message);
           if (badge) {
@@ -2673,7 +2673,7 @@
       }
 
       try {
-        const res = await fetch("/api/v1/system/update/local-changes");
+        const res = await fetch("/api/v1/system/update/local-changes?force=true");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         window._localChangesList = data.files || [];

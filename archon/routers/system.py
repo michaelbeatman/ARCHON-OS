@@ -298,14 +298,19 @@ def set_system_language(request: Request, payload: dict = Body(...)):
 
 
 @router.get("/api/v1/system/update/check")
-def api_system_update_check():
+def api_system_update_check(force: bool = False):
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    if force:
+        system_updater.invalidate(system_updater.get_update_status)
+        system_updater.invalidate(system_updater.get_local_changes)
     return system_updater.get_update_status()
 
 
 @router.get("/api/v1/system/update/local-changes")
-def api_system_update_local_changes():
+def api_system_update_local_changes(force: bool = False):
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    if force:
+        system_updater.invalidate(system_updater.get_local_changes)
     return system_updater.get_local_changes()
 
 

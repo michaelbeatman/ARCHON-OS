@@ -598,6 +598,9 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
     new_native = _read_git_head_native()
     new_commit = new_native.get("commit", "unknown")
 
+    invalidate(get_update_status)
+    invalidate(get_local_changes)
+
     return {
         "status": "success",
         "new_commit": new_commit,
@@ -636,6 +639,8 @@ def push_changes(commit_message: Optional[str] = None, custom_version: Optional[
 
     dirty = bool(status_chk["stdout"].strip())
     if not dirty:
+        invalidate(get_update_status)
+        invalidate(get_local_changes)
         return {"status": "nothing_to_commit", "message": "Keine neuen lokalen Aenderungen zum Veroeffentlichen vorhanden."}
 
     # 1. Flexible Versionierung (Benutzer-Eingabe oder Step)
@@ -681,6 +686,8 @@ def push_changes(commit_message: Optional[str] = None, custom_version: Optional[
         _run_git(["push", "origin", new_ver], timeout=30)
 
     new_head = _read_git_head_native().get("commit", "unknown")
+    invalidate(get_update_status)
+    invalidate(get_local_changes)
     return {
         "status": "success",
         "commit": new_head,

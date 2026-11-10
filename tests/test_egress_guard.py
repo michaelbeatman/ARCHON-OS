@@ -76,7 +76,7 @@ def test_bad_schemes_blocked(url):
 
 def test_credentials_in_url_blocked():
     with pytest.raises(EgressBlocked) as err:
-        check_target_url("http://user:geheim@127.0.0.1:8501/")
+        check_target_url("http://user:dummy_pass@127.0.0.1:8501/")
     assert "Zugangsdaten" in err.value.reason
 
 

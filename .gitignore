@@ -80,6 +80,7 @@ build/
 *.bak
 *.bak*
 *.backup
+.archon_backup*/
 *.zip
 *.tar.gz
 *.bundle

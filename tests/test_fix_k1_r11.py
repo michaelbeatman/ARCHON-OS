@@ -95,7 +95,7 @@ def test_r11_raw_config_parsed_masks_secrets(monkeypatch):
     yaml_with_secret = (
         "model:\n"
         "  provider: openrouter\n"
-        "  api_key: sk-or-v1-supersecretkey1234567890\n"
+        "  api_key: sk-or-v1-dummytestkey1234567890\n"
     )
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", dir="/tmp", delete=False) as f:
         f.write(yaml_with_secret)
@@ -112,9 +112,9 @@ def test_r11_raw_config_parsed_masks_secrets(monkeypatch):
         assert "parsed" in res
         parsed = res["parsed"]
         # Das Secret darf weder in yaml_content noch in parsed im Klartext stehen
-        assert "sk-or-v1-supersecretkey1234567890" not in res["yaml_content"]
+        assert "sk-or-v1-dummytestkey1234567890" not in res["yaml_content"]
         raw_in_parsed = str(parsed)
-        assert "sk-or-v1-supersecretkey1234567890" not in raw_in_parsed, "Klartext-Key in parsed gefunden!"
+        assert "sk-or-v1-dummytestkey1234567890" not in raw_in_parsed, "Klartext-Key in parsed gefunden!"
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)

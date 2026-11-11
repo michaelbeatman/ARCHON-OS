@@ -88,34 +88,35 @@ async def get_mission_control_state():
     data = await asyncio.to_thread(_load_mission_control_data)
     tasks = data.get("tasks", [])
 
-    # 23.10.2026: Live-Synchronisation mit kanban.db (Source of Truth für Tasks)
-    def _fetch_in_progress_from_kanban():
-        try:
-            from backend.operations_api import _get_kanban_connection
-            conn = _get_kanban_connection()
+    # Wenn ein Legacy-Teststore (nicht kanban.db) genutzt wird, laufende Kanban-Tasks ergänzen
+    if data.get("source") != "kanban.db":
+        def _fetch_in_progress_from_kanban():
             try:
-                cur = conn.cursor()
-                rows = cur.execute("SELECT id, title, assignee, status, started_at, model_override FROM tasks WHERE status = 'in_progress'").fetchall()
-                res = []
-                for r in rows:
-                    res.append({
-                        "id": r["id"],
-                        "title": r["title"],
-                        "agent_id": r["assignee"],
-                        "agent_name": r["assignee"],
-                        "model": r["model_override"] or "omniroute/best-coding",
-                        "status": "in_progress",
-                        "started_at": r["started_at"]
-                    })
-                return res
-            finally:
-                conn.close()
-        except Exception:
-            return []
+                from backend.operations_api import _get_kanban_connection
+                conn = _get_kanban_connection()
+                try:
+                    cur = conn.cursor()
+                    rows = cur.execute("SELECT id, title, assignee, status, started_at, model_override FROM tasks WHERE status = 'in_progress'").fetchall()
+                    res = []
+                    for r in rows:
+                        res.append({
+                            "id": r["id"],
+                            "title": r["title"],
+                            "agent_id": r["assignee"],
+                            "agent_name": r["assignee"],
+                            "model": r["model_override"] or "omniroute/best-coding",
+                            "status": "in_progress",
+                            "started_at": r["started_at"]
+                        })
+                    return res
+                finally:
+                    conn.close()
+            except Exception:
+                return []
 
-    k_tasks = await asyncio.to_thread(_fetch_in_progress_from_kanban)
-    if k_tasks:
-        tasks = [t for t in tasks if t.get("status") != "in_progress"] + k_tasks
+        k_tasks = await asyncio.to_thread(_fetch_in_progress_from_kanban)
+        if k_tasks:
+            tasks = [t for t in tasks if t.get("status") != "in_progress"] + k_tasks
 
     # 1. Profile aus agent_profiles.json laden (51 reale Profile)
     profiles = await asyncio.to_thread(api_get_hermes_profiles)

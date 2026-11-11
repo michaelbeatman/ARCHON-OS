@@ -709,37 +709,111 @@ div#master-chat-sessions-list > div.group {
   border-radius: 0 !important;
   box-shadow: none !important;
   margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  text-align: left !important;
 }
 
-[id$="-global-header"] div.min-w-0 {
+/* Linker Primär-Container in allen Headern bleibt waagerecht linksbündig */
+[id$="-global-header"] > div.flex-1 {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  min-width: 0 !important;
+  flex: 1 1 0% !important;
+}
+
+/* Zweizeilige Titel-Subtitel-Container (nicht der äußere flex-1 Wrapper!) */
+[id$="-global-header"] > div.flex-1 > div.min-w-0 {
   display: flex !important;
   flex-direction: column !important;
+  align-items: flex-start !important;
   justify-content: center !important;
+  text-align: left !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: 100% !important;
   height: auto !important;
   max-height: 76px !important;
 }
 
-[id$="-global-header"] div.min-w-0 h2 {
+[id$="-global-header"] > div.flex-1 > div.min-w-0 > div.flex {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  max-width: 100% !important;
+}
+
+/* Einheitliche Header-Typografie für alle 17 Ansichten */
+[id$="-global-header"] h2 {
   display: block !important;
   visibility: visible !important;
   opacity: 1 !important;
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  width: auto !important;
+  max-width: 100% !important;
   color: var(--foreground) !important;
-  font-size: 20px !important;
-  line-height: 24px !important;
+  font-family: inherit !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  line-height: 22px !important;
+  letter-spacing: -0.02em !important;
+  text-transform: none !important;
+  text-align: left !important;
   margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
-[id$="-global-header"] p,
-[id$="-global-header"] div.min-w-0 > p,
-[id$="-global-header"] div.min-w-0 > div[id$="-main-subtitle"] {
+/* Inline-Header Titel nicht zusammendrücken — Subtitel soll zuerst kürzen */
+[id$="-global-header"] > div.flex-1 > h2 {
+  flex-shrink: 0 !important;
+}
+
+/* Inline Status-Badges im Header immer sichtbar halten */
+[id$="-global-header"] span.inline-flex {
+  display: inline-flex !important;
+}
+
+/* Einheitliche Subtitel: linksbündig, sauber lesbar, keine Überdeckung */
+[id$="-global-header"] [id$="-main-subtitle"],
+[id$="-global-header"] > div.flex-1 > div.min-w-0 > p {
   width: auto !important;
   max-width: 100% !important;
   height: auto !important;
   min-height: 0 !important;
   max-height: 20px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
   line-height: 16px !important;
-  margin-top: 3px !important;
-  margin-bottom: 0 !important;
+  text-align: left !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+[id$="-global-header"] > div.flex-1 > div.min-w-0 > [id$="-main-subtitle"],
+[id$="-global-header"] > div.flex-1 > div.min-w-0 > p {
+  margin: 3px 0 0 0 !important;
+}
+
+[id$="-global-header"] > div.flex-1 > span[id$="-main-subtitle"] {
+  margin: 0 !important;
 }
 
 #main-viewport-scroll,
@@ -778,8 +852,8 @@ div#master-chat-sessions-list > div.group {
   overflow: visible !important;
   z-index: 30 !important;
   margin: 0 !important;
-  padding-left: 0 !important;
-  padding-right: 24px !important;
+  padding-left: 20px !important;
+  padding-right: 20px !important;
 }
 
 #view-mission-control {
@@ -1606,12 +1680,13 @@ div.shadcn-card > div.flex > span {
 }
 
 div.shrink-0 > div.flex > h2.text-base {
-  font-size: 24px !important;
-  line-height: 30px !important;
+  font-size: 18px !important;
+  line-height: 22px !important;
   box-shadow: none !important;
-  width: 223px !important;
-  left: 15px !important;
-  top: 0px !important;
+  width: auto !important;
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
 }
 
 div.shrink-0 > div.flex > span.w-2\.5 {

@@ -1,6 +1,6 @@
 # Archon Agentic OS 2026
 
-Autonomes, multi-agentenbasiertes Betriebssystem für Unternehmen und Gründer. Kombiniert 57 spezialisierte KI-Fachagenten, strukturierte AI-Boardroom-Debatten, interaktiven Computer-Use mit Programming by Demonstration (PbD), lokale DSGVO-Datenhaltung und autonome Selbst-Evolution.
+Autonomes, multi-agentenbasiertes Betriebssystem für Unternehmen und Gründer. Kombiniert 59 spezialisierte KI-Fachagenten, strukturierte AI-Boardroom-Debatten, interaktiven Computer-Use mit Programming by Demonstration (PbD), lokale DSGVO-Datenhaltung und autonome Selbst-Evolution.
 
 ---
 
@@ -112,7 +112,8 @@ AgenticOS-2026/
 ├── .agents/skills/           # Registrierte Skills mit SKILL.md-Manifesten
 ├── data/                     # Lokale Datenbanken (Kanban, ERP, Tenants)
 ├── docs/                     # System-Handbuch & Architektur-Spezifikationen
-│   └── SYSTEM_HANDBUCH.md    # Vollständiges System-Handbuch (300+ Seiten)
+│   ├── system/ARCHON_OS_SYSTEM_HANDBUCH_2026.docx # Offizielles Endbenutzer-Handbuch (Word)
+│   └── system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md # Aktuelle Architektur- & Audit-Referenz
 ├── docker-compose.yml        # Multi-Container-Orchestrierung
 ├── setup.bat                 # 1-Click-Installer für Windows
 ├── start.bat                 # Schneller Start für den Alltag
@@ -126,7 +127,8 @@ AgenticOS-2026/
 
 Die vollständige Dokumentation mit detaillierten Anleitungen zu allen dokumentierten Modulen, API-Endpunkten und SOPs befindet sich unter:
 
-* **[Offizielles System-Handbuch](docs/SYSTEM_HANDBUCH.md)**
+* **[Systemarchitektur & Audit 2026 (Markdown-Kern)](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md)**
+* **[Offizielles System-Handbuch (Word)](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.docx)**
 * **[Entwicklungs-Roadmap 2026](docs/system/ROADMAP_2026.md)**
 
 ---

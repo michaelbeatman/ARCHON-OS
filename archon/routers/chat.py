@@ -33,7 +33,7 @@ from archon.core.delegation import (
 )
 from archon.core.mission_control import (
     _MC_STATE_CACHE,
-    update_mission_control_data,
+    mc_capture_task_sqlite,
 )
 from archon.core.profiles import api_get_hermes_profiles
 from archon.core.runtime import (
@@ -639,21 +639,14 @@ async def api_chat_stream(req: ChatStreamRequest):
             "phase": initial_phase
         }
 
-        # Audit Log
+        # Audit Log + atomare Persistenz direkt in kanban.db
         now_t = datetime.datetime.now().strftime("%H:%M:%S")
-
-        # F-10: Read-Modify-Write unter Lock statt load->modify->save.
-        def _approval_mutate(mc_data):
-            mc_data.setdefault("tasks", []).insert(0, new_task)
-            mc_data.setdefault("audit_logs", []).insert(0, {
-                "time": now_t,
-                "source": "Approval Gate",
-                "msg": f"Missions-Modus: Task #{task_id} erfordert Freigabe vor Ausführung!"
-            })
-            mc_data["audit_logs"] = mc_data["audit_logs"][:25]
-            return new_task
-
-        await asyncio.to_thread(update_mission_control_data, _approval_mutate)
+        audit_entry = {
+            "time": now_t,
+            "source": "Approval Gate",
+            "msg": f"Missions-Modus: Task #{task_id} erfordert Freigabe vor Ausführung!"
+        }
+        await asyncio.to_thread(mc_capture_task_sqlite, new_task, audit_entry)
         
         # --- 2c: Mission liegt im HITL-Approval-Gate -> ueber den zentralen
         # Entscheidungs-Service (echter Kanban-Task, EIN Schreibpfad) ---

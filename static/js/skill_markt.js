@@ -2779,8 +2779,52 @@
     let _currentPriceModalTargetEl = null;
     let _cachedPriceModalList = [];
 
+    function _findPriceCatalogProviderSelect(modelSelectEl) {
+      if (!modelSelectEl) return null;
+      const targetId = modelSelectEl.id;
+      if (targetId === "prof-edit-model") {
+        return document.getElementById("prof-edit-provider");
+      } else if (targetId === "agent-tab-model-select") {
+        return document.getElementById("agent-tab-provider-select");
+      } else if (targetId === "master-chat-model-select") {
+        return document.getElementById("master-chat-provider-select");
+      } else if (targetId === "boardroom-chair-model-select") {
+        return document.getElementById("boardroom-chair-provider-select");
+      } else if (modelSelectEl.closest && modelSelectEl.closest(".boardroom-slot-row")) {
+        return modelSelectEl.closest(".boardroom-slot-row").querySelector(".boardroom-slot-provider-select");
+      }
+      return null;
+    }
+
+    function _syncPriceModalProviderSelect(targetSelectEl) {
+      const modalProvSelect = document.getElementById("llm-price-provider-select");
+      if (!modalProvSelect) return;
+      const callerProvSelect = _findPriceCatalogProviderSelect(targetSelectEl);
+      if (callerProvSelect && callerProvSelect.options && callerProvSelect.options.length > 0) {
+        const currentCallerVal = callerProvSelect.value || "openrouter";
+        modalProvSelect.innerHTML = "";
+        Array.from(callerProvSelect.options).forEach(opt => {
+          const clone = document.createElement("option");
+          clone.value = opt.value;
+          clone.textContent = opt.textContent;
+          if (opt.value === currentCallerVal) clone.selected = true;
+          modalProvSelect.appendChild(clone);
+        });
+        modalProvSelect.value = currentCallerVal;
+      } else if (!modalProvSelect.value) {
+        modalProvSelect.value = "openrouter";
+      }
+    }
+
+    function onPriceModalProviderChange(providerVal) {
+      // Routing-Provider-Wechsel behält die Katalogsuche unverändert und wendet den Provider beim Klick auf "Wählen" an.
+      filterPriceModalTable();
+    }
+    window.onPriceModalProviderChange = onPriceModalProviderChange;
+
     async function openPriceCatalogModal(targetSelectEl, initialFilter = "") {
       _currentPriceModalTargetEl = targetSelectEl;
+      _syncPriceModalProviderSelect(targetSelectEl);
       if (typeof window.loadAgentTabModelPrices === 'function') {
         await window.loadAgentTabModelPrices();
       }
@@ -2807,11 +2851,11 @@
         };
       });
 
-      // Anbieter/Vendor-Dropdown befüllen
+      // Hersteller/Vendor-Dropdown befüllen (unabhängig vom Routing-Provider)
       const vendorSelect = document.getElementById("llm-price-vendor-select");
       if (vendorSelect) {
         const vendors = Array.from(new Set(_cachedPriceModalList.map(m => m.vendor))).filter(Boolean).sort();
-        vendorSelect.innerHTML = '<option value="" selected>Anbieter: Alle</option>';
+        vendorSelect.innerHTML = '<option value="" selected>Hersteller: Alle</option>';
         vendors.forEach(v => {
           const opt = document.createElement("option");
           opt.value = v;
@@ -2958,48 +3002,62 @@
     }
     window.filterPriceModalTable = filterPriceModalTable;
 
-    function selectModelFromPriceCatalog(modelId) {
+    async function selectModelFromPriceCatalog(modelId) {
+      const modalProvSelect = document.getElementById("llm-price-provider-select");
+      let chosenProvider = modalProvSelect ? modalProvSelect.value : "openrouter";
+      let chosenProviderLabel = modalProvSelect && modalProvSelect.selectedIndex >= 0
+        ? modalProvSelect.options[modalProvSelect.selectedIndex].textContent
+        : "OpenRouter";
+
       if (_currentPriceModalTargetEl) {
         const sel = _currentPriceModalTargetEl;
-        let found = false;
-        for (let i = 0; i < sel.options.length; i++) {
-          if (sel.options[i].value === modelId) {
-            sel.selectedIndex = i;
-            found = true;
-            break;
+        const provSelect = _findPriceCatalogProviderSelect(sel);
+        if (provSelect) {
+          if (chosenProvider && Array.from(provSelect.options).some(o => o.value === chosenProvider)) {
+            provSelect.value = chosenProvider;
+          } else {
+            chosenProvider = provSelect.value || chosenProvider;
           }
         }
-        if (!found) {
-          const opt = document.createElement("option");
-          opt.value = modelId;
-          opt.textContent = modelId;
-          sel.appendChild(opt);
-          opt.selected = true;
-        }
-        sel.dispatchEvent(new Event("change", { bubbles: true }));
 
-        // Zugehörigen Provider automatisch auf openrouter setzen
         const targetId = sel.id;
-        let provSelect = null;
-        if (targetId === "prof-edit-model") {
-          provSelect = document.getElementById("prof-edit-provider");
-        } else if (targetId === "agent-tab-model-select") {
-          provSelect = document.getElementById("agent-tab-provider-select");
-        } else if (targetId === "master-chat-model-select") {
-          provSelect = document.getElementById("master-chat-provider-select");
-        } else if (targetId === "boardroom-chair-model-select") {
-          provSelect = document.getElementById("boardroom-chair-provider-select");
-        } else if (sel.closest && sel.closest('.boardroom-slot-row')) {
-          provSelect = sel.closest('.boardroom-slot-row').querySelector('.boardroom-slot-provider-select');
-        }
-
-        if (provSelect) {
-          provSelect.value = "openrouter";
-          provSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        if (targetId === "prof-edit-model" && typeof window.onProfileProviderChange === "function") {
+          await window.onProfileProviderChange(chosenProvider, modelId);
+          if (typeof window.applyProfileModelSelection === "function") {
+            await window.applyProfileModelSelection();
+          }
+        } else if (targetId === "agent-tab-model-select" && typeof window.onAgentTabProviderChange === "function") {
+          await window.onAgentTabProviderChange(chosenProvider, modelId);
+        } else if (targetId === "master-chat-model-select" && typeof window.onMasterChatProviderChanged === "function") {
+          await window.onMasterChatProviderChanged(chosenProvider, modelId);
+        } else if (targetId === "boardroom-chair-model-select" && typeof window.setupBoardroomChairmanModelDropdown === "function") {
+          await window.setupBoardroomChairmanModelDropdown(chosenProvider, modelId);
+        } else if (sel.closest && sel.closest(".boardroom-slot-row") && typeof window.setupBoardroomSlotModelDropdown === "function") {
+          await window.setupBoardroomSlotModelDropdown(sel, chosenProvider, modelId);
+        } else {
+          let found = false;
+          for (let i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === modelId) {
+              sel.selectedIndex = i;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            const opt = document.createElement("option");
+            opt.value = modelId;
+            opt.textContent = modelId;
+            sel.appendChild(opt);
+            opt.selected = true;
+          }
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+          if (provSelect) {
+            provSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }
         }
       }
       if (typeof showArchonToast === "function") {
-        showArchonToast(`Modell '${modelId}' (OpenRouter) übernommen.`, "success");
+        showArchonToast(`Modell '${modelId}' (${chosenProviderLabel}) übernommen.`, "success");
       }
       closePriceCatalogModal();
     }

@@ -11,7 +11,7 @@
   <link href="/static/vendor/fonts/fonts.css" rel="stylesheet">
   <!-- Custom Studio CSS Overrides -->
   <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
-  <link rel="stylesheet" href="/static/custom.css?v=202611092115">
+  <link rel="stylesheet" href="/static/custom.css?v=202611101448">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
   <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=202611092115">
   <!-- Tailwind CSS Local Bundle (Offline-fähig & kein CDN Latenz-Overhead) -->
@@ -1971,14 +1971,25 @@
 
             <!-- Toolbar & Schnell-Filter -->
             <div class="p-3 border-b border-[var(--border)] bg-[var(--card)] space-y-2 shrink-0">
-              <div class="flex items-center gap-2.5">
-                <div class="relative flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <div class="relative flex-1 min-w-[200px]">
                   <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] pointer-events-none"></i>
                   <input type="text" id="llm-price-search" oninput="filterPriceModalTable()" placeholder="Modell durchsuchen (z.B. deepseek, claude, gpt-4o, flash, qwen)..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl pl-9 pr-8 py-1.5 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-medium shadow-2xs">
                   <button type="button" onclick="document.getElementById('llm-price-search').value=''; filterPriceModalTable();" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs cursor-pointer p-0.5" title="Suchfeld leeren">✕</button>
                 </div>
-                <select id="llm-price-vendor-select" onchange="filterPriceModalTable()" class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-medium cursor-pointer shadow-2xs focus:outline-none shrink-0" title="Nach Anbieter filtern">
-                  <option value="" selected>Anbieter: Alle</option>
+                <div class="flex items-center gap-1.5 shrink-0" title="Routing-Provider / Gateway auswählen (z. B. OpenRouter oder OmniRoute)">
+                  <span class="text-[10px] font-mono font-bold uppercase text-[var(--muted-foreground)]">Provider:</span>
+                  <select id="llm-price-provider-select" onchange="onPriceModalProviderChange(this.value)" class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-bold cursor-pointer shadow-2xs focus:outline-none shrink-0">
+                    <option value="openrouter" selected>OpenRouter</option>
+                    <option value="omniroute">OmniRoute</option>
+                    <option value="google">Google AI (Gemini)</option>
+                    <option value="groq">Groq</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="nvidia">NVIDIA NIM</option>
+                  </select>
+                </div>
+                <select id="llm-price-vendor-select" onchange="filterPriceModalTable()" class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-medium cursor-pointer shadow-2xs focus:outline-none shrink-0" title="Nach Sprachmodell-Hersteller filtern">
+                  <option value="" selected>Hersteller: Alle</option>
                 </select>
                 <select id="llm-price-sort" onchange="filterPriceModalTable()" class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono font-medium cursor-pointer shadow-2xs focus:outline-none shrink-0" title="Sortierung wählen">
                   <option value="price_asc" selected>Sortierung: Günstigste zuerst</option>
@@ -2136,7 +2147,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/archon_i18n.js"></script>
   <script src="/static/js/auth_manager.js"></script>
   <script src="/static/js/auth_gate.js"></script>
-  <script src="/static/js/chat_engine.js?v=202610271358"></script>
+  <script src="/static/js/chat_engine.js?v=202611101445"></script>
   <script src="/static/js/system_settings.js?v=202610311300"></script>
   <script src="/static/js/settings_search.js?v=202611030730"></script>
   <script src="/static/js/system_update_badge.js?v=202611030945"></script>
@@ -2175,7 +2186,7 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/approval_policies_controller.js?v=202610310700"></script>
   <script src="/static/js/prompt_studio.js?v=202610242200"></script>
   <script src="/static/js/wissensbibliothek.js?v=202610241345"></script>
-  <script src="/static/js/skill_markt.js?v=202610272015"></script>
+  <script src="/static/js/skill_markt.js?v=202611101445"></script>
   <script>
     // =========================================================================
     // 🔔 ARCHON OS GLOBAL NOTIFICATION / TOAST SYSTEM
@@ -3206,7 +3217,7 @@ print('Ausführung erfolgreich!')</textarea>
       }
       if (tabId === "mission-control") {
         fetchMissionControlData();
-        if (requestedMcSubtab && typeof setOperationsTab === "function") {
+        if (typeof requestedMcSubtab !== "undefined" && requestedMcSubtab && typeof setOperationsTab === "function") {
           setOperationsTab(requestedMcSubtab);
           if (requestedMcSubtab !== "automation" && typeof loadOperationsData === "function") {
             loadOperationsData(false);

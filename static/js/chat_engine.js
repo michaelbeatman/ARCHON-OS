@@ -1099,6 +1099,8 @@ async function initMasterChat() {
       }
     }
     window.onMasterChatReasoningChange = onMasterChatReasoningChange;
+    window.onMasterChatProviderChanged = onMasterChatProviderChanged;
+    window.onMasterChatModelChanged = onMasterChatModelChanged;
 
     window.openPriceCatalogForMasterChat = function() {
       const modelSelect = document.getElementById("master-chat-model-select");

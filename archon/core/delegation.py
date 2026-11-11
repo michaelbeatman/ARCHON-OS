@@ -21,7 +21,11 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from archon.core.constants import DELEGATION_PROTOCOL_PROMPT
-from archon.core.mission_control import _load_mission_control_data, update_mission_control_data
+from archon.core.mission_control import (
+    mc_get_parent_context_sqlite,
+    mc_link_subtask_sqlite,
+    mc_update_task_sqlite,
+)
 from archon.core.orchestration import _fan_in_maybe_start_synthesis
 from archon.core.profiles import api_get_hermes_profiles
 from archon.core.paths import OPT_DATA_DIR
@@ -654,12 +658,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     fan_parent = None
                     fan_parent_title = None
                     try:
-                        _mc = _load_mission_control_data()
-                        for _t in _mc.get("tasks", []):
-                            if _t.get("kanban_task_id") == task_id:
-                                fan_parent = _t.get("parent_project_id")
-                                fan_parent_title = _t.get("parent_project_title")
-                                break
+                        fan_parent, fan_parent_title = await asyncio.to_thread(
+                            mc_get_parent_context_sqlite, task_id
+                        )
                     except Exception:
                         pass
                     try:
@@ -794,19 +795,16 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             # --- FAN-IN RUECKLAUF ---
             if status == "done":
                 try:
-                    fan_parent = None
-                    def _fan_in_mutate(mc_data):
-                        nonlocal fan_parent
-                        for _t in mc_data.get("tasks", []):
-                            if _t.get("kanban_task_id") == task_id:
-                                _t["status"] = "completed"
-                                _t["result_summary"] = (result or "")[:800]
-                                _t["completed_at"] = time.time()
-                                fan_parent = _t.get("parent_project_id")
-                                break
-                        return fan_parent
-
-                    await asyncio.to_thread(update_mission_control_data, _fan_in_mutate)
+                    fan_parent, _ = await asyncio.to_thread(mc_get_parent_context_sqlite, task_id)
+                    await asyncio.to_thread(
+                        mc_update_task_sqlite,
+                        task_id,
+                        {
+                            "status": "completed",
+                            "result_summary": (result or "")[:800],
+                            "completed_at": time.time(),
+                        },
+                    )
                     if fan_parent:
                         _spawn_background(_fan_in_maybe_start_synthesis(fan_parent), name=f"fan_in_{fan_parent}")
                 except Exception as fan_err:
@@ -814,57 +812,34 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         except Exception as e:
             logger.error(f"[Delegation] Task-Watcher error: {e}")
 
-    # --- FAN-IN BRUECKE ---
+    # --- FAN-IN BRUECKE (nativ auf kanban.db + task_links) ---
     parent_pid = str(payload.get("parent_project_id") or payload.get("projekt") or "").strip()
     if parent_pid:
         try:
             parent_title_var = str(payload.get("projekt_titel") or payload.get("titel") or "").strip()
-
-            def _bridge_mutate(mc_data):
-                mc_tasks = mc_data.setdefault("tasks", [])
-                title_var = parent_title_var
-                existing_parent = next((t for t in mc_tasks if t.get("id") == parent_pid), None)
-                if existing_parent is None:
-                    if not title_var:
-                        title_var = f"Delegationsprojekt {parent_pid}"
-                    mc_tasks.append({
-                        "id": parent_pid,
-                        "title": title_var,
-                        "agent_id": delegator_id,
-                        "agent_name": d_name,
-                        "status": "active",
-                        "phase": "in_progress",
-                        "created_via": "delegation_bridge",
-                        "capture_input": auftrag[:400],
-                        "target_action": "none",
-                    })
-                    logger.info(f"[Delegation] Fan-in Parent '{parent_pid}' angelegt")
-                else:
-                    title_var = str(existing_parent.get("title") or title_var or parent_pid)
-                if task_id:
-                    mc_tasks.append({
-                        "id": f"mcsub-{task_id}",
-                        "title": auftrag[:80],
-                        "agent_id": ziel,
-                        "agent_name": t_name,
-                        "status": "active",
-                        "phase": "in_progress",
-                        "parent_project_id": parent_pid,
-                        "parent_project_title": title_var,
-                        "kanban_task_id": task_id,
-                        "created_via": "delegation_bridge",
-                        "capture_input": auftrag[:400],
-                        "target_action": "none",
-                    })
-                return title_var
-
-            update_mission_control_data(_bridge_mutate)
-            from backend.operations_api import _get_kanban_connection as _kg_link
-            kc_link = _kg_link()
-            kc_link.execute("UPDATE tasks SET project_id = ? WHERE id = ?", (parent_pid, task_id))
-            kc_link.execute("INSERT OR IGNORE INTO task_links (parent_id, child_id) VALUES (?, ?)", (parent_pid, task_id))
-            kc_link.commit()
-            kc_link.close()
+            mc_link_subtask_sqlite(
+                parent_pid,
+                task_id,
+                parent_defaults={
+                    "id": parent_pid,
+                    "title": parent_title_var or f"Delegationsprojekt {parent_pid}",
+                    "agent_id": delegator_id,
+                    "agent_name": d_name,
+                    "status": "active",
+                    "phase": "in_progress",
+                    "created_via": "delegation_bridge",
+                    "capture_input": auftrag[:400],
+                    "target_action": "none",
+                },
+                child_updates={
+                    "agent_name": t_name,
+                    "phase": "in_progress",
+                    "created_via": "delegation_bridge",
+                    "capture_input": auftrag[:400],
+                    "target_action": "none",
+                } if task_id else None,
+            )
+            logger.info(f"[Delegation] Fan-in Link '{parent_pid}' -> '{task_id}' in kanban.db gespeichert")
         except Exception as fan_err:
             logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 

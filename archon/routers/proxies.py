@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
-from typing import Dict
+import time
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
@@ -98,8 +100,54 @@ def _get_n8n_proxy():
     return _N8N_PROXY
 
 
+_N8N_AUTOSTART_LOCK: Optional[asyncio.Lock] = None
+_N8N_AUTOSTART_LAST_TRY: float = 0.0
+
+
+async def _ensure_n8n_running() -> bool:
+    """Startet den gestoppten n8n-Container einmalig über den DockerClient und wartet auf /healthz."""
+    global _N8N_AUTOSTART_LOCK, _N8N_AUTOSTART_LAST_TRY
+    if _N8N_AUTOSTART_LOCK is None:
+        _N8N_AUTOSTART_LOCK = asyncio.Lock()
+
+    async with _N8N_AUTOSTART_LOCK:
+        now = time.monotonic()
+        if now - _N8N_AUTOSTART_LAST_TRY < 15.0:
+            return False
+        _N8N_AUTOSTART_LAST_TRY = now
+
+        try:
+            from utils.docker_client import docker_client
+
+            info_raw = await asyncio.to_thread(docker_client.container_json, "n8n")
+            info = json.loads(info_raw.decode("utf-8", errors="ignore") or "{}")
+            running = bool((info.get("State") or {}).get("Running"))
+            if not running:
+                logger.info("[n8n-proxy] Container 'n8n' ist gestoppt — starte automatisch nach...")
+                await asyncio.to_thread(docker_client.container_action, "n8n", "start")
+        except Exception as exc:
+            logger.warning(f"[n8n-proxy] Auto-Start fehlgeschlagen: {exc}")
+            return False
+
+        client = _get_shared_proxy_client()
+        for _ in range(24):
+            try:
+                resp = await client.get("http://n8n:5678/healthz", timeout=2.0)
+                if resp.status_code == 200:
+                    return True
+            except Exception:
+                pass
+            await asyncio.sleep(0.5)
+        return False
+
+
 async def forward_to_n8n(request: Request, path: str):
-    return await _get_n8n_proxy().forward(request, path)
+    proxy = _get_n8n_proxy()
+    res = await proxy.forward(request, path)
+    if res.status_code == 502:
+        if await _ensure_n8n_running():
+            return await proxy.forward(request, path)
+    return res
 
 
 @router.api_route("/n8n-proxy", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])

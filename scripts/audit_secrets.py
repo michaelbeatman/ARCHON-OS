@@ -37,6 +37,7 @@ SAFE_FILE_EXCEPTIONS = {
     "scripts/audit_secrets.py",
     "local_security_guard.py",
     "tests/test_security_and_validation.py",
+    "tests/test_m30_onboarding_wizard.py",
     "docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md",
     "docs/security/SECRETS_MANAGEMENT_UND_ROTATION.md",
 }

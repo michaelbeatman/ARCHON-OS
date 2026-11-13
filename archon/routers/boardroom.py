@@ -10,7 +10,7 @@ import re
 import sys
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import httpx
 import yaml
@@ -114,9 +114,32 @@ def api_delete_boardroom_history_item(item_id: str):
     return {"status": "success"}
 
 
+def _resolve_boardroom_lang(lang: Optional[str] = None, request: Request = cast(Request, None)) -> str:
+    if isinstance(lang, str) and lang.strip():
+        return "en" if lang.strip().lower().startswith("en") else "de"
+    if request is not None:
+        st_lang = getattr(getattr(request, "state", None), "lang", None)
+        if isinstance(st_lang, str) and st_lang.strip():
+            return "en" if st_lang.strip().lower().startswith("en") else "de"
+        acc = (request.headers.get("accept-language") or "").strip().lower()
+        if acc:
+            first_tag = acc.split(",")[0].split(";")[0].strip()
+            if first_tag.startswith("en"):
+                return "en"
+            if first_tag.startswith("de"):
+                return "de"
+    env_lang = (os.environ.get("ARCHON_LANGUAGE") or "").strip().lower()
+    return "en" if env_lang.startswith("en") else "de"
+
+
 @router.get("/api/boardroom/frameworks")
-def api_get_boardroom_frameworks():
-    return _DEPS["load_boardroom_frameworks"]()
+def api_get_boardroom_frameworks(lang: Optional[str] = None, request: Request = cast(Request, None)):
+    resolved_lang = _resolve_boardroom_lang(lang=lang, request=request)
+    if resolved_lang == "en":
+        return core_dispatcher.CATEGORIZED_FRAMEWORKS_EN
+    if "load_boardroom_frameworks" in _DEPS:
+        return _DEPS["load_boardroom_frameworks"]()
+    return core_dispatcher.CATEGORIZED_FRAMEWORKS
 
 
 @router.post("/api/boardroom/frameworks")
@@ -136,6 +159,7 @@ def api_reset_boardroom_frameworks(request: Request):
         except Exception:
             pass
     core_dispatcher.CATEGORIZED_FRAMEWORKS = _deepcopy(core_dispatcher.DEFAULT_CATEGORIZED_FRAMEWORKS)
+    core_dispatcher.CATEGORIZED_FRAMEWORKS_EN = _deepcopy(core_dispatcher.DEFAULT_CATEGORIZED_FRAMEWORKS_EN)
     _save_json(FRAMEWORKS_FILE, core_dispatcher.CATEGORIZED_FRAMEWORKS)
     return {"status": "success"}
 

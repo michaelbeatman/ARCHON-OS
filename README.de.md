@@ -7,13 +7,15 @@
 **Autonomes, lokal betreibbares Multi-Agenten-Betriebssystem für Gründer, Teams & Fachdomänen**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Agenten: 70 Spezialisten](https://img.shields.io/badge/Spezialisten-70%20in%208%20Dom%C3%A4nen-emerald.svg)](agent_profiles.json)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](requirements.txt)
-[![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED.svg)](docker-compose.yml)
+[![Release: v0.5.2.1](https://img.shields.io/badge/Release-v0.5.2.1%20Global%20Edition-6366f1.svg)](CHANGELOG.md)
+[![Agenten: 70 Spezialisten](https://img.shields.io/badge/Spezialisten-70%20in%208%20Dom%C3%A4nen%20(DE%2FEN)-emerald.svg)](agent_profiles.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
+[![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
+[![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](SECURITY.md)
 
-[🇬🇧 English](README.md) · **🇩🇪 Deutsch** · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md)
+[🇬🇧 English](README.md) · **🇩🇪 Deutsch** · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 Agenten-Installationsprotokoll](INSTALL_AGENT.md) | [📘 Handbücher & PDFs](#dokumentation--handbücher-pdf) | [🗺️ Roadmap](docs/system/ROADMAP_2026.md)
+[🤖 Agenten-Installationsprotokoll](INSTALL_AGENT.md) | [⚡ Zero-Key Live-Demo](#weg-c-sofortige-read-only-live-demo-archon_demo_modetrue) | [📘 Handbücher & PDFs](#dokumentation--handbücher-pdf) | [🗺️ Roadmap (M0–M53)](docs/system/ROADMAP_2026.md)
 
 </div>
 
@@ -30,10 +32,10 @@ Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehos
 | Dokument | Deutsch (DE) | Englisch (EN) | Inhalt & Umfang |
 |---|---|---|---|
 | **Benutzer- & Firmenhandbuch** | [**ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf**](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 S., 1,9 MB)* | [ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 S., 1,9 MB)* | Installation, Kapitel 1–19, 5 Use Cases, IT-Sicherheit/Verschlüsselung/DSGVO & A–Z-Glossar |
-| **Vollständige Featureliste (`v0.5.1`)** | [**ARCHON_OS_FEATURELISTE_2026.pdf**](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) *(34 S., 0,7 MB)* | [ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) *(31 S., 0,7 MB)* | Kompletter System- & Modul-Katalog, FinOps, Pillars 1–7, ERP *(alpha)*, Hardening & Index |
-| **AI-Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) *(32 S., 0,7 MB)* | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) *(31 S., 0,7 MB)* | Alle 55 strukturierten Decision-Engine-Methodiken in 9 Kategorien & A–Z-Verzeichnis |
+| **Vollständige Featureliste (`v0.5.2.1`)** | [**ARCHON_OS_FEATURELISTE_2026.pdf**](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | [ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | Kompletter System- & Modul-Katalog, Zweisprachige Global Edition, Live-Demo-Modus, Setup-Wizard & FinOps |
+| **AI-Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | Alle 55 strukturierten Decision-Engine-Methodiken (DE & EN) & Index |
 
-*Weitere Technik- & Sicherheitsdokumente:* [Systemarchitektur & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap](docs/system/ROADMAP_2026.md) · [CLI-Übersetzungsskript (`scripts/translate_manual.py`)](scripts/translate_manual.py)
+*Weitere Technik- & Sicherheitsdokumente:* [Systemarchitektur & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M53)](docs/system/ROADMAP_2026.md) · [Live-Demo-Modus (`ARCHON_DEMO_MODE`)](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup-Wizard](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ökosystem & Migration](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -104,14 +106,23 @@ Beide Installer prüfen und installieren bei Bedarf **Docker** sowie **Obsidian 
 
 *(Im Alltag genügt ein Doppelklick auf `start.bat` zum Starten und `stop.bat` zum geordneten Herunterfahren.)*
 
-#### Linux & macOS
+#### Linux & macOS (Intel & Apple Silicon ARM64)
 ```bash
-git clone https://github.com/michaelbeatman/Archon-Os.git
-cd Archon-Os
+git clone https://github.com/michaelbeatman/ARCHON-OS.git
+cd ARCHON-OS
 chmod +x install.sh
 ./install.sh
 ```
-*(Mit `./install.sh --yes` läuft der Installer ohne Rückfragen mit Standardwerten durch.)*
+*(Mit `./install.sh --yes` läuft der Installer ohne Rückfragen durch; beim ersten Browser-Aufruf führt der **4-stufige Web-Setup-Wizard** durch Mandantenprofil, Live-Provider-Test, Kanäle und Domänen-Auswahl.)*
+
+### Weg C: Sofortige Read-Only Live-Demo (`ARCHON_DEMO_MODE=true`)
+
+Cockpit, 6-Phasen-Boardroom-Debatte (*„Mittelstand Muster GmbH“*), Kanban und 70 Spezialisten **ohne API-Keys und ohne Token-Kosten** in 30 Sekunden testen (oder sicher auf einer 5-€-VPS hosten):
+
+```bash
+ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
+# Öffne http://localhost:8501 — strikt schreibgeschützt via ASGI-Guard!
+```
 
 ---
 
@@ -161,8 +172,10 @@ flowchart LR
 
 ### Weiterführende Dokumente & Handbücher (PDF)
 - **Benutzer- & Firmenhandbuch (DE, PDF):** [docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)
-- **Vollständige Featureliste & System-Katalog (v0.5.1, DE, PDF):** [docs/system/ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf)
+- **Vollständige Featureliste & System-Katalog (v0.5.2.1, DE, PDF):** [docs/system/ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf)
 - **Decision Engine & 55 Boardroom-Frameworks (DE, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
-- **Entwicklungs-Roadmap (44 Meilensteine):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
+- **Entwicklungs-Roadmap (54 Meilensteine, M0–M53):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
+- **Live-Demo-Modus (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
+- **First-Run Setup-Wizard:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)
+- **Ökosystem & Migrations-Guide:** [docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md)
 - **Systemarchitektur & Audit 2026:** [docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md)
-- **Übersetzungs-Leitfaden für die englische Handbuch-Ausgabe:** [docs/system/MANUAL_TRANSLATION_GUIDE.md](docs/system/MANUAL_TRANSLATION_GUIDE.md)

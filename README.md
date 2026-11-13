@@ -7,13 +7,15 @@
 **Self-Hosted Multi-Agent Operating System for Founders, Teams & Domain Specialists**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains-emerald.svg)](agent_profiles.json)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](requirements.txt)
-[![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED.svg)](docker-compose.yml)
+[![Release: v0.5.2.1](https://img.shields.io/badge/Release-v0.5.2.1%20Global%20Edition-6366f1.svg)](CHANGELOG.md)
+[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](agent_profiles.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
+[![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
+[![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](SECURITY.md)
 
 **🇬🇧 English** · [🇩🇪 Deutsch](README.de.md) · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap](docs/system/ROADMAP_2026.md)
+[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M53)](docs/system/ROADMAP_2026.md)
 
 </div>
 
@@ -23,7 +25,7 @@
 
 Archon OS replaces isolated single-prompt chatbots with a persistent, self-hosted **Agentic Operating System**. It orchestrates **70 domain specialists across 8 specialized domains**, runs structured **55-framework AI Boardroom debates**, pairs **Zero-Egress local AI routing** with a tamper-evident **GoBD/ISO-27001 SHA-256 audit log**, and connects directly to your **Obsidian Second Brain**, **n8n automations**, **Telegram**, and an integrated **CRM & ERP suite *(Alpha)***.
 
-> **Localization Status:** Core UI supports 9 languages via i18n (`en`, `de`, `es`, `fr`, `pt`, `ru`, `ja`, `ko`, `zh`). The **User Manual**, **Complete Feature List (`v0.5.1`)**, and **55 Boardroom Frameworks Reference** are available immediately below as compact, indexed **English & German PDFs**.
+> **Localization & Global Edition (`v0.5.2.1`):** Full bilingual (`en` & `de`) parity across all **70 specialist `SOUL.md` profiles**, **832 parametric Prompt Studio templates**, **55 AI Boardroom frameworks**, and the **First-Run Web Setup Wizard**; core UI localized in 9 languages (`en`, `de`, `es`, `fr`, `pt`, `ru`, `ja`, `ko`, `zh`). The **User Manual**, **Complete Feature List (`v0.5.2.1`)**, and **55 Boardroom Frameworks Reference** are available immediately below as indexed **English & German PDFs**.
 
 ---
 
@@ -58,10 +60,10 @@ And the best part: Archon OS is a **self-improving system built on Hermes Agent*
 | Document | English (EN) | Deutsch (DE) | Scope |
 |---|---|---|---|
 | **User & Company Manual** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 pp., 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 pp., 1.9 MB)* | Installation, Chapters 1–19, 5 Use Cases, Encryption/GDPR Overview & A–Z Glossary |
-| **Complete Feature List (`v0.5.1`)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) *(31 pp., 0.7 MB)* | [ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) *(34 pp., 0.7 MB)* | Full 19-chapter module catalog, FinOps, Pillars 1–7, ERP *(alpha)*, Hardening & Index |
-| **AI Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) *(31 pp., 0.7 MB)* | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) *(32 pp., 0.7 MB)* | All 55 structured Decision Engine methodologies across 9 categories & A–Z index |
+| **Complete Feature List (`v0.5.2.1`)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | Full module catalog, Bilingual Global Edition, Live Demo Mode, First-Run Wizard, FinOps & Security |
+| **AI Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 55 structured Decision Engine methodologies (EN & DE) & index |
 
-*More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap](docs/system/ROADMAP_2026.md) · [Manual Translation CLI (`scripts/translate_manual.py`)](scripts/translate_manual.py)
+*More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M53)](docs/system/ROADMAP_2026.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -132,14 +134,23 @@ Both installers automatically check/offer **Docker** and **Obsidian Desktop**, i
 
 *(For daily use afterwards: double-click `start.bat` to launch or `stop.bat` to shut down gracefully.)*
 
-#### Linux & macOS
+#### Linux & macOS (Intel & Apple Silicon ARM64)
 ```bash
-git clone https://github.com/michaelbeatman/Archon-Os.git
-cd Archon-Os
+git clone https://github.com/michaelbeatman/ARCHON-OS.git
+cd ARCHON-OS
 chmod +x install.sh
 ./install.sh
 ```
-*(Use `./install.sh --yes` for non-interactive setup using `.env.example` defaults.)*
+*(Use `./install.sh --yes` for non-interactive setup; on first browser visit, the **4-Step Web Setup Wizard** guides you through company profile, live provider check, channels, and domain activation.)*
+
+### Option C: Instant Zero-Key Read-Only Demo (`ARCHON_DEMO_MODE=true`)
+
+Want to explore the full Cockpit, the **Mittelstand Muster GmbH** 6-phase AI Boardroom debate, Kanban cards, and 70 specialists **in 30 seconds without a single API key or LLM cost** (or host a safe public showcase on a €5 VPS)?
+
+```bash
+ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
+# Open http://localhost:8501 — read-only ASGI guard, zero token egress!
+```
 
 ---
 
@@ -148,11 +159,11 @@ chmod +x install.sh
 ```mermaid
 flowchart LR
     U["User / LAN Browser / Telegram"] -->|HTTP 8501 + RBAC Auth| UI["Archon Web Cockpit (FastAPI + SPA)"]
-    UI --> OR["Orchestrator & 70-Specialist Fleet (3-Tier SOUL)"]
+    UI --> OR["Orchestrator & 70-Specialist Fleet (3-Tier SOUL · EN/DE)"]
     OR --> BR["AI Boardroom (55 Decision Frameworks)"]
-    OR --> PR["Zero-Egress Privacy Router"]
-    PR -->|Local Data / Sensitive| LOC["Ollama / LM Studio (On-Premise)"]
-    PR -->|General / Cloud| CLD["OpenRouter / OpenAI / Anthropic / Gemini"]
+    OR --> OM["OmniRoute Switchboard (Port 20128)"]
+    OM -->|Local / Zero-Egress| LOC["Ollama / LM Studio (On-Premise)"]
+    OM -->|Cloud Providers| CLD["OpenRouter / OpenAI / Anthropic / Gemini"]
     UI --> DB["SQLite WAL + SHA-256 Audit Log + Obsidian Vault"]
     UI --> ERP["CRM & ERP Module (Alpha) + Kanban HITL"]
     UI <-->|TCP via Socket Proxy| DOC["Docker Socket Proxy (Least Privilege)"]
@@ -160,10 +171,10 @@ flowchart LR
 ```
 
 ### The 4 Navigation Pillars
-1. **Steuerung & Operation:** Operations Command Center, Master Chat, Triage Inbox (Webhooks, Email, Messenger, Approvals), **70-Specialist Agent Fleet** (incl. Bot Screen PbD & 3-tier SOUL), Showroom Sandbox.
-2. **Kognition & Wissen:** Internet-Watchdog (RSS/Web Radar), Research Lab (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM RAG), AI Boardroom (6-phase debate across 55 frameworks).
-3. **Wirtschaft & ERP *(Alpha)*:** CRM (addresses, contacts, pipeline), ERP suite (offers, contracts, invoices, receivables/dunning, receipts), OmniRoute token FinOps with per-model cost control.
-4. **Infrastruktur & Governance:** Org-Chart & Teams, Guardian (Concurrency, Sessions, Rate Limits), System Control Center (API Keys, Routing, Kernel Watchdog, Updates), Tamper-Evident Audit Log Stream.
+1. **Command & Operations:** Operations Command Center, Master Chat, Triage Inbox (Webhooks, Email, Messenger, Approvals), **70-Specialist Agent Fleet** (incl. Bot Screen PbD & 3-tier SOUL), **832-Template Prompt Studio**, Showroom Sandbox.
+2. **Cognition & Knowledge:** Internet-Watchdog (RSS/Web Radar), Research Lab (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM RAG), AI Boardroom (6-phase debate across 55 frameworks).
+3. **Economy & ERP *(Alpha)*:** CRM (addresses, contacts, pipeline), ERP suite (offers, contracts, invoices, receivables/dunning, receipts), OmniRoute token FinOps with per-model cost control.
+4. **Infrastructure & Governance:** Org-Chart & Teams, Guardian (Concurrency, Sessions, Rate Limits), System Control Center (First-Run Wizard, API Keys, Routing, Kernel Watchdog, Updates), Tamper-Evident Audit Log Stream.
 
 ---
 
@@ -195,24 +206,28 @@ flowchart LR
 ## Project Structure & Documentation
 
 ```text
-AgenticOS-2026/
-├── archon/                 # Modular FastAPI routers & core runtime (70 profiles, org)
-├── backend/                # Auth gate, audit log, privacy router, PbD, MCTS, updater
-├── static/                 # Border-first SPA UI, views & interactive liability modals
-├── scripts/                # SOUL sync (sync_soul_modes.py), backups, MCP drivers
-├── docs/system/            # System Architecture, 44-Milestone Roadmap & Word Manual
-├── INSTALL_AGENT.md        # Structured onboarding guide for AI Coding Agents
-├── setup.bat / setup.ps1   # Interactive 1-Click Installer for Windows
-├── install.sh              # Interactive Installer for Linux & macOS
-├── docker-compose.yml      # Portable container stack definition
-├── LICENSE                 # MIT License (SPDX: MIT)
-├── DISCLAIMER.md           # Regulatory & Professional Liability Notice
-└── THIRD_PARTY_LICENSES.md # Open-source attributions & synthetic avatar notice
+ARCHON-OS/
+├── archon/                  # Modular FastAPI routers & core runtime (70 profiles, onboarding, demo)
+├── backend/                 # Auth gate, audit log, privacy router, onboarding wizard, demo guard
+├── static/                  # Border-first SPA UI, 9 locales & interactive liability modals
+├── scripts/                 # Bilingual SOUL & profile.yaml sync (sync_soul_modes.py), backups
+├── deploy/ecosystem/        # Self-hosting manifests & ecosystem integration guides
+├── docs/system/             # System Architecture, 54-Milestone Roadmap (M0–M53) & PDFs
+├── INSTALL_AGENT.md         # Structured onboarding guide for AI Coding Agents
+├── setup.bat / setup.ps1    # Interactive 1-Click Installer for Windows
+├── install.sh               # Interactive Multi-Arch Installer for Linux & macOS
+├── docker-compose.yml       # Full production container stack (non-root, socket-proxy, omniroute)
+├── docker-compose.demo.yml  # Zero-key read-only showcase container (ARCHON_DEMO_MODE=true)
+├── LICENSE                  # MIT License (SPDX: MIT)
+├── SECURITY.md              # Zero-Trust Security Architecture & Vulnerability Policy
+└── DISCLAIMER.md            # Regulatory & Professional Liability Notice
 ```
 
 - **User & Company Manual (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(German: [DE PDF](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
-- **Complete Feature List & System Catalog (v0.5.1, EN, PDF):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
+- **Complete Feature List & System Catalog (v0.5.2.1, EN, PDF):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 - **Decision Engine & 55 Boardroom Frameworks (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
-- **Detailed Roadmap (44 Milestones):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
+- **Detailed Roadmap (54 Milestones, M0–M53):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
+- **Live Demo Mode Guide (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
+- **First-Run Setup Wizard Guide:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)
+- **Ecosystem & Migration Guide:** [docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md)
 - **System Architecture & Audit:** [docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md)
-- **Manual Translation Guide (DE → EN):** [docs/system/MANUAL_TRANSLATION_GUIDE.md](docs/system/MANUAL_TRANSLATION_GUIDE.md)

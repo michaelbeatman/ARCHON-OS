@@ -263,32 +263,52 @@ def _load_prompt_studio_catalog() -> List[Dict[str, Any]]:
 
 
 @router.get("/api/templates/catalog")
-def get_prompt_studio_catalog(category: Optional[str] = None, q: Optional[str] = None):
-    """Liefert den gesamten Archon Prompt Studio Katalog (824 Vorlagen) gefiltert nach Kategorie/Suche."""
+def get_prompt_studio_catalog(category: Optional[str] = None, q: Optional[str] = None, lang: Optional[str] = Query("de")):
+    """Liefert den gesamten Archon Prompt Studio Katalog (832 Vorlagen) gefiltert nach Kategorie/Suche/Sprache."""
     catalog = _load_prompt_studio_catalog()
-    categories = sorted(list({t["category"] for t in catalog if "category" in t}))
+    is_en = (lang or "").lower() == "en"
+    if is_en:
+        categories = sorted(list({(t.get("category_en") or t.get("category")) for t in catalog if t.get("category") or t.get("category_en")}))
+    else:
+        categories = sorted(list({t["category"] for t in catalog if "category" in t}))
 
     filtered = catalog
     if category and category != "all" and category != "Favoriten":
-        filtered = [t for t in filtered if t.get("category", "").lower() == category.lower() or t.get("category_slug", "").lower() == category.lower()]
+        cat_lower = category.lower()
+        filtered = [
+            t for t in filtered
+            if t.get("category", "").lower() == cat_lower
+            or t.get("category_slug", "").lower() == cat_lower
+            or t.get("category_en", "").lower() == cat_lower
+        ]
     if q:
         query = q.lower().strip()
         filtered = [
             t for t in filtered
-            if query in t.get("name", "").lower() or query in t.get("id", "").lower() or query in t.get("description", "").lower()
+            if query in t.get("name", "").lower()
+            or query in t.get("name_de", "").lower()
+            or query in t.get("name_en", "").lower()
+            or query in t.get("id", "").lower()
+            or query in t.get("description", "").lower()
+            or query in t.get("description_de", "").lower()
+            or query in t.get("description_en", "").lower()
         ]
 
     # Kompakte Übersicht für das Frontend-Menü
     summaries = [
         {
             "id": t.get("id"),
-            "name": t.get("name_de") or t.get("name"),
+            "name": (t.get("name_en") if is_en else (t.get("name_de") or t.get("name"))),
             "name_de": t.get("name_de") or t.get("name"),
-            "category": t.get("category"),
+            "name_en": t.get("name_en") or t.get("name"),
+            "category": (t.get("category_en") if is_en else t.get("category")),
+            "category_de": t.get("category"),
+            "category_en": t.get("category_en") or t.get("category"),
             "category_slug": t.get("category_slug"),
             "tier": t.get("tier", "Community"),
-            "description": t.get("description_de") or t.get("description", ""),
+            "description": (t.get("description_en") if is_en else (t.get("description_de") or t.get("description", ""))),
             "description_de": t.get("description_de") or t.get("description", ""),
+            "description_en": t.get("description_en") or t.get("description", ""),
             "field_count": len(t.get("form_fields", []))
         }
         for t in filtered
@@ -304,12 +324,32 @@ def get_prompt_studio_catalog(category: Optional[str] = None, q: Optional[str] =
 
 
 @router.get("/api/templates/{template_slug}/schema")
-def get_template_schema(template_slug: str):
+def get_template_schema(template_slug: str, lang: Optional[str] = Query("de")):
     """Gibt das Formular-Schema und den Template-Text für ein einzelnes Template zurück."""
     catalog = _load_prompt_studio_catalog()
     tpl = next((t for t in catalog if t.get("id") == template_slug), None)
     if not tpl:
         raise HTTPException(status_code=404, detail={"code": "templates_template_not_found", "params": {}})
+
+    is_en = (lang or "").lower() == "en"
+    if is_en:
+        localized_tpl = dict(tpl)
+        localized_tpl["name"] = tpl.get("name_en") or tpl.get("name")
+        localized_tpl["category"] = tpl.get("category_en") or tpl.get("category")
+        localized_tpl["description"] = tpl.get("description_en") or tpl.get("description")
+        localized_tpl["archon_prompt_template"] = tpl.get("archon_prompt_template_en") or tpl.get("archon_prompt_template")
+        localized_fields = []
+        for ff in tpl.get("form_fields", []):
+            field_copy = dict(ff)
+            field_copy["label"] = ff.get("label_en") or ff.get("label_de") or ff.get("label")
+            field_copy["placeholder"] = ff.get("placeholder_en") or ff.get("placeholder_de") or ff.get("placeholder")
+            localized_fields.append(field_copy)
+        localized_tpl["form_fields"] = localized_fields
+        return {
+            "status": "ok",
+            "template": localized_tpl
+        }
+
     return {
         "status": "ok",
         "template": tpl
@@ -317,7 +357,7 @@ def get_template_schema(template_slug: str):
 
 
 @router.post("/api/templates/{template_slug}/render")
-def render_template_prompt(request: Request, template_slug: str, req: TemplateRenderRequest):
+def render_template_prompt(request: Request, template_slug: str, req: TemplateRenderRequest, lang: Optional[str] = Query("de")):
     """
     Rendert das Archon_Prompt_Template mit den übergebenen Formularwerten.
     Verhalten A: Leere optionale Variablen und deren Zeilen werden rückstandslos entfernt.
@@ -329,9 +369,15 @@ def render_template_prompt(request: Request, template_slug: str, req: TemplateRe
     if not tpl:
         raise HTTPException(status_code=404, detail={"code": "templates_template_not_found_2", "params": {}})
 
-    raw_template = tpl.get("archon_prompt_template", "")
-    values = req.values or {}
     options = req.options or {}
+    is_en = (lang or "").lower() == "en" or str(options.get("lang", "")).lower() == "en"
+
+    if is_en and tpl.get("archon_prompt_template_en"):
+        raw_template = tpl["archon_prompt_template_en"]
+    else:
+        raw_template = tpl.get("archon_prompt_template", "")
+
+    values = req.values or {}
 
     # Variablen-Ersetzung & Verhalten A
     rendered_lines = []
@@ -347,7 +393,10 @@ def render_template_prompt(request: Request, template_slug: str, req: TemplateRe
                     line_has_empty_var = True
                     break
                 else:
-                    placeholder = field_def.get("label_de") or field_def.get("label") or var_name if field_def else var_name
+                    if is_en and field_def and field_def.get("label_en"):
+                        placeholder = field_def["label_en"]
+                    else:
+                        placeholder = field_def.get("label_de") or field_def.get("label") or var_name if field_def else var_name
                     line = line.replace(f"{{{{{var_name}}}}}", f"[{placeholder.upper()}]")
                     line = line.replace(f"{{{{ {var_name} }}}}", f"[{placeholder.upper()}]")
             else:
@@ -363,37 +412,69 @@ def render_template_prompt(request: Request, template_slug: str, req: TemplateRe
     adv_sections = []
     thinking = []
     if options.get("stepbystep"):
-        thinking.append("- Schritt für Schritt: Durchdenken Sie das Problem systematisch in logischen Einzelschritten, bevor Sie das Endergebnis formulieren.")
+        if is_en:
+            thinking.append("- Step-by-Step: Break down the problem systematically in logical individual steps before formulating the final deliverable.")
+        else:
+            thinking.append("- Schritt für Schritt: Durchdenken Sie das Problem systematisch in logischen Einzelschritten, bevor Sie das Endergebnis formulieren.")
     if options.get("reasoning"):
-        thinking.append("- Begründung & Herleitung: Erläutern Sie Ihre strategische Entscheidungslogik und Gedankengänge transparent.")
+        if is_en:
+            thinking.append("- Reasoning & Justification: Explain your strategic decision-making logic and thought process transparently.")
+        else:
+            thinking.append("- Begründung & Herleitung: Erläutern Sie Ihre strategische Entscheidungslogik und Gedankengänge transparent.")
     if options.get("perspectives"):
-        thinking.append("- Multiperspektivität: Beleuchten Sie die Fragestellung aus mehreren relevanten Blickwinkeln und wägen Sie Gegenargumente ab.")
+        if is_en:
+            thinking.append("- Multi-Perspective Analysis: Examine the issue from all relevant stakeholder viewpoints and evaluate counterarguments.")
+        else:
+            thinking.append("- Multiperspektivität: Beleuchten Sie die Fragestellung aus mehreren relevanten Blickwinkeln und wägen Sie Gegenargumente ab.")
     if options.get("systematic"):
-        thinking.append("- Systematischer Ansatz: Wenden Sie ein klares, strukturiertes Analyse- und Handlungs-Framework an.")
+        if is_en:
+            thinking.append("- Systematic Framework: Apply a clear, structured analytical and operational methodology.")
+        else:
+            thinking.append("- Systematischer Ansatz: Wenden Sie ein klares, strukturiertes Analyse- und Handlungs-Framework an.")
     if options.get("cot"):
-        thinking.append("- Chain-of-Thought: Verknüpfen Sie alle Zwischenschritte nachvollziehbar miteinander.")
+        if is_en:
+            thinking.append("- Chain-of-Thought: Connect all reasoning steps with explicit, verifiable logic.")
+        else:
+            thinking.append("- Chain-of-Thought: Verknüpfen Sie alle Zwischenschritte nachvollziehbar miteinander.")
     if options.get("roleplay"):
-        thinking.append("- Vertieftes Rollenspiel: Agieren Sie strikt aus der spezifizierten Expertenperspektive mit profunder Fachsprache.")
+        if is_en:
+            thinking.append("- Deep Expert Roleplay: Act strictly from the specified enterprise domain perspective with rigorous specialized terminology.")
+        else:
+            thinking.append("- Vertieftes Rollenspiel: Agieren Sie strikt aus der spezifizierten Expertenperspektive mit profunder Fachsprache.")
     if thinking:
-        adv_sections.append("### DENK-METHODIK & STRATEGIE:\n" + "\n".join(thinking))
+        title = "### REASONING & METHODOLOGY:" if is_en else "### DENK-METHODIK & STRATEGIE:"
+        adv_sections.append(f"{title}\n" + "\n".join(thinking))
 
     output = []
     if options.get("confidence"):
-        output.append("- Konfidenz-Rating: Weisen Sie zentralen Empfehlungen eine Zuverlässigkeitsbewertung (Hoch/Mittel/Niedrig) zu.")
+        if is_en:
+            output.append("- Confidence Rating: Assign a clear confidence rating (High/Medium/Low) to core strategic recommendations.")
+        else:
+            output.append("- Konfidenz-Rating: Weisen Sie zentralen Empfehlungen eine Zuverlässigkeitsbewertung (Hoch/Mittel/Niedrig) zu.")
     if options.get("citations"):
-        output.append("- Quellen & Belege: Untermauern Sie Fakten, Daten und Kernaussagen mit konkreten Quellenverweisen.")
+        if is_en:
+            output.append("- Sources & Citations: Substantiate facts, metrics, and core assertions with concrete citations.")
+        else:
+            output.append("- Quellen & Belege: Untermauern Sie Fakten, Daten und Kernaussagen mit konkreten Quellenverweisen.")
     ex_count = int(options.get("examples_count") or 0)
     if ex_count > 0:
-        output.append(f"- Praxisbeispiele: Integrieren Sie mindestens {ex_count} konkrete, illustrative Anwendungsbeispiele.")
+        if is_en:
+            output.append(f"- Practical Examples: Integrate at least {ex_count} concrete, illustrative real-world examples.")
+        else:
+            output.append(f"- Praxisbeispiele: Integrieren Sie mindestens {ex_count} konkrete, illustrative Anwendungsbeispiele.")
     if output:
-        adv_sections.append("### ERWEITERTE AUSGABE-VORGABEN:\n" + "\n".join(output))
+        title = "### ADVANCED OUTPUT SPECIFICATIONS:" if is_en else "### ERWEITERTE AUSGABE-VORGABEN:"
+        adv_sections.append(f"{title}\n" + "\n".join(output))
 
     if options.get("context"):
-        adv_sections.append(f"### ZUSÄTZLICHER KONTEXT & HINTERGRUND:\n{options['context']}")
+        title = "### ADDITIONAL CONTEXT & BACKGROUND:" if is_en else "### ZUSÄTZLICHER KONTEXT & HINTERGRUND:"
+        adv_sections.append(f"{title}\n{options['context']}")
     if options.get("examples"):
-        adv_sections.append(f"### REFERENZ-BEISPIELE (GEWÜNSCHTER AUSGABESTIL):\n{options['examples']}")
+        title = "### REFERENCE EXAMPLES (TARGET OUTPUT STYLE):" if is_en else "### REFERENZ-BEISPIELE (GEWÜNSCHTER AUSGABESTIL):"
+        adv_sections.append(f"{title}\n{options['examples']}")
     if options.get("success"):
-        adv_sections.append(f"### ERFOLGSKRITERIEN (DEFINITION OF DONE):\n{options['success']}")
+        title = "### SUCCESS CRITERIA (DEFINITION OF DONE):" if is_en else "### ERFOLGSKRITERIEN (DEFINITION OF DONE):"
+        adv_sections.append(f"{title}\n{options['success']}")
 
     if adv_sections:
         adv_block = "\n\n".join(adv_sections)
@@ -401,6 +482,11 @@ def render_template_prompt(request: Request, template_slug: str, req: TemplateRe
             assembled = assembled.replace(
                 "4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT",
                 f"{adv_block}\n\n4. ARCHON OS GOVERNANCE & PHRASEN-VERBOT"
+            )
+        elif "4. ARCHON OS GOVERNANCE & ANTI-FLUFF DIRECTIVE" in assembled:
+            assembled = assembled.replace(
+                "4. ARCHON OS GOVERNANCE & ANTI-FLUFF DIRECTIVE",
+                f"{adv_block}\n\n4. ARCHON OS GOVERNANCE & ANTI-FLUFF DIRECTIVE"
             )
         else:
             assembled += f"\n\n{adv_block}"

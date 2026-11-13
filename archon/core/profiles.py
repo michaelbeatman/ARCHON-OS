@@ -319,8 +319,57 @@ def invalidate_hermes_profiles_cache():
     _HERMES_PROFILES_CACHE_TIME = 0.0
     _HERMES_PROFILES_CACHE_MTIME = 0.0
 
-def api_get_hermes_profiles():
+_CATEGORY_DE_TO_EN = {
+    "1. Strategie, Führung & Lebensplanung": "1. Strategy, Leadership & Life Architecture",
+    "2. Handel, Beschaffung & E-Commerce": "2. Commerce, Procurement & E-Commerce",
+    "3. Recht, Steuern & Compliance": "3. Legal, Tax & Compliance",
+    "4. Immobilien & Objektentwicklung": "4. Real Estate & Property Development",
+    "5. Kreation, Medien & Content": "5. Creative, Media & Content",
+    "6. Vertrieb, CRM & Growth": "6. Sales, CRM & Growth",
+    "7. Tech, Software & Data": "7. Tech, Software & Data",
+    "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen": "8. Medicine, Chemistry, Science & Engineering",
+}
+
+
+def _resolve_profiles_lang(lang: Optional[str] = None) -> str:
+    raw = (lang if lang is not None else os.environ.get("ARCHON_LANGUAGE", "")).strip().lower()
+    return "en" if raw.startswith("en") else "de"
+
+
+def _project_profiles_for_lang(profiles: List[Dict[str, Any]], lang: str) -> List[Dict[str, Any]]:
+    if lang != "en":
+        return profiles
+    localized: List[Dict[str, Any]] = []
+    for p in profiles:
+        if not isinstance(p, dict):
+            localized.append(p)
+            continue
+        item = dict(p)
+        name_en = item.get("name_en") or item.get("name") or item.get("id", "")
+        cat_de = item.get("category") or ""
+        cat_en = item.get("category_en") or _CATEGORY_DE_TO_EN.get(cat_de) or cat_de or "1. Strategy, Leadership & Life Architecture"
+        desc_en = item.get("description_en") or item.get("description") or ""
+        prompt_en = item.get("prompt_en") or item.get("system_prompt_en") or item.get("prompt") or ""
+        sys_prompt_en = item.get("system_prompt_en") or prompt_en
+        item["name"] = name_en
+        item["name_en"] = name_en
+        item["category"] = cat_en
+        item["category_en"] = cat_en
+        item["description"] = desc_en
+        item["description_en"] = desc_en
+        if prompt_en:
+            item["prompt"] = prompt_en
+            item["prompt_en"] = prompt_en
+        if sys_prompt_en:
+            item["system_prompt"] = sys_prompt_en
+            item["system_prompt_en"] = sys_prompt_en
+        localized.append(item)
+    return localized
+
+
+def api_get_hermes_profiles(lang: Optional[str] = None):
     global _HERMES_PROFILES_CACHE, _HERMES_PROFILES_CACHE_TIME, _HERMES_PROFILES_CACHE_MTIME
+    resolved_lang = _resolve_profiles_lang(lang)
     now = time.time()
     cur_mtime = _compute_profiles_mtime()
     if (
@@ -328,7 +377,7 @@ def api_get_hermes_profiles():
         and (now - _HERMES_PROFILES_CACHE_TIME) < _HERMES_PROFILES_CACHE_TTL
         and (_HERMES_PROFILES_CACHE_MTIME == 0.0 or cur_mtime <= _HERMES_PROFILES_CACHE_MTIME)
     ):
-        return _HERMES_PROFILES_CACHE
+        return _project_profiles_for_lang(_HERMES_PROFILES_CACHE, resolved_lang)
 
     HERMES_PROFILES_DIR = get_primary_hermes_profiles_dir()
     os.makedirs(HERMES_PROFILES_DIR, exist_ok=True)
@@ -457,16 +506,16 @@ def api_get_hermes_profiles():
         model = ydata.get("model") or (cdata.get("model", {}).get("default") if isinstance(cdata.get("model"), dict) else None) or fallback.get("model", "auto/best-free")
         reasoning_level = ydata.get("reasoning_level") or (ydata.get("llm", {}).get("reasoning_level") if isinstance(ydata.get("llm"), dict) else None) or fallback.get("reasoning_level", "high")
         status_val = ydata.get("status") or fallback.get("status", "active")
-        is_fav = bool(ydata.get("is_favorite") if "is_favorite" in ydata else fallback.get("is_favorite", (p_id in ["default", "micha"])))
+        is_fav = bool(ydata.get("is_favorite") if "is_favorite" in ydata else fallback.get("is_favorite", (p_id in ["default", "founder"])))
         callsign = ydata.get("callsign") or fallback.get("callsign") or ""
         if not callsign:
             if p_id == "executive_decision_architect":
                 callsign = "robert"
-            elif p_id in ("founder", "micha"):
-                callsign = "micha"
+            elif p_id == "founder":
+                callsign = "alex"
         callsign = str(callsign).strip().lower()
 
-        # Sonderbehandlung für default & micha
+        # Sonderbehandlung für default & founder
         if p_id in ["default", "hermes_default"]:
             p_id = "default"
             name = name or "Hermes Default (Root Engine)"
@@ -476,12 +525,18 @@ def api_get_hermes_profiles():
                 avatar_val = "/static/avatars/hermes_default_avatar.png"
             if not soul_prompt:
                 prompt = prompt or "You are Hermes Agent, an intelligent AI assistant created by Nous Research. You are helpful, knowledgeable, and direct. You assist users with a wide range of tasks including answering questions, writing and editing code, analyzing information, creative work, and executing actions via your tools."
-        elif p_id in ("founder", "micha"):
-            name = name or "Michael Keller (Strategischer Leiter)"
-            person_name = person_name or "Michael Keller"
+        elif p_id == "founder":
+            name = name or "Strategic Founder & System Architect"
+            person_name = person_name or "Alex Rivera"
             is_fav = True
             if not soul_prompt:
-                prompt = prompt or "Du bist Michael Keller, der strategische Leiter und Architekt von Archon OS. Deine Aufgabe ist die strategische Gesamtausrichtung, Festlegung von Prioritäten und Koordination aller operativen Fachagenten."
+                prompt = prompt or "Du bist Alex Rivera, der strategische Gründer und System-Architekt von Archon OS. Deine Aufgabe ist die strategische Gesamtausrichtung, Festlegung von Prioritäten und Koordination aller operativen Fachagenten."
+
+        name_en = ydata.get("name_en") or fallback.get("name_en") or name
+        category_en = ydata.get("category_en") or fallback.get("category_en") or _CATEGORY_DE_TO_EN.get(category, category)
+        description_en = ydata.get("description_en") or fallback.get("description_en") or description
+        prompt_en = ydata.get("prompt_en") or fallback.get("prompt_en") or fallback.get("system_prompt_en") or prompt
+        system_prompt_en = ydata.get("system_prompt_en") or fallback.get("system_prompt_en") or prompt_en
 
         # Dateisystem auf Disk synchron halten
         if not os.path.exists(soul_path):
@@ -495,9 +550,12 @@ def api_get_hermes_profiles():
             try:
                 y_payload = {
                     "name": name,
+                    "name_en": name_en,
                     "person_name": person_name,
                     "category": category,
+                    "category_en": category_en,
                     "description": description,
+                    "description_en": description_en,
                     "role_id": p_id,
                     "avatar": avatar_val,
                     "avatar_url": avatar_val,
@@ -517,11 +575,16 @@ def api_get_hermes_profiles():
         profile_data.update({
             "id": p_id,
             "name": name,
+            "name_en": name_en,
             "person_name": person_name,
             "callsign": callsign,
             "category": category,
+            "category_en": category_en,
             "description": description,
+            "description_en": description_en,
             "prompt": prompt,
+            "prompt_en": prompt_en,
+            "system_prompt_en": system_prompt_en,
             "skills": active_skills,
             "tools": tools,
             "avatar": avatar_val,
@@ -534,12 +597,12 @@ def api_get_hermes_profiles():
         })
         enriched_profiles.append(profile_data)
 
-    # Sortierung: default zuerst, micha als zweiter, danach alphabetisch nach Kategorie & Name
+    # Sortierung: default zuerst, founder als zweiter, danach alphabetisch nach Kategorie & Name
     def _sort_key(p):
         pid = p.get("id", "")
         if pid == "default":
             return (0, "")
-        if pid == "micha":
+        if pid == "founder":
             return (1, "")
         return (2, p.get("category", "") + "_" + p.get("name", ""))
 
@@ -562,7 +625,7 @@ def api_get_hermes_profiles():
     except Exception as e:
         logger.warning(f"[Profiles] Error initializing agent_profiles.json: {e}")
 
-    return enriched_profiles
+    return _project_profiles_for_lang(enriched_profiles, resolved_lang)
 
 def create_rolling_backup(filepath: str, max_backups: int = 3):
     """

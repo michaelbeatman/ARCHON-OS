@@ -1,0 +1,39 @@
+name: Specialist / Blueprint Proposal
+description: Propose a new specialist persona, domain skill, Boardroom framework, or workflow playbook
+title: "[Blueprint]: "
+labels: ["enhancement", "blueprint"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Contribution Type
+      options:
+        - Specialist Persona (SOUL.md)
+        - Domain Skill (SKILL.md)
+        - AI Boardroom Methodology Framework
+        - Prompt Studio Parametric Template
+        - 1-Click Business Playbook / n8n Flow
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Target Domain (1–8)
+      options:
+        - "1. Strategy, Leadership & Synthesis"
+        - "2. Commerce, Procurement & E-Commerce"
+        - "3. Law, Tax & Compliance"
+        - "4. Real Estate & Urban Development"
+        - "5. Creation, Media & Content"
+        - "6. Sales, CRM & Growth"
+        - "7. Tech, Software & Data"
+        - "8. Medicine, Chemistry, Science & Engineering"
+    validations:
+      required: true
+  - type: textarea
+    id: specification
+    attributes:
+      label: Core Mandate, Methodology & Guardrails (EN / DE)
+      description: Describe the specialist's core problem space, verifiable methods/standards, and zero-hallucination guardrails.
+    validations:
+      required: true

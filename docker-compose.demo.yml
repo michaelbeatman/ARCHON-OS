@@ -1,0 +1,70 @@
+# docker-compose.demo.yml
+# Milestone 47 — Standalone Hardened "Zero-Install" Public Live-Demo Stack
+#
+# Purpose: Safe public hosting (Show HN / Product Hunt / public evaluation)
+# on any 5 EUR VPS (1 vCPU, 1 GB RAM) with:
+#   - Zero LLM API keys & zero token cost (ARCHON_DEMO_MODE=true)
+#   - Zero Docker daemon socket mounts & zero sibling containers required
+#   - Immutable read-only root filesystem (`read_only: true`)
+#   - Ephemeral RAM-backed tmpfs mounts (`noexec,nosuid,nodev`) pre-seeded on boot
+#   - All Linux kernel capabilities dropped (`cap_drop: [ALL]`, `no-new-privileges:true`)
+
+name: archon-os-demo
+
+services:
+  archon-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agent-os-container:demo
+    container_name: ${ARCHON_DEMO_CONTAINER_NAME:-archon-os-demo}
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "${ARCHON_DEMO_BIND_IP:-127.0.0.1}:${ARCHON_DEMO_PORT:-8501}:8501"
+    environment:
+      - ARCHON_DEMO_MODE=true
+      - ARCHON_LANGUAGE=${ARCHON_LANGUAGE:-en}
+      - PRIVACY_ZERO_EGRESS=true
+      - ARCHON_RATE_LIMIT_ENABLED=1
+      - ARCHON_RATE_LIMIT_DEFAULT=240
+      - ARCHON_RATE_LIMIT_STRICT=15
+      - PYTHONUNBUFFERED=1
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 1.0
+    pids_limit: 128
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,uid=1000,gid=1000
+      - /var/cache:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000
+      - /app/data:rw,noexec,nosuid,nodev,size=128m,uid=1000,gid=1000
+      - /app/agent_workspace:rw,noexec,nosuid,nodev,size=128m,uid=1000,gid=1000
+      - /home/streamlituser/.cache:rw,noexec,nosuid,nodev,size=32m,uid=1000,gid=1000
+    command:
+      - python
+      - -c
+      - >-
+        import os, shutil, uvicorn;
+        from backend.demo_mode import seed_demo_workspace;
+        lang = os.environ.get('ARCHON_LANGUAGE', 'en');
+        seed_demo_workspace('/app/agent_workspace', lang=lang);
+        seed_demo_workspace('/app/data', lang=lang);
+        shutil.copyfile('/app/agents.json', '/app/data/agents.json') if os.path.exists('/app/agents.json') else None;
+        uvicorn.run('main:app', host='0.0.0.0', port=8501, workers=1)
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/health', timeout=3)"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

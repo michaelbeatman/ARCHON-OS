@@ -132,4 +132,14 @@ Thumbs.db
 # Laufzeit-Gateway Config
 gateway_config.json
 
+# Interne Betriebsdokumente & Audit-Logs (OPSEC)
+docs/BETRIEB_HANDBUCH_INTERN.md
+docs/LAUNCH_PLAN_*
+docs/HANDOVER_*
+docs/I18N_ETAPPE*
+docs/I18N_SOUL*
+*.backup_*
+translate_*.log
+
+
 docs/_archive/

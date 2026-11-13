@@ -70,20 +70,20 @@ Summarize Phase 1 in 3–4 short lines, then ask these **6 mandatory questions**
 ## Phase 3: Provisioning Execution
 
 1. **Install Missing Desktop Prerequisites (if approved in Q1):** Docker Desktop/Engine and Obsidian Desktop.
-2. **Initialize Directories, Vault Structure & Network:**
+2. **Initialize Directories & Vault Structure:**
    ```bash
-   mkdir -p data data/tenants/primary agent_workspace/builds logs .hermes/profiles
+   mkdir -p data data/inbox data/tenants/primary agent_workspace/builds logs .hermes/profiles
    mkdir -p obsidian_vault/{00_HR_Agenten,01_PROJEKTE,02_Wissensbibliothek,04_Radar,05_Content}
-   docker network inspect archon-os-dev_agents_net >/dev/null 2>&1 || docker network create archon-os-dev_agents_net
    ```
-3. **Write `.env` from `.env.example`:** Set `ARCHON_BIND_IP`, `ARCHON_LANGUAGE`, `ARCHON_STACK_PROFILE`, `ARCHON_HERMES_DIR`, `ARCHON_OBSIDIAN_DIR`, `PRIVACY_ZERO_EGRESS`, provider keys, and optional Telegram credentials.
-4. **Pull Hermes Agent & AnythingLLM + Start Selected Stack:**
-   - **Standard (Recommended):** `docker compose up -d --build archon-os docker-socket-proxy hermes anything-llm chroma`
-   - **Full Automation:** `docker compose up -d --build archon-os docker-socket-proxy hermes anything-llm chroma n8n ollama-embed`
-   - **Minimal Core:** `docker compose up -d --build archon-os docker-socket-proxy hermes`
-5. **Sync 70 Specialist `SOUL.md` Profiles (Shared by Archon & Hermes):**
+3. **Write `.env` from `.env.example` (mode `600`):** Set `ARCHON_BIND_IP`, `ARCHON_LANGUAGE`, `ARCHON_STACK_PROFILE`, `ARCHON_HERMES_DIR`, `ARCHON_OBSIDIAN_DIR`, `PRIVACY_ZERO_EGRESS`, provider keys, random 32-byte hex secrets (`HERMES_DASHBOARD_SESSION_TOKEN`, `N8N_USER_MANAGEMENT_JWT_SECRET`, `OMNIROUTE_INITIAL_PASSWORD`), and optional Telegram credentials.
+4. **Pull Multi-Arch Images (`amd64` / `arm64`) + Start Selected Stack:**
+   - **Standard (Recommended):** `docker compose up -d --build archon-os docker-socket-proxy omniroute hermes anything-llm chroma`
+   - **Full Automation:** `docker compose up -d --build archon-os docker-socket-proxy omniroute hermes anything-llm chroma n8n ollama-embed`
+   - **Minimal Core:** `docker compose up -d --build archon-os docker-socket-proxy omniroute hermes`
+   - **Zero-Key Read-Only Demo:** `ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d`
+5. **Sync 70 Specialist `SOUL.md` & `profile.yaml` Configurations (`--lang en` or `--lang de`):**
    ```bash
-   docker exec ARCHON-OS python scripts/sync_soul_modes.py --mode compact
+   docker compose exec -T archon-os python scripts/sync_soul_modes.py --mode compact --lang "${ARCHON_LANGUAGE:-en}"
    ```
 
 ---

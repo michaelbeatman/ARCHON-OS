@@ -1,6 +1,6 @@
-# AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.0.1)
+# AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.2.1)
 
-*Stand: 10. November 2026 | Release: v0.5.0.1 (Archon Hardened)*  
+*Stand: 13. November 2026 | Release: v0.5.2.1 (Global Release Edition)*  
 *Maschinenlesbares Gegenstück:* [`docs/system/system_architecture_spec.json`](system_architecture_spec.json)  
 *Endbenutzer-Handbuch (PDF):* [`docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf`](ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)  
 *Vollständige Featureliste (PDF):* [`docs/system/ARCHON_OS_FEATURELISTE_2026.pdf`](ARCHON_OS_FEATURELISTE_2026.pdf) | *55 Boardroom-Frameworks:* [`docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf`](ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
@@ -42,7 +42,11 @@ Das System nutzt SQLite (WAL-Modus) als durchgängige Single Source of Truth:
    - `pocketbase/pb_data`: CRM-Datenbank für Kontakte, Nachrichtenverläufe und Bewerbungen.
 
 2. **JSON-Deklarationen & Sidecar-Dateien:**
-   - [`agent_profiles.json`](../../agent_profiles.json): **59 vollständige Agenten-Profile** mit System-Prompts, 3-Stufen-`SOUL.md` (`Compact`, `Pro / Skills+`, `Full-SOUL`), Tool-Scopes, Fähigkeiten (`skills`), Avataren und Modell-Routings.
+   - [`agent_profiles.json`](../../agent_profiles.json): **70 vollständige Agenten-Profile** mit zweisprachigen System-Prompts (DE/EN), 3-Stufen-`SOUL.md` (`Compact`, `Pro / Skills+`, `Full-SOUL`), Tool-Scopes, Fähigkeiten (`skills`), Avataren und Modell-Routings.
+   - [`prompt_studio_catalog.json`](../../prompt_studio_catalog.json): **832 zweisprachige Prompt-Vorlagen** (DE/EN) mit verifizierter 100 % Variablen-Parität für das Archon Prompt Studio.
+   - [`core_dispatcher.py`](../../core_dispatcher.py): **55 Boardroom-Frameworks** (DE/EN) für mehrperspektivische Exekutiv-Debatten.
+   - [`backend/onboarding_wizard.py`](../../backend/onboarding_wizard.py): **Web-Setup-Wizard (M30)** für geführtes 4-Schritte-First-Run-Onboarding.
+   - [`backend/demo_mode.py`](../../backend/demo_mode.py): **Zero-Install Live-Demo-Modus (`ARCHON_DEMO_MODE`, M47)** für sichere, öffentliche Showcase-Instanzen.
    - [`config/kanban_meta.json`](../../config/kanban_meta.json): Sidecar-Metadaten (WIP-Limits, Obsidian-Verknüpfungen, Tags) über [`backend/kanban_sidecar.py`](../../backend/kanban_sidecar.py).
    - [`config/org_hierarchy.json`](../../config/org_hierarchy.json): Interaktives Ablaufdiagramm (64 Knoten, 63 Berichtslinien).
    - [`config/teams.json`](../../config/teams.json): Zuordnung der Unternehmensbereiche.
@@ -79,7 +83,7 @@ Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite
 | Säule | Vorgabe | Aktueller Zustand | Status |
 | :--- | :--- | :--- | :--- |
 | **1. Kernel & Scheduling** | Daemon-Architektur, Tickless Sleep, Watchdog 30s, OTel Tracing | Watchdog läuft in eigenem Thread (`watchdog_daemon.py`); App auf Port `8501` via Uvicorn; OpenTelemetry & Langfuse Tracing ([Guide](LLM_TRACING_LANGFUSE_GUIDE.md)); Pre-Flight Validator ([Guide](CONFIG_VALIDATION_GUIDE.md)); Prometheus & Grafana Monitoring ([Guide](PROMETHEUS_GRAFANA_MONITORING_GUIDE.md)); Zentrale Logs mit Loki & Promtail ([Guide](CENTRAL_LOGGING_LOKI_GUIDE.md)); Live-Streaming per SSE & WebSocket ([Guide](LIVE_STREAMING_SSE_WEBSOCKET_GUIDE.md)). | **Erfüllt** |
-| **2. Prozessmodell** | Subagenten als Prozesse, Task-Zustände, Crash-Recovery, Concurrency Throttle | 59 Profile mit einheitlichem 3-Stufen-`SOUL.md` & Skills-Wiring aktiv; Tasks und Subagenten-Links über `kanban.db` nachverfolgt; Auto-Crash-Recovery (6h); Prompt-Registry mit Canary-Rollout ([Guide](PROMPT_REGISTRY_CANARY_GUIDE.md)); Chaos- und Resilienz-Tests ([Guide](CHAOS_RESILIENCE_GUIDE.md)). | **Erfüllt** |
+| **2. Prozessmodell** | Subagenten als Prozesse, Task-Zustände, Crash-Recovery, Concurrency Throttle | 70 Profile mit einheitlichem 3-Stufen-`SOUL.md` (DE/EN) & Skills-Wiring aktiv; Tasks und Subagenten-Links über `kanban.db` nachverfolgt; Auto-Crash-Recovery (6h); Prompt-Registry mit Canary-Rollout ([Guide](PROMPT_REGISTRY_CANARY_GUIDE.md)); Chaos- und Resilienz-Tests ([Guide](CHAOS_RESILIENCE_GUIDE.md)). | **Erfüllt** |
 | **3. Device Driver (MCP)** | MCP Server-Ecosystem, `mcp__{server}__{tool}`, Lock-Scheduler | MCP-Treiber für CRM (`archon_crm_mcp.py`), n8n (`scripts/mcp_n8n_driver.py`) und nativer Archon OS MCP-Server (`scripts/archon_mcp_server.py`) aktiv ([Guide](ARCHON_MCP_SERVER_GUIDE.md)). | **Erfüllt** |
 | **4. Dateisystem & RAM** | SQLite WAL, 5 Tabellen, einheitliche Persistenz, Litestream | Vollständig vereinheitlicht auf SQLite WAL (`kanban.db` + `agentic_memory.db`), atomare Sidecars (`kanban_sidecar.py`), Obsidian-Ablage, Litestream-Replikation ([Guide](LITESTREAM_REPLICATION_GUIDE.md)) und Restore-Tests ([Guide](AUTOMATED_RESTORE_TEST_GUIDE.md)). | **Erfüllt** |
 | **5. Hardware-Routing** | Multi-Provider Routing über OmniRoute, Logit-Snapshots | OmniRoute läuft auf Port `20128` und routet dynamisch auf OpenAI, Anthropic, Gemini, DeepSeek und lokale Endpunkte; `hermes_updater` nutzt dedizierten `DockerAdminClient` über `docker-socket-proxy`. | **Erfüllt** |

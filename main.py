@@ -141,6 +141,14 @@ try:
 except Exception as _err_lm:
     logger.warning(f"[i18n] LocaleMiddleware nicht aktiv: {_err_lm}")
 
+# --- Demo Mode Middleware (M47): Read-only sandbox for live showcases ---
+try:
+    from backend.demo_mode import DemoModeMiddleware
+    app.add_middleware(DemoModeMiddleware)
+    logger.info("[DemoMode] DemoModeMiddleware aktiv")
+except Exception as _err_dm:
+    logger.warning(f"[DemoMode] DemoModeMiddleware nicht aktiv: {_err_dm}")
+
 # --- Exception-Handler (Etappe 4): code+params Format für API-Fehler ---
 try:
     from archon.core.exceptions import register_exception_handlers
@@ -1898,3 +1906,15 @@ try:
     app.include_router(_mc_router)
 except Exception as _err_mc:
     logger.warning(f"[Router] mission_control nicht geladen: {_err_mc}")
+
+try:
+    from archon.routers.onboarding import router as _onboarding_r
+    app.include_router(_onboarding_r)
+except Exception as _err_onb:
+    logger.warning(f"[Router] onboarding nicht geladen: {_err_onb}")
+
+try:
+    from archon.routers.demo import router as _demo_r
+    app.include_router(_demo_r)
+except Exception as _err_demo:
+    logger.warning(f"[Router] demo nicht geladen: {_err_demo}")

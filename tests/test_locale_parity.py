@@ -1012,7 +1012,7 @@ INDEX_HTML_RANGES_DONE = (
     (11000, 11999),     # Paket 3: Prompt-Vorlagen-Editor, Archon Prompt Studio, Watchdog-Auditor,
                         #          Ad-hoc-Sicherheitskanal, Brain-Theme-Studio
     (12000, 12999),     # Paket 4: Quartz-Pane, Plugin-Konfiguration, Bereichshilfe, Datei-Preview
-    (13000, 13525),     # Paket 4: Datenschutz-/LLM-Modal, Hermes-Core-Update-Dialog
+    (13000, 14000),     # Paket 4: Datenschutz-/LLM-Modal, Hermes-Core-Update-Dialog
 )
 
 INDEX_HTML_RANGES_PENDING = ()

@@ -104,6 +104,8 @@ def client_and_db(tmp_path, monkeypatch):
     # Nicht-Rollen-Pfad (Depends/DB-Verhalten), deshalb wird der Rollenzaun
     # als "Admin erkannt" verdrahtet — ohne Injektion sperrt er fail-closed
     # (503) und der Test wuerde das Falsche messen.
+    from backend.auth_service import auth_service
+    monkeypatch.setattr(auth_service, "is_auth_enabled", lambda: False)
     monkeypatch.setitem(system_router._DEPS, "require_admin",
                         lambda request: {"role": "admin"})
 

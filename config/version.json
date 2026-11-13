@@ -1,16 +1,14 @@
 {
-  "version": "v0.5.1",
-  "codename": "Archon Hardened",
-  "released_at": "2026-11-11 07:04",
-  "previous_version": "v0.5.0.1",
-  "commit": "9ef750a1",
+  "version": "v0.5.2.2",
+  "codename": "Archon Global Hardened",
+  "released_at": "2026-11-13 22:03",
+  "previous_version": "v0.5.2.1",
+  "commit": "e06f8183",
   "features": [
-    "Modulare Router-Architektur: main.py von 16.254 auf 1.875 Zeilen reduziert (-88%)",
-    "Sicherheits-Haertung: 25 kritische (Rot) und 68 hohe (Orange) Review-Befunde vollstaendig geschlossen",
-    "Zentralisierte Umgebungs-Konfiguration in archon/core/config.py und B10-Pfadkonsolidierung",
-    "Starlette Threadpool & Async-Event-Loop-Entlastung (A6)",
-    "Robuste UI-Fehlerbehandlung: 1.140 DOM-Pfade analysiert und alle Eigenschaftszugriffe gehaertet",
-    "Docker-Admin-Proxy fuer hermes_updater und Container-Steuerung (Klasse A)",
-    "1.225 automatisierte Unittests mit 100% Erfolgsquote"
+    "M31 Global Edition: Bilingual parity (EN/DE) across 70 Specialists, 832 Prompt Templates, and 55 Boardroom Frameworks",
+    "M30 First-Run Onboarding: Interactive 4-Step Web Setup Wizard + Multi-Arch CLI Installer (amd64 & Apple Silicon arm64)",
+    "M47 Zero-Install Live Demo Mode (ARCHON_DEMO_MODE=true): Read-only ASGI showcase tenant with zero token cost",
+    "Zero-Trust & RBAC Hardening: Non-root runtime (uid 1000), Socket Proxy, 72-router viewer write lock & deterministic SQLite handle closing",
+    "M35 & M36 Public Launch & Ecosystem Kit: SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, manifests & Roadmap M0–M53"
   ]
 }

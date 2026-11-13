@@ -11,7 +11,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: agent-os-container:v0.5.2
+    image: agent-os-container:v0.5.2.1
     container_name: ${ARCHON_CONTAINER_NAME:-ARCHON-OS}
     restart: unless-stopped
     user: "${ARCHON_UID:-1000}:${ARCHON_GID:-1000}"

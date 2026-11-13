@@ -1,0 +1,37 @@
+{
+  "name": "Archon OS",
+  "slug": "archon-os",
+  "tagline": "Self-Hosted Agentic Operating System with 70 Domain Specialists, AI Boardroom & Obsidian Second Brain",
+  "version": "0.5.2.1",
+  "license": "MIT",
+  "repository": "https://github.com/michaelbeatman/ARCHON-OS",
+  "foundation": "https://github.com/NousResearch/hermes-agent",
+  "categories": [
+    "AI Agents",
+    "Self-Hosted",
+    "Knowledge Management",
+    "Business Automation",
+    "ERP & CRM"
+  ],
+  "architectures": ["amd64", "arm64"],
+  "languages": ["en", "de", "es", "fr", "pt", "ru", "ja", "ko", "zh"],
+  "highlights": {
+    "specialists": 70,
+    "domains": 8,
+    "prompt_templates": 832,
+    "boardroom_frameworks": 55,
+    "zero_trust_socket_proxy": true,
+    "zero_egress_local_llm": true,
+    "read_only_demo_mode": true
+  },
+  "quickstart": {
+    "unix": "./install.sh",
+    "windows": "setup.bat",
+    "demo": "ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d"
+  },
+  "minimum_requirements": {
+    "ram_gb_minimal": 2.5,
+    "ram_gb_standard": 4.0,
+    "docker_compose": ">=2.20"
+  }
+}

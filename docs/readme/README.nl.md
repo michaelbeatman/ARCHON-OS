@@ -37,8 +37,8 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 - **Windows:** dubbelklik op **`setup.bat`**. Voor dagelijks gebruik: `start.bat` en `stop.bat`.
 - **Linux en macOS:**
   ```bash
-  git clone https://github.com/michaelbeatman/Archon-Os.git
-  cd Archon-Os
+  git clone https://github.com/michaelbeatman/ARCHON-OS.git
+  cd ARCHON-OS
   chmod +x install.sh && ./install.sh
   ```
 
@@ -52,5 +52,5 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ### Manuals & Documentation (PDF)
 - **User & Company Manual:** [Nederlands PDF (1.8 MB)](../system/ARCHON_OS_SYSTEM_MANUAL_2026_NL.pdf) | [English PDF (97 pp., 1.9 MB)](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) | [Deutsch PDF (97 S., 1.9 MB)](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)
-- **Complete Feature List (v0.5.1):** [Nederlands PDF (653K)](../system/ARCHON_OS_FEATURELISTE_2026_NL.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [Deutsch PDF (34 S., 0.7 MB)](../system/ARCHON_OS_FEATURELISTE_2026.pdf)
+- **Complete Feature List (v0.5.2.1):** [Nederlands PDF (653K)](../system/ARCHON_OS_FEATURELISTE_2026_NL.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [Deutsch PDF (34 S., 0.7 MB)](../system/ARCHON_OS_FEATURELISTE_2026.pdf)
 - **AI Boardroom (55 Frameworks):** [Nederlands PDF (528K)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_NL.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [Deutsch PDF (32 S., 0.7 MB)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)

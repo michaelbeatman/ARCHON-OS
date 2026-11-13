@@ -473,7 +473,7 @@
       try {
         // Parallel laden: SurePrompts und Fabric-Patterns
         const [tplRes, fabRes] = await Promise.all([
-          fetch("/api/templates/catalog").catch(() => null),
+          fetch(`/api/templates/catalog?lang=${encodeURIComponent(psLocale())}`).catch(() => null),
           fetch("/api/fabric/patterns").catch(() => null)
         ]);
         let sureTemplates = [];
@@ -714,7 +714,7 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
             };
           }
         } else {
-          const res = await fetch(`/api/templates/${id}/schema`);
+          const res = await fetch(`/api/templates/${id}/schema?lang=${encodeURIComponent(psLocale())}`);
           if (!res.ok) throw new Error(psT('ui.prompt_studio.err_schema_load', 'Schema konnte nicht geladen werden'));
           const data = await res.json();
           selectedSurePromptData = data.template;

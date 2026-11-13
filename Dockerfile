@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Complete application code & static assets (runs standalone even without bind-mount)
 COPY --chown=streamlituser:streamlitgroup *.py ./
-COPY --chown=streamlituser:streamlitgroup agent_profiles.json agents.json roles.json settings.json hermes_skills_index.json hermes_skills_cache.json ./
+COPY --chown=streamlituser:streamlitgroup agent_profiles.json agents.json roles.json settings.json prompt_studio_catalog.json hermes_skills_index.json hermes_skills_cache.json ./
 COPY --chown=streamlituser:streamlitgroup archon/ archon/
 COPY --chown=streamlituser:streamlitgroup backend/ backend/
 COPY --chown=streamlituser:streamlitgroup utils/ utils/

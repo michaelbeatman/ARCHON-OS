@@ -14,7 +14,7 @@
 | **9** | **Redesign der oberen Leiste & Avatar-Überlappung** | Hoch | Abgeschlossen | Vereinheitlichung nach dem Vorbild "AI Mastermind · Übersicht", Klärung & CSS-Konzept für überlappende Avatare im Kader |
 | **10** | **Eingang (Inbox) Funktionsprüfung & Re-Architektur** | Hoch | Abgeschlossen | Suchleiste unter den Header mit Filter-/Markierungstools; linker Balken fokussiert auf markierte/angepinnte Items |
 | **11** | **Tokenguard: Zeitraum-Skalierungsleiste für Grafen** | Normal | Abgeschlossen | Interaktive Steuerleiste zur flexiblen Skalierung des Zeitraums (24h, 7T, 30T, 90T, Gesamt) für Verbrauchs-Chart |
-| **12** | **Informationsquellen-Strategie (Research Lab)** | Hoch | Offen | Gemeinsame Bestandsaufnahme und Bewertung aller Wissensquellen (Grokipedia, Wikipedia, Fachportale, amtliche Quellen, ArXiv, Websuche): Vertrauensstufen, Rolle KI-generierter Quellen, Kosten/Limits, Quellen-Priorisierung je Fragetyp |
+| **12** | **Informationsquellen-Strategie (Research Lab)** | Hoch | Abgeschlossen | Gemeinsame Bestandsaufnahme und Bewertung aller Wissensquellen (Grokipedia, Wikipedia, Fachportale, amtliche Quellen, ArXiv, Websuche): Vertrauensstufen, Rolle KI-generierter Quellen, Kosten/Limits, Quellen-Priorisierung je Fragetyp |
 | **13** | **n8n Workflow-Mesh & Routine-Automation** | Hoch | Abgeschlossen | Vollständige n8n-Anbindung, Webhook-Trigger, zeitgesteuerte Routine-Workflows (Morning-Briefing 07:30 Uhr Mo-Fr, Weekly Maintenance So 23:00 Uhr, stündlicher RSS-Scan) |
 | **14** | **Telegram Voice-Pipeline (Voice-to-Text & Audio)** | Hoch | Abgeschlossen | Whisper-Transkription eingehender Telegram-Sprachnachrichten, Delegation an Ziel-Agenten, Sprachausgabe via edge-tts |
 | **15** | **Kanban Qualitäts-Gate (4-Augen-Review vor Done)** | Hoch | Abgeschlossen | Automatischer Peer-Review-Prüfschritt vor Verschieben auf "Done", Prüfung auf Vollständigkeit & Belege, Re-Iterationsschleife |
@@ -32,13 +32,13 @@
 | **27** | **MCTS Action Trajectories & Deep Reasoning Gate** | Mittel | Abgeschlossen | Optionale Monte-Carlo-Baumsuche in Autonomie-Settings zur Voraus-Simulation heikler Handlungsstränge vor Ausführung |
 | **28** | **ERP-Modul zum vollwertigen Kernsystem ausbauen** | Kritisch | Geplant | Von der aktuellen Basis-Stammdatenverwaltung zur E-Rechnung (XRechnung/ZUGFeRD), FinTS/PSD2-Bankabgleich, DATEV-Export, Bestandsbuchung & Beleg-Workflow |
 | **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Geplant | WYSIWYG-/Block-Editor für Angebote, Rechnungen, Mahnungen & Verträge inkl. § 14 UStG-Pflichtfeld-Prüfung, Briefbogen-Layouter und Live-PDF-Vorschau |
-| **30** | **Interaktiver Setup-Wizard & Installationsprogramm** | Kritisch | Geplant | Geführter First-Run-Installer (GUI & CLI) mit Abfrage von Firmendaten, Mandantenstamm, API-Keys, lokalen LLM-Pfaden, IMAP/SMTP und Telegram-Bot-Setup |
-| **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Geplant | Durchgehende Übersetzung aller 70 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 55 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
+| **30** | **Interaktiver Setup-Wizard & Installationsprogramm** | Kritisch | Abgeschlossen | Geführter First-Run-Installer (GUI & CLI) mit Abfrage von Firmendaten, Mandantenstamm, API-Keys, lokalen LLM-Pfaden, IMAP/SMTP und Telegram-Bot-Setup |
+| **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Abgeschlossen | Durchgehende Übersetzung aller 70 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 55 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
 | **32** | **Telegram-Kommunikation & Gateway-Härtung** | Hoch | Geplant | Konfliktfreies Session-Handling, Inline-Freigabe-Buttons (HITL), Live-Status-Updates bei Langläufer-Tasks, zuverlässiges Agenten-Routing (`/robert`, `/anwalt`) |
 | **33** | **Watchdog & Internet-Radar 2.0** | Hoch | Geplant | Semantisches Relevanz-Scoring (Signal vs. Noise), Selbstheilung defekter Scraper/RSS-Feeds, Dubletten-Sperre und automatische Task-Anlage bei Schwellenwerten |
 | **34** | **Android-App (Mobile Command & Receipt Scanner)** | Mittel | Geplant | Mobile App für Direkt-Chat, Push-Freigaben (Approval Gates), Sprachnotizen und Kamera-Beleg-Scan direkt in die ERP-Buchhaltung |
-| **35** | **GitHub-Präsentation & Public Launch Kit** | Hoch | Geplant | Zweisprachige Showcase-`README.md`, Architektur-Schaubilder, 90-Sekunden-Walkthrough-Video, One-Line-Installer und Security/License-Badges |
-| **36** | **Ökosystem-Verzeichnisse & Community-Integrationen** | Hoch | Geplant | Offizielle Aufnahme in kuratierte Open-Source- und Self-Hosting-Kataloge (*Awesome-Selfhosted*, *Awesome-AI-Agents*, *Awesome-MCP-Servers*), Community-Blueprints & Integrations-Guides |
+| **35** | **GitHub-Präsentation & Public Launch Kit** | Hoch | Abgeschlossen | Zweisprachige Showcase-`README.md`, Architektur-Schaubilder, 90-Sekunden-Walkthrough-Video, One-Line-Installer und Security/License-Badges |
+| **36** | **Ökosystem-Verzeichnisse & Community-Integrationen** | Hoch | Abgeschlossen | Offizielle Aufnahme in kuratierte Open-Source- und Self-Hosting-Kataloge (*Awesome-Selfhosted*, *Awesome-AI-Agents*, *Awesome-MCP-Servers*), Community-Blueprints & Integrations-Guides |
 | **37** | **Zeiterfassung & Projekt-Nachkalkulation (Time-to-Invoice)** | Hoch | Geplant | Topbar-Stoppuhr & Projekt-Zeiterfassung, Soll-/Ist-Budgetabgleich und 1-Klick-Übernahme gebuchter Stunden als ERP-Rechnungspositionen |
 | **38** | **Automatischer Vertrags-, Fristen- & Abo-Wächter** | Hoch | Geplant | Kündigungs-Radar im ERP für Verträge, Leasing & SaaS-Abos mit 30/14-Tage-Vorwarnung via Watchdog/Telegram und fertigem Kündigungsentwurf |
 | **39** | **Lokaler Meeting- & Call-Copilot (Audio → Protokoll + Tasks)** | Hoch | Geplant | Lokale Gesprächsaufzeichnung (Whisper mit Sprecher-Trennung), automatische CRM-Aktennotiz und direkte Anlage erkannter To-Dos im Kanban-Board |
@@ -49,7 +49,7 @@
 | **44** | **Fertige „1-Click Business Playbooks“ (Workflow-Rezepte)** | Hoch | Geplant | 10 sofort ausführbare End-to-End-Prozessrezepte für Einsteiger (Kunden-Onboarding, Monatsabschluss, Wettbewerbs-Teardown, Lastenheft-zu-Angebot) |
 | **45** | **Research Lab zum Deep-Research-Labor ausbauen (Alpha → Produktiv)** | Hoch | Geplant | Mehrstufige Quellen-Triangulation (Trust-Tiers), Live-Citation-Check, ArXiv-/Patent-/Amtsregister-Connectoren, PDF-Dossier-Export & Vault-Auto-Ablage |
 | **46** | **Open-Source Community-Hub, Sponsoring & Projekt-Portal** | Hoch | Geplant | Kanonische Dokumentations- und Architektur-Website, GitHub Sponsors & Enterprise-Support-Optionen, mehrsprachige Handbücher und transparente Release-Notes |
-| **47** | **„Zero-Install“ Read-Only Live-Demo-Modus (`ARCHON_DEMO_MODE`)** | Hoch | Geplant | Gehärteter öffentlicher Demo-Mandant („Mittelstand Muster GmbH“) mit gesperrten Schreib-/Shell-/Egress-Pfaden und deterministischen Muster-Debatten ohne Token-Kosten |
+| **47** | **„Zero-Install“ Read-Only Live-Demo-Modus (`ARCHON_DEMO_MODE`)** | Hoch | Abgeschlossen | Gehärteter öffentlicher Demo-Mandant („Mittelstand Muster GmbH“) mit gesperrten Schreib-/Shell-/Egress-Pfaden und deterministischen Muster-Debatten ohne Token-Kosten |
 | **48** | **Archon OS als nativer MCP-Server (`/mcp` Gateway)** | Hoch | Geplant | Scoped-API-Key- und HITL-geschützter Model-Context-Protocol-Endpunkt zur Nutzung aller 70 Spezialisten, Boardroom-Voten und Vault/CRM-Daten aus Claude Desktop, Cursor & VS Code |
 | **49** | **EU AI Act Compliance-Engine & 1-Klick-Verfahrensdokumentation** | Kritisch | Geplant | Automatische Risikoklassifizierung je Spezialist (Anhang III / Art. 50), KI-Kompetenznachweis-Log (Art. 4) und prüferfertiger GoBD- & EU-AI-Act-Verfahrensdokumentations-PDF-Export |
 | **50** | **Agent-Eval- & Modell-Benchmark-Arena** | Hoch | Geplant | Lokales Gold-Task-Testdeck (~25 Referenzfälle) zum direkten Qualitäts-, Halluzinations-, Latenz- und Kostenvergleich vor Modell- oder `SOUL.md`-Wechseln |
@@ -232,14 +232,14 @@
 - **Dynamische Datenbindung & § 14 UStG-Check:** Platzhalter-System (`{{customer.name}}`, `{{invoice.items_table}}`, `{{company.vat_id}}`) mit automatischer Live-Prüfung aller umsatzsteuerlichen Pflichtangaben.
 - **Echtzeit-PDF-Vorschau:** Nebeneinander-Ansicht von Layout-Einstellungen (Schriften, Ränder, Logo, Fußzeilen-Spalten, QR-GiroCode für Sofortüberweisung) und gerendertem A4-PDF.
 
-### Meilenstein 30: Interaktiver Setup-Wizard & Installationsprogramm (Geplant – Kritisch)
-- **Geführter First-Run-Onboarding-Assistent:** Beim ersten Start eines frischen Archon-OS-Systems öffnet sich automatisch ein mehrstufiger Einrichtungs-Assistent (Web-Wizard + optionaler Desktop-/CLI-Installer):
-  1. *Unternehmens- & Mandantenprofil:* Firmenname, Rechtsform, Adresse, Steuernummer/USt-IdNr., Bankverbindung, Logo-Upload.
-  2. *KI-Provider & API-Keys:* Geführte Eingabe und sofortiger Live-Verbindungstest für `OpenRouter`, `Google Gemini`, `OpenAI`, `Anthropic`, `Groq` oder lokales `Ollama` / `LM Studio`.
-  3. *Kommunikations-Kanäle:* Einrichtung von IMAP/SMTP (E-Mail-Sync) und Telegram-Bot-Token inkl. automatischem Webhook-/Chat-ID-Pairing.
+### Meilenstein 30: Interaktiver Setup-Wizard & Installationsprogramm (Abgeschlossen)
+- **Geführter 4-Schritte-Web-Wizard (`/onboarding` & Setup-Modal):**
+  1. *Unternehmensstamm & Mandant:* Firmenname, Branche, Rechtsform, Standardwährung (`EUR`/`USD`/`CHF`), Steuernummer und Admin-E-Mail.
+  2. *LLM- & Provider-Orchestrierung:* Schnellauswahl & API-Key-Validierung für OpenRouter, Hermes-Local, vLLM, Ollama und LM Studio mit Live-Ping-Test.
+  3. *Kommunikation & Kanäle:* SMTP/IMAP-Postfächer für Auto-E-Mail-Sync und Telegram-Bot-Token mit Sofort-Validierung (`getMe`).
   4. *Domänen-Auswahl:* Auswahl, welche der 8 Fachdomänen (70 Spezialisten) sofort aktiv geschaltet werden sollen.
 
-### Meilenstein 31: Vollständige Englische Version – Global Release Edition (Geplant – Kritisch)
+### Meilenstein 31: Vollständige Englische Version – Global Release Edition (Abgeschlossen)
 - **Systemweite Zweisprachigkeit (DE / EN):** Vollständige Übersetzung aller 70 Spezialisten-Profile (`SOUL_COMPACT.md`, `SOUL_PRO.md`, `SOUL_FULL.md`), der 832 Prompt-Studio-Vorlagen und der 55 Boardroom-Frameworks ins Englische.
 - **Internationale Rechts- & Steuer-Adaption:** Umschaltbare Normen-Profile für den englischsprachigen Raum (z. B. US-GAAP/IFRS, GDPR/CCPA, FDA/OSHA statt reinem HGB/BauGB/StBerG).
 - **Englisches Systemhandbuch:** Vollständige englische Ausgabe des 218-seitigen Archon-OS-Handbuchs (`ARCHON_OS_SYSTEM_MANUAL_2026_EN.docx` / PDF).
@@ -259,11 +259,11 @@
 - **Kamera-Belegscanner & Sprach-First:** Direktes Fotografieren von Tank-/Bewirtungsbelegen mit sofortiger Übergabe an die ERP-Beleg-OCR sowie Push-to-Talk-Sprachbefehle an alle 70 Agenten.
 - **Echtzeit-Push für HITL-Gates:** Sofortige Push-Benachrichtigung, wenn ein Agent auf eine kritische Freigabe (Zahlung, E-Mail, Vertragsentwurf) wartet.
 
-### Meilenstein 35: GitHub-Präsentation & Public Launch Kit (Geplant – Hoch)
+### Meilenstein 35: GitHub-Präsentation & Public Launch Kit (Abgeschlossen)
 - **High-Impact Repository-Auftritt:** Zweigeteilte `README.md` (Englisch als Hauptsprache für globale Reichweite + Deutsch-Link) mit interaktiver Architektur-Grafik, Vergleichstabelle (*Single Chatbot vs. Super-Agent vs. Archon OS*) und 3-Befehle-Schnellstart.
 - **Visuelle Produkt-Tour:** Eingebettete kurze GIF-/MP4-Demos für die 4 Kern-Highlights: *70-Agenten-Kader mit 3-Stufen-SOUL*, *AI Boardroom Debatte*, *ERP/CRM mit HITL-Freigabe* und *Obsidian Second Brain*.
 
-### Meilenstein 36: Ökosystem-Verzeichnisse & Community-Integrationen (Geplant – Hoch)
+### Meilenstein 36: Ökosystem-Verzeichnisse & Community-Integrationen (Abgeschlossen)
 - **Kuratierte Open-Source-Kataloge:** Strukturierte Bereitstellung von Metadaten, Self-Hosting-Manifesten und Architektur-Steckbriefen für *Awesome-Selfhosted*, *Awesome-AI-Agents* und *Awesome-MCP-Servers*.
 - **Interoperabilitäts- & Migrations-Guides:** Praxisnahe Vergleichs- und Umstiegsdokumentation für Teams, die von Einzel-Chatbots oder Cloud-only-Agenten-Plattformen auf eine selbstgehostete Multi-Agenten-Infrastruktur wechseln.
 - **Community-Beitrags-Workflow:** Standardisierte Issue-/PR-Vorlagen für neue Spezialisten-Profile, Fach-Skills, Lokalisierungen und Workflow-Rezepte.
@@ -321,7 +321,7 @@
 
 ---
 
-### Meilenstein 47: „Zero-Install“ Read-Only Live-Demo-Modus (`ARCHON_DEMO_MODE`) (Geplant – Hoch)
+### Meilenstein 47: „Zero-Install“ Read-Only Live-Demo-Modus (`ARCHON_DEMO_MODE`) (Abgeschlossen)
 - **Öffentlicher Showcase-Mandant ohne Token-Risiko:** Startschalter `ARCHON_DEMO_MODE=true`, der Archon OS mit einem vollständig vorbefüllten Muster-Unternehmen (*„Mittelstand Muster GmbH“*: fertige 6-Phasen-Boardroom-Debatte, aktive Kanban-Karten, Muster-Rechnungen, CRM-Pipeline und 70er-Organigramm) initialisiert.
 - **Harte Middleware-Schreib- & Exec-Sperre:** Blockiert auf ASGI-Ebene sämtliche schreibenden Mutationen, Container-/Sandbox-Ausführungen, Dateisystem-Schreibpfade und externen LLM-Egress; liefert für Interaktionen deterministische, vorab aufgezeichnete Referenz-Antworten aus.
 - **5-€-VPS-Deployment-Fähigkeit:** Ermöglicht den risikolosen Betrieb einer öffentlichen Live-Instanz (`demo.archon-os...`) ohne 0-Day-Angriffsfläche und ohne laufende API-/Token-Kosten.

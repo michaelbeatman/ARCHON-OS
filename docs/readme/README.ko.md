@@ -48,8 +48,8 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 - **Windows:** **`setup.bat`** 더블 클릭([setup.ps1](../../setup.ps1)이 Docker, Obsidian, Ollama, API 키, 네트워크 설정을 단계별로 안내). 일상 실행은 `start.bat`, 종료는 `stop.bat`.
 - **Linux / macOS:**
   ```bash
-  git clone https://github.com/michaelbeatman/Archon-Os.git
-  cd Archon-Os
+  git clone https://github.com/michaelbeatman/ARCHON-OS.git
+  cd ARCHON-OS
   chmod +x install.sh && ./install.sh
   ```
   *(`--yes` 옵션으로 기본값 기반 자동 설치 가능)*
@@ -88,5 +88,5 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ### Manuals & Documentation (PDF)
 - **User & Company Manual:** [한국어 PDF (2.1 MB)](../system/ARCHON_OS_SYSTEM_MANUAL_2026_KO.pdf) | [English PDF (97 pp., 1.9 MB)](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) | [Deutsch PDF (97 S., 1.9 MB)](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)
-- **Complete Feature List (v0.5.1):** [한국어 PDF (944K)](../system/ARCHON_OS_FEATURELISTE_2026_KO.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [Deutsch PDF (34 S., 0.7 MB)](../system/ARCHON_OS_FEATURELISTE_2026.pdf)
+- **Complete Feature List (v0.5.2.1):** [한국어 PDF (944K)](../system/ARCHON_OS_FEATURELISTE_2026_KO.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [Deutsch PDF (34 S., 0.7 MB)](../system/ARCHON_OS_FEATURELISTE_2026.pdf)
 - **AI Boardroom (55 Frameworks):** [한국어 PDF (733K)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [Deutsch PDF (32 S., 0.7 MB)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)

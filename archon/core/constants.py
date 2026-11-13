@@ -22,7 +22,7 @@ from archon.core.runtime import APP_ROOT
 
 # --- Auth-Gate (wirkt nur, wenn settings.auth.enabled = true) --------------
 # Oeffentliche Praefixe ohne Login. Bewusst Tupel, nicht Set: Sets sind mutabel.
-_AUTH_PUBLIC_PREFIXES = ("/static/", "/api/auth/login", "/api/auth/status", "/docs", "/redoc")
+_AUTH_PUBLIC_PREFIXES = ("/static/", "/api/auth/login", "/api/auth/status", "/docs", "/redoc", "/api/demo/")
 
 # API-Pfade, die *unter* einem oeffentlichen Prefix liegen und deshalb wie
 # "/api/" behandelt werden (401 statt Durchreichen). F1/R-34:

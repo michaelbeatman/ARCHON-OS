@@ -1,0 +1,10 @@
+{
+  "id": "persona_watchlist",
+  "name": "watchlist",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'watchlist'. Act as a financial data assistant. Please look at the companies listed in the provided image and extract their ticker sy...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

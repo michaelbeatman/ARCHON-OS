@@ -1,0 +1,10 @@
+{
+  "id": "persona_pitchside_tunnel_moment_with_your_favorite_footballer",
+  "name": "Pitchside Tunnel Moment with Your Favorite Footballer",
+  "category": "6. Vertrieb, CRM & Growth",
+  "description": "Fach-Experte: 'Pitchside Tunnel Moment with Your Favorite Footballer'. Inputs\n\nReference 1: User’s uploaded photo\n\nReference 2: ${Footballer Name}\n\nJersey Number: ${Jersey Number}\nJersey Team...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

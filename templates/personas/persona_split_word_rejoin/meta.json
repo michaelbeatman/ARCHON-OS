@@ -1,0 +1,10 @@
+{
+  "id": "persona_split_word_rejoin",
+  "name": "Split Word Rejoin",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Split Word Rejoin'. Remove the - character and restore the split words in the markdown content....",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

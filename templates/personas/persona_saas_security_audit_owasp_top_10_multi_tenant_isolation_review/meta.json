@@ -1,0 +1,10 @@
+{
+  "id": "persona_saas_security_audit_owasp_top_10_multi_tenant_isolation_review",
+  "name": "SaaS Security Audit - OWASP Top 10 & Multi-Tenant Isolation Review",
+  "category": "3. Recht, Steuern & Compliance",
+  "description": "Fach-Experte: 'SaaS Security Audit - OWASP Top 10 & Multi-Tenant Isolation Review'. title: SaaS Dashboard Security Audit - Knowledge-Anchored Backend Prompt\ndomain: backend\nanchors:\n  - OWASP Top 10 (2021...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

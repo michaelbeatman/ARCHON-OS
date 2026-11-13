@@ -1,0 +1,10 @@
+{
+  "id": "persona_theme_based_art_style_fusion_meta_prompt",
+  "name": "Theme based Art Style Fusion Meta-Prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Theme based Art Style Fusion Meta-Prompt'. Theme=\"${theme}\" \nStyle=\"the most interesting fusion of 3 or more art styles to best capture the theme\"...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

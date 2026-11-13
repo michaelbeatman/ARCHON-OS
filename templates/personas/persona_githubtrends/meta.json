@@ -1,0 +1,10 @@
+{
+  "id": "persona_githubtrends",
+  "name": "GitHubTrends",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'GitHubTrends'. ---\nname: GitHubTrends\ndescription: 显示GitHub热门项目趋势，生成可视化仪表板。USE WHEN github trends, trending projects, hot repositories,...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

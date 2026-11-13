@@ -1,0 +1,46 @@
+{
+  "id": "archon.tool.system_metrics",
+  "name": "System & Container Telemetrie",
+  "version": "1.0.0",
+  "description": "Stellt Agenten und Dashboards Live-Metriken zu CPU, RAM, Festplatte und Docker-Containern bereit.",
+  "author": "Archon OS Core Team",
+  "category": "tool",
+  "default_enabled": true,
+  "permissions": ["system_info", "filesystem_read"],
+  "hooks": ["on_startup", "on_enable", "on_disable"],
+  "entry_point": "plugin.py:SystemMetricsPlugin",
+  "settings_schema": {
+    "type": "object",
+    "properties": {
+      "warning_threshold_ram_percent": {
+        "type": "number",
+        "title": "RAM-Warnschwelle (%)",
+        "default": 85.0
+      },
+      "include_container_logs": {
+        "type": "boolean",
+        "title": "Container-Logs in Kurzform einbinden",
+        "default": false
+      }
+    }
+  },
+  "default_config": {
+    "warning_threshold_ram_percent": 85.0,
+    "include_container_logs": false
+  },
+  "tools": [
+    {
+      "name": "get_system_telemetry",
+      "description": "Liest den aktuellen Zustand des Hostsystems und aktiver Docker-Container (CPU, RAM, Disk, Uptime) aus.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "include_containers": {
+            "type": "boolean",
+            "description": "Ob eine Liste aller Docker-Container und ihrer Ports beigefügt werden soll."
+          }
+        }
+      }
+    }
+  ]
+}

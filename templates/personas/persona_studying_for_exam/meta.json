@@ -1,0 +1,10 @@
+{
+  "id": "persona_studying_for_exam",
+  "name": "studying for exam",
+  "category": "3. Recht, Steuern & Compliance",
+  "description": "Fach-Experte: 'studying for exam'. Please help me study for an exam. This exam is about network security. The class's text book is this: Stallings, W. & Br...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

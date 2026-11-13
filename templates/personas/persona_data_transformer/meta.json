@@ -1,0 +1,10 @@
+{
+  "id": "persona_data_transformer",
+  "name": "Data Transformer",
+  "category": "6. Vertrieb, CRM & Growth",
+  "description": "Fach-Experte: 'Data Transformer'. {\"role\": \"Data Transformer\", \"input_schema\": {\"type\": \"array\", \"items\": {\"name\": \"string\", \"email\": \"string\", \"age\": \"nu...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,4551 @@
+
+    // --- i18n-Helfer (Tranche 1) ---------------------------------------------
+    // profT() liefert den Katalogtext mit PFLICHT-Fallback: fehlt der Key in der
+    // aktiven Sprache und in de, bleibt der deutsche Text stehen - nie "".
+    // {platzhalter} werden aus params gefuellt (Zahlen stehen nie im Key).
+    function profT(key, fallback, params) {
+      const i18n = window.archonI18n;
+      let text = i18n ? i18n.t(key, fallback) : fallback;
+      if (params) {
+        Object.keys(params).forEach(name => {
+          text = text.split(`{${name}}`).join(String(params[name]));
+        });
+      }
+      return text;
+    }
+    // profLocale() ist das Sprach-Tag fuer Intl/toLocaleString: die Ausgabesprache
+    // folgt dem Katalog statt eines festen "de-DE".
+    function profLocale() {
+      return (window.archonI18n && window.archonI18n.currentLang) || "de";
+    }
+
+    // --- HERMES AGENTENPROFILE & SKILL-MANAGER LOGIK ---
+    let hermesProfilesData = [];
+    let hermesGlobalSkillsData = [];
+    let currentSelectedProfileId = "";
+    let activeProfileCategoryFilter = "all";
+    let isLoadingProfiles = false;
+    let _profilesLoadingPromise = null;
+    // F-15: Schutz gegen die Endlosschleife renderHermesProfilesList() ->
+    // loadHermesProfilesFromServer() -> renderHermesProfilesList(). Ist der
+    // Kader legitim leer (frisches Profil), feuerte der Browser dauerhaft
+    // GET /api/hermes/profiles (110 KB je Runde). Der Guard haelt fest, dass
+    // ein Abruf laeuft bzw. bereits gelaufen ist.
+    let _profilesFetchInFlight = false;
+    let _profilesFetchSettled = false;
+    async function loadHermesProfilesView(force = false) {
+      // F-15: ein ausdrueckliches Neuladen setzt den Einmal-Guard zurueck.
+      if (force) _profilesFetchSettled = false;
+      if (_profilesLoadingPromise && !force) {
+        return _profilesLoadingPromise;
+      }
+      _profilesLoadingPromise = (async () => {
+        isLoadingProfiles = true;
+        const shouldShowOverlay = (currentTab === 'agent-profiles' || force) && hermesProfilesData.length === 0;
+        if (shouldShowOverlay) {
+          showLoadingOverlay("Agenten-Kader wird geladen...", "54 Personalakten, Rollen & SOUL-Direktiven werden synchronisiert");
+        }
+        try {
+          // Starte Skills-Download asynchron im Hintergrund (blockiert nicht die Anzeige der Profile)
+          if (hermesGlobalSkillsData.length === 0 || force) {
+            loadHermesSkillsFromServer().then(() => {
+              populateGlobalSkillsDropdown();
+              initTalentMarketplace();
+              if (currentSelectedProfileId) {
+                const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+                if (prof) renderActiveProfileSkillsTags(prof.skills || []);
+              }
+            }).catch(e => console.warn("Skills background load:", e));
+          }
+          if (hermesProfilesData.length === 0 || force) {
+            await loadHermesProfilesFromServer();
+          } else {
+            renderHermesProfilesList();
+          }
+          if (hermesProfilesData.length > 0) {
+            let targetProfileId = currentSelectedProfileId;
+            if (!targetProfileId || !hermesProfilesData.find(p => p.id === targetProfileId)) {
+              try {
+                const savedId = localStorage.getItem("archon_active_profile_id");
+                if (savedId && hermesProfilesData.find(p => p.id === savedId)) {
+                  targetProfileId = savedId;
+                }
+              } catch(e) {}
+            }
+            if (!targetProfileId || !hermesProfilesData.find(p => p.id === targetProfileId)) {
+              targetProfileId = hermesProfilesData[0].id;
+            }
+            if (activeProfileTabFilter === 'active') {
+              const activeProfs = hermesProfilesData.filter(p => isProfileDeployedActive(p));
+              const currentIsActive = activeProfs.some(p => p.id === targetProfileId);
+              if (!currentIsActive && activeProfs.length > 0) {
+                targetProfileId = activeProfs[0].id;
+              }
+            }
+            currentSelectedProfileId = targetProfileId;
+            selectProfileForEditor(currentSelectedProfileId, false);
+          } else {
+            createNewProfileDraft();
+          }
+          if (window.lucide) lucide.createIcons();
+        } catch (err) {
+          console.error("Error in loadHermesProfilesView:", err);
+        } finally {
+          if (shouldShowOverlay) {
+            hideLoadingOverlay();
+          }
+          isLoadingProfiles = false;
+          _profilesLoadingPromise = null;
+        }
+      })();
+      return _profilesLoadingPromise;
+    }
+    async function loadHermesSkillsFromServer() {
+      try {
+        const res = await fetch("/api/hermes/skills");
+        if (res.ok) {
+          hermesGlobalSkillsData = await res.json();
+        }
+      } catch (e) {
+        console.error("Error loading hermes skills:", e);
+      }
+    }
+    async function loadHermesProfilesFromServer() {
+      // F-15: nur ein Abruf gleichzeitig, und nach einem abgeschlossenen Abruf
+      // kein automatischer Neustart aus dem Rendern heraus.
+      if (_profilesFetchInFlight || _profilesFetchSettled) return;
+      _profilesFetchInFlight = true;
+      try {
+        const res = await fetch("/api/hermes/profiles");
+        if (res.ok) {
+          hermesProfilesData = await res.json();
+          window.hermesProfilesData = hermesProfilesData;
+        }
+        _profilesFetchSettled = true;
+      } catch (e) {
+        console.error("[DEBUG PROFILES] Error loading hermes profiles:", e);
+        _profilesFetchSettled = true;   // kein Retry-Sturm: der Nutzer kann manuell neu laden
+      } finally {
+        _profilesFetchInFlight = false;
+      }
+      if (currentSelectedProfileId) {
+        selectProfileForEditor(currentSelectedProfileId, false);
+      } else {
+        renderHermesProfilesList();
+      }
+    }
+    function populateGlobalSkillsDropdown() {
+      const select = document.getElementById("prof-add-skill-select");
+      if (!select) return;
+      select.innerHTML = `<option value="" disabled selected>${profT('ui.agent_profiles.skill_picker_placeholder', '+ Skill aus dem Katalog hinzufügen...')}</option>`;
+      const categories = {};
+      hermesGlobalSkillsData.forEach(sk => {
+        const cat = sk.category || "Allgemein";
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(sk);
+      });
+      for (const [catName, list] of Object.entries(categories)) {
+        const group = document.createElement("optgroup");
+        group.label = catName;
+        list.forEach(sk => {
+          const opt = document.createElement("option");
+          opt.value = sk.id;
+          opt.innerText = `${sk.name} (${(sk.tags || []).join(', ')})`;
+          group.appendChild(opt);
+        });
+        select.appendChild(group);
+      }
+    }
+    const AVATAR_REV = "20260913_rev4";
+    let avatarDynamicRev = Date.now();
+    function withAvatarRevision(url) {
+      if (!url) return `/static/avatars/avatar_001.jpg?v=${AVATAR_REV}`;
+      if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+      const clean = url.split("?")[0];
+      if (clean.includes("custom_") || clean.includes("upload")) {
+        return `${clean}?v=${avatarDynamicRev}`;
+      }
+      return `${clean}?v=${AVATAR_REV}`;
+    }
+    const ALL_AVATARS_LIST = [
+      "/static/avatars/hermes_default_avatar.png",
+      ...Array.from({ length: 174 }, (_, i) => `/static/avatars/avatar_${String(i + 1).padStart(3, '0')}.jpg`)
+    ];
+    function getProfileAvatarUrl(prof) {
+      if (prof && (prof.id === "default" || prof.id === "hermes_default")) {
+        if (prof.avatar && !prof.avatar.includes("avatar_001.jpg") && !prof.avatar.includes("dicebear.com")) {
+          return withAvatarRevision(prof.avatar);
+        }
+        return withAvatarRevision("/static/avatars/hermes_default_avatar.png");
+      }
+      if (prof && prof.avatar && !prof.avatar.includes("dicebear.com")) return withAvatarRevision(prof.avatar);
+      if (prof && prof.avatar_url && !prof.avatar_url.includes("dicebear.com")) return withAvatarRevision(prof.avatar_url);
+      // Deterministischer Avatar-Index basierend auf Profil-ID oder Name
+      let hash = 0;
+      const str = (prof && (prof.id || prof.name)) || "agent";
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      const avatarIndex = (Math.abs(hash) % 174) + 1;
+      return withAvatarRevision(`/static/avatars/avatar_${String(avatarIndex).padStart(3, '0')}.jpg`);
+    }
+    const AVAILABLE_SYSTEM_TOOLS = [
+      { id: "web_search", name: "Web Search & Scraping", icon: "globe", desc: "Live-Websuche und Inhalts-Extraktion via DuckDuckGo und Brave für aktuelle Online-Recherchen.", subtools: ["web_search", "web_extract"], mode: "sandbox", timeout: 30 },
+      { id: "browser", name: "Browser Automation", icon: "chrome", desc: "Headless Chrome-Steuerung über CDP: Klicks, Navigation, Formulareingaben, DOM-Inspektion und Screenshots.", subtools: ["browser_back", "browser_cdp", "browser_click", "browser_console", "browser_dialog", "browser_exec", "browser_get_images", "browser_navigate", "browser_press", "browser_scroll", "browser_snapshot", "browser_type", "browser_vision"], mode: "sandbox", timeout: 90 },
+      { id: "terminal", name: "Terminal & Shell", icon: "terminal", desc: "Sichere Ausführung von Bash-Befehlen, Systemdiagnosen und langlebigen Hintergrundprozessen.", subtools: ["process", "terminal"], mode: "direct", timeout: 120 },
+      { id: "filesystem", name: "Dateisystem-Operationen", icon: "folder-tree", desc: "Dateien und Projektordner lesen, schreiben, strukturiert durchsuchen und zeilenweise patchen.", subtools: ["patch", "read_file", "search_files", "write_file"], mode: "direct", timeout: 60 },
+      { id: "execute_code", name: "Code-Sandbox (Polyglot)", icon: "code-2", desc: "Isolierte Ausführung von Python-, Node.js- und Shell-Skripten mit Rückgabe von Stdout und Exit-Code.", subtools: ["execute_code"], mode: "sandbox", timeout: 60 },
+      { id: "vision_analyze", name: "Vision & Bildanalyse", icon: "eye", desc: "Multimodale optische Analyse von Screenshots, UI-Mockups, Diagrammen und Fotos via Vision-LLM.", subtools: ["vision_analyze"], mode: "sandbox", timeout: 60 },
+      { id: "video_analyze", name: "Video-Analyse", icon: "video", desc: "Frame-basierte Erkennung von Szenen, Textinhalten und Handlungsabläufen in Videodateien.", subtools: ["video_analyze"], mode: "sandbox", timeout: 120 },
+      { id: "image_generate", name: "Bildgenerierung", icon: "image", desc: "Synthetisiert hochauflösende Grafiken, Diagramme und Visualisierungen anhand von Textprompts.", subtools: ["image_generate"], mode: "sandbox", timeout: 60 },
+      { id: "video_generate", name: "Videogenerierung", icon: "film", desc: "Erstellt KI-Videoclips aus Textprompts, Standbildern oder Referenzsequenzen.", subtools: ["video_generate", "xai_video_edit", "xai_video_extend"], mode: "sandbox", timeout: 180 },
+      { id: "bfl_flux3", name: "BFL FLUX Studio", icon: "clapperboard", desc: "Professionelle Black Forest Labs FLUX Bild- und Videogeneration mit Frame-Fortsetzung und Keyframes.", subtools: ["bfl_flux3_get_result", "bfl_flux3_image_to_video", "bfl_flux3_keyframes_to_video", "bfl_flux3_prompting_guide", "bfl_flux3_text_to_video", "bfl_flux3_video_continuation"], mode: "sandbox", timeout: 180 },
+      { id: "x_search", name: "X (Twitter) Live-Suche", icon: "twitter", desc: "Echtzeit-Abfrage von Tweets, Profilen, Trends und Diskussionen auf X via xAI API.", subtools: ["x_search"], mode: "sandbox", timeout: 30 },
+      { id: "text_to_speech", name: "Sprachausgabe (TTS)", icon: "volume-2", desc: "Wandelt Agenten-Antworten in natürliche Sprachausgabe via ElevenLabs oder Edge-TTS um.", subtools: ["text_to_speech"], mode: "sandbox", timeout: 30 },
+      { id: "speech_to_text", name: "Spracherkennung (STT)", icon: "mic", desc: "Transkribiert gesprochene Sprachnachrichten und Audioaufnahmen präzise in Fließtext via Whisper.", subtools: ["stt_toolset"], mode: "sandbox", timeout: 30 },
+      { id: "skills", name: "Skill-Verwaltung", icon: "sparkles", desc: "Verwaltet modulare Fach-Skills, lädt Handbücher und führt domänenspezifische Instruktionen aus.", subtools: ["skill_manage", "skill_view", "skills_list"], mode: "direct", timeout: 30 },
+      { id: "task_planning", name: "Aufgabenplanung (WBS)", icon: "check-square", desc: "Zerlegt übergeordnete Ziele in messbare Meilensteine, Arbeitspakete und To-Do-Checklisten.", subtools: ["todo"], mode: "direct", timeout: 30 },
+      { id: "memory", name: "Persistentes Gedächtnis", icon: "database", desc: "Sichert Fakten, Entscheidungen und Nutzerpräferenzen dauerhaft in der SQLite-Datenbank.", subtools: ["memory"], mode: "direct", timeout: 30 },
+      { id: "context_engine", name: "Kontext-Engine", icon: "cpu", desc: "Injiziert dynamisch passende Wissens-Chunks, Systemrichtlinien und Vault-Inhalte zur Laufzeit.", subtools: ["context_engine"], mode: "direct", timeout: 30 },
+      { id: "session_search", name: "Sitzungs-Archivsuche", icon: "search", desc: "Volltextsuche in vergangenen Konversationen, Transkripten und Beschlüssen aller Agenten.", subtools: ["session_search"], mode: "direct", timeout: 30 },
+      { id: "clarify", name: "Präzisierungs-Rückfragen", icon: "help-circle", desc: "Stellt gezielte Rückfragen an den Nutzer, wenn Aufgabenstellungen mehrdeutig oder unvollständig sind.", subtools: ["clarify"], mode: "direct", timeout: 30 },
+      { id: "delegate_task", name: "Aufgaben-Delegation", icon: "share-2", desc: "Übergibt Teilaufgaben autonom an spezialisierte Subagenten und führt Zwischenergebnisse zusammen.", subtools: ["delegate_task"], mode: "direct", timeout: 60 },
+      { id: "cronjob", name: "Automations-Scheduler", icon: "clock", desc: "Erstellt und überwacht zeitgesteuerte Hintergrundaufträge, Cron-Jobs und Intervalle.", subtools: ["cronjob"], mode: "direct", timeout: 60 },
+      { id: "home_assistant", name: "Home Assistant (IoT)", icon: "home", desc: "Interagiert mit Smart-Home-Entitäten, liest Sensoren aus und schaltet Geräte im lokalen Netzwerk.", subtools: ["ha_call_service", "ha_get_state", "ha_list_entities", "ha_list_services"], mode: "sandbox", timeout: 45 },
+      { id: "spotify", name: "Spotify Mediensteuerung", icon: "music", desc: "Sucht Musik, steuert Wiedergabe und kuratiert Playlists auf verbundenen Spotify-Geräten.", subtools: ["spotify_albums", "spotify_devices", "spotify_library", "spotify_playback", "spotify_playlists", "spotify_queue", "spotify_search"], mode: "sandbox", timeout: 45 },
+      { id: "discord", name: "Discord Messenger", icon: "message-circle", desc: "Liest Nachrichten, durchsucht Server-Kanäle und sendet Beiträge in Discord-Threads.", subtools: ["discord"], mode: "sandbox", timeout: 45 },
+      { id: "discord_admin", name: "Discord Server-Admin", icon: "shield", desc: "Verwaltet Rollen, Berechtigungen und Kanalstrukturen auf autorisierten Discord-Servern.", subtools: ["discord_admin"], mode: "sandbox", timeout: 45 },
+      { id: "yuanbao", name: "Yuanbao Integration", icon: "messages-square", desc: "Interagiert mit Tencent Yuanbao Workflows, Gruppeninformationen und Kommunikationskanälen.", subtools: ["yb_query_group_info", "yb_query_group_members", "yb_search_sticker", "yb_send_dm", "yb_send_sticker"], mode: "sandbox", timeout: 45 },
+      { id: "computer_use", name: "Desktop CUA-Automation", icon: "monitor", desc: "Autonome Steuerung von Mauszeiger, Klicks und Tastatureingaben für grafische Betriebssystem-Aufgaben.", subtools: ["computer_use"], mode: "direct", timeout: 120 },
+      { id: "a2a", name: "A2A Inter-Agent Protokoll", icon: "network", desc: "Standardisierte Peer-to-Peer Kommunikation für kooperative Agententeams und Föderationen.", subtools: ["a2a_call", "a2a_discover", "a2a_history", "a2a_list", "a2a_orchestrate"], mode: "direct", timeout: 60 }
+    ];
+    const DEFAULT_HERMES_TOOLS = [
+      "web_search", "browser", "terminal", "filesystem", "execute_code", "vision_analyze",
+      "image_generate", "bfl_flux3", "text_to_speech", "speech_to_text", "skills", "task_planning",
+      "memory", "session_search", "clarify", "delegate_task", "cronjob", "computer_use"
+    ];
+    let dynamicPaperclipAgentIds = [];
+    let dynamicPaperclipAgents = [];
+    async function loadPaperclipActiveAgents() {
+      // Paperclip-Polling entfernt; Profile-Status kommt direkt aus agent_profiles.json
+      return Promise.resolve();
+    }
+    async function refreshProfiles(isManual = false) {
+      if (isManual) {
+        showLoadingOverlay("Agenten-Disposition wird abgeglichen...", "Agenten-Profile werden synchronisiert");
+      }
+      try {
+        await loadHermesProfilesFromServer();
+        if (currentSelectedProfileId) {
+          selectProfileForEditor(currentSelectedProfileId);
+        }
+        if (isManual && typeof showNotification === 'function') {
+          showNotification("Agenten Sync", "Agenten-Status erfolgreich synchronisiert.", "info");
+        }
+      } catch (e) {
+        console.error("Error syncing profiles:", e);
+      } finally {
+        if (isManual) {
+          setTimeout(() => hideLoadingOverlay(), 300);
+        }
+      }
+    }
+    const refreshPaperclipAndProfiles = refreshProfiles;
+    window.refreshPaperclipAndProfiles = refreshProfiles;
+    let activeProfileTabFilter = 'active';
+    function setProfileTabFilter(tabName) {
+      activeProfileTabFilter = tabName || 'active';
+      
+      const btnActive = document.getElementById("tab-filter-active");
+      const btnFav = document.getElementById("tab-filter-favorites");
+      const btnAll = document.getElementById("tab-filter-all");
+      const activeClass = "py-1 px-1.5 rounded-lg text-[10.5px] font-bold font-mono transition text-center cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] truncate";
+      const inactiveClass = "py-1 px-1.5 rounded-lg text-[10.5px] font-medium font-mono transition text-center cursor-pointer bg-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent truncate";
+      if (btnActive) {
+        btnActive.className = (activeProfileTabFilter === 'active') ? activeClass : inactiveClass;
+        btnActive.style.cssText = "";
+      }
+      if (btnFav) {
+        btnFav.className = (activeProfileTabFilter === 'favorites') ? activeClass : inactiveClass;
+        btnFav.style.cssText = "";
+      }
+      if (btnAll) {
+        btnAll.className = (activeProfileTabFilter === 'all') ? activeClass : inactiveClass;
+        btnAll.style.cssText = "";
+      }
+      renderHermesProfilesList();
+    }
+    async function toggleProfileFavorite(profId, event) {
+      if (event) event.stopPropagation();
+      const prof = hermesProfilesData.find(p => p.id === profId);
+      if (!prof) return;
+      
+      prof.is_favorite = !prof.is_favorite;
+      renderHermesProfilesList();
+      try {
+        await fetch(`/api/hermes/profiles/${profId}/favorite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (e) {
+        console.error("Error toggling favorite:", e);
+      }
+    }
+    function getProfilePaperclipAgent(p) {
+      if (!p || !p.id || !Array.isArray(dynamicPaperclipAgents)) return null;
+      const pid = (p.id || '').toLowerCase().trim();
+      const pperson = (p.person_name || '').toLowerCase().trim();
+      const pname = (p.name || '').toLowerCase().trim();
+      
+      return dynamicPaperclipAgents.find(a => {
+        const apid = (a.profile_id || '').toLowerCase().trim();
+        const arole = (a.role || '').toLowerCase().trim();
+        const aname = (a.name || '').toLowerCase().trim();
+        const atitle = (a.title || '').toLowerCase().trim();
+        
+        return (apid && apid === pid) ||
+               (arole && (arole === pid || arole === pid.replace(/_/g, ' '))) ||
+               (aname && (aname === pperson || aname === pname)) ||
+               (atitle && (atitle === pname || atitle === pperson));
+      }) || null;
+    }
+    function isProfileDeployedActive(p) {
+      // 1. Check OmniRoute Gateway
+      if (typeof gwProfilesData !== 'undefined' && Array.isArray(gwProfilesData)) {
+        const agent = gwProfilesData.find(gw => gw && gw.id === p.id);
+        if (agent) {
+          const st = (agent.status || '').toLowerCase().trim();
+          if (st === 'active' || st === 'idle' || st === 'running') return true;
+        }
+      }
+      
+      // 2. Check if user is currently chatting with them
+      if (typeof currentSelectedProfileId !== 'undefined' && p.id === currentSelectedProfileId) return true;
+      if (typeof currentMasterChatProfileId !== 'undefined' && p.id === currentMasterChatProfileId) return true;
+      
+      // 3. The 'default' (Master) is practically always active when you interact with it
+      if (p.id === 'default' && (currentSelectedProfileId === 'default' || currentMasterChatProfileId === 'default')) return true;
+      
+      return false;
+    }
+    function startPaperclipBackgroundSync() {
+      // Paperclip-Polling entfernt; Profile werden bei Bedarf synchronisiert.
+    }
+    let catalogCollapsed = false;
+    let activeAgentCadreTab = 'overview';
+    let inlinePersonalakteViewMode = 'dossier';
+    function toggleCatalogCollapse(forceState) {
+      if (typeof forceState === 'boolean') {
+        catalogCollapsed = forceState;
+      } else {
+        catalogCollapsed = !catalogCollapsed;
+      }
+      
+      const col = document.getElementById("agent-catalog-col");
+      const expHeader = document.getElementById("catalog-expanded-header");
+      const colHeader = document.getElementById("catalog-collapsed-header");
+      const expFooter = document.getElementById("catalog-expanded-footer");
+      
+      if (col) {
+        if (catalogCollapsed) {
+          col.classList.remove("w-[250px]", "min-w-[250px]", "max-w-[250px]", "p-3");
+          col.classList.add("w-[68px]", "min-w-[68px]", "max-w-[68px]", "p-1.5");
+          if (expHeader) expHeader.classList.add("hidden");
+          if (colHeader) colHeader.classList.remove("hidden");
+          if (expFooter) expFooter.classList.add("hidden");
+        } else {
+          col.classList.remove("w-[68px]", "min-w-[68px]", "max-w-[68px]", "p-1.5");
+          col.classList.add("w-[250px]", "min-w-[250px]", "max-w-[250px]", "p-3");
+          if (expHeader) expHeader.classList.remove("hidden");
+          if (colHeader) colHeader.classList.add("hidden");
+          if (expFooter) expFooter.classList.remove("hidden");
+        }
+      }
+      renderHermesProfilesList();
+    }
+    function switchAgentCadreTab(tabName) {
+      activeAgentCadreTab = tabName || 'overview';
+      
+      const tabNames = ['overview', 'chat', 'operations', 'botscreen', 'skills', 'soul', 'personalakte', 'marketplace'];
+      tabNames.forEach(t => {
+        const btn = document.getElementById(`agent-tab-btn-${t}`);
+        const pane = document.getElementById(`agent-pane-${t}`);
+        const label = btn ? btn.querySelector(".agent-tab-label") : null;
+        
+        const iconWrap = btn ? btn.querySelector(".tile-icon-wrap") : null;
+        
+        if (t === activeAgentCadreTab) {
+          if (btn) {
+            btn.className = "agent-header-tile active-cadre-tab flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) {
+            iconWrap.classList.add("active-tile");
+          }
+          if (label) {
+            label.className = "agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold";
+          }
+          if (pane) pane.classList.remove("hidden");
+        } else {
+          if (btn) {
+            btn.className = "agent-header-tile flex flex-col items-center justify-center min-w-[58px] sm:min-w-[66px] py-0.5 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+          }
+          if (iconWrap) {
+            iconWrap.classList.remove("active-tile");
+          }
+          if (label) {
+            label.className = "agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium";
+          }
+          if (pane) pane.classList.add("hidden");
+        }
+      });
+      if (currentSelectedProfileId) {
+        if (activeAgentCadreTab === 'overview') {
+          loadAgentLiveActivity(currentSelectedProfileId);
+          loadAgentProjectsHistory(currentSelectedProfileId);
+        } else if (activeAgentCadreTab === 'soul') {
+          loadInlineSoulMarkdown(currentSelectedProfileId);
+        } else if (activeAgentCadreTab === 'personalakte') {
+          loadInlinePersonalakte(currentSelectedProfileId);
+        } else if (activeAgentCadreTab === 'chat') {
+          loadAgentTabChatSessions(currentSelectedProfileId);
+        } else if (activeAgentCadreTab === 'skills') {
+          const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+          if (prof) {
+            renderActiveProfileSkillsTags(prof.skills || []);
+            renderActiveProfileTools(prof.tools || []);
+          }
+        }
+      }
+      
+      if (window.lucide) lucide.createIcons();
+    }
+    function renderHermesProfilesList() {
+      const container = document.getElementById("hermes-profiles-list");
+      if (!container) return;
+      container.innerHTML = "";
+      // Fallback: Wenn noch keine Daten geladen wurden, lade sie vom Server
+      if (!Array.isArray(hermesProfilesData) || hermesProfilesData.length === 0) {
+        // F-15: nur einmal anstossen. Danach steht ein echter Leerzustand,
+        // statt dauerhaft "Lade ..." zu pulsen und den Server zu haemmern.
+        if (!_profilesFetchSettled) {
+          loadHermesProfilesFromServer();
+          container.innerHTML = `<div class="text-center py-8 text-xs text-[var(--muted-foreground)] font-mono animate-pulse">${profT('ui.agent_profiles.cadre_loading', 'Lade Agenten-Kader...')}</div>`;
+        } else {
+          container.innerHTML = `<div class="text-center py-8 text-xs text-[var(--muted-foreground)] font-mono">${profT('ui.agent_profiles.cadre_empty', 'Keine Agentenprofile vorhanden.')}</div>`;
+        }
+        return;
+      }
+      const query = (document.getElementById("profile-search-input")?.value || "").toLowerCase().trim();
+      // Counts berechnen
+      const totalAll = hermesProfilesData.length;
+      const totalFav = hermesProfilesData.filter(p => p.is_favorite === true).length;
+      const totalActive = hermesProfilesData.filter(p => isProfileDeployedActive(p)).length;
+      const countActiveEl = document.getElementById("count-active");
+      const countFavEl = document.getElementById("count-favorites");
+      const countAllEl = document.getElementById("count-all");
+      const countBadge = document.getElementById("profile-count-badge");
+      if (countActiveEl) countActiveEl.innerText = totalActive;
+      if (countFavEl) countFavEl.innerText = totalFav;
+      if (countAllEl) countAllEl.innerText = totalAll;
+      const filtered = hermesProfilesData.filter(p => {
+        // Tab Filter
+        let matchesTab = true;
+        if (activeProfileTabFilter === 'active') {
+          matchesTab = isProfileDeployedActive(p);
+        } else if (activeProfileTabFilter === 'favorites') {
+          matchesTab = (p.is_favorite === true);
+        }
+        // Domänen Filter
+        const matchesCat = (activeProfileCategoryFilter === "all" || p.category === activeProfileCategoryFilter);
+        
+        // Such-Query Filter
+        const matchesQuery = !query || 
+          (p.person_name || "").toLowerCase().includes(query) ||
+          (p.name || "").toLowerCase().includes(query) ||
+          (p.id || "").toLowerCase().includes(query) ||
+          (p.category || "").toLowerCase().includes(query) ||
+          (p.description || "").toLowerCase().includes(query) ||
+          (p.skills || []).some(s => s.toLowerCase().includes(query));
+        return matchesTab && matchesCat && matchesQuery;
+      });
+      if (countBadge) {
+        countBadge.innerText = `${filtered.length} ${filtered.length === 1 ? 'Profil' : 'Profile'}`;
+      }
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 text-xs text-[var(--muted-foreground)] font-mono">${catalogCollapsed ? '—' : profT('ui.agent_profiles.search_empty', 'Keine Profile gefunden.')}</div>`;
+        return;
+      }
+      filtered.forEach(prof => {
+        const isSelected = prof.id === currentSelectedProfileId;
+        const skillsCount = (prof.skills || []).length;
+        const avatarUrl = getProfileAvatarUrl(prof);
+        const personName = prof.person_name || prof.name || prof.id;
+        const roleName = prof.name || prof.id;
+        const isFav = prof.is_favorite === true;
+        const isDeployed = isProfileDeployedActive(prof);
+        const runtimeStatus = prof.runtime_status || (isDeployed ? 'active' : '');
+        const coreAgents = ['default', 'founder', 'executive_decision_architect', 'labor_law_hr_governance'];
+        const isOnMission = runtimeStatus === 'active' && !coreAgents.includes(prof.id) && prof.current_task_id;
+        if (catalogCollapsed) {
+          // 68px Icon-Rail Ansicht mit 44px (w-11 h-11) Avatar
+          const item = document.createElement("div");
+          item.setAttribute("data-profile-id", prof.id);
+          item.onclick = () => selectProfileForEditor(prof.id);
+          item.title = `${personName} (${roleName})\nStatus: ${isDeployed ? 'Aktiv' : 'Inaktiv'}\nID: ${prof.id}`;
+          item.className = `cursor-pointer relative p-1 rounded-2xl flex items-center justify-center transition-all duration-150 ${
+            isSelected 
+              ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 ring-2 ring-zinc-500 shadow-xs' 
+              : 'hover:bg-[var(--secondary)] text-[var(--foreground)]'
+          }`;
+          item.innerHTML = `
+            <div class="relative w-11 h-11 shrink-0">
+              <img src="${avatarUrl}" alt="${escapeHtml(personName)}" class="w-full h-full rounded-full object-cover border-2 border-[var(--border)] bg-[var(--card)] shadow-xs" onerror="this.onerror=null; this.src=withAvatarRevision('/static/avatars/hermes_default_avatar.png');">
+              <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[var(--background)] ${isDeployed ? 'bg-emerald-500' : 'bg-zinc-400'}"></span>
+            </div>
+          `;
+          container.appendChild(item);
+        } else {
+          // 320px Schlanke Kartenansicht mit 56px (w-14 h-14) Avatar
+          const card = document.createElement("div");
+          card.setAttribute("data-profile-id", prof.id);
+          card.onclick = () => selectProfileForEditor(prof.id);
+          card.className = `prof-list-item p-2.5 cursor-pointer relative overflow-hidden bg-[var(--card)] border rounded-2xl transition-all duration-150 shadow-2xs ${
+            isSelected 
+              ? 'selected-item border-zinc-900 dark:border-zinc-100 ring-1 ring-zinc-900/20 dark:ring-zinc-100/20 bg-[var(--secondary)]/40' 
+              : 'border-[var(--border)] hover:border-zinc-400 dark:hover:border-zinc-600'
+          }`;
+          let statusLabel = profT('ui.agent_profiles.status_inactive', 'Inaktiv');
+          let statusColor = 'text-[var(--muted-foreground)]';
+          let ledColor = 'bg-zinc-400 dark:bg-zinc-600';
+          let switchTooltip = profT('ui.agent_profiles.switch_off_hint', 'Inaktiv im Agenten-Netzwerk (Klicken zum Aktivieren)');
+          if (isDeployed) {
+            statusLabel = profT('ui.agent_profiles.status_active', 'Aktiv');
+            statusColor = 'text-[var(--foreground)] font-bold';
+            ledColor = 'bg-emerald-500';
+            switchTooltip = profT('ui.agent_profiles.switch_on_hint', 'Aktiv im Agenten-Netzwerk (Klicken zum Deaktivieren)');
+          }
+          card.innerHTML = `
+            <div class="flex items-center gap-3">
+              <div class="relative shrink-0">
+                <img src="${avatarUrl}" alt="${escapeHtml(personName)}" class="w-14 h-14 rounded-full object-cover border-2 border-[var(--border)] bg-[var(--secondary)] shadow-xs" onerror="this.onerror=null; this.src=withAvatarRevision('/static/avatars/hermes_default_avatar.png');">
+                <button type="button" onclick="toggleProfileFavorite('${prof.id}', event)" class="absolute -bottom-1 -left-1 w-5 h-5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[10px] flex items-center justify-center cursor-pointer text-amber-500 shadow-2xs hover:scale-110 transition" title="${isFav ? profT('ui.agent_profiles.favorite_remove', 'Aus Favoriten entfernen') : profT('ui.agent_profiles.favorite_add', 'Zu Favoriten hinzufügen')}">
+                  ${isFav ? '⭐' : '☆'}
+                </button>
+              </div>
+              <div class="min-w-0 flex-1 space-y-0.5">
+                <div class="flex items-center justify-between gap-1">
+                  <span class="font-bold text-xs sm:text-sm text-[var(--foreground)] truncate leading-snug">${escapeHtml(personName)}</span>
+                  <span class="text-[9.5px] font-mono px-1.5 py-0.2 rounded bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)] shrink-0">
+                    ${profT('ui.agent_profiles.skills_compact', '{count} Sk.', { count: skillsCount })}
+                  </span>
+                </div>
+                <div class="text-[11px] font-medium text-[var(--muted-foreground)] truncate">${escapeHtml(roleName)}</div>
+                <div class="flex items-center justify-between gap-1 pt-1 mt-1 border-t border-[var(--border)] text-[9.5px] font-mono">
+                  <button type="button" onclick="toggleProfileDeployment('${prof.id}', ${!isDeployed}, event)" class="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition select-none" title="${switchTooltip}">
+                    <span class="w-2 h-2 rounded-full ${ledColor}"></span>
+                    <span class="${statusColor} uppercase">${statusLabel}</span>
+                  </button>
+                  <span class="text-[9px] text-[var(--muted-foreground)] truncate max-w-[110px]" title="${escapeHtml(prof.id)}">${escapeHtml(prof.id)}</span>
+                </div>
+              </div>
+            </div>
+          `;
+          container.appendChild(card);
+        }
+      });
+      if (window.lucide) lucide.createIcons();
+    }
+    function onProfileSearchOrFilter() {
+      renderHermesProfilesList();
+    }
+    function filterProfilesByCategory(cat) {
+      activeProfileCategoryFilter = cat;
+      renderHermesProfilesList();
+    }
+    function createNewProfileDraft() {
+      const draftId = `custom_agent_${Date.now()}`;
+      const draftProfile = {
+        id: draftId,
+        person_name: "Neuer Spezialist",
+        name: "Spezial-Agent Rolle",
+        category: activeProfileCategoryFilter !== "all" ? activeProfileCategoryFilter : "1. Strategie, Führung & Lebensplanung",
+        description: "Beschreibung der Kernkompetenzen und Aufgaben...",
+        prompt: "Du bist ein erfahrener Spezialist in Archon OS. Deine Aufgabe ist es, Aufgaben präzise und lösungsorientiert auszuführen.",
+        provider: "openrouter",
+        model: "deepseek/deepseek-v4-flash-0731",
+        skills: [],
+        tools: typeof DEFAULT_HERMES_TOOLS !== 'undefined' ? [...DEFAULT_HERMES_TOOLS] : [],
+        avatar: "/static/avatars/avatar_001.jpg",
+        status: "active",
+        is_favorite: false
+      };
+      
+      hermesProfilesData.unshift(draftProfile);
+      switchAgentCadreTab('overview');
+      selectProfileForEditor(draftId);
+      setTimeout(() => focusProfileNameInput(), 50);
+    }
+    function focusProfileNameInput() {
+      switchAgentCadreTab('overview');
+      const input = document.getElementById("prof-edit-person-name");
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }
+    function onProfilePersonNameInputChange(val) {
+      const titleEl = document.getElementById("profile-editor-title");
+      if (titleEl) {
+        titleEl.innerText = val.trim() || "Neuer Agent";
+      }
+    }
+    function onProfileNameInputChange(val) {
+      const roleEl = document.getElementById("profile-editor-role");
+      if (roleEl) {
+        roleEl.innerText = val.trim() || "Rolle";
+      }
+    }
+    function onProfileCategoryChange(val) {
+      const catEl = document.getElementById("profile-editor-cat-tag");
+      if (catEl) {
+        catEl.innerText = val;
+      }
+    }
+    function setAvatarValue(url, skipListRender = false) {
+      const input = document.getElementById("prof-edit-avatar");
+      const img = document.getElementById("prof-edit-avatar-preview");
+      if (input) input.value = url;
+      if (img) {
+        img.src = withAvatarRevision(url || "/static/avatars/avatar_001.jpg");
+      }
+      if (currentSelectedProfileId && !skipListRender) {
+        const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+        if (prof) {
+          prof.avatar = url;
+          prof.avatar_url = url;
+          renderHermesProfilesList();
+        }
+      }
+    }
+    function triggerAvatarFileInput() {
+      const input = document.getElementById("prof-avatar-file-input");
+      if (input) input.click();
+    }
+    function processUploadedAvatarFile(file) {
+      if (!file || !file.type.startsWith("image/")) {
+        showArchonToast("Bitte eine gültige Bilddatei auswählen.", "error");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        showArchonToast("Bild ist zu groß (max. 10 MB).", "error");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async function(evt) {
+        const dataUrl = evt.target.result;
+        setAvatarValue(dataUrl);
+        if (currentSelectedProfileId && !currentSelectedProfileId.startsWith("custom_agent_")) {
+          try {
+            const res = await fetch(`/api/hermes/profiles/${currentSelectedProfileId}/avatar`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ image: dataUrl })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              avatarDynamicRev = Date.now();
+              const freshUrl = data.avatar_url;
+              setAvatarValue(freshUrl);
+              showArchonToast("Avatar erfolgreich gespeichert.", "success");
+            }
+          } catch(err) {
+            console.warn("Avatar upload deferred to profile save:", err);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    function handleAvatarFileSelected(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      processUploadedAvatarFile(file);
+      e.target.value = "";
+    }
+    function handleAvatarDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dropzone = document.getElementById("prof-avatar-dropzone");
+      if (dropzone) dropzone.classList.add("ring-4", "ring-indigo-500", "scale-105");
+    }
+    function handleAvatarDragLeave(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dropzone = document.getElementById("prof-avatar-dropzone");
+      if (dropzone) dropzone.classList.remove("ring-4", "ring-indigo-500", "scale-105");
+    }
+    function handleAvatarDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dropzone = document.getElementById("prof-avatar-dropzone");
+      if (dropzone) dropzone.classList.remove("ring-4", "ring-indigo-500", "scale-105");
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) {
+        processUploadedAvatarFile(file);
+      }
+    }
+    window.addEventListener("paste", function(e) {
+      const profilesTab = document.getElementById("tab-agent-profiles");
+      if (!profilesTab || profilesTab.classList.contains("hidden")) return;
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+        if (!e.clipboardData || !e.clipboardData.types.includes('Files')) return;
+      }
+      const items = (e.clipboardData || window.clipboardData)?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type && items[i].type.indexOf("image") !== -1) {
+          const blob = items[i].getAsFile();
+          if (blob) {
+            e.preventDefault();
+            processUploadedAvatarFile(blob);
+            break;
+          }
+        }
+      }
+    });
+    function handleDiceClick(e) {
+      if (e) e.stopPropagation();
+      const randIndex = Math.floor(Math.random() * ALL_AVATARS_LIST.length);
+      const url = ALL_AVATARS_LIST[randIndex];
+      setAvatarValue(url);
+    }
+    function resetAvatarToDefault(e) {
+      if (e) e.stopPropagation();
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const defaultUrl = prof ? getProfileAvatarUrl(prof) : "/static/avatars/avatar_001.jpg";
+      setAvatarValue(defaultUrl);
+    }
+    let currentAvatarColorFilter = "all";
+    let avatarMetadataCache = null;
+    const AVATAR_COLOR_CATEGORIES = [
+      { id: "all", label: "Alle", badge: "174", dot: "bg-slate-400" },
+      { id: "rot", label: "Rot", badge: "36", dot: "bg-rose-500" },
+      { id: "orange", label: "Orange", badge: "31", dot: "bg-amber-500" },
+      { id: "gelb", label: "Gelb", badge: "2", dot: "bg-yellow-400" },
+      { id: "gruen", label: "Grün", badge: "24", dot: "bg-emerald-500" },
+      { id: "tuerkis", label: "Türkis", badge: "14", dot: "bg-teal-400" },
+      { id: "blau", label: "Blau", badge: "21", dot: "bg-sky-500" },
+      { id: "lila", label: "Lila", badge: "2", dot: "bg-purple-500" },
+      { id: "pink", label: "Pink", badge: "8", dot: "bg-pink-500" },
+      { id: "braun", label: "Braun", badge: "6", dot: "bg-amber-800" },
+      { id: "neutral", label: "Studio / Neutral", badge: "30", dot: "bg-slate-400" }
+    ];
+    async function loadAvatarMetadata() {
+      if (!avatarMetadataCache) {
+        try {
+          const res = await fetch(`/static/avatars/avatars_metadata.json?t=${Date.now()}`, { cache: "no-store" });
+          if (res.ok) {
+            avatarMetadataCache = await res.json();
+          }
+        } catch (e) {
+          console.warn("Konnte avatars_metadata.json nicht laden:", e);
+        }
+      }
+      return avatarMetadataCache;
+    }
+    async function openAvatarLibraryModal(e) {
+      if (e) e.stopPropagation();
+      await loadAvatarMetadata();
+      renderAvatarColorFilters();
+      renderAvatarLibraryGrid();
+      document.getElementById("avatar-picker-modal").classList.remove("hidden");
+      lucide.createIcons();
+    }
+    function closeAvatarLibraryModal() {
+      document.getElementById("avatar-picker-modal").classList.add("hidden");
+    }
+    function setAvatarColorFilter(groupId) {
+      currentAvatarColorFilter = groupId;
+      renderAvatarColorFilters();
+      renderAvatarLibraryGrid();
+    }
+    function renderAvatarColorFilters() {
+      const bar = document.getElementById("avatar-color-filters");
+      if (!bar) return;
+      bar.innerHTML = "";
+      AVATAR_COLOR_CATEGORIES.forEach(cat => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const isActive = (currentAvatarColorFilter === cat.id);
+        btn.className = `px-2.5 py-1 rounded-lg text-xs font-semibold font-mono flex items-center gap-1.5 transition cursor-pointer shrink-0 border ${
+          isActive
+            ? "!bg-[#EF233C] !text-white !border-[#EF233C] shadow-xs"
+            : "!bg-white hover:!bg-slate-50 !text-slate-800 !border-slate-300 shadow-xs"
+        }`;
+        btn.onclick = () => setAvatarColorFilter(cat.id);
+        btn.innerHTML = `
+          <span class="w-2 h-2 rounded-full ${cat.dot}"></span>
+          <span>${cat.label}</span>
+          <span class="text-[10px] opacity-75">(${cat.badge})</span>
+        `;
+        bar.appendChild(btn);
+      });
+    }
+    function renderAvatarLibraryGrid() {
+      const grid = document.getElementById("avatar-library-grid");
+      if (!grid) return;
+      grid.innerHTML = "";
+      const currentAvatar = (document.getElementById("prof-edit-avatar")?.value || "").trim();
+      let itemsToShow = [];
+      if (avatarMetadataCache && avatarMetadataCache.length > 0) {
+        itemsToShow = avatarMetadataCache.filter(m => {
+          if (currentAvatarColorFilter === "all") return true;
+          return m.color_group === currentAvatarColorFilter;
+        });
+      } else {
+        itemsToShow = ALL_AVATARS_LIST.slice(1).map((url, i) => ({
+          url,
+          filename: `avatar_${String(i+1).padStart(3, '0')}.jpg`,
+          index: i + 1,
+          color_name: "Avatar"
+        }));
+      }
+      const countSpan = document.getElementById("avatar-library-count-text");
+      if (countSpan) {
+        countSpan.textContent = `${itemsToShow.length} von 174 Porträts angezeigt – farblich sortiert`;
+      }
+      itemsToShow.forEach((item) => {
+        const url = item.url;
+        const displayUrl = withAvatarRevision(url);
+        const el = document.createElement("div");
+        const isSel = (url === currentAvatar);
+        el.className = `cursor-pointer p-2.5 rounded-2xl border transition flex flex-col items-center gap-2 hover:shadow-md ${
+          isSel
+            ? 'border-2 border-[#EF233C] bg-rose-50 dark:bg-rose-950/30 ring-2 ring-rose-300'
+            : 'border-slate-200 dark:border-neutral-800 hover:border-slate-400 bg-white dark:bg-neutral-900'
+        }`;
+        el.onclick = () => {
+          setAvatarValue(url);
+          closeAvatarLibraryModal();
+        };
+        el.innerHTML = `
+          <img src="${displayUrl}" alt="${item.filename || 'Avatar'}" class="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-2 border-slate-200 dark:border-neutral-700 bg-slate-100 dark:bg-neutral-800 shadow-xs">
+          <span class="text-xs font-mono font-medium text-slate-600 dark:text-slate-400 truncate w-full text-center">#${String(item.index || '').padStart(3, '0')}</span>
+        `;
+        grid.appendChild(el);
+      });
+    }
+    // Globaler Cache und Modell-Lader für Hermes LLM-Provider
+    window._llmProviderModelsCache = {};
+    async function loadLlmModelsForProvider(provider) {
+      const p = (provider || "openrouter").toLowerCase().trim();
+      if (window._llmProviderModelsCache[p] && window._llmProviderModelsCache[p].length > 0) {
+        return window._llmProviderModelsCache[p];
+      }
+      try {
+        const res = await fetch(`/api/llm-providers/models?provider=${encodeURIComponent(p)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.models) && data.models.length > 0) {
+            window._llmProviderModelsCache[p] = data.models;
+            return data.models;
+          }
+        }
+      } catch (e) {
+        console.warn("[LLM] Error fetching models for", p, e);
+      }
+      // Standard-Fallbacklisten
+      if (p === "google") {
+        return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-image", "gemini-2.0-flash", "gemini-1.5-pro"];
+      } else if (p === "openrouter") {
+        return [
+          "google/gemini-2.5-flash-image",
+          "google/gemini-3.1-flash-image",
+          "google/gemini-3-pro-image",
+          "google/gemini-3.1-flash-lite-image",
+          "openai/gpt-image-2",
+          "openai/gpt-image-2.5-sunburst",
+          "bytedance/seedream-4.5",
+          "anthropic/claude-3.7-sonnet",
+          "anthropic/claude-3.5-sonnet",
+          "openai/gpt-4o",
+          "openai/gpt-4o-mini",
+          "deepseek/deepseek-chat",
+          "meta-llama/llama-3.3-70b-instruct"
+        ];
+      } else if (p === "groq") {
+        return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"];
+      } else if (p === "openai") {
+        return ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini", "dall-e-3"];
+      } else if (p === "nvidia") {
+        return ["nvidia/llama-3.1-nemotron-70b-instruct", "meta/llama-3.3-70b-instruct"];
+      } else {
+        return [
+          "auto/best-coding", "auto/best-reasoning", "auto/best-vision", "auto/best-fast", "auto/best-chat",
+          "deepseek-ai/DeepSeek-V4-Pro", "qwen/Qwen3.6-27B", "google/gemma-4-31B-it",
+          "meta-llama/Llama-4-Scout-17B-16E-Instruct", "CohereLabs/command-a-vision-07-2025", "omniroute/free-forever"
+        ];
+      }
+    }
+    window.loadLlmModelsForProvider = loadLlmModelsForProvider;
+    window.fetchProviderModelsList = loadLlmModelsForProvider;
+    window.openPriceCatalogForAgentTab = function() {
+      const modelSelect = document.getElementById('agent-tab-model-select');
+      if (typeof window.openPriceCatalogModal === 'function') {
+        window.openPriceCatalogModal(modelSelect, '');
+      } else {
+        const modal = document.getElementById('llm-price-catalog-modal');
+        if (modal) modal.classList.remove('hidden');
+      }
+    };
+    function populateModelDropdown(selectEl, models, selectedModel) {
+      if (!selectEl) return;
+      const rawModels = (Array.isArray(models) && models.length > 0) 
+        ? models 
+        : ["google/gemini-2.5-flash-image", "anthropic/claude-3.7-sonnet", "deepseek/deepseek-v3", "meta-llama/llama-3.3-70b-instruct"];
+      // Alphabetisch sortieren f?r ?bersichtliches Pulldown-Men?
+      const validModels = [...rawModels].sort((a, b) => (a || "").localeCompare(b || "", undefined, { sensitivity: "base" }));
+      
+      // Modus 1: HTML5 Input mit Datalist (wie Hermes Desktop App)
+      if (selectEl.tagName === "INPUT") {
+        const listId = selectEl.getAttribute("list") || "prof-edit-model-datalist";
+        let dl = document.getElementById(listId);
+        if (!dl) {
+          dl = document.createElement("datalist");
+          dl.id = listId;
+          selectEl.setAttribute("list", listId);
+          selectEl.parentNode.appendChild(dl);
+        }
+        dl.innerHTML = "";
+        validModels.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m;
+          dl.appendChild(opt);
+        });
+        if (selectedModel) {
+          selectEl.value = selectedModel;
+        } else if (!selectEl.value && validModels.length > 0) {
+          selectEl.value = validModels[0];
+        }
+        return;
+      }
+      // Modus 2: Klassisches SELECT Element mit Freitext-Option
+      selectEl.innerHTML = "";
+      let found = false;
+      validModels.forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = m;
+        if (m === selectedModel) {
+          opt.selected = true;
+          found = true;
+        }
+        selectEl.appendChild(opt);
+      });
+      // Eigenes Modell manuell eingeben Option hinzufügen
+      const customOpt = document.createElement("option");
+      customOpt.value = "__CUSTOM__";
+      customOpt.textContent = "+ Eigenes Modell manuell eingeben...";
+      selectEl.appendChild(customOpt);
+      if (!found && selectedModel && selectedModel !== "free-forever" && selectedModel !== "Keine Modelle geladen") {
+        const opt = document.createElement("option");
+        opt.value = selectedModel;
+        opt.textContent = `${selectedModel} (Aktuell)`;
+        opt.selected = true;
+        selectEl.insertBefore(opt, selectEl.firstChild);
+      } else if (!found && validModels.length > 0) {
+        selectEl.selectedIndex = 0;
+      }
+    }
+    window.populateModelDropdown = populateModelDropdown;
+    function handleCustomModelOption(selectEl) {
+      if (!selectEl || selectEl.value !== "__CUSTOM__") return false;
+      const custom = prompt("Gib die genaue Modell-ID ein (z. B. google/gemini-2.5-flash-image oder bytedance/seedream-4.5):");
+      if (custom && custom.trim()) {
+        const val = custom.trim();
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = `${val} (Benutzerdefiniert)`;
+        opt.selected = true;
+        selectEl.insertBefore(opt, selectEl.firstChild);
+        selectEl.value = val;
+        return true;
+      }
+      selectEl.selectedIndex = 0;
+      return false;
+    }
+    window.handleCustomModelOption = handleCustomModelOption;
+    function setProfileModelPreset(modelId, provider) {
+      const provSelect = document.getElementById("prof-edit-provider");
+      const modInput = document.getElementById("prof-edit-model");
+      if (provSelect && provider) {
+        provSelect.value = provider;
+        onProfileProviderChange(provider, modelId);
+      } else if (modInput) {
+        modInput.value = modelId;
+      }
+      const label = document.getElementById("prof-active-model-label");
+      if (label) label.innerText = `aktiv: ${modelId}`;
+    }
+    window.setProfileModelPreset = setProfileModelPreset;
+
+    // =========================================================================
+    // BERUFSRECHTS- & HAFTUNGS-WARNDIALOG FÜR REGULIERTE FACH-AGENTEN
+    // =========================================================================
+    const LIABILITY_LEGAL_IDS = new Set([
+      "commercial_jurist_contracts",
+      "legal_counsel",
+      "tax_holding_advisor",
+      "vvgmbh_immo_tax_lead",
+      "compliance_gdpr_auditor",
+      "liability_risk_analyst",
+      "labor_law_hr_governance",
+      "ip_patent_analyst",
+      "finance_lead",
+      "debt_financing_specialist",
+      "insurance_claims_manager",
+    ]);
+    const LIABILITY_MED_CHEM_IDS = new Set([
+      "clinical_medical_advisor",
+      "medtech_regulatory_lead",
+      "chemistry_materials_specialist",
+      "pharma_biotech_scientist",
+      "industrial_process_engineer",
+    ]);
+    const LIABILITY_CONSTRUCTION_IDS = new Set([
+      "baugb_permit_expert",
+      "construction_project_manager",
+    ]);
+
+    function getProfileLiabilityInfo(prof) {
+      if (!prof) return null;
+      const pid = prof.id || "";
+      const cat = (prof.category || "").toLowerCase();
+      if (LIABILITY_LEGAL_IDS.has(pid) || cat.startsWith("3.")) {
+        return {
+          group: "legal_tax_finance",
+          icon: "⚖️",
+          badgeLabel: "⚖️ RDG / StBerG-Hinweis",
+          title: "Hinweis zu Rechts-, Steuer- & Finanz-Profilen",
+          lawPill: "Gemäß § 3 RDG, § 5 StBerG, § 2 WpHG & § 34d GewO",
+          body: `Das Spezialisten-Profil „${prof.person_name || prof.name} (${prof.name})“ arbeitet ausschließlich als KI-gestütztes Analyse-, Strukturierungs- und Entwurfswerkzeug (Decision Support & Drafting).`,
+          bullets: [
+            "• <b>Keine Rechts- oder Steuerberatung:</b> Ausgaben ersetzen keine Prüfung durch zugelassene Rechtsanwälte, Steuerberater oder Wirtschaftsprüfer.",
+            "• <b>Keine Finanz- oder Versicherungsvermittlung:</b> Kalkulationen (DSCR, DCF, Policen-Prüfungen) sind unverbindliche Modellrechnungen.",
+            "• <b>Freigabevorbehalt:</b> Vertragsentwürfe, Klauseln und Schreiben dürfen erst nach fachlicher Endkontrolle im Rechtsverkehr verwendet werden."
+          ]
+        };
+      }
+      if (LIABILITY_MED_CHEM_IDS.has(pid) || cat.startsWith("8.")) {
+        return {
+          group: "med_chem_science",
+          icon: "⚕️",
+          badgeLabel: "⚕️ EU-MDR / Fach-Hinweis",
+          title: "Hinweis zu Medizin-, Chemie- & Ingenieur-Profilen",
+          lawPill: "Gemäß Art. 2 EU-MDR (2017/745), HWG, Heilberufsrecht & REACH/CLP",
+          body: `Das Spezialisten-Profil „${prof.person_name || prof.name} (${prof.name})“ dient ausschließlich der wissenschaftlichen Literatur-, Normen- und Methodik-Aufbereitung.`,
+          bullets: [
+            "• <b>Kein Medizinprodukt:</b> Archon OS ist kein zugelassenes Medizinprodukt im Sinne der EU-MDR (2017/745) oder IVDR.",
+            "• <b>Keine Heilbehandlung oder Diagnose:</b> Ausgaben stellen keine ärztliche Diagnose, Therapieempfehlung oder Arzneimittelverordnung dar.",
+            "• <b>Gefahrstoff- & Anlagensicherheit:</b> Chemische Rezepturen, Sicherheitsdatenblätter (REACH/CLP) und CE-/Normenprüfungen erfordern zwingend die Freigabe durch befähigte Personen."
+          ]
+        };
+      }
+      if (LIABILITY_CONSTRUCTION_IDS.has(pid)) {
+        return {
+          group: "construction_permit",
+          icon: "🏗️",
+          badgeLabel: "🏗️ BauGB / HOAI-Hinweis",
+          title: "Hinweis zu Baurechts- & Bauvorlage-Profilen",
+          lawPill: "Gemäß BauGB, Landesbauordnung (LBO) & HOAI",
+          body: `Das Spezialisten-Profil „${prof.person_name || prof.name} (${prof.name})“ erstellt unverbindliche Vorprüfungen, Konzeptstudien und Leistungsverzeichnis-Entwürfe.`,
+          bullets: [
+            "• <b>Keine Bauvorlageberechtigung:</b> Ausgaben ersetzen keinen bauvorlageberechtigten Entwurfsverfasser, Tragwerksplaner oder öffentlich bestellten Vermessungsingenieur.",
+            "• <b>Behördliche Verbindlichkeit:</b> Rechtsverbindliche Aussagen zur Bebaubarkeit erfolgen ausschließlich durch positiven Bauvorbescheid oder Baugenehmigung."
+          ]
+        };
+      }
+      return null;
+    }
+
+    function openLiabilityDisclaimerModal(profileId, forceShow = false) {
+      const prof = hermesProfilesData.find(p => p.id === (profileId || currentSelectedProfileId));
+      const info = getProfileLiabilityInfo(prof);
+      if (!info) return;
+      const ackKey = `archon_liability_ack_${prof.id}`;
+      if (!forceShow) {
+        try {
+          if (sessionStorage.getItem(ackKey) === "1") return;
+        } catch (e) {}
+      }
+      const modal = document.getElementById("archon-liability-disclaimer-modal");
+      if (!modal) return;
+      const iconBox = document.getElementById("liability-modal-icon-box");
+      const titleEl = document.getElementById("liability-modal-title");
+      const subEl = document.getElementById("liability-modal-subtitle");
+      const pillEl = document.getElementById("liability-modal-law-pill");
+      const bodyEl = document.getElementById("liability-modal-body");
+      const bulletsEl = document.getElementById("liability-modal-bullets");
+      if (iconBox) iconBox.innerText = info.icon;
+      if (titleEl) titleEl.innerText = info.title;
+      if (subEl) subEl.innerText = `${prof.person_name || prof.name} — ${prof.name}`;
+      if (pillEl) pillEl.innerText = info.lawPill;
+      if (bodyEl) bodyEl.innerText = info.body;
+      if (bulletsEl) bulletsEl.innerHTML = info.bullets.map(b => `<div>${b}</div>`).join("");
+      modal.setAttribute("data-ack-key", ackKey);
+      modal.classList.remove("hidden");
+      if (window.lucide) lucide.createIcons();
+    }
+    window.openLiabilityDisclaimerModal = openLiabilityDisclaimerModal;
+
+    function closeLiabilityDisclaimerModal(markAcknowledged = true) {
+      const modal = document.getElementById("archon-liability-disclaimer-modal");
+      if (!modal) return;
+      if (markAcknowledged) {
+        const ackKey = modal.getAttribute("data-ack-key");
+        if (ackKey) {
+          try { sessionStorage.setItem(ackKey, "1"); } catch (e) {}
+        }
+      }
+      modal.classList.add("hidden");
+    }
+    window.closeLiabilityDisclaimerModal = closeLiabilityDisclaimerModal;
+
+    function selectProfileForEditor(profileId, userInitiated = true) {
+      currentSelectedProfileId = profileId;
+      if (profileId && !profileId.startsWith("custom_agent_")) {
+        try { localStorage.setItem("archon_active_profile_id", profileId); } catch(e){}
+      }
+      const listContainer = document.getElementById("hermes-profiles-list");
+      const existingNodes = listContainer ? listContainer.querySelectorAll("[data-profile-id]") : [];
+      if (existingNodes.length > 0 && listContainer.querySelector(`[data-profile-id="${CSS.escape(profileId)}"]`)) {
+        existingNodes.forEach(node => {
+          const isSel = node.getAttribute("data-profile-id") === profileId;
+          if (catalogCollapsed) {
+            node.className = `cursor-pointer relative p-1 rounded-2xl flex items-center justify-center transition-all duration-150 ${
+              isSel
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 ring-2 ring-zinc-500 shadow-xs'
+                : 'hover:bg-[var(--secondary)] text-[var(--foreground)]'
+            }`;
+          } else {
+            node.className = `prof-list-item p-2.5 cursor-pointer relative overflow-hidden bg-[var(--card)] border rounded-2xl transition-all duration-150 shadow-2xs ${
+              isSel
+                ? 'selected-item border-zinc-900 dark:border-zinc-100 ring-1 ring-zinc-900/20 dark:ring-zinc-100/20 bg-[var(--secondary)]/40'
+                : 'border-[var(--border)] hover:border-zinc-400 dark:hover:border-zinc-600'
+            }`;
+          }
+        });
+      } else {
+        renderHermesProfilesList();
+      }
+      const prof = hermesProfilesData.find(p => p.id === profileId);
+      if (!prof) return;
+      const personName = prof.person_name || prof.name || "Profil";
+      const roleName = prof.name || prof.id || "";
+      const avatarUrl = getProfileAvatarUrl(prof);
+      // Header befüllen
+      const titleEl = document.getElementById("profile-editor-title");
+      if (titleEl) titleEl.innerText = personName;
+      
+      const roleEl = document.getElementById("profile-editor-role");
+      if (roleEl) roleEl.innerText = roleName;
+      const catTag = document.getElementById("profile-editor-cat-tag");
+      if (catTag) catTag.innerText = prof.category || '1. Strategie, Führung & Lebensplanung';
+      const liabilityBadge = document.getElementById("profile-editor-liability-badge");
+      const liabilityInfo = getProfileLiabilityInfo(prof);
+      if (liabilityBadge) {
+        if (liabilityInfo) {
+          liabilityBadge.classList.remove("hidden");
+          liabilityBadge.classList.add("inline-flex");
+          liabilityBadge.innerHTML = `<span>${liabilityInfo.badgeLabel}</span>`;
+        } else {
+          liabilityBadge.classList.add("hidden");
+          liabilityBadge.classList.remove("inline-flex");
+        }
+      }
+      if (userInitiated && liabilityInfo) {
+        openLiabilityDisclaimerModal(prof.id, false);
+      }
+      const idTag = document.getElementById("profile-editor-id-tag");
+      if (idTag) idTag.innerText = `id: ${prof.id}`;
+      const statusTag = document.getElementById("profile-editor-status-tag");
+      const isDeployed = isProfileDeployedActive(prof);
+      const pcAgent = getProfilePaperclipAgent(prof);
+      const pcStatus = pcAgent ? (pcAgent.status || '').toLowerCase().trim() : '';
+      if (statusTag) {
+        if (isDeployed) {
+          statusTag.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
+          statusTag.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> ${profT('ui.agent_profiles.status_ready_active', 'Bereit (Aktiv)')}`;
+        } else if (pcStatus === 'terminated') {
+          statusTag.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-500/10 text-zinc-500 border border-zinc-500/20";
+          statusTag.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> ${profT('ui.agent_profiles.status_terminated', 'Terminiert')}`;
+        } else {
+          statusTag.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20";
+          statusTag.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> ${profT('ui.agent_profiles.status_ready_standby', 'Bereit (Standby)')}`;
+        }
+      }
+      setAvatarValue(avatarUrl, true);
+      // Reiter 1 (Übersicht) befüllen
+      const personNameEl = document.getElementById("prof-edit-person-name");
+      if (personNameEl) personNameEl.value = prof.person_name || "";
+      
+      const nameEl = document.getElementById("prof-edit-name");
+      if (nameEl) nameEl.value = prof.name || "";
+      
+      const idEl = document.getElementById("prof-edit-id");
+      if (idEl) {
+        idEl.value = prof.id || "";
+        idEl.readOnly = false;
+      }
+      
+      const catEl = document.getElementById("prof-edit-category");
+      if (catEl) catEl.value = prof.category || "1. Strategie, Führung & Lebensplanung";
+      
+      const descEl = document.getElementById("prof-edit-desc");
+      if (descEl) descEl.value = prof.description || "";
+      const promptEl = document.getElementById("prof-edit-prompt");
+      if (promptEl) promptEl.value = prof.prompt || prof.system_prompt || "";
+      const providerSelect = document.getElementById("prof-edit-provider");
+      const initialProv = prof.provider || (prof.model && prof.model.includes("gemini") ? "google" : "openrouter");
+      if (providerSelect) {
+        providerSelect.value = initialProv;
+      }
+      onProfileProviderChange(initialProv, prof.model);
+      const reasoningSelect = document.getElementById("prof-edit-reasoning");
+      if (reasoningSelect) {
+        reasoningSelect.value = prof.reasoning_level || "medium";
+      }
+      const chatReasoningSelect = document.getElementById("agent-tab-reasoning-select");
+      if (chatReasoningSelect) {
+        chatReasoningSelect.value = prof.reasoning_level || "medium";
+      }
+      if (typeof populateAgentTabModelSelect === "function") {
+        populateAgentTabModelSelect();
+      }
+      // KPI Bar befüllen
+      const callsignInput = document.getElementById("prof-edit-callsign");
+      if (callsignInput) {
+        let defCallsign = prof.callsign || "";
+        if (!defCallsign) {
+          if (prof.id === "executive_decision_architect") defCallsign = "robert";
+          else if (prof.id === "founder") defCallsign = "founder";
+        }
+        callsignInput.value = defCallsign;
+      }
+      const kpiDomain = document.getElementById("kpi-val-domain");
+      if (kpiDomain) kpiDomain.innerText = prof.category || "1. Strategie, Führung";
+      const kpiSupervisor = document.getElementById("kpi-val-supervisor");
+      if (kpiSupervisor) {
+        const isRoot = prof.id === "hermes_default" || prof.id === "founder";
+        const isBoard = prof.id === "executive_decision_architect";
+        kpiSupervisor.innerText = isRoot ? "Michael Keller (Owner / CEO)" : (isBoard ? "Hermes Master System" : "Alexander Richter (Decision Lead)");
+      }
+      const kpiTasks = document.getElementById("kpi-val-tasks");
+      const kpiSuccess = document.getElementById("kpi-val-success");
+      if (kpiTasks) {
+        kpiTasks.innerText = "Lade Akte...";
+        fetch(`/api/v1/agent/${encodeURIComponent(profileId)}/stats`)
+          .then(r => r.json())
+          .then(stats => {
+            if (stats && stats.status === "ok") {
+              const count = stats.tasks_completed || 0;
+              const lCount = stats.learnings_count || 0;
+              kpiTasks.innerText = `${count} ${count === 1 ? 'Einsatz' : 'Einsätze'} (${lCount} ${lCount === 1 ? 'Learning' : 'Learnings'})`;
+              if (kpiSuccess) {
+                kpiSuccess.innerText = count > 0 ? "100% (Verifiziert)" : (isProfileDeployedActive(prof) ? "100% (Bereit)" : "Standby");
+              }
+            } else {
+              kpiTasks.innerText = "0 Einsätze";
+            }
+          })
+          .catch(() => {
+            kpiTasks.innerText = "0 Einsätze (Standby)";
+          });
+      }
+      // Reiter 2: Skills & Tools befüllen
+      currentInspectedSkillId = "";
+      currentInspectedToolId = "";
+      renderActiveProfileSkillsTags(prof.skills || []);
+      renderActiveProfileTools(prof.tools || []);
+      // Dispatch Tab-spezifischer Lader
+      if (activeAgentCadreTab === 'overview') {
+        loadAgentLiveActivity(profileId);
+        loadAgentProjectsHistory(profileId);
+      } else if (activeAgentCadreTab === 'soul') {
+        loadInlineSoulMarkdown(profileId);
+      } else if (activeAgentCadreTab === 'personalakte') {
+        loadInlinePersonalakte(profileId);
+      } else if (activeAgentCadreTab === 'chat') {
+        loadAgentTabChatSessions(profileId);
+      }
+      // Operations Tab Daten
+      const pcStatusEl = document.getElementById("operations-pane-status");
+      if (pcStatusEl) {
+        pcStatusEl.innerHTML = isDeployed 
+          ? `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ${profT('ui.agent_profiles.ops_status_ready', 'Bereit im Agenten-Netzwerk')}` 
+          : `<span class="w-2 h-2 rounded-full bg-zinc-400"></span> ${profT('ui.agent_profiles.ops_status_standby', 'Inaktiv / Standby')}`;
+      }
+      const tasksCountEl = document.getElementById("operations-tasks-count");
+      const tasksListEl = document.getElementById("operations-assigned-tasks-list");
+      if (tasksListEl) {
+        const agentTasks = (opsKanbanData?.tasks || []).filter(t => t.assignee === profileId);
+        if (tasksCountEl) tasksCountEl.innerText = `${agentTasks.length} aktive Tasks`;
+        if (agentTasks.length === 0) {
+          tasksListEl.innerHTML = `<div class="p-3 text-center text-xs text-[var(--muted-foreground)] font-mono">${profT('ui.agent_profiles.ops_tasks_empty', "Keine aktiven Aufgaben zugewiesen. Klicke auf '+ Aufgabe zuweisen', um einen Task im Operations Center zu starten.")}</div>`;
+        } else {
+          tasksListEl.innerHTML = agentTasks.map(t => `
+            <div class="p-2.5 rounded-lg bg-[var(--card)] border border-[var(--border)] flex items-center justify-between">
+              <div>
+                <div class="font-bold text-xs text-[var(--foreground)]">${opsEscapeHtml(t.title)}</div>
+                <div class="text-[10px] text-[var(--muted-foreground)] font-mono">${profT('ui.agent_profiles.task_meta', 'Spalte: {column} | Priorität: {priority}', { column: opsEscapeHtml(t.column_id), priority: opsEscapeHtml(t.priority) })}</div>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[9.5px] font-mono bg-indigo-500/10 text-indigo-500 font-bold border border-indigo-500/20">${opsEscapeHtml(t.column_id)}</span>
+            </div>
+          `).join('');
+        }
+      }
+      // Gateway Manager Widget
+      if (typeof updateGatewayWidgetForCurrentProfile === "function") {
+        updateGatewayWidgetForCurrentProfile();
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+    async function deleteCurrentProfile() {
+      if (!currentSelectedProfileId) {
+        alert("Kein Profil ausgewählt.");
+        return;
+      }
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const name = prof ? (prof.person_name || prof.name) : currentSelectedProfileId;
+      
+      if (!confirm(`Möchtest du das Agenten-Profil '${name}' (${currentSelectedProfileId}) wirklich unwiderruflich löschen?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/hermes/profiles/${encodeURIComponent(currentSelectedProfileId)}`, {
+          method: "DELETE"
+        });
+        if (res.ok) {
+          let delData = null; try { delData = await res.clone().json(); } catch(e) {} if (delData && delData.status === "pending_owner_approval" && delData.gate_id) { if (confirm(`🔐 Sicherheits-Gate (${delData.gate_id}):\n${delData.message || "Profil-Löschung erfordert Owner-Bestätigung."}\n\nMöchtest du die Löschung direkt hier im Browser freigeben?`)) { await fetch(`/api/permission-gates/${encodeURIComponent(delData.gate_id)}/decide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "approve" }) }); } else { showArchonToast("🔐 " + (delData.message || "Warte auf Telegram-Bestätigung."), "info"); return; } }
+          showArchonToast(`Profil '${name}' erfolgreich gelöscht!`, "success");
+          await loadHermesProfilesFromServer();
+          if (hermesProfilesData.length > 0) {
+            selectProfileForEditor(hermesProfilesData[0].id);
+          } else {
+            createNewProfileDraft();
+          }
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showArchonToast(`Fehler beim Löschen: ${err.detail || res.statusText}`, "error");
+        }
+      } catch (err) {
+        showArchonToast(`Verbindungsfehler beim Löschen: ${err.message}`, "error");
+      }
+    }
+    // =========================================================================
+    // INLINE SOUL.MD LOGIK (REITER 4) & 3-STUFEN SOUL-TIEFE UMSCHALTER
+    // =========================================================================
+    function updateSoulModeUI(mode, charsCount) {
+      const normalized = mode === "full" ? "full" : (mode === "pro" ? "pro" : "compact");
+      const isFull = normalized === "full";
+      const isPro = normalized === "pro";
+      const isCompact = normalized === "compact";
+
+      const charBadge = document.getElementById("prof-soul-char-badge");
+      if (charBadge && typeof charsCount === "number") {
+        const modeTitle = isFull ? "Full-SOUL" : (isPro ? "Pro / Skills+" : "Standard");
+        charBadge.innerText = `${charsCount.toLocaleString(profLocale())} ${profT('ui.agent_profiles.chars_unit', 'Zeichen')} (${modeTitle})`;
+        charBadge.className = isFull
+          ? "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0"
+          : isPro
+          ? "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 shrink-0"
+          : "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0";
+      }
+
+      const settingsBadge = document.getElementById("settings-soul-mode-status-badge");
+      if (settingsBadge) {
+        settingsBadge.innerText = isFull
+          ? "🔥 Full-SOUL aktiv (~17.200 Zeichen/Agent)"
+          : isPro
+          ? "🎯 Pro / Skills+ aktiv (~6.800 Zeichen/Agent)"
+          : "⚡ Standard aktiv (~3.100 Zeichen/Agent)";
+        settingsBadge.className = isFull
+          ? "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+          : isPro
+          ? "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30"
+          : "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30";
+      }
+
+      const fullButtons = [
+        "prof-soul-mode-btn-full",
+        "agent-chat-soul-btn-full",
+        "master-chat-soul-btn-full",
+        "settings-soul-btn-full"
+      ];
+      const proButtons = [
+        "prof-soul-mode-btn-pro",
+        "agent-chat-soul-btn-pro",
+        "master-chat-soul-btn-pro",
+        "settings-soul-btn-pro"
+      ];
+      const compactButtons = [
+        "prof-soul-mode-btn-compact",
+        "agent-chat-soul-btn-compact",
+        "master-chat-soul-btn-compact",
+        "settings-soul-btn-compact"
+      ];
+
+      fullButtons.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isFull) {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40 shadow-2xs"
+            : "px-2 py-0.5 rounded font-bold transition-all bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 cursor-pointer";
+        } else {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
+            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+        }
+      });
+
+      proButtons.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isPro) {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/40 shadow-2xs"
+            : "px-2 py-0.5 rounded font-bold transition-all bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 cursor-pointer";
+        } else {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
+            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+        }
+      });
+
+      compactButtons.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isCompact) {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 shadow-2xs"
+            : "px-2 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer";
+        } else {
+          el.className = id.startsWith("settings-")
+            ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
+            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+        }
+      });
+    }
+
+    async function switchGlobalOrAgentSoulMode(mode, applyGlobal = true) {
+      const targetMode = mode === "full" ? "full" : (mode === "pro" ? "pro" : "compact");
+      const statusEl = document.getElementById("prof-soul-save-status");
+      if (statusEl) statusEl.innerText = "Schalte SOUL-Modus um...";
+      try {
+        const payload = {
+          mode: targetMode,
+          agent_id: applyGlobal ? null : (currentSelectedProfileId || "default")
+        };
+        const res = await fetch("/api/v1/hermes/soul-mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          await loadHermesProfilesFromServer();
+          if (currentSelectedProfileId) {
+            await loadInlineSoulMarkdown(currentSelectedProfileId);
+            const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+            if (prof) {
+              const prevEl = document.getElementById("prof-edit-prompt-preview");
+              if (prevEl) prevEl.innerText = prof.prompt || "";
+            }
+          }
+          updateSoulModeUI(targetMode, data.avg_active_chars ? Math.round(data.avg_active_chars) : undefined);
+          const label = targetMode === "full"
+            ? "🔥 Full-SOUL (~17.200 Zeichen)"
+            : targetMode === "pro"
+            ? "🎯 Pro / Skills+ (~6.800 Zeichen)"
+            : "⚡ Standard-SOUL (~3.100 Zeichen)";
+          showArchonToast(
+            applyGlobal
+              ? `Alle ${data.updated_profiles || 59} Agenten auf ${label} umgeschaltet!`
+              : `Agent '${currentSelectedProfileId}' auf ${label} umgeschaltet!`,
+            "success"
+          );
+        } else {
+          showArchonToast("Fehler beim Umschalten des SOUL-Modus.", "error");
+        }
+      } catch (err) {
+        console.error("switchGlobalOrAgentSoulMode error:", err);
+        showArchonToast(`Fehler: ${err.message}`, "error");
+      }
+    }
+
+    window.switchGlobalOrAgentSoulMode = switchGlobalOrAgentSoulMode;
+    window.updateSoulModeUI = updateSoulModeUI;
+
+    async function loadInlineSoulMarkdown(agentId) {
+      const id = agentId || currentSelectedProfileId || "hermes_default";
+      const pathLabel = document.getElementById("prof-soul-path-label");
+      const statusEl = document.getElementById("prof-soul-save-status");
+      const textarea = document.getElementById("prof-soul-inline-editor");
+      if (pathLabel) pathLabel.innerText = `~/.hermes/profiles/${id}/SOUL.md`;
+      if (statusEl) statusEl.innerText = "Lade SOUL.md...";
+      if (textarea) textarea.value = "";
+      try {
+        const res = await fetch(`/api/v1/hermes/soul/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data.markdown === "string") {
+            if (textarea) textarea.value = data.markdown;
+            if (statusEl) statusEl.innerText = "Synchronisiert";
+            const detectedMode = data.mode || (data.markdown.length > 6000 ? "full" : "compact");
+            updateSoulModeUI(detectedMode, data.chars || data.markdown.length);
+          }
+        } else {
+          if (statusEl) statusEl.innerText = "Standard / Neu";
+        }
+      } catch (e) {
+        if (statusEl) statusEl.innerText = "Fehler beim Laden";
+      }
+      loadAgentScorecard(id);
+    }
+    async function saveInlineSoulMarkdown(agentId) {
+      const id = agentId || currentSelectedProfileId || "hermes_default";
+      const textarea = document.getElementById("prof-soul-inline-editor");
+      const statusEl = document.getElementById("prof-soul-save-status");
+      if (!textarea) return;
+      const markdown = textarea.value;
+      if (statusEl) statusEl.innerText = "Speichere...";
+      try {
+        const res = await fetch(`/api/v1/hermes/soul/${id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ markdown })
+        });
+        if (res.ok) {
+          if (statusEl) {
+            statusEl.innerText = "✅ Gespeichert";
+            setTimeout(() => { if (statusEl) statusEl.innerText = "Synchronisiert"; }, 3000);
+          }
+          showArchonToast(`SOUL.md für ${id} gespeichert!`, "success");
+        } else {
+          if (statusEl) statusEl.innerText = "❌ Fehler";
+          showArchonToast(`Fehler beim Speichern der SOUL.md`, "error");
+        }
+      } catch (e) {
+        if (statusEl) statusEl.innerText = "❌ Verbindungsfehler";
+        showArchonToast(`Verbindungsfehler: ${e.message}`, "error");
+      }
+    }
+    // =========================================================================
+    // INLINE PERSONALAKTE LOGIK (REITER 5)
+    // =========================================================================
+    function toggleInlinePersonalakteView(mode) {
+      inlinePersonalakteViewMode = mode || (inlinePersonalakteViewMode === 'dossier' ? 'raw' : 'dossier');
+      const btnDossier = document.getElementById("btn-pa-inline-dossier");
+      const btnRaw = document.getElementById("btn-pa-inline-raw");
+      const dossierView = document.getElementById("pa-inline-dossier-view");
+      const rawView = document.getElementById("pa-inline-raw-view");
+      if (inlinePersonalakteViewMode === 'dossier') {
+        if (btnDossier) {
+          btnDossier.className = "px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer";
+        }
+        if (btnRaw) {
+          btnRaw.className = "px-2 py-0.5 rounded text-[10px] font-mono text-[var(--muted-foreground)] hover:text-[var(--foreground)] bg-transparent cursor-pointer";
+        }
+        if (dossierView) dossierView.classList.remove("hidden");
+        if (rawView) rawView.classList.add("hidden");
+      } else {
+        if (btnDossier) {
+          btnDossier.className = "px-2 py-0.5 rounded text-[10px] font-mono text-[var(--muted-foreground)] hover:text-[var(--foreground)] bg-transparent cursor-pointer";
+        }
+        if (btnRaw) {
+          btnRaw.className = "px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer";
+        }
+        if (dossierView) dossierView.classList.add("hidden");
+        if (rawView) rawView.classList.remove("hidden");
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+    async function loadInlinePersonalakte(agentId) {
+      const id = agentId || currentSelectedProfileId || "hermes_default";
+      const prof = hermesProfilesData.find(p => p.id === id) || { id, person_name: id, name: id, category: "Strategie" };
+      
+      const pathLabel = document.getElementById("pa-inline-path");
+      if (pathLabel) pathLabel.innerText = `00_HR_Agenten/Personalakten/${id}.md`;
+      
+      const nameEl = document.getElementById("pa-inline-person-name");
+      if (nameEl) nameEl.innerText = prof.person_name || prof.name || id;
+      
+      const roleEl = document.getElementById("pa-inline-role-name");
+      if (roleEl) roleEl.innerText = prof.name || id;
+      
+      const supEl = document.getElementById("pa-inline-supervisor");
+      if (supEl) {
+        const isRoot = prof.id === "hermes_default" || prof.id === "founder";
+        const isBoard = prof.id === "executive_decision_architect";
+        supEl.innerText = isRoot ? "[[Michael Keller (Owner / CEO)]]" : (isBoard ? "[[Hermes Master System]]" : "[[Alexander Richter (Decision Lead)]]");
+      }
+      const descEl = document.getElementById("pa-inline-desc");
+      if (descEl) descEl.innerText = prof.description || "Autonome Fach-Exekution im Archon OS Netzwerk.";
+      const skillsContainer = document.getElementById("pa-inline-skills-list");
+      if (skillsContainer) {
+        const skills = prof.skills || [];
+        if (skills.length === 0) {
+          skillsContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] italic">${profT('ui.agent_profiles.pa_no_skills', 'Keine expliziten Fach-Skills zugeordnet.')}</span>`;
+        } else {
+          skillsContainer.innerHTML = skills.map(sk => `
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] font-bold">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> ${escapeHtml(sk)}
+            </span>
+          `).join('');
+        }
+      }
+      const statusEl = document.getElementById("pa-inline-save-status");
+      const rawTextarea = document.getElementById("pa-inline-raw-markdown");
+      if (statusEl) statusEl.innerText = "Lade Akte...";
+      
+      try {
+        const res = await fetch(`/api/v1/hr/personalakte/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.markdown) {
+            if (rawTextarea) rawTextarea.value = data.markdown;
+            
+            const renderedDiv = document.getElementById("pa-inline-rendered-markdown");
+            if (renderedDiv) {
+              renderedDiv.innerHTML = formatMarkdownText(data.markdown);
+            }
+            if (statusEl) statusEl.innerText = "Synchronisiert";
+            // Frontmatter parsen um Stammdaten exakt abzugleichen
+            const md = data.markdown;
+            const pNameM = md.match(/person_name:\s*([^\n]+)/);
+            if (pNameM && nameEl) nameEl.innerText = pNameM[1].trim();
+            const roleM = md.match(/name:\s*([^\n]+)/);
+            if (roleM && roleEl) roleEl.innerText = roleM[1].trim();
+            const supM = md.match(/supervisor:\s*([^\n]+)/);
+            if (supM && supEl) supEl.innerText = supM[1].trim();
+            const descM = md.match(/description:\s*([^\n]+)/);
+            if (descM && descEl) descEl.innerText = descM[1].trim();
+          }
+        } else {
+          if (statusEl) statusEl.innerText = "Bereit (Standard)";
+        }
+      } catch (e) {
+        if (statusEl) statusEl.innerText = "Fehler beim Laden";
+      }
+    }
+    async function saveInlinePersonalakteMarkdown(agentId) {
+      const id = agentId || currentSelectedProfileId || "hermes_default";
+      const rawTextarea = document.getElementById("pa-inline-raw-markdown");
+      const statusEl = document.getElementById("pa-inline-save-status");
+      const renderedDiv = document.getElementById("pa-inline-rendered-markdown");
+      if (!rawTextarea) return;
+      const markdown = rawTextarea.value;
+      if (statusEl) statusEl.innerText = "Speichere in Obsidian...";
+      try {
+        const res = await fetch(`/api/v1/hr/personalakte/${id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ markdown })
+        });
+        if (res.ok) {
+          if (renderedDiv) renderedDiv.innerHTML = formatMarkdownText(markdown);
+          if (statusEl) {
+            statusEl.innerText = "✅ Gespeichert";
+            setTimeout(() => { if (statusEl) statusEl.innerText = "Synchronisiert"; }, 3000);
+          }
+          showArchonToast(`Personalakte für ${id} in Obsidian gespeichert!`, "success");
+        } else {
+          if (statusEl) statusEl.innerText = "❌ Fehler";
+          showArchonToast(`Fehler beim Speichern der Personalakte`, "error");
+        }
+      } catch (e) {
+        if (statusEl) statusEl.innerText = "❌ Verbindungsfehler";
+        showArchonToast(`Verbindungsfehler: ${e.message}`, "error");
+      }
+    }
+    // =========================================================================
+    // INLINE PERSISTENTER TAB-CHAT LOGIK (REITER 3 - SYNCHRONISIERT MIT MASTER-KONSOLE)
+    // =========================================================================
+    let currentAgentTabSessionId = null;
+    let currentAgentTabAttachments = [];
+    let isAgentTabGenerating = false;
+    let isAgentTabDictating = false;
+    let agentTabDictationRecognition = null;
+    let currentAgentTabModel = null;
+    let currentAgentTabMode = "direct"; // 'direct' | 'mission'
+    function toggleAgentTabModeSwitch() {
+      const nextMode = currentAgentTabMode === "mission" ? "direct" : "mission";
+      setAgentTabMode(nextMode);
+    }
+    function syncAgentTabSwitchUI(mode) {
+      const flatDirect = document.getElementById("agent-tab-flat-direct");
+      const flatMission = document.getElementById("agent-tab-flat-mission");
+      const inputEl = document.getElementById("agent-tab-chat-input");
+      if (mode === "mission") {
+        if (flatDirect) {
+          flatDirect.className = "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+        }
+        if (flatMission) {
+          flatMission.className = "px-2 py-0.5 rounded font-bold transition-all bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer";
+        }
+        if (inputEl) inputEl.placeholder = "Missions-Auftrag formulieren (wird als Task in Operations angelegt und im Approval Gate gestoppt)...";
+      } else {
+        if (flatDirect) {
+          flatDirect.className = "px-2 py-0.5 rounded font-bold transition-all bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer";
+        }
+        if (flatMission) {
+          flatMission.className = "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+        }
+        if (inputEl) inputEl.placeholder = "Nachricht an diesen Agenten eingeben (Enter zum Senden, Shift+Enter für Zeilenumbruch)...";
+      }
+    }
+    function setAgentTabMode(mode) {
+      currentAgentTabMode = mode;
+      syncAgentTabSwitchUI(mode);
+    }
+    async function loadAgentTabChatSessions(agentId) {
+      const id = agentId || currentSelectedProfileId || "default";
+      const select = document.getElementById("agent-chat-session-select");
+      if (!select) return;
+      select.innerHTML = `<option value="">${profT('ui.agent_profiles.sessions_loading', 'Lade Sitzungen...')}</option>`;
+      populateAgentTabModelSelect();
+      syncAgentTabSwitchUI(currentAgentTabMode);
+      // JEV State auch für Agent Tab synchronisieren
+      const masterJevState = document.getElementById("master-chat-jev-state")?.innerText === "ON";
+      updateJevStatusPill(masterJevState);
+      let agentSessions = [];
+      try {
+        const res = await fetch(`/api/chat/sessions?profile_id=${encodeURIComponent(id)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data.sessions) ? data.sessions : [];
+          // Strikte Filterung: Nur Sitzungen DIESES spezifischen Agenten!
+          agentSessions = list.filter(s => {
+            if (!s) return false;
+            if (id === "default") {
+              if (s.profile_name === "default" || !s.profile_name || s.profile_name === "") return true;
+              if (s.id && (s.id.endsWith(`_default`) || s.id.includes(`_default_`))) return true;
+              return false;
+            }
+            if (s.profile_name === id) return true;
+            if (s.id && (s.id.endsWith(`_${id}`) || s.id.includes(`_${id}_`))) return true;
+            return false;
+          });
+        }
+      } catch (e) {
+        console.warn("[AgentTabChat] Fehler beim Laden der Sessions für", id, e);
+      }
+      select.innerHTML = "";
+      if (agentSessions.length === 0) {
+        // Keine vorhandene Session für diesen Agenten -> neue isolierte Session anlegen
+        const nowStr = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+        const newSessionId = `mc_${nowStr}_${id}`;
+        currentAgentTabSessionId = newSessionId;
+        const opt = document.createElement("option");
+        opt.value = newSessionId;
+        opt.innerText = `${profT('ui.agent_profiles.new_chat_option', 'Neuer Chat')} (${new Date().toLocaleTimeString(profLocale(), { hour: '2-digit', minute: '2-digit' })})`;
+        select.appendChild(opt);
+        select.value = newSessionId;
+        renderAgentTabEmptyWelcome();
+        return;
+      }
+      // Prüfe, ob die bisherige Session wirklich zu DIESEM Agenten gehört
+      const currentBelongsToAgent = agentSessions.some(s => s.id === currentAgentTabSessionId);
+      if (!currentBelongsToAgent) {
+        // Sofort auf die neueste eigene Session dieses Agenten wechseln!
+        currentAgentTabSessionId = agentSessions[0].id;
+      }
+      agentSessions.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        let rawTitle = (s.title && s.title.trim()) ? s.title.trim() : (s.id || "Chat");
+        if ((id === "telegram_bot" || (s.source || "").toLowerCase() === "telegram") && (!rawTitle || rawTitle === "Analyze uploaded image" || rawTitle === "New Session")) {
+          rawTitle = "Telegram Bot (Live-Stream)";
+        }
+        const title = rawTitle.length > 55 ? rawTitle.slice(0, 52) + "..." : rawTitle;
+        const msgs = s.message_count ? `${s.message_count} Msgs` : "0 Msgs";
+        const dateStr = s.last_activity_at_formatted || s.started_at_formatted;
+        const date = dateStr ? ` · Zuletzt: ${dateStr}` : "";
+        opt.innerText = `${title} (${msgs}${date})`;
+        if (s.id === currentAgentTabSessionId) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+      select.value = currentAgentTabSessionId;
+      await loadAgentTabChatMessages(currentAgentTabSessionId);
+    }
+    function createNewAgentChatSession() {
+      const id = currentSelectedProfileId || "default";
+      const nowStr = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+      const newSessionId = `mc_${nowStr}_${id}`;
+      currentAgentTabSessionId = newSessionId;
+      const select = document.getElementById("agent-chat-session-select");
+      if (select) {
+        const opt = document.createElement("option");
+        opt.value = newSessionId;
+        opt.innerText = `${profT('ui.agent_profiles.new_chat_option', 'Neuer Chat')} (${new Date().toLocaleTimeString(profLocale(), { hour: '2-digit', minute: '2-digit' })})`;
+        opt.selected = true;
+        select.insertBefore(opt, select.firstChild);
+        select.value = newSessionId;
+      }
+      removeAgentTabAttachment();
+      const inputEl = document.getElementById("agent-tab-chat-input");
+      if (inputEl) {
+        inputEl.value = "";
+        inputEl.focus();
+      }
+      renderAgentTabEmptyWelcome();
+    }
+    async function renameCurrentAgentTabSession() {
+      const select = document.getElementById("agent-chat-session-select");
+      if (!select || !select.value) return;
+      const sId = select.value;
+      const opt = select.options[select.selectedIndex];
+      const currentTitle = opt ? opt.text.split(" (")[0] : "";
+      if (typeof promptRenameSession === "function") {
+        await promptRenameSession(sId, currentTitle);
+        if (typeof loadAgentTabChatSessions === "function") {
+          await loadAgentTabChatSessions(currentSelectedProfileId);
+        }
+      }
+    }
+    async function loadAgentTabChatMessages(sessionId) {
+      const sId = sessionId || currentAgentTabSessionId;
+      if (!sId) return;
+      currentAgentTabSessionId = sId;
+      const container = document.getElementById("agent-tab-chat-messages");
+      if (!container) return;
+      container.innerHTML = `<div class="text-center text-xs text-slate-400 py-10 font-mono italic animate-pulse">${profT('ui.agent_profiles.messages_loading', 'Lade Nachrichtenverlauf...')}</div>`;
+      try {
+        const res = await fetch(`/api/chat/sessions/${encodeURIComponent(sId)}/messages`);
+        if (res.ok) {
+          const data = await res.json();
+          const msgs = data.messages || [];
+          container.innerHTML = "";
+          if (msgs.length === 0) {
+            renderAgentTabEmptyWelcome();
+          } else {
+            msgs.forEach(m => appendAgentTabMessageBubble(m.role, m.content, m.timestamp, m.id));
+          }
+          container.scrollTop = container.scrollHeight;
+          requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+            setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+          });
+          if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+          return;
+        }
+      } catch (e) {
+        console.warn("[AgentTabChat] Fehler beim Laden der Nachrichten:", e);
+      }
+      renderAgentTabEmptyWelcome();
+    }
+    function renderAgentTabEmptyWelcome() {
+      const container = document.getElementById("agent-tab-chat-messages");
+      if (!container) return;
+      const agentId = currentSelectedProfileId || "default";
+      const prof = hermesProfilesData.find(p => p.id === agentId);
+      const name = prof ? (prof.person_name || prof.name) : "Hermes Agent";
+      const role = prof ? (prof.description || prof.category || "Spezialist") : "Agenten-System";
+      const avatarUrl = (typeof getProfileAvatarUrl === "function" && prof) ? getProfileAvatarUrl(prof) : (prof && prof.avatar ? prof.avatar : "/static/avatars/hermes_default_avatar.png");
+      container.innerHTML = `
+        <div class="h-full flex flex-col items-center justify-center p-6 text-center select-none space-y-4 my-auto">
+          <div class="w-14 h-14 rounded-2xl border border-[var(--border)] overflow-hidden shadow-xs bg-[var(--secondary)] flex items-center justify-center">
+            <img src="${avatarUrl}" class="w-full h-full object-cover" onerror="this.src='/static/avatars/avatar_001.jpg'">
+          </div>
+          <div class="space-y-1">
+            <h4 class="font-bold text-sm text-[var(--foreground)]">${escapeHtml(name)}</h4>
+            <p class="text-xs text-[var(--muted-foreground)] max-w-md">${escapeHtml(role)}</p>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-1.5 pt-2 max-w-lg">
+            <button type="button" onclick="insertAgentTabPromptTemplate('Was sind deine Kernkompetenzen und verfügbaren Werkzeuge?')" class="text-[11px] font-mono px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-2xs">
+              ${profT('ui.agent_profiles.chip_tools', '🛠️ Werkzeuge & Skills')}
+            </button>
+            <button type="button" onclick="insertAgentTabPromptTemplate('Analysiere den aktuellen Projektstand und schlage nächste Schritte vor.')" class="text-[11px] font-mono px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-2xs">
+              ${profT('ui.agent_profiles.chip_status', '📊 Status & Empfehlungen')}
+            </button>
+            <button type="button" onclick="openSurePromptsModal('agent-tab')" class="text-[11px] font-mono px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-2xs">
+              ✨ Archon Prompt Studio
+            </button>
+          </div>
+        </div>
+      `;
+      if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+    }
+    function insertAgentTabPromptTemplate(text) {
+      const input = document.getElementById("agent-tab-chat-input");
+      if (!input) return;
+      input.value = text;
+      autoResizeAgentTabInput(input);
+      input.focus();
+    }
+    function appendAgentTabMessageBubble(role, content, timestamp, msgId) {
+      const container = document.getElementById("agent-tab-chat-messages");
+      if (!container) return;
+      const safeContent = content == null ? "" : String(content);
+      const isUser = role === "user";
+      const div = document.createElement("div");
+      div.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+      let dateFormatted = "";
+      if (timestamp) {
+        if (typeof timestamp === "number" || (!isNaN(timestamp) && !String(timestamp).includes(":") && !String(timestamp).includes("-"))) {
+          const num = parseFloat(timestamp);
+          const ms = num < 1e11 ? num * 1000 : num;
+          const d = new Date(ms);
+          if (!isNaN(d.getTime())) {
+            dateFormatted = d.toLocaleDateString(profLocale(), { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+          }
+        } else if (typeof timestamp === "string") {
+          dateFormatted = timestamp.length <= 8 ? `${new Date().toLocaleDateString(profLocale(), { day: "2-digit", month: "2-digit", year: "numeric" })}, ${timestamp}` : timestamp;
+        }
+      }
+      if (!dateFormatted) {
+        dateFormatted = new Date().toLocaleDateString(profLocale(), { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+      const idStr = msgId ? `#msg-${msgId}` : `#msg-${Math.floor(1000 + Math.random() * 9000)}`;
+      if (isUser) {
+        div.innerHTML = `
+          <div class="max-w-[85%] bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-2xl rounded-br-xs px-4 py-2.5 shadow-xs min-w-[200px] select-text">
+            <div class="text-xs font-sans whitespace-pre-wrap leading-relaxed select-text">${escapeHtml(safeContent)}</div>
+            <div class="text-[9.5px] opacity-75 font-mono text-right mt-1.5 flex items-center justify-between gap-1.5 border-t border-white/10 dark:border-black/10 pt-1 select-none">
+              <div class="flex items-center gap-2">
+                <button type="button" class="resend-user-btn hover:opacity-100 opacity-60 p-0.5 rounded cursor-pointer transition flex items-center gap-1 text-[9px]" title="Nachricht erneut senden" onclick="retryUserChatMessage(this)" data-msg="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
+                  <i data-lucide="rotate-cw" class="w-2.5 h-2.5"></i>
+                  <span>${profT('ui.agent_profiles.chat_resend', 'Erneut senden')}</span>
+                </button>
+                <button type="button" class="edit-user-btn hover:opacity-100 opacity-60 p-0.5 rounded cursor-pointer transition flex items-center gap-1 text-[9px]" title="${profT('ui.agent_profiles.chat_edit_hint', 'Nachricht bearbeiten & neu senden')}" onclick="editUserChatMessage(this)" data-msg="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
+                  <i data-lucide="pencil" class="w-2.5 h-2.5"></i>
+                  <span>${profT('ui.agent_profiles.chat_edit', 'Bearbeiten')}</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <i data-lucide="clock" class="w-2.5 h-2.5"></i>
+                <span>${dateFormatted}</span>
+                <span class="opacity-60 ml-1">${idStr}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+        const name = prof ? (prof.person_name || prof.name) : "Hermes Agent";
+        const avatarUrl = (typeof getProfileAvatarUrl === "function" && prof) ? getProfileAvatarUrl(prof) : (prof && prof.avatar ? prof.avatar : "/static/avatars/hermes_default_avatar.png");
+        const hasError = /verbindungsfehler|connection error|name 're' is not defined|error:/i.test(safeContent);
+        div.innerHTML = `
+          <div class="flex gap-2.5 max-w-[90%]">
+            <div class="w-8 h-8 rounded-lg border border-[var(--border)] overflow-hidden shrink-0 mt-0.5 bg-[var(--secondary)] shadow-2xs">
+              <img src="${avatarUrl}" class="w-full h-full object-cover" onerror="this.src='/static/avatars/avatar_001.jpg'">
+            </div>
+            <div class="bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] rounded-2xl rounded-tl-xs px-3.5 py-2.5 text-xs shadow-xs leading-relaxed space-y-1.5 flex-1 min-w-0 select-text">
+              <div class="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-1 select-none">
+                <span class="font-bold text-xs font-mono text-[var(--foreground)] truncate">${escapeHtml(name)}</span>
+                <div class="flex items-center gap-1">
+                  <button type="button" class="retry-assistant-btn text-[var(--muted-foreground)] hover:text-sky-500 transition p-0.5 rounded cursor-pointer" title="${profT('ui.agent_profiles.chat_regenerate_hint', 'Antwort neu generieren')}" onclick="regenerateLastAssistantResponse()">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </button>
+                  <button type="button" class="copy-bubble-btn text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-0.5 rounded cursor-pointer" title="${profT('ui.agent_profiles.chat_copy_hint', 'In Zwischenablage kopieren')}" onclick="copyAgentMessageText(this)" data-text="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
+                    <i data-lucide="copy" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </button>
+                  <button type="button" class="speaker-btn text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-0.5 rounded cursor-pointer" title="${profT('ui.agent_profiles.chat_speak_hint', 'Vorlesen')}" onclick="speakText(this.getAttribute('data-text'))" data-text="${escapeHtml(safeContent).replace(/"/g, '&quot;')}">
+                    <i data-lucide="volume-2" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="chat-markdown font-sans leading-relaxed text-[var(--foreground)] break-words select-text">
+                ${typeof formatMarkdownText === "function" ? formatMarkdownText(safeContent) : escapeHtml(safeContent)}
+              </div>
+              ${hasError ? `
+                <div class="pt-2 select-none">
+                  <button type="button" onclick="retryLastUserChatMessage()" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-500 dark:text-sky-400 font-mono text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs">
+                    <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                    <span>${profT('ui.agent_profiles.chat_resend_message', 'Nachricht erneut versenden')}</span>
+                  </button>
+                </div>
+              ` : ''}
+              <div class="pt-1.5 border-t border-[var(--border)] flex items-center justify-between gap-2 text-[9px] font-mono text-[var(--muted-foreground)] select-none">
+                <span class="flex items-center gap-1 shrink-0"><i data-lucide="clock" class="w-2.5 h-2.5 text-black dark:text-white"></i>${dateFormatted}</span>
+                <span class="shrink-0 font-medium">${idStr}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+      if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+    }
+    async function sendAgentTabChatMessage() {
+      if (isAgentTabGenerating) return;
+      const inputEl = document.getElementById("agent-tab-chat-input");
+      if (!inputEl) return;
+      const text = inputEl.value.trim();
+      const hasAttachments = currentAgentTabAttachments.length > 0;
+      if (!text && !hasAttachments) return;
+      if (isAgentTabDictating) {
+        toggleAgentTabDictation();
+      }
+      inputEl.value = "";
+      autoResizeAgentTabInput(inputEl);
+      const agentId = currentSelectedProfileId || "default";
+      if (!currentAgentTabSessionId) {
+        const nowStr = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+        currentAgentTabSessionId = `mc_${nowStr}_${agentId}`;
+      }
+      let attachmentNotice = "";
+      if (hasAttachments) {
+        const statusSpan = document.getElementById("agent-tab-chat-status");
+        if (statusSpan) statusSpan.textContent = `Lade ${currentAgentTabAttachments.length} Datei(en) hoch...`;
+        try {
+          for (const att of currentAgentTabAttachments) {
+            const formData = new FormData();
+            formData.append("file", att.file);
+            const uploadRes = await fetch("/api/chat/upload", {
+              method: "POST",
+              body: formData
+            });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              attachmentNotice += `\n[Datei angehängt: ${uploadData.path || uploadData.filename}]`;
+            }
+          }
+        } catch (err) {
+          console.warn("[AgentTabChat Upload] Fehler:", err);
+        }
+        removeAgentTabAttachment();
+      }
+      const fullUserMessage = (text + attachmentNotice).trim();
+      window.lastSentUserChatMessage = fullUserMessage;
+      appendAgentTabMessageBubble("user", fullUserMessage);
+      const statusSpan = document.getElementById("agent-tab-chat-status");
+      const sendBtn = document.getElementById("agent-tab-send-btn");
+      if (statusSpan) {
+        statusSpan.innerHTML = currentAgentTabMode === "mission" 
+          ? `<span class="font-semibold animate-pulse text-[var(--foreground)]">${profT('ui.agent_profiles.status_creating_mission', '⚙️ Erstelle Operations Mission...')}</span>`
+          : `<span class="font-semibold animate-pulse text-[var(--foreground)]">${profT('ui.agent_profiles.status_agent_answering', '● Agent antwortet...')}</span>`;
+      }
+      if (sendBtn) sendBtn.disabled = true;
+      isAgentTabGenerating = true;
+      const container = document.getElementById("agent-tab-chat-messages");
+      const assistantBubble = document.createElement("div");
+      assistantBubble.className = "flex justify-start";
+      const prof = hermesProfilesData.find(p => p.id === agentId);
+      const name = prof ? (prof.person_name || prof.name) : "Hermes Agent";
+      const avatarUrl = (typeof getProfileAvatarUrl === "function" && prof) ? getProfileAvatarUrl(prof) : (prof && prof.avatar ? prof.avatar : "/static/avatars/hermes_default_avatar.png");
+      const timeStr = new Date().toLocaleTimeString(profLocale(), { hour: "2-digit", minute: "2-digit" });
+      const liveMsgId = `#msg-${Math.floor(1000 + Math.random() * 9000)}`;
+      assistantBubble.innerHTML = `
+        <div class="flex gap-2.5 max-w-[90%]">
+          <div class="w-8 h-8 rounded-lg border border-[var(--border)] overflow-hidden shrink-0 mt-0.5 bg-[var(--secondary)] shadow-2xs">
+            <img src="${avatarUrl}" class="w-full h-full object-cover" onerror="this.src='/static/avatars/avatar_001.jpg'">
+          </div>
+          <div class="bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] rounded-2xl rounded-tl-xs px-3.5 py-2.5 text-xs shadow-xs leading-relaxed space-y-1.5 flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-1">
+              <span class="font-bold text-xs font-mono text-[var(--foreground)] truncate">${escapeHtml(name)}</span>
+              <div class="flex items-center gap-1">
+                <button type="button" class="copy-bubble-btn text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-0.5 rounded cursor-pointer" title="${profT('ui.agent_profiles.chat_copy_hint', 'In Zwischenablage kopieren')}" onclick="copyAgentMessageText(this)" data-text="">
+                  <i data-lucide="copy" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                </button>
+                <button type="button" class="speaker-btn text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition p-0.5 rounded cursor-pointer" title="${profT('ui.agent_profiles.chat_speak_hint', 'Vorlesen')}" onclick="speakText(this.getAttribute('data-text'))" data-text="">
+                  <i data-lucide="volume-2" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                </button>
+              </div>
+            </div>
+            <div class="chat-assistant-body chat-markdown font-sans leading-relaxed text-[var(--foreground)] break-words">
+              <span class="text-[var(--muted-foreground)] italic animate-pulse">${profT('ui.agent_profiles.answer_generating', 'Antwort wird generiert...')}</span>
+            </div>
+            <div class="chat-assistant-action-card"></div>
+            <div class="pt-1.5 border-t border-[var(--border)] flex items-center justify-between text-[9px] font-mono text-[var(--muted-foreground)]">
+              <span class="flex items-center gap-1"><i data-lucide="clock" class="w-2.5 h-2.5 text-black dark:text-white"></i>${timeStr}</span>
+              <span>${liveMsgId}</span>
+            </div>
+          </div>
+        </div>
+      `;
+      container.appendChild(assistantBubble);
+      container.scrollTop = container.scrollHeight;
+      if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+      const bodyEl = assistantBubble.querySelector(".chat-assistant-body");
+      const actionCardContainer = assistantBubble.querySelector(".chat-assistant-action-card");
+      const speakerBtn = assistantBubble.querySelector(".speaker-btn");
+      let fullText = "";
+      try {
+        const reasoningLvl = document.getElementById("agent-tab-reasoning-select")?.value || 
+                             document.getElementById("prof-edit-reasoning")?.value || 
+                             (prof && prof.reasoning_level) || 
+                             "medium";
+        const payload = {
+          agent_id: agentId,
+          message: fullUserMessage,
+          session_id: currentAgentTabSessionId,
+          mode: currentAgentTabMode,
+          provider: currentAgentTabProvider || (prof && prof.provider) || "openrouter",
+          model: currentAgentTabModel || (prof && prof.model) || "auto/best-coding",
+          reasoning_level: reasoningLvl
+        };
+        const res = await fetch("/api/chat/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          throw new Error("HTTP Fehler " + res.status);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data: ")) continue;
+            const jsonStr = trimmed.slice(6).trim();
+            if (jsonStr === "[DONE]") break;
+            try {
+              const eventData = JSON.parse(jsonStr);
+              if (eventData.type === "delta" && eventData.delta) {
+                fullText += eventData.delta;
+                if (bodyEl) {
+                  bodyEl.innerHTML = typeof formatMarkdownText === "function" ? formatMarkdownText(fullText) : escapeHtml(fullText);
+                }
+                container.scrollTop = container.scrollHeight;
+              } else if (eventData.type === "mission_created") {
+                fullText = eventData.content || "Mission angelegt.";
+                if (bodyEl) {
+                  bodyEl.innerHTML = typeof formatMarkdownText === "function" ? formatMarkdownText(fullText) : escapeHtml(fullText);
+                }
+                if (actionCardContainer) {
+                  actionCardContainer.innerHTML = `
+                    <div class="mt-2.5 p-2.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg flex items-center justify-between gap-3 text-[var(--foreground)] shadow-xs">
+                      <div class="text-xs font-sans font-medium flex items-center gap-1.5">
+                        <i data-lucide="shield-alert" class="w-4 h-4 text-black dark:text-white"></i>
+                        <span>${profT('ui.agent_profiles.mission_approval_hint', 'Diese Mission wartet im Approval Gate auf Freigabe.')}</span>
+                      </div>
+                      <button type="button" onclick="setTab('mission-control')" class="shadcn-btn-primary px-2.5 py-1 text-xs font-semibold rounded-md flex items-center gap-1.5 cursor-pointer shadow-xs transition shrink-0">
+                        <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+                        <span>${profT('ui.agent_profiles.mission_to_approval', 'Zur Freigabe')}</span>
+                      </button>
+                    </div>
+                  `;
+                  if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+                }
+                container.scrollTop = container.scrollHeight;
+              } else if (eventData.type === "error") {
+                fullText += `\n❌ ${profT('ui.agent_profiles.label_error', 'Fehler')}: ${eventData.error}`;
+                if (bodyEl) {
+                  bodyEl.innerHTML = `<span class="text-rose-600 font-semibold">${escapeHtml(fullText)}</span>`;
+                }
+                if (actionCardContainer) {
+                  actionCardContainer.innerHTML = `
+                    <div class="mt-2 select-none">
+                      <button type="button" onclick="retryLastUserChatMessage()" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-500 dark:text-sky-400 font-mono text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs">
+                        <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                        <span>${profT('ui.agent_profiles.chat_resend_message', 'Nachricht erneut versenden')}</span>
+                      </button>
+                    </div>
+                  `;
+                  if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+                }
+              }
+            } catch (jsonErr) {
+              console.warn("[AgentTabChat SSE] Ungültiges Event:", trimmed, jsonErr);
+            }
+          }
+        }
+        const copyBtn = assistantBubble.querySelector(".copy-bubble-btn");
+        if (copyBtn) {
+          copyBtn.setAttribute("data-text", escapeHtml(fullText).replace(/"/g, '&quot;'));
+        }
+        if (speakerBtn) {
+          speakerBtn.setAttribute("data-text", escapeHtml(fullText).replace(/"/g, '&quot;'));
+        }
+        // Sessions neu laden
+        loadMasterChatSessions();
+      } catch (err) {
+        if (bodyEl) {
+          bodyEl.innerHTML = `<span class="text-rose-600 font-semibold">${profT('ui.agent_profiles.connection_error', 'Verbindungsfehler: {message}', { message: escapeHtml(err.message) })}</span>`;
+        }
+        if (actionCardContainer) {
+          actionCardContainer.innerHTML = `
+            <div class="mt-2 select-none">
+              <button type="button" onclick="retryLastUserChatMessage()" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-500 dark:text-sky-400 font-mono text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs">
+                <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                <span>${profT('ui.agent_profiles.chat_resend_message', 'Nachricht erneut versenden')}</span>
+              </button>
+            </div>
+          `;
+          if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+        }
+      } finally {
+        isAgentTabGenerating = false;
+        if (statusSpan) statusSpan.textContent = "Bereit";
+        if (sendBtn) sendBtn.disabled = false;
+        if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+        if (inputEl) inputEl.focus();
+      }
+    }
+    function addAgentTabAttachmentFiles(files) {
+      if (!files || !files.length) return;
+      const fileList = Array.from(files);
+      const remaining = 5 - currentAgentTabAttachments.length;
+      if (remaining <= 0) {
+        if (typeof showActionFeedbackToast === "function") {
+          showActionFeedbackToast("⚠️ Maximal 5 Anhänge erlaubt.");
+        } else {
+          alert("Maximal 5 Anhänge gleichzeitig erlaubt.");
+        }
+        return;
+      }
+      const toAdd = fileList.slice(0, remaining);
+      if (fileList.length > remaining && typeof showActionFeedbackToast === "function") {
+        showActionFeedbackToast(`⚠️ Nur ${remaining} Datei(en) hinzugefügt (Limit: 5).`);
+      }
+      toAdd.forEach(file => {
+        currentAgentTabAttachments.push({
+          file: file,
+          name: file.name || "datei",
+          size: (file.size / 1024).toFixed(1) + " KB",
+          type: file.type || "application/octet-stream"
+        });
+      });
+      renderAgentTabAttachments();
+    }
+    function renderAgentTabAttachments() {
+      const bar = document.getElementById("agent-tab-attachment-bar");
+      if (!bar) return;
+      if (!currentAgentTabAttachments.length) {
+        bar.classList.add("hidden");
+        bar.innerHTML = "";
+        return;
+      }
+      bar.classList.remove("hidden");
+      bar.innerHTML = `
+        <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          <span class="text-[10px] font-mono text-[var(--muted-foreground)] uppercase font-bold shrink-0">${profT('ui.agent_profiles.attachments_label', 'Anhänge ({count}/5):', { count: currentAgentTabAttachments.length })}</span>
+          ${currentAgentTabAttachments.map((att, idx) => `
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--card)] border border-[var(--border)] text-[10.5px] font-mono text-[var(--foreground)] shadow-2xs">
+              <i data-lucide="file" class="w-3 h-3 text-emerald-500 shrink-0"></i>
+              <span class="truncate max-w-[130px] font-medium" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</span>
+              <span class="text-[9px] text-[var(--muted-foreground)] font-normal">${att.size}</span>
+              <button type="button" onclick="removeAgentTabAttachment(${idx})" class="text-[var(--muted-foreground)] hover:text-red-500 transition p-0.5 cursor-pointer" title="${profT('ui.agent_profiles.remove', 'Entfernen')}">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+        <button type="button" onclick="removeAgentTabAttachment()" class="text-[10px] font-mono text-[var(--muted-foreground)] hover:text-red-500 transition px-1.5 py-0.5 rounded cursor-pointer shrink-0" title="${profT('ui.agent_profiles.clear_attachments_hint', 'Alle Anhänge entfernen')}">
+          ${profT('ui.agent_profiles.clear_attachments', 'Alle löschen')}
+        </button>
+      `;
+      if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+    }
+    function handleAgentTabFileSelected(event) {
+      const files = event.target.files;
+      if (!files || !files.length) return;
+      addAgentTabAttachmentFiles(files);
+    }
+    function handleAgentTabInputPaste(event) {
+      const items = (event.clipboardData || window.clipboardData)?.items;
+      if (!items) return;
+      const foundFiles = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+          const blob = item.getAsFile();
+          if (blob) {
+            const ts = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+            const isImg = item.type.startsWith('image/');
+            const ext = isImg ? "png" : "bin";
+            const file = new File([blob], `pasted_${ts}_${i}.${ext}`, { type: blob.type || (isImg ? "image/png" : "application/octet-stream") });
+            foundFiles.push(file);
+          }
+        }
+      }
+      if (foundFiles.length > 0) {
+        event.preventDefault();
+        addAgentTabAttachmentFiles(foundFiles);
+      }
+    }
+    async function captureScreenForAgentChat() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        alert("Bildschirm-Aufnahme wird von diesem Browser nicht unterstützt oder erfordert HTTPS / localhost.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { cursor: "always" },
+          audio: false
+        });
+        const track = stream.getVideoTracks()[0];
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        await video.play();
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 1920;
+        canvas.height = video.videoHeight || 1080;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        track.stop();
+        stream.getTracks().forEach(t => t.stop());
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const ts = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+          const file = new File([blob], `screen_capture_${ts}.png`, { type: "image/png" });
+          addAgentTabAttachmentFiles([file]);
+        }, "image/png");
+      } catch (err) {
+        if (err.name !== "NotAllowedError") {
+          console.warn("[ScreenCapture] Fehler:", err);
+        }
+      }
+    }
+    function removeAgentTabAttachment(idx) {
+      if (typeof idx === "number") {
+        currentAgentTabAttachments.splice(idx, 1);
+      } else {
+        currentAgentTabAttachments = [];
+      }
+      const fileInput = document.getElementById("agent-tab-file-input");
+      if (fileInput) fileInput.value = "";
+      renderAgentTabAttachments();
+    }
+    function toggleAgentTabDictation() {
+      const btn = document.getElementById("agent-tab-mic-btn");
+      const textarea = document.getElementById("agent-tab-chat-input");
+      if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+        alert("Spracherkennung wird in diesem Browser leider nicht unterstützt. Bitte Chrome oder Edge nutzen.");
+        return;
+      }
+      if (isAgentTabDictating) {
+        if (agentTabDictationRecognition) {
+          agentTabDictationRecognition.stop();
+        }
+        isAgentTabDictating = false;
+        if (btn) {
+          btn.className = "p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs";
+          btn.title = "Spracheingabe / Diktat starten (Mikrofon)";
+        }
+        return;
+      }
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      agentTabDictationRecognition = new SpeechRec();
+      agentTabDictationRecognition.continuous = true;
+      agentTabDictationRecognition.interimResults = true;
+      agentTabDictationRecognition.lang = "de-DE";
+      let baseText = textarea.value ? textarea.value.trim() + " " : "";
+      agentTabDictationRecognition.onresult = (event) => {
+        let interimTranscript = "";
+        let finalTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        textarea.value = baseText + finalTranscript + interimTranscript;
+        autoResizeAgentTabInput(textarea);
+      };
+      agentTabDictationRecognition.onerror = (event) => {
+        console.error("[AgentTab Speech] Fehler:", event.error);
+        isAgentTabDictating = false;
+        if (btn) {
+          btn.className = "p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs";
+        }
+      };
+      agentTabDictationRecognition.onend = () => {
+        isAgentTabDictating = false;
+        if (btn) {
+          btn.className = "p-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs";
+        }
+      };
+      agentTabDictationRecognition.start();
+      isAgentTabDictating = true;
+      if (btn) {
+        btn.className = "p-2 rounded-lg border border-red-500 text-red-500 bg-red-50 dark:bg-red-950/30 animate-pulse transition shrink-0 cursor-pointer shadow-2xs";
+        btn.title = "Diktat läuft... Klicken zum Stoppen";
+      }
+    }
+    function autoResizeAgentTabInput(el) {
+      if (!el) return;
+      el.style.height = "auto";
+      const maxH = Math.floor(window.innerHeight * 0.25);
+      el.style.height = Math.max(48, Math.min(el.scrollHeight, maxH)) + "px";
+    }
+    let currentAgentTabProvider = "openrouter";
+    // --- Tokenpreis pro 1M (Input/Output) neben der Modell-Auswahl ---
+    let agentTabModelPrices = {};
+    let agentTabModelPricesLoaded = false;
+    async function loadAgentTabModelPrices() {
+      if (agentTabModelPricesLoaded) return;
+      try {
+        const res = await fetch("/api/llm-providers/prices");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.prices) {
+          agentTabModelPrices = data.prices;
+          agentTabModelPricesLoaded = true;
+          window.masterChatModelPrices = data.prices;
+          if (typeof updateProfileModelCost === "function") updateProfileModelCost();
+          if (typeof updateAgentTabModelCost === "function") updateAgentTabModelCost();
+        }
+      } catch (e) {
+        console.warn("Tokenpreise konnten nicht geladen werden:", e);
+      }
+    }
+    window.loadAgentTabModelPrices = loadAgentTabModelPrices;
+
+    async function refreshAgentTabPrices(btn) {
+      const icon = btn ? (btn.querySelector("svg") || btn.querySelector("i") || btn) : null;
+      if (icon) icon.classList.add("animate-spin");
+      try {
+        const res = await fetch("/api/llm-providers/prices?refresh=1");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.prices) {
+            agentTabModelPrices = data.prices;
+            agentTabModelPricesLoaded = true;
+            window.masterChatModelPrices = data.prices;
+          }
+        }
+        updateAgentTabModelCost();
+        if (typeof updateMasterChatProfileUI === "function") updateMasterChatProfileUI();
+        if (typeof showArchonToast === "function") showArchonToast("Tokenpreise live aktualisiert", "success");
+      } catch (e) {
+        console.warn("Preis-Refresh fehlgeschlagen:", e);
+      } finally {
+        if (icon) setTimeout(() => icon.classList.remove("animate-spin"), 600);
+      }
+    }
+    window.refreshAgentTabPrices = refreshAgentTabPrices;
+    function formatPricePer1M(usd) {
+      if (usd === undefined || usd === null || isNaN(usd)) return "0.00";
+      const num = Number(usd);
+      if (num === 0) return "0.00";
+      if (num >= 50) return num.toFixed(2);
+      const s4 = num.toFixed(4);
+      if (s4.endsWith("00")) return num.toFixed(2);
+      if (s4.endsWith("0")) return num.toFixed(3);
+      return s4;
+    }
+    window.formatPricePer1M = formatPricePer1M;
+
+    function updateAgentTabModelCost() {
+      const el = document.getElementById("agent-tab-model-cost");
+      if (!el) return;
+      const modelSelect = document.getElementById("agent-tab-model-select");
+      const model = (modelSelect && modelSelect.value) || currentAgentTabModel;
+      const info = findModelPriceInfo(model);
+      if (info && info.p) {
+        const pre = info.approx ? "≈ " : "";
+        const inP = formatPricePer1M(info.p.prompt_1m);
+        const outP = formatPricePer1M(info.p.completion_1m);
+        el.innerHTML = `${pre}In: <span class="text-emerald-500">$${inP}</span> | Out: <span class="text-amber-500">$${outP}</span> /1M Tok`;
+        el.classList.remove("hidden");
+        el.title = info.approx
+          ? `Preis des passenden Modells (${info.matched}) — Input: $${inP} / Output: $${outP} pro 1M Tokens`
+          : `Input: $${inP} / Output: $${outP} pro 1 Million Tokens (live von OpenRouter)`;
+      } else {
+        el.classList.add("hidden");
+      }
+    }
+    function findModelPriceInfo(model) {
+      if (!model || !Object.keys(agentTabModelPrices).length) return null;
+      // 1. Exakter Match
+      const exact = agentTabModelPrices[model];
+      if (exact) return { p: exact, approx: false, matched: model };
+
+      const lowModel = model.toLowerCase();
+      // 2. Case-Insensitive Match
+      for (const k of Object.keys(agentTabModelPrices)) {
+        if (k.toLowerCase() === lowModel) {
+          return { p: agentTabModelPrices[k], approx: false, matched: k };
+        }
+      }
+
+      // 3. Match ohne Vendor-Präfix
+      const modelBase = lowModel.includes("/") ? lowModel.split("/").pop() : lowModel;
+      for (const k of Object.keys(agentTabModelPrices)) {
+        const kBase = k.toLowerCase().split("/").pop();
+        if (kBase === modelBase) {
+          return { p: agentTabModelPrices[k], approx: false, matched: k };
+        }
+      }
+
+      // 4. Intelligenter Substring- / Slug-Match unter Beibehaltung der Modell-Klasse (Flash, Pro, Mini, etc.)
+      const tiers = ["flash", "pro", "mini", "sonnet", "opus", "haiku", "max", "nano", "small", "medium", "large"];
+      const activeTiers = tiers.filter(t => lowModel.includes(t));
+
+      let bestKey = null;
+      let bestScore = -1;
+
+      const cleanModel = modelBase.replace(/[^a-z0-9]/g, "");
+
+      for (const k of Object.keys(agentTabModelPrices)) {
+        const lowK = k.toLowerCase();
+        // Falls das Suchmodell eine Tier-Kennung hat (z.B. Flash), MUSS der Kandidat dieselbe Kennung haben!
+        if (activeTiers.length > 0) {
+          const hasAllTiers = activeTiers.every(t => lowK.includes(t));
+          if (!hasAllTiers) continue;
+        }
+
+        const kBase = lowK.split("/").pop();
+        const cleanK = kBase.replace(/[^a-z0-9]/g, "");
+
+        let score = 0;
+        if (cleanK === cleanModel) score += 100;
+        else if (cleanK.includes(cleanModel) || cleanModel.includes(cleanK)) score += 50;
+
+        // Vendor-Bonus wenn übereinstimmend
+        if (lowModel.includes("/") && lowK.includes("/")) {
+          const v1 = lowModel.split("/")[0].replace(/[^a-z0-9]/g, "");
+          const v2 = lowK.split("/")[0].replace(/[^a-z0-9]/g, "");
+          if (v1 === v2) score += 30;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestKey = k;
+        }
+      }
+
+      if (bestKey && bestScore > 0) {
+        return { p: agentTabModelPrices[bestKey], approx: true, matched: bestKey };
+      }
+      return null;
+    }
+    window.findModelPriceInfo = findModelPriceInfo;
+    window.updateAgentTabModelCost = updateAgentTabModelCost;
+    async function onAgentHeaderProviderChange(prov) {
+      const tabProvSelect = document.getElementById("agent-tab-provider-select");
+      if (tabProvSelect) tabProvSelect.value = prov;
+      await onAgentTabProviderChange(prov);
+      syncAgentHeaderModelDropdown();
+    }
+    async function onAgentHeaderModelChange(val) {
+      const tabModelSelect = document.getElementById("agent-tab-model-select");
+      if (tabModelSelect) tabModelSelect.value = val;
+      await onAgentTabModelChange(val);
+    }
+    function syncAgentHeaderModelDropdown() {
+      const tabModelSelect = document.getElementById("agent-tab-model-select");
+      const headerModelSelect = document.getElementById("agent-header-model-select");
+      const headerProvSelect = document.getElementById("agent-header-provider-select");
+      const tabProvSelect = document.getElementById("agent-tab-provider-select");
+      if (headerProvSelect && tabProvSelect) {
+        if (headerProvSelect.options.length !== tabProvSelect.options.length) {
+          headerProvSelect.innerHTML = tabProvSelect.innerHTML;
+        }
+        headerProvSelect.value = tabProvSelect.value;
+      }
+      if (tabModelSelect && headerModelSelect) {
+        headerModelSelect.innerHTML = tabModelSelect.innerHTML;
+        headerModelSelect.value = tabModelSelect.value;
+      }
+    }
+    async function populateAgentTabModelSelect() {
+      const providerSelect = document.getElementById("agent-tab-provider-select");
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const prov = (prof && prof.provider) || (prof && prof.model && prof.model.includes("gemini") ? "google" : "openrouter");
+      const mod = (prof && prof.model && prof.model !== "free-forever") ? prof.model : null;
+      currentAgentTabProvider = prov;
+      if (providerSelect) providerSelect.value = prov;
+      await onAgentTabProviderChange(prov, mod, true);
+      syncAgentHeaderModelDropdown();
+    }
+    async function onAgentTabProviderChange(prov, preferredModel, skipSave = false) {
+      currentAgentTabProvider = prov || "openrouter";
+      const modelSelect = document.getElementById("agent-tab-model-select");
+      if (!modelSelect) return;
+      modelSelect.disabled = true;
+      modelSelect.innerHTML = `<option value="">${profT('ui.agent_profiles.models_loading', 'Lade Modelle für {provider}...', { provider: currentAgentTabProvider })}</option>`;
+      const models = await loadLlmModelsForProvider(currentAgentTabProvider);
+      modelSelect.disabled = false;
+      populateModelDropdown(modelSelect, models, preferredModel);
+      currentAgentTabModel = modelSelect.value;
+      await loadAgentTabModelPrices();
+      updateAgentTabModelCost();
+      syncAgentHeaderModelDropdown();
+      if (!skipSave && currentSelectedProfileId && currentAgentTabModel) {
+        saveActiveAgentModelAndProvider(currentAgentTabProvider, currentAgentTabModel);
+      }
+    }
+    async function onAgentTabModelChange(val) {
+      if (val === "__CUSTOM__") {
+        const selectEl = document.getElementById("agent-tab-model-select");
+        if (handleCustomModelOption(selectEl)) {
+          val = selectEl.value;
+        } else {
+          return;
+        }
+      }
+      currentAgentTabModel = val;
+      syncAgentHeaderModelDropdown();
+      updateAgentTabModelCost();
+      if (currentSelectedProfileId && val) {
+        await saveActiveAgentModelAndProvider(currentAgentTabProvider, val);
+      }
+    }
+    async function saveActiveAgentModelAndProvider(provider, model) {
+      if (!currentSelectedProfileId || !provider || !model) return;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (prof) {
+        prof.provider = provider;
+        prof.model = model;
+      }
+      const profProv = document.getElementById("prof-edit-provider");
+      const profMod = document.getElementById("prof-edit-model");
+      const profLabel = document.getElementById("prof-active-model-label");
+      if (profProv) profProv.value = provider;
+      if (profMod) {
+        profMod.value = model;
+      }
+      if (profLabel) profLabel.innerText = `aktiv: ${model} (${provider})`;
+      try {
+        await fetch(`/api/hermes/profiles/${encodeURIComponent(currentSelectedProfileId)}/model`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, model })
+        });
+      } catch (err) {
+        console.warn("[Profile Model] Auto-save error:", err);
+      }
+    }
+    function jumpToMasterChatWithCurrentAgent() {
+      const agentId = currentSelectedProfileId || "default";
+      setTab('master-chat');
+      if (typeof selectMasterChatProfile === "function") {
+        selectMasterChatProfile(agentId);
+      }
+    }
+    function togglePinAgentToCurrentTask() {
+      if (!currentSelectedProfileId) return;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const name = prof ? (prof.person_name || prof.name) : currentSelectedProfileId;
+      prof.is_pinned_to_task = !prof.is_pinned_to_task;
+      showArchonToast(
+        prof.is_pinned_to_task 
+          ? `Agent '${name}' an aktiven Task geheftet!` 
+          : `Task-Bindung für '${name}' gelöst.`, 
+        "success"
+      );
+    }
+    // Modal-Umleitungen zur Vermeidung von Popup-Modals
+    function openSoulModal(agentId) {
+      if (agentId) selectProfileForEditor(agentId);
+      switchAgentCadreTab('soul');
+    }
+    function closeSoulModal() {}
+    function saveSoulMarkdown() { saveInlineSoulMarkdown(); }
+    function openPersonalakteModal(agentId) {
+      if (agentId) selectProfileForEditor(agentId);
+      switchAgentCadreTab('personalakte');
+    }
+    function closePersonalakteModal() {}
+    function switchPersonalakteTab(tabName) {}
+    function savePersonalakteMarkdown() { saveInlinePersonalakteMarkdown(); }
+    function openDirectChatForCurrentProfile(agentId) {
+      if (agentId) selectProfileForEditor(agentId);
+      switchAgentCadreTab('chat');
+    }
+    function closeAgentDirectChatModal() {}
+    async function loadAgentLiveActivity(agentId) {
+      const term = document.getElementById("prof-activity-log-terminal");
+      const statusEl = document.getElementById("prof-log-status");
+      if (!term) return;
+      term.innerHTML = `<div class="text-[var(--muted-foreground)] italic">${profT('ui.agent_profiles.log_connecting', 'Verbinde mit Agenten-Log...')}</div>`;
+      if (statusEl) statusEl.innerText = "Lade...";
+      try {
+        const res = await fetch(`/api/v1/agent/${agentId}/activity`);
+        if (!res.ok) throw new Error("Status " + res.status);
+        const data = await res.json();
+        const logs = data.logs || [];
+        const turns = data.recent_turns || [];
+        if (statusEl) statusEl.innerText = "Aktiv";
+        let html = "";
+        if (turns.length > 0) {
+          html += `<div class="text-[10px] text-zinc-900 dark:text-zinc-100 font-bold mb-1 border-b border-[var(--border)] pb-0.5">${profT('ui.agent_profiles.log_turns_header', '💬 Letzte Konversationsturns:')}</div>`;
+          turns.forEach(t => {
+            html += `<div class="text-[var(--foreground)]/90 whitespace-pre-wrap leading-tight py-0.5">${escapeHtml(t)}</div>`;
+          });
+          html += `<div class="text-[10px] text-zinc-900 dark:text-zinc-100 font-bold mt-2 mb-1 border-b border-[var(--border)] pb-0.5">${profT('ui.agent_profiles.log_telemetry_header', '⚡ System & Daemon Telemetrie:')}</div>`;
+        }
+        if (logs.length > 0) {
+          logs.forEach(l => {
+            let color = "text-[var(--muted-foreground)]";
+            if (l.includes("INFO") || l.includes("aktiv") || l.includes("online")) color = "text-emerald-600 dark:text-emerald-400";
+            if (l.includes("WARN") || l.includes("caution")) color = "text-amber-600 dark:text-amber-400";
+            if (l.includes("ERROR") || l.includes("Fehler")) color = "text-rose-600 dark:text-rose-400";
+            html += `<div class="${color} whitespace-pre-wrap leading-tight py-0.5 font-mono">${escapeHtml(l)}</div>`;
+          });
+        } else {
+          html += `<div class="text-[var(--muted-foreground)] italic">${profT('ui.agent_profiles.log_empty', 'Keine aktuellen Hintergrund-Logs für diesen Agenten.')}</div>`;
+        }
+        term.innerHTML = html;
+        term.scrollTop = term.scrollHeight;
+      } catch (err) {
+        term.innerHTML = `<div class="text-[var(--foreground)] font-mono"><span class="font-bold">[DAEMON]</span> ${profT('ui.agent_profiles.log_fallback_ready', 'Agent bereit im Standby-Modus.')}<br><span class="text-[var(--muted-foreground)]">[ROUTER]</span> ${profT('ui.agent_profiles.log_fallback_router', 'Port 20128 aktiv. Keine Warnungen.')}</div>`;
+        if (statusEl) statusEl.innerText = "Bereit";
+      }
+    }
+    async function loadAgentProjectsHistory(agentId) {
+      const list = document.getElementById("prof-projects-list");
+      const countEl = document.getElementById("prof-projects-count");
+      if (!list) return;
+      list.innerHTML = `<div class="text-[11px] text-[var(--muted-foreground)] italic p-1">${profT('ui.agent_profiles.projects_loading', 'Lade Projektbeteiligungen...')}</div>`;
+      try {
+        const res = await fetch(`/api/v1/agent/${agentId}/projects`);
+        if (!res.ok) throw new Error("Status " + res.status);
+        const data = await res.json();
+        const projects = data.projects || [];
+        if (countEl) {
+          countEl.innerText = `${projects.length} ${projects.length === 1 ? 'Projekt' : 'Projekte'}`;
+        }
+        if (projects.length === 0) {
+          list.innerHTML = `<div class="text-[11px] text-[var(--muted-foreground)] italic p-1">${profT('ui.agent_profiles.projects_empty', 'Bisher keine dokumentierten Projektbeteiligungen.')}</div>`;
+          return;
+        }
+        list.innerHTML = projects.map(p => `
+          <div class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:border-zinc-500 transition shadow-2xs">
+            <div class="flex items-center justify-between gap-1">
+              <span class="font-bold text-xs text-[var(--foreground)] truncate">${escapeHtml(p.name)}</span>
+              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-[var(--secondary)] text-[var(--foreground)] font-bold border border-[var(--border)] shrink-0">${escapeHtml(p.status || profT('ui.agent_profiles.status_active', 'Aktiv'))}</span>
+            </div>
+            <div class="flex items-center justify-between text-[9.5px] font-mono text-[var(--muted-foreground)] mt-0.5">
+              <span>📅 ${escapeHtml(p.date || '2026')}</span>
+              <span class="truncate max-w-[110px]">${escapeHtml(p.source || 'Vault')}</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        list.innerHTML = `
+          <div class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-2xs">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-[var(--foreground)]">AgenticOS 2026 Kernsystem</span>
+              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-[var(--secondary)] text-[var(--foreground)] font-bold border border-[var(--border)]">${profT('ui.agent_profiles.status_active', 'Aktiv')}</span>
+            </div>
+            <div class="text-[9.5px] font-mono text-[var(--muted-foreground)] mt-0.5">📅 2026-09 • Archon OS</div>
+          </div>
+        `;
+        if (countEl) countEl.innerText = "1 Projekt";
+      }
+    }
+    async function onProfileProviderChange(provider, preferredModel) {
+      const modelSelect = document.getElementById("prof-edit-model");
+      if (!modelSelect) return;
+      if (modelSelect.tagName === "SELECT") {
+        modelSelect.disabled = true;
+        modelSelect.innerHTML = `<option value="">${profT('ui.agent_profiles.models_loading', 'Lade Modelle für {provider}...', { provider })}</option>`;
+      } else {
+        modelSelect.placeholder = profT('ui.agent_profiles.models_loading', 'Lade Modelle für {provider}...', { provider });
+      }
+      await loadAgentTabModelPrices();
+      const models = await loadLlmModelsForProvider(provider);
+      if (modelSelect.tagName === "SELECT") {
+        modelSelect.disabled = false;
+      } else {
+        modelSelect.placeholder = profT('ui.agent_profiles.model_search_placeholder', 'Modell suchen oder manuell eingeben...');
+      }
+      populateModelDropdown(modelSelect, models, preferredModel);
+      const label = document.getElementById("prof-active-model-label");
+      if (label && modelSelect.value) {
+        label.innerText = `aktiv: ${modelSelect.value}`;
+      }
+      updateProfileModelCost();
+      if (!preferredModel && modelSelect.value) {
+        applyProfileModelSelection();
+      }
+    }
+
+    function updateProfileModelCost() {
+      const el = document.getElementById("prof-edit-model-cost");
+      if (!el) return;
+      const modelSelect = document.getElementById("prof-edit-model");
+      const model = modelSelect ? modelSelect.value : "";
+      const info = findModelPriceInfo(model);
+      if (info && info.p) {
+        const pre = info.approx ? "≈ " : "";
+        const inP = formatPricePer1M(info.p.prompt_1m);
+        const outP = formatPricePer1M(info.p.completion_1m);
+        el.innerHTML = `${pre}In: <span class="text-emerald-500 font-bold">$${inP}</span> | Out: <span class="text-amber-500 font-bold">$${outP}</span> <span class="text-slate-400 font-normal">/1M Tok</span>`;
+        el.classList.remove("hidden");
+        el.title = info.approx
+          ? `Preis des passenden Modells (${info.matched}) — Input: $${inP} / Output: $${outP} pro 1M Tokens`
+          : `Input: $${inP} / Output: $${outP} pro 1 Million Tokens (live)`;
+      } else if (model) {
+        el.innerHTML = `In: <span class="text-emerald-500 font-bold">$0.00</span> | Out: <span class="text-amber-500 font-bold">$0.00</span> <span class="text-slate-400 font-normal">/1M Tok</span>`;
+        el.classList.remove("hidden");
+      } else {
+        el.classList.add("hidden");
+      }
+    }
+    window.updateProfileModelCost = updateProfileModelCost;
+
+    async function onProfileModelDropdownChange(val) {
+      const selectEl = document.getElementById("prof-edit-model");
+      if (!selectEl) return;
+      if (val === "__CUSTOM__") {
+        if (handleCustomModelOption(selectEl)) {
+          val = selectEl.value;
+        } else {
+          return;
+        }
+      }
+      updateProfileModelCost();
+      await applyProfileModelSelection();
+    }
+    window.onProfileModelDropdownChange = onProfileModelDropdownChange;
+    async function applyProfileModelSelection() {
+      const providerSelect = document.getElementById("prof-edit-provider");
+      const modelSelect = document.getElementById("prof-edit-model");
+      const reasoningSelect = document.getElementById("prof-edit-reasoning");
+      const label = document.getElementById("prof-active-model-label");
+      if (!modelSelect || !providerSelect) return;
+      const provider = providerSelect.value;
+      const model = modelSelect.value;
+      const reasoning_level = reasoningSelect ? reasoningSelect.value : "medium";
+      if (!provider || !model) return;
+      if (label) label.innerText = `aktiv: ${model} (${provider}) · 🧠 ${reasoning_level}`;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (prof) {
+        prof.provider = provider;
+        prof.model = model;
+        prof.reasoning_level = reasoning_level;
+      }
+      // Falls der Chat-Tab für diesen Agenten geöffnet ist, synchronisiere auch die Chat-Auswahl
+      const tabProv = document.getElementById("agent-tab-provider-select");
+      const tabMod = document.getElementById("agent-tab-model-select");
+      const tabReas = document.getElementById("agent-tab-reasoning-select");
+      if (tabProv && tabProv.value !== provider) tabProv.value = provider;
+      if (tabMod) tabMod.value = model;
+      if (tabReas) tabReas.value = reasoning_level;
+      currentAgentTabProvider = provider;
+      currentAgentTabModel = model;
+      if (typeof updateAgentTabModelCost === "function") {
+        updateAgentTabModelCost();
+      }
+      try {
+        const res = await fetch(`/api/hermes/profiles/${encodeURIComponent(currentSelectedProfileId)}/model`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, model, reasoning_level })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          if (typeof showActionFeedbackToast === "function") {
+            showActionFeedbackToast(`Modell gespeichert: ${model} (${provider})`);
+          } else if (label) {
+            label.innerText = `✓ aktiv: ${model} (${provider})`;
+          }
+        }
+      } catch (err) {
+        console.error("[Profile Model] Save failed:", err);
+      }
+    }
+    function assignSelectedMarketplaceSkillToProfile() {
+      if (typeof assignSelectedMarketplaceSkill === "function") {
+        return assignSelectedMarketplaceSkill();
+      }
+    }
+    let currentInspectedSkillId = "";
+    let currentInspectedToolId = "";
+    let availableSkillsSearchFilter = "";
+    let availableToolsSearchFilter = "";
+
+    function filterAvailableSkillsCatalog(query) {
+      availableSkillsSearchFilter = (query || "").trim().toLowerCase();
+      renderAvailableSkillsCatalog(availableSkillsSearchFilter);
+    }
+
+    function filterAvailableToolsCatalog(query) {
+      availableToolsSearchFilter = (query || "").trim().toLowerCase();
+      renderAvailableToolsCatalog(availableToolsSearchFilter);
+    }
+
+    function openSkillDetailModalFromInspector() {
+      if (currentInspectedSkillId) {
+        openSkillDetailModal(currentInspectedSkillId);
+      } else {
+        showArchonToast("Bitte wähle zuerst einen Skill aus.", "info");
+      }
+    }
+
+    function openToolConfigModalFromInspector(event) {
+      if (currentInspectedToolId) {
+        openToolConfigModal(currentInspectedToolId, event);
+      } else {
+        showArchonToast("Bitte wähle zuerst ein Tool aus.", "info");
+      }
+    }
+
+    async function saveProfileChangesDirectly() {
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (!prof) return;
+      try {
+        const payload = {
+          id: prof.id,
+          old_id: prof.id,
+          name: prof.name || prof.person_name || "Agent",
+          person_name: prof.person_name || prof.name || "Agent",
+          callsign: prof.callsign || "",
+          category: prof.category || "1. Strategie, Führung & Lebensplanung",
+          description: prof.description || "",
+          avatar: prof.avatar || "/static/avatars/avatar_001.jpg",
+          prompt: prof.prompt || prof.system_prompt || "",
+          system_prompt: prof.prompt || prof.system_prompt || "",
+          provider: prof.provider || "openrouter",
+          model: prof.model || "deepseek/deepseek-v4-flash-0731",
+          reasoning_level: prof.reasoning_level || "high",
+          skills: Array.isArray(prof.skills) ? prof.skills : [],
+          tools: Array.isArray(prof.tools) ? prof.tools : []
+        };
+        const res = await fetch("/api/hermes/profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.status === "pending_owner_approval") {
+            showArchonToast(data.message || "Neue Tool-Freigabe wartet auf Telegram-Bestätigung.", "info");
+          } else if (data && data.profile && data.profile.prompt) {
+            prof.prompt = data.profile.prompt;
+            prof.system_prompt = data.profile.prompt;
+            const prevEl = document.getElementById("prof-edit-prompt-preview");
+            if (prevEl) prevEl.innerText = prof.prompt;
+            await loadInlineSoulMarkdown(prof.id);
+          }
+        }
+      } catch (err) {
+        console.warn("[Profile AutoSave] Failed to save skills/tools changes:", err);
+      }
+    }
+
+    function renderActiveProfileSkillsTags(skillsList = []) {
+      const tagsContainer = document.getElementById("prof-active-skills-tags");
+      const countEl = document.getElementById("prof-skills-count");
+      const summaryEl = document.getElementById("prof-skills-summary-badge");
+      if (!tagsContainer) return;
+      tagsContainer.innerHTML = "";
+      
+      const count = Array.isArray(skillsList) ? skillsList.length : 0;
+      if (countEl) countEl.innerText = `${count} aktiv`;
+      if (summaryEl) summaryEl.innerText = `${count} zugewiesen`;
+      
+      if (!skillsList || skillsList.length === 0) {
+        tagsContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-2 px-1">${profT('ui.agent_profiles.skills_none', 'Keine Fach-Skills zugeteilt. Klicke rechts auf (+) um Skills zuzuweisen.')}</span>`;
+      } else {
+        skillsList.forEach(skId => {
+          const skObj = hermesGlobalSkillsData.find(s => s.id === skId || s.id === `skill-${skId}`) || { id: skId, name: skId.replace(/-/g, ' ').replace(/^skill /i, ''), category: "Fachkompetenz" };
+          const isSelected = currentInspectedSkillId === skId || currentInspectedSkillId === skObj.id;
+          
+          const pill = document.createElement("div");
+          pill.className = `prof-skill-pill-assigned group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-emerald-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
+          pill.title = profT('ui.agent_profiles.skill_details_hint', 'Klicken für Details / SKILL.md Preview');
+          pill.onclick = () => selectSkillForInspector(skId);
+          
+          pill.innerHTML = `
+            <span class="truncate max-w-[130px]">${skObj.name}</span>
+            <button type="button" onclick="removeSkillFromProfile('${skId}', event)" class="w-4 h-4 rounded hover:bg-rose-500/20 text-rose-500 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="${profT('ui.agent_profiles.unassign', 'Zuweisung lösen')}">
+              −
+            </button>
+          `;
+          tagsContainer.appendChild(pill);
+        });
+      }
+      
+      renderAvailableSkillsCatalog(availableSkillsSearchFilter);
+      
+      if (!currentInspectedSkillId && skillsList && skillsList.length > 0) {
+        selectSkillForInspector(skillsList[0]);
+      } else if (currentInspectedSkillId) {
+        highlightInspectedSkillPill(currentInspectedSkillId);
+      }
+      
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderAvailableSkillsCatalog(filter = "") {
+      const container = document.getElementById("prof-available-skills-tags");
+      const countEl = document.getElementById("prof-skills-available-count");
+      if (!container) return;
+      container.innerHTML = "";
+      
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const activeSkills = prof && Array.isArray(prof.skills) ? prof.skills : [];
+      
+      let available = hermesGlobalSkillsData.filter(s => {
+        const id = s.id;
+        const altId = id.startsWith("skill-") ? id.replace(/^skill-/, '') : `skill-${id}`;
+        return !activeSkills.includes(id) && !activeSkills.includes(altId);
+      });
+      
+      if (filter) {
+        const q = filter.toLowerCase();
+        available = available.filter(s => 
+          (s.name && s.name.toLowerCase().includes(q)) ||
+          (s.id && s.id.toLowerCase().includes(q)) ||
+          (s.description && s.description.toLowerCase().includes(q)) ||
+          (s.category && s.category.toLowerCase().includes(q)) ||
+          (s.tags && s.tags.some(t => t.toLowerCase().includes(q)))
+        );
+      }
+      
+      if (countEl) countEl.innerText = `${available.length}`;
+      
+      if (available.length === 0) {
+        container.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-2 px-1">${profT('ui.agent_profiles.skills_catalog_empty', 'Keine weiteren Skills im Katalog gefunden.')}</span>`;
+        return;
+      }
+      
+      available.forEach(sk => {
+        const isSelected = currentInspectedSkillId === sk.id;
+        const pill = document.createElement("div");
+        pill.className = `prof-skill-pill-available group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-emerald-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
+        pill.title = profT('ui.agent_profiles.skill_details_hint', 'Klicken für Details / SKILL.md Preview');
+        pill.onclick = () => selectSkillForInspector(sk.id);
+        
+        pill.innerHTML = `
+          <span class="truncate max-w-[130px]">${sk.name}</span>
+          <button type="button" onclick="addSelectedSkillById('${sk.id}', event)" class="w-4 h-4 rounded hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="${profT('ui.agent_profiles.assign_skill', 'Skill zuweisen')}">
+            +
+          </button>
+        `;
+        container.appendChild(pill);
+      });
+      
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function selectSkillForInspector(skillId) {
+      if (!skillId) return;
+      currentInspectedSkillId = skillId;
+      highlightInspectedSkillPill(skillId);
+      
+      const titleEl = document.getElementById("prof-skill-inspector-title");
+      const catEl = document.getElementById("prof-skill-inspector-category");
+      const descEl = document.getElementById("prof-skill-inspector-desc");
+      const pathEl = document.getElementById("prof-skill-inspector-path");
+      const contentEl = document.getElementById("prof-skill-inspector-content");
+      
+      const skObj = hermesGlobalSkillsData.find(s => s.id === skillId || s.id === `skill-${skillId}`) || { id: skillId, name: skillId.replace(/-/g, ' '), category: "Allgemein", description: "" };
+      
+      if (titleEl) titleEl.innerText = skObj.name || skillId;
+      if (catEl) catEl.innerText = skObj.category || "Allgemein";
+      if (descEl) descEl.innerText = skObj.description || "Fach-Skill für den Agenten-Workflow.";
+      if (pathEl) pathEl.innerText = skObj.file_path || "";
+      if (contentEl) contentEl.innerText = "Lade Spezifikationsdatei (SKILL.md)...";
+      
+      try {
+        const res = await fetch(`/api/hermes/skills/${encodeURIComponent(skillId)}`);
+        if (res.ok) {
+          const full = await res.json();
+          if (titleEl) titleEl.innerText = full.name || skObj.name || skillId;
+          if (catEl) catEl.innerText = full.category || skObj.category || "Allgemein";
+          if (descEl) descEl.innerText = full.description || skObj.description || "Fach-Skill für den Agenten-Workflow.";
+          if (pathEl) pathEl.innerText = full.file_path || "";
+          if (contentEl) {
+            contentEl.innerText = full.content || full.description || "# Keine SKILL.md Datei gefunden.";
+          }
+        }
+      } catch (err) {
+        console.warn("Inspector load skill error:", err);
+        if (contentEl) contentEl.innerText = skObj.description || "Fehler beim Laden der Datei.";
+      }
+    }
+
+    function highlightInspectedSkillPill(skillId) {
+      document.querySelectorAll(".prof-skill-pill-assigned, .prof-skill-pill-available").forEach(el => {
+        el.classList.remove("border-emerald-500", "bg-emerald-500/10", "font-bold");
+        el.classList.add("border-[var(--border)]", "bg-[var(--card)]");
+      });
+      document.querySelectorAll(".prof-skill-pill-assigned, .prof-skill-pill-available").forEach(el => {
+        const btn = el.querySelector("button");
+        if (btn && btn.getAttribute("onclick") && btn.getAttribute("onclick").includes(`'${skillId}'`)) {
+          el.classList.remove("border-[var(--border)]", "bg-[var(--card)]");
+          el.classList.add("border-emerald-500", "bg-emerald-500/10", "font-bold");
+        }
+      });
+    }
+
+    async function addSelectedSkillById(skillId, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!skillId) return;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (!prof) {
+        showArchonToast("Bitte wähle zuerst einen Agenten aus.", "error");
+        return;
+      }
+      if (!prof.skills) prof.skills = [];
+      if (!prof.skills.includes(skillId)) {
+        prof.skills.push(skillId);
+        renderActiveProfileSkillsTags(prof.skills);
+        selectSkillForInspector(skillId);
+        
+        await saveProfileChangesDirectly();
+        const skObj = hermesGlobalSkillsData.find(s => s.id === skillId) || { name: skillId };
+        showArchonToast(`Skill '${skObj.name}' zugewiesen!`, "success");
+      }
+    }
+
+    async function removeSkillFromProfile(skillId, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!skillId) return;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (!prof || !prof.skills) return;
+      
+      prof.skills = prof.skills.filter(s => s !== skillId && s !== `skill-${skillId}`);
+      renderActiveProfileSkillsTags(prof.skills);
+      
+      await saveProfileChangesDirectly();
+      showArchonToast(`Zuweisung für '${skillId}' gelöst.`, "info");
+    }
+
+    function renderActiveProfileTools(toolsList = []) {
+      const tagsContainer = document.getElementById("prof-active-tools-tags");
+      const countEl = document.getElementById("prof-tools-count");
+      const summaryEl = document.getElementById("prof-tools-summary-badge");
+      if (!tagsContainer) return;
+      tagsContainer.innerHTML = "";
+      
+      const activeTools = Array.isArray(toolsList) && toolsList.length > 0 ? toolsList : (typeof DEFAULT_HERMES_TOOLS !== 'undefined' ? DEFAULT_HERMES_TOOLS : []);
+      const count = activeTools.length;
+      if (countEl) countEl.innerText = `${count} aktiv`;
+      if (summaryEl) summaryEl.innerText = `${count} zugewiesen`;
+      
+      if (count === 0) {
+        tagsContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-2 px-1">${profT('ui.agent_profiles.tools_none', 'Keine Tools zugeteilt. Klicke rechts auf (+) um Tools zuzuweisen.')}</span>`;
+      } else {
+        activeTools.forEach(toolId => {
+          const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { id: toolId, name: toolId, icon: "wrench", desc: "System Tool" };
+          const isSelected = currentInspectedToolId === toolId;
+          
+          const pill = document.createElement("div");
+          pill.className = `prof-tool-pill-assigned group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-blue-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
+          pill.title = profT('ui.agent_profiles.tool_details_hint', 'Klicken für Spezifikation & Parameter');
+          pill.onclick = () => selectToolForInspector(toolId);
+          
+          pill.innerHTML = `
+            <div class="flex items-center gap-1.5 min-w-0">
+              <i data-lucide="${tool.icon || 'wrench'}" class="w-3.5 h-3.5 shrink-0 text-blue-500"></i>
+              <span class="truncate max-w-[110px]">${tool.name}</span>
+            </div>
+            <button type="button" onclick="removeToolFromProfile('${tool.id}', event)" class="w-4 h-4 rounded hover:bg-rose-500/20 text-rose-500 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="${profT('ui.agent_profiles.unassign', 'Zuweisung lösen')}">
+              −
+            </button>
+          `;
+          tagsContainer.appendChild(pill);
+        });
+      }
+      
+      renderAvailableToolsCatalog(availableToolsSearchFilter);
+      
+      if (!currentInspectedToolId && activeTools.length > 0) {
+        selectToolForInspector(activeTools[0]);
+      } else if (currentInspectedToolId) {
+        highlightInspectedToolPill(currentInspectedToolId);
+      }
+      
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderAvailableToolsCatalog(filter = "") {
+      const container = document.getElementById("prof-available-tools-tags");
+      const countEl = document.getElementById("prof-tools-available-count");
+      if (!container) return;
+      container.innerHTML = "";
+      
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const activeTools = prof && Array.isArray(prof.tools) ? prof.tools : (typeof DEFAULT_HERMES_TOOLS !== 'undefined' ? DEFAULT_HERMES_TOOLS : []);
+      
+      let available = AVAILABLE_SYSTEM_TOOLS.filter(t => !activeTools.includes(t.id));
+      
+      if (filter) {
+        const q = filter.toLowerCase();
+        available = available.filter(t => 
+          t.name.toLowerCase().includes(q) ||
+          t.id.toLowerCase().includes(q) ||
+          (t.desc && t.desc.toLowerCase().includes(q)) ||
+          (t.subtools && t.subtools.some(st => st.toLowerCase().includes(q)))
+        );
+      }
+      
+      if (countEl) countEl.innerText = `${available.length}`;
+      
+      if (available.length === 0) {
+        container.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] font-mono italic py-2 px-1">${profT('ui.agent_profiles.tools_catalog_empty', 'Keine weiteren Tools im Katalog gefunden.')}</span>`;
+        return;
+      }
+      
+      available.forEach(tool => {
+        const isSelected = currentInspectedToolId === tool.id;
+        const pill = document.createElement("div");
+        pill.className = `prof-tool-pill-available group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-blue-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
+        pill.title = profT('ui.agent_profiles.tool_details_hint', 'Klicken für Spezifikation & Parameter');
+        pill.onclick = () => selectToolForInspector(tool.id);
+        
+        pill.innerHTML = `
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i data-lucide="${tool.icon || 'wrench'}" class="w-3.5 h-3.5 shrink-0 text-blue-500"></i>
+            <span class="truncate max-w-[110px]">${tool.name}</span>
+          </div>
+          <button type="button" onclick="addToolToProfileById('${tool.id}', event)" class="w-4 h-4 rounded hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="${profT('ui.agent_profiles.assign_tool', 'Tool zuweisen')}">
+            +
+          </button>
+        `;
+        container.appendChild(pill);
+      });
+      
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function selectToolForInspector(toolId) {
+      if (!toolId) return;
+      currentInspectedToolId = toolId;
+      highlightInspectedToolPill(toolId);
+      
+      const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { id: toolId, name: toolId, desc: "System Tool", mode: "direct", timeout: 60, subtools: [toolId] };
+      
+      const titleEl = document.getElementById("prof-tool-inspector-title");
+      const modeEl = document.getElementById("prof-tool-inspector-mode");
+      const descEl = document.getElementById("prof-tool-inspector-desc");
+      const timeoutEl = document.getElementById("prof-tool-inspector-timeout");
+      const subtoolsEl = document.getElementById("prof-tool-inspector-subtools");
+      
+      if (titleEl) titleEl.innerText = tool.name;
+      if (modeEl) {
+        modeEl.innerText = tool.mode === "sandbox" ? "Isolierte Sandbox" : "Direkter Host-Zugriff";
+        modeEl.className = `text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${tool.mode === 'sandbox' ? 'bg-amber-500/10 text-amber-600 border-amber-500/30' : 'bg-blue-500/10 text-blue-600 border-blue-500/30'}`;
+      }
+      if (descEl) descEl.innerText = tool.desc || "Keine detaillierte Beschreibung vorhanden.";
+      if (timeoutEl) timeoutEl.innerText = `Timeout: ${tool.timeout || 60}s | ID: ${tool.id}`;
+      
+      if (subtoolsEl) {
+        subtoolsEl.innerHTML = "";
+        const subs = tool.subtools && tool.subtools.length > 0 ? tool.subtools : [tool.id];
+        subs.forEach(st => {
+          const chip = document.createElement("span");
+          chip.className = "inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] shadow-2xs";
+          chip.innerHTML = `<i data-lucide="terminal" class="w-2.5 h-2.5 text-blue-500"></i> ${st}`;
+          subtoolsEl.appendChild(chip);
+        });
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function highlightInspectedToolPill(toolId) {
+      document.querySelectorAll(".prof-tool-pill-assigned, .prof-tool-pill-available").forEach(el => {
+        el.classList.remove("border-blue-500", "bg-blue-500/10", "font-bold");
+        el.classList.add("border-[var(--border)]", "bg-[var(--card)]");
+      });
+      document.querySelectorAll(".prof-tool-pill-assigned, .prof-tool-pill-available").forEach(el => {
+        const btn = el.querySelector("button");
+        if (btn && btn.getAttribute("onclick") && btn.getAttribute("onclick").includes(`'${toolId}'`)) {
+          el.classList.remove("border-[var(--border)]", "bg-[var(--card)]");
+          el.classList.add("border-blue-500", "bg-blue-500/10", "font-bold");
+        }
+      });
+    }
+
+    async function addToolToProfileById(toolId, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!toolId) return;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (!prof) {
+        showArchonToast("Bitte wähle zuerst einen Agenten aus.", "error");
+        return;
+      }
+      if (!prof.tools) prof.tools = [];
+      if (!prof.tools.includes(toolId)) {
+        prof.tools.push(toolId);
+        renderActiveProfileTools(prof.tools);
+        selectToolForInspector(toolId);
+        
+        await saveProfileChangesDirectly();
+        const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { name: toolId };
+        showArchonToast(`Tool '${tool.name}' zugewiesen!`, "success");
+      }
+    }
+
+    async function removeToolFromProfile(toolId, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!toolId) return;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (!prof || !prof.tools) return;
+      
+      prof.tools = prof.tools.filter(t => t !== toolId);
+      renderActiveProfileTools(prof.tools);
+      
+      await saveProfileChangesDirectly();
+      showArchonToast(`Tool '${toolId}' entfernt.`, "info");
+    }
+
+    function populateGlobalToolsDropdown(activeTools = []) {
+      // Legacy wrapper, UI nutzt jetzt verfügbare Spalte
+    }
+    function addSelectedToolToProfile() {
+      // Legacy wrapper
+    }
+    let currentConfiguringToolId = "";
+    function openToolConfigModal(toolId, event) {
+      if (event) event.stopPropagation();
+      currentConfiguringToolId = toolId;
+      const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { id: toolId, name: toolId, desc: "System Tool", mode: "direct", timeout: 60 };
+      
+      const titleEl = document.getElementById("tool-modal-title");
+      if (titleEl) titleEl.innerText = `Tool-Einstellungen: ${tool.name}`;
+      const idInput = document.getElementById("tool-modal-tool-id");
+      if (idInput) idInput.value = tool.id;
+      const nameInput = document.getElementById("tool-modal-name");
+      if (nameInput) nameInput.value = tool.name;
+      const descInput = document.getElementById("tool-modal-desc");
+      if (descInput) descInput.value = tool.desc || "";
+      const modeInput = document.getElementById("tool-modal-mode");
+      if (modeInput) modeInput.value = tool.mode || "direct";
+      const timeoutInput = document.getElementById("tool-modal-timeout");
+      if (timeoutInput) timeoutInput.value = tool.timeout || 60;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      const isCurrentlyActive = prof && prof.tools ? prof.tools.includes(toolId) : true;
+      const toggleEl = document.getElementById("tool-modal-active-toggle");
+      if (toggleEl) toggleEl.checked = isCurrentlyActive;
+      const configEl = document.getElementById("tool-modal-config");
+      if (configEl) {
+        const defaultConfig = {
+          enabled: isCurrentlyActive,
+          mode: tool.mode || "direct",
+          timeout: tool.timeout || 60,
+          env_vars: {},
+          max_retries: 3
+        };
+        configEl.value = JSON.stringify(defaultConfig, null, 2);
+      }
+      const modal = document.getElementById("tool-config-modal");
+      if (modal) modal.classList.remove("hidden");
+      if (window.lucide) lucide.createIcons();
+    }
+    function closeToolConfigModal() {
+      const modal = document.getElementById("tool-config-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+    function saveToolConfigFromModal() {
+      const toolId = document.getElementById("tool-modal-tool-id")?.value;
+      const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId);
+      if (tool) {
+        tool.desc = document.getElementById("tool-modal-desc")?.value.trim() || "";
+        tool.mode = document.getElementById("tool-modal-mode")?.value || "direct";
+        tool.timeout = parseInt(document.getElementById("tool-modal-timeout")?.value) || 60;
+      }
+      const isActive = document.getElementById("tool-modal-active-toggle")?.checked;
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (prof) {
+        if (!prof.tools) prof.tools = AVAILABLE_SYSTEM_TOOLS.map(t => t.id);
+        if (isActive && !prof.tools.includes(toolId)) {
+          prof.tools.push(toolId);
+        } else if (!isActive && prof.tools.includes(toolId)) {
+          prof.tools = prof.tools.filter(t => t !== toolId);
+        }
+        renderActiveProfileTools(prof.tools);
+      }
+      closeToolConfigModal();
+    }
+    async function openSkillDetailModal(skillId) {
+      const idEl = document.getElementById("skill-edit-id");
+      if (idEl) idEl.value = skillId;
+      const nameEl = document.getElementById("skill-edit-name");
+      const catEl = document.getElementById("skill-edit-category");
+      const tagsEl = document.getElementById("skill-edit-tags");
+      const descEl = document.getElementById("skill-edit-desc");
+      const contentEl = document.getElementById("skill-edit-content");
+      const titleEl = document.getElementById("skill-modal-title");
+      const resetBtn = document.getElementById("skill-modal-reset-btn");
+      if (titleEl) titleEl.innerText = `Skill: ${skillId}`;
+      if (contentEl) contentEl.value = "Lade Spezifikation...";
+      const modal = document.getElementById("skill-editor-modal");
+      if (modal) modal.classList.remove("hidden");
+      try {
+        const res = await fetch(`/api/hermes/skills/${encodeURIComponent(skillId)}`);
+        if (res.ok) {
+          const fullSkill = await res.json();
+          if (titleEl) titleEl.innerText = `Skill: ${fullSkill.name || skillId}`;
+          if (nameEl) nameEl.value = fullSkill.name || skillId;
+          if (catEl) catEl.value = fullSkill.category || "Allgemein";
+          if (tagsEl) tagsEl.value = (fullSkill.tags || []).join(", ");
+          if (descEl) descEl.value = fullSkill.description || "";
+          if (contentEl) contentEl.value = fullSkill.content || "";
+          if (resetBtn) {
+            resetBtn.disabled = !fullSkill.has_original_backup;
+            resetBtn.style.opacity = fullSkill.has_original_backup ? "1" : "0.5";
+            resetBtn.title = fullSkill.has_original_backup ? "Auf Originalzustand (.SKILL.md.orig) zurücksetzen" : "Noch keine Anpassung vorgenommen (Original ist aktiv)";
+          }
+        }
+      } catch (e) {
+        console.error("Error loading skill details:", e);
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+    function closeSkillDetailModal() {
+      const modal = document.getElementById("skill-editor-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+    async function resetSkillDetailsToOriginal() {
+      const skillId = document.getElementById("skill-edit-id")?.value;
+      if (!skillId) return;
+      if (!confirm(`Möchtest du den Skill '${skillId}' wirklich auf die Original-Version zurücksetzen?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/hermes/skills/${encodeURIComponent(skillId)}/reset`, {
+          method: "POST"
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showArchonToast(data.error || "Fehler beim Zurücksetzen.", "error");
+          return;
+        }
+        const nameEl = document.getElementById("skill-edit-name");
+        const catEl = document.getElementById("skill-edit-category");
+        const tagsEl = document.getElementById("skill-edit-tags");
+        const descEl = document.getElementById("skill-edit-desc");
+        const contentEl = document.getElementById("skill-edit-content");
+        const resetBtn = document.getElementById("skill-modal-reset-btn");
+        if (nameEl && data.name) nameEl.value = data.name;
+        if (catEl && data.category) catEl.value = data.category;
+        if (tagsEl && data.tags) tagsEl.value = (data.tags || []).join(", ");
+        if (descEl && data.description) descEl.value = data.description;
+        if (contentEl && data.content) contentEl.value = data.content;
+        if (resetBtn) {
+          resetBtn.disabled = true;
+          resetBtn.style.opacity = "0.5";
+          resetBtn.title = "Bereits im Originalzustand";
+        }
+        await loadHermesSkillsFromServer();
+        showArchonToast("Skill erfolgreich auf Original zurückgesetzt!", "success");
+      } catch (e) {
+        console.error("Reset skill error:", e);
+        showArchonToast(`Fehler: ${e.message}`, "error");
+      }
+    }
+    async function saveSkillDetailsFromModal() {
+      const skillId = document.getElementById("skill-edit-id")?.value;
+      const name = document.getElementById("skill-edit-name")?.value.trim();
+      const category = document.getElementById("skill-edit-category")?.value.trim();
+      const tags = (document.getElementById("skill-edit-tags")?.value || "").split(",").map(t => t.trim()).filter(Boolean);
+      const description = document.getElementById("skill-edit-desc")?.value.trim();
+      const content = document.getElementById("skill-edit-content")?.value;
+      if (!name) {
+        alert("Bitte gib einen Skill-Namen ein.");
+        return;
+      }
+      const payload = { id: skillId, name, category, tags, description, content };
+      try {
+        const res = await fetch(`/api/hermes/skills/${encodeURIComponent(skillId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          alert("Fehler beim Speichern der Skill-Spezifikation.");
+          return;
+        }
+        await loadHermesSkillsFromServer();
+        populateGlobalSkillsDropdown();
+        
+        const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+        if (prof && prof.skills) {
+          renderActiveProfileSkillsTags(prof.skills);
+        }
+        closeSkillDetailModal();
+        showArchonToast(`Skill '${name}' erfolgreich gespeichert!`, "success");
+      } catch (e) {
+        console.error("Save skill error:", e);
+        showArchonToast(`Fehler: ${e.message}`, "error");
+      }
+    }
+    function addSelectedSkillToProfile() {
+      const select = document.getElementById("prof-add-skill-select");
+      const skillId = select?.value;
+      if (skillId) addSelectedSkillById(skillId);
+    }
+    function showArchonToast(msg, type = "success") {
+      let container = document.getElementById("archon-global-toast-container");
+      if (!container) {
+        container = document.createElement("div");
+        container.id = "archon-global-toast-container";
+        container.className = "fixed bottom-5 right-5 z-[999999] flex flex-col gap-2 pointer-events-none";
+        document.body.appendChild(container);
+      }
+      const toast = document.createElement("div");
+      const isErr = type === "error";
+      toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl shadow-2xl border text-xs font-mono font-bold flex items-center gap-2 transition-all duration-300 transform translate-y-2 opacity-0 ${
+        isErr 
+          ? 'bg-rose-50 text-rose-800 border-rose-300' 
+          : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+      }`;
+      toast.innerHTML = `<span>${isErr ? '❌' : '✅'}</span> <span>${escapeHtml(msg)}</span>`;
+      container.appendChild(toast);
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 350);
+      }, 4000);
+    }
+    async function saveCurrentProfile(event) {
+      if (event) {
+        try { event.preventDefault(); event.stopPropagation(); } catch(e){}
+      }
+      const btn = document.getElementById("btn-save-profile");
+      const originalBtnHtml = btn ? btn.innerHTML : '<i data-lucide="save" class="w-3.5 h-3.5"></i> ' + profT('ui.agent_profiles.save', 'Speichern');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<svg class="animate-spin -ml-1 mr-1.5 h-3.5 w-3.5 text-white dark:text-zinc-900 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ${profT('ui.agent_profiles.saving', 'Speichere...')}`;
+      }
+      try {
+        const personName = (document.getElementById("prof-edit-person-name")?.value || "").trim();
+        const name = (document.getElementById("prof-edit-name")?.value || "").trim();
+        let id = (document.getElementById("prof-edit-id")?.value || "").trim();
+        const category = document.getElementById("prof-edit-category")?.value || "1. Strategie, Führung & Lebensplanung";
+        const description = (document.getElementById("prof-edit-desc")?.value || "").trim();
+        const avatar = (document.getElementById("prof-edit-avatar")?.value || "").trim() || "/static/avatars/avatar_001.jpg";
+        const prof = Array.isArray(hermesProfilesData) ? hermesProfilesData.find(p => p.id === currentSelectedProfileId) : null;
+        const promptEl = document.getElementById("prof-edit-prompt");
+        const prompt = (promptEl?.value || prof?.prompt || prof?.system_prompt || "").trim();
+        if (!name && !personName) {
+          showArchonToast("Bitte persönlichen Namen oder Stellenbeschreibung eingeben.", "error");
+          if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHtml; if (window.lucide) lucide.createIcons(); }
+          return;
+        }
+        const finalRoleName = name || personName;
+        const finalPersonName = personName || name;
+        if (!id) {
+          id = finalRoleName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        }
+        const old_id = currentSelectedProfileId;
+        let activeSkills = [];
+        let activeTools = typeof DEFAULT_HERMES_TOOLS !== 'undefined' ? [...DEFAULT_HERMES_TOOLS] : [];
+        if (prof) {
+          if (Array.isArray(prof.skills)) activeSkills = [...prof.skills];
+          if (Array.isArray(prof.tools)) activeTools = [...prof.tools];
+        }
+        const providerSelect = document.getElementById("prof-edit-provider");
+        const provider = providerSelect?.value || (prof?.provider || "openrouter");
+        const modelSelect = document.getElementById("prof-edit-model");
+        const model = modelSelect?.value || (prof?.model || "deepseek/deepseek-v4-flash-0731");
+        const reasoningSelect = document.getElementById("prof-edit-reasoning");
+        const reasoning_level = reasoningSelect?.value || (prof?.reasoning_level || "high");
+        const callsign = (document.getElementById("prof-edit-callsign")?.value || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+        const payload = {
+          id,
+          old_id,
+          name: finalRoleName,
+          person_name: finalPersonName,
+          callsign,
+          category,
+          description,
+          avatar,
+          prompt: prompt || prof?.prompt || prof?.system_prompt || "",
+          system_prompt: prompt || prof?.prompt || prof?.system_prompt || "",
+          provider,
+          model,
+          reasoning_level,
+          skills: activeSkills,
+          tools: activeTools
+        };
+        const res = await fetch("/api/hermes/profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          let errDetail = "Fehler beim Speichern des Profils.";
+          try {
+            const errJson = await res.json();
+            if (errJson.detail) {
+              errDetail = typeof errJson.detail === "string" ? errJson.detail : JSON.stringify(errJson.detail);
+            }
+          } catch(e) {}
+          showArchonToast(`Fehler (${res.status}): ${errDetail}`, "error");
+          if (btn) {
+            btn.innerHTML = `<span class="text-rose-500 font-bold">⚠️ ${profT('ui.agent_profiles.label_error', 'Fehler')}</span>`;
+            setTimeout(() => { if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHtml; if (window.lucide) lucide.createIcons(); } }, 3000);
+          }
+          return;
+        }
+        // PERMISSION-GATE (12.10.2026): Rechte-Erweiterung braucht die
+        // Owner-Bestaetigung per Telegram - NICHTS wird gespeichert.
+        let _gateData = null;
+        try { _gateData = await res.clone().json(); } catch(e) {}
+        if (_gateData && _gateData.status === "pending_owner_approval" && _gateData.gate_id && confirm(`🔐 Sicherheits-Gate (${_gateData.gate_id}):\n${_gateData.message || "Neue Tool-Rechte erfordern Owner-Bestätigung."}\n\nMöchtest du diese Rechte-Erweiterung direkt hier im Browser freigeben?`)) { await fetch(`/api/permission-gates/${encodeURIComponent(_gateData.gate_id)}/decide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "approve" }) }); showArchonToast("✅ Rechte-Gate direkt freigegeben & Profil gespeichert!", "success"); } else if (_gateData && _gateData.status === "pending_owner_approval") {
+          showArchonToast("🔐 " + (_gateData.message || "Warte auf deine Telegram-Bestätigung."), "info");
+          if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHtml; if (window.lucide) lucide.createIcons(); }
+          return;
+        }
+        // Parallel SOUL.md und Personalakte mitspeichern wenn Inhalte editiert wurden
+        const soulEditor = document.getElementById("prof-soul-inline-editor");
+        if (soulEditor && soulEditor.value.trim()) {
+          fetch(`/api/v1/hermes/soul/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ markdown: soulEditor.value })
+          }).catch(console.error);
+        }
+        const paEditor = document.getElementById("pa-inline-raw-markdown");
+        if (paEditor && paEditor.value.trim()) {
+          fetch(`/api/v1/hr/personalakte/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ markdown: paEditor.value })
+          }).catch(console.error);
+        }
+        currentSelectedProfileId = id;
+        try { localStorage.setItem("archon_active_profile_id", id); } catch(e){}
+        await loadHermesProfilesFromServer();
+        renderHermesProfilesList();
+        selectProfileForEditor(id);
+        if (typeof loadMasterChatProfiles === "function") {
+          await loadMasterChatProfiles();
+        }
+        // Synchronisiere auch das geladene Organigramm im Speicher
+        if (typeof currentHierarchyData !== "undefined" && currentHierarchyData && Array.isArray(currentHierarchyData.nodes)) {
+          const orgNode = currentHierarchyData.nodes.find(n => n.id === id || n.id === old_id);
+          if (orgNode) {
+            orgNode.id = id;
+            orgNode.name = finalRoleName;
+            orgNode.role = finalRoleName;
+            orgNode.person_name = finalPersonName;
+            orgNode.avatar = avatar;
+            orgNode.provider = provider;
+            orgNode.model = model;
+            orgNode.reasoning_level = reasoning_level;
+            if (typeof renderOpsOrgFlowchart === "function") {
+              try { renderOpsOrgFlowchart(); } catch(e) {}
+            }
+          }
+        }
+        if (btn) {
+          btn.innerHTML = `<span class="text-emerald-400 font-bold">✓ ${profT('ui.agent_profiles.label_saved', 'Gespeichert!')}</span>`;
+          setTimeout(() => {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = originalBtnHtml;
+              if (window.lucide) lucide.createIcons();
+            }
+          }, 2500);
+        }
+      } catch (e) {
+        console.error("Save profile error:", e);
+        showArchonToast(`Verbindungsfehler: ${e.message}`, "error");
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span class="text-rose-500 font-bold">⚠️ ${profT('ui.agent_profiles.label_error', 'Fehler')}</span>`;
+          setTimeout(() => { if (btn) { btn.innerHTML = originalBtnHtml; if (window.lucide) lucide.createIcons(); } }, 3000);
+        }
+      }
+    }
+
+    async function onProfileCallsignChanged(val) {
+      const cleanVal = (val || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const input = document.getElementById("prof-edit-callsign");
+      if (input) input.value = cleanVal;
+      const statusEl = document.getElementById("prof-callsign-status");
+      if (statusEl) {
+        statusEl.classList.remove("hidden");
+        statusEl.innerText = "⏳ Speichere...";
+      }
+      try {
+        const prof = Array.isArray(hermesProfilesData) ? hermesProfilesData.find(p => p.id === currentSelectedProfileId) : null;
+        if (!prof) return;
+        prof.callsign = cleanVal;
+        await saveCurrentProfile(null);
+        if (statusEl) {
+          statusEl.innerText = "✓ Gespeichert";
+          setTimeout(() => { if (statusEl) statusEl.classList.add("hidden"); }, 2000);
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.innerText = "⚠️ Fehler";
+          setTimeout(() => { if (statusEl) statusEl.classList.add("hidden"); }, 3000);
+        }
+      }
+    }
+    window.onProfileCallsignChanged = onProfileCallsignChanged;
+// --- GLOBAL EXPORTS FR DOM-EVENTS ---
+window.onAgentTabProviderChange = typeof onAgentTabProviderChange !== 'undefined' ? onAgentTabProviderChange : null;
+window.onAgentTabModelChange = typeof onAgentTabModelChange !== 'undefined' ? onAgentTabModelChange : null;
+window.handleAgentTabFileSelected = typeof handleAgentTabFileSelected !== 'undefined' ? handleAgentTabFileSelected : null;
+window.removeAgentTabAttachment = typeof removeAgentTabAttachment !== 'undefined' ? removeAgentTabAttachment : null;
+window.sendAgentTabChatMessage = typeof sendAgentTabChatMessage !== 'undefined' ? sendAgentTabChatMessage : null;
+window.autoResizeAgentTabInput = typeof autoResizeAgentTabInput !== 'undefined' ? autoResizeAgentTabInput : null;
+window.toggleAgentTabDictation = typeof toggleAgentTabDictation !== 'undefined' ? toggleAgentTabDictation : null;
+window.onAgentHeaderProviderChange = typeof onAgentHeaderProviderChange !== 'undefined' ? onAgentHeaderProviderChange : null;
+window.onAgentHeaderModelChange = typeof onAgentHeaderModelChange !== 'undefined' ? onAgentHeaderModelChange : null;
+window.onProfileCategoryChange = typeof onProfileCategoryChange !== 'undefined' ? onProfileCategoryChange : null;
+window.onProfileProviderChange = typeof onProfileProviderChange !== 'undefined' ? onProfileProviderChange : null;
+window.filterProfilesByCategory = typeof filterProfilesByCategory !== 'undefined' ? filterProfilesByCategory : null;
+window.onProfileModelDropdownChange = typeof onProfileModelDropdownChange !== 'undefined' ? onProfileModelDropdownChange : null;
+window.updateProfileModelCost = typeof updateProfileModelCost !== 'undefined' ? updateProfileModelCost : null;
+window.handleAvatarFileSelected = typeof handleAvatarFileSelected !== 'undefined' ? handleAvatarFileSelected : null;
+window.loadAgentTabChatMessages = typeof loadAgentTabChatMessages !== 'undefined' ? loadAgentTabChatMessages : null;
+window.switchAgentCadreTab = typeof switchAgentCadreTab !== 'undefined' ? switchAgentCadreTab : null;
+window.selectProfileForEditor = typeof selectProfileForEditor !== 'undefined' ? selectProfileForEditor : null;
+window.applyProfileModelSelection = typeof applyProfileModelSelection !== 'undefined' ? applyProfileModelSelection : null;
+window.renameCurrentAgentTabSession = typeof renameCurrentAgentTabSession !== 'undefined' ? renameCurrentAgentTabSession : null;
+window.loadAgentTabChatSessions = typeof loadAgentTabChatSessions !== 'undefined' ? loadAgentTabChatSessions : null;
+window.updateAgentChatSessionsDropdown = typeof loadAgentTabChatSessions !== 'undefined' ? loadAgentTabChatSessions : null;
+
+window.addSelectedSkillById = typeof addSelectedSkillById !== 'undefined' ? addSelectedSkillById : null;
+window.removeSkillFromProfile = typeof removeSkillFromProfile !== 'undefined' ? removeSkillFromProfile : null;
+window.selectSkillForInspector = typeof selectSkillForInspector !== 'undefined' ? selectSkillForInspector : null;
+window.filterAvailableSkillsCatalog = typeof filterAvailableSkillsCatalog !== 'undefined' ? filterAvailableSkillsCatalog : null;
+window.openSkillDetailModalFromInspector = typeof openSkillDetailModalFromInspector !== 'undefined' ? openSkillDetailModalFromInspector : null;
+
+window.addToolToProfileById = typeof addToolToProfileById !== 'undefined' ? addToolToProfileById : null;
+window.removeToolFromProfile = typeof removeToolFromProfile !== 'undefined' ? removeToolFromProfile : null;
+window.selectToolForInspector = typeof selectToolForInspector !== 'undefined' ? selectToolForInspector : null;
+window.filterAvailableToolsCatalog = typeof filterAvailableToolsCatalog !== 'undefined' ? filterAvailableToolsCatalog : null;
+window.openToolConfigModalFromInspector = typeof openToolConfigModalFromInspector !== 'undefined' ? openToolConfigModalFromInspector : null;
+
+    function onAgentTabReasoningChange(val) {
+      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
+      if (prof) prof.reasoning_level = val;
+      const reasoningSelect = document.getElementById("prof-edit-reasoning");
+      if (reasoningSelect) reasoningSelect.value = val;
+      if (currentSelectedProfileId) {
+        const provider = currentAgentTabProvider || (prof && prof.provider) || "openrouter";
+        const model = currentAgentTabModel || (prof && prof.model) || "auto/best-coding";
+        fetch(`/api/hermes/profiles/${encodeURIComponent(currentSelectedProfileId)}/model`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, model, reasoning_level: val })
+        }).catch(e => console.warn("[Reasoning] Auto-save error:", e));
+      }
+    }
+    window.onAgentTabReasoningChange = onAgentTabReasoningChange;
+
+    // =========================================================================
+    // AGENT SCORECARD & OPERATOR NOTIZEN (t-f257ba)
+    // =========================================================================
+
+    window.loadAgentScorecard = async function(agentId) {
+      const id = agentId || currentSelectedProfileId || "default";
+      try {
+        const res = await fetch(`/api/operations/agents/${id}/scorecard`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const sc = json.scorecard;
+        if (!sc) return;
+
+        // 1. Update 6 KPI Tiles
+        const elSuccess = document.getElementById("pa-kpi-success");
+        const elSuccessSub = document.getElementById("pa-kpi-success-sub");
+        if (elSuccess) elSuccess.innerText = `${sc.success_rate}%`;
+        if (elSuccessSub) elSuccessSub.innerText = `${sc.completed_tasks} / ${sc.total_tasks} Tasks`;
+
+        const elTokens = document.getElementById("pa-kpi-tokens");
+        const elTokensSub = document.getElementById("pa-kpi-tokens-sub");
+        const tokenK = sc.total_tokens >= 1000 ? (sc.total_tokens / 1000).toFixed(1) + 'k' : sc.total_tokens;
+        if (elTokens) elTokens.innerText = `${tokenK} Tok`;
+        if (elTokensSub) elTokensSub.innerText = `$${sc.avg_cost.toFixed(2)} / Task`;
+
+        const elSpeed = document.getElementById("pa-kpi-speed");
+        const elSpeedSub = document.getElementById("pa-kpi-speed-sub");
+        if (elSpeed) elSpeed.innerText = sc.avg_duration_minutes > 0 ? `${sc.avg_duration_minutes}m` : `< 1m`;
+        if (elSpeedSub) elSpeedSub.innerText = `Ø Durchlaufzeit`;
+
+        const elFeedback = document.getElementById("pa-kpi-feedback");
+        const elFeedbackSub = document.getElementById("pa-kpi-feedback-sub");
+        if (elFeedback) elFeedback.innerText = `${sc.feedback_rate}%`;
+        if (elFeedbackSub) elFeedbackSub.innerText = `${sc.feedback_count} Ratings`;
+
+        const elAutonomy = document.getElementById("pa-kpi-autonomy");
+        const elAutonomySub = document.getElementById("pa-kpi-autonomy-sub");
+        if (elAutonomy) elAutonomy.innerText = `${sc.autonomy_rate}%`;
+        if (elAutonomySub) elAutonomySub.innerText = `First-Pass Rate`;
+
+        const elLearnings = document.getElementById("pa-kpi-learnings");
+        const elLearningsSub = document.getElementById("pa-kpi-learnings-sub");
+        if (elLearnings) elLearnings.innerText = sc.learnings_count;
+        if (elLearningsSub) elLearningsSub.innerText = `Heuristiken`;
+
+        // 2. Projects Badges
+        const projContainer = document.getElementById("pa-scorecard-projects");
+        if (projContainer) {
+          if (!sc.projects || sc.projects.length === 0) {
+            projContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] italic">${profT('ui.agent_profiles.scorecard_projects_empty', 'Keine Projekte verknüpft')}</span>`;
+          } else {
+            projContainer.innerHTML = sc.projects.map(p => `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] font-bold">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> ${escapeHtml(p)}
+              </span>
+            `).join('');
+          }
+        }
+
+        // 3. Recent Milestones
+        const mileContainer = document.getElementById("pa-scorecard-milestones");
+        if (mileContainer) {
+          if (!sc.recent_tasks || sc.recent_tasks.length === 0) {
+            mileContainer.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] italic">${profT('ui.agent_profiles.scorecard_tasks_empty', 'Keine aktiven Aufgaben')}</span>`;
+          } else {
+            mileContainer.innerHTML = sc.recent_tasks.map(t => `
+              <div class="flex items-center justify-between gap-1 p-1 rounded hover:bg-[var(--secondary)]/50">
+                <span class="truncate font-medium text-[var(--foreground)]">${escapeHtml(t.title)}</span>
+                <span class="px-1.5 py-0.2 rounded text-[8.5px] uppercase font-bold bg-[var(--secondary)] border border-[var(--border)] shrink-0">${t.status}</span>
+              </div>
+            `).join('');
+          }
+        }
+
+        // 4. Operator Notes
+        const notesInput = document.getElementById("pa-operator-notes");
+        if (notesInput) {
+          notesInput.value = sc.operator_notes || "";
+        }
+
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        console.error("Scorecard error:", err);
+      }
+    };
+
+    window.refreshAgentScorecard = function() {
+      loadAgentScorecard();
+    };
+
+    window.saveOperatorNotes = async function() {
+      const id = currentSelectedProfileId || "default";
+      const notes = document.getElementById("pa-operator-notes")?.value || "";
+      try {
+        const res = await fetch(`/api/operations/agents/${id}/operator-notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notes })
+        });
+        if (res.ok) {
+          if (typeof showArchonToast === 'function') {
+            showArchonToast("Operator-Beurteilung in Obsidian Personalakte gespeichert!", "success");
+          } else {
+            alert("Operator-Beurteilung in Obsidian Personalakte gespeichert!");
+          }
+          loadInlinePersonalakte(id);
+        } else {
+          alert("Fehler beim Speichern der Notizen.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Netzwerkfehler.");
+      }
+    };
+
+
+
+    // =========================================================================
+    // CADRE BOT SCREEN CONTROLLER (INTERAKTIVER DESKTOP IM AGENTENKADER)
+    // =========================================================================
+    let cadreBotScreenAuthorized = false;
+    let cadreBotScreenFullscreen = false;
+    let cadreBotScreenA11yActive = true;
+    let cadrePbDRecordingActive = false;
+    let cadrePbDRecordedSteps = 0;
+    let cursorDemoTimer = null;
+    let cursorCurrentPos = { x: 50, y: 50 };
+
+    function toggleCadreBotScreenA11y() {
+      cadreBotScreenA11yActive = !cadreBotScreenA11yActive;
+      const dot = document.getElementById("dot-botscreen-a11y");
+      const badge = document.getElementById("badge-botscreen-a11y");
+      const btn = document.getElementById("btn-cadre-botscreen-a11y");
+
+      if (cadreBotScreenA11yActive) {
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+        if (badge) {
+          badge.className = "text-[9px] px-1 py-0.2 rounded bg-emerald-500/30 text-emerald-300 font-bold";
+          badge.innerText = "-85%";
+        }
+        if (btn) btn.className = "px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-mono text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-2xs";
+        if (typeof showArchonToast === 'function') {
+          showArchonToast("🌲 a11y Observation Pruning aktiviert: 85% Token-Reduktion!", "info");
+        }
+      } else {
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-zinc-500";
+        if (badge) {
+          badge.className = "text-[9px] px-1 py-0.2 rounded bg-zinc-700 text-zinc-400 font-bold";
+          badge.innerText = "Inaktiv";
+        }
+        if (btn) btn.className = "px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] font-mono text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-2xs";
+        if (typeof showArchonToast === 'function') {
+          showArchonToast("⚠️ a11y Pruning deaktiviert: Roher DOM-Stream aktiv.", "warning");
+        }
+      }
+    }
+
+    // --- PROGRAMMING BY DEMONSTRATION (PbD) RECORDER ---
+    async function toggleBotScreenPbDRecording() {
+      const btn = document.getElementById("btn-cadre-botscreen-record");
+      const dot = document.getElementById("dot-botscreen-record");
+      const label = document.getElementById("label-botscreen-record");
+      const badge = document.getElementById("badge-botscreen-record-count");
+      const banner = document.getElementById("cadre-botscreen-pbd-banner");
+      const urlInput = document.getElementById("cadre-botscreen-url");
+      const currentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "default";
+
+      if (!cadrePbDRecordingActive) {
+        // Start Recording
+        const title = prompt("Titel für diesen Workflow / Skill:", "Bewerber sichten & filtern") || "Demonstration_" + Date.now();
+        try {
+          const res = await fetch("/api/operations/bot-screen/pbd/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: title,
+              target_url: urlInput ? urlInput.value : "",
+              creator_agent: currentId
+            })
+          });
+          const data = await res.json();
+          cadrePbDRecordingActive = true;
+          cadrePbDRecordedSteps = 0;
+
+          if (btn) btn.className = "px-3 py-1.5 rounded-lg border border-rose-500 bg-rose-600 hover:bg-rose-500 text-white font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md animate-pulse";
+          if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-white";
+          if (label) label.innerText = "⏹️ Aufnahme stoppen & Skill erzeugen";
+          if (badge) {
+            badge.classList.remove("hidden");
+            badge.innerText = "0 Steps";
+          }
+          if (banner) banner.classList.remove("hidden");
+
+          attachCanvasDemonstrationListeners();
+
+          if (typeof showArchonToast === 'function') {
+            showArchonToast("🔴 PbD-Aufnahme gestartet! Klicke und bediene nun die Elemente.", "info");
+          }
+        } catch (e) {
+          alert("Fehler beim Starten der PbD-Aufnahme: " + e.message);
+        }
+      } else {
+        // Stop & Synthesize
+        const defaultSlug = "auto_workflow_" + Date.now().toString().slice(-4);
+        const skillSlug = prompt("Eindeutiger Bezeichner für den neuen Skill (z. B. 'auto_job_screener'):", defaultSlug) || defaultSlug;
+
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = `<span class="animate-spin mr-1">⚙️</span> ${profT('ui.agent_profiles.synthesize_skill', 'Synthetisiere Skill...')}`;
+        }
+
+        try {
+          const res = await fetch("/api/operations/bot-screen/pbd/stop-and-synthesize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ skill_slug: skillSlug })
+          });
+          const data = await res.json();
+
+          cadrePbDRecordingActive = false;
+          detachCanvasDemonstrationListeners();
+
+          if (btn) {
+            btn.disabled = false;
+            btn.className = "px-3 py-1.5 rounded-lg border border-purple-500/50 bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs";
+            btn.innerHTML = `<span id="dot-botscreen-record" class="w-2 h-2 rounded-full bg-rose-500"></span><span id="label-botscreen-record">${profT('ui.agent_profiles.record_start', 'Vormachen & Aufnehmen')}</span><span id="badge-botscreen-record-count" class="hidden px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9.5px]">0 Steps</span>`;
+          }
+          if (banner) banner.classList.add("hidden");
+
+          if (data.status === "synthesized") {
+            const msg = `🎉 Neuer Skill '${data.skill_name}' erfolgreich gelernt!\n\n` +
+                        `• ${data.steps_count} Aktionen im Ablauf gespeichert\n` +
+                        `• Manifest: ${data.skill_path}\n` +
+                        `• Ghost-Cursor & Gauss-Jitter automatisch integriert.\n\n` +
+                        `Der Skill steht deinen Agenten ab sofort zur Verfügung!`;
+            if (typeof showArchonToast === 'function') {
+              showArchonToast(`Skill '${data.skill_name}' erfolgreich synthetisiert!`, "success");
+            }
+            alert(msg);
+          } else {
+            alert("Synthese-Rückmeldung: " + (data.message || JSON.stringify(data)));
+          }
+        } catch (e) {
+          alert("Fehler bei der Skill-Synthese: " + e.message);
+        }
+      }
+    }
+
+    async function addPbDCommentary() {
+      const input = document.getElementById("pbd-step-commentary");
+      const text = input ? input.value.trim() : "";
+      if (!text || !cadrePbDRecordingActive) return;
+
+      try {
+        await fetch("/api/operations/bot-screen/pbd/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action_type: "voice_instruction",
+            details: { commentary_type: "user_intent" },
+            commentary: text
+          })
+        });
+        cadrePbDRecordedSteps++;
+        const badge = document.getElementById("badge-botscreen-record-count");
+        if (badge) badge.innerText = `${cadrePbDRecordedSteps} Steps`;
+        input.value = "";
+        if (typeof showArchonToast === 'function') {
+          showArchonToast("Kommentar angeheftet: " + text, "info");
+        }
+      } catch (e) {
+        console.error("Kommentar konnte nicht gesendet werden:", e);
+      }
+    }
+
+    function handleCanvasDemonstrationClick(e) {
+      if (!cadrePbDRecordingActive) return;
+      const canvas = document.getElementById("cadre-botscreen-canvas");
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const xPercent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+      const yPercent = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+
+      const targetText = e.target ? (e.target.innerText || e.target.tagName).slice(0, 30) : "Element";
+
+      fetch("/api/operations/bot-screen/pbd/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action_type: "click",
+          details: {
+            x: xPercent,
+            y: yPercent,
+            target: targetText,
+            tag: e.target.tagName.toLowerCase()
+          },
+          commentary: `Klick auf ${targetText}`
+        })
+      }).then(() => {
+        cadrePbDRecordedSteps++;
+        const badge = document.getElementById("badge-botscreen-record-count");
+        if (badge) badge.innerText = `${cadrePbDRecordedSteps} Steps`;
+      }).catch(() => {});
+    }
+
+    function attachCanvasDemonstrationListeners() {
+      const canvas = document.getElementById("cadre-botscreen-canvas");
+      if (canvas) {
+        canvas.addEventListener("click", handleCanvasDemonstrationClick, true);
+      }
+    }
+
+    function detachCanvasDemonstrationListeners() {
+      const canvas = document.getElementById("cadre-botscreen-canvas");
+      if (canvas) {
+        canvas.removeEventListener("click", handleCanvasDemonstrationClick, true);
+      }
+    }
+
+    // --- BIOMECHANISCHE BÉZIER-ANIMATION DES AGENTEN-MAUSZEIGERS ---
+    function animateAgentCursorTrajectory(targetX, targetY, isClick = false, labelText = null, onComplete = null) {
+      const cursor = document.getElementById("botscreen-agent-cursor");
+      const badge = document.getElementById("botscreen-cursor-badge");
+      if (!cursor) return;
+
+      cursor.classList.remove("hidden");
+      if (labelText && badge) badge.innerText = labelText;
+
+      const startX = cursorCurrentPos.x;
+      const startY = cursorCurrentPos.y;
+
+      // Berechne kubische Bézier-Kontrollpunkte mit Fitts's Law
+      const dx = targetX - startX;
+      const dy = targetY - startY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < 2) {
+        setAgentCursorPosition(targetX, targetY, isClick, labelText);
+        cursorCurrentPos = { x: targetX, y: targetY };
+        if (onComplete) onComplete();
+        return;
+      }
+
+      // Gauss-Jitter im Zielpunkt (±1.5%)
+      const jitterX = targetX + (Math.random() - 0.5) * 2.5;
+      const jitterY = targetY + (Math.random() - 0.5) * 2.5;
+
+      // Seitlicher Wölbungs-Versatz für natürliche Bogenform
+      const normX = -dy / dist;
+      const normY = dx / dist;
+      const curvature = (Math.random() - 0.5) * 14;
+
+      const p1x = startX + dx * 0.3 + normX * curvature;
+      const p1y = startY + dy * 0.3 + normY * curvature;
+      const p2x = startX + dx * 0.7 + normX * (curvature * 0.6);
+      const p2y = startY + dy * 0.7 + normY * (curvature * 0.6);
+
+      const totalFrames = Math.max(16, Math.min(32, Math.round(dist * 0.65)));
+      let frame = 0;
+
+      function step() {
+        frame++;
+        const t = frame / totalFrames;
+        // Ease-in-out S-Kurve
+        const eased = t * t * (3 - 2 * t);
+        const omt = 1 - eased;
+        const omt2 = omt * omt;
+        const omt3 = omt2 * omt;
+        const t2 = eased * eased;
+        const t3 = t2 * eased;
+
+        const curX = omt3 * startX + 3 * omt2 * eased * p1x + 3 * omt * t2 * p2x + t3 * jitterX;
+        const curY = omt3 * startY + 3 * omt2 * eased * p1y + 3 * omt * t2 * p2y + t3 * jitterY;
+
+        cursor.style.left = `${Math.max(4, Math.min(96, curX))}%`;
+        cursor.style.top = `${Math.max(4, Math.min(96, curY))}%`;
+
+        if (frame < totalFrames) {
+          requestAnimationFrame(step);
+        } else {
+          cursorCurrentPos = { x: jitterX, y: jitterY };
+          if (isClick) {
+            const ripple = document.getElementById("botscreen-cursor-ripple");
+            if (ripple) {
+              ripple.classList.remove("hidden");
+              setTimeout(() => ripple.classList.add("hidden"), 550);
+            }
+          }
+          if (onComplete) onComplete();
+        }
+      }
+
+      requestAnimationFrame(step);
+    }
+
+    function navigateCadreBotScreen() {
+      const urlInput = document.getElementById("cadre-botscreen-url");
+      const titleEl = document.getElementById("cadre-botscreen-title");
+      const url = urlInput ? urlInput.value.trim() : "";
+      if (!url) return;
+      if (titleEl) titleEl.innerText = url + " — Sitzung aktiv";
+      fetch("/api/operations/bot-screen/takeover/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Manuelle Navigation durch Bediener", url: url })
+      }).catch(() => {});
+    }
+
+    function refreshCadreBotScreen() {
+      const titleEl = document.getElementById("cadre-botscreen-title");
+      if (titleEl) titleEl.classList.add("animate-pulse");
+      setTimeout(() => { if (titleEl) titleEl.classList.remove("animate-pulse"); }, 600);
+    }
+
+    function toggleCadreBotScreenFullscreen() {
+      const pane = document.getElementById("agent-pane-botscreen");
+      const icon = document.getElementById("icon-botscreen-fullscreen");
+      const label = document.getElementById("label-botscreen-fullscreen");
+      if (!pane) return;
+
+      cadreBotScreenFullscreen = !cadreBotScreenFullscreen;
+      if (cadreBotScreenFullscreen) {
+        pane.classList.add("botscreen-fullscreen-mode");
+        if (icon) {
+          icon.setAttribute("data-lucide", "minimize-2");
+        }
+        if (label) label.innerText = "Beenden";
+        window.addEventListener("keydown", handleBotScreenEscapeKey);
+      } else {
+        pane.classList.remove("botscreen-fullscreen-mode");
+        if (icon) {
+          icon.setAttribute("data-lucide", "maximize-2");
+        }
+        if (label) label.innerText = "Vollbild";
+        window.removeEventListener("keydown", handleBotScreenEscapeKey);
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function handleBotScreenEscapeKey(e) {
+      if (e.key === "Escape" && cadreBotScreenFullscreen) {
+        toggleCadreBotScreenFullscreen();
+      }
+    }
+
+    function toggleBotScreenAgentAuthorization(forceState) {
+      const currentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "default";
+      
+      if (typeof forceState === "boolean") {
+        cadreBotScreenAuthorized = forceState;
+      } else {
+        cadreBotScreenAuthorized = !cadreBotScreenAuthorized;
+      }
+
+      const btn = document.getElementById("btn-cadre-botscreen-auth");
+      const dot = document.getElementById("cadre-botscreen-auth-dot");
+      const label = document.getElementById("cadre-botscreen-auth-label");
+      const pill = document.getElementById("cadre-botscreen-mode-pill");
+      const hint = document.getElementById("cadre-botscreen-auth-hint");
+
+      if (cadreBotScreenAuthorized) {
+        if (btn) btn.className = "px-3.5 py-1.5 rounded-lg font-bold text-xs font-mono flex items-center gap-2 transition cursor-pointer shadow-xs bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500";
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-white animate-pulse";
+        if (label) label.innerText = "🤖 Agent autorisiert (Steuerung aktiv)";
+        if (pill) {
+          pill.className = "text-[9.5px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-bold";
+          pill.innerText = "🤖 Agent aktiv (Maus & Tastatur freigegeben)";
+        }
+        if (hint) hint.innerText = "Jetzt Anweisung eingeben und absenden";
+        setAgentCursorPosition(50, 50, false, `🤖 ${currentId}`);
+      } else {
+        if (btn) btn.className = "px-3.5 py-1.5 rounded-lg font-bold text-xs font-mono flex items-center gap-2 transition cursor-pointer shadow-xs bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700";
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-zinc-500";
+        if (label) label.innerText = "👤 Dein Zugriff (Agent wartet)";
+        if (pill) {
+          pill.className = "text-[9.5px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 font-bold";
+          pill.innerText = "👤 Manueller Modus (Login aktiv)";
+        }
+        if (hint) hint.innerText = "Klicke, um Agenten für Maus & Tastatur freizuschalten";
+        hideAgentCursor();
+      }
+    }
+
+    // --- PROMINENTER AGENTEN-MAUSZEIGER CONTROLLER ---
+    function setAgentCursorPosition(xPercent, yPercent, isClick = false, labelText = null) {
+      const cursor = document.getElementById("botscreen-agent-cursor");
+      const ripple = document.getElementById("botscreen-cursor-ripple");
+      const badge = document.getElementById("botscreen-cursor-badge");
+      if (!cursor) return;
+
+      cursor.classList.remove("hidden");
+      cursor.style.left = `${Math.max(5, Math.min(95, xPercent))}%`;
+      cursor.style.top = `${Math.max(5, Math.min(95, yPercent))}%`;
+
+      if (labelText && badge) {
+        badge.innerText = labelText;
+      }
+
+      if (isClick && ripple) {
+        ripple.classList.remove("hidden");
+        setTimeout(() => {
+          ripple.classList.add("hidden");
+        }, 600);
+      }
+    }
+
+    function hideAgentCursor() {
+      const cursor = document.getElementById("botscreen-agent-cursor");
+      if (cursor) cursor.classList.add("hidden");
+    }
+
+    function testCadreAgentCursor() {
+      if (cursorDemoTimer) clearTimeout(cursorDemoTimer);
+      const agentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "Default";
+      
+      // 1. Schwingt biomechanisch zum ersten Feld
+      animateAgentCursorTrajectory(32, 28, false, `🤖 ${agentId}: Scannt Maske...`, () => {
+        cursorDemoTimer = setTimeout(() => {
+          // 2. Gleitet mit Bézier-Kurve zum Button und klickt mit Gauss-Jitter
+          animateAgentCursorTrajectory(48, 38, true, `🤖 ${agentId}: Klickt Filter`, () => {
+            cursorDemoTimer = setTimeout(() => {
+              // 3. Scannt Zeilen
+              animateAgentCursorTrajectory(58, 62, false, `🤖 ${agentId}: Prüft Profil`, () => {
+                cursorDemoTimer = setTimeout(() => {
+                  // 4. Klickt Ziel-Aktion
+                  animateAgentCursorTrajectory(74, 68, true, `🤖 ${agentId}: Wählt Bewerbung`, () => {
+                    cursorDemoTimer = setTimeout(() => {
+                      animateAgentCursorTrajectory(50, 50, false, `🤖 ${agentId}: Bereit`);
+                    }, 800);
+                  });
+                }, 700);
+              });
+            }, 700);
+          });
+        }, 600);
+      });
+    }
+
+    // --- NOTFALL-ABBRUCH ---
+    async function emergencyAbortBotScreen() {
+      toggleBotScreenAgentAuthorization(false);
+      hideAgentCursor();
+      if (cursorDemoTimer) clearTimeout(cursorDemoTimer);
+
+      const titleEl = document.getElementById("cadre-botscreen-title");
+      if (titleEl) {
+        const orig = titleEl.innerText;
+        titleEl.innerText = "🛑 NOTFALL-STOPP AUSGELÖST — Agent gestoppt!";
+        setTimeout(() => { if (titleEl) titleEl.innerText = orig; }, 3000);
+      }
+
+      try {
+        await fetch("/api/operations/bot-screen/abort", { method: "POST" });
+      } catch (e) {
+        console.error("Fehler beim Abort-Call:", e);
+      }
+
+      if (typeof showArchonToast === 'function') {
+        showArchonToast("🛑 Notfall-Abbruch ausgeführt: Agent gestoppt, volle Kontrolle bei dir!", "error");
+      } else {
+        alert("🛑 Notfall-Abbruch ausgeführt!\n\nAlle autonomen Aktionen wurden sofort gestoppt.\nDer Agent hat keinen Zugriff mehr auf Maus und Tastatur.\nDie Steuerung liegt wieder zu 100% bei dir.");
+      }
+    }
+
+    async function sendCadreBotScreenInstruction() {
+      const promptInput = document.getElementById("cadre-botscreen-prompt");
+      const urlInput = document.getElementById("cadre-botscreen-url");
+      const prompt = promptInput ? promptInput.value.trim() : "";
+      if (!prompt) return;
+
+      if (!cadreBotScreenAuthorized) {
+        alert("Bitte zuerst links den Button 'Agent autorisieren' umlegen, bevor du die Anweisung sendest.");
+        return;
+      }
+
+      const sendBtn = document.getElementById("btn-cadre-botscreen-send");
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = `<span class="animate-pulse">${profT('ui.agent_profiles.executing', 'Ausführen...')}</span>`;
+      }
+
+      testCadreAgentCursor();
+
+      try {
+        const agentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "orchestrator";
+        const res = await fetch("/api/operations/comm-feed/broadcast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "commander",
+            message: `[Bot-Screen Anweisung an ${agentId}]: ${prompt} (Ziel: ${urlInput?.value || 'aktuelle Seite'})`,
+            target: agentId
+          })
+        });
+        promptInput.value = "";
+        if (typeof showArchonToast === 'function') {
+          showArchonToast(`Anweisung an ${agentId} übergeben! Live-Navigation aktiv.`, "info");
+        } else {
+          alert(`Anweisung an ${agentId} übergeben! Der Agent führt die Schritte jetzt autonom aus und berichtet im Funkverkehr.`);
+        }
+      } catch (err) {
+        alert("Fehler beim Übergeben der Instruktion: " + err.message);
+      } finally {
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.innerHTML = `<i data-lucide="send" class="w-3.5 h-3.5"></i><span>${profT('ui.agent_profiles.instruct', 'Instruieren')}</span>`;
+          if (window.lucide) lucide.createIcons();
+        }
+      }
+    }
+
+    window.navigateCadreBotScreen = navigateCadreBotScreen;
+    window.refreshCadreBotScreen = refreshCadreBotScreen;
+    window.toggleCadreBotScreenFullscreen = toggleCadreBotScreenFullscreen;
+    window.toggleBotScreenAgentAuthorization = toggleBotScreenAgentAuthorization;
+    window.sendCadreBotScreenInstruction = sendCadreBotScreenInstruction;
+    window.emergencyAbortBotScreen = emergencyAbortBotScreen;
+    window.testCadreAgentCursor = testCadreAgentCursor;
+    window.setAgentCursorPosition = setAgentCursorPosition;
+    window.hideAgentCursor = hideAgentCursor;
+    window.toggleCadreBotScreenA11y = toggleCadreBotScreenA11y;
+    window.toggleBotScreenPbDRecording = toggleBotScreenPbDRecording;
+    window.addPbDCommentary = addPbDCommentary;
+    window.animateAgentCursorTrajectory = animateAgentCursorTrajectory;
+
+
+    // --- CHAT RETRY & SELECTION CONTEXT HELPERS ---
+    window.lastSentUserChatMessage = "";
+
+    function retryUserChatMessage(btn) {
+      const msg = btn ? btn.getAttribute("data-msg") : window.lastSentUserChatMessage;
+      if (!msg) return;
+      const inputEl = document.getElementById("agent-tab-chat-input") || document.getElementById("master-chat-input");
+      if (inputEl) {
+        inputEl.value = msg;
+        if (typeof sendAgentTabChatMessage === "function" && document.getElementById("agent-tab-chat-input")) {
+          sendAgentTabChatMessage();
+        } else if (typeof sendMasterChatMessage === "function") {
+          sendMasterChatMessage();
+        }
+      }
+    }
+    window.retryUserChatMessage = retryUserChatMessage;
+
+    function editUserChatMessage(btn) {
+      const msg = btn ? btn.getAttribute("data-msg") : "";
+      if (!msg) return;
+      const inputEl = document.getElementById("agent-tab-chat-input") || document.getElementById("master-chat-input");
+      if (inputEl) {
+        inputEl.value = msg;
+        inputEl.focus();
+        inputEl.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+    window.editUserChatMessage = editUserChatMessage;
+
+    function retryLastUserChatMessage() {
+      retryUserChatMessage(null);
+    }
+    window.retryLastUserChatMessage = retryLastUserChatMessage;
+
+    function regenerateLastAssistantResponse() {
+      retryLastUserChatMessage();
+    }
+    window.regenerateLastAssistantResponse = regenerateLastAssistantResponse;
+
+    let currentSelectedChatText = "";
+
+    function initChatSelectionToolbar() {
+      let toolbar = document.getElementById("chat-selection-toolbar");
+      if (!toolbar) {
+        toolbar = document.createElement("div");
+        toolbar.id = "chat-selection-toolbar";
+        toolbar.className = "fixed z-[99999] hidden flex items-center gap-1 bg-zinc-900/95 text-white dark:bg-zinc-100/95 dark:text-zinc-900 border border-zinc-700/50 dark:border-zinc-300/50 rounded-xl px-1.5 py-1 shadow-2xl backdrop-blur-md transition-all text-xs font-mono font-medium";
+        toolbar.innerHTML = `
+          <button type="button" onclick="copyChatSelectionText()" class="px-2 py-1 rounded-lg hover:bg-white/10 dark:hover:bg-black/10 flex items-center gap-1.5 cursor-pointer transition">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>${profT('ui.agent_profiles.selection_copy', 'Kopieren')}</span>
+          </button>
+          <span class="opacity-30">|</span>
+          <button type="button" onclick="quoteChatSelectionText()" class="px-2 py-1 rounded-lg hover:bg-white/10 dark:hover:bg-black/10 flex items-center gap-1.5 cursor-pointer transition">
+            <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+            <span>${profT('ui.agent_profiles.selection_quote', 'Zitieren')}</span>
+          </button>
+          <span class="opacity-30">|</span>
+          <button type="button" onclick="newSessionFromSelectionText()" class="px-2 py-1 rounded-lg hover:bg-white/10 dark:hover:bg-black/10 flex items-center gap-1.5 cursor-pointer transition">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>${profT('ui.agent_profiles.selection_new_session', 'Neue Session')}</span>
+          </button>
+        `;
+        document.body.appendChild(toolbar);
+      }
+
+      function handleSelection() {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) {
+          if (toolbar) toolbar.classList.add("hidden");
+          return;
+        }
+        const text = sel.toString().trim();
+        if (text.length < 2) {
+          if (toolbar) toolbar.classList.add("hidden");
+          return;
+        }
+
+        const anchorNode = sel.anchorNode;
+        const chatContainer = anchorNode && (anchorNode.nodeType === 1 ? anchorNode : anchorNode.parentElement)?.closest("#agent-tab-chat-messages, #master-chat-messages, .chat-markdown, .chat-assistant-body");
+        if (!chatContainer) {
+          toolbar.classList.add("hidden");
+          return;
+        }
+
+        currentSelectedChatText = text;
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) {
+          toolbar.classList.add("hidden");
+          return;
+        }
+
+        toolbar.classList.remove("hidden");
+        const top = Math.max(10, rect.top - 46);
+        const left = Math.max(10, Math.min(window.innerWidth - 300, rect.left + (rect.width / 2) - 130));
+        toolbar.style.top = `${top}px`;
+        toolbar.style.left = `${left}px`;
+        if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+      }
+
+      document.addEventListener("selectionchange", () => {
+        setTimeout(handleSelection, 80);
+      });
+      document.addEventListener("mouseup", () => {
+        setTimeout(handleSelection, 50);
+      });
+      document.addEventListener("mousedown", (e) => {
+        if (toolbar && !toolbar.contains(e.target)) {
+          setTimeout(() => {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed) toolbar.classList.add("hidden");
+          }, 100);
+        }
+      });
+    }
+
+    function copyChatSelectionText() {
+      if (!currentSelectedChatText) return;
+      navigator.clipboard.writeText(currentSelectedChatText).then(() => {
+        if (typeof showArchonToast === "function") showArchonToast("In Zwischenablage kopiert", "success");
+        const tb = document.getElementById("chat-selection-toolbar");
+        if (tb) tb.classList.add("hidden");
+      });
+    }
+    window.copyChatSelectionText = copyChatSelectionText;
+
+    function quoteChatSelectionText() {
+      if (!currentSelectedChatText) return;
+      const quote = currentSelectedChatText.split("\n").map(l => "> " + l).join("\n") + "\n\n";
+      const inputEl = document.getElementById("agent-tab-chat-input") || document.getElementById("master-chat-input");
+      if (inputEl) {
+        inputEl.value = quote + inputEl.value;
+        inputEl.focus();
+        inputEl.scrollIntoView({ behavior: "smooth" });
+      }
+      const tb = document.getElementById("chat-selection-toolbar");
+      if (tb) tb.classList.add("hidden");
+      window.getSelection()?.removeAllRanges();
+    }
+    window.quoteChatSelectionText = quoteChatSelectionText;
+
+    function newSessionFromSelectionText() {
+      if (!currentSelectedChatText) return;
+      const text = currentSelectedChatText;
+      if (typeof createNewAgentChatSession === "function" && document.getElementById("agent-tab-chat-input")) {
+        createNewAgentChatSession();
+        setTimeout(() => {
+          const inputEl = document.getElementById("agent-tab-chat-input");
+          if (inputEl) {
+            inputEl.value = text;
+            inputEl.focus();
+          }
+        }, 150);
+      } else if (typeof createNewMasterChatSession === "function") {
+        createNewMasterChatSession();
+        setTimeout(() => {
+          const inputEl = document.getElementById("master-chat-input");
+          if (inputEl) {
+            inputEl.value = text;
+            inputEl.focus();
+          }
+        }, 150);
+      }
+      const tb = document.getElementById("chat-selection-toolbar");
+      if (tb) tb.classList.add("hidden");
+      window.getSelection()?.removeAllRanges();
+    }
+    window.newSessionFromSelectionText = newSessionFromSelectionText;
+
+    // Auto-init on load
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initChatSelectionToolbar);
+    } else {
+      initChatSelectionToolbar();
+    }

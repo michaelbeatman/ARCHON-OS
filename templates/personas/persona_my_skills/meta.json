@@ -1,0 +1,10 @@
+{
+  "id": "persona_my_skills",
+  "name": "My-Skills",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'My-Skills'. Yazılacak kod aşağıdaki yeteneklerde olacak.\n\n1. kullanıcı girişi olacak ve kullanıcı şifresi veritabanında salt ve diğe...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

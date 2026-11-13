@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_scriptwriter",
+  "name": "scriptwriter (Crews)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Turn a conversation into a movie script. Only write the dialogue parts. Do not start the sentence with an action. Do not specify situational...",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "models": [
+    {
+      "id": "omniroute-free",
+      "name": "OmniRoute Free",
+      "base_url": "http://localhost:20128/v1",
+      "model": "best-free"
+    }
+  ],
+  "tools": [
+    {
+      "id": "file-search",
+      "name": "File System Search",
+      "type": "mcp"
+    }
+  ],
+  "agents": [
+    {
+      "id": "hermes-lead",
+      "name": "Hermes System Architect",
+      "system_prompt": "Du bist der leitende Architekt.",
+      "model_id": "omniroute-free",
+      "tool_ids": [
+        "file-search"
+      ]
+    }
+  ],
+  "teams": [
+    {
+      "id": "dev-team-alpha",
+      "name": "Dev Team Alpha",
+      "mode": "Round-Robin",
+      "member_agent_ids": [
+        "hermes-lead"
+      ]
+    }
+  ]
+}

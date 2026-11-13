@@ -1,0 +1,4 @@
+# Diese Datei aktiviert den Sponsor-Button oben im Repository.
+# Voraussetzung: GitHub-Sponsors-Profil einmalig freischalten unter
+# https://github.com/sponsors (Stripe-/Bankkonto, Prüfung dauert einige Tage).
+github: [michaelbeatman]

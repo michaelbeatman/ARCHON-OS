@@ -1,0 +1,10 @@
+{
+  "id": "persona__sigrex_io_full_kitchen_sink",
+  "name": "[sigrex.io] Full Kitchen Sink",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: '[sigrex.io] Full Kitchen Sink'. {{val:symbol=SOLUSDT}}\n{{val:rsi_ob=70}}\n{{val:rsi_os=30}}\n{{val:max_repeat=3}}\n\nSymbol: {{symbol}} | Time: {{current_ti...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

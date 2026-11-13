@@ -1,0 +1,10 @@
+{
+  "id": "persona_bookstore_aisle_artsy_quiet_luxury",
+  "name": "Bookstore Aisle (artsy, quiet luxury)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Bookstore Aisle (artsy, quiet luxury)'. {\n  \"category\": \"BOOKSTORE_AISLE_ARTSY\",\n  \"identity_lock\": {\n    \"enabled\": true,\n    \"priority\": \"ABSOLUTE_MAX\",\n    \"...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

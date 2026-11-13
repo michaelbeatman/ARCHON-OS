@@ -1,0 +1,10 @@
+{
+  "id": "persona_karpathy_guidelines",
+  "name": "karpathy-guidelines",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'karpathy-guidelines'. ---\nname: karpathy-guidelines\ndescription: Behavioral guidelines to reduce common LLM coding mistakes. Use when writing,...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

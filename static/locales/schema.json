@@ -1,0 +1,733 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://archon.local/schemas/locale-catalog.json",
+  "title": "Archon OS Locale Catalog",
+  "description": "Schema fuer static/locales/<lang>.json. Sektionen sind geschlossen: ein Tippfehler im Schluessel ist ein Fehler, kein stiller Fallback. Genau 2 oder 3 Segmente pro Schluessel (bereich.element[.eigenschaft]), snake_case, ASCII [a-z0-9_].",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ui",
+    "nav",
+    "common",
+    "status",
+    "header",
+    "drawer",
+    "settings",
+    "help",
+    "api",
+    "telemetry",
+    "topbar",
+    "view",
+    "plural"
+  ],
+  "properties": {
+    "ui": {
+      "type": "object",
+      "description": "Texte der Zeilenbereiche von static/index.html (Etappe 3). Struktur ui.<bereich>.<element>, z. B. ui.dashboard.title. Die Bereiche folgen der Funktion (common, dashboard, board, artifact, ops, agent, omniroute, boardroom, pricing, tasks, vault), nicht der Dateireihenfolge.",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z0-9_]+$": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/message"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "patternProperties": {
+                "^[a-z0-9_]+$": {
+                  "$ref": "#/definitions/message"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "nav": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operations",
+        "inbox",
+        "org",
+        "cadre",
+        "crm",
+        "items",
+        "operations_erp",
+        "finance",
+        "showroom",
+        "boardroom",
+        "watchdog",
+        "library",
+        "brain",
+        "plugins",
+        "guardian",
+        "chat",
+        "settings",
+        "logs",
+        "design_lab",
+        "css_studio",
+        "research",
+        "corporate",
+        "approval_policies",
+        "automation",
+        "dashboard",
+        "dashboard_desc",
+        "operations_desc",
+        "chat_desc",
+        "inbox_desc",
+        "cadre_desc",
+        "automation_desc",
+        "showroom_desc",
+        "watchdog_desc",
+        "research_desc",
+        "library_desc",
+        "boardroom_desc",
+        "crm_desc",
+        "items_desc",
+        "operations_erp_desc",
+        "finance_desc",
+        "corporate_desc",
+        "approval_policies_desc",
+        "guardian_desc",
+        "logs_desc",
+        "palette_title",
+        "gateway_title",
+        "settings_title",
+        "hermes_dashboard_title",
+        "theme_title",
+        "section"
+      ],
+      "properties": {
+        "operations": {
+          "$ref": "#/definitions/message"
+        },
+        "inbox": {
+          "$ref": "#/definitions/message"
+        },
+        "org": {
+          "$ref": "#/definitions/message"
+        },
+        "cadre": {
+          "$ref": "#/definitions/message"
+        },
+        "crm": {
+          "$ref": "#/definitions/message"
+        },
+        "items": {
+          "$ref": "#/definitions/message"
+        },
+        "operations_erp": {
+          "$ref": "#/definitions/message"
+        },
+        "finance": {
+          "$ref": "#/definitions/message"
+        },
+        "showroom": {
+          "$ref": "#/definitions/message"
+        },
+        "boardroom": {
+          "$ref": "#/definitions/message"
+        },
+        "watchdog": {
+          "$ref": "#/definitions/message"
+        },
+        "library": {
+          "$ref": "#/definitions/message"
+        },
+        "brain": {
+          "$ref": "#/definitions/message"
+        },
+        "plugins": {
+          "$ref": "#/definitions/message"
+        },
+        "guardian": {
+          "$ref": "#/definitions/message"
+        },
+        "chat": {
+          "$ref": "#/definitions/message"
+        },
+        "settings": {
+          "$ref": "#/definitions/message"
+        },
+        "logs": {
+          "$ref": "#/definitions/message"
+        },
+        "design_lab": {
+          "$ref": "#/definitions/message"
+        },
+        "css_studio": {
+          "$ref": "#/definitions/message"
+        },
+        "research": {
+          "$ref": "#/definitions/message"
+        },
+        "corporate": {
+          "$ref": "#/definitions/message"
+        },
+        "approval_policies": {
+          "$ref": "#/definitions/message"
+        },
+        "automation": {
+          "$ref": "#/definitions/message"
+        },
+        "dashboard": {
+          "$ref": "#/definitions/message"
+        },
+        "dashboard_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "operations_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "chat_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "inbox_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "cadre_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "automation_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "showroom_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "watchdog_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "research_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "library_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "boardroom_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "crm_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "items_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "operations_erp_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "finance_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "corporate_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "approval_policies_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "guardian_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "logs_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "palette_title": {
+          "$ref": "#/definitions/message"
+        },
+        "gateway_title": {
+          "$ref": "#/definitions/message"
+        },
+        "settings_title": {
+          "$ref": "#/definitions/message"
+        },
+        "hermes_dashboard_title": {
+          "$ref": "#/definitions/message"
+        },
+        "theme_title": {
+          "$ref": "#/definitions/message"
+        },
+        "section": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operative",
+            "cognition",
+            "economy",
+            "infrastructure",
+            "economy_alpha_title"
+          ],
+          "properties": {
+            "operative": {
+              "$ref": "#/definitions/message"
+            },
+            "cognition": {
+              "$ref": "#/definitions/message"
+            },
+            "economy": {
+              "$ref": "#/definitions/message"
+            },
+            "infrastructure": {
+              "$ref": "#/definitions/message"
+            },
+            "economy_alpha_title": {
+              "$ref": "#/definitions/message"
+            }
+          }
+        }
+      }
+    },
+    "common": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "save",
+        "cancel",
+        "delete",
+        "edit",
+        "new_task",
+        "search",
+        "filter",
+        "close",
+        "bake_permanent",
+        "loading",
+        "success",
+        "actions",
+        "refresh"
+      ],
+      "properties": {
+        "save": {
+          "$ref": "#/definitions/message"
+        },
+        "cancel": {
+          "$ref": "#/definitions/message"
+        },
+        "delete": {
+          "$ref": "#/definitions/message"
+        },
+        "edit": {
+          "$ref": "#/definitions/message"
+        },
+        "new_task": {
+          "$ref": "#/definitions/message"
+        },
+        "search": {
+          "$ref": "#/definitions/message"
+        },
+        "filter": {
+          "$ref": "#/definitions/message"
+        },
+        "close": {
+          "$ref": "#/definitions/message"
+        },
+        "bake_permanent": {
+          "$ref": "#/definitions/message"
+        },
+        "loading": {
+          "$ref": "#/definitions/message"
+        },
+        "success": {
+          "$ref": "#/definitions/message"
+        },
+        "actions": {
+          "$ref": "#/definitions/message"
+        },
+        "refresh": {
+          "$ref": "#/definitions/message"
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "online",
+        "busy",
+        "ready",
+        "in_progress",
+        "review",
+        "done",
+        "local_dsgvo",
+        "cloud"
+      ],
+      "properties": {
+        "online": {
+          "$ref": "#/definitions/message"
+        },
+        "busy": {
+          "$ref": "#/definitions/message"
+        },
+        "ready": {
+          "$ref": "#/definitions/message"
+        },
+        "in_progress": {
+          "$ref": "#/definitions/message"
+        },
+        "review": {
+          "$ref": "#/definitions/message"
+        },
+        "done": {
+          "$ref": "#/definitions/message"
+        },
+        "local_dsgvo": {
+          "$ref": "#/definitions/message"
+        },
+        "cloud": {
+          "$ref": "#/definitions/message"
+        }
+      }
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operations",
+        "active_tasks",
+        "fleet_load",
+        "telemetry"
+      ],
+      "properties": {
+        "operations": {
+          "$ref": "#/definitions/message"
+        },
+        "active_tasks": {
+          "$ref": "#/definitions/message"
+        },
+        "fleet_load": {
+          "$ref": "#/definitions/message"
+        },
+        "telemetry": {
+          "$ref": "#/definitions/message"
+        }
+      }
+    },
+    "drawer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overview",
+        "messages",
+        "commercial",
+        "receipts_ops",
+        "contacts",
+        "gdpr",
+        "node_badge",
+        "node_details"
+      ],
+      "properties": {
+        "overview": {
+          "$ref": "#/definitions/message"
+        },
+        "messages": {
+          "$ref": "#/definitions/message"
+        },
+        "commercial": {
+          "$ref": "#/definitions/message"
+        },
+        "receipts_ops": {
+          "$ref": "#/definitions/message"
+        },
+        "contacts": {
+          "$ref": "#/definitions/message"
+        },
+        "gdpr": {
+          "$ref": "#/definitions/message"
+        },
+        "node_badge": {
+          "$ref": "#/definitions/message"
+        },
+        "node_details": {
+          "$ref": "#/definitions/message"
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Fenster 'Systemeinstellungen'. Direkte Nachrichten (title, language, ...) plus je Tab ein Unterobjekt settings.<tab>.<element> mit den Texten dieses Tabs.",
+      "required": [
+        "title",
+        "language",
+        "language_desc",
+        "save_btn"
+      ],
+      "patternProperties": {
+        "^[a-z0-9_]+$": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/message"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "patternProperties": {
+                "^[a-z0-9_]+$": {
+                  "$ref": "#/definitions/message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "properties": {
+        "title": {
+          "$ref": "#/definitions/message"
+        },
+        "language": {
+          "$ref": "#/definitions/message"
+        },
+        "language_desc": {
+          "$ref": "#/definitions/message"
+        },
+        "save_btn": {
+          "$ref": "#/definitions/message"
+        }
+      }
+    },
+    "help": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operations"
+      ],
+      "properties": {
+        "operations": {
+          "$ref": "#/definitions/message"
+        }
+      }
+    },
+    "api": {
+      "description": "Reservierter Namensraum fuer Backend-Meldungen (Etappe 4). Struktur: api.<bereich>.<code> = message. Noch leer; Fehler-Payload liefert code plus params, der Client uebersetzt.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "patternProperties": {
+          "^[a-z0-9_]+$": {
+            "$ref": "#/definitions/message"
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "sync",
+        "sync_title",
+        "local_llm",
+        "local_llm_title",
+        "dsgvo",
+        "dsgvo_title",
+        "update",
+        "update_title",
+        "hermes_core",
+        "omniroute",
+        "hermes_dashboard",
+        "docker_proxy",
+        "status_label",
+        "killswitch_review"
+      ],
+      "properties": {
+        "title": {
+          "$ref": "#/definitions/message"
+        },
+        "sync": {
+          "$ref": "#/definitions/message"
+        },
+        "sync_title": {
+          "$ref": "#/definitions/message"
+        },
+        "local_llm": {
+          "$ref": "#/definitions/message"
+        },
+        "local_llm_title": {
+          "$ref": "#/definitions/message"
+        },
+        "dsgvo": {
+          "$ref": "#/definitions/message"
+        },
+        "dsgvo_title": {
+          "$ref": "#/definitions/message"
+        },
+        "update": {
+          "$ref": "#/definitions/message"
+        },
+        "update_title": {
+          "$ref": "#/definitions/message"
+        },
+        "hermes_core": {
+          "$ref": "#/definitions/message"
+        },
+        "omniroute": {
+          "$ref": "#/definitions/message"
+        },
+        "hermes_dashboard": {
+          "$ref": "#/definitions/message"
+        },
+        "docker_proxy": {
+          "$ref": "#/definitions/message"
+        },
+        "status_label": {
+          "$ref": "#/definitions/message"
+        },
+        "killswitch_review": {
+          "$ref": "#/definitions/message"
+        }
+      }
+    },
+    "topbar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active",
+        "theme_light",
+        "css_studio",
+        "css_studio_title",
+        "radar",
+        "watchdog_title",
+        "settings",
+        "settings_title"
+      ],
+      "properties": {
+        "active": {
+          "$ref": "#/definitions/message"
+        },
+        "theme_light": {
+          "$ref": "#/definitions/message"
+        },
+        "css_studio": {
+          "$ref": "#/definitions/message"
+        },
+        "css_studio_title": {
+          "$ref": "#/definitions/message"
+        },
+        "radar": {
+          "$ref": "#/definitions/message"
+        },
+        "watchdog_title": {
+          "$ref": "#/definitions/message"
+        },
+        "settings": {
+          "$ref": "#/definitions/message"
+        },
+        "settings_title": {
+          "$ref": "#/definitions/message"
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Texte der eigenstaendigen Views (static/views/*.html). Je View ein Unterobjekt view.<view>.<element> mit den Texten dieser Datei, z. B. view.finance.title.",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z0-9_]+$": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/message"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "patternProperties": {
+                "^[a-z0-9_]+$": {
+                  "$ref": "#/definitions/message"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "plural": {
+      "type": "object",
+      "description": "Plural-Nachrichten (CLDR). Struktur plural.<key> = Plural-Objekt (one/few/many/other). Keys: snake_case, ASCII [a-z0-9_].",
+      "additionalProperties": {
+        "$ref": "#/definitions/plural"
+      }
+    }
+  },
+  "definitions": {
+    "message": {
+      "description": "Ein Blatt: nicht-leerer String oder Plural-Objekt.",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "$ref": "#/definitions/plural"
+        }
+      ]
+    },
+    "plural": {
+      "description": "Plural-Nachricht: Objekt ausschliesslich aus CLDR-Kategorien one/few/many/other, je Kategorie ein nicht-leerer String. Die Sprache fuehrt nur die Kategorien, die CLDR fuer sie kennt (siehe x-archon-plural.categories).",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(one|few|many|other)$": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "x-archon-plural": {
+    "rule": "Plural-Nachrichten werden in Etappe 3 als Objekt unter dem Nachrichten-Schluessel gefuehrt: {\"one\": \"...\", \"other\": \"...\"}. Die Suffixe _one/_few/_many/_other sind als Schluessel-Endungen reserviert (flache Schreibweise) und duerfen nicht als eigene Nachricht angelegt werden; Pluralitaet wird nie per count === 1 ? a : b im Code geloest.",
+    "suffixes": [
+      "_one",
+      "_few",
+      "_many",
+      "_other"
+    ],
+    "key_suffix_pattern": "_(one|few|many|other)$",
+    "categories": {
+      "de": [
+        "one",
+        "other"
+      ],
+      "en": [
+        "one",
+        "other"
+      ],
+      "es": [
+        "one",
+        "many",
+        "other"
+      ],
+      "fr": [
+        "one",
+        "many",
+        "other"
+      ],
+      "pt": [
+        "one",
+        "many",
+        "other"
+      ],
+      "ru": [
+        "one",
+        "few",
+        "many",
+        "other"
+      ],
+      "ja": [
+        "other"
+      ],
+      "ko": [
+        "other"
+      ],
+      "zh": [
+        "other"
+      ]
+    },
+    "populated": false
+  }
+}

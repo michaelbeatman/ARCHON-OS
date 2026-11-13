@@ -1,0 +1,16 @@
+{
+  "version": "v0.5.1",
+  "codename": "Archon Hardened",
+  "released_at": "2026-11-11 07:04",
+  "previous_version": "v0.5.0.1",
+  "commit": "9ef750a1",
+  "features": [
+    "Modulare Router-Architektur: main.py von 16.254 auf 1.875 Zeilen reduziert (-88%)",
+    "Sicherheits-Haertung: 25 kritische (Rot) und 68 hohe (Orange) Review-Befunde vollstaendig geschlossen",
+    "Zentralisierte Umgebungs-Konfiguration in archon/core/config.py und B10-Pfadkonsolidierung",
+    "Starlette Threadpool & Async-Event-Loop-Entlastung (A6)",
+    "Robuste UI-Fehlerbehandlung: 1.140 DOM-Pfade analysiert und alle Eigenschaftszugriffe gehaertet",
+    "Docker-Admin-Proxy fuer hermes_updater und Container-Steuerung (Klasse A)",
+    "1.225 automatisierte Unittests mit 100% Erfolgsquote"
+  ]
+}

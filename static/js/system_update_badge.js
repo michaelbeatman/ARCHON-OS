@@ -1,0 +1,373 @@
+/**
+ * static/js/system_update_badge.js
+ * Status-Pill (LED) in der Sidebar und Hermes Agent Core Update-Dialog
+ * mit NousResearch/hermes-agent Versionsauskunft, Upstream Releases, täglichen Commits
+ * und Administrator-Update-Trigger.
+ */
+
+(function () {
+  'use strict';
+
+  // --- i18n-Helfer (Tranche t5) ---------------------------------------------
+  // updT() liefert den Katalogtext mit PFLICHT-Fallback: fehlt der Key in der
+  // aktiven Sprache und in de, bleibt der deutsche Text stehen - nie "".
+  // {platzhalter} werden aus params gefuellt (Zahlen stehen nie im Key).
+  function updT(key, fallback, params) {
+    const i18n = window.archonI18n;
+    let text = i18n ? i18n.t(key, fallback) : fallback;
+    if (params) {
+      Object.keys(params).forEach(name => {
+        text = text.split(`{${name}}`).join(String(params[name]));
+      });
+    }
+    return text;
+  }
+
+  let lastUpdateData = null;
+  let isChecking = false;
+
+  /**
+   * Prüft den Hermes Agent Core Update-Status im Hintergrund und aktualisiert die Status-LED.
+   */
+  async function checkUpdateStatus(silent = false, force = false) {
+    if (isChecking) return lastUpdateData;
+    isChecking = true;
+
+    const dot = document.getElementById('dot-update');
+    const badgeBtn = document.getElementById('status-badge-update');
+
+    if (!silent && dot) {
+      dot.className = 'w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0 transition-colors';
+    }
+
+    try {
+      const url = force ? '/api/v1/hermes/update/check?force=true' : '/api/v1/hermes/update/check';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      lastUpdateData = data;
+
+      if (dot) {
+        if (data.update_available) {
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0 transition-colors';
+          const updateLabel = data.latest_release_tag || updT('ui.system_update_badge.release_new', 'Neu');
+          if (badgeBtn) {
+            badgeBtn.title = updT('ui.system_update_badge.badge_title_available', 'Hermes Core Update verfügbar: {tag} ({count} neue Commits)', { tag: data.latest_release_tag || updT('ui.system_update_badge.release_new_fallback', 'Neues Release'), count: data.incoming_commits?.length || 0 });
+          }
+          const label = document.getElementById('label-update-text');
+          if (label) {
+            label.innerText = updT('ui.system_update_badge.label_update', 'Update ({version})', { version: updateLabel });
+            label.className = 'text-amber-500 font-bold';
+          }
+        } else {
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors';
+          if (badgeBtn) {
+            badgeBtn.title = updT('ui.system_update_badge.badge_title_current', 'Hermes Agent Core ist auf dem neuesten Stand ({version})', { version: data.installed_version || '' });
+          }
+          const label = document.getElementById('label-update-text');
+          if (label) {
+            label.innerText = updT('ui.system_update_badge.label_update', 'Update ({version})', { version: data.installed_version || 'v0.22.6' });
+            label.className = 'text-emerald-500 font-medium';
+          }
+        }
+      }
+      return data;
+    } catch (err) {
+      if (dot) {
+        dot.className = 'w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors';
+        if (badgeBtn) {
+          badgeBtn.title = updT('ui.system_update_badge.badge_title_offline', 'Hermes Core Status: Offline oder nicht erreichbar');
+        }
+      }
+      return null;
+    } finally {
+      isChecking = false;
+    }
+  }
+
+  /**
+   * Öffnet den dedizierten Update-Dialog und aktualisiert die Daten.
+   */
+  async function openSystemUpdateDialog() {
+    let modal = document.getElementById('system-update-dialog-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+    await renderUpdateDialogContent(true);
+  }
+
+  function closeSystemUpdateDialog() {
+    const modal = document.getElementById('system-update-dialog-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Lädt und rendert den Inhalt des Update-Dialogs.
+   */
+  async function renderUpdateDialogContent(force = false) {
+    const verEl = document.getElementById('upd-modal-version');
+    const badgeEl = document.getElementById('upd-modal-status-badge');
+    const branchEl = document.getElementById('upd-modal-branch');
+    const commitEl = document.getElementById('upd-modal-commit');
+    const lastCommitEl = document.getElementById('upd-modal-last-commit');
+    const updatesSec = document.getElementById('upd-modal-updates-section');
+    const actionsArea = document.getElementById('upd-modal-actions-area');
+
+    if (badgeEl) {
+      badgeEl.innerText = updT('ui.system_update_badge.checking', 'Prüfe...');
+      badgeEl.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-500/15 text-[var(--muted-foreground)] border border-[var(--border)]';
+    }
+
+    const data = await checkUpdateStatus(false, force);
+
+    if (!data) {
+      if (badgeEl) {
+        badgeEl.innerText = updT('ui.system_update_badge.offline_error', 'Offline / Fehler');
+        badgeEl.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-500 border border-rose-500/20';
+      }
+      if (updatesSec) {
+        updatesSec.innerHTML = `
+          <div class="p-3 rounded-xl border border-rose-500/20 bg-rose-500/5 text-xs text-rose-500 font-mono">
+            ${updT('ui.system_update_badge.github_unreachable', 'Konnte keine Verbindung zu GitHub (NousResearch/hermes-agent) herstellen.')}
+          </div>
+        `;
+      }
+      return;
+    }
+
+    // Version und Build SHA setzen
+    if (verEl) {
+      verEl.innerText = `${data.installed_version || 'v0.22.6'} (${data.installed_codename || '2026.9.24'}) · SHA: ${data.installed_sha_short || '-'}`;
+    }
+    if (branchEl) {
+      branchEl.innerText = 'NousResearch/hermes-agent (main)';
+    }
+    if (commitEl) {
+      const isRunning = data.container_status === 'running';
+      commitEl.innerHTML = `<span class="${isRunning ? 'text-emerald-500' : 'text-amber-500'} font-bold">${data.container_status || 'running'}</span> (${data.installed_sha_short || '-'})`;
+    }
+    if (lastCommitEl) {
+      lastCommitEl.innerText = updT('ui.system_update_badge.last_commit', 'Neuester Upstream Commit: {sha} ({date}) · {message}', { sha: data.latest_commit_sha_short || '-', date: data.latest_commit_date || '-', message: data.latest_commit_msg || '' });
+    }
+
+    const commitsListHtml = (data.incoming_commits || []).map(c => `
+      <div class="flex items-start gap-1.5 text-xs font-mono py-1 border-b border-[var(--border)]/50 last:border-0">
+        <span class="text-sky-500 font-bold shrink-0">›</span>
+        <span class="text-[var(--foreground)] truncate">${escapeHtml(c)}</span>
+      </div>
+    `).join('');
+
+    // Status Badge & Updates Liste
+    if (data.update_available) {
+      if (badgeEl) {
+        badgeEl.innerText = data.latest_release_tag || updT('ui.system_update_badge.update_available', 'Update verfügbar');
+        badgeEl.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30';
+      }
+
+      if (updatesSec) {
+        updatesSec.innerHTML = `
+          <div class="border border-amber-500/30 bg-amber-500/10 rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between text-xs font-bold text-amber-600 dark:text-amber-400">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="arrow-down-circle" class="w-4 h-4"></i>
+                ${updT('ui.system_update_badge.new_release', 'Neues Hermes Core Release: {tag}', { tag: data.latest_release_tag || updT('ui.system_update_badge.release_new', 'Neu') })}
+              </span>
+              <span class="text-[10px] font-mono font-normal">${data.latest_release_date || ''}</span>
+            </div>
+            ${data.release_notes ? `
+              <div class="text-[11px] text-[var(--muted-foreground)] bg-[var(--card)]/60 p-2 rounded-lg border border-[var(--border)] line-clamp-3 font-mono">
+                ${escapeHtml(data.release_notes)}
+              </div>
+            ` : ''}
+            <div>
+              <div class="text-[11px] font-bold text-[var(--foreground)] mb-1">${updT('ui.system_update_badge.daily_commits', 'Tägliche Core-Commits (NousResearch):')}</div>
+              <div class="bg-[var(--card)]/90 rounded-lg p-2 border border-[var(--border)] max-h-40 overflow-y-auto space-y-0.5 custom-scrollbar">
+                ${commitsListHtml || '<div class="text-xs text-[var(--muted-foreground)]">' + updT('ui.system_update_badge.commits_none_loaded', 'Keine Commits geladen.') + '</div>'}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      if (badgeEl) {
+        badgeEl.innerText = updT('ui.system_update_badge.badge_current', '{version} · Aktuell', { version: data.installed_version || 'v0.22.6' });
+        badgeEl.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30';
+      }
+
+      if (updatesSec) {
+        updatesSec.innerHTML = `
+          <div class="border border-emerald-500/20 bg-emerald-500/5 rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center gap-2.5 text-xs">
+              <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="font-bold text-[var(--foreground)]">${updT('ui.system_update_badge.core_current_title', 'Hermes Agent Core ist auf dem neuesten Stand ({version})', { version: data.installed_version })}</div>
+                <div class="text-[11px] text-[var(--muted-foreground)]">${updT('ui.system_update_badge.core_current_desc', 'Installiertes Release entspricht der neuesten offiziellen Upstream-Version von NousResearch.')}</div>
+              </div>
+            </div>
+            <div>
+              <div class="text-[11px] font-bold text-[var(--foreground)] mb-1">${updT('ui.system_update_badge.last_upstream_commits', 'Letzte Upstream-Commits auf main:')}</div>
+              <div class="bg-[var(--card)]/90 rounded-lg p-2 border border-[var(--border)] max-h-36 overflow-y-auto space-y-0.5 custom-scrollbar">
+                ${commitsListHtml || '<div class="text-xs text-[var(--muted-foreground)]">' + updT('ui.system_update_badge.commits_none_received', 'Keine Commits empfangen.') + '</div>'}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // RBAC Rollenprüfung für den Update-Button
+    const isAdmin = !window.currentUser || window.currentUser.role === 'admin' || window.currentUser.role === undefined;
+
+    if (actionsArea) {
+      if (isAdmin) {
+        actionsArea.innerHTML = `
+          <div class="flex items-center justify-between text-xs font-mono text-[var(--muted-foreground)]">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="upd-hermes-auto-restart" checked class="rounded border-zinc-400 text-sky-600 focus:ring-sky-500">
+              <span>${updT('ui.system_update_badge.auto_restart', 'Container nach Download neu instanziieren')}</span>
+            </label>
+            <span class="text-[10px] bg-[var(--secondary)] px-2 py-0.5 rounded">${updT('ui.system_update_badge.channel_label', 'Kanal: latest')}</span>
+          </div>
+          <button 
+            type="button" 
+            id="btn-upd-dialog-apply" 
+            onclick="window.executeHermesUpdateFromDialog()" 
+            class="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-mono font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+          >
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>${data.update_available ? updT('ui.system_update_badge.apply_now', 'Hermes Agent Core jetzt aktualisieren') : updT('ui.system_update_badge.force_pull', 'Hermes Docker Image erneut laden (Force Pull)')}</span>
+          </button>
+          <div id="upd-dialog-progress-msg" class="hidden text-center text-xs font-mono text-sky-500 animate-pulse"></div>
+        `;
+      } else {
+        actionsArea.innerHTML = `
+          <div class="p-2.5 rounded-xl bg-[var(--secondary)]/60 border border-[var(--border)] text-xs font-mono text-[var(--muted-foreground)] flex items-center gap-2">
+            <i data-lucide="shield-alert" class="w-4 h-4 text-amber-500 shrink-0"></i>
+            <span>${updT('ui.system_update_badge.admin_only', 'Nur Administratoren dürfen das Hermes Kernsystem aktualisieren. Angemeldet als {role}.', { role: `<strong>${window.currentUser?.role}</strong>` })}</span>
+          </div>
+        `;
+      }
+    }
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }
+
+  /**
+   * Führt das Hermes Agent Core Update aus (nur für Admins).
+   */
+  async function executeHermesUpdateFromDialog() {
+    const restartCheckbox = document.getElementById('upd-hermes-auto-restart');
+    const autoRestart = restartCheckbox ? restartCheckbox.checked : true;
+    const btn = document.getElementById('btn-upd-dialog-apply');
+    const progMsg = document.getElementById('upd-dialog-progress-msg');
+
+    const confirmText = updT('ui.system_update_badge.confirm_text', 'Hermes Agent Core jetzt aktualisieren?\n\nArchon zieht das neueste Docker Image (nousresearch/hermes-agent:latest) vom offiziellen Repository und instanziiert den Hermes-Container neu.');
+
+    if (!confirm(confirmText)) return;
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>' + updT('ui.system_update_badge.download_running', 'Download läuft (Docker Pull)... Bitte warten') + '</span>';
+    }
+    if (progMsg) {
+      progMsg.classList.remove('hidden');
+      progMsg.innerText = updT('ui.system_update_badge.pull_started', 'Lade nousresearch/hermes-agent:latest herunter...');
+    }
+
+    try {
+      const res = await fetch('/api/v1/hermes/update/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'latest', restart: autoRestart })
+      });
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        if (progMsg) {
+          progMsg.className = 'text-center text-xs font-mono text-emerald-500 font-bold';
+          progMsg.innerText = updT('ui.system_update_badge.update_success', '✅ Hermes Core erfolgreich aktualisiert ({duration}s)!', { duration: data.duration_seconds });
+        }
+        if (btn) {
+          btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> <span>' + updT('ui.system_update_badge.update_done', 'Aktualisierung abgeschlossen') + '</span>';
+          btn.className = 'w-full py-2.5 rounded-xl bg-emerald-600 text-white font-mono font-bold text-xs flex items-center justify-center gap-2';
+        }
+        setTimeout(async () => {
+          await renderUpdateDialogContent(true);
+        }, 1500);
+      } else {
+        const errText = data.message || data.detail || updT('ui.system_update_badge.unknown_error', 'Unbekannter Fehler');
+        const logsText = Array.isArray(data.logs) && data.logs.length ? `\n\nLogs:\n${data.logs.join('\n')}` : '';
+        const fullErr = updT('ui.system_update_badge.update_failed_detail', 'Update fehlgeschlagen: {message}', { message: errText }) + logsText;
+        if (progMsg) {
+          progMsg.className = 'mt-2 p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-left text-xs font-mono text-rose-500 select-text';
+          progMsg.innerHTML = `
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="font-bold">${updT('ui.system_update_badge.update_failed', 'Update fehlgeschlagen')}</span>
+              <button type="button" onclick="navigator.clipboard.writeText(this.dataset.err); this.innerText='${updT('ui.system_update_badge.copied', 'Kopiert ✓')}';" data-err="${escapeHtml(fullErr)}" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[10px] font-bold cursor-pointer">
+                ${updT('ui.system_update_badge.copy_error', 'Fehler kopieren')}
+              </button>
+            </div>
+            <pre class="whitespace-pre-wrap break-words text-[11px] max-h-36 overflow-y-auto select-text">${escapeHtml(fullErr)}</pre>
+          `;
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i data-lucide="download" class="w-4 h-4"></i> <span>' + updT('ui.system_update_badge.retry', 'Erneut versuchen') + '</span>';
+        }
+      }
+    } catch (err) {
+      const fullErr = updT('ui.system_update_badge.network_error_detail', 'Netzwerkfehler beim Anwenden des Hermes Updates: {message}', { message: err.message });
+      if (progMsg) {
+        progMsg.className = 'mt-2 p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-left text-xs font-mono text-rose-500 select-text';
+        progMsg.innerHTML = `
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="font-bold">${updT('ui.system_update_badge.network_error', 'Netzwerkfehler')}</span>
+            <button type="button" onclick="navigator.clipboard.writeText(this.dataset.err); this.innerText='${updT('ui.system_update_badge.copied', 'Kopiert ✓')}';" data-err="${escapeHtml(fullErr)}" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[10px] font-bold cursor-pointer">
+              ${updT('ui.system_update_badge.copy_error', 'Fehler kopieren')}
+            </button>
+          </div>
+          <pre class="whitespace-pre-wrap break-words text-[11px] select-text">${escapeHtml(fullErr)}</pre>
+        `;
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="download" class="w-4 h-4"></i> <span>' + updT('ui.system_update_badge.retry', 'Erneut versuchen') + '</span>';
+      }
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Exportiere Funktionen nach window
+  window.openSystemUpdateDialog = openSystemUpdateDialog;
+  window.closeSystemUpdateDialog = closeSystemUpdateDialog;
+  window.checkSystemUpdateDialogStatus = () => renderUpdateDialogContent(true);
+  window.executeHermesUpdateFromDialog = executeHermesUpdateFromDialog;
+  window.executeSystemUpdateFromDialog = executeHermesUpdateFromDialog;
+  window.checkUpdateStatus = checkUpdateStatus;
+
+  // Initialer Check nach Start (verzögert um 2 Sekunden)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => checkUpdateStatus(true), 2000);
+    });
+  } else {
+    setTimeout(() => checkUpdateStatus(true), 2000);
+  }
+
+  // Regelmäßige Hintergrundprüfung alle 5 Minuten
+  setInterval(() => checkUpdateStatus(true), 5 * 60 * 1000);
+
+})();

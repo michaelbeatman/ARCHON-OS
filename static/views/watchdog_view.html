@@ -1,0 +1,518 @@
+<div id="view-watchdog" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="height: 100vh !important; max-height: 100vh !important;">
+
+  <!-- ========================================================================= -->
+  <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR INTERNET WATCHDOG       -->
+  <!-- ========================================================================= -->
+  <header id="watchdog-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+    <!-- Links: Titel & Subtitel -->
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="hidden" aria-hidden="true">
+        <img id="watchdog-main-header-img" src="/static/img/cadre_icons/watchdog_radar.png" alt="Watchdog" class="hidden">
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h2 data-i18n="view.watchdog.title" id="watchdog-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">
+            Internet-Watchdog · Radar
+          </h2>
+          <button data-i18n-title="view.watchdog.title_help" type="button" onclick="openContextHelp('watchdog')" title="Hilfe zum Internet-Watchdog" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          </button>
+          <button data-i18n-title="view.watchdog.title_toggle" 
+            type="button"
+            onclick="toggleWatchdogGlobalEnabled()" 
+            id="wd-status-pill"
+            class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1 transition cursor-pointer bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 shrink-0"
+            title="Global an-/ausschalten"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="wd-status-pill-text">Aktiv</span>
+          </button>
+          <span id="wd-findings-total-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">
+            0 Funde
+          </span>
+          <button data-i18n-title="view.watchdog.title_basket_widget" 
+            type="button" 
+            onclick="switchWatchdogSubTab('basket')"
+            id="wd-basket-widget" 
+            class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 shrink-0 cursor-pointer flex items-center gap-1 hover:bg-amber-500/20 transition"
+            title="Sammelkorb öffnen"
+          >
+            <i data-lucide="shopping-bag" class="w-3 h-3 text-amber-500"></i>
+            <span data-i18n="view.watchdog.basket_label">Korb:</span>
+            <span id="wd-basket-count">0</span>/<span id="wd-basket-max">3</span>
+          </button>
+          <span id="wd-last-scan-time-badge" class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0 hidden sm:inline">
+            Letzter Scan: --:--
+          </span>
+        </div>
+        <p data-i18n="view.watchdog.subtitle" id="watchdog-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">
+          Token-freie, autonome Dauerüberwachung für Markt, Bau, KI und Wettbewerbs-Quellen
+        </p>
+      </div>
+    </div>
+
+    <!-- Rechts: 4 Subtabs als 72px Kacheln & Scan-Button & Help -->
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      
+      <!-- 1. Radar -->
+      <button data-i18n-title="view.watchdog.title_tab_radar" 
+        type="button" 
+        id="watchdog-subtab-btn-radar" 
+        onclick="switchWatchdogSubTab('radar')" 
+        class="watchdog-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Web-Radar &amp; Funde-Triage"
+      >
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <img src="/static/img/cadre_icons/watchdog_radar.png" alt="Radar" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.watchdog.tab_radar" class="watchdog-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Radar</span>
+      </button>
+
+      <!-- 2. Sammelkorb -->
+      <button data-i18n-title="view.watchdog.title_tab_basket" 
+        type="button" 
+        id="watchdog-subtab-btn-basket" 
+        onclick="switchWatchdogSubTab('basket')" 
+        class="watchdog-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Sammelkorb &amp; Content-Synthese"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <img src="/static/img/cadre_icons/watchdog_basket.png" alt="Sammelkorb" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.watchdog.tab_basket" class="watchdog-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Korb</span>
+      </button>
+
+      <!-- 3. Quellen -->
+      <button data-i18n-title="view.watchdog.title_tab_sources" 
+        type="button" 
+        id="watchdog-subtab-btn-sources" 
+        onclick="switchWatchdogSubTab('sources')" 
+        class="watchdog-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Radar-Quellen &amp; RSS-Feeds"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <img src="/static/img/cadre_icons/watchdog_sources.png" alt="Quellen" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.watchdog.tab_sources" class="watchdog-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Quellen</span>
+      </button>
+
+      <!-- 4. Optionen -->
+      <button data-i18n-title="view.watchdog.title_tab_settings" 
+        type="button" 
+        id="watchdog-subtab-btn-settings" 
+        onclick="switchWatchdogSubTab('settings')" 
+        class="watchdog-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Taktung, Alarm-Keywords &amp; Kanäle"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <img src="/static/img/cadre_icons/watchdog_settings.png" alt="Optionen" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.watchdog.tab_settings" class="watchdog-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Optionen</span>
+      </button>
+
+      <!-- Scan-Now Button -->
+      <button data-i18n-title="view.watchdog.title_scan" 
+        type="button" 
+        id="wd-scan-now-btn" 
+        onclick="triggerWatchdogRunNow()" 
+        class="h-8 px-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium flex items-center gap-1.5 transition shadow-2xs cursor-pointer shrink-0 ml-1"
+        title="Alle aktiven Quellen sofort abfragen"
+      >
+        <i id="wd-scan-spin-icon" data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
+        <span id="wd-scan-btn-label" class="text-[11px]">Scan</span>
+      </button>
+
+      <!-- Hilfe-Button -->
+      <button data-i18n-title="view.watchdog.title_help" 
+        type="button" 
+        onclick="openContextHelp('watchdog')" 
+        title="Hilfe zum Internet-Watchdog" 
+        class="w-8 h-8 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shadow-xs ml-0.5"
+      >
+        <i data-lucide="help-circle" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- HAUPT-BEREICH: TAB-ROUTING (RADAR / SAMMELKORB / QUELLEN / OPTIONEN)      -->
+  <!-- ========================================================================= -->
+  <div class="flex-1 min-h-0 w-full p-2 overflow-hidden relative">
+
+    <!-- ======================================================================= -->
+    <!-- SUBTAB 1: RADAR (QUELLEN-KATALOG LINKS + TREFFER-STREAM & DETAILS RECHTS) -->
+    <!-- ======================================================================= -->
+    <div id="watchdog-subtab-radar" class="h-full min-h-0 flex gap-2.5 w-full overflow-hidden">
+      
+      <!-- 1. MITTLERE SPALTE: QUELLEN-KATALOG (240px) -->
+      <div id="watchdog-sources-col" class="w-[240px] min-w-[240px] max-w-[240px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-2.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs shrink-0 transition-all duration-200">
+        
+        <!-- EXPANDED HEADER: Kompakt 36px -->
+        <div id="watchdog-sources-expanded-header" class="shrink-0">
+          <div class="h-9 flex items-center justify-between pb-1.5 border-b border-[var(--border)]">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <i data-lucide="radio" class="w-4 h-4 text-sky-500 shrink-0"></i>
+              <h3 data-i18n="view.watchdog.feeds_title" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">Radar-Feeds</h3>
+              <span id="wd-sources-count-badge" class="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-[var(--secondary)] border border-[var(--border)] font-mono">0</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button data-i18n-title="view.watchdog.title_add_source" 
+                type="button" 
+                onclick="toggleWatchdogAddForm()" 
+                class="w-6 h-6 rounded-md border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] flex items-center justify-center transition shadow-2xs cursor-pointer shrink-0" 
+                title="Neue Quelle hinzufügen"
+              >
+                <i data-lucide="plus" class="w-3 h-3"></i>
+              </button>
+              <button data-i18n-title="view.watchdog.title_collapse" 
+                type="button" 
+                id="btn-watchdog-sources-collapse" 
+                onclick="toggleWatchdogSourcesCollapse()" 
+                class="h-6 px-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-[11px] font-mono font-bold cursor-pointer shadow-xs shrink-0" 
+                title="Spalte ein-/ausklappen"
+              >
+                ◀
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- COLLAPSED HEADER (Wenn auf 64px eingeklappt) -->
+        <div id="watchdog-sources-collapsed-header" class="hidden flex flex-col items-center gap-2 pb-2 border-b border-[var(--border)] shrink-0 w-full">
+          <button data-i18n-title="view.watchdog.title_expand" type="button" onclick="toggleWatchdogSourcesCollapse()" class="w-full py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-xs" title="Spalte ausklappen">
+            ▶
+          </button>
+          <button data-i18n-title="view.watchdog.title_check_now" type="button" onclick="triggerWatchdogRunNow()" class="p-2 rounded-xl border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center justify-center cursor-pointer shadow-xs" title="Jetzt prüfen">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
+          </button>
+          <button data-i18n-title="view.watchdog.title_options_channels" type="button" onclick="switchWatchdogSubTab('settings')" class="p-2 rounded-xl border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center justify-center cursor-pointer shadow-xs" title="Optionen &amp; Kanäle">
+            <i data-lucide="settings" class="w-3.5 h-3.5 text-[var(--foreground)]"></i>
+          </button>
+        </div>
+
+        <!-- BODY: KATEGORIEN-FILTER & QUELLEN-LISTE -->
+        <div id="watchdog-sources-body" class="flex-1 flex flex-col min-h-0 py-1.5 overflow-hidden gap-2">
+          
+          <!-- OBERER TEIL: KATEGORIEN-SCHNELLFILTER -->
+          <div class="shrink-0 space-y-1">
+            <div class="flex items-center justify-between pb-1 border-b border-[var(--border)]">
+              <span data-i18n="view.watchdog.categories" class="text-[10px] font-mono font-semibold uppercase text-[var(--muted-foreground)]">Kategorien</span>
+              <span id="wd-cat-active-label" class="text-[9.5px] font-mono text-[var(--foreground)] font-bold">Alle</span>
+            </div>
+            <div class="flex flex-wrap gap-1" id="wd-categories-tags">
+              <button data-i18n="view.watchdog.cat_all" type="button" onclick="filterWatchdogByCategory('all')" class="wd-cat-btn px-2 py-0.5 rounded text-[10px] font-mono border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-bold cursor-pointer transition">Alle</button>
+              <button data-i18n="view.watchdog.cat_market" type="button" onclick="filterWatchdogByCategory('Markt & Bau')" class="wd-cat-btn px-2 py-0.5 rounded text-[10px] font-mono border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] cursor-pointer transition">Markt &amp; Bau</button>
+              <button data-i18n="view.watchdog.cat_ai" type="button" onclick="filterWatchdogByCategory('KI & Tech')" class="wd-cat-btn px-2 py-0.5 rounded text-[10px] font-mono border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] cursor-pointer transition">KI &amp; Tech</button>
+              <button data-i18n="view.watchdog.cat_competitors" type="button" onclick="filterWatchdogByCategory('Wettbewerb')" class="wd-cat-btn px-2 py-0.5 rounded text-[10px] font-mono border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] cursor-pointer transition">Wettbewerb</button>
+            </div>
+          </div>
+
+          <!-- FORMULAR FÜR NEUE QUELLE -->
+          <div id="wd-inline-add-form" class="hidden p-2 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/40 space-y-2 shrink-0">
+            <div data-i18n="view.watchdog.new_source_title" class="font-mono text-[10.5px] font-bold text-[var(--foreground)]">Neue Quelle anlegen</div>
+            <input data-i18n-placeholder="view.watchdog.ph_name" type="text" id="wd-input-name" placeholder="Name (z.B. KfW News)" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--card)] text-xs text-[var(--foreground)] outline-none font-sans">
+            <input data-i18n-placeholder="view.watchdog.ph_category" type="text" id="wd-input-category" placeholder="Kategorie (z.B. Markt & Bau)" value="Markt & Bau" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--card)] text-xs text-[var(--foreground)] outline-none font-sans">
+            <select id="wd-input-type" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--card)] text-xs text-[var(--foreground)] outline-none font-sans">
+              <option data-i18n="view.watchdog.opt_google_news" value="search_feed">Google News / Suchbegriff</option>
+              <option data-i18n="view.watchdog.opt_rss" value="rss">Direkter RSS-/Atom-Feed</option>
+              <option data-i18n="view.watchdog.opt_web_diff" value="web_diff">Webseiten-Diff (URL)</option>
+            </select>
+            <input data-i18n-placeholder="view.watchdog.ph_query" type="text" id="wd-input-query" placeholder="Suchquery oder URL" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--card)] text-xs text-[var(--foreground)] outline-none font-mono">
+            <div class="flex justify-end gap-1.5 pt-1">
+              <button data-i18n="view.watchdog.cancel" type="button" onclick="toggleWatchdogAddForm(false)" class="px-2 py-1 rounded text-[11px] font-mono text-[var(--muted-foreground)] hover:bg-[var(--secondary)] cursor-pointer">Abbrechen</button>
+              <button data-i18n="view.watchdog.save" type="button" onclick="submitWatchdogNewTarget()" class="px-2.5 py-1 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-mono text-[11px] font-semibold cursor-pointer shadow-xs">Speichern</button>
+            </div>
+          </div>
+
+          <!-- QUELLEN-LISTE -->
+          <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div class="flex items-center justify-between pb-1 mb-1 border-b border-[var(--border)] shrink-0">
+              <span data-i18n="view.watchdog.active_feeds" class="text-[10px] font-mono font-semibold uppercase text-[var(--muted-foreground)]">Aktive Feeds</span>
+              <span id="wd-sources-active-ratio" class="text-[9.5px] font-mono text-[var(--muted-foreground)]">0/0 aktiv</span>
+            </div>
+            <div id="wd-sources-list" class="space-y-1.5 overflow-y-auto pr-0.5 custom-scrollbar flex-1 min-h-0 text-[11px]"></div>
+          </div>
+
+        </div>
+
+        <!-- FOOTER -->
+        <div id="watchdog-sources-footer" class="pt-2 shrink-0 border-t border-[var(--border)] space-y-1.5">
+          <div class="p-1.5 rounded-xl bg-[var(--secondary)]/30 border border-[var(--border)] flex items-center justify-between text-[9.5px] font-mono">
+            <span data-i18n="view.watchdog.scan_interval" class="text-[var(--muted-foreground)]">Scan-Taktung</span>
+            <span id="wd-sources-footer-interval" class="font-bold text-[var(--foreground)]">30 Min.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 2. RECHTE FLÄCHE: TREFFER-STREAM & DETAIL-VORSCHAU -->
+      <div id="watchdog-main-area" class="flex-1 h-full min-h-0 flex flex-col gap-2 min-w-0 overflow-hidden">
+        
+        <!-- Filter-Toolbar für Funde -->
+        <div class="p-2.5 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-3">
+          <div class="relative flex-1 max-w-md min-w-0">
+            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] pointer-events-none"></i>
+            <input data-i18n-placeholder="view.watchdog.ph_search" 
+              type="text" 
+              id="wd-findings-search-input" 
+              oninput="filterWatchdogFindingsList(this.value)" 
+              placeholder="Funde nach Titel, Quelle oder Text durchsuchen..." 
+              class="w-full h-8 bg-[var(--background)] border border-[var(--border)] rounded-xl pl-8 pr-3 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-500 font-mono shadow-2xs"
+            >
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span id="wd-findings-counter-label" class="text-[11px] font-mono font-bold text-[var(--foreground)] px-2 py-1 rounded-lg bg-[var(--secondary)] border border-[var(--border)]">
+              0 Treffer
+            </span>
+            <button data-i18n-title="view.watchdog.title_dispatch" 
+              type="button" 
+              id="btn-wd-dispatch-basket" 
+              onclick="dispatchWatchdogBasket()" 
+              class="h-8 px-3 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-mono text-[11px] font-bold transition cursor-pointer shadow-xs disabled:opacity-40 flex items-center gap-1.5"
+              disabled
+              title="Gesammelte Funde als Bündel-Auftrag an Ghostwriter übergeben"
+            >
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              <span data-i18n="view.watchdog.act_synthesis">Synthese starten</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2-Spalten Split: Liste + Detail -->
+        <div class="flex-1 min-h-0 flex gap-2.5 overflow-hidden">
+          
+          <!-- MITTLERE SPALTE: FUNDE-STREAM (LISTE) -->
+          <div class="flex-1 min-w-0 h-full flex flex-col prof-panel-card p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2">
+                <i data-lucide="list" class="w-4 h-4 text-sky-500"></i>
+                <span data-i18n="view.watchdog.findings_title" class="text-xs font-bold font-mono uppercase tracking-wider text-[var(--foreground)]">Chronologische Trefferliste</span>
+              </div>
+            </div>
+
+            <div id="wd-findings-stream-container" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar min-h-0">
+              <!-- Dynamisch befüllt -->
+            </div>
+          </div>
+
+          <!-- RECHTE VORSCHAU-SPALTE (DETAIL EINES FUNDES MIT SCHNELL-AKTIONEN) -->
+          <div id="wd-finding-preview-col" class="w-[360px] min-w-[360px] max-w-[400px] h-full flex flex-col prof-panel-card p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs overflow-hidden shrink-0 hidden lg:flex">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <i data-lucide="file-text" class="w-4 h-4 text-amber-500"></i>
+                <span data-i18n="view.watchdog.detail_title" class="text-xs font-bold font-mono uppercase tracking-wider text-[var(--foreground)] truncate">Fund-Details &amp; Aktionen</span>
+              </div>
+            </div>
+
+            <div id="wd-finding-preview-body" class="flex-1 overflow-y-auto custom-scrollbar space-y-3 min-h-0 text-xs">
+              <div class="py-16 text-center text-xs font-mono text-[var(--muted-foreground)] space-y-2">
+                <i data-lucide="mouse-pointer-click" class="w-6 h-6 mx-auto opacity-40"></i>
+                <p data-i18n="view.watchdog.detail_empty">Wähle links einen Fund aus, um Voransicht, Prompting &amp; Aktions-Trigger zu aktivieren.</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- SUBTAB 2: SAMMELKORB (DEDIZIERTE CONTENT-SYNTHESE ANSICHT)                 -->
+    <!-- ======================================================================= -->
+    <div id="watchdog-subtab-basket" class="hidden h-full min-h-0 flex flex-col gap-2.5 w-full overflow-hidden">
+      
+      <!-- Korb-Toolbar -->
+      <div class="p-3 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-600 dark:text-amber-400">
+            <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 data-i18n="view.watchdog.basket_title" class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">CONTENT-SAMMELKORB (SYNTHESE)</h3>
+            <p data-i18n="view.watchdog.basket_sub" class="text-xs text-[var(--muted-foreground)] font-mono">Bündelung von Einzelfunden für zusammenhängende Dossiers &amp; LinkedIn-Posts</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            onclick="dispatchWatchdogBasket()" 
+            class="h-9 px-4 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-mono text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-2"
+          >
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span data-i18n="view.watchdog.basket_action">Bündel-Synthese starten</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Korb-Inhalte Grid -->
+      <div class="flex-1 min-h-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs overflow-y-auto custom-scrollbar">
+        <div id="wd-basket-full-grid" class="space-y-3">
+          <!-- Dynamisch via renderWatchdogBasketFull() befüllt -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- SUBTAB 3: QUELLEN (VOLLFLÄCHIGE FEED- & RSS-VERWALTUNG)                   -->
+    <!-- ======================================================================= -->
+    <div id="watchdog-subtab-sources" class="hidden h-full min-h-0 flex flex-col gap-2.5 w-full overflow-hidden">
+      
+      <div class="p-3 shrink-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-600 dark:text-sky-400">
+            <i data-lucide="radio" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 data-i18n="view.watchdog.sources_title" class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">RADAR-QUELLEN &amp; FEEDS</h3>
+            <p data-i18n="view.watchdog.sources_sub" class="text-xs text-[var(--muted-foreground)] font-mono">Konfiguration aller Google News Queries, RSS-Feeds und Webseiten-Diffs</p>
+          </div>
+        </div>
+
+        <button 
+          type="button" 
+          onclick="toggleWatchdogAddForm(true); switchWatchdogSubTab('radar');" 
+          class="h-9 px-4 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-mono text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-2"
+        >
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span data-i18n="view.watchdog.new_source">Neue Quelle</span>
+        </button>
+      </div>
+
+      <!-- Vollständige Quellen-Liste -->
+      <div class="flex-1 min-h-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs overflow-y-auto custom-scrollbar">
+        <div id="wd-sources-full-list" class="space-y-2">
+          <!-- Dynamisch via renderWatchdogSourcesFull() befüllt -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- SUBTAB 4: OPTIONEN (WATCHDOG-PARAMETER & TELEGRAM-ALARM)                  -->
+    <!-- ======================================================================= -->
+    <div id="watchdog-subtab-settings" class="hidden h-full min-h-0 flex flex-col gap-3 w-full overflow-y-auto pr-1 custom-scrollbar">
+      
+      <div class="p-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs space-y-4">
+        <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground)]">
+              <i data-lucide="sliders" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h3 data-i18n="view.watchdog.options_title" class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">WATCHDOG-OPTIONEN &amp; ALARM</h3>
+              <p data-i18n="view.watchdog.options_sub" class="text-xs text-[var(--muted-foreground)] font-mono">Taktung, Prioritäts-Keywords &amp; Benachrichtigungen</p>
+            </div>
+          </div>
+          <button data-i18n="view.watchdog.options_save" onclick="saveAndCloseWatchdogSettingsModal()" class="px-4 py-2 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-mono text-xs font-bold cursor-pointer shadow-xs">
+            Einstellungen Speichern
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- 1. Prioritäts-Keywords -->
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 font-mono text-xs font-bold text-[var(--foreground)]">
+                <i data-lucide="bell-ring" class="w-4 h-4 text-rose-500"></i>
+                <span data-i18n="view.watchdog.keywords_title">🚨 Prioritäts-Keywords (Sofort-Alarm via Telegram)</span>
+              </div>
+              <span data-i18n="view.watchdog.keywords_badge" class="text-[9.5px] font-mono text-[var(--muted-foreground)]">Kommagetrennt</span>
+            </div>
+            <p data-i18n="view.watchdog.keywords_hint" class="text-xs text-[var(--muted-foreground)]">
+              Sobald ein Fund eines dieser Suchworte enthält, wird sofort eine gesonderte Telegram-Warnung auf dein Handy geschickt.
+            </p>
+            <input data-i18n-placeholder="view.watchdog.ph_keywords" 
+              type="text" 
+              id="wd-cfg-priority-keywords" 
+              placeholder="z.B. KfW 458, Förderstopp, BauGB § 246e, Groq" 
+              class="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] text-xs text-[var(--foreground)] font-mono outline-none shadow-2xs"
+            >
+          </div>
+
+          <!-- 2. Sammelkorb-Schwellenwert -->
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 space-y-2">
+            <div class="flex items-center gap-2 font-mono text-xs font-bold text-[var(--foreground)]">
+              <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-500"></i>
+              <span data-i18n="view.watchdog.threshold_title">🧺 Sammelkorb-Schwelle für Content-Synthese</span>
+            </div>
+            <p data-i18n="view.watchdog.threshold_hint" class="text-xs text-[var(--muted-foreground)]">
+              Wie viele Funde sollen gesammelt werden, bevor ein Bündel-Paket an den LinkedIn Ghostwriter geht?
+            </p>
+            <div class="flex items-center gap-3 pt-1">
+              <input 
+                type="number" 
+                id="wd-cfg-basket-threshold" 
+                min="1" 
+                max="15" 
+                value="3" 
+                class="w-20 px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] text-xs font-mono text-[var(--foreground)] text-center font-bold shadow-2xs"
+              >
+              <span data-i18n="view.watchdog.threshold_unit" class="text-xs text-[var(--muted-foreground)]">Funde im Paket für zusammenfassenden Post / Dossier</span>
+            </div>
+          </div>
+
+          <!-- 3. Abfrage-Intervall -->
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 space-y-2">
+            <div class="flex items-center gap-2 font-mono text-xs font-bold text-[var(--foreground)]">
+              <i data-lucide="clock" class="w-4 h-4 text-sky-500"></i>
+              <span data-i18n="view.watchdog.interval_title">Abfrage-Rhythmus (Watchdog Intervall)</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 pt-1" id="wd-modal-interval-buttons">
+              <button data-i18n="view.watchdog.interval_15" type="button" onclick="setWatchdogInterval(15)" data-interval="15" class="wd-interval-btn px-3 py-1.5 rounded-xl border border-[var(--border)] font-mono text-xs hover:bg-[var(--secondary)] cursor-pointer">15 Min.</button>
+              <button data-i18n="view.watchdog.interval_30" type="button" onclick="setWatchdogInterval(30)" data-interval="30" class="wd-interval-btn px-3 py-1.5 rounded-xl border border-[var(--border)] font-mono text-xs hover:bg-[var(--secondary)] cursor-pointer">30 Min.</button>
+              <button data-i18n="view.watchdog.interval_60" type="button" onclick="setWatchdogInterval(60)" data-interval="60" class="wd-interval-btn px-3 py-1.5 rounded-xl border border-[var(--border)] font-mono text-xs hover:bg-[var(--secondary)] cursor-pointer">1 Std.</button>
+              <button data-i18n="view.watchdog.interval_120" type="button" onclick="setWatchdogInterval(120)" data-interval="120" class="wd-interval-btn px-3 py-1.5 rounded-xl border border-[var(--border)] font-mono text-xs hover:bg-[var(--secondary)] cursor-pointer">2 Std.</button>
+              <button data-i18n="view.watchdog.interval_360" type="button" onclick="setWatchdogInterval(360)" data-interval="360" class="wd-interval-btn px-3 py-1.5 rounded-xl border border-[var(--border)] font-mono text-xs hover:bg-[var(--secondary)] cursor-pointer">6 Std.</button>
+            </div>
+          </div>
+
+          <!-- 4. Kanäle -->
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 space-y-2">
+            <div class="flex items-center gap-2 font-mono text-xs font-bold text-[var(--foreground)]">
+              <i data-lucide="send" class="w-4 h-4 text-indigo-500"></i>
+              <span data-i18n="view.watchdog.notifications_title">Standard-Benachrichtigungen</span>
+            </div>
+            <div class="space-y-2 pt-1">
+              <label class="flex items-center gap-2.5 text-xs text-[var(--foreground)] cursor-pointer">
+                <input type="checkbox" id="wd-modal-chan-telegram" onchange="toggleWatchdogChannel('telegram', this.checked)" class="rounded border-[var(--border)] accent-[var(--foreground)]">
+                <span data-i18n="view.watchdog.notif_telegram">Telegram Status-Meldungen bei neuen Funden</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- WATCHDOG OPTIONEN MODAL (BACKWARD COMPATIBILITY) -->
+<div id="watchdog-settings-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+  <div class="os-modal bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-5 w-full max-w-xl flex flex-col shadow-2xl overflow-hidden transition-all duration-200 space-y-4 max-h-[90vh]">
+    <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground)]">
+          <i data-lucide="sliders" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h3 data-i18n="view.watchdog.modal_title" class="text-sm font-bold uppercase tracking-wider text-[var(--foreground)]">Watchdog-Optionen &amp; Filter</h3>
+          <p data-i18n="view.watchdog.modal_sub" class="text-[11px] text-[var(--muted-foreground)]">Taktung, Prioritäts-Keywords &amp; Sammelkorb</p>
+        </div>
+      </div>
+      <button onclick="closeWatchdogSettingsModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1.5 rounded-lg hover:bg-[var(--secondary)] transition cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div class="flex justify-between items-center border-t border-[var(--border)] pt-3 text-[11px] font-mono text-[var(--muted-foreground)]">
+      <span data-i18n="view.watchdog.modal_footer">Archon OS • Autonome Kognition</span>
+      <button data-i18n="view.watchdog.modal_save" onclick="saveAndCloseWatchdogSettingsModal()" class="px-4 py-1.5 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 font-mono text-xs font-semibold cursor-pointer shadow-xs">Speichern &amp; Schließen</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_research_agent",
+  "name": "Research Analyst (Crews)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Analyze the company website and provided description to extract insights on culture, values, and specific needs.",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

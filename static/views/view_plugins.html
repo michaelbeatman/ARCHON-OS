@@ -1,0 +1,102 @@
+<div id="view-plugins" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] overflow-hidden" style="height: 100vh; width: 100%;">
+        <!-- Header Toolbar -->
+        <div class="px-6 py-3.5 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-black dark:text-white">
+              <i data-lucide="puzzle" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 data-i18n="view.plugins.title" class="text-sm font-extrabold uppercase tracking-wide font-mono text-[var(--foreground)]">Erweiterungen &amp; Modul-Zentrale</h1>
+                <button type="button" onclick="openContextHelp('plugins')" data-i18n-title="view.plugins.title_help" title="Hilfe zu Erweiterungen &amp; Plugins" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+                  <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                </button>
+                <span id="plugins-active-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--secondary)] text-[var(--foreground)] font-bold border border-[var(--border)]">
+                  34 Module
+                </span>
+              </div>
+              <p data-i18n="view.plugins.subtitle" class="text-[11px] text-[var(--muted-foreground)] font-medium">Hermes Spezial-Plugins nach Fachgebieten strukturiert und einzeln steuerbar</p>
+            </div>
+          </div>
+          <!-- Search & Action Buttons -->
+          <div class="flex items-center gap-2.5">
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-black dark:text-white"></i>
+              <input 
+                type="text" 
+                id="plugin-center-search" 
+                data-i18n-placeholder="view.plugins.ph_search" placeholder="Modul suchen..." 
+                oninput="renderPluginCenterCards()" 
+                class="w-48 bg-[var(--background)] border border-[var(--border)] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[var(--foreground)] placeholder-[var(--muted-foreground)] font-mono focus:bg-[var(--card)]"
+              >
+            </div>
+            <button onclick="loadPluginCenterData()" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Neu laden
+            </button>
+          </div>
+        </div>
+        <!-- 8 Fach-Reiter Navigation Bar -->
+        <div class="px-6 border-b border-[var(--border)] bg-[var(--card)] flex items-center gap-1 overflow-x-auto custom-scrollbar shrink-0 select-none">
+          <button onclick="setPluginTab('Sicherheit & Wächter')" id="pl-tab-btn-0" class="py-3 px-3.5 border-b-2 font-mono text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100">
+            <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.plugins.tab_security">Sicherheit &amp; Wächter</span>
+            <span class="pl-tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--foreground)]">4</span>
+          </button>
+          <button onclick="setPluginTab('Performance & Cache')" id="pl-tab-btn-1" class="py-3 px-3.5 border-b-2 font-mono text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-2 cursor-pointer whitespace-nowrap border-transparent">
+            <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.plugins.tab_performance">Performance &amp; Cache</span>
+            <span class="pl-tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">2</span>
+          </button>
+          <button onclick="setPluginTab('Monitoring & Analytics')" id="pl-tab-btn-2" class="py-3 px-3.5 border-b-2 font-mono text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-2 cursor-pointer whitespace-nowrap border-transparent">
+            <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.plugins.tab_monitoring">Monitoring &amp; Analytics</span>
+            <span class="pl-tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">3</span>
+          </button>
+          <button onclick="setPluginTab('Agenten-Intelligenz')" id="pl-tab-btn-3" class="py-3 px-3.5 border-b-2 font-mono text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-2 cursor-pointer whitespace-nowrap border-transparent">
+            <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.plugins.tab_agents">Agenten-Intelligenz</span>
+            <span class="pl-tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">6</span>
+          </button>
+          <button onclick="setPluginTab('Planung & Tasks')" id="pl-tab-btn-4" class="py-3 px-3.5 border-b-2 font-mono text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-2 cursor-pointer whitespace-nowrap border-transparent">
+            <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.plugins.tab_planning">Planung &amp; Tasks</span>
+            <span class="pl-tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">2</span>
+          </button>
+          <button onclick="setPluginTab('Brücken & Schnittstellen')" id="pl-tab-btn-5" class="py-3 px-3.5 border-b-2 font-mono text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-2 cursor-pointer whitespace-nowrap border-transparent">
+            <i data-lucide="git-merge" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.plugins.tab_bridges">Brücken &amp; Schnittstellen</span>
+            <span class="pl-tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">4</span>
+          </button>
+          <button onclick="setPluginTab('Gedächtnis & Wissen')" id="pl-tab-btn-6" class="py-3 px-3.5 border-b-2 font-mono text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-2 cursor-pointer whitespace-nowrap border-transparent">
+            <i data-lucide="database" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.plugins.tab_memory">Gedächtnis &amp; Wissen</span>
+            <span class="pl-tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">3</span>
+          </button>
+          <button onclick="setPluginTab('Tools & Execution')" id="pl-tab-btn-7" class="py-3 px-3.5 border-b-2 font-mono text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-2 cursor-pointer whitespace-nowrap border-transparent">
+            <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.plugins.tab_tools">Tools &amp; Execution</span>
+            <span class="pl-tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--secondary)] text-[var(--muted-foreground)]">3</span>
+          </button>
+        </div>
+        <!-- Tab Content Grid: Cards for active category -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h2 id="plugin-center-tab-title" class="text-xs font-extrabold uppercase tracking-wider font-mono text-[var(--foreground)]">
+                Sicherheit &amp; Wächter Module
+              </h2>
+              <p id="plugin-center-tab-desc" class="text-[11px] text-[var(--muted-foreground)] font-medium">
+                Schutz vor unbegrenztem Tokenverbrauch, Endlosschleifen und Injection-Angriffen.
+              </p>
+            </div>
+            <span id="plugin-center-active-count" class="text-xs font-mono font-bold text-[var(--foreground)]">
+              -- aktiv
+            </span>
+          </div>
+          <!-- Cards Grid -->
+          <div id="plugin-center-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Dynamically populated plugin cards -->
+            <div class="col-span-full py-12 text-center text-black dark:text-white italic">Lade Erweiterungen...</div>
+          </div>
+        </div>
+      </div>

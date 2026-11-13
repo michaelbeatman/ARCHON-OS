@@ -1,0 +1,10 @@
+{
+  "id": "persona_self_summary",
+  "name": "Self-summary",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Self-summary'. Give me a summary of what you know about me so far...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_formatter",
+  "name": "formatter (Crews)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Format the text as asked. Leave out actions from discussion members that happen between brackets, eg (smiling).",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

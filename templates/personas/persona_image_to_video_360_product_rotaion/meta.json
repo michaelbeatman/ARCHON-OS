@@ -1,0 +1,10 @@
+{
+  "id": "persona_image_to_video_360_product_rotaion",
+  "name": "image to video 360 product rotaion",
+  "category": "2. Handel, Beschaffung & E-Commerce",
+  "description": "Fach-Experte: 'image to video 360 product rotaion'. {\n  \"model\": \"veo-3.1\",\n  \"task\": \"image_to_video_360_product_rotation\",\n\n  \"objective\": \"Generate a photorealistic, sil...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

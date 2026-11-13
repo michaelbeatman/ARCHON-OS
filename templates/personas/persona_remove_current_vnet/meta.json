@@ -1,0 +1,10 @@
+{
+  "id": "persona_remove_current_vnet",
+  "name": "remove current vnet",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'remove current vnet'. I have used netgen vnet to deploy that is managed by internal cental team which is geeting deployed by other team for us...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

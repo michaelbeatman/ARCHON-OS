@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Archon Mobile</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#090d16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #131b2e;
+      --card-border: #1e293b;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --nav-height: 64px;
+      --header-height: 54px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.4;
+      padding-top: calc(var(--header-height) + env(safe-area-inset-top, 0px));
+      padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 12px);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    /* Header */
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: calc(var(--header-height) + env(safe-area-inset-top, 0px));
+      padding-top: env(safe-area-inset-top, 0px);
+      background: rgba(9, 13, 22, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-left: 16px;
+      padding-right: 16px;
+      z-index: 100;
+    }
+    .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
+    .brand svg { width: 20px; height: 20px; color: var(--primary); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; box-shadow: 0 0 8px var(--success); }
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    .icon-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; padding: 6px; border-radius: 8px; }
+    .icon-btn:active { background: var(--card); color: var(--text); }
+
+    /* Nav Bar */
+    nav.bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      background: rgba(19, 27, 46, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 100;
+    }
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 500;
+      gap: 3px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .nav-item.active { color: var(--primary); }
+    .nav-item svg { width: 22px; height: 22px; stroke-width: 2; }
+    .badge-count {
+      position: absolute;
+      top: 6px;
+      right: 25%;
+      background: var(--danger);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 10px;
+      min-width: 16px;
+      text-align: center;
+    }
+
+    /* Tab Content */
+    .tab-content { display: none; padding: 14px 16px; max-width: 680px; margin: 0 auto; }
+    .tab-content.active { display: block; }
+
+    /* Cards */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .card-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; }
+    .card-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+
+    /* Buttons */
+    .btn {
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: opacity 0.15s;
+    }
+    .btn:active { opacity: 0.75; }
+    .btn-primary { background: var(--primary); color: #000; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-outline { background: transparent; border: 1px solid var(--card-border); color: var(--text); }
+    .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+
+    /* Segmented Control */
+    .segment-control {
+      display: flex;
+      background: #0f172a;
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 14px;
+      border: 1px solid var(--card-border);
+    }
+    .segment-btn {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .segment-btn.active {
+      background: var(--card);
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    /* Tab: Chat */
+    .agent-selector-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      scrollbar-width: none;
+    }
+    .agent-selector-scroll::-webkit-scrollbar { display: none; }
+    .agent-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .agent-pill.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 70px;
+      min-height: 250px;
+    }
+    .msg-bubble {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+      word-break: break-word;
+    }
+    .msg-user {
+      align-self: flex-end;
+      background: var(--primary);
+      color: #000;
+      border-bottom-right-radius: 4px;
+      font-weight: 500;
+    }
+    .msg-assistant {
+      align-self: flex-start;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+    .msg-time { font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
+    .chat-input-bar {
+      position: fixed;
+      bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+      left: 0; right: 0;
+      background: rgba(9, 13, 22, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      border-top: 1px solid var(--card-border);
+      max-width: 680px;
+      margin: 0 auto;
+      z-index: 90;
+    }
+    .chat-input-bar textarea {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 14px;
+      resize: none;
+      height: 42px;
+      outline: none;
+      font-family: inherit;
+    }
+    .chat-input-bar textarea:focus { border-color: var(--primary); }
+
+    /* Quick Prompts */
+    .quick-prompts { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 10px; scrollbar-width: none; }
+    .quick-prompts::-webkit-scrollbar { display: none; }
+    .quick-prompt-btn {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 14px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    /* Tab: Approvals / Kanban */
+    .approval-card {
+      background: #151d30;
+      border: 1px solid #2a374f;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    }
+    .approval-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+      margin-bottom: 8px;
+    }
+    .approval-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    /* Tab: Reports Sheet */
+    .report-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      border-bottom: 1px solid var(--card-border);
+      cursor: pointer;
+    }
+    .report-item:last-child { border-bottom: none; }
+    .report-item:active { background: rgba(56, 189, 248, 0.05); }
+
+    .reader-modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--bg);
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+    }
+    .reader-modal.open { display: flex; }
+    .reader-header {
+      height: 54px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--card-border);
+      background: var(--card);
+    }
+    .reader-body {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Tab: Status */
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .status-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .status-value { font-size: 18px; font-weight: 700; color: var(--text); }
+    .status-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+
+    /* Tab: Logs */
+    .log-terminal {
+      background: #030712;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      height: 60vh;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #94a3b8;
+    }
+    .log-line.error { color: #f87171; font-weight: 600; }
+    .log-line.warn { color: #fbbf24; }
+    .log-line.info { color: #38bdf8; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(30, 41, 59, 0.95);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      z-index: 300;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <span>Archon Mobile</span>
+      <span class="status-dot" id="live-dot" title="Server erreichbar" data-i18n-title="ui.mobile.live_dot_title"></span>
+    </div>
+    <div class="header-actions">
+      <span id="header-time" style="font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums;">--:--</span>
+      <button class="icon-btn" onclick="refreshCurrentTab()" title="Aktualisieren" data-i18n-title="ui.mobile.refresh_title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- TAB 1: CHAT -->
+  <div id="tab-chat" class="tab-content active">
+    <!-- Agent Pills -->
+    <div class="agent-selector-scroll" id="agent-selector-scroll">
+      <div class="agent-pill active" onclick="selectAgent('default', 'Robert (CEO)')">👔 Robert (CEO)</div>
+      <div class="agent-pill" onclick="selectAgent('founder', 'Founder')">👤 Founder</div>
+      <div class="agent-pill" onclick="selectAgent('anwalt', 'Rechtsberater')">⚖️ Anwalt</div>
+      <div class="agent-pill" onclick="selectAgent('dev_lead', 'Dev Lead')">💻 Dev Lead</div>
+      <div class="agent-pill" onclick="selectAgent('deep_analyst', 'Analyst')">📊 Analyst</div>
+    </div>
+
+    <!-- Quick Prompts -->
+    <div class="quick-prompts">
+      <button class="quick-prompt-btn" onclick="sendQuickPrompt('Gib mir ein kurzes Tages-Briefing: Was steht heute an?')" data-i18n="ui.mobile.quick_briefing">📋 Tages-Briefing</button>
+      <button class="quick-prompt-btn" onclick="sendQuickPrompt('Gibt es offene Blocker oder ungelöste Probleme?')" data-i18n="ui.mobile.quick_blockers">⚠️ Blocker prüfen</button>
+      <button class="quick-prompt-btn" onclick="sendQuickPrompt('Wie ist der aktuelle System- und Aufgabenstatus?')" data-i18n="ui.mobile.quick_status">⚡ Status abfragen</button>
+    </div>
+
+    <!-- Message Stream -->
+    <div class="chat-messages" id="chat-messages">
+      <div class="msg-bubble msg-assistant">
+        Hallo! Ich bin dein mobiler Direktkontakt. Wähle oben ein Profil oder schreibe mir direkt einen Auftrag.
+        <div class="msg-time">Jetzt</div>
+      </div>
+    </div>
+
+    <!-- Sticky Input Bar -->
+    <div class="chat-input-bar">
+      <textarea id="chat-input" placeholder="Nachricht an Agenten..." data-i18n-placeholder="ui.mobile.chat_input_placeholder" rows="1" onkeydown="handleChatKey(event)"></textarea>
+      <button class="btn btn-primary btn-sm" id="chat-send-btn" onclick="sendMessage()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- TAB 2: KANBAN & FREIGABEN -->
+  <div id="tab-kanban" class="tab-content">
+    <div class="segment-control">
+      <button class="segment-btn active" onclick="setKanbanFilter('review')">⚡ Freigaben (<span id="count-review">0</span>)</button>
+      <button class="segment-btn" onclick="setKanbanFilter('in_progress')" data-i18n="ui.mobile.kanban_in_progress">In Arbeit</button>
+      <button class="segment-btn" onclick="setKanbanFilter('all')" data-i18n="ui.mobile.kanban_all">Alle Tasks</button>
+    </div>
+
+    <div id="kanban-cards-container">
+      <div style="text-align: center; padding: 40px 0; color: var(--text-muted);" data-i18n="ui.mobile.kanban_loading">Lade Aufgaben...</div>
+    </div>
+  </div>
+
+  <!-- TAB 3: BERICHTE & SHOWROOM -->
+  <div id="tab-reports" class="tab-content">
+    <div data-i18n="ui.mobile.reports_intro" style="margin-bottom: 12px; font-size: 13px; color: var(--text-muted);">
+      Zuletzt generierte Berichte, Dossiers und Zwischenergebnisse:
+    </div>
+    <div class="card" style="padding: 4px 8px;" id="reports-list-container">
+      <div style="text-align: center; padding: 20px 0; color: var(--text-muted);" data-i18n="ui.mobile.reports_loading">Lade Berichte...</div>
+    </div>
+  </div>
+
+  <!-- TAB 4: STATUS & VITALITÄT -->
+  <div id="tab-status" class="tab-content">
+    <div class="status-grid">
+      <div class="status-card">
+        <span class="status-label" data-i18n="ui.mobile.status_kernel_daemon">Kernel Daemon</span>
+        <span class="status-value" id="status-daemon" style="color: var(--success);" data-i18n="ui.mobile.status_daemon_online">Online :8501</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label" data-i18n="ui.mobile.status_active_tasks">Aktive Aufgaben</span>
+        <span class="status-value" id="status-active-tasks">-</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span data-i18n="ui.mobile.docker_container">Docker Container</span>
+        <button class="btn btn-outline btn-sm" onclick="loadServicesStatus()" data-i18n="ui.mobile.check">Prüfen</button>
+      </div>
+      <div id="container-status-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+        <div style="color: var(--text-muted); font-size: 13px;" data-i18n="ui.mobile.containers_loading">Lade Container-Status...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: LOG-STREAM -->
+  <div id="tab-logs" class="tab-content">
+    <div style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center;">
+      <select id="log-container-select" onchange="fetchLogs()" style="flex: 1; background: var(--card); border: 1px solid var(--card-border); color: var(--text); padding: 8px; border-radius: 8px; font-size: 12px;">
+        <option value="all" data-i18n="ui.mobile.logs_all_containers">Alle Container</option>
+        <option value="ARCHON-OS">ARCHON-OS</option>
+        <option value="hermes">hermes</option>
+        <option value="n8n">n8n</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="log-pause-btn" onclick="toggleLogPause()" data-i18n="ui.mobile.logs_pause">Pause</button>
+      <button class="btn btn-outline btn-sm" onclick="fetchLogs()" data-i18n="ui.mobile.logs_new">Neu</button>
+    </div>
+    <div class="log-terminal" id="log-terminal" data-i18n="ui.mobile.logs_loading">Lade Log-Stream...</div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab('chat')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span data-i18n="ui.mobile.nav_chat">Chat</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('kanban')" style="position: relative;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+      <span data-i18n="ui.mobile.nav_kanban">Kanban</span>
+      <span class="badge-count" id="nav-badge" style="display: none;">0</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('reports')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span data-i18n="ui.mobile.nav_reports">Berichte</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('status')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span data-i18n="ui.mobile.nav_status">Status</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('logs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <span data-i18n="ui.mobile.nav_logs">Logs</span>
+    </div>
+  </nav>
+
+  <!-- Reader Modal Sheet for Reports -->
+  <div class="reader-modal" id="reader-modal">
+    <div class="reader-header">
+      <button class="btn btn-outline btn-sm" onclick="closeReader()" data-i18n="ui.mobile.reader_back">‹ Zurück</button>
+      <span id="reader-title" style="font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;" data-i18n="ui.mobile.reader_title_default">Bericht</span>
+      <div style="width: 40px;"></div>
+    </div>
+    <div class="reader-body" id="reader-body"></div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast" data-i18n="ui.mobile.toast_action_done">Aktion ausgeführt</div>
+
+  <script>
+    let activeTab = 'chat';
+    let currentAgentId = 'default';
+    let currentAgentName = 'Robert (CEO)';
+    let kanbanTasks = [];
+    let currentKanbanFilter = 'review';
+    let isLogPaused = false;
+    let logPollTimer = null;
+
+    // Uhrzeit im Header
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('header-time').innerText = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    }, 1000);
+
+    // Toast
+    function showToast(text) {
+      const t = document.getElementById('toast');
+      t.innerText = text;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    // Tab Switching
+    function switchTab(tabId) {
+      activeTab = tabId;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      
+      const targetTab = document.getElementById('tab-' + tabId);
+      if (targetTab) targetTab.classList.add('active');
+
+      const tabs = ['chat', 'kanban', 'reports', 'status', 'logs'];
+      const idx = tabs.indexOf(tabId);
+      if (idx !== -1) document.querySelectorAll('.nav-item')[idx].classList.add('active');
+
+      if (tabId === 'kanban') loadKanbanTasks();
+      if (tabId === 'reports') loadReports();
+      if (tabId === 'status') loadServicesStatus();
+      if (tabId === 'logs') {
+        fetchLogs();
+        startLogPolling();
+      } else {
+        stopLogPolling();
+      }
+    }
+
+    function refreshCurrentTab() {
+      if (activeTab === 'chat') loadQuickchatSession(currentAgentId);
+      if (activeTab === 'kanban') loadKanbanTasks();
+      if (activeTab === 'reports') loadReports();
+      if (activeTab === 'status') loadServicesStatus();
+      if (activeTab === 'logs') fetchLogs();
+      showToast('Aktualisiert');
+    }
+
+    // --- TAB 1: CHAT ---
+    async function loadAgents() {
+      try {
+        const res = await fetch('/api/agents');
+        if (!res.ok) return;
+        const agents = await res.json();
+        if (Array.isArray(agents) && agents.length > 0) {
+          const scroll = document.getElementById('agent-selector-scroll');
+          scroll.innerHTML = '';
+          agents.slice(0, 15).forEach((ag, idx) => {
+            const pill = document.createElement('div');
+            pill.className = 'agent-pill' + (ag.id === currentAgentId ? ' active' : '');
+            pill.innerText = (ag.emoji || '🤖') + ' ' + (ag.name || ag.id);
+            pill.onclick = () => selectAgent(ag.id, ag.name || ag.id);
+            scroll.appendChild(pill);
+          });
+        }
+      } catch (e) { console.debug('loadAgents error:', e); }
+    }
+
+    function selectAgent(id, name) {
+      currentAgentId = id;
+      currentAgentName = name;
+      document.querySelectorAll('.agent-pill').forEach(p => p.classList.remove('active'));
+      event.target.classList.add('active');
+      loadQuickchatSession(id);
+    }
+
+    async function loadQuickchatSession(profileId) {
+      try {
+        const res = await fetch(`/api/v1/quickchat/session/${profileId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const container = document.getElementById('chat-messages');
+        container.innerHTML = '';
+        if (data.messages && data.messages.length > 0) {
+          data.messages.forEach(m => {
+            appendChatMessage(m.role, m.content, m.timestamp);
+          });
+        } else {
+          container.innerHTML = `<div class="msg-bubble msg-assistant">Session mit <b>${currentAgentName}</b> gestartet. Wie kann ich dir helfen?</div>`;
+        }
+        window.scrollTo(0, document.body.scrollHeight);
+      } catch (e) { console.debug('quickchat load error:', e); }
+    }
+
+    function appendChatMessage(role, text, time) {
+      const container = document.getElementById('chat-messages');
+      const div = document.createElement('div');
+      div.className = 'msg-bubble ' + (role === 'user' ? 'msg-user' : 'msg-assistant');
+      const formatted = escapeHtml(text).replace(/\n/g, '<br>');
+      const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 'Jetzt';
+      div.innerHTML = formatted + `<div class="msg-time">${timeStr}</div>`;
+      container.appendChild(div);
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      appendChatMessage('user', text, new Date().toISOString());
+
+      const sendBtn = document.getElementById('chat-send-btn');
+      sendBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/v1/quickchat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile_id: currentAgentId, message: text })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          appendChatMessage('assistant', data.reply || 'Keine Antwort erhalten.', new Date().toISOString());
+        } else {
+          appendChatMessage('assistant', '⚠️ Fehler bei der Übermittlung an den Agenten.', new Date().toISOString());
+        }
+      } catch (e) {
+        appendChatMessage('assistant', '⚠️ Netzwerkfehler beim Senden.', new Date().toISOString());
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    function sendQuickPrompt(promptText) {
+      document.getElementById('chat-input').value = promptText;
+      sendMessage();
+    }
+
+    function handleChatKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    // --- TAB 2: KANBAN & FREIGABEN ---
+    async function loadKanbanTasks() {
+      try {
+        const res = await fetch('/api/operations/kanban/tasks');
+        if (!res.ok) return;
+        kanbanTasks = await res.json();
+        renderKanban();
+      } catch (e) {
+        document.getElementById('kanban-cards-container').innerHTML = '<div style="color: var(--danger); text-align: center; padding: 20px;">Fehler beim Laden der Aufgaben.</div>';
+      }
+    }
+
+    function setKanbanFilter(filter) {
+      currentKanbanFilter = filter;
+      document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      renderKanban();
+    }
+
+    function renderKanban() {
+      const container = document.getElementById('kanban-cards-container');
+      const reviewTasks = kanbanTasks.filter(t => t.status === 'review');
+      document.getElementById('count-review').innerText = reviewTasks.length;
+      
+      const badge = document.getElementById('nav-badge');
+      if (reviewTasks.length > 0) {
+        badge.innerText = reviewTasks.length;
+        badge.style.display = 'block';
+      } else {
+        badge.style.display = 'none';
+      }
+
+      let filtered = kanbanTasks;
+      if (currentKanbanFilter === 'review') filtered = reviewTasks;
+      else if (currentKanbanFilter === 'in_progress') filtered = kanbanTasks.filter(t => t.status === 'in_progress');
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px 16px; color: var(--text-muted);">
+            <div style="font-size: 32px; margin-bottom: 8px;">🎉</div>
+            <div style="font-weight: 600; color: var(--text);">Keine Aufgaben im Filter "${currentKanbanFilter}"</div>
+            <div style="font-size: 13px; margin-top: 4px;">Alle relevanten Freigaben sind erteilt.</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const isReview = t.status === 'review';
+        return `
+          <div class="approval-card" id="task-card-${t.id}">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+              <span class="approval-badge">${t.status}</span>
+              <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">#${t.id.slice(-6)}</span>
+            </div>
+            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">${escapeHtml(t.title || 'Aufgabe')}</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">${escapeHtml(t.description || t.kurzfassung || 'Keine Beschreibung angegeben.')}</p>
+            <div style="font-size: 12px; color: var(--primary); margin-bottom: 10px;">👤 Zuständig: ${escapeHtml(t.assignee || 'Nicht zugewiesen')}</div>
+            
+            ${isReview ? `
+              <div class="approval-actions">
+                <button class="btn btn-success" onclick="decideTask('${t.id}', 'approve')">
+                  ✅ Freigeben
+                </button>
+                <button class="btn btn-danger" onclick="decideTask('${t.id}', 'reject')">
+                  ❌ Ablehnen
+                </button>
+              </div>
+            ` : `
+              <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <button class="btn btn-outline btn-sm" onclick="setTaskStatus('${t.id}', 'done')">Als erledigt markieren</button>
+              </div>
+            `}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function decideTask(taskId, decision) {
+      const card = document.getElementById('task-card-' + taskId);
+      if (card) card.style.opacity = '0.5';
+      try {
+        const res = await fetch('/api/decisions/decide', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: taskId, decision: decision, von: 'mobile_owner' })
+        });
+        if (res.ok) {
+          showToast(decision === 'approve' ? '✅ Freigabe erteilt!' : '❌ Abgelehnt');
+          if (card) card.remove();
+          loadKanbanTasks();
+        } else {
+          // Fallback via Status Patch
+          const newStatus = decision === 'approve' ? 'done' : 'blocked';
+          await setTaskStatus(taskId, newStatus);
+        }
+      } catch (e) {
+        showToast('Fehler bei Entscheidung');
+        if (card) card.style.opacity = '1';
+      }
+    }
+
+    async function setTaskStatus(taskId, status) {
+      try {
+        const res = await fetch(`/api/operations/kanban/tasks/${taskId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: status, force: true })
+        });
+        if (res.ok) {
+          showToast(`Status auf "${status}" gesetzt`);
+          loadKanbanTasks();
+        } else {
+          showToast('Statusänderung fehlgeschlagen');
+        }
+      } catch (e) { showToast('Netzwerkfehler'); }
+    }
+
+    // --- TAB 3: BERICHTE ---
+    async function loadReports() {
+      const container = document.getElementById('reports-list-container');
+      try {
+        const res = await fetch('/api/views/showroom/reports');
+        if (!res.ok) {
+          container.innerHTML = '<div style="padding: 16px; color: var(--text-muted);">Keine Berichte verfügbar.</div>';
+          return;
+        }
+        const data = await res.json();
+        const reports = Array.isArray(data) ? data : (data.reports || []);
+        if (reports.length === 0) {
+          container.innerHTML = '<div style="padding: 16px; color: var(--text-muted); text-align: center;">Noch keine Berichte im Showroom generiert.</div>';
+          return;
+        }
+        container.innerHTML = reports.map(r => `
+          <div class="report-item" onclick="openReport('${encodeURIComponent(r.path || r.filename)}', '${escapeHtml(r.title || r.name)}')">
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(r.title || r.name)}</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${r.date || r.modified || 'Aktuell'}</div>
+            </div>
+            <div style="color: var(--primary); font-size: 18px; margin-left: 8px;">›</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = '<div style="padding: 16px; color: var(--danger);">Fehler beim Abrufen der Berichte.</div>';
+      }
+    }
+
+    async function openReport(encodedPath, title) {
+      const modal = document.getElementById('reader-modal');
+      const body = document.getElementById('reader-body');
+      document.getElementById('reader-title').innerText = title;
+      body.innerHTML = 'Lade Berichtsinhalt...';
+      modal.classList.add('open');
+
+      try {
+        const res = await fetch(`/api/views/showroom/report-content?path=${encodedPath}`);
+        if (res.ok) {
+          const data = await res.json();
+          body.innerText = data.content || 'Kein Inhalt vorhanden.';
+        } else {
+          body.innerText = 'Fehler beim Laden des Berichts.';
+        }
+      } catch (e) {
+        body.innerText = 'Netzwerkfehler.';
+      }
+    }
+
+    function closeReader() {
+      document.getElementById('reader-modal').classList.remove('open');
+    }
+
+    // --- TAB 4: STATUS ---
+    async function loadServicesStatus() {
+      try {
+        const [servRes, tasksRes] = await Promise.all([
+          fetch('/api/services'),
+          fetch('/api/operations/kanban/tasks')
+        ]);
+        if (tasksRes.ok) {
+          const tasks = await tasksRes.json();
+          const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+          document.getElementById('status-active-tasks').innerText = inProgress;
+        }
+        if (servRes.ok) {
+          const services = await servRes.json();
+          const list = document.getElementById('container-status-list');
+          list.innerHTML = '';
+          const containers = Array.isArray(services) ? services : (services.containers || []);
+          if (containers.length === 0) {
+            list.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">Keine Container gemeldet.</div>';
+            return;
+          }
+          containers.forEach(c => {
+            const isUp = (c.status || c.state || '').toLowerCase().includes('up') || (c.state || '').toLowerCase() === 'running';
+            list.innerHTML += `
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--card-border);">
+                <span style="font-weight: 500; font-size: 13px;">${escapeHtml(c.name || c.id)}</span>
+                <span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600; background: ${isUp ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${isUp ? 'var(--success)' : 'var(--danger)'};">
+                  ${isUp ? 'Online' : 'Gestoppt'}
+                </span>
+              </div>
+            `;
+          });
+        }
+      } catch (e) { console.debug('status fetch error:', e); }
+    }
+
+    // --- TAB 5: LOG-STREAM ---
+    async function fetchLogs() {
+      const container = document.getElementById('log-container-select').value;
+      const term = document.getElementById('log-terminal');
+      try {
+        let url = `/api/v1/container/all-logs?tail=60`;
+        if (container !== 'all') {
+          url = `/api/v1/container/logs?container_name=${encodeURIComponent(container)}&tail=60`;
+        }
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          const raw = data.logs || 'Keine Logs vorhanden.';
+          term.innerHTML = formatLogLines(raw);
+          term.scrollTop = term.scrollHeight;
+        }
+      } catch (e) {
+        term.innerText = 'Log-Stream nicht erreichbar.';
+      }
+    }
+
+    function formatLogLines(raw) {
+      return raw.split('\n').map(line => {
+        let cls = '';
+        if (line.includes('ERROR') || line.includes('Error') || line.includes('Exception')) cls = 'error';
+        else if (line.includes('WARN') || line.includes('Warning')) cls = 'warn';
+        else if (line.includes('INFO') || line.includes('Success')) cls = 'info';
+        return `<div class="log-line ${cls}">${escapeHtml(line)}</div>`;
+      }).join('');
+    }
+
+    function toggleLogPause() {
+      isLogPaused = !isLogPaused;
+      document.getElementById('log-pause-btn').innerText = isLogPaused ? 'Fortsetzen' : 'Pause';
+      if (!isLogPaused) fetchLogs();
+    }
+
+    function startLogPolling() {
+      stopLogPolling();
+      logPollTimer = setInterval(() => {
+        if (!isLogPaused && activeTab === 'logs') fetchLogs();
+      }, 3500);
+    }
+
+    function stopLogPolling() {
+      if (logPollTimer) { clearInterval(logPollTimer); logPollTimer = null; }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Init beim Start
+    loadAgents();
+    loadQuickchatSession('default');
+    loadKanbanTasks();
+  </script>
+  <script src="/static/js/archon_i18n.js"></script>
+</body>
+</html>

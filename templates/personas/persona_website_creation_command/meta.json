@@ -1,0 +1,10 @@
+{
+  "id": "persona_website_creation_command",
+  "name": "Website Creation Command",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Website Creation Command'. ---\nname: website-creation-command\ndescription: A skill to guide users in creating a website similar to a specified one,...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

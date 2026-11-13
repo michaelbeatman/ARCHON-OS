@@ -1,0 +1,520 @@
+[
+  {
+    "id": "b1c3f1e9b2d84f11",
+    "name": "Archon Morning-Briefing Routine",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "30 7 * * 1-5"
+              }
+            ]
+          }
+        },
+        "id": "cron-briefing",
+        "name": "Schedule (07:30 Mo-Fr)",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          -80
+        ]
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-morning-briefing",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-briefing",
+        "name": "Webhook On-Demand",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          100
+        ],
+        "webhookId": "archon-morning-briefing"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://ARCHON-OS:8501/api/system/standup/run",
+          "sendBody": false,
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
+        },
+        "id": "http-standup",
+        "name": "Run Morning Standup",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://ARCHON-OS:8501/api/telegram/send",
+          "sendBody": true,
+          "specifyBody": "keypair",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "text",
+                "value": "={{ $json.briefing_markdown }}"
+              }
+            ]
+          },
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
+        },
+        "id": "http-telegram",
+        "name": "Send Telegram Briefing",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "m1",
+                "name": "status",
+                "value": "success",
+                "type": "string"
+              },
+              {
+                "id": "m2",
+                "name": "routine",
+                "value": "morning_briefing",
+                "type": "string"
+              },
+              {
+                "id": "m3",
+                "name": "date",
+                "value": "={{ $json.date }}",
+                "type": "string"
+              },
+              {
+                "id": "m4",
+                "name": "message",
+                "value": "Morning-Briefing erfolgreich generiert und verteilt.",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-briefing",
+        "name": "Format Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          720,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Schedule (07:30 Mo-Fr)": {
+        "main": [
+          [
+            {
+              "node": "Run Morning Standup",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook On-Demand": {
+        "main": [
+          [
+            {
+              "node": "Run Morning Standup",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Morning Standup": {
+        "main": [
+          [
+            {
+              "node": "Send Telegram Briefing",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Telegram Briefing": {
+        "main": [
+          [
+            {
+              "node": "Format Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f12",
+    "name": "Archon Weekly Maintenance & System-Audit",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 23 * * 0"
+              }
+            ]
+          }
+        },
+        "id": "cron-audit",
+        "name": "Schedule (So 23:00)",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          -80
+        ]
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-weekly-audit",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-audit",
+        "name": "Webhook On-Demand",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          100
+        ],
+        "webhookId": "archon-weekly-audit"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://ARCHON-OS:8501/api/system/backup-db",
+          "sendBody": false,
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
+        },
+        "id": "http-backup",
+        "name": "Create DB Backup",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "http://ARCHON-OS:8501/api/system/health",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
+        },
+        "id": "http-health",
+        "name": "Check System Health",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "w1",
+                "name": "status",
+                "value": "success",
+                "type": "string"
+              },
+              {
+                "id": "w2",
+                "name": "routine",
+                "value": "weekly_maintenance",
+                "type": "string"
+              },
+              {
+                "id": "w3",
+                "name": "system_health",
+                "value": "={{ $json.status }}",
+                "type": "string"
+              },
+              {
+                "id": "w4",
+                "name": "message",
+                "value": "Woechentliche System-Wartung und SQLite-Backup erfolgreich abgeschlossen.",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-audit",
+        "name": "Format Audit Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          720,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Schedule (So 23:00)": {
+        "main": [
+          [
+            {
+              "node": "Create DB Backup",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook On-Demand": {
+        "main": [
+          [
+            {
+              "node": "Create DB Backup",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create DB Backup": {
+        "main": [
+          [
+            {
+              "node": "Check System Health",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check System Health": {
+        "main": [
+          [
+            {
+              "node": "Format Audit Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f13",
+    "name": "Archon RSS & News Watchdog Routine",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 * * * *"
+              }
+            ]
+          }
+        },
+        "id": "cron-rss",
+        "name": "Schedule (Stündlich)",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          -80
+        ]
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-rss-watchdog",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-rss",
+        "name": "Webhook On-Demand",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          100
+        ],
+        "webhookId": "archon-rss-watchdog"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://ARCHON-OS:8501/api/inbox-watcher/scan-now",
+          "sendBody": false,
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          }
+        },
+        "id": "http-scan",
+        "name": "Scan RSS Feeds",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "r1",
+                "name": "status",
+                "value": "success",
+                "type": "string"
+              },
+              {
+                "id": "r2",
+                "name": "routine",
+                "value": "rss_watchdog",
+                "type": "string"
+              },
+              {
+                "id": "r3",
+                "name": "message",
+                "value": "RSS & News Radar Scan abgeschlossen.",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-rss",
+        "name": "Format Scan Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          480,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Schedule (Stündlich)": {
+        "main": [
+          [
+            {
+              "node": "Scan RSS Feeds",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook On-Demand": {
+        "main": [
+          [
+            {
+              "node": "Scan RSS Feeds",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Scan RSS Feeds": {
+        "main": [
+          [
+            {
+              "node": "Format Scan Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  }
+]

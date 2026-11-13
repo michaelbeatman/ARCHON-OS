@@ -1,0 +1,10 @@
+{
+  "id": "persona_dummy_test_prompt",
+  "name": "Dummy Test Prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Dummy Test Prompt'. Explain {{topic}} in simple terms, as if talking to a 10-year-old....",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_detailed_image_generation_prompt_for_fashion_and_portrait_photography",
+  "name": "Detailed Image Generation Prompt for Fashion and Portrait Photography",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Detailed Image Generation Prompt for Fashion and Portrait Photography'. {\n  \"image_generation_prompt\": {\n    \"subject\": {\n      \"demographics\": \"Young woman\",\n      \"hair\": {\n        \"color\": ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

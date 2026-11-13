@@ -1,0 +1,10 @@
+{
+  "id": "persona_strategic_app_design_content_engineering_prompt",
+  "name": "Strategic App Design & Content Engineering Prompt",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Strategic App Design & Content Engineering Prompt'. \"I want you to design an application architecture and conversion strategy for ${app_category_and_name} using persuasion ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

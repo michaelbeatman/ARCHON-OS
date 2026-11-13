@@ -1,0 +1,899 @@
+<!-- ============================================================ -->
+  <!-- ARCHON VISUAL CSS LIVE STUDIO & IN-PLACE INSPECTOR OVERLAY   -->
+  <!-- 1. LIVE HOVER HIGHLIGHTER BOX -->
+  <div id="archon-css-highlighter" class="fixed pointer-events-none z-[9999998] hidden transition-all duration-75 border-2 border-zinc-200 bg-indigo-500/10 rounded">
+    <div id="archon-highlighter-badge" class="absolute -top-6 left-0 bg-zinc-900 text-zinc-100 border border-zinc-700 font-mono text-[10px] px-1.5 py-0.5 rounded shadow-md whitespace-nowrap">
+      div#target
+    </div>
+  </div>
+  <!-- INTERACTIVE TRANSFORM GIZMO (DRAG POSITION, CORNER RESIZE & BORDER-RADIUS) -->
+  <div id="archon-css-gizmo" class="fixed z-[9999997] hidden border-2 border-dashed border-zinc-400 bg-zinc-500/5 select-none pointer-events-none transition-[border-color] duration-150">
+    <!-- Top Move Handle (Drag Position) -->
+    <div id="gizmo-handle-move" class="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-900 text-zinc-100 border border-zinc-700 font-mono text-[10px] px-2 py-0.5 rounded-t shadow-md flex items-center gap-1 cursor-move hover:bg-zinc-800 active:bg-zinc-700 whitespace-nowrap pointer-events-auto">
+      <i data-lucide="move" class="w-3 h-3 text-zinc-300"></i> <span data-i18n="view.app_frame_studio.position_ziehen">Position ziehen</span>
+    </div>
+    <!-- Live Dimension & Radius Badge -->
+    <div id="gizmo-info-badge" class="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-zinc-200 border border-zinc-700/80 font-mono text-[9.5px] px-2 py-0.5 rounded-full shadow whitespace-nowrap">
+      W: 0px × H: 0px | R: 0px
+    </div>
+    <!-- 4 Corner Resize Handles -->
+    <div class="gizmo-handle-corner absolute -top-2 -left-2 w-3.5 h-3.5 bg-zinc-950 border-2 border-zinc-300 rounded-xs cursor-nwse-resize shadow-xs hover:scale-125 transition-transform pointer-events-auto" data-corner="nw" title="Größe anpassen (Nord-West)" data-i18n-title="view.app_frame_studio.title_groesse_anpassen_nord_west"></div>
+    <div class="gizmo-handle-corner absolute -top-2 -right-2 w-3.5 h-3.5 bg-zinc-950 border-2 border-zinc-300 rounded-xs cursor-nesw-resize shadow-xs hover:scale-125 transition-transform pointer-events-auto" data-corner="ne" title="Größe anpassen (Nord-Ost)" data-i18n-title="view.app_frame_studio.title_groesse_anpassen_nord_ost"></div>
+    <div class="gizmo-handle-corner absolute -bottom-2 -left-2 w-3.5 h-3.5 bg-zinc-950 border-2 border-zinc-300 rounded-xs cursor-nesw-resize shadow-xs hover:scale-125 transition-transform pointer-events-auto" data-corner="sw" title="Größe anpassen (Süd-West)" data-i18n-title="view.app_frame_studio.title_groesse_anpassen_sued_west"></div>
+    <div class="gizmo-handle-corner absolute -bottom-2 -right-2 w-3.5 h-3.5 bg-zinc-950 border-2 border-zinc-300 rounded-xs cursor-nwse-resize shadow-xs hover:scale-125 transition-transform pointer-events-auto" data-corner="se" title="Größe anpassen (Süd-Ost)" data-i18n-title="view.app_frame_studio.title_groesse_anpassen_sued_ost"></div>
+    <!-- 4 Edge Resize Handles -->
+    <div class="gizmo-handle-edge absolute top-1/2 -left-1.5 -translate-y-1/2 w-2.5 h-5 bg-zinc-700 border border-zinc-500 rounded-xs cursor-ew-resize hover:scale-110 shadow-xs pointer-events-auto" data-edge="w" title="Breite links anpassen" data-i18n-title="view.app_frame_studio.title_breite_links_anpassen"></div>
+    <div class="gizmo-handle-edge absolute top-1/2 -right-1.5 -translate-y-1/2 w-2.5 h-5 bg-zinc-700 border border-zinc-500 rounded-xs cursor-ew-resize hover:scale-110 shadow-xs pointer-events-auto" data-edge="e" title="Breite rechts anpassen" data-i18n-title="view.app_frame_studio.title_breite_rechts_anpassen"></div>
+    <div class="gizmo-handle-edge absolute -top-1.5 left-1/2 -translate-x-1/2 h-2.5 w-5 bg-zinc-700 border border-zinc-500 rounded-xs cursor-ns-resize hover:scale-110 shadow-xs pointer-events-auto" data-edge="n" title="Höhe oben anpassen" data-i18n-title="view.app_frame_studio.title_hoehe_oben_anpassen"></div>
+    <div class="gizmo-handle-edge absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-2.5 w-5 bg-zinc-700 border border-zinc-500 rounded-xs cursor-ns-resize hover:scale-110 shadow-xs pointer-events-auto" data-edge="s" title="Höhe unten anpassen" data-i18n-title="view.app_frame_studio.title_hoehe_unten_anpassen"></div>
+    <!-- 4 Corner-Radius Adjustment Knobs (Ecken-Rundung ziehen) -->
+    <div class="gizmo-handle-radius absolute top-2 left-2 w-3 h-3 bg-zinc-200 border border-zinc-900 rounded-full cursor-pointer shadow-sm hover:scale-130 transition-transform pointer-events-auto" data-radius="tl" title="Eckenrundung ziehen (Top-Left)" data-i18n-title="view.app_frame_studio.title_eckenrundung_ziehen_top_left"></div>
+    <div class="gizmo-handle-radius absolute top-2 right-2 w-3 h-3 bg-zinc-200 border border-zinc-900 rounded-full cursor-pointer shadow-sm hover:scale-130 transition-transform pointer-events-auto" data-radius="tr" title="Eckenrundung ziehen (Top-Right)" data-i18n-title="view.app_frame_studio.title_eckenrundung_ziehen_top_right"></div>
+    <div class="gizmo-handle-radius absolute bottom-2 left-2 w-3 h-3 bg-zinc-200 border border-zinc-900 rounded-full cursor-pointer shadow-sm hover:scale-130 transition-transform pointer-events-auto" data-radius="bl" title="Eckenrundung ziehen (Bottom-Left)" data-i18n-title="view.app_frame_studio.title_eckenrundung_ziehen_bottom_left"></div>
+    <div class="gizmo-handle-radius absolute bottom-2 right-2 w-3 h-3 bg-zinc-200 border border-zinc-900 rounded-full cursor-pointer shadow-sm hover:scale-130 transition-transform pointer-events-auto" data-radius="br" title="Eckenrundung ziehen (Bottom-Right)" data-i18n-title="view.app_frame_studio.title_eckenrundung_ziehen_bottom_right"></div>
+  </div>
+  <!-- 2. MINIMIZED FLOATING PILL -->
+  <div id="archon-css-studio-minimized" class="fixed bottom-6 right-20 z-[9999999] hidden bg-zinc-950/95 text-white border border-zinc-700/80 rounded-full shadow-2xl px-3 py-2 flex items-center gap-2 cursor-pointer hover:scale-105 hover:bg-zinc-800 transition backdrop-blur-md" onclick="restoreCssStudio()">
+    <span class="w-2.5 h-2.5 rounded-full bg-zinc-400 animate-pulse"></span>
+    <i data-lucide="palette" class="w-4 h-4 text-zinc-200"></i>
+    <span class="text-xs font-mono font-bold text-zinc-200" data-i18n="view.app_frame_studio.css_studio">CSS Studio</span>
+    <span id="studio-min-badge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700 font-bold">0</span>
+  </div>
+  <!-- 3. MAIN FLOATING STUDIO WINDOW -->
+  <div id="archon-css-studio" class="fixed top-14 right-6 w-[560px] sm:w-[580px] max-w-[95vw] h-[min(84vh,calc(100vh-4.5rem))] max-h-[calc(100vh-4.5rem)] z-[9999999] hidden flex flex-col bg-zinc-950/95 text-zinc-100 border border-zinc-800 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] backdrop-blur-xl animate-in zoom-in-95 duration-200 select-none overflow-hidden font-sans">
+    
+    <!-- DRAGGABLE HEADER BAR -->
+    <div id="studio-drag-header" class="px-3.5 py-2.5 bg-zinc-900/95 border-b border-zinc-800 flex items-center justify-between cursor-grab active:cursor-grabbing shrink-0">
+      <div class="flex items-center gap-2">
+        <i data-lucide="grip-vertical" class="w-4 h-4 text-zinc-400"></i>
+        <div class="flex items-center gap-1.5">
+          <i data-lucide="palette" class="w-4 h-4 text-indigo-400"></i>
+          <span class="font-extrabold text-xs tracking-wider text-white uppercase">Archon CSS Live Studio</span>
+          <button type="button" onclick="openContextHelp('css_studio')" title="Hilfe zum CSS Live Studio" class="w-5 h-5 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-sky-400 flex items-center justify-center transition cursor-pointer shrink-0" data-i18n-title="view.app_frame_studio.title_hilfe_zum_css_live_studio">
+            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <span id="studio-active-rules-count" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 font-bold">0 Regeln</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button type="button" id="btn-studio-header-save" onclick="saveStudioOverrides()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="Live-Änderungen als temporäre Overrides speichern (Strg + S)" data-i18n-title="view.app_frame_studio.title_live_aenderungen_als_temporaere_over">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+          <span data-i18n="view.app_frame_studio.speichern">Speichern</span>
+        </button>
+        <button type="button" id="btn-studio-header-bake" onclick="bakeStudioIntoMainDesign()" class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="Permanent ins Hauptdesign (custom_studio.css) einbrennen & Zähler auf 0 setzen" data-i18n-title="view.app_frame_studio.title_permanent_ins_hauptdesign_custom_stu">
+          <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-300"></i>
+          <span data-i18n="view.app_frame_studio.permanent_einbrennen">Permanent einbrennen</span>
+        </button>
+        <button type="button" onclick="minimizeCssStudio()" class="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer" title="Minimieren" data-i18n-title="view.app_frame_studio.title_minimieren">
+          <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button" onclick="toggleCssStudio()" class="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition font-bold cursor-pointer" title="Schließen (Alt + S)" data-i18n-title="view.app_frame_studio.title_schliessen_alt_s">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+    
+      <!-- THEME MANAGER BAR -->
+      <div class="px-3.5 py-2 bg-zinc-950/90 border-b border-zinc-800 flex items-center justify-between gap-2.5 shrink-0">
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+          <i data-lucide="layers" class="w-3.5 h-3.5 text-zinc-400 shrink-0"></i>
+          <select id="studio-theme-select" onchange="loadSelectedThemeProfile(this.value)" class="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-lg px-2.5 py-1 text-[11px] font-mono text-white focus:outline-none focus:border-indigo-400 shadow-inner">
+            <option value="" data-i18n="view.app_frame_studio.theme_waehlen">-- Theme w&auml;hlen --</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" onclick="saveThemeProfile()" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] transition shadow-xs flex items-center gap-1 cursor-pointer" title="Als benanntes Theme-Profil speichern" data-i18n-title="view.app_frame_studio.title_als_benanntes_theme_profil_speichern">
+            <i data-lucide="save" class="w-3 h-3"></i> <span data-i18n="view.app_frame_studio.theme_speichern">Theme Speichern</span>
+          </button>
+          <button type="button" onclick="deleteThemeProfile()" class="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/80 text-rose-300 font-bold text-[10px] transition shadow-xs cursor-pointer" title="Theme löschen" data-i18n-title="view.app_frame_studio.title_theme_loeschen">
+            <i data-lucide="trash-2" class="w-3 h-3"></i>
+          </button>
+        </div>
+      </div>
+<!-- TARGET SELECTOR & INSPECTION RIBBON -->
+    <div class="px-3.5 py-2.5 bg-zinc-900/90 border-b border-zinc-800 flex flex-col gap-2 shrink-0">
+      <div class="grid grid-cols-4 gap-2">
+        <button type="button" id="btn-studio-pick-element" onclick="toggleStudioInspector()" class="py-1.5 px-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-900 font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-xs">
+          <i data-lucide="crosshair" class="w-3.5 h-3.5 text-zinc-900"></i>
+          <span id="lbl-studio-pick" data-i18n="view.app_frame_studio.auswaehlen">🎯 Auswählen</span>
+        </button>
+        <button type="button" id="btn-studio-gizmo-mode" onclick="toggleStudioGizmo()" class="py-1.5 px-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer border border-zinc-700 shadow-xs">
+          <i data-lucide="move" class="w-3.5 h-3.5 text-zinc-300"></i>
+          <span id="lbl-studio-gizmo" data-i18n="view.app_frame_studio.ecken">✋ Ecken</span>
+        </button>
+        <button type="button" id="btn-studio-text-mode" onclick="toggleStudioTextMode()" class="py-1.5 px-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer border border-zinc-700 shadow-xs">
+          <i data-lucide="type" class="w-3.5 h-3.5 text-zinc-300"></i>
+          <span data-i18n="view.app_frame_studio.text">✏️ Text</span>
+        </button>
+        <button type="button" id="btn-studio-ribbon-save" onclick="saveStudioOverrides()" class="py-1.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-xs" title="Änderungen sofort dauerhaft auf Server speichern (Strg + S)" data-i18n-title="view.app_frame_studio.title_aenderungen_sofort_dauerhaft_auf_ser">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+          <span data-i18n="view.app_frame_studio.speichern_2">💾 Speichern</span>
+        </button>
+      </div>
+      <!-- Selector Path Display & Manual Override Input -->
+      <div class="flex items-center gap-2 bg-zinc-950/90 border border-zinc-800 rounded-lg px-2.5 py-1.5 shadow-inner">
+        <span class="text-[10px] font-mono text-zinc-400 font-bold shrink-0" data-i18n="view.app_frame_studio.css_ziel">CSS Ziel:</span>
+        <input type="text" id="studio-target-selector" placeholder="Klicke ein Element an oder tippe z.B. #id oder .class" oninput="onStudioSelectorInputChange(this.value)" class="flex-1 bg-transparent text-xs font-mono text-zinc-100 focus:outline-none placeholder-zinc-500" data-i18n-placeholder="view.app_frame_studio.placeholder_klicke_ein_element_an_oder_tip">
+        <span id="studio-element-tag-badge" class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">none</span>
+      </div>
+      <!-- Quick Action Ribbon (Ausblenden / Symbole / Stop Anim) -->
+      <div class="flex items-center gap-2 pt-0.5">
+        <button type="button" id="btn-studio-quick-hide" onclick="toggleStudioElementHide()" class="flex-1 py-1.5 px-2 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 font-mono text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs" title="Dieses Element komplett ausblenden / entfernen" data-i18n-title="view.app_frame_studio.title_dieses_element_komplett_ausblenden_e">
+          <i data-lucide="eye-off" class="w-3.5 h-3.5 text-rose-400"></i>
+          <span id="lbl-studio-quick-hide" data-i18n="view.app_frame_studio.ausblenden">🚫 Ausblenden</span>
+        </button>
+        <button type="button" id="btn-studio-quick-symbol" onclick="setStudioTab('symbols')" class="py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-mono text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-xs" title="Symbol oder HTML dieses Elements anpassen" data-i18n-title="view.app_frame_studio.title_symbol_oder_html_dieses_elements_anp">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span data-i18n="view.app_frame_studio.symbol_html">Symbol / HTML</span>
+        </button>
+        <button type="button" id="btn-studio-quick-stop-anim" onclick="toggleStudioAnimationStop()" class="py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-mono text-[11px] transition flex items-center gap-1 cursor-pointer shadow-xs" title="Animationen (wie Pulsieren/Blinken) auf diesem Element stoppen" data-i18n-title="view.app_frame_studio.title_animationen_wie_pulsieren_blinken_au">
+          <i data-lucide="zap-off" class="w-3.5 h-3.5 text-zinc-400"></i>
+          <span data-i18n="view.app_frame_studio.stopp_puls">Stopp Puls</span>
+        </button>
+      </div>
+    </div>
+    <!-- STUDIO TABS -->
+    <div class="flex items-center border-b border-zinc-800 bg-zinc-900/60 px-2 pt-1 text-xs shrink-0 gap-1 overflow-x-auto custom-scrollbar">
+      <button type="button" onclick="setStudioTab('visual')" id="studio-tab-btn-visual" class="studio-tab-btn px-2.5 py-1.5 font-bold border-b-2 border-zinc-200 text-zinc-200 transition flex items-center gap-1 cursor-pointer shrink-0">
+        <i data-lucide="sliders" class="w-3.5 h-3.5"></i> <span data-i18n="view.app_frame_studio.visual">Visual</span>
+      </button>
+      <button type="button" onclick="setStudioTab('symbols')" id="studio-tab-btn-symbols" class="studio-tab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1 cursor-pointer shrink-0">
+        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> <span data-i18n="view.app_frame_studio.symbole_html">Symbole &amp; HTML</span>
+      </button>
+      <button type="button" onclick="setStudioTab('rules')" id="studio-tab-btn-rules" class="studio-tab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1 cursor-pointer shrink-0">
+        <i data-lucide="list" class="w-3.5 h-3.5"></i> <span data-i18n="view.app_frame_studio.regeln">Regeln</span>
+      </button>
+      <button type="button" onclick="setStudioTab('code')" id="studio-tab-btn-code" class="studio-tab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1 cursor-pointer shrink-0">
+        <i data-lucide="code" class="w-3.5 h-3.5"></i> <span data-i18n="view.app_frame_studio.css">CSS</span>
+      </button>
+      <button type="button" onclick="setStudioTab('texts')" id="studio-tab-btn-texts" class="studio-tab-btn px-2.5 py-1.5 font-bold border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1 cursor-pointer shrink-0">
+        <i data-lucide="file-text" class="w-3.5 h-3.5"></i> <span data-i18n="view.app_frame_studio.texte">Texte (</span><span id="studio-text-count">0</span>)
+      </button>
+    </div>
+    <!-- TAB CONTENTS (SCROLLABLE ACCORDIONS) -->
+    <div class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar text-xs">
+      
+      <!-- ============================================== -->
+      <!-- TAB 1: VISUAL BUILDER ACCORDIONS               -->
+      <!-- ============================================== -->
+      <div id="studio-tab-content-visual" class="space-y-2.5">
+        <!-- 1. TYPOGRAFIE -->
+        <details class="group bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden" open>
+          <summary class="flex items-center justify-between p-2.5 font-bold text-xs text-zinc-300 cursor-pointer select-none bg-zinc-900/90 hover:bg-zinc-800/80 transition">
+            <span class="flex items-center gap-2"><i data-lucide="type" class="w-3.5 h-3.5 text-zinc-200"></i> <span data-i18n="view.app_frame_studio.typografie_schrift">Typografie & Schrift</span></span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform group-open:rotate-180 text-zinc-400"></i>
+          </summary>
+          <div class="p-3 space-y-2.5 border-t border-zinc-800/80 bg-zinc-950/40">
+            <!-- Font Family -->
+            <div class="space-y-1.5 pb-2.5 border-b border-zinc-800/80">
+              <div class="flex items-center justify-between">
+                <span class="text-zinc-300 font-mono text-[11px] flex items-center gap-1.5 font-bold">
+                  <i data-lucide="type" class="w-3.5 h-3.5 text-indigo-400"></i> <span data-i18n="view.app_frame_studio.schriftart_font_family">Schriftart (font-family):</span>
+                </span>
+                <button type="button" onclick="applyStudioGlobalFont(document.getElementById('st-input-font-family').value || document.getElementById('st-select-font-family').value)" class="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold hover:underline cursor-pointer flex items-center gap-1" title="Diese Schriftart global für die gesamte Benutzeroberfläche als Standard setzen" data-i18n-title="view.app_frame_studio.title_diese_schriftart_global_fuer_die_ges">
+                  <i data-lucide="globe" class="w-3 h-3"></i> <span data-i18n="view.app_frame_studio.global_anwenden">Global anwenden</span>
+                </button>
+              </div>
+              <select id="st-select-font-family" onchange="onStudioFontFamilySelect(this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1.5 text-[11px] font-mono text-white focus:outline-none focus:border-zinc-400 cursor-pointer">
+                <option value="inherit" data-i18n="view.app_frame_studio.standard_erben_inherit">Standard / Erben (inherit)</option>
+                <option value="'Inter', sans-serif" data-i18n="view.app_frame_studio.inter_modern_clean">Inter (Modern & Clean)</option>
+                <option value="'Plus Jakarta Sans', sans-serif" data-i18n="view.app_frame_studio.plus_jakarta_sans_klar_geometrisch">Plus Jakarta Sans (Klar & Geometrisch)</option>
+                <option value="\'Outfit\', sans-serif" selected data-i18n="view.app_frame_studio.outfit_rund_hochwertig">Outfit (Rund & Hochwertig)</option>
+                <option value="'Space Grotesk', sans-serif" data-i18n="view.app_frame_studio.space_grotesk_tech_futuristic">Space Grotesk (Tech & Futuristic)</option>
+                <option value="'JetBrains Mono', monospace" data-i18n="view.app_frame_studio.jetbrains_mono_code_daten">JetBrains Mono (Code & Daten)</option>
+                <option value="'Fira Code', monospace" data-i18n="view.app_frame_studio.fira_code_monospace">Fira Code (Monospace)</option>
+                <option value="'Montserrat', sans-serif" data-i18n="view.app_frame_studio.montserrat_urban_headline">Montserrat (Urban & Headline)</option>
+                <option value="'Playfair Display', serif" data-i18n="view.app_frame_studio.playfair_display_serif_editorial">Playfair Display (Serif / Editorial)</option>
+                <option value="'Cinzel', serif" data-i18n="view.app_frame_studio.cinzel_klassisch_monumental">Cinzel (Klassisch / Monumental)</option>
+                <option value="'Julius Sans One', sans-serif" data-i18n="view.app_frame_studio.julius_sans_one_minimalistisch">Julius Sans One (Minimalistisch)</option>
+                <option value="system-ui, -apple-system, sans-serif" data-i18n="view.app_frame_studio.system_ui_apple_windows">System UI (Apple / Windows)</option>
+                <option value="custom" data-i18n="view.app_frame_studio.eigene_schriftart_eingeben">✍️ Eigene Schriftart eingeben...</option>
+              </select>
+              <input type="text" id="st-input-font-family" placeholder="z. B. 'Poppins', sans-serif" oninput="onStudioPropChange('font-family', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 font-mono text-[11px] text-white focus:outline-none focus:border-zinc-400"  data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_poppins_sans_serif"/>
+            </div>
+            <!-- Text Color -->
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-zinc-300 font-mono text-[11px]" data-i18n="view.app_frame_studio.schriftfarbe_color">Schriftfarbe (color):</span>
+              <div class="flex items-center gap-1.5">
+                <input type="color" id="st-prop-color-picker" oninput="onStudioPropChange('color', this.value)" class="w-6 h-6 rounded border border-zinc-800 cursor-pointer p-0 bg-transparent">
+                <input type="text" id="st-prop-color-hex" placeholder="#000000" oninput="onStudioPropChange('color', this.value)" class="w-20 bg-zinc-900 border border-zinc-800 rounded px-2 py-0.5 font-mono text-[11px] text-white focus:outline-none focus:border-zinc-200">
+              </div>
+            </div>
+            <!-- Font Size -->
+            <div>
+              <div class="flex justify-between text-[11px] font-mono text-zinc-300 mb-1">
+                <span data-i18n="view.app_frame_studio.schriftgroesse_font_size">Schriftgröße (font-size):</span>
+                <span id="st-val-font-size" class="text-zinc-200 font-bold">14px</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <input type="range" id="st-range-font-size" min="8" max="72" value="14" oninput="onStudioPropChange('font-size', this.value + 'px')" class="flex-1 accent-zinc-400 cursor-pointer">
+                <input type="text" id="st-input-font-size" value="14px" onchange="onStudioPropChange('font-size', this.value)" class="w-16 bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5 text-center font-mono text-[11px] text-white focus:outline-none">
+              </div>
+            </div>
+            <!-- Font Weight & Line Height -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.dicke_font_weight">Dicke (font-weight)</label>
+                <select id="st-select-font-weight" onchange="onStudioPropChange('font-weight', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none">
+                  <option value="normal" data-i18n="view.app_frame_studio.normal_400">Normal (400)</option>
+                  <option value="500" data-i18n="view.app_frame_studio.medium_500">Medium (500)</option>
+                  <option value="600" data-i18n="view.app_frame_studio.semibold_600">Semibold (600)</option>
+                  <option value="bold" data-i18n="view.app_frame_studio.bold_700">Bold (700)</option>
+                  <option value="800" data-i18n="view.app_frame_studio.extrabold_800">Extrabold (800)</option>
+                  <option value="900" data-i18n="view.app_frame_studio.black_900">Black (900)</option>
+                  <option value="300" data-i18n="view.app_frame_studio.light_300">Light (300)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.zeilenhoehe_line_height">Zeilenhöhe (line-height)</label>
+                <input type="text" id="st-input-line-height" placeholder="z.B. 1.5 oder 20px" oninput="onStudioPropChange('line-height', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none" data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_1_5_oder_20px">
+              </div>
+            </div>
+            <!-- Text Align & Transform -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.ausrichtung_text_align">Ausrichtung (text-align)</label>
+                <select id="st-select-text-align" onchange="onStudioPropChange('text-align', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none">
+                  <option value="inherit" data-i18n="view.app_frame_studio.standard">Standard</option>
+                  <option value="left" data-i18n="view.app_frame_studio.links_left">Links (left)</option>
+                  <option value="center" data-i18n="view.app_frame_studio.zentriert_center">Zentriert (center)</option>
+                  <option value="right" data-i18n="view.app_frame_studio.rechts_right">Rechts (right)</option>
+                  <option value="justify" data-i18n="view.app_frame_studio.blocksatz_justify">Blocksatz (justify)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.gross_klein_transform">Groß-/Klein (transform)</label>
+                <select id="st-select-text-transform" onchange="onStudioPropChange('text-transform', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none">
+                  <option value="none" data-i18n="view.app_frame_studio.normal_none">Normal (none)</option>
+                  <option value="uppercase" data-i18n="view.app_frame_studio.grossbuchstaben">GROSSBUCHSTABEN</option>
+                  <option value="capitalize" data-i18n="view.app_frame_studio.erster_buchstabe_gross">Erster Buchstabe Groß</option>
+                  <option value="lowercase" data-i18n="view.app_frame_studio.kleinbuchstaben">kleinbuchstaben</option>
+                </select>
+              </div>
+            </div>
+            <!-- Letter Spacing & Decoration -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.buchstaben_abstand">Buchstaben-Abstand</label>
+                <input type="text" id="st-input-letter-spacing" placeholder="z.B. 0.5px oder 1px" oninput="onStudioPropChange('letter-spacing', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none" data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_0_5px_oder_1px">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.unterstreichung_decor">Unterstreichung (decor)</label>
+                <select id="st-select-text-decoration" onchange="onStudioPropChange('text-decoration', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none">
+                  <option value="none" data-i18n="view.app_frame_studio.keine_none">Keine (none)</option>
+                  <option value="underline" data-i18n="view.app_frame_studio.unterstrichen">Unterstrichen</option>
+                  <option value="line-through" data-i18n="view.app_frame_studio.durchgestrichen">Durchgestrichen</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </details>
+        <!-- 2. HINTERGRUND & FÜLLUNG -->
+        <details class="group bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
+          <summary class="flex items-center justify-between p-2.5 font-bold text-xs text-zinc-300 cursor-pointer select-none bg-zinc-900/90 hover:bg-zinc-800/80 transition">
+            <span class="flex items-center gap-2"><i data-lucide="paint-bucket" class="w-3.5 h-3.5 text-zinc-200"></i> <span data-i18n="view.app_frame_studio.hintergrund_deckkraft">Hintergrund & Deckkraft</span></span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform group-open:rotate-180 text-zinc-400"></i>
+          </summary>
+          <div class="p-3 space-y-2.5 border-t border-zinc-800/80 bg-zinc-950/40">
+            <!-- Bg Color -->
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-zinc-300 font-mono text-[11px]" data-i18n="view.app_frame_studio.hintergrundfarbe_bg">Hintergrundfarbe (bg):</span>
+              <div class="flex items-center gap-1.5">
+                <input type="color" id="st-prop-bg-picker" oninput="onStudioPropChange('background-color', this.value)" class="w-6 h-6 rounded border border-zinc-800 cursor-pointer p-0 bg-transparent">
+                <input type="text" id="st-prop-bg-hex" placeholder="#ffffff" oninput="onStudioPropChange('background-color', this.value)" class="w-24 bg-zinc-900 border border-zinc-800 rounded px-2 py-0.5 font-mono text-[11px] text-white focus:outline-none focus:border-zinc-200" data-i18n-placeholder="view.app_frame_studio.placeholder_ffffff">
+              </div>
+            </div>
+            <!-- Bg Image URL + Upload (User-Wunsch 10.10.2026: JPG-Dateien als Hintergrund) -->
+            <div>
+              <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.hintergrundbild_url_image">Hintergrundbild URL (image)</label>
+              <input type="text" id="st-input-bg-image" placeholder="url('https://...') oder linear-gradient(...)" oninput="onStudioPropChange('background-image', this.value.startsWith('http') ? 'url(' + this.value + ')' : this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none mb-1" data-i18n-placeholder="view.app_frame_studio.placeholder_url_https_oder_linear_gradient">
+              <label title="JPG/PNG/WebP vom Rechner hochladen (max. 8 MB) — wird unter /static/uploads/ gespeichert und direkt als Hintergrund gesetzt" class="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-indigo-300 text-[10px] font-mono font-bold transition cursor-pointer" data-i18n-title="view.app_frame_studio.title_jpg_png_webp_vom_rechner_hochladen_m">
+                <span data-i18n="view.app_frame_studio.jpg_bild_hochladen">🖼️ JPG/Bild hochladen</span>
+                <input type="file" id="st-file-bg-image" accept=".jpg,.jpeg,.png,.webp,.gif" class="hidden" onchange="onStudioBgFileChosen(this)">
+              </label>
+              <button type="button" onclick="removeStudioBackground()" title="Entfernt background-image aus ALLEN Studio-Regeln und speichert dauerhaft (Gegenstück zum Upload)" class="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-300 text-[10px] font-mono font-bold transition cursor-pointer mt-1" data-i18n="view.app_frame_studio.hintergrundbild_entfernen" data-i18n-title="view.app_frame_studio.title_entfernt_background_image_aus_allen">
+                🗑️ Hintergrundbild entfernen
+              </button>
+              <div id="st-bg-upload-status" class="hidden text-[10px] font-mono text-emerald-400 mt-1"></div>
+              <div id="st-bg-remove-status" class="hidden text-[10px] font-mono mt-1"></div>
+            </div>
+            <!-- Bg Size & Repeat -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.bildgroesse_bg_size">Bildgröße (bg-size)</label>
+                <select id="st-select-bg-size" onchange="onStudioPropChange('background-size', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none">
+                  <option value="auto" data-i18n="view.app_frame_studio.auto">Auto</option>
+                  <option value="cover" data-i18n="view.app_frame_studio.cover_ausfuellend">Cover (Ausfüllend)</option>
+                  <option value="contain" data-i18n="view.app_frame_studio.contain_eingepasst">Contain (Eingepasst)</option>
+                  <option value="100% 100%" data-i18n="view.app_frame_studio.100_100_gestreckt">100% 100% (Gestreckt)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.wiederholung_repeat">Wiederholung (repeat)</label>
+                <select id="st-select-bg-repeat" onchange="onStudioPropChange('background-repeat', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none">
+                  <option value="no-repeat" data-i18n="view.app_frame_studio.keine_no_repeat">Keine (no-repeat)</option>
+                  <option value="repeat" data-i18n="view.app_frame_studio.wiederholen_repeat">Wiederholen (repeat)</option>
+                  <option value="repeat-x" data-i18n="view.app_frame_studio.horizontal_repeat_x">Horizontal (repeat-x)</option>
+                  <option value="repeat-y" data-i18n="view.app_frame_studio.vertikal_repeat_y">Vertikal (repeat-y)</option>
+                </select>
+              </div>
+            </div>
+            <!-- Opacity & Backdrop Blur -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.deckkraft_opacity">Deckkraft (opacity)</label>
+                <input type="range" id="st-range-opacity" min="0" max="1" step="0.05" value="1" oninput="onStudioPropChange('opacity', this.value)" class="w-full accent-zinc-400 cursor-pointer">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.backdrop_blur_glass">Backdrop-Blur (Glass)</label>
+                <input type="text" id="st-input-backdrop-blur" placeholder="z.B. blur(10px)" oninput="onStudioPropChange('backdrop-filter', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none" data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_blur_10px">
+              </div>
+            </div>
+          </div>
+        </details>
+        <!-- 3. RAHMEN & ECKENRUNDUNG -->
+        <details class="group bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
+          <summary class="flex items-center justify-between p-2.5 font-bold text-xs text-zinc-300 cursor-pointer select-none bg-zinc-900/90 hover:bg-zinc-800/80 transition">
+            <span class="flex items-center gap-2"><i data-lucide="square" class="w-3.5 h-3.5 text-zinc-200"></i> <span data-i18n="view.app_frame_studio.rahmen_ecken_border">Rahmen & Ecken (Border)</span></span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform group-open:rotate-180 text-zinc-400"></i>
+          </summary>
+          <div class="p-3 space-y-2.5 border-t border-zinc-800/80 bg-zinc-950/40">
+            <!-- Border Color & Style -->
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-zinc-300 font-mono text-[11px]" data-i18n="view.app_frame_studio.rahmenfarbe_color">Rahmenfarbe (color):</span>
+              <div class="flex items-center gap-1.5">
+                <input type="color" id="st-prop-border-color-picker" oninput="onStudioPropChange('border-color', this.value)" class="w-6 h-6 rounded border border-zinc-800 cursor-pointer p-0 bg-transparent">
+                <input type="text" id="st-prop-border-color-hex" placeholder="#cbd5e1" oninput="onStudioPropChange('border-color', this.value)" class="w-20 bg-zinc-900 border border-zinc-800 rounded px-2 py-0.5 font-mono text-[11px] text-white focus:outline-none focus:border-zinc-200">
+              </div>
+            </div>
+            <!-- Border Width & Style -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.breite_width">Breite (width)</label>
+                <div class="flex items-center gap-1">
+                  <input type="range" id="st-range-border-width" min="0" max="12" value="1" oninput="onStudioPropChange('border-width', this.value + 'px')" class="flex-1 accent-zinc-400 cursor-pointer">
+                  <span id="st-val-border-width" class="text-[10px] font-mono text-zinc-200 font-bold w-6 text-right">1px</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.stil_style">Stil (style)</label>
+                <select id="st-select-border-style" onchange="onStudioPropChange('border-style', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none">
+                  <option value="solid" data-i18n="view.app_frame_studio.solid_durchgezogen">Solid (Durchgezogen)</option>
+                  <option value="dashed" data-i18n="view.app_frame_studio.dashed_gestrichelt">Dashed (Gestrichelt)</option>
+                  <option value="dotted" data-i18n="view.app_frame_studio.dotted_gepunktet">Dotted (Gepunktet)</option>
+                  <option value="double" data-i18n="view.app_frame_studio.double_doppelt">Double (Doppelt)</option>
+                  <option value="none" data-i18n="view.app_frame_studio.kein_rahmen_none">Kein Rahmen (none)</option>
+                </select>
+              </div>
+            </div>
+            <!-- Border Radius (Global + 4 Corners) -->
+            <div>
+              <div class="flex justify-between text-[11px] font-mono text-zinc-300 mb-1">
+                <span data-i18n="view.app_frame_studio.eckenrundung_radius">Eckenrundung (radius):</span>
+                <span id="st-val-border-radius" class="text-zinc-200 font-bold">8px</span>
+              </div>
+              <input type="range" id="st-range-border-radius" min="0" max="48" value="8" oninput="onStudioPropChange('border-radius', this.value + 'px')" class="w-full accent-zinc-400 cursor-pointer mb-2">
+              
+              <!-- 4 Corners individual -->
+              <div class="grid grid-cols-4 gap-2 text-center font-mono">
+                <div>
+                  <span class="text-[9px] text-zinc-400 font-bold block mb-1" data-i18n="view.app_frame_studio.top_l">Top-L</span>
+                  <input type="text" id="st-input-radius-tl" placeholder="8px" oninput="onStudioPropChange('border-top-left-radius', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-[11px] text-center text-white focus:outline-none focus:border-indigo-400 shadow-inner">
+                </div>
+                <div>
+                  <span class="text-[9px] text-zinc-400 font-bold block mb-1" data-i18n="view.app_frame_studio.top_r">Top-R</span>
+                  <input type="text" id="st-input-radius-tr" placeholder="8px" oninput="onStudioPropChange('border-top-right-radius', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-[11px] text-center text-white focus:outline-none focus:border-indigo-400 shadow-inner">
+                </div>
+                <div>
+                  <span class="text-[9px] text-zinc-400 font-bold block mb-1" data-i18n="view.app_frame_studio.bot_l">Bot-L</span>
+                  <input type="text" id="st-input-radius-bl" placeholder="8px" oninput="onStudioPropChange('border-bottom-left-radius', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-[11px] text-center text-white focus:outline-none focus:border-indigo-400 shadow-inner">
+                </div>
+                <div>
+                  <span class="text-[9px] text-zinc-400 font-bold block mb-1" data-i18n="view.app_frame_studio.bot_r">Bot-R</span>
+                  <input type="text" id="st-input-radius-br" placeholder="8px" oninput="onStudioPropChange('border-bottom-right-radius', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-[11px] text-center text-white focus:outline-none focus:border-indigo-400 shadow-inner">
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+        <!-- 4. SPACING, DIMENSIONEN & BOX-MODELL -->
+        <details class="group bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
+          <summary class="flex items-center justify-between p-2.5 font-bold text-xs text-zinc-300 cursor-pointer select-none bg-zinc-900/90 hover:bg-zinc-800/80 transition">
+            <span class="flex items-center gap-2"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-200"></i> <span data-i18n="view.app_frame_studio.abstaende_box_modell">Abstände & Box-Modell</span></span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform group-open:rotate-180 text-zinc-400"></i>
+          </summary>
+          <div class="p-3.5 space-y-3.5 border-t border-zinc-800/80 bg-zinc-950/40">
+            
+            <!-- Interactive Box Model Diagram -->
+            <div class="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 font-mono text-[10px]">
+              <!-- Margin Container -->
+              <div class="p-3 border border-dashed border-zinc-700/80 bg-zinc-800/20 rounded-xl text-center">
+                <span class="text-zinc-300 font-bold block mb-1.5 uppercase tracking-wider text-[9.5px]" data-i18n="view.app_frame_studio.margin_aussenabstand">MARGIN (Außenabstand)</span>
+                <div class="flex justify-center mb-2">
+                  <input type="text" id="st-box-mt" placeholder="T: 0" oninput="onStudioPropChange('margin-top', this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1 text-center text-zinc-200 shadow-inner focus:outline-none focus:border-indigo-400">
+                </div>
+                <div class="flex items-center justify-between gap-2.5 mb-2">
+                  <input type="text" id="st-box-ml" placeholder="L: 0" oninput="onStudioPropChange('margin-left', this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1 text-center text-zinc-200 shadow-inner focus:outline-none focus:border-indigo-400 shrink-0">
+                  
+                  <!-- Padding Container inside Margin -->
+                  <div class="flex-1 p-2.5 border border-zinc-700 bg-zinc-800/40 rounded-lg text-center">
+                    <span class="text-zinc-300 font-bold block mb-1.5 uppercase tracking-wider text-[9px]" data-i18n="view.app_frame_studio.padding_innenabstand">PADDING (Innenabstand)</span>
+                    <div class="flex justify-center mb-1.5">
+                      <input type="text" id="st-box-pt" placeholder="T: 8px" oninput="onStudioPropChange('padding-top', this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-0.5 text-center text-zinc-300 shadow-inner focus:outline-none focus:border-indigo-400">
+                    </div>
+                    <div class="flex items-center justify-between gap-1.5 mb-1.5">
+                      <input type="text" id="st-box-pl" placeholder="L: 8px" oninput="onStudioPropChange('padding-left', this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-0.5 text-center text-zinc-300 shadow-inner focus:outline-none focus:border-indigo-400 shrink-0">
+                      <span class="text-[9.5px] font-bold text-indigo-400 px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700/60 uppercase" data-i18n="view.app_frame_studio.inhalt">Inhalt</span>
+                      <input type="text" id="st-box-pr" placeholder="R: 8px" oninput="onStudioPropChange('padding-right', this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-0.5 text-center text-zinc-300 shadow-inner focus:outline-none focus:border-indigo-400 shrink-0">
+                    </div>
+                    <div class="flex justify-center">
+                      <input type="text" id="st-box-pb" placeholder="B: 8px" oninput="onStudioPropChange('padding-bottom', this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-0.5 text-center text-zinc-300 shadow-inner focus:outline-none focus:border-indigo-400">
+                    </div>
+                  </div>
+                  <input type="text" id="st-box-mr" placeholder="R: 0" oninput="onStudioPropChange('margin-right', this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1 text-center text-zinc-200 shadow-inner focus:outline-none focus:border-indigo-400 shrink-0">
+                </div>
+                <div class="flex justify-center">
+                  <input type="text" id="st-box-mb" placeholder="B: 0" oninput="onStudioPropChange('margin-bottom', this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1 text-center text-zinc-200 shadow-inner focus:outline-none focus:border-indigo-400">
+                </div>
+              </div>
+            </div>
+            <!-- Width & Height -->
+            <div class="grid grid-cols-2 gap-2.5 font-mono">
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.breite_width">Breite (width)</label>
+                <input type="text" id="st-input-width" placeholder="auto / 100% / 320px" oninput="onStudioPropChange('width', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-indigo-400 shadow-inner">
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.hoehe_height">Höhe (height)</label>
+                <input type="text" id="st-input-height" placeholder="auto / 40px / 100%" oninput="onStudioPropChange('height', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-indigo-400 shadow-inner">
+              </div>
+            </div>
+            <!-- Min/Max Width -->
+            <div class="grid grid-cols-2 gap-2.5 font-mono">
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.min_breite_min_width">Min-Breite (min-width)</label>
+                <input type="text" id="st-input-min-width" placeholder="z.B. 200px" oninput="onStudioPropChange('min-width', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-indigo-400 shadow-inner" data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_200px">
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.max_breite_max_width">Max-Breite (max-width)</label>
+                <input type="text" id="st-input-max-width" placeholder="z.B. 100% oder 800px" oninput="onStudioPropChange('max-width', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-indigo-400 shadow-inner" data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_100_oder_800px">
+              </div>
+            </div>
+          </div>
+        </details>
+        <!-- 5. LAYOUT, FLEXBOX & POSITION -->
+        <details class="group bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
+          <summary class="flex items-center justify-between p-2.5 font-bold text-xs text-zinc-300 cursor-pointer select-none bg-zinc-900/90 hover:bg-zinc-800/80 transition">
+            <span class="flex items-center gap-2"><i data-lucide="layout" class="w-3.5 h-3.5 text-zinc-200"></i> <span data-i18n="view.app_frame_studio.layout_flexbox">Layout & Flexbox</span></span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform group-open:rotate-180 text-zinc-400"></i>
+          </summary>
+          <div class="p-3 space-y-2.5 border-t border-zinc-800/80 bg-zinc-950/40 font-mono">
+            <!-- Display & Position -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.anzeige_display">Anzeige (display)</label>
+                <select id="st-select-display" onchange="onStudioPropChange('display', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none">
+                  <option value="inherit" data-i18n="view.app_frame_studio.standard">Standard</option>
+                  <option value="flex" data-i18n="view.app_frame_studio.flex">flex</option>
+                  <option value="inline-flex" data-i18n="view.app_frame_studio.inline_flex">inline-flex</option>
+                  <option value="grid" data-i18n="view.app_frame_studio.grid">grid</option>
+                  <option value="block" data-i18n="view.app_frame_studio.block">block</option>
+                  <option value="inline-block" data-i18n="view.app_frame_studio.inline_block">inline-block</option>
+                  <option value="inline" data-i18n="view.app_frame_studio.inline">inline</option>
+                  <option value="none" data-i18n="view.app_frame_studio.none_ausblenden">none (Ausblenden)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.position_position">Position (position)</label>
+                <select id="st-select-position" onchange="onStudioPropChange('position', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none">
+                  <option value="static" data-i18n="view.app_frame_studio.static">static</option>
+                  <option value="relative" data-i18n="view.app_frame_studio.relative">relative</option>
+                  <option value="absolute" data-i18n="view.app_frame_studio.absolute">absolute</option>
+                  <option value="fixed" data-i18n="view.app_frame_studio.fixed">fixed</option>
+                  <option value="sticky" data-i18n="view.app_frame_studio.sticky">sticky</option>
+                </select>
+              </div>
+            </div>
+            <!-- Flex-Direction & Gap -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.richtung_direction">Richtung (direction)</label>
+                <select id="st-select-flex-direction" onchange="onStudioPropChange('flex-direction', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none">
+                  <option value="row" data-i18n="view.app_frame_studio.row_horizontal">row (Horizontal)</option>
+                  <option value="column" data-i18n="view.app_frame_studio.column_vertikal">column (Vertikal)</option>
+                  <option value="row-reverse" data-i18n="view.app_frame_studio.row_reverse">row-reverse</option>
+                  <option value="column-reverse" data-i18n="view.app_frame_studio.column_reverse">column-reverse</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.abstand_gap">Abstand (gap)</label>
+                <input type="text" id="st-input-gap" placeholder="z.B. 8px oder 1rem" oninput="onStudioPropChange('gap', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none" data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_8px_oder_1rem">
+              </div>
+            </div>
+            <!-- Align Items & Justify Content -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.ausrichten_align">Ausrichten (align)</label>
+                <select id="st-select-align-items" onchange="onStudioPropChange('align-items', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none">
+                  <option value="center" data-i18n="view.app_frame_studio.center">center</option>
+                  <option value="flex-start" data-i18n="view.app_frame_studio.flex_start_oben">flex-start (Oben)</option>
+                  <option value="flex-end" data-i18n="view.app_frame_studio.flex_end_unten">flex-end (Unten)</option>
+                  <option value="stretch" data-i18n="view.app_frame_studio.stretch">stretch</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.verteilen_justify">Verteilen (justify)</label>
+                <select id="st-select-justify-content" onchange="onStudioPropChange('justify-content', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none">
+                  <option value="flex-start" data-i18n="view.app_frame_studio.flex_start">flex-start</option>
+                  <option value="center" data-i18n="view.app_frame_studio.center">center</option>
+                  <option value="space-between" data-i18n="view.app_frame_studio.space_between">space-between</option>
+                  <option value="space-around" data-i18n="view.app_frame_studio.space_around">space-around</option>
+                  <option value="flex-end" data-i18n="view.app_frame_studio.flex_end">flex-end</option>
+                </select>
+              </div>
+            </div>
+            <!-- Overflow & Z-Index -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.ueberlauf_overflow">Überlauf (overflow)</label>
+                <select id="st-select-overflow" onchange="onStudioPropChange('overflow', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none">
+                  <option value="visible" data-i18n="view.app_frame_studio.visible">visible</option>
+                  <option value="hidden" data-i18n="view.app_frame_studio.hidden_abschneiden">hidden (Abschneiden)</option>
+                  <option value="auto" data-i18n="view.app_frame_studio.auto_scrollbar">auto (Scrollbar)</option>
+                  <option value="scroll" data-i18n="view.app_frame_studio.scroll">scroll</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.ebene_z_index">Ebene (z-index)</label>
+                <input type="number" id="st-input-z-index" placeholder="z.B. 10 oder 50" oninput="onStudioPropChange('z-index', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none" data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_10_oder_50">
+              </div>
+            </div>
+          </div>
+        </details>
+        <!-- 6. EFFEKTE, SCHATTEN & CURSOR -->
+        <details class="group bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
+          <summary class="flex items-center justify-between p-2.5 font-bold text-xs text-zinc-300 cursor-pointer select-none bg-zinc-900/90 hover:bg-zinc-800/80 transition">
+            <span class="flex items-center gap-2"><i data-lucide="sparkles" class="w-3.5 h-3.5 text-zinc-200"></i> <span data-i18n="view.app_frame_studio.schatten_effekte">Schatten & Effekte</span></span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform group-open:rotate-180 text-zinc-400"></i>
+          </summary>
+          <div class="p-3 space-y-2.5 border-t border-zinc-800/80 bg-zinc-950/40">
+            <!-- Box Shadow Presets & Custom -->
+            <div>
+              <label class="block text-[10px] font-mono text-zinc-400 mb-1" data-i18n="view.app_frame_studio.schatten_box_shadow">Schatten (box-shadow)</label>
+              <select id="st-select-box-shadow" onchange="onStudioPropChange('box-shadow', this.value); document.getElementById('st-input-box-shadow').value = this.value;" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none mb-1">
+                <option value="none" data-i18n="view.app_frame_studio.kein_schatten_none">Kein Schatten (none)</option>
+                <option value="0 1px 3px rgba(0,0,0,0.1)" data-i18n="view.app_frame_studio.subtil_1px">Subtil (1px)</option>
+                <option value="0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)" data-i18n="view.app_frame_studio.mittel_medium">Mittel (Medium)</option>
+                <option value="0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)" data-i18n="view.app_frame_studio.gross_large">Groß (Large)</option>
+                <option value="0 20px 25px -5px rgba(0,0,0,0.2)" data-i18n="view.app_frame_studio.prominent_float">Prominent (Float)</option>
+                <option value="0 0 15px rgba(99, 102, 241, 0.4)" data-i18n="view.app_frame_studio.indigo_glow">Indigo Glow</option>
+                <option value="0 0 15px rgba(239, 35, 60, 0.4)" data-i18n="view.app_frame_studio.red_glow">Red Glow</option>
+                <option value="inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15)" data-i18n="view.app_frame_studio.mulde_absenkung_inset">Mulde / Absenkung (Inset)</option>
+                <option value="inset 0 4px 10px rgba(0,0,0,0.3)" data-i18n="view.app_frame_studio.tiefe_mulde_inset_stark">Tiefe Mulde (Inset stark)</option>
+                <option value="inset 0 0 0 2px rgba(99, 102, 241, 0.5)" data-i18n="view.app_frame_studio.eingepraegte_kontur_inset_ring">Eingeprägte Kontur (Inset Ring)</option>
+              </select>
+              <!-- User-Wunsch 10.10.2026: Inset-Toggle (Mulde) direkt neben dem Schatten-Feld -->
+              <button type="button" id="st-btn-inset-toggle" onclick="toggleShadowInset()" title="Schatten in eine Mulde/Absenkung (inset) umwandeln oder zurück in einen erhabenen Schatten" class="w-full mb-1 py-1 px-2 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-[10px] font-mono text-zinc-200 transition cursor-pointer flex items-center justify-center gap-1.5" data-i18n="view.app_frame_studio.mulde_umschalten_inset" data-i18n-title="view.app_frame_studio.title_schatten_in_eine_mulde_absenkung_ins">↳ Mulde umschalten (Inset)</button>
+              <input type="text" id="st-input-box-shadow" placeholder="Eigener Schatten z.B. 0 4px 20px rgba(0,0,0,0.15)" oninput="onStudioPropChange('box-shadow', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] font-mono text-white focus:outline-none" data-i18n-placeholder="view.app_frame_studio.placeholder_eigener_schatten_z_b_0_4px_20p">
+            </div>
+            <!-- Cursor & Transition -->
+            <div class="grid grid-cols-2 gap-2 font-mono">
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.mauszeiger_cursor">Mauszeiger (cursor)</label>
+                <select id="st-select-cursor" onchange="onStudioPropChange('cursor', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none">
+                  <option value="auto" data-i18n="view.app_frame_studio.auto_2">auto</option>
+                  <option value="pointer" data-i18n="view.app_frame_studio.pointer_hand">pointer (Hand)</option>
+                  <option value="default" data-i18n="view.app_frame_studio.default">default</option>
+                  <option value="text" data-i18n="view.app_frame_studio.text_2">text</option>
+                  <option value="move" data-i18n="view.app_frame_studio.move">move</option>
+                  <option value="not-allowed" data-i18n="view.app_frame_studio.not_allowed">not-allowed</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1" data-i18n="view.app_frame_studio.animation_transition">Animation (transition)</label>
+                <input type="text" id="st-input-transition" placeholder="z.B. all 0.2s ease" oninput="onStudioPropChange('transition', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded p-1 text-[11px] text-white focus:outline-none" data-i18n-placeholder="view.app_frame_studio.placeholder_z_b_all_0_2s_ease">
+              </div>
+            </div>
+          </div>
+        </details>
+        <!-- 7. FREIE CSS-PROPERTY HINZUFÜGEN (+) -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 space-y-2.5">
+          <span class="text-[11px] font-bold text-zinc-300 flex items-center gap-1.5">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-indigo-400"></i>
+            <span data-i18n="view.app_frame_studio.beliebige_css_eigenschaft_hinzufuegen">Beliebige CSS-Eigenschaft hinzufügen</span>
+          </span>
+          <div class="flex items-center gap-2 font-mono">
+            <input type="text" id="st-custom-prop-name" list="css-property-list" placeholder="Property (z.B. filter, transform)" class="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-indigo-400 shadow-inner" data-i18n-placeholder="view.app_frame_studio.placeholder_property_z_b_filter_transform">
+            <input type="text" id="st-custom-prop-val" placeholder="Wert (z.B. scale(1.05))" class="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-indigo-400 shadow-inner" data-i18n-placeholder="view.app_frame_studio.placeholder_wert_z_b_scale_1_05">
+            <button type="button" onclick="addCustomStudioProp()" class="px-3 py-1.5 bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer shadow-xs">
+              +
+            </button>
+          </div>
+          <datalist id="css-property-list">
+            <option value="accent-color"></option>
+            <option value="align-content"></option>
+            <option value="align-items"></option>
+            <option value="align-self"></option>
+            <option value="animation"></option>
+            <option value="aspect-ratio"></option>
+            <option value="backdrop-filter"></option>
+            <option value="background"></option>
+            <option value="background-blend-mode"></option>
+            <option value="background-clip"></option>
+            <option value="background-color"></option>
+            <option value="background-image"></option>
+            <option value="background-position"></option>
+            <option value="background-repeat"></option>
+            <option value="background-size"></option>
+            <option value="border"></option>
+            <option value="border-collapse"></option>
+            <option value="border-color"></option>
+            <option value="border-radius"></option>
+            <option value="border-style"></option>
+            <option value="border-width"></option>
+            <option value="bottom"></option>
+            <option value="box-shadow"></option>
+            <option value="box-sizing"></option>
+            <option value="clip-path"></option>
+            <option value="color"></option>
+            <option value="column-gap"></option>
+            <option value="cursor"></option>
+            <option value="display"></option>
+            <option value="filter"></option>
+            <option value="flex"></option>
+            <option value="flex-direction"></option>
+            <option value="flex-grow"></option>
+            <option value="flex-shrink"></option>
+            <option value="flex-wrap"></option>
+            <option value="float"></option>
+            <option value="font-family"></option>
+            <option value="font-size"></option>
+            <option value="font-style"></option>
+            <option value="font-weight"></option>
+            <option value="gap"></option>
+            <option value="grid-template-columns"></option>
+            <option value="grid-template-rows"></option>
+            <option value="height"></option>
+            <option value="inset"></option>
+            <option value="justify-content"></option>
+            <option value="justify-items"></option>
+            <option value="left"></option>
+            <option value="letter-spacing"></option>
+            <option value="line-height"></option>
+            <option value="margin"></option>
+            <option value="margin-bottom"></option>
+            <option value="margin-left"></option>
+            <option value="margin-right"></option>
+            <option value="margin-top"></option>
+            <option value="max-height"></option>
+            <option value="max-width"></option>
+            <option value="min-height"></option>
+            <option value="min-width"></option>
+            <option value="mix-blend-mode"></option>
+            <option value="opacity"></option>
+            <option value="order"></option>
+            <option value="outline"></option>
+            <option value="overflow"></option>
+            <option value="overflow-x"></option>
+            <option value="overflow-y"></option>
+            <option value="padding"></option>
+            <option value="padding-bottom"></option>
+            <option value="padding-left"></option>
+            <option value="padding-right"></option>
+            <option value="padding-top"></option>
+            <option value="perspective"></option>
+            <option value="pointer-events"></option>
+            <option value="position"></option>
+            <option value="resize"></option>
+            <option value="right"></option>
+            <option value="row-gap"></option>
+            <option value="scroll-behavior"></option>
+            <option value="table-layout"></option>
+            <option value="text-align"></option>
+            <option value="text-decoration"></option>
+            <option value="text-overflow"></option>
+            <option value="text-shadow"></option>
+            <option value="text-transform"></option>
+            <option value="top"></option>
+            <option value="transform"></option>
+            <option value="transform-origin"></option>
+            <option value="transition"></option>
+            <option value="user-select"></option>
+            <option value="vertical-align"></option>
+            <option value="visibility"></option>
+            <option value="white-space"></option>
+            <option value="width"></option>
+            <option value="word-break"></option>
+            <option value="z-index"></option>
+          </datalist>
+        </div>
+      </div>
+      <!-- ============================================== -->
+      <!-- TAB 2: ALLE AKTIVEN REGELN                     -->
+      <!-- ============================================== -->
+      <div id="studio-tab-content-rules" class="hidden space-y-2 font-mono">
+        <div class="flex items-center justify-between text-zinc-400 text-[11px] pb-1 border-b border-zinc-800">
+          <span data-i18n="view.app_frame_studio.gespeicherte_css_selektoren">Gespeicherte CSS-Selektoren:</span>
+          <button type="button" onclick="resetAllStudioStyles()" class="text-zinc-400 hover:text-zinc-200 text-[10px] cursor-pointer" data-i18n="view.app_frame_studio.alle_loeschen">Alle löschen</button>
+        </div>
+        <div id="studio-rules-list-container" class="space-y-2">
+          <!-- Dynamically filled with active selector blocks -->
+          <div class="text-zinc-500 text-center py-6 text-xs" data-i18n="view.app_frame_studio.noch_keine_css_regeln_definiert_klicke_obe">Noch keine CSS-Regeln definiert. Klicke oben auf „Element auswählen“, um Styles zu bearbeiten.</div>
+        </div>
+      </div>
+      <!-- ============================================== -->
+      <!-- TAB 3: RAW CSS CODE EDITOR                     -->
+      <!-- ============================================== -->
+      <div id="studio-tab-content-code" class="hidden flex flex-col space-y-2">
+        <div class="flex items-center justify-between text-[11px] font-mono text-zinc-400">
+          <span data-i18n="view.app_frame_studio.live_css_stylesheet">Live CSS Stylesheet:</span>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="saveStudioOverrides()" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1 cursor-pointer shadow-xs" title="CSS Stylesheet dauerhaft speichern (Strg + S)" data-i18n-title="view.app_frame_studio.title_css_stylesheet_dauerhaft_speichern_s">
+              <i data-lucide="save" class="w-3 h-3"></i> <span data-i18n="view.app_frame_studio.speichern">Speichern</span>
+            </button>
+            <button type="button" onclick="copyStudioCss()" class="text-zinc-200 hover:text-zinc-300 cursor-pointer flex items-center gap-1">
+              <i data-lucide="copy" class="w-3 h-3"></i> <span data-i18n="view.app_frame_studio.kopieren">Kopieren</span>
+            </button>
+          </div>
+        </div>
+        <textarea id="studio-raw-css-editor" oninput="onStudioRawCssInput(this.value)" class="w-full h-72 bg-zinc-950 border border-zinc-800 rounded-xl p-3 font-mono text-xs text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-200 resize-y custom-scrollbar" placeholder="/* Schreibe oder paste hier beliebiges CSS. Wird sofort live im DOM angewendet! */" data-i18n-placeholder="view.app_frame_studio.placeholder_schreibe_oder_paste_hier_belie"></textarea>
+      </div>
+      <!-- ============================================== -->
+      <!-- TAB 4: TEXT-OVERRIDES                         -->
+      <!-- ============================================== -->
+      <div id="studio-tab-content-texts" class="hidden space-y-2">
+        <div class="flex items-center justify-between text-[11px] font-mono text-zinc-400 pb-1 border-b border-zinc-800">
+          <span data-i18n="view.app_frame_studio.geaenderte_texte_labels">Geänderte Texte & Labels:</span>
+          <button type="button" onclick="clearAllStudioTextOverrides()" class="text-zinc-400 hover:text-zinc-200 text-[10px] cursor-pointer" data-i18n="view.app_frame_studio.alle_zuruecksetzen">Alle zurücksetzen</button>
+        </div>
+        <div id="studio-texts-list-container" class="space-y-1.5">
+          <!-- Dynamically filled with text replacements -->
+        </div>
+      </div>
+      <!-- ============================================== -->
+      <!-- TAB 5: SYMBOLE, ICONS & HTML-OBJEKTE          -->
+      <!-- ============================================== -->
+      <div id="studio-tab-content-symbols" class="hidden space-y-3.5">
+        
+        <!-- ELEMENT STATUS & QUICK HIDE -->
+        <div class="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold text-zinc-300 flex items-center gap-1.5">
+              <i data-lucide="eye" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span data-i18n="view.app_frame_studio.sichtbarkeit_des_elements">Sichtbarkeit des Elements</span>
+            </span>
+            <span id="studio-symbols-vis-badge" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">Sichtbar</span>
+          </div>
+          <button type="button" onclick="toggleStudioElementHide()" id="btn-studio-symbols-hide-toggle" class="w-full py-2 px-3 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-300 font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span id="lbl-studio-symbols-hide" data-i18n="view.app_frame_studio.element_ausblenden_entfernen_display_none">Element ausblenden / entfernen (display: none)</span>
+          </button>
+        </div>
+
+        <!-- SYMBOL / ICON PRESETS -->
+        <div class="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold text-zinc-300 flex items-center gap-1.5">
+              <i data-lucide="icons" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span data-i18n="view.app_frame_studio.symbol_icon_schnell_wahl">Symbol &amp; Icon Schnell-Wahl</span>
+            </span>
+            <span class="text-[10px] text-zinc-400 font-mono" data-i18n="view.app_frame_studio.1_klick_ersetzen">1-Klick Ersetzen</span>
+          </div>
+          <p class="text-[11px] text-zinc-400 leading-tight" data-i18n="view.app_frame_studio.ersetze_den_inhalt_des_markierten_elements">
+            Ersetze den Inhalt des markierten Elements durch ein Icon, einen dezenten Punkt oder leere es komplett.
+          </p>
+
+          <div class="grid grid-cols-3 gap-1.5 pt-1">
+            <button type="button" onclick="applyStudioSymbolPreset('pulse_dot', 'emerald-500')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer" title="Grüner pulsierender Punkt (z.B. für Online / Aktiv)" data-i18n-title="view.app_frame_studio.title_gruener_pulsierender_punkt_z_b_fuer">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 my-0.5 inline-block animate-pulse"></span>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.puls_gruen">Puls Grün</span>
+            </button>
+            <button type="button" onclick="applyStudioSymbolPreset('pulse_dot', 'indigo-500')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer" title="Indigo pulsierender Punkt (Akzent / Fokus)" data-i18n-title="view.app_frame_studio.title_indigo_pulsierender_punkt_akzent_fok">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 my-0.5 inline-block animate-pulse"></span>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.puls_indigo">Puls Indigo</span>
+            </button>
+            <button type="button" onclick="applyStudioSymbolPreset('pulse_dot', 'rose-500')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer" title="Roter pulsierender Punkt (Live / Alarm)" data-i18n-title="view.app_frame_studio.title_roter_pulsierender_punkt_live_alarm">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500 my-0.5 inline-block animate-pulse"></span>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.puls_rot">Puls Rot</span>
+            </button>
+            <button type="button" onclick="applyStudioSymbolPreset('ping_dot', 'emerald-500')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer" title="Radar-Sonar-Effekt" data-i18n-title="view.app_frame_studio.title_radar_sonar_effekt">
+              <span class="relative flex h-2.5 w-2.5 my-0.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.radar_ping">Radar Ping</span>
+            </button>
+            <button type="button" onclick="applyStudioSymbolPreset('dot')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer" title="Statischer, unaufdringlicher Punkt" data-i18n-title="view.app_frame_studio.title_statischer_unaufdringlicher_punkt">
+              <span class="w-2 h-2 rounded-full bg-slate-400 my-0.5 inline-block"></span>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.dezenter_punkt">Dezenter Punkt</span>
+            </button>
+            <button type="button" onclick="applyStudioSymbolPreset('none')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer" title="Inhalt komplett leeren" data-i18n-title="view.app_frame_studio.title_inhalt_komplett_leeren">
+              <i data-lucide="slash" class="w-4 h-4 text-zinc-400"></i>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.kein_symbol">Kein Symbol</span>
+            </button>
+            <button type="button" onclick="applyStudioSymbolPreset('lucide', 'check')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer">
+              <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.check">Check</span>
+            </button>
+            <button type="button" onclick="applyStudioSymbolPreset('lucide', 'chevron-right')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer">
+              <i data-lucide="chevron-right" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.pfeil">Pfeil</span>
+            </button>
+            <button type="button" onclick="applyStudioSymbolPreset('lucide', 'sparkles')" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-mono flex flex-col items-center gap-1 cursor-pointer">
+              <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+              <span class="text-[10px]" data-i18n="view.app_frame_studio.stern">Stern</span>
+            </button>
+          </div>
+
+          <!-- Freie Icon-Eingabe (Lucide) -->
+          <div class="pt-1.5 flex items-center gap-1.5">
+            <input type="text" id="studio-custom-icon-input" placeholder="Lucide Name (z.B. zap, bell, cpu)" class="flex-1 bg-zinc-950 border border-zinc-800 rounded px-2 py-1 font-mono text-[11px] text-zinc-200 focus:outline-none focus:border-indigo-400" data-i18n-placeholder="view.app_frame_studio.placeholder_lucide_name_z_b_zap_bell_cpu">
+            <button type="button" onclick="applyStudioSymbolPreset('lucide', document.getElementById('studio-custom-icon-input').value.trim())" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-mono text-[11px] font-bold transition cursor-pointer" data-i18n="view.app_frame_studio.icon_setzen">
+              Icon setzen
+            </button>
+          </div>
+        </div>
+
+        <!-- HTML DIREKT-EDITOR (innerHTML) -->
+        <div class="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold text-zinc-300 flex items-center gap-1.5">
+              <i data-lucide="code-2" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span data-i18n="view.app_frame_studio.html_knoten_editor_innerhtml">HTML / Knoten-Editor (innerHTML)</span>
+            </span>
+          </div>
+          <p class="text-[11px] text-zinc-400 leading-tight" data-i18n="view.app_frame_studio.bearbeite_den_html_inhalt_direkt_z_b_text">
+            Bearbeite den HTML-Inhalt direkt (z. B. Text mit Icons kombinieren oder Tags hinzufügen).
+          </p>
+          <textarea id="studio-selected-html-editor" rows="3" class="w-full bg-zinc-950 border border-zinc-800 rounded p-2 font-mono text-xs text-zinc-200 focus:outline-none focus:border-indigo-400 resize-y" placeholder="Kein Element ausgewählt" data-i18n-placeholder="view.app_frame_studio.placeholder_kein_element_ausgewaehlt"></textarea>
+          <div class="flex justify-end gap-2">
+            <button type="button" onclick="resetStudioElementHtml()" class="px-2.5 py-1 rounded border border-zinc-700 bg-zinc-800 text-zinc-300 text-xs font-mono hover:text-white cursor-pointer" data-i18n="view.app_frame_studio.zuruecksetzen">
+              Zurücksetzen
+            </button>
+            <button type="button" onclick="setStudioElementHtml(document.getElementById('studio-selected-html-editor').value)" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-mono text-xs font-bold transition cursor-pointer" data-i18n="view.app_frame_studio.html_uebernehmen">
+              HTML Übernehmen
+            </button>
+          </div>
+        </div>
+
+        <!-- LISTE AUSGEBLENDETER ELEMENTE -->
+        <div class="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold text-zinc-300 flex items-center gap-1.5">
+              <i data-lucide="eye-off" class="w-3.5 h-3.5 text-rose-400"></i>
+              <span><span data-i18n="view.app_frame_studio.ausgeblendete_elemente">Ausgeblendete Elemente (</span><span id="studio-hidden-count">0</span>)</span>
+            </span>
+          </div>
+          <div id="studio-hidden-elements-list" class="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar font-mono text-xs">
+            <span class="text-zinc-500 text-[11px]" data-i18n="view.app_frame_studio.keine_elemente_ausgeblendet">Keine Elemente ausgeblendet.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <!-- ACTION FOOTER BAR -->
+    <div class="p-3 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between gap-2 shrink-0">
+      <div class="flex items-center gap-1.5">
+        <button type="button" id="btn-studio-footer-save" onclick="saveStudioOverrides()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Live-Änderungen speichern (Strg + S)" data-i18n-title="view.app_frame_studio.title_live_aenderungen_speichern_strg_s">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+          <span data-i18n="view.app_frame_studio.speichern_2">💾 Speichern</span>
+        </button>
+        <button type="button" id="btn-studio-footer-bake" onclick="bakeStudioIntoMainDesign()" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Alle Live-Regeln dauerhaft ins Hauptdesign (custom_studio.css) übertragen und den Zähler auf 0 zurücksetzen" data-i18n-title="view.app_frame_studio.title_alle_live_regeln_dauerhaft_ins_haupt">
+          <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-300"></i>
+          <span data-i18n="view.app_frame_studio.permanent_uebernehmen_zaehler_0">🔥 Permanent übernehmen (Zähler 0)</span>
+        </button>
+        <button type="button" onclick="exportStudioCss()" class="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition flex items-center gap-1 cursor-pointer" title="Als CSS-Datei herunterladen" data-i18n-title="view.app_frame_studio.title_als_css_datei_herunterladen">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span data-i18n="view.app_frame_studio.export">Export</span>
+        </button>
+      </div>
+      <div class="flex items-center gap-1">
+        <button type="button" onclick="resetSelectedElementStyles()" class="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-[11px] transition cursor-pointer" title="Styles des aktuell gewählten Elements entfernen" data-i18n="view.app_frame_studio.element_reset" data-i18n-title="view.app_frame_studio.title_styles_des_aktuell_gewaehlten_elemen">
+          Element Reset
+        </button>
+        <button type="button" onclick="resetAllStudioStyles()" class="px-2 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border border-zinc-700 font-bold text-[11px] transition cursor-pointer" title="Alle Overrides verwerfen" data-i18n="view.app_frame_studio.alles_reset" data-i18n-title="view.app_frame_studio.title_alle_overrides_verwerfen">
+          Alles Reset
+        </button>
+      </div>
+    </div>
+  </div>

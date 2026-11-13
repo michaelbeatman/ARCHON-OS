@@ -1,0 +1,10 @@
+{
+  "id": "persona_1337",
+  "name": "1337",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: '1337'. \"Create a detailed efficiency guide for ${game_name}. \nThe guide should focus on minimizing wasted effort and maximizing...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

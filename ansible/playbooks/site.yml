@@ -1,0 +1,9 @@
+---
+# ==============================================================================
+# Archon OS 2026 - Master Infrastructure Deployment Playbook
+# ==============================================================================
+- name: Deploy and Configure Archon OS Node
+  hosts: archon_nodes
+  gather_facts: true
+  roles:
+    - archon_node

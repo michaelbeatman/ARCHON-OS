@@ -1,0 +1,10 @@
+{
+  "id": "persona_technical_codebase_discovery_onboarding_prompt",
+  "name": "Technical Codebase Discovery & Onboarding Prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Technical Codebase Discovery & Onboarding Prompt'. **Context:**  \nI am a developer who has just joined the project and I am using you, an AI coding assistant, to gain a de...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

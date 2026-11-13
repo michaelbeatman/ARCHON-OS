@@ -1,0 +1,10 @@
+{
+  "id": "persona_linkedin_experience_optimization_prompt",
+  "name": "LinkedIn: Experience optimization prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'LinkedIn: Experience optimization prompt'. Suggest me to optimize my LinkedIn profile experience section to highlight most of the relevant achievements for a ${job...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

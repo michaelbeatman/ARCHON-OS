@@ -1,0 +1,10 @@
+{
+  "id": "persona_network_packet_analyzer_cli",
+  "name": "Network Packet Analyzer CLI",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Network Packet Analyzer CLI'. Create a command-line network packet analyzer in C using libpcap. Implement packet capture from network interfaces with ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

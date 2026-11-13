@@ -1,0 +1,144 @@
+{
+  "rules": {
+    "#prof-activity-log-terminal": {
+      "background-color": "#000000"
+    },
+    "div#avatar-library-grid > div.cursor-pointer": {
+      "background-color": "#ffffff"
+    },
+    "#master-chat-profile-select": {
+      "border-width": "1px",
+      "border-color": "#ccd5e1",
+      "box-shadow": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)"
+    },
+    "#master-chat-profile-category": {
+      "border-color": "#ffffff",
+      "box-shadow": "none",
+      "background-color": "#ffffff",
+      "color": "#303030",
+      "left": "-4px",
+      "top": "-18px",
+      "height": "21px",
+      "width": "219px"
+    },
+    "#master-chat-avatar-container": {
+      "border-radius": "14px",
+      "width": "77px",
+      "height": "77px"
+    },
+    "#master-chat-profile-desc": {
+      "left": "-218px",
+      "top": "2px",
+      "width": "568px"
+    },
+    "div#sp-category-tabs > button.sp-cat-btn": {
+      "box-shadow": "0 1px 3px rgba(0,0,0,0.1)"
+    },
+    ".border-red-100": {
+      "box-shadow": "0 1px 3px rgba(0,0,0,0.1)",
+      "background-color": "#fbfcfd"
+    },
+    "div#sp-form-content > div.border": {
+      "box-shadow": "0 1px 3px rgba(0,0,0,0.1)"
+    },
+    "#sp-live-preview": {
+      "box-shadow": "0 1px 3px rgba(0,0,0,0.1)"
+    },
+    "#sp-copy-btn": {
+      "border-color": "#787878",
+      "border-width": "1px"
+    },
+    "#sp-apply-btn": {
+      "color": "#d82829",
+      "background-color": "#ffffff",
+      "box-shadow": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)",
+      "border-color": "#d42a2b",
+      "border-width": "2px"
+    },
+    "div#sp-cards-wrapper > div.p-2\\.5": {
+      "background-color": "#ffffff",
+      "box-shadow": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)"
+    },
+    "div.p-4 > div.flex > div.p-2\\.5": {
+      "border-width": "2px",
+      "border-color": "#d82829",
+      "box-shadow": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)",
+      "background-color": "#ffffff"
+    },
+    "#master-chat-model-select": {
+      "border-width": "1px",
+      "box-shadow": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)"
+    },
+    "#master-chat-selected-avatar": {
+      "height": "86px"
+    },
+    "div.min-w-0 > div.flex > div.flex": {
+      "left": "-498px",
+      "top": "-21px"
+    },
+    "#master-chat-header-bar": {
+      "height": "106px"
+    },
+    "div#master-chat-header-bar > div.min-w-0 > div.flex": {
+      "height": "46px"
+    },
+    "#master-chat-mode-switch": {
+      "height": "16px"
+    },
+    "#sp-detail-category": {
+      "border-width": "0px",
+      "background-color": "#ffffff"
+    },
+    "div#sp-list-container > div.relative > svg": {
+      "color": "#cd2627",
+      "font-size": "14px"
+    },
+    "div#sureprompts-modal > div.bg-white > div.p-4": {
+      "height": "54px"
+    },
+    "div.p-4 > div.flex > button.p-2": {
+      "border-color": "#d82829",
+      "border-width": "2px"
+    },
+    "div.flex > button.p-2 > svg": {
+      "color": "#d82829",
+      "font-size": "15px",
+      "font-weight": "bold",
+      "background-size": "auto",
+      "opacity": "1",
+      "background-color": "#ffffff",
+      "line-height": "22.5px",
+      "box-shadow": "none"
+    },
+    "div.flex > span.text-xs > span": {
+      "font-size": "13px"
+    },
+    "div#sp-list-container > div.font-mono": {
+      "font-size": "13px",
+      "color": "#11162a"
+    },
+    "div#sp-category-panel > div.font-mono": {
+      "font-size": "13px",
+      "color": "#11162a"
+    },
+    "#system-health-badge": {
+      "background-color": "#ffffff"
+    },
+    ".text-amber-800": {
+      "background-color": "#ffffff"
+    },
+    ".border-red-600": {
+      "color": "#d82829",
+      "background-color": "#ffffff",
+      "border-width": "2px"
+    },
+    "div.px-5 > div.flex > button.p-2": {
+      "border-color": "#d02b2d",
+      "border-width": "2px"
+    }
+  },
+  "textOverrides": {
+    "579 Vorlagen & SOPs": "579"
+  },
+  "updated_at": "2026-09-15T22:46:38.888863"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_ai_engineer",
+  "name": "AI Engineer",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'AI Engineer'. ---\nname: ai-engineer\ndescription: \"Use this agent when implementing AI/ML features, integrating language models, buildi...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

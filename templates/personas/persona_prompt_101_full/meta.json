@@ -1,0 +1,10 @@
+{
+  "id": "persona_prompt_101_full",
+  "name": "Prompt 101 (full)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Prompt 101 (full)'. # Task context\n\nYou will be acting as ${role}. The context is ${context}. Your goal is ${goal}, to achieve ${sucess_crit...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

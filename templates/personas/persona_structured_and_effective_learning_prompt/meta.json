@@ -1,0 +1,10 @@
+{
+  "id": "persona_structured_and_effective_learning_prompt",
+  "name": "Structured and Effective Learning Prompt",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Structured and Effective Learning Prompt'. ${subject}=\n${current_level}=\n${time_available}=\n${learning_style}=\n${goal}=\n\nStep 1: Knowledge Assessment\n1. Break down...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

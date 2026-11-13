@@ -1,0 +1,792 @@
+{
+  "inbox_watcher": {
+    "enabled": true,
+    "watch_folder": "/app/agent_workspace/test_inbox_watch",
+    "processed_folder": "/app/agent_workspace/test_inbox_watch/processed",
+    "interval_seconds": 5,
+    "standup_enabled": true,
+    "standup_time": "08:00"
+  },
+  "concurrency": {
+    "max_concurrent_agents": 5,
+    "queue_timeout_seconds": 60,
+    "auto_deadlock_recovery": true,
+    "stagnation_threshold_seconds": 45
+  },
+  "circuit_breaker": {
+    "loop_detection_enabled": true,
+    "max_identical_turns": 5,
+    "jaccard_similarity_threshold": 0.9,
+    "max_steps_per_task": 60,
+    "budget_downgrade_threshold_pct": 80,
+    "token_clipper_enabled": true
+  },
+  "task_self_healer": {
+    "enabled": true,
+    "auto_git_rollback": true,
+    "max_attempts": 3,
+    "escalation_model": "deepseek/deepseek-chat"
+  },
+  "ephemeral_sandbox": {
+    "enabled": true,
+    "memory_limit_mb": 512,
+    "cpu_limit": 1,
+    "timeout_seconds": 180,
+    "network_enabled": false
+  },
+  "time_travel_snapshots": {
+    "tracing_enabled": true,
+    "auto_pre_write_snapshots": true,
+    "max_snapshots": 50,
+    "max_trace_steps": 100
+  },
+  "consensus_gate": {
+    "enabled": true,
+    "min_priority": 3,
+    "mode": "tri_agent_council",
+    "majority_rule": "two_thirds",
+    "default_model": "deepseek/deepseek-chat"
+  },
+  "war_room": {
+    "enabled": true,
+    "auto_pre_mortem": false,
+    "block_threshold": "HIGH",
+    "default_model": "deepseek/deepseek-chat"
+  },
+  "sla_contracts": {
+    "enabled": true,
+    "min_content_length": 100,
+    "max_turnaround_minutes": 60,
+    "auto_reject_incomplete": true
+  },
+  "fleet_and_hygiene": {
+    "auto_container_restart": true,
+    "secret_masking_enabled": true,
+    "visual_browser_audit": true,
+    "db_backup_keep_days": 7
+  },
+  "memory_consolidation": {
+    "enabled": true,
+    "schedule_time": "03:00",
+    "retention_days": 14,
+    "archive_threshold_similarity": 0.92,
+    "auto_prune_temporary_logs": true,
+    "last_run": "2026-10-24 07:41:00",
+    "last_pruned_records_count": 0
+  },
+  "semantic_cache": {
+    "enabled": true,
+    "similarity_threshold": 0.95,
+    "ttl_hours": 24,
+    "max_entries": 500
+  },
+  "map_reduce": {
+    "enabled": true,
+    "max_parallel_workers": 4,
+    "chunk_timeout_seconds": 30,
+    "auto_fan_out_min_items": 3
+  },
+  "speculative_hedger": {
+    "enabled": true,
+    "hedge_delay_seconds": 2.5,
+    "fallback_model": "deepseek/deepseek-chat",
+    "max_hedged_calls_per_minute": 20
+  },
+  "self_evolving_tooling": {
+    "enabled": true,
+    "max_repair_iterations": 3,
+    "auto_sandbox_verification": true,
+    "auto_register_skills": true
+  },
+  "mcts_reasoning": {
+    "enabled": false,
+    "default_depth": 3,
+    "rollout_budget": 4,
+    "exploration_weight": 1.414,
+    "min_task_complexity_score": 75
+  },
+  "speculative_prefetcher": {
+    "enabled": true,
+    "ttl_seconds": 180,
+    "prefetch_crm": true,
+    "prefetch_erp": true,
+    "prefetch_learnings": true
+  },
+  "jit_persona_induction": {
+    "enabled": true,
+    "ephemeral_lifespan_minutes": 15,
+    "auto_purge_on_completion": true,
+    "allow_graduation_to_cadre": true
+  },
+  "context_compactor": {
+    "enabled": true,
+    "trigger_token_threshold": 6000,
+    "keep_recent_turns": 20,
+    "target_compression_ratio": 0.3
+  },
+  "write_batcher": {
+    "enabled": true,
+    "batch_size": 25,
+    "flush_interval_seconds": 2,
+    "max_queue_size": 1000
+  },
+  "hybrid_search": {
+    "enabled": true,
+    "rrf_k": 60,
+    "bm25_weight": 0.5,
+    "vector_weight": 0.5,
+    "top_k": 5
+  },
+  "knowledge_graph": {
+    "enabled": true,
+    "auto_extract_triples": true,
+    "max_traversal_hops": 2,
+    "min_confidence": 0.7
+  },
+  "corrective_rag": {
+    "enabled": true,
+    "relevance_threshold": 0.45,
+    "auto_query_rewrite": true,
+    "max_rewrite_attempts": 2,
+    "min_relevance_score": 0.45
+  },
+  "core_memory_tier": {
+    "enabled": true,
+    "max_pinned_blocks": 10,
+    "max_chars_per_block": 800,
+    "auto_inject_into_system_prompt": true
+  },
+  "citation_pinning": {
+    "enabled": true,
+    "require_inline_citations": true,
+    "min_citation_coverage_pct": 60,
+    "auto_append_sources_footer": true
+  },
+  "structured_outputs": {
+    "enabled": true,
+    "auto_repair_json": true,
+    "strict_schema_validation": true,
+    "max_repair_attempts": 2
+  },
+  "durable_checkpointing": {
+    "enabled": true,
+    "checkpoint_every_n_steps": 1,
+    "auto_resume_on_boot": true,
+    "retention_days": 14
+  },
+  "idempotency_guard": {
+    "enabled": true,
+    "ttl_hours": 24,
+    "block_duplicate_side_effects": true
+  },
+  "dry_run_shadow": {
+    "enabled": false,
+    "intercept_write_tools": true,
+    "intercept_external_apis": true,
+    "log_simulated_diffs": true
+  },
+  "dead_letter_queue": {
+    "enabled": true,
+    "max_replay_retries": 3,
+    "backoff_base_seconds": 10,
+    "auto_replay_enabled": true
+  },
+  "pii_scrubber": {
+    "enabled": true,
+    "scrub_emails": true,
+    "scrub_phones": true,
+    "scrub_ibans": true,
+    "auto_rehydrate_response": true
+  },
+  "egress_firewall": {
+    "enabled": true,
+    "default_policy": "allowlist_only",
+    "allowed_domains": [
+      "openrouter.ai",
+      "api.openai.com",
+      "generativelanguage.googleapis.com",
+      "api.anthropic.com",
+      "api.groq.com",
+      "github.com",
+      "localhost",
+      "127.0.0.1"
+    ],
+    "block_raw_ip_egress": true
+  },
+  "agent_rbac_jail": {
+    "enabled": true,
+    "enforce_path_jail": true,
+    "block_dotenv_access": true,
+    "block_system_dirs": true
+  },
+  "output_policy_linter": {
+    "enabled": true,
+    "strip_ai_slop_phrases": true,
+    "block_destructive_commands": true,
+    "auto_clean_output": true
+  },
+  "execution_receipts": {
+    "enabled": true,
+    "hash_algorithm": "sha256",
+    "chain_receipts": true,
+    "include_cost_breakdown": true
+  },
+  "prompt_optimizer": {
+    "enabled": true,
+    "min_failures_to_trigger": 3,
+    "auto_apply_patches": false,
+    "max_rules_appended": 5
+  },
+  "eval_regression_suite": {
+    "enabled": true,
+    "min_pass_rate_pct": 90,
+    "block_deploy_on_regression": true
+  },
+  "bandit_router": {
+    "enabled": true,
+    "exploration_epsilon": 0.15,
+    "latency_weight": 0.4,
+    "success_weight": 0.6
+  },
+  "ephemeral_teams": {
+    "enabled": true,
+    "max_team_size": 4,
+    "auto_dissolve_on_complete": true
+  },
+  "resource_backpressure": {
+    "enabled": true,
+    "max_cpu_pct": 85,
+    "max_ram_pct": 85,
+    "min_free_disk_gb": 2,
+    "throttle_action": "pause_low_priority"
+  },
+  "internet_watchdog": {
+    "enabled": true,
+    "interval_minutes": 30,
+    "auto_kanban_sync": false,
+    "basket_threshold": 3,
+    "priority_keywords": [
+      "Invest in Germany",
+      "Investitionsgipfel",
+      "Handelsabkommen",
+      "Freihandelsabkommen",
+      "Deutschlandfonds",
+      "Subvention",
+      "Halbleiter",
+      "Auslandsinvestition",
+      "Wirtschaftsgipfel",
+      "KfW",
+      "Förderstopp",
+      "BauGB",
+      "GEG",
+      "Groq",
+      "Claude",
+      "Llama"
+    ],
+    "basket": [],
+    "channels": {
+      "telegram": true,
+      "kanban": true
+    },
+    "targets": [
+      {
+        "id": "src-bundesregierung",
+        "name": "Bundesregierung (Presse & Gipfel)",
+        "category": "Investitionen & Geopolitik",
+        "type": "search_feed",
+        "query_or_url": "site:bundesregierung.de (\"Invest in Germany\" OR Investitionsgipfel OR Wirtschaftspolitik OR Außenwirtschaft)",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-bmwk",
+        "name": "BMWK (Wirtschaft & Industrie)",
+        "category": "Investitionen & Geopolitik",
+        "type": "search_feed",
+        "query_or_url": "BMWK OR \"Wirtschaftsministerium\" (Investition OR Förderung OR Industrie OR Handelsabkommen)",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-dihk",
+        "name": "DIHK (Außenwirtschaft & Handel)",
+        "category": "Investitionen & Geopolitik",
+        "type": "search_feed",
+        "query_or_url": "site:dihk.de (Außenwirtschaft OR Handelsabkommen OR Freihandelsabkommen OR Export)",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-gtai",
+        "name": "GTAI (Germany Trade & Invest)",
+        "category": "Investitionen & Geopolitik",
+        "type": "search_feed",
+        "query_or_url": "site:gtai.de OR \"Germany Trade and Invest\"",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-invest-radar",
+        "name": "High-Impact Investitions-Radar",
+        "category": "Investitionen & Geopolitik",
+        "type": "search_feed",
+        "query_or_url": "(\"Invest in Germany\" OR \"Investitionsgipfel\" OR \"Deutschlandfonds\" OR \"Freihandelsabkommen\") Deutschland",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-handelsblatt-top",
+        "name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "type": "rss",
+        "query_or_url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-handelsblatt-politik",
+        "name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "type": "rss",
+        "query_or_url": "https://www.handelsblatt.com/contentexport/feed/politik",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-bundesbank",
+        "name": "Deutsche Bundesbank (Presse & Daten)",
+        "category": "Wirtschaft & Finanzen",
+        "type": "search_feed",
+        "query_or_url": "site:bundesbank.de (Pressemitteilung OR Monatsbericht OR Konjunktur)",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-reuters",
+        "name": "Reuters Business (Globale Märkte)",
+        "category": "Wirtschaft & Finanzen",
+        "type": "search_feed",
+        "query_or_url": "Reuters (Wirtschaft OR Börse OR Konjunktur OR Notenbank)",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-finanzen-boerse",
+        "name": "Finanzen & Börse Radar (DAX & Ströme)",
+        "category": "Wirtschaft & Finanzen",
+        "type": "search_feed",
+        "query_or_url": "(site:finanzen.net OR site:boerse-online.de) (Investition OR DAX OR Zinsen)",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-heise",
+        "name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "type": "rss",
+        "query_or_url": "https://www.heise.de/rss/heise-atom.xml",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-techcrunch",
+        "name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "type": "rss",
+        "query_or_url": "https://techcrunch.com/feed/",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-arxiv-ai",
+        "name": "ArXiv AI (Wissenschaftliche CS-Preprints)",
+        "category": "Technologie & KI",
+        "type": "rss",
+        "query_or_url": "https://rss.arxiv.org/rss/cs.AI",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-tagesschau",
+        "name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "type": "rss",
+        "query_or_url": "https://www.tagesschau.de/xml/rss2/",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      },
+      {
+        "id": "src-spektrum",
+        "name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "type": "search_feed",
+        "query_or_url": "site:spektrum.de",
+        "active": true,
+        "last_check": "2026-11-04T20:04:04.524169",
+        "last_status": "OK (8 Einträge)"
+      }
+    ],
+    "last_run": "2026-11-04T20:04:04.524169",
+    "recent_findings": [
+      {
+        "id": "cbc9354749195144",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ Ukraine-Krieg +++: Russische Angriffe machen ukrainischer Energieversorgung zu schaffen",
+        "link": "https://www.handelsblatt.com/politik/international/ukraine-russische-angriffe-machen-ukrainischer-energieversorgung-zu-schaffen/27982126.html",
+        "published": "Wed, 04 Nov 2026 19:48:00 GMT",
+        "detected_at": "04.11.2026 20:00"
+      },
+      {
+        "id": "59e41292865de6aa",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ Bundespolitik +++: Schulze unterstützt Aigner als Bundespräsidentin",
+        "link": "https://www.handelsblatt.com/politik/deutschland/bundespolitik-schulze-unterstuetzt-aigner-als-bundespraesidentin/100137034.html",
+        "published": "Wed, 04 Nov 2026 19:40:00 GMT",
+        "detected_at": "04.11.2026 20:00"
+      },
+      {
+        "id": "dfbe2d43d3d76c30",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Viele Stunden am Schreibtisch? Hier nicht sparen: Der beste Bürostuhl im Test",
+        "link": "https://www.heise.de/bestenlisten/testsieger/viele-stunden-am-schreibtisch-hier-nicht-sparen-der-beste-buerostuhl-im-test/6le25ss?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T20:00:00+01:00",
+        "detected_at": "04.11.2026 19:33"
+      },
+      {
+        "id": "a7db5f3effa5edc9",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "Open source AI is booming. Hugging Face explains who profits.",
+        "link": "https://techcrunch.com/video/open-source-ai-is-booming-hugging-face-explains-who-profits/",
+        "published": "Wed, 04 Nov 2026 19:30:04 +0000",
+        "detected_at": "04.11.2026 19:33"
+      },
+      {
+        "id": "f9baa21328cbab64",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "DuckDuckGo pitches itself to schools amid backlash over Google’s AI policy",
+        "link": "https://techcrunch.com/2026/11/04/duckduckgo-pitches-itself-to-schools-amid-backlash-over-googles-ai-policy/",
+        "published": "Wed, 04 Nov 2026 19:29:52 +0000",
+        "detected_at": "04.11.2026 19:33"
+      },
+      {
+        "id": "32d40b506f20d2c4",
+        "target_id": "src-bundesbank",
+        "target_name": "Deutsche Bundesbank (Presse & Daten)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Tägliche Rendite der börsennotierten Bundeswertpapiere - Deutsche Bundesbank",
+        "link": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxOWENnM1lrYnZ1bGwzaU1yT212al8wOUVTUmdZU25TejE3N3RObEhkUXRkQlVzTkNPY040Zi10T2FNZmFpa2lDWlZuQ3hBN0NJUkZyR3FKcVlaNmN1MTExVDZORE9jaHc0TFpuRzNYRmQzeUFtdDI4bTMxeHhqNHlyLVlTOVVrRzc3bk1lR3BkYXBXOEhqRUZ6NTF5Y3hIeTlFREtRa1U0UE5ZWjRPOWRIZHFsekptSi1oWnNNaDNnLUowVlgwTmZ0UHRjdFI2NWNMNGlRd2JVbV9QRmxM?oc=5",
+        "published": "Tue, 03 Nov 2026 12:48:34 GMT",
+        "detected_at": "04.11.2026 18:33"
+      },
+      {
+        "id": "6619436a406084ab",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "watchOS 27.3 Beta: Apple aktiviert erstmals umstrittene Audio-Intelligence-Tech",
+        "link": "https://www.heise.de/news/watchOS-27-3-Beta-Apple-aktiviert-erstmals-umstrittene-Audio-Intelligence-Tech-11511988.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T19:15:00+01:00",
+        "detected_at": "04.11.2026 18:33"
+      },
+      {
+        "id": "64040589fe1b9f8d",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "Waymo confirms it will split with Uber in January 2028",
+        "link": "https://techcrunch.com/2026/11/04/waymo-confirms-it-will-split-with-uber-in-january-2028/",
+        "published": "Wed, 04 Nov 2026 18:12:30 +0000",
+        "detected_at": "04.11.2026 18:33"
+      },
+      {
+        "id": "021604fd94c01162",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "‘You Can See Everything’ is getting an outer space release and it hasn’t even come out in Europe yet",
+        "link": "https://techcrunch.com/2026/11/04/you-can-see-everything-is-getting-an-outer-space-release-and-it-hasnt-even-come-out-in-europe-yet/",
+        "published": "Wed, 04 Nov 2026 18:10:11 +0000",
+        "detected_at": "04.11.2026 18:33"
+      },
+      {
+        "id": "3d70861ba4b27da7",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Rüstungsindustrie: Verzögerungen bei Aufträgen – Rheinmetall senkt Prognose",
+        "link": "https://www.handelsblatt.com/unternehmen/industrie/ruestungsindustrie-verzoegerungen-bei-auftraegen-rheinmetall-senkt-prognose/100267059.html",
+        "published": "Wed, 04 Nov 2026 17:46:34 GMT",
+        "detected_at": "04.11.2026 18:00"
+      },
+      {
+        "id": "12a0571837ee6736",
+        "target_id": "src-bundesbank",
+        "target_name": "Deutsche Bundesbank (Presse & Daten)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Mut zu mehr Europa - Deutsche Bundesbank",
+        "link": "https://news.google.com/rss/articles/CBMid0FVX3lxTFBROWg3VVd5UmRib3pyRWF6WlpqNmlPbnlENldQYnNDamdEUGZ4Wlh5b3hpZGZXOTJSeDBEQ201QnJhRWVWdnhYZl83QTJJM1hfZmF6OGZwRW5TRGdMdzlGRUNpOEk3S0pEUVV2RjVCVnlSY08wS3dr?oc=5",
+        "published": "Tue, 03 Nov 2026 18:00:46 GMT",
+        "detected_at": "04.11.2026 18:00"
+      },
+      {
+        "id": "3201a7a3223e71fd",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "EU-Abgeordnete stimmen für Aufweichung des Verbrenner-Aus",
+        "link": "https://www.heise.de/news/EU-Abgeordnete-stimmen-fuer-Aufweichung-des-Verbrenner-Aus-11512661.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T18:43:00+01:00",
+        "detected_at": "04.11.2026 18:00"
+      },
+      {
+        "id": "8f3af2610b84571c",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Mobilfunk: Telekom-Chef wirbt bei der Bundesregierung für Mega-Fusion",
+        "link": "https://www.handelsblatt.com/technik/it-internet/mobilfunk-telekom-chef-wirbt-bei-der-bundesregierung-fuer-mega-fusion/100265960.html",
+        "published": "Wed, 04 Nov 2026 17:21:01 GMT",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "f59afb50b1913b99",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Alterssicherung: Koalition verschiebt die neue Kapitalrente ins nächste Jahr",
+        "link": "https://www.handelsblatt.com/politik/deutschland/alterssicherung-koalition-verschiebt-die-neue-kapitalrente-ins-naechste-jahr/100267176.html",
+        "published": "Wed, 04 Nov 2026 16:16:32 GMT",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "2ec2ee248e8d01b8",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Sicherheit: „Wir sind nicht vorbereitet“ – NRW will Infrastruktur gegen hybride Angriffe stärken",
+        "link": "https://www.handelsblatt.com/politik/deutschland/sicherheit-nrw-will-resilienz-gegen-hybride-angriffe-staerken/100267071.html",
+        "published": "Wed, 04 Nov 2026 17:31:19 GMT",
+        "detected_at": "04.11.2026 17:42",
+        "is_priority": true,
+        "matched_keywords": [
+          "geg"
+        ]
+      },
+      {
+        "id": "13ad99ddd8b70c46",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Saudi Aramco übernimmt knapp die Hälfte des KI-Unternehmens Humain",
+        "link": "https://www.heise.de/news/Saudi-Aramco-uebernimmt-knapp-die-Haelfte-des-KI-Unternehmens-Humain-11512647.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T18:32:00+01:00",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "c84c19a06b0675c3",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "Tesla eröffnet Entwicklungszentrum in Berlin",
+        "link": "https://www.heise.de/news/Tesla-eroeffnet-Entwicklungszentrum-in-Berlin-11512643.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T18:26:00+01:00",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "fa8fe96f3241cfa3",
+        "target_id": "src-spektrum",
+        "target_name": "Spektrum der Wissenschaft (Forschung & Fakten)",
+        "category": "Politik & Wissenschaft",
+        "title": "Geschichten aus der Mathematik: John Nash und das Phantom von Fine Hall - Spektrum der Wissenschaft",
+        "link": "https://news.google.com/rss/articles/CBMilwFBVV95cUxOT2VzS1JES2UyX1g2eWVpV0MyZE1Pc2J4NkNNVEhzWkVlblF3OFZFMWZIc1Bvc21Jb2J0T0RGZ1lRX3NqOU9TMlFsUzdXUWRkSFJUNmRaTjJCeXBuelhZMlJfTF9xd3FxWmpjTWZIM2U1Z3pweGYxZTlDRmRfVFFHdUtTTVJWdFluM1V4cUR3M1kwRWpBYU5r?oc=5",
+        "published": "Wed, 04 Nov 2026 10:24:51 GMT",
+        "detected_at": "04.11.2026 17:42"
+      },
+      {
+        "id": "e04ab44dbfcb70f9",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Börsen: Midterms lösen Erholungsrally in den USA aus – KI-Aktien fallen trotzdem",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/boersen-midterms-loesenerholungsrally-aus-ki-aktien-fallen-trotzdem/100265439.html",
+        "published": "Wed, 04 Nov 2026 17:11:15 GMT",
+        "detected_at": "04.11.2026 17:12"
+      },
+      {
+        "id": "49c05bf10445cacf",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "Dax aktuell: Dax beendet Handel deutlich über 26.000-Punkte-Marke – Ölpreis fällt",
+        "link": "https://www.handelsblatt.com/finanzen/maerkte/marktberichte/dax-aktuell-dax-beendet-handel-deutlich-ueber-26.000-punkte-marke/100267175.html",
+        "published": "Wed, 04 Nov 2026 17:04:54 GMT",
+        "detected_at": "04.11.2026 17:12"
+      },
+      {
+        "id": "dedd448bad5b4daf",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "Sequoia hits rewind, undoing 20 years of expansion",
+        "link": "https://techcrunch.com/2026/11/04/sequoia-hits-rewind-undoing-20-years-of-expansion/",
+        "published": "Wed, 04 Nov 2026 17:11:15 +0000",
+        "detected_at": "04.11.2026 17:12"
+      },
+      {
+        "id": "4119b1cbb6048c6b",
+        "target_id": "src-handelsblatt-politik",
+        "target_name": "Handelsblatt (Politik & Ökonomie)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ US-Midterms +++: Vance: „Der Grund, weshalb wir verloren haben, ist der Krieg“",
+        "link": "https://www.handelsblatt.com/politik/international/us-midterms-vance-sieht-iran-krieg-als-grund-fuer-wahlniederlage/29669594.html",
+        "published": "Wed, 04 Nov 2026 16:40:00 GMT",
+        "detected_at": "04.11.2026 17:00"
+      },
+      {
+        "id": "a83c726edcab0704",
+        "target_id": "src-techcrunch",
+        "target_name": "TechCrunch (Startups & Tech-Infrastruktur)",
+        "category": "Technologie & KI",
+        "title": "I tried Apple’s Siri Recaps. They’re surprisingly useful — and a little unsettling",
+        "link": "https://techcrunch.com/2026/11/04/i-tried-apples-siri-recaps-theyre-surprisingly-useful-and-a-little-unsettling/",
+        "published": "Wed, 04 Nov 2026 16:51:35 +0000",
+        "detected_at": "04.11.2026 17:00"
+      },
+      {
+        "id": "8ec4a948e3ad6b87",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Kommentar zu den Midterms: Hoffentlich vermasseln sie es nicht",
+        "link": "https://www.tagesschau.de/kommentar/usa-midterms-120.html",
+        "published": "Wed, 04 Nov 2026 17:50:16 +0100",
+        "detected_at": "04.11.2026 17:00"
+      },
+      {
+        "id": "94e989b37315b154",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Nach Sieg bei den Midterms: Welche Optionen die Demokraten haben",
+        "link": "https://www.tagesschau.de/ausland/demokraten-optionen-100.html",
+        "published": "Wed, 04 Nov 2026 17:49:39 +0100",
+        "detected_at": "04.11.2026 17:00"
+      },
+      {
+        "id": "9d70837e27f9a9cb",
+        "target_id": "src-handelsblatt-top",
+        "target_name": "Handelsblatt (Top-Themen)",
+        "category": "Wirtschaft & Finanzen",
+        "title": "+++ US-Midterms +++: Vance: Iran-Krieg ist der Grund für Wahlniederlage der Republikaner bei den Midterms",
+        "link": "https://www.handelsblatt.com/politik/international/us-midterms-vance-sieht-iran-krieg-als-grund-fuer-wahlniederlage/29669594.html",
+        "published": "Wed, 04 Nov 2026 16:40:00 GMT",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "4f63af0ed5ff17ba",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "iPhone Duo: Warum viele Apps noch nicht richtig angepasst sind",
+        "link": "https://www.heise.de/news/iPhone-Duo-Warum-viele-Apps-noch-nicht-richtig-angepasst-sind-11512597.html?wt_mc=rss.red.ho.ho.atom.beitrag.beitrag",
+        "published": "2026-11-04T17:36:00+01:00",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "4cc8702ee9378cec",
+        "target_id": "src-heise",
+        "target_name": "Heise Online (IT-Leitmedium DACH)",
+        "category": "Technologie & KI",
+        "title": "heise+ | So hackt sich Google mit KI selbst: Interview mit dem Leiter der Red Teams",
+        "link": "https://www.heise.de/hintergrund/So-hackt-sich-Google-mit-KI-selbst-Interview-mit-dem-Leiter-der-Red-Teams-11471434.html?wt_mc=rss.red.ho.ho.atom.beitrag_plus.beitrag_plus",
+        "published": "2026-11-04T17:30:00+01:00",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "8b29c1c3c818b6cc",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Jeder vierte Jugendliche bewegt sich laut WHO kaum",
+        "link": "https://www.tagesschau.de/wissen/gesundheit/kinder-jugendliche-bewegung-100.html",
+        "published": "Wed, 04 Nov 2026 17:37:10 +0100",
+        "detected_at": "04.11.2026 16:42"
+      },
+      {
+        "id": "1db0abad9ad24a4c",
+        "target_id": "src-tagesschau",
+        "target_name": "Tagesschau (Eilmeldungen & Politik)",
+        "category": "Politik & Wissenschaft",
+        "title": "Bund fördert Schwimmenlernen mit 20 Millionen Euro",
+        "link": "https://www.tagesschau.de/inland/foerderprogramm-bund-schwimmen-100.html",
+        "published": "Wed, 04 Nov 2026 17:29:29 +0100",
+        "detected_at": "04.11.2026 16:42"
+      }
+    ]
+  },
+  "auth": {
+    "enabled": false,
+    "mode": "single_user",
+    "allow_guest_viewer": false
+  },
+  "autonomy_governance": {
+    "enabled": true,
+    "general_actions": [
+      "browse_web",
+      "extract_data",
+      "fill_form",
+      "apply_job",
+      "submit_application",
+      "read_documents"
+    ],
+    "sensitive_actions": [
+      "purchase",
+      "pay",
+      "order",
+      "contract_sign",
+      "delete_account",
+      "transfer_funds"
+    ],
+    "prohibited_actions": [
+      "leak_credentials",
+      "system_wipe",
+      "disable_security"
+    ],
+    "authorized_controllers": [
+      "orchestrator",
+      "default",
+      "micha"
+    ]
+  },
+  "github_sync": {
+    "is_master": true,
+    "owner": "michaelbeatman",
+    "repo": "Agentic-Archon-Os",
+    "default_version_step": "subpatch",
+    "allow_push": true
+  }
+}

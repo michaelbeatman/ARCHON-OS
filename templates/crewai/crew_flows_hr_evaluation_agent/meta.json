@@ -1,0 +1,11 @@
+{
+  "id": "crew_flows_hr_evaluation_agent",
+  "name": "Senior HR Evaluation Expert (Flows)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Analyze candidates' qualifications and compare them against the job description to provide a score and reasoning.",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_prompts_chat_taste",
+  "name": "prompts.chat taste",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'prompts.chat taste'. # Taste\n\n# github-actions\n- Use `actions/checkout@v6` and `actions/setup-node@v6` (not v4) in GitHub Actions workflows. ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

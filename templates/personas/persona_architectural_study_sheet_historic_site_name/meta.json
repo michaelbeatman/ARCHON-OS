@@ -1,0 +1,10 @@
+{
+  "id": "persona_architectural_study_sheet_historic_site_name",
+  "name": "Architectural Study Sheet: [HISTORIC_SITE_NAME]",
+  "category": "4. Immobilien & Objektentwicklung",
+  "description": "Fach-Experte: 'Architectural Study Sheet: [HISTORIC_SITE_NAME]'. A vintage architectural infographic of ${historic_site_name} that blends art and technical clarity: a detailed front ele...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

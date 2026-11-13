@@ -1,0 +1,10 @@
+{
+  "id": "persona_lonely_girl",
+  "name": "Lonely Girl",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Lonely Girl'. {\n  \"action\": \"image_generation\",\n  \"prompt_details\": {\n    \"format\": \"formato verticale 9:16 aspect ratio\",\n    \"subjec...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

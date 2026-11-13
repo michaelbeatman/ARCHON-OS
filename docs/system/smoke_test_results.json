@@ -1,0 +1,2365 @@
+{
+  "base": "http://127.0.0.1:8501",
+  "total_get_routes": 314,
+  "ok": 193,
+  "failed": [
+    {
+      "path": "/api/chat",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/contracts/history",
+      "status": 404,
+      "ms": 7,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/crons",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/db",
+      "status": 404,
+      "ms": 26,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/extensions/status",
+      "status": 404,
+      "ms": 28,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/health/agent",
+      "status": 404,
+      "ms": 102,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/insights",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/marketplace/skill",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/marketplace/template",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/memory/knowledge-graph/subgraph",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/model",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/onboarding/status",
+      "status": 404,
+      "ms": 22,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/operations/chaos/results",
+      "status": 404,
+      "ms": 7,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/operations/raw",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/operations/security/break-glass/kit",
+      "status": 404,
+      "ms": 8,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/operations/vault/file",
+      "status": 422,
+      "ms": 6,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/operations/vault/find",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/outline",
+      "status": 404,
+      "ms": 24,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/panels",
+      "status": 404,
+      "ms": 24,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/plugins",
+      "status": 404,
+      "ms": 20,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/project-os/dashboard",
+      "status": 404,
+      "ms": 30,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/projects",
+      "status": 404,
+      "ms": 30,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/provider/cost-history",
+      "status": 404,
+      "ms": 38,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/provider/quota",
+      "status": 404,
+      "ms": 28,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/providers",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/proxy",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/rag/query",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/reasoning",
+      "status": 404,
+      "ms": 27,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/session",
+      "status": 404,
+      "ms": 30,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/transcribe",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/transcribe/capability",
+      "status": 404,
+      "ms": 26,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/v1/brain/vault-file",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/chat/history",
+      "status": 422,
+      "ms": 6,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/file/content",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/files",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/logs",
+      "status": 422,
+      "ms": 7,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/metrics",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/settings",
+      "status": 422,
+      "ms": 3,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/hermes/profile-logs",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/library/book-content",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/skills/docker/logs",
+      "status": 422,
+      "ms": 24,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/skills/obsidian/search",
+      "status": 422,
+      "ms": 26,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/skills/rag/query",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/vault/file",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/views/inbox/file",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/views/library/vault/file",
+      "status": 422,
+      "ms": 6,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/views/showroom/file-content",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/views/showroom/report-content",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/wiki/browse",
+      "status": 404,
+      "ms": 94,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/wiki/page",
+      "status": 404,
+      "ms": 22,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/wiki/status",
+      "status": 404,
+      "ms": 50,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/workspace",
+      "status": 404,
+      "ms": 32,
+      "bytes": 0,
+      "error": "Not Found"
+    }
+  ],
+  "skipped": 69,
+  "results": [
+    {
+      "path": "/",
+      "status": 200,
+      "ms": 13,
+      "bytes": 833394,
+      "error": null
+    },
+    {
+      "path": "/_next/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/agents",
+      "status": 200,
+      "ms": 5,
+      "bytes": 978,
+      "error": null
+    },
+    {
+      "path": "/api/agents/profiles",
+      "status": 200,
+      "ms": 12,
+      "bytes": 93180,
+      "error": null
+    },
+    {
+      "path": "/api/audit/logs",
+      "status": 200,
+      "ms": 7,
+      "bytes": 6519,
+      "error": null
+    },
+    {
+      "path": "/api/audit/verify",
+      "status": 200,
+      "ms": 6,
+      "bytes": 289,
+      "error": null
+    },
+    {
+      "path": "/api/auth/me",
+      "status": 200,
+      "ms": 4,
+      "bytes": 201,
+      "error": null
+    },
+    {
+      "path": "/api/auth/status",
+      "status": 200,
+      "ms": 5,
+      "bytes": 40,
+      "error": null
+    },
+    {
+      "path": "/api/auth/users",
+      "status": 200,
+      "ms": 8,
+      "bytes": 2737,
+      "error": null
+    },
+    {
+      "path": "/api/boardroom/frameworks",
+      "status": 200,
+      "ms": 4,
+      "bytes": 26681,
+      "error": null
+    },
+    {
+      "path": "/api/boardroom/history",
+      "status": 200,
+      "ms": 5,
+      "bytes": 30296,
+      "error": null
+    },
+    {
+      "path": "/api/boardroom/history/{item_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/cache/semantic-stats",
+      "status": 200,
+      "ms": 8,
+      "bytes": 133,
+      "error": null
+    },
+    {
+      "path": "/api/chat",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/chat/sessions",
+      "status": 200,
+      "ms": 19,
+      "bytes": 37539,
+      "error": null
+    },
+    {
+      "path": "/api/chat/sessions/{session_id}/messages",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/chat/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/client-events",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/client-events/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/concurrency/status",
+      "status": 200,
+      "ms": 9,
+      "bytes": 186,
+      "error": null
+    },
+    {
+      "path": "/api/config",
+      "status": 200,
+      "ms": 29,
+      "bytes": 27010,
+      "error": null
+    },
+    {
+      "path": "/api/config/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/consensus/history",
+      "status": 200,
+      "ms": 10,
+      "bytes": 43,
+      "error": null
+    },
+    {
+      "path": "/api/contracts",
+      "status": 200,
+      "ms": 7,
+      "bytes": 35,
+      "error": null
+    },
+    {
+      "path": "/api/contracts/history",
+      "status": 404,
+      "ms": 7,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/contracts/stats",
+      "status": 200,
+      "ms": 8,
+      "bytes": 185,
+      "error": null
+    },
+    {
+      "path": "/api/contracts/{contract_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/corporate/companies",
+      "status": 200,
+      "ms": 7,
+      "bytes": 206,
+      "error": null
+    },
+    {
+      "path": "/api/corporate/companies/{company_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/crm/avatars/{contact_id}/{filename}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/crm/calendar",
+      "status": 200,
+      "ms": 11,
+      "bytes": 1047,
+      "error": null
+    },
+    {
+      "path": "/api/crm/contacts",
+      "status": 200,
+      "ms": 210,
+      "bytes": 64629,
+      "error": null
+    },
+    {
+      "path": "/api/crm/contacts/{contact_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/crm/contacts/{contact_id}/gdpr-export",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/crm/messages",
+      "status": 200,
+      "ms": 65,
+      "bytes": 39146,
+      "error": null
+    },
+    {
+      "path": "/api/crm/report",
+      "status": 200,
+      "ms": 50,
+      "bytes": 4609,
+      "error": null
+    },
+    {
+      "path": "/api/crons",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/crons/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/db",
+      "status": 404,
+      "ms": 26,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/db/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/deals",
+      "status": 200,
+      "ms": 7,
+      "bytes": 531,
+      "error": null
+    },
+    {
+      "path": "/api/deals/forecast",
+      "status": 200,
+      "ms": 10,
+      "bytes": 659,
+      "error": null
+    },
+    {
+      "path": "/api/deals/{deal_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/debug-db",
+      "status": 200,
+      "ms": 17,
+      "bytes": 49,
+      "error": null
+    },
+    {
+      "path": "/api/design/themes",
+      "status": 200,
+      "ms": 6,
+      "bytes": 9490,
+      "error": null
+    },
+    {
+      "path": "/api/erp/documents",
+      "status": 200,
+      "ms": 10,
+      "bytes": 3702,
+      "error": null
+    },
+    {
+      "path": "/api/erp/documents/{doc_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/erp/documents/{doc_id}/print",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/erp/entities",
+      "status": 200,
+      "ms": 12,
+      "bytes": 3803,
+      "error": null
+    },
+    {
+      "path": "/api/erp/entities/{entity_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/erp/items",
+      "status": 200,
+      "ms": 8,
+      "bytes": 2786,
+      "error": null
+    },
+    {
+      "path": "/api/erp/overview",
+      "status": 200,
+      "ms": 14,
+      "bytes": 493,
+      "error": null
+    },
+    {
+      "path": "/api/events/history",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/execution/checkpoints/list",
+      "status": 200,
+      "ms": 11,
+      "bytes": 233,
+      "error": null
+    },
+    {
+      "path": "/api/execution/checkpoints/resume/{workflow_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/execution/dlq/list",
+      "status": 200,
+      "ms": 10,
+      "bytes": 22,
+      "error": null
+    },
+    {
+      "path": "/api/execution/map-reduce/history",
+      "status": 200,
+      "ms": 9,
+      "bytes": 30,
+      "error": null
+    },
+    {
+      "path": "/api/extensions/status",
+      "status": 404,
+      "ms": 28,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/fabric/pattern/{pattern_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/fabric/patterns",
+      "status": 200,
+      "ms": 11,
+      "bytes": 110444,
+      "error": null
+    },
+    {
+      "path": "/api/fleet/health-check",
+      "status": 200,
+      "ms": 987,
+      "bytes": 932,
+      "error": null
+    },
+    {
+      "path": "/api/governance/ai-act/export",
+      "status": 200,
+      "ms": 10,
+      "bytes": 14109,
+      "error": null
+    },
+    {
+      "path": "/api/governance/ai-act/inventory",
+      "status": 200,
+      "ms": 35,
+      "bytes": 41270,
+      "error": null
+    },
+    {
+      "path": "/api/governance/ai-act/stats",
+      "status": 200,
+      "ms": 6,
+      "bytes": 370,
+      "error": null
+    },
+    {
+      "path": "/api/governance/data-classification/items",
+      "status": 200,
+      "ms": 9,
+      "bytes": 516,
+      "error": null
+    },
+    {
+      "path": "/api/governance/data-classification/taxonomy",
+      "status": 200,
+      "ms": 5,
+      "bytes": 1001,
+      "error": null
+    },
+    {
+      "path": "/api/guardian/config",
+      "status": 200,
+      "ms": 49,
+      "bytes": 12964,
+      "error": null
+    },
+    {
+      "path": "/api/guardian/plugins/{plugin_id}/config",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/guardian/stats",
+      "status": 200,
+      "ms": 129,
+      "bytes": 107780,
+      "error": null
+    },
+    {
+      "path": "/api/healing/logs",
+      "status": 200,
+      "ms": 8,
+      "bytes": 30,
+      "error": null
+    },
+    {
+      "path": "/api/health/agent",
+      "status": 404,
+      "ms": 102,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/help/context/{view_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/hermes/config",
+      "status": 200,
+      "ms": 62,
+      "bytes": 4543,
+      "error": null
+    },
+    {
+      "path": "/api/hermes/profiles",
+      "status": 200,
+      "ms": 16,
+      "bytes": 88951,
+      "error": null
+    },
+    {
+      "path": "/api/hermes/raw_config",
+      "status": 200,
+      "ms": 46,
+      "bytes": 12401,
+      "error": null
+    },
+    {
+      "path": "/api/hermes/settings",
+      "status": 200,
+      "ms": 32,
+      "bytes": 10702,
+      "error": null
+    },
+    {
+      "path": "/api/hermes/skills",
+      "status": 200,
+      "ms": 15,
+      "bytes": 58437,
+      "error": null
+    },
+    {
+      "path": "/api/hermes/skills/{skill_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/inbox-watcher/config",
+      "status": 200,
+      "ms": 12,
+      "bytes": 287,
+      "error": null
+    },
+    {
+      "path": "/api/insights",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/kanban",
+      "status": 200,
+      "ms": 6,
+      "bytes": 21198,
+      "error": null
+    },
+    {
+      "path": "/api/llm-providers",
+      "status": 200,
+      "ms": 2082,
+      "bytes": 2213,
+      "error": null
+    },
+    {
+      "path": "/api/llm-providers/models",
+      "status": 200,
+      "ms": 7,
+      "bytes": 12107,
+      "error": null
+    },
+    {
+      "path": "/api/llm-providers/prices",
+      "status": 200,
+      "ms": 16,
+      "bytes": 58679,
+      "error": null
+    },
+    {
+      "path": "/api/llm-providers/privacy-status",
+      "status": 200,
+      "ms": 27,
+      "bytes": 722,
+      "error": null
+    },
+    {
+      "path": "/api/logs",
+      "status": 200,
+      "ms": 36,
+      "bytes": 13659,
+      "error": null
+    },
+    {
+      "path": "/api/marketplace/skill",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/marketplace/skills",
+      "status": 200,
+      "ms": 6,
+      "bytes": 2807,
+      "error": null
+    },
+    {
+      "path": "/api/marketplace/skills/sources",
+      "status": 200,
+      "ms": 4,
+      "bytes": 471,
+      "error": null
+    },
+    {
+      "path": "/api/marketplace/sources",
+      "status": 200,
+      "ms": 4,
+      "bytes": 193,
+      "error": null
+    },
+    {
+      "path": "/api/marketplace/template",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/marketplace/templates",
+      "status": 200,
+      "ms": 19,
+      "bytes": 83791,
+      "error": null
+    },
+    {
+      "path": "/api/memory/core-blocks",
+      "status": 200,
+      "ms": 9,
+      "bytes": 1344,
+      "error": null
+    },
+    {
+      "path": "/api/memory/knowledge-graph/subgraph",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/mission-control/state",
+      "status": 200,
+      "ms": 162,
+      "bytes": 31305,
+      "error": null
+    },
+    {
+      "path": "/api/mission-control/task/{task_id}/artifact",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/model",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/model/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/models",
+      "status": 200,
+      "ms": 4,
+      "bytes": 87,
+      "error": null
+    },
+    {
+      "path": "/api/notifications/recent",
+      "status": 200,
+      "ms": 10,
+      "bytes": 14828,
+      "error": null
+    },
+    {
+      "path": "/api/onboarding/status",
+      "status": 404,
+      "ms": 22,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/operations/agents/{agent_id}/scorecard",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/approvals/audit-chain",
+      "status": 200,
+      "ms": 9,
+      "bytes": 3312,
+      "error": null
+    },
+    {
+      "path": "/api/operations/approvals/audit-verify",
+      "status": 200,
+      "ms": 7,
+      "bytes": 234,
+      "error": null
+    },
+    {
+      "path": "/api/operations/approvals/delegation",
+      "status": 200,
+      "ms": 13,
+      "bytes": 197,
+      "error": null
+    },
+    {
+      "path": "/api/operations/approvals/policies",
+      "status": 200,
+      "ms": 10,
+      "bytes": 2580,
+      "error": null
+    },
+    {
+      "path": "/api/operations/approvals/requests",
+      "status": 200,
+      "ms": 12,
+      "bytes": 34,
+      "error": null
+    },
+    {
+      "path": "/api/operations/autonomy/evolved-tools",
+      "status": 200,
+      "ms": 7,
+      "bytes": 839,
+      "error": null
+    },
+    {
+      "path": "/api/operations/autonomy/jit-persona/ephemeral",
+      "status": 200,
+      "ms": 7,
+      "bytes": 44,
+      "error": null
+    },
+    {
+      "path": "/api/operations/backup/restore-test",
+      "status": 200,
+      "ms": 7,
+      "bytes": 47,
+      "error": null
+    },
+    {
+      "path": "/api/operations/bot-screen/pbd/status",
+      "status": 200,
+      "ms": 7,
+      "bytes": 37,
+      "error": null
+    },
+    {
+      "path": "/api/operations/bot-screen/status",
+      "status": 200,
+      "ms": 6,
+      "bytes": 311,
+      "error": null
+    },
+    {
+      "path": "/api/operations/chaos/results",
+      "status": 404,
+      "ms": 7,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/operations/comm-feed",
+      "status": 200,
+      "ms": 12,
+      "bytes": 28312,
+      "error": null
+    },
+    {
+      "path": "/api/operations/comm-feed/stream",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/config/validate",
+      "status": 200,
+      "ms": 7,
+      "bytes": 1222,
+      "error": null
+    },
+    {
+      "path": "/api/operations/dunning/invoices",
+      "status": 200,
+      "ms": 6,
+      "bytes": 44,
+      "error": null
+    },
+    {
+      "path": "/api/operations/email-drafts",
+      "status": 200,
+      "ms": 8,
+      "bytes": 1841,
+      "error": null
+    },
+    {
+      "path": "/api/operations/email-drafts/{draft_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/esign/contracts",
+      "status": 200,
+      "ms": 6,
+      "bytes": 45,
+      "error": null
+    },
+    {
+      "path": "/api/operations/feedback/stats",
+      "status": 200,
+      "ms": 7,
+      "bytes": 199,
+      "error": null
+    },
+    {
+      "path": "/api/operations/feedback/task/{task_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/finetuning/status",
+      "status": 200,
+      "ms": 8,
+      "bytes": 182,
+      "error": null
+    },
+    {
+      "path": "/api/operations/gdpr/audit-log",
+      "status": 200,
+      "ms": 6,
+      "bytes": 44,
+      "error": null
+    },
+    {
+      "path": "/api/operations/governance/audit-log",
+      "status": 200,
+      "ms": 8,
+      "bytes": 6510,
+      "error": null
+    },
+    {
+      "path": "/api/operations/governance/audit-log/export",
+      "status": 200,
+      "ms": 14,
+      "bytes": 5431,
+      "error": null
+    },
+    {
+      "path": "/api/operations/governance/concurrency",
+      "status": 200,
+      "ms": 5,
+      "bytes": 81,
+      "error": null
+    },
+    {
+      "path": "/api/operations/kanban/meta",
+      "status": 200,
+      "ms": 11,
+      "bytes": 8207,
+      "error": null
+    },
+    {
+      "path": "/api/operations/kanban/palette",
+      "status": 200,
+      "ms": 5,
+      "bytes": 372,
+      "error": null
+    },
+    {
+      "path": "/api/operations/kanban/projects/{task_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/kanban/projects/{task_id}/file",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/kanban/stats",
+      "status": 200,
+      "ms": 7,
+      "bytes": 159,
+      "error": null
+    },
+    {
+      "path": "/api/operations/kanban/tasks",
+      "status": 200,
+      "ms": 33,
+      "bytes": 112341,
+      "error": null
+    },
+    {
+      "path": "/api/operations/kanban/tasks/{task_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/keys",
+      "status": 200,
+      "ms": 8,
+      "bytes": 30,
+      "error": null
+    },
+    {
+      "path": "/api/operations/keys/audit",
+      "status": 200,
+      "ms": 10,
+      "bytes": 35,
+      "error": null
+    },
+    {
+      "path": "/api/operations/mcp/tools",
+      "status": 200,
+      "ms": 5,
+      "bytes": 2866,
+      "error": null
+    },
+    {
+      "path": "/api/operations/metrics",
+      "status": 200,
+      "ms": 8,
+      "bytes": 1857,
+      "error": null
+    },
+    {
+      "path": "/api/operations/metrics/summary",
+      "status": 200,
+      "ms": 7,
+      "bytes": 515,
+      "error": null
+    },
+    {
+      "path": "/api/operations/notifications/digest",
+      "status": 200,
+      "ms": 6,
+      "bytes": 77,
+      "error": null
+    },
+    {
+      "path": "/api/operations/notifications/policy",
+      "status": 200,
+      "ms": 9,
+      "bytes": 386,
+      "error": null
+    },
+    {
+      "path": "/api/operations/org-chart",
+      "status": 200,
+      "ms": 9,
+      "bytes": 18952,
+      "error": null
+    },
+    {
+      "path": "/api/operations/org-hierarchy",
+      "status": 200,
+      "ms": 10,
+      "bytes": 28898,
+      "error": null
+    },
+    {
+      "path": "/api/operations/projects/overview",
+      "status": 200,
+      "ms": 11,
+      "bytes": 33581,
+      "error": null
+    },
+    {
+      "path": "/api/operations/prompts/{agent_id}/diff",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/prompts/{agent_id}/versions",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/raw",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/operations/receipts",
+      "status": 200,
+      "ms": 5,
+      "bytes": 44,
+      "error": null
+    },
+    {
+      "path": "/api/operations/receipts/{receipt_id}/image",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/security/break-glass/kit",
+      "status": 404,
+      "ms": 8,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/operations/security/break-glass/status",
+      "status": 200,
+      "ms": 8,
+      "bytes": 236,
+      "error": null
+    },
+    {
+      "path": "/api/operations/security/trusted-sources",
+      "status": 200,
+      "ms": 5,
+      "bytes": 99,
+      "error": null
+    },
+    {
+      "path": "/api/operations/tasks/{task_id}/stream",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/traces/otel",
+      "status": 200,
+      "ms": 8,
+      "bytes": 553,
+      "error": null
+    },
+    {
+      "path": "/api/operations/traces/otel/{trace_or_task_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/operations/vault/file",
+      "status": 422,
+      "ms": 6,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/operations/vault/find",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/operations/workflows/checkpoints",
+      "status": 200,
+      "ms": 8,
+      "bytes": 37,
+      "error": null
+    },
+    {
+      "path": "/api/oracle/feed",
+      "status": 200,
+      "ms": 11,
+      "bytes": 16665,
+      "error": null
+    },
+    {
+      "path": "/api/outline",
+      "status": 404,
+      "ms": 24,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/outline/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/panels",
+      "status": 404,
+      "ms": 24,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/panels/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/paperclip/agents",
+      "status": 200,
+      "ms": 6,
+      "bytes": 32,
+      "error": null
+    },
+    {
+      "path": "/api/plugins",
+      "status": 404,
+      "ms": 20,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/plugins/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/project-os/dashboard",
+      "status": 404,
+      "ms": 30,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/projects",
+      "status": 404,
+      "ms": 30,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/projects/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/provider/cost-history",
+      "status": 404,
+      "ms": 38,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/provider/quota",
+      "status": 404,
+      "ms": 28,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/providers",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/providers/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/proxy",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/rag/query",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/reasoning",
+      "status": 404,
+      "ms": 27,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/roles",
+      "status": 200,
+      "ms": 12,
+      "bytes": 92819,
+      "error": null
+    },
+    {
+      "path": "/api/router/bandit-select",
+      "status": 200,
+      "ms": 13,
+      "bytes": 449,
+      "error": null
+    },
+    {
+      "path": "/api/router/benchmark/history",
+      "status": 200,
+      "ms": 9,
+      "bytes": 36,
+      "error": null
+    },
+    {
+      "path": "/api/router/hedged-stats",
+      "status": 200,
+      "ms": 6,
+      "bytes": 166,
+      "error": null
+    },
+    {
+      "path": "/api/security/egress-logs",
+      "status": 200,
+      "ms": 13,
+      "bytes": 30,
+      "error": null
+    },
+    {
+      "path": "/api/security/receipts/verify",
+      "status": 200,
+      "ms": 8,
+      "bytes": 76,
+      "error": null
+    },
+    {
+      "path": "/api/seo/articles",
+      "status": 200,
+      "ms": 10,
+      "bytes": 184,
+      "error": null
+    },
+    {
+      "path": "/api/services",
+      "status": 200,
+      "ms": 269,
+      "bytes": 10261,
+      "error": null
+    },
+    {
+      "path": "/api/session",
+      "status": 404,
+      "ms": 30,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/session/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/sessions",
+      "status": 200,
+      "ms": 38,
+      "bytes": 32354,
+      "error": null
+    },
+    {
+      "path": "/api/sessions/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/settings",
+      "status": 200,
+      "ms": 3,
+      "bytes": 862,
+      "error": null
+    },
+    {
+      "path": "/api/settings/autonomy-modules",
+      "status": 200,
+      "ms": 17,
+      "bytes": 24321,
+      "error": null
+    },
+    {
+      "path": "/api/settings/memory-consolidation",
+      "status": 200,
+      "ms": 9,
+      "bytes": 222,
+      "error": null
+    },
+    {
+      "path": "/api/settings/model-routing",
+      "status": 200,
+      "ms": 7,
+      "bytes": 816,
+      "error": null
+    },
+    {
+      "path": "/api/settings/model-routing/resolve",
+      "status": 200,
+      "ms": 10,
+      "bytes": 48,
+      "error": null
+    },
+    {
+      "path": "/api/simulation/war-room/history",
+      "status": 200,
+      "ms": 7,
+      "bytes": 33,
+      "error": null
+    },
+    {
+      "path": "/api/skills/proposals",
+      "status": 200,
+      "ms": 12,
+      "bytes": 1071,
+      "error": null
+    },
+    {
+      "path": "/api/snapshots",
+      "status": 200,
+      "ms": 6,
+      "bytes": 1198,
+      "error": null
+    },
+    {
+      "path": "/api/status",
+      "status": 200,
+      "ms": 195,
+      "bytes": 2843,
+      "error": null
+    },
+    {
+      "path": "/api/system/backup-db/list",
+      "status": 200,
+      "ms": 5,
+      "bytes": 33,
+      "error": null
+    },
+    {
+      "path": "/api/system/drain/status",
+      "status": 200,
+      "ms": 11,
+      "bytes": 169,
+      "error": null
+    },
+    {
+      "path": "/api/system/health",
+      "status": 200,
+      "ms": 3037,
+      "bytes": 401,
+      "error": null
+    },
+    {
+      "path": "/api/system/health-score",
+      "status": 200,
+      "ms": 901,
+      "bytes": 472,
+      "error": null
+    },
+    {
+      "path": "/api/system/language",
+      "status": 200,
+      "ms": 6,
+      "bytes": 95,
+      "error": null
+    },
+    {
+      "path": "/api/system/resource-backpressure",
+      "status": 200,
+      "ms": 6,
+      "bytes": 270,
+      "error": null
+    },
+    {
+      "path": "/api/system/standup/latest",
+      "status": 200,
+      "ms": 9,
+      "bytes": 795,
+      "error": null
+    },
+    {
+      "path": "/api/system/write-batcher/stats",
+      "status": 200,
+      "ms": 13,
+      "bytes": 208,
+      "error": null
+    },
+    {
+      "path": "/api/templates",
+      "status": 200,
+      "ms": 10,
+      "bytes": 16537,
+      "error": null
+    },
+    {
+      "path": "/api/templates/catalog",
+      "status": 200,
+      "ms": 46,
+      "bytes": 385397,
+      "error": null
+    },
+    {
+      "path": "/api/templates/{template_slug}/schema",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/theme",
+      "status": 200,
+      "ms": 5,
+      "bytes": 2310,
+      "error": null
+    },
+    {
+      "path": "/api/theme/live-overrides",
+      "status": 200,
+      "ms": 6,
+      "bytes": 191,
+      "error": null
+    },
+    {
+      "path": "/api/themes",
+      "status": 200,
+      "ms": 4,
+      "bytes": 13,
+      "error": null
+    },
+    {
+      "path": "/api/themes/{theme_name}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/ticker",
+      "status": 200,
+      "ms": 4,
+      "bytes": 14,
+      "error": null
+    },
+    {
+      "path": "/api/tools/proposals",
+      "status": 200,
+      "ms": 5,
+      "bytes": 898,
+      "error": null
+    },
+    {
+      "path": "/api/traces/{task_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/transcribe",
+      "status": 404,
+      "ms": 25,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/transcribe/capability",
+      "status": 404,
+      "ms": 26,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/v1/agent/{agent_id}/activity",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/agent/{agent_id}/projects",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/agent/{agent_id}/stats",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/brain/galaxy-data",
+      "status": 200,
+      "ms": 521,
+      "bytes": 3853445,
+      "error": null
+    },
+    {
+      "path": "/api/v1/brain/quartz-config",
+      "status": 200,
+      "ms": 29,
+      "bytes": 5852,
+      "error": null
+    },
+    {
+      "path": "/api/v1/brain/vault-file",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/chat/history",
+      "status": 422,
+      "ms": 6,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/all-logs",
+      "status": 200,
+      "ms": 14,
+      "bytes": 22041,
+      "error": null
+    },
+    {
+      "path": "/api/v1/container/file/content",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/files",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/logs",
+      "status": 422,
+      "ms": 7,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/metrics",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/container/settings",
+      "status": 422,
+      "ms": 3,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/contracts",
+      "status": 200,
+      "ms": 6,
+      "bytes": 35,
+      "error": null
+    },
+    {
+      "path": "/api/v1/contracts/stats",
+      "status": 200,
+      "ms": 6,
+      "bytes": 185,
+      "error": null
+    },
+    {
+      "path": "/api/v1/contracts/{contract_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/deals",
+      "status": 200,
+      "ms": 6,
+      "bytes": 531,
+      "error": null
+    },
+    {
+      "path": "/api/v1/deals/forecast",
+      "status": 200,
+      "ms": 7,
+      "bytes": 659,
+      "error": null
+    },
+    {
+      "path": "/api/v1/deals/{deal_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/events/stream",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/gateway/config",
+      "status": 200,
+      "ms": 6,
+      "bytes": 193,
+      "error": null
+    },
+    {
+      "path": "/api/v1/gateway/list",
+      "status": 200,
+      "ms": 12,
+      "bytes": 5160,
+      "error": null
+    },
+    {
+      "path": "/api/v1/governance/ai-act/export",
+      "status": 200,
+      "ms": 6,
+      "bytes": 14109,
+      "error": null
+    },
+    {
+      "path": "/api/v1/governance/ai-act/inventory",
+      "status": 200,
+      "ms": 8,
+      "bytes": 41270,
+      "error": null
+    },
+    {
+      "path": "/api/v1/governance/ai-act/stats",
+      "status": 200,
+      "ms": 5,
+      "bytes": 370,
+      "error": null
+    },
+    {
+      "path": "/api/v1/governance/data-classification/items",
+      "status": 200,
+      "ms": 5,
+      "bytes": 516,
+      "error": null
+    },
+    {
+      "path": "/api/v1/governance/data-classification/taxonomy",
+      "status": 200,
+      "ms": 6,
+      "bytes": 1001,
+      "error": null
+    },
+    {
+      "path": "/api/v1/hermes/profile-logs",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/hermes/soul/{agent_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/hermes/update/check",
+      "status": 200,
+      "ms": 348,
+      "bytes": 3106,
+      "error": null
+    },
+    {
+      "path": "/api/v1/hr/personalakte/{agent_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/hud/telemetry",
+      "status": 200,
+      "ms": 160,
+      "bytes": 4366,
+      "error": null
+    },
+    {
+      "path": "/api/v1/library/book-content",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/library/books",
+      "status": 200,
+      "ms": 941,
+      "bytes": 1386754,
+      "error": null
+    },
+    {
+      "path": "/api/v1/memory/context",
+      "status": 200,
+      "ms": 30,
+      "bytes": 677,
+      "error": null
+    },
+    {
+      "path": "/api/v1/memory/profile",
+      "status": 200,
+      "ms": 69,
+      "bytes": 234,
+      "error": null
+    },
+    {
+      "path": "/api/v1/memory/stats",
+      "status": 200,
+      "ms": 163,
+      "bytes": 140,
+      "error": null
+    },
+    {
+      "path": "/api/v1/memory/vault-summary",
+      "status": 200,
+      "ms": 111,
+      "bytes": 22771,
+      "error": null
+    },
+    {
+      "path": "/api/v1/models",
+      "status": 200,
+      "ms": 4,
+      "bytes": 100,
+      "error": null
+    },
+    {
+      "path": "/api/v1/notebooks",
+      "status": 200,
+      "ms": 17,
+      "bytes": 241,
+      "error": null
+    },
+    {
+      "path": "/api/v1/notebooks/{nb_id}/chat-history",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/notebooks/{nb_id}/sources",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/plugins",
+      "status": 200,
+      "ms": 5,
+      "bytes": 3113,
+      "error": null
+    },
+    {
+      "path": "/api/v1/plugins/tools",
+      "status": 200,
+      "ms": 6,
+      "bytes": 618,
+      "error": null
+    },
+    {
+      "path": "/api/v1/plugins/{plugin_id}/config",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/quickchat/session/{profile_id}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/research/dossier/{filename}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/v1/research/history",
+      "status": 200,
+      "ms": 6,
+      "bytes": 34,
+      "error": null
+    },
+    {
+      "path": "/api/v1/research/providers",
+      "status": 200,
+      "ms": 6,
+      "bytes": 1676,
+      "error": null
+    },
+    {
+      "path": "/api/v1/research/sources",
+      "status": 200,
+      "ms": 6,
+      "bytes": 8952,
+      "error": null
+    },
+    {
+      "path": "/api/v1/security/stats",
+      "status": 200,
+      "ms": 22,
+      "bytes": 94,
+      "error": null
+    },
+    {
+      "path": "/api/v1/services",
+      "status": 200,
+      "ms": 447,
+      "bytes": 10261,
+      "error": null
+    },
+    {
+      "path": "/api/v1/settings/smtp",
+      "status": 200,
+      "ms": 31,
+      "bytes": 154,
+      "error": null
+    },
+    {
+      "path": "/api/v1/skills/docker/inspect",
+      "status": 200,
+      "ms": 23,
+      "bytes": 57,
+      "error": null
+    },
+    {
+      "path": "/api/v1/skills/docker/logs",
+      "status": 422,
+      "ms": 24,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/skills/obsidian/search",
+      "status": 422,
+      "ms": 26,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/skills/rag/query",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/v1/system/drain/status",
+      "status": 200,
+      "ms": 5,
+      "bytes": 169,
+      "error": null
+    },
+    {
+      "path": "/api/v1/system/update/check",
+      "status": 200,
+      "ms": 11,
+      "bytes": 664,
+      "error": null
+    },
+    {
+      "path": "/api/v1/system/update/local-changes",
+      "status": 200,
+      "ms": 9,
+      "bytes": 67,
+      "error": null
+    },
+    {
+      "path": "/api/v1/system/update/snapshots",
+      "status": 200,
+      "ms": 9,
+      "bytes": 4135,
+      "error": null
+    },
+    {
+      "path": "/api/v1/telemetry/dashboard",
+      "status": 200,
+      "ms": 11,
+      "bytes": 95,
+      "error": null
+    },
+    {
+      "path": "/api/v1/watchdog/alarms",
+      "status": 200,
+      "ms": 5,
+      "bytes": 13,
+      "error": null
+    },
+    {
+      "path": "/api/v1/watchdog/config",
+      "status": 200,
+      "ms": 12,
+      "bytes": 18273,
+      "error": null
+    },
+    {
+      "path": "/api/vault",
+      "status": 200,
+      "ms": 161,
+      "bytes": 1513948,
+      "error": null
+    },
+    {
+      "path": "/api/vault/file",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/vault/files",
+      "status": 200,
+      "ms": 93,
+      "bytes": 1407310,
+      "error": null
+    },
+    {
+      "path": "/api/views/inbox/file",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/views/inbox/items",
+      "status": 200,
+      "ms": 31,
+      "bytes": 181808,
+      "error": null
+    },
+    {
+      "path": "/api/views/library/vault/file",
+      "status": 422,
+      "ms": 6,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/views/library/vault/tree",
+      "status": 200,
+      "ms": 109,
+      "bytes": 1016996,
+      "error": null
+    },
+    {
+      "path": "/api/views/showroom/apps",
+      "status": 200,
+      "ms": 7,
+      "bytes": 370,
+      "error": null
+    },
+    {
+      "path": "/api/views/showroom/file-content",
+      "status": 422,
+      "ms": 4,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/views/showroom/preview/app/{app_name}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/views/showroom/report-content",
+      "status": 422,
+      "ms": 5,
+      "bytes": 0,
+      "error": "Unprocessable Entity"
+    },
+    {
+      "path": "/api/views/showroom/reports",
+      "status": 200,
+      "ms": 108,
+      "bytes": 3966,
+      "error": null
+    },
+    {
+      "path": "/api/views/showroom/tree",
+      "status": 200,
+      "ms": 11,
+      "bytes": 20432,
+      "error": null
+    },
+    {
+      "path": "/api/views/theme/live-overrides",
+      "status": 200,
+      "ms": 76,
+      "bytes": 137,
+      "error": null
+    },
+    {
+      "path": "/api/voice/audio/{filename}",
+      "status": "skipped"
+    },
+    {
+      "path": "/api/wiki/browse",
+      "status": 404,
+      "ms": 94,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/wiki/page",
+      "status": 404,
+      "ms": 22,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/wiki/status",
+      "status": 404,
+      "ms": 50,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/workspace",
+      "status": 404,
+      "ms": 32,
+      "bytes": 0,
+      "error": "Not Found"
+    },
+    {
+      "path": "/api/workspace/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/assets/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/health",
+      "status": 200,
+      "ms": 29,
+      "bytes": 46,
+      "error": null
+    },
+    {
+      "path": "/hud",
+      "status": 200,
+      "ms": 20,
+      "bytes": 23865,
+      "error": null
+    },
+    {
+      "path": "/m",
+      "status": 200,
+      "ms": 10,
+      "bytes": 36550,
+      "error": null
+    },
+    {
+      "path": "/manifest.json",
+      "status": 200,
+      "ms": 8,
+      "bytes": 465,
+      "error": null
+    },
+    {
+      "path": "/metrics",
+      "status": 200,
+      "ms": 15,
+      "bytes": 1857,
+      "error": null
+    },
+    {
+      "path": "/mobile",
+      "status": 200,
+      "ms": 99,
+      "bytes": 36550,
+      "error": null
+    },
+    {
+      "path": "/n8n-proxy",
+      "status": 200,
+      "ms": 51,
+      "bytes": 42382,
+      "error": null
+    },
+    {
+      "path": "/n8n-proxy/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/omniroute-proxy/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/rest/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/static/hermes-webui/api/{path}",
+      "status": "skipped"
+    },
+    {
+      "path": "/v2",
+      "status": 200,
+      "ms": 28,
+      "bytes": 833394,
+      "error": null
+    }
+  ]
+}

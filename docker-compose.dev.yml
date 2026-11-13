@@ -1,0 +1,152 @@
+services:
+  archon:
+    image: archon-os-dev:latest
+    container_name: ARCHON-OS-dev
+    user: "1000:1000"
+    group_add:
+      - "973"
+    working_dir: /app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8501", "--reload"]
+    env_file:
+      - .env.archon
+    environment:
+      HOME: /tmp
+      ENVIRONMENT: development
+      # Etappe 3: der Updater laeuft ueber den Proxy statt ueber den rohen Socket.
+      # DOCKER_ADMIN_HOST gilt nur fuer DockerAdminClient (utils/docker_client.py).
+      HERMES_UPDATER_DOCKER_CLIENT: "1"
+      DOCKER_ADMIN_HOST: "tcp://docker-socket-proxy:2375"
+      # Etappe 4 (Abloesung Socket-Mount): der gemeinsame DockerClient laeuft jetzt
+      # ebenfalls ueber den Proxy. Am 08.11.2026 live gegen den Proxy gemessen:
+      #   GET /containers/json, /containers/<c>/json, /logs?tail=…, /stats?stream=false
+      #   POST /containers/<c>/exec -> /exec/<id>/start, POST .../start, .../stop
+      #   -> alle 200/201/204/304, also deckungsgleich mit _ALLOWED in
+      #      utils/docker_client.py.
+      # NICHT gedeckt (deshalb bleibt der Socket-Mount unten stehen):
+      #   POST .../restart (403, ALLOW_RESTARTS=0), CLI-Pfade der Sandbox
+      #   (`docker run` braucht attach/wait -> 403) und der Update-Pfad des Updaters,
+      #   der bewusst schon ueber DOCKER_ADMIN_HOST geht.
+      # Die CLI-Aufrufe, die den Socket strukturell brauchen, pinnen ihn selbst ueber
+      # utils.docker_client.docker_cli_host_args() — die CLI wuerde DOCKER_HOST sonst
+      # global folgen und still degradieren.
+      DOCKER_HOST: "tcp://docker-socket-proxy:2375"
+    ports:
+      # Standard bleibt 127.0.0.1 (localhost-only); fuer LAN-Zugriff auf dem Homeserver
+      # in .env.archon z. B. ARCHON_BIND_IP=0.0.0.0 oder 192.168.1.100 setzen.
+      - "${ARCHON_BIND_IP:-127.0.0.1}:8501:8501"
+    # F27 (Cluster 3): harte Limits + Haertung. `deploy.resources` wirkt
+    # ausserhalb von Swarm nicht, deshalb die flachen Compose-Keys.
+    # read_only ist moeglich, weil /app, /opt/data und /app/data Bind-Mounts
+    # sind; /tmp braucht ein tmpfs (HOME=/tmp steht oben bereits).
+    mem_limit: 2g
+    memswap_limit: 2g
+    pids_limit: 200
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /var/cache:rw,size=64m
+    cap_drop:
+      - ALL
+    # Minimum fuer uvicorn --reload mit uid 1000 auf Bind-Mounts.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    security_opt:
+      - "no-new-privileges:true"
+    volumes:
+      - /mnt/raid/AgenticOS-2026:/app
+      - /mnt/raid/AgenticOS-2026/agent_workspace:/app/agent_workspace
+      - /mnt/raid/AgenticOS-2026/data:/app/data
+      - ${ARCHON_HERMES_DIR:-./.hermes}:/opt/data
+      - ${ARCHON_OBSIDIAN_DIR:-./obsidian_vault}:/opt/data/obsidian
+      # BLEIBT (Stand Etappe 4, 08.11.2026): nur noch die Klasse-B/C-Aufrufer brauchen
+      # den Socket — restart (Proxy: 403, ALLOW_RESTARTS=0), die CLI-Pfade der
+      # Sandbox (attach/wait -> 403) und `docker exec` in operations_api.
+      # Die Klasse-A-Aufrufer (services/logs/stats/inspect/exec/start/stop) laufen
+      # ueber DOCKER_HOST. Zeile erst entfernen, wenn B und C entschieden sind.
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    networks:
+      - agents_net
+      # F20: eigener Verwaltungsnetz-Zugang zum Socket-Proxy (nur ARCHON-OS).
+      - archon-admin_net
+
+  # Docker-API-Proxy: einziger durch die Anwendung genutzter Weg zum Daemon.
+  # Ist-Stand 1:1 übernommen (netzwerk-, mount- und env-gleich), bewusst nur
+  # eine Abweichung: EXEC=1 (Paperclip braucht exec, siehe
+  # backend/post_task_pipeline.py:522/526). Die Regeln kommen NICHT mehr aus
+  # der Env-Generierung (Pfad-Praefix-Match, siehe deploy/docker-socket-proxy/
+  # README.md), sondern aus der geprueften, read-only gemounteten Soll-Cfg.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    # Entrypoint rendert weiterhin /tmp/haproxy.cfg aus dem Image-Template
+    # (unbenutzt, kollidiert nicht mit unserem Pfad) und ruft dann
+    # `haproxy -W -db <command>` auf. Deshalb zeigt -f auf unsere Datei unter
+    # /usr/local/etc/haproxy/ (eigener Name, nicht haproxy.cfg.template),
+    # damit der Nachbarordner /usr/local/etc/haproxy/errors/ fuer die
+    # errorfile-Direktiven erhalten bleibt.
+    command: ["haproxy", "-f", "/usr/local/etc/haproxy/socket-proxy.cfg"]
+    # F20 (Cluster 3): Methoden-ACL verengt. Default = Lesen + Start/Stop.
+    # Create/Delete/Rename/Pull/Tag/Exec/Volumes/Networks/Images sind aus; sie
+    # werden nur noch per explizitem Env-Schalter (Default 0) freigegeben:
+    #   ARCHON_PROXY_ALLOW_UPDATER=1  -> Create/Rename/Delete/Pull/Tag (Updater)
+    #   ARCHON_PROXY_ALLOW_EXEC=1     -> /containers/<c>/exec (Paperclip-Pipeline)
+    # Beides ist eine bewusste Einzelfreigabe, kein Dauerzustand.
+    environment:
+      ALLOW_CONTAINER_CREATE: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_CONTAINER_DELETE: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_CONTAINER_RENAME: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_IMAGE_PULL: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_IMAGE_TAG: "${ARCHON_PROXY_ALLOW_UPDATER:-0}"
+      ALLOW_RESTARTS: "0"
+      ALLOW_START: "1"
+      ALLOW_STOP: "1"
+      AUTH: "0"
+      BUILD: "0"
+      COMMIT: "0"
+      CONFIGS: "0"
+      CONTAINERS: "1"
+      DELETE: "0"
+      DISABLE_IPV6: "0"
+      DISTRIBUTION: "0"
+      EVENTS: "0"
+      EXEC: "${ARCHON_PROXY_ALLOW_EXEC:-0}"
+      GRPC: "0"
+      IMAGES: "0"
+      INFO: "1"
+      LOG_LEVEL: "info"
+      NETWORKS: "0"
+      NODES: "0"
+      PING: "1"
+      PLUGINS: "0"
+      POST: "1"
+      SECRETS: "0"
+      SERVICES: "0"
+      SESSION: "0"
+      SWARM: "0"
+      SYSTEM: "0"
+      TASKS: "0"
+      VERSION: "1"
+      VOLUMES: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./deploy/docker-socket-proxy/haproxy.cfg:/usr/local/etc/haproxy/socket-proxy.cfg:ro
+    # F20: NICHT mehr im gemeinsamen agents_net. Der Daemon-Zugang haengt nur
+    # noch am internen Verwaltungsnetz, in dem ausschliesslich ARCHON-OS (und
+    # der Orchestrator) sitzt.
+    networks:
+      - archon-admin_net
+
+networks:
+  agents_net:
+    external: true
+    name: archon-os-dev_agents_net
+  archon-admin_net:
+    name: archon-admin_net
+    # internal: kein Gateway, kein NAT -> der Proxy ist aus dem Internet/LAN
+    # nicht erreichbar, auch nicht per Portveroeffentlichung.
+    internal: true

@@ -1,0 +1,10 @@
+{
+  "id": "persona_email_sequence_with_storytelling",
+  "name": "EMAIL SEQUENCE WITH STORYTELLING",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'EMAIL SEQUENCE WITH STORYTELLING'. Product: ${offer} | Avatar: ${customer} | Timing: 24-48h\n\n🔵 EMAIL 1: WELCOME\nSubject: \"Your ${lead_magnet} is ready + so...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

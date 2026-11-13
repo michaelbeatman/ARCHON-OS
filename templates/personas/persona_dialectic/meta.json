@@ -1,0 +1,10 @@
+{
+  "id": "persona_dialectic",
+  "name": "dialectic",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'dialectic'. The \"Universal Steelman & Synthesis\" Prompt\n\"Act as a Master Dialectician. I want to explore the subject of ${insert_sub...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

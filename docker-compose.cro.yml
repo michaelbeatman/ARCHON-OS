@@ -1,0 +1,80 @@
+name: cro
+
+networks:
+  agents_net:
+    external: true
+
+services:
+  crm:
+    image: crm-frontend:latest
+    container_name: CRM
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "3005:3005"
+    volumes:
+      - ./frontend:/app
+    environment:
+      - PORT=3005
+      - NODE_ENV=development
+    command: ["npm", "run", "dev"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3005/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "1.5"
+
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./pocketbase/pb_data:/pb_data
+      - ./pocketbase/pb_hooks:/pb_hooks
+      - ./pocketbase/pb_public:/pb_public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+
+  pocketbase-media:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase-Media
+    restart: unless-stopped
+    networks:
+      - agents_net
+    ports:
+      - "8092:8090"
+    volumes:
+      - ./pocketbase-media/pb_data:/pb_data
+      - ./pocketbase-media/pb_hooks:/pb_hooks
+      - ./pocketbase-media/pb_public:/pb_public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"

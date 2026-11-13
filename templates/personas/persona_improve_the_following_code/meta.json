@@ -1,0 +1,10 @@
+{
+  "id": "persona_improve_the_following_code",
+  "name": "Improve the following code",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Improve the following code'. Improve the following code\n\n```\n${selectedText}\n```\n\nPlease suggest improvements for:\n1. Code readability and maintainab...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

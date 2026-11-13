@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_investment_advisor",
+  "name": "Private Investment Advisor (Crews)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Impress your customers with full analyses over stocks and complete investment recommendations",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

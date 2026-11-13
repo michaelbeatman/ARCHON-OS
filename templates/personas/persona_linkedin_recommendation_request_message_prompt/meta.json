@@ -1,0 +1,10 @@
+{
+  "id": "persona_linkedin_recommendation_request_message_prompt",
+  "name": "LinkedIn: Recommendation request message prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'LinkedIn: Recommendation request message prompt'. Help me write a message asking my former supervisor and mentor to recommend me for the role of ${job_title} in the ${sec...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

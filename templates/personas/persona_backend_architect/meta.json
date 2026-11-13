@@ -1,0 +1,10 @@
+{
+  "id": "persona_backend_architect",
+  "name": "Backend Architect",
+  "category": "4. Immobilien & Objektentwicklung",
+  "description": "Fach-Experte: 'Backend Architect'. ---\nname: backend-architect\ndescription: \"Use this agent when designing APIs, building server-side logic, implementing d...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

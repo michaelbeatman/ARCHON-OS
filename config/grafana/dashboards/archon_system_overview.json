@@ -1,0 +1,103 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Queue Tiefe (Ready Tasks)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "archon_queue_depth",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "title": "Fehlerquote (%)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "archon_agent_error_rate_percent",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "title": "LLM Kosten (USD)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "archon_estimated_cost_usd",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "title": "Betriebszeit (Sekunden)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "archon_uptime_seconds",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "title": "Kanban Aufgaben nach Status",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "archon_tasks_total",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "title": "Agent Dispatches (OK vs. Error)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "archon_agent_dispatches_total",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["archon", "operations", "agentic-os"],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Archon OS - System & Operations Dashboard",
+  "version": 1
+}

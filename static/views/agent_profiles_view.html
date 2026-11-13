@@ -1,0 +1,1747 @@
+<div id="view-agent-profiles" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col" style="height: 100vh !important; max-height: 100vh !important;">
+
+  <!-- ========================================================================= -->
+  <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, OVERLAY AVATAR)            -->
+  <!-- ========================================================================= -->
+  <div id="agent-profiles-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-4 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+
+    <!-- LINKS: MODUL-TITEL ÜBER DEM 250px-KATALOG (REIN TYPOGRAFISCH) -->
+    <div class="w-[250px] min-w-[250px] max-w-[250px] shrink-0 flex items-center pl-5 pr-3 border-r border-[var(--border)] h-full select-none">
+      <div class="flex items-center gap-2">
+        <h2 class="text-base font-extrabold uppercase tracking-widest text-[var(--foreground)] font-mono truncate" data-i18n="view.agent_profiles.agentenkader">
+          Agentenkader
+        </h2>
+        <button type="button" onclick="openContextHelp('kader')" title="Hilfe zum Agenten-Kader" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0" data-i18n-title="view.agent_profiles.title_hilfe_zum_agenten_kader">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- MITTE: 110px AVATAR (GOLDENER SCHNITT: 68px IM HEADER, 42px OVERLAY) + STAMMDATEN -->
+    <div class="flex items-center gap-3.5 min-w-0 flex-1 pl-3.5 relative overflow-visible">
+      
+      <!-- AVATAR CONTAINER (110x110px, OVERLAY) -->
+      <div class="relative shrink-0 group z-30" style="width: 110px; height: 110px; transform: translateY(27px);">
+        <div 
+          id="prof-avatar-dropzone"
+          onclick="triggerAvatarFileInput()" 
+          ondragover="handleAvatarDragOver(event)"
+          ondragleave="handleAvatarDragLeave(event)"
+          ondrop="handleAvatarDrop(event)"
+          class="w-[110px] h-[110px] rounded-full border-[3px] border-[#878787] shadow-md bg-[var(--secondary)] overflow-hidden cursor-pointer flex items-center justify-center relative hover:ring-2 hover:ring-foreground/20 transition group "
+          title="Klicken zum Auswählen, Bild hierher ziehen oder einfügen (Strg+V)"
+         data-i18n-title="view.agent_profiles.title_klicken_zum_auswaehlen_bild_hierher">
+          <img id="prof-edit-avatar-preview" src="/static/avatars/avatar_001.jpg" alt="Avatar" class="w-full h-full object-cover" onerror="this.src='/static/avatars/avatar_001.jpg'">
+          <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center text-white text-[10px] font-bold font-mono">
+            <i data-lucide="upload" class="w-4 h-4 mb-0.5"></i>
+            <span data-i18n="view.agent_profiles.aendern">Ändern</span>
+          </div>
+        </div>
+        <input type="file" id="prof-avatar-file-input" accept="image/*" class="hidden" onchange="handleAvatarFileSelected(event)">
+        <input type="hidden" id="prof-edit-avatar" value="/static/avatars/avatar_001.jpg">
+        <textarea id="prof-edit-prompt" class="hidden"></textarea>
+
+        <!-- Avatar Library Button -->
+        <button 
+          type="button" 
+          onclick="openAvatarLibraryModal(event)" 
+          class="absolute bottom-0 -left-1 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-md hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition z-40" 
+          title="Avatar-Bibliothek (174 Porträts) öffnen"
+         data-i18n-title="view.agent_profiles.title_avatar_bibliothek_174_portraets_oeff">
+          <i data-lucide="book-open" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+        </button>
+
+        <!-- Zufalls Avatar Button -->
+        <button 
+          type="button" 
+          onclick="handleDiceClick(event)" 
+          class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-md hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition z-40" 
+          title="Zufälligen Avatar wählen"
+         data-i18n-title="view.agent_profiles.title_zufaelligen_avatar_waehlen">
+          <i data-lucide="dices" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+        </button>
+
+        <!-- Standard Avatar Button (Reset) -->
+        <button 
+          type="button" 
+          onclick="resetAvatarToDefault(event)" 
+          class="absolute bottom-0 -right-1 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-md hover:scale-110 text-[var(--foreground)] flex items-center justify-center cursor-pointer transition z-40" 
+          title="Standard-Avatar wiederherstellen"
+         data-i18n-title="view.agent_profiles.title_standard_avatar_wiederherstellen">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+        </button>
+      </div>
+
+      <!-- Agent Stammdaten (Kompakt im 80px Header) -->
+      <div class="min-w-0 space-y-0.5 flex-1 pl-1">
+        <div class="flex items-center gap-2 group cursor-pointer" onclick="focusProfileNameInput()" title="Klicken zum Bearbeiten" data-i18n-title="view.agent_profiles.title_klicken_zum_bearbeiten">
+          <h2 id="profile-editor-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-tight truncate">
+            Alexander Richter
+          </h2>
+          <span id="profile-editor-id-tag" class="px-2 py-0.5 rounded-full text-[9px] font-mono text-[var(--muted-foreground)] bg-[var(--secondary)] border border-[var(--border)] truncate shrink-0">
+            id: default
+          </span>
+        </div>
+        <div id="profile-editor-role" class="text-xs font-semibold text-[var(--muted-foreground)] truncate leading-tight">
+          Executive Decision Architect
+        </div>
+        <div class="pt-0.5 flex items-center gap-1.5 flex-wrap">
+          <span id="profile-editor-cat-tag" class="inline-block px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] truncate max-w-full">
+            1. STRATEGIE, FÜHRUNG &amp; LEBENSPLANUNG
+          </span>
+          <button
+            type="button"
+            id="profile-editor-liability-badge"
+            onclick="openLiabilityDisclaimerModal(currentSelectedProfileId, true)"
+            class="hidden px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition cursor-pointer shrink-0 items-center gap-1"
+            title="Rechtlicher & berufsrechtlicher Hinweis zu diesem Spezialisten-Profil anzeigen"
+           data-i18n-title="view.agent_profiles.title_rechtlicher_berufsrechtlicher_hinwei">
+            <span data-i18n="view.agent_profiles.fach_haftungshinweis">⚖️ Fach- &amp; Haftungshinweis</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECHTS: DIE 7 SUBTAB-ICONS (64px, MINIMALER ABSTAND, BESCHREIBUNG UNTEN) -->
+    <div id="agent-cadre-subtabs-nav" class="flex items-center gap-0.5 sm:gap-1 shrink-0 h-full py-0.5 ml-auto overflow-x-auto custom-scrollbar">
+      <!-- 1. Übersicht -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-overview" 
+        onclick="switchAgentCadreTab('overview')" 
+        class="agent-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Übersicht"
+       data-i18n-title="view.agent_profiles.title_uebersicht">
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/overview.png" alt="Übersicht" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none" data-i18n="view.agent_profiles.uebersicht">Übersicht</span>
+      </button>
+
+      <!-- 2. Chat -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-chat" 
+        onclick="switchAgentCadreTab('chat')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Direkt-Chat"
+       data-i18n-title="view.agent_profiles.title_direkt_chat">
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/chat.png" alt="Chat" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none" data-i18n="view.agent_profiles.chat">Chat</span>
+      </button>
+
+      <!-- 3. Operations -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-operations" 
+        onclick="switchAgentCadreTab('operations')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Operations & Disposition"
+       data-i18n-title="view.agent_profiles.title_operations_disposition">
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/operations.png?v=3" alt="Operations" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none" data-i18n="view.agent_profiles.operations">Operations</span>
+      </button>
+
+      <!-- 4. Bot Screen (Desktop & Web Navigator) -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-botscreen" 
+        onclick="switchAgentCadreTab('botscreen')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150 relative"
+        title="Bot Screen (Interaktiver Desktop & Navigator)"
+       data-i18n-title="view.agent_profiles.title_bot_screen_interaktiver_desktop_navi">
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <i data-lucide="monitor" class="w-7 h-7 text-sky-500 drop-shadow-xs"></i>
+          <span id="agent-botscreen-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none" data-i18n="view.agent_profiles.screen">Screen</span>
+      </button>
+
+      <!-- 5. Fähigkeiten -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-skills" 
+        onclick="switchAgentCadreTab('skills')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Fähigkeiten & Tools"
+       data-i18n-title="view.agent_profiles.title_faehigkeiten_tools">
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/skills.png" alt="Fähigkeiten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none" data-i18n="view.agent_profiles.faehigkeiten">Fähigkeiten</span>
+      </button>
+
+      <!-- 5. SOUL -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-soul" 
+        onclick="switchAgentCadreTab('soul')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="SOUL Direktiven"
+       data-i18n-title="view.agent_profiles.title_soul_direktiven">
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/soul.png" alt="SOUL" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none" data-i18n="view.agent_profiles.soul">SOUL</span>
+      </button>
+
+      <!-- 6. Personalakte -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-personalakte" 
+        onclick="switchAgentCadreTab('personalakte')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Personalakte (Dossier & SOP)"
+       data-i18n-title="view.agent_profiles.title_personalakte_dossier_sop">
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/personalakte.png" alt="Personalakte" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none" data-i18n="view.agent_profiles.personalakte">Personalakte</span>
+      </button>
+
+      <!-- 7. Marktplatz -->
+      <button 
+        type="button" 
+        id="agent-tab-btn-marketplace" 
+        onclick="switchAgentCadreTab('marketplace')" 
+        class="agent-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Talent-Marktplatz"
+       data-i18n-title="view.agent_profiles.title_talent_marktplatz">
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/marketplace.png" alt="Marktplatz" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="agent-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-black dark:text-zinc-100 font-medium leading-none" data-i18n="view.agent_profiles.marktplatz">Marktplatz</span>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 2. HAUPT-BEREICH UNTER DEM HEADER: KATALOG (LINKS) & ARBEITSBEREICH (RECHTS)-->
+  <!-- ========================================================================= -->
+  <div class="flex-1 min-h-0 flex gap-2.5 w-full overflow-hidden p-2.5 pt-3" style="height: calc(100vh - 80px); max-height: calc(100vh - 80px);">
+    
+<!-- 1. LINKE SPALTE: AGENTEN-KATALOG (DYNAMISCH 250px ODER 68px RAIL) -->
+          <div id="agent-catalog-col" class="w-[250px] min-w-[250px] max-w-[250px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-3 transition-all duration-200 bg-[var(--card)] rounded-2xl shadow-xs" style="height: 100% !important;">
+            
+            <!-- EXPANDED HEADER (Wenn nicht eingeklappt) -->
+            <div id="catalog-expanded-header" class="space-y-2.5 shrink-0">
+              <div class="flex items-center justify-between pb-1 border-b border-[var(--border)]">
+                <div class="flex items-center gap-1.5">
+                  <i data-lucide="users" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i>
+                  <span class="text-xs font-mono font-bold uppercase tracking-wider text-[var(--foreground)]" data-i18n="view.agent_profiles.katalog">Katalog</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button type="button" onclick="openContextHelp('kader')" title="Hilfe zum Agenten-Kader" class="w-6 h-6 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer" data-i18n-title="view.agent_profiles.title_hilfe_zum_agenten_kader">
+                    <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <button type="button" id="btn-catalog-collapse" onclick="toggleCatalogCollapse()" class="h-6 px-2 rounded-md border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-[10px] font-mono font-bold cursor-pointer shadow-2xs" title="Katalog auf 68px Icon-Rail einklappen" data-i18n-title="view.agent_profiles.title_katalog_auf_68px_icon_rail_einklappe">
+                    ◀
+                  </button>
+                </div>
+              </div>
+              <!-- Suchfeld & Domäne-Filter übereinander über dem Agentenfilter -->
+              <div class="space-y-1.5 pt-0.5">
+                <!-- 1. Zeile: Suchfeld -->
+                <div class="relative w-full">
+                  <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] pointer-events-none"></i>
+                  <input 
+                    type="text" 
+                    id="profile-search-input" 
+                    oninput="toggleClearBtn('profile-search-input'); onProfileSearchOrFilter()" 
+                    placeholder="Suchen..." 
+                    class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg pl-7 pr-6 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-medium shadow-2xs"
+                   data-i18n-placeholder="view.agent_profiles.placeholder_suchen">
+                  <button 
+                    id="profile-search-input-clear" 
+                    onclick="clearSearchInput('profile-search-input', onProfileSearchOrFilter)" 
+                    class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-[11px] font-bold cursor-pointer" 
+                    title="Suche zurücksetzen"
+                   data-i18n-title="view.agent_profiles.title_suche_zuruecksetzen">✕</button>
+                </div>
+                <!-- 2. Zeile: Domänefilter -->
+                <div class="relative w-full">
+                  <select 
+                    id="profile-category-dropdown" 
+                    onchange="filterProfilesByCategory(this.value)" 
+                    class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-[11px] font-semibold text-[var(--foreground)] focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 cursor-pointer shadow-2xs truncate"
+                  >
+                    <option value="all" data-i18n="view.agent_profiles.alle_domaenen">Alle Domänen</option>
+                    <option value="1. Strategie, Führung & Lebensplanung" data-i18n="view.agent_profiles.1_strategie_fuehrung">1. Strategie & Führung</option>
+                    <option value="2. Handel, Beschaffung & E-Commerce" data-i18n="view.agent_profiles.2_handel_e_com">2. Handel & E-Com</option>
+                    <option value="3. Recht, Steuern & Compliance" data-i18n="view.agent_profiles.3_recht_steuern">3. Recht & Steuern</option>
+                    <option value="4. Immobilien & Objektentwicklung" data-i18n="view.agent_profiles.4_immobilien">4. Immobilien</option>
+                    <option value="5. Kreation, Medien & Content" data-i18n="view.agent_profiles.5_medien_content">5. Medien & Content</option>
+                    <option value="6. Vertrieb, CRM & Growth" data-i18n="view.agent_profiles.6_vertrieb_growth">6. Vertrieb & Growth</option>
+                    <option value="7. Tech, Software & Data" data-i18n="view.agent_profiles.7_tech_software">7. Tech & Software</option>
+                  </select>
+                </div>
+              </div>
+              <!-- 3-Teilige Tab-Filterleiste (Aktiv, Favoriten, Alle) -->
+              <div class="grid grid-cols-3 gap-1 p-1 rounded-xl bg-[var(--secondary)] border border-[var(--border)] shadow-2xs">
+                <button type="button" id="tab-filter-active" onclick="setProfileTabFilter('active')" class="py-1 px-1.5 rounded-lg text-[10.5px] font-bold font-mono transition text-center cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] truncate">
+                  <span data-i18n="view.agent_profiles.aktiv">Aktiv (</span><span id="count-active">0</span>)
+                </button>
+                <button type="button" id="tab-filter-favorites" onclick="setProfileTabFilter('favorites')" class="py-1 px-1.5 rounded-lg text-[10.5px] font-medium font-mono transition text-center cursor-pointer bg-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent truncate">
+                  <span data-i18n="view.agent_profiles.favoriten">Favoriten (</span><span id="count-favorites">0</span>)
+                </button>
+                <button type="button" id="tab-filter-all" onclick="setProfileTabFilter('all')" class="py-1 px-1.5 rounded-lg text-[10.5px] font-medium font-mono transition text-center cursor-pointer bg-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent truncate">
+                  <span data-i18n="view.agent_profiles.alle">Alle (</span><span id="count-all">0</span>)
+                </button>
+              </div>
+            </div>
+            <!-- COLLAPSED HEADER (Wenn auf 68px eingeklappt) -->
+            <div id="catalog-collapsed-header" class="hidden flex flex-col items-center gap-2.5 pb-2.5 border-b border-[var(--border)] shrink-0 w-full">
+              <button type="button" onclick="toggleCatalogCollapse()" class="w-full py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-xs" title="Katalog auf 320px ausklappen" data-i18n-title="view.agent_profiles.title_katalog_auf_320px_ausklappen">
+                ▶
+              </button>
+              <button type="button" onclick="refreshPaperclipAndProfiles(true)" class="p-2 rounded-xl border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center justify-center cursor-pointer shadow-xs" title="Sync" data-i18n-title="view.agent_profiles.title_sync">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <!-- Profil-Liste (Scrollt flexibel im Viewport) -->
+            <div id="hermes-profiles-list" class="flex-1 overflow-y-auto space-y-2 my-2 pr-1 min-h-0 custom-scrollbar w-full">
+              <!-- Dynamisch befüllt mit großen Profil-Karten -->
+            </div>
+            <!-- EXPANDED FOOTER -->
+            <div id="catalog-expanded-footer" class="pt-2 shrink-0 space-y-2 border-t border-[var(--border)]">
+              <!-- Profil-Aktionen: Neu, Speichern, Löschen -->
+              <div class="grid grid-cols-3 gap-1.5 w-full">
+                <button 
+                  type="button" 
+                  onclick="createNewProfileDraft()" 
+                  class="py-1.5 px-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                  title="Neues leeres Agenten-Profil anlegen"
+                 data-i18n-title="view.agent_profiles.title_neues_leeres_agenten_profil_anlegen">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                  <span data-i18n="view.agent_profiles.neu">Neu</span>
+                </button>
+                <button 
+                  id="btn-save-profile" 
+                  type="button" 
+                  onclick="saveCurrentProfile(event)" 
+                  class="py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950 font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                  title="Alle Änderungen dieses Agenten speichern"
+                 data-i18n-title="view.agent_profiles.title_alle_aenderungen_dieses_agenten_spei">
+                  <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                  <span data-i18n="view.agent_profiles.speichern">Speichern</span>
+                </button>
+                <button 
+                  type="button" 
+                  onclick="deleteCurrentProfile()" 
+                  class="py-1.5 px-2 rounded-lg border border-[var(--border)] hover:bg-rose-500/10 hover:border-rose-500/40 hover:text-rose-500 text-[var(--muted-foreground)] font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                  title="Dieses Profil löschen"
+                 data-i18n-title="view.agent_profiles.title_dieses_profil_loeschen">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  <span data-i18n="view.agent_profiles.loeschen">Löschen</span>
+                </button>
+              </div>
+              <!-- Gateway Manager Modul -->
+              <div id="agent-gateway-manager-widget" class="p-2.5 rounded-xl space-y-1.5 transition shadow-2xs bg-[var(--card)] border border-[var(--border)]">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                    <span class="text-[10px] font-bold font-mono uppercase tracking-wider text-[var(--foreground)]" data-i18n="view.agent_profiles.omniroute_gateway">OmniRoute Gateway</span>
+                  </div>
+                  <span id="gateway-widget-status-badge" class="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border bg-[var(--secondary)] text-[var(--foreground)] border-[var(--border)]">
+                    -- Aktiv
+                  </span>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5 pt-0.5">
+                  <button type="button" id="btn-gateway-toggle-active" onclick="toggleActiveAgentGateway()" class="py-1 px-1.5 rounded-lg font-mono text-[9.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+                    <i data-lucide="play" class="w-3 h-3"></i> <span data-i18n="view.agent_profiles.start">Start</span>
+                  </button>
+                  <button type="button" onclick="openGatewayManagerModal()" class="py-1 px-1.5 rounded-lg font-mono text-[9.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+                    <i data-lucide="settings-2" class="w-3 h-3"></i> <span data-i18n="view.agent_profiles.verwalten">Verwalten</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+    <!-- 2. RECHTE SPALTE: AGENTEN-COCKPIT (7 DYNAMISCHE PANES) -->
+    <div class="flex-1 h-full min-h-0 flex flex-col min-w-0 overflow-hidden relative">
+<!-- HAUPTBEREICH: 7 DYNAMISCHE REITER-PANES -->
+            <div class="flex-1 min-h-0 relative overflow-hidden flex flex-col">
+              <!-- ========================================================= -->
+              <!-- REITER 1: 📊 ÜBERSICHT (360°-DOSSIER) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-overview" class="flex-1 min-h-0 flex flex-col justify-between overflow-hidden w-full h-full pb-1">
+                
+                <!-- 2 Elastische Spalten: Stammdaten (optimale Formularbreite) + Live-Feed-Log (dynamisch dehnbar) mit klarem Spalt zur Fußleiste -->
+                <div id="prof-main-columns-container" class="flex gap-2.5 flex-1 min-h-0 overflow-hidden w-full mb-3" style="max-height: calc(100% - 78px);">
+                  
+                  <!-- Linke Spalte: Stammdaten, Modell & Projekt-Historie -->
+                  <div id="prof-col-stammdaten" class="w-[500px] xl:w-[520px] 2xl:w-[540px] shrink-0 prof-panel-card p-3 flex flex-col gap-2 h-full min-h-0 overflow-y-auto custom-scrollbar border-0 shadow-xs">
+                    
+                    <div class="flex flex-col gap-2 flex-1 min-h-0 pt-11">
+                      <!-- Persönlicher Name & Handle -->
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+                        <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.persoenlicher_name">Persönlicher Name</label>
+                          <input type="text" id="prof-edit-person-name" placeholder="z.B. Alexander Richter" oninput="onProfilePersonNameInputChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-semibold focus:outline-none">
+                        </div>
+                        <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.hermes_handle_id">Hermes-Handle (ID)</label>
+                          <input type="text" id="prof-edit-id" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-mono focus:outline-none shadow-2xs">
+                        </div>
+                      </div>
+                      <!-- Stellenbeschreibung & Domäne -->
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+                        <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.stellenbeschreibung_rolle">Stellenbeschreibung / Rolle</label>
+                          <input type="text" id="prof-edit-name" placeholder="z.B. Executive Decision Architect" oninput="onProfileNameInputChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] font-semibold focus:outline-none shadow-2xs" data-i18n-placeholder="view.agent_profiles.placeholder_z_b_executive_decision_archite">
+                        </div>
+                        <div class="prof-box-card p-2 rounded-xl bg-[var(--card)]">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.domaenen_kategorie">Domänen-Kategorie</label>
+                          <select id="prof-edit-category" onchange="onProfileCategoryChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                            <option value="1. Strategie, Führung & Lebensplanung" data-i18n="view.agent_profiles.1_strategie_fuehrung_lebensplanung">1. Strategie, Führung & Lebensplanung</option>
+                            <option value="2. Handel, Beschaffung & E-Commerce" data-i18n="view.agent_profiles.2_handel_beschaffung_e_commerce">2. Handel, Beschaffung & E-Commerce</option>
+                            <option value="3. Recht, Steuern & Compliance" data-i18n="view.agent_profiles.3_recht_steuern_compliance">3. Recht, Steuern & Compliance</option>
+                            <option value="4. Immobilien & Objektentwicklung" data-i18n="view.agent_profiles.4_immobilien_objektentwicklung">4. Immobilien & Objektentwicklung</option>
+                            <option value="5. Kreation, Medien & Content" data-i18n="view.agent_profiles.5_kreation_medien_content">5. Kreation, Medien & Content</option>
+                            <option value="5. Synthese, Integration & Ergebnissicherung" data-i18n="view.agent_profiles.5b_synthese_integration_ergebnissicherung">5b. Synthese, Integration & Ergebnissicherung</option>
+                            <option value="6. Vertrieb, CRM & Growth" data-i18n="view.agent_profiles.6_vertrieb_crm_growth">6. Vertrieb, CRM & Growth</option>
+                            <option value="7. Tech, Software & Data" data-i18n="view.agent_profiles.7_tech_software_data">7. Tech, Software & Data</option>
+                            <option value="8. Medizin, Chemie, Wissenschaft & Ingenieurwesen" data-i18n="view.agent_profiles.8_medizin_chemie_wissenschaft_ingenieurwes">8. Medizin, Chemie, Wissenschaft & Ingenieurwesen</option>
+                          </select>
+                        </div>
+                      </div>
+                      <!-- API & Modell-Router: 2x2 Matrix (Gleichverteilt) -->
+                      <div class="prof-box-card p-2 rounded-xl bg-[var(--card)] space-y-1.5 shadow-xs shrink-0 border-0">
+                        <div class="flex items-center justify-between">
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold" data-i18n="view.agent_profiles.modell_router_llm_provider">Modell-Router / LLM-Provider</label>
+                          <span id="prof-active-model-label" class="text-[9px] font-mono text-[var(--muted-foreground)]">aktiv: -</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 w-full">
+                          <!-- Zeile 1 Links: Provider & Dollar-Katalog Button -->
+                          <div class="flex items-center gap-1 min-w-0">
+                            <select id="prof-edit-provider" onchange="onProfileProviderChange(this.value)" class="flex-1 min-w-0 bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono">
+                              <option value="openrouter" selected data-i18n="view.agent_profiles.openrouter">OpenRouter</option>
+                              <option value="google" data-i18n="view.agent_profiles.google_ai_gemini">Google AI (Gemini)</option>
+                              <option value="omniroute" data-i18n="view.agent_profiles.omniroute">OmniRoute</option>
+                              <option value="groq" data-i18n="view.agent_profiles.groq">Groq</option>
+                              <option value="openai" data-i18n="view.agent_profiles.openai">OpenAI</option>
+                              <option value="nvidia" data-i18n="view.agent_profiles.nvidia_nim">NVIDIA NIM</option>
+                            </select>
+                            <button type="button" onclick="openPriceCatalogForProfileEditor()" class="p-1 rounded-md bg-[var(--secondary)] hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-[var(--border)] cursor-pointer transition shrink-0 flex items-center justify-center shadow-2xs" title="Preise & Modell-Katalog öffnen" data-i18n-title="view.agent_profiles.title_preise_modell_katalog_oeffnen">
+                              <i data-lucide="circle-dollar-sign" class="w-3.5 h-3.5"></i>
+                            </button>
+                          </div>
+                          <!-- Zeile 1 Rechts: Sprachmodell -->
+                          <div class="min-w-0">
+                            <select id="prof-edit-model" onchange="onProfileModelDropdownChange(this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono truncate">
+                              <option value="">Lade Modelle...</option>
+                            </select>
+                          </div>
+                          <!-- Zeile 2 Links: Reasoning -->
+                          <div class="min-w-0">
+                            <select id="prof-edit-reasoning" onchange="applyProfileModelSelection()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs font-mono truncate" title="Reasoning-Intensität / Thinking Budget" data-i18n-title="view.agent_profiles.title_reasoning_intensitaet_thinking_budge">
+                              <option value="off" data-i18n="view.agent_profiles.aus_0_tok">🧠 Aus (0 Tok)</option>
+                              <option value="minimal" data-i18n="view.agent_profiles.minimal_1k">🧠 Minimal (~1k)</option>
+                              <option value="low" data-i18n="view.agent_profiles.niedrig_2k">🧠 Niedrig (~2k)</option>
+                              <option value="medium" selected data-i18n="view.agent_profiles.mittel_4k">🧠 Mittel (~4k)</option>
+                              <option value="high" data-i18n="view.agent_profiles.hoch_8k">🧠 Hoch (~8k)</option>
+                              <option value="max" data-i18n="view.agent_profiles.maximal_16k">🧠 Maximal (~16k)</option>
+                            </select>
+                          </div>
+                          <!-- Zeile 2 Rechts: Costpill -->
+                          <div class="flex items-center min-w-0">
+                            <span id="prof-edit-model-cost" class="w-full text-center text-[10px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-1 rounded-md border border-amber-500/20 shadow-2xs truncate font-medium">In: $0.15 | Out: $0.60 /1M Tok</span>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- Beschreibung & Aufgabenprofil -->
+                      <div class="prof-box-card p-2 rounded-xl bg-[var(--card)] space-y-1 shrink-0">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold" data-i18n="view.agent_profiles.aufgabenprofil_beschreibung">Aufgabenprofil & Beschreibung</label>
+                        <textarea id="prof-edit-desc" class="w-full h-16 bg-[var(--background)] border border-[var(--border)] rounded-lg p-2 text-xs text-[var(--foreground)] leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-2xs" placeholder="Definiere hier die Kernaufgaben und den Fokus des Agenten..." data-i18n-placeholder="view.agent_profiles.placeholder_definiere_hier_die_kernaufgabe"></textarea>
+                      </div>
+                      <!-- Projekt-Historie & Beteiligungen (bis zur Unterkante ausfüllend) -->
+                      <div class="prof-box-card p-2 rounded-xl bg-[var(--card)] flex-1 min-h-[90px] flex flex-col space-y-1 border-0">
+                        <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
+                          <div class="flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-foreground/60 inline-block"></span>
+                            <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold" data-i18n="view.agent_profiles.projekt_historie_beteiligungen">Projekt-Historie & Beteiligungen</label>
+                          </div>
+                          <span id="prof-projects-count" class="text-[9px] text-[var(--muted-foreground)] font-mono font-bold">0 Projekte</span>
+                        </div>
+                        <div id="prof-projects-list" class="w-full flex-1 min-h-0 bg-[var(--background)] border border-[var(--border)] rounded-lg p-1.5 overflow-y-auto custom-scrollbar space-y-1 shadow-2xs">
+                          <div class="text-[11px] text-[var(--muted-foreground)] italic p-1">Lade Projektbeteiligungen...</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Rechte Spalte: Aktivitäts-Log & Live-Feed elastisch breiter -->
+                  <div id="prof-col-activity-feed" class="flex-1 min-w-0 prof-panel-card p-3 flex flex-col gap-2 h-full min-h-0 overflow-hidden border-0 shadow-xs">
+                    
+                    <!-- Aktivitäts-Log (Volle Höhe) -->
+                    <div class="prof-box-card p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-0 flex flex-col justify-between space-y-1 shadow-xs">
+                      <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-1.5 h-1.5 rounded-full bg-zinc-900 dark:bg-zinc-100 inline-block"></span>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold tracking-wider" data-i18n="view.agent_profiles.aktivitaets_log_live_feed">Aktivitäts-Log & Live-Feed</label>
+                        </div>
+                        <span id="prof-log-status" class="text-[9px] font-mono text-[var(--muted-foreground)]">Live</span>
+                      </div>
+                      <div id="prof-activity-log-terminal" class="w-full flex-1 min-h-[150px] bg-[var(--background)] border border-[var(--border)] rounded-lg p-2 text-[11px] font-mono leading-tight text-[var(--foreground)] overflow-y-auto custom-scrollbar shadow-inner select-text">
+                        <div class="text-[var(--muted-foreground)] italic">Lade Agenten-Aktivität...</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Unten: KPI- & STATUS-KACHEL (ELASTISCH DURCHGEHEND) -->
+                <div id="prof-overview-kpi-footer" class="prof-panel-card p-2.5 shrink-0 w-full bg-[var(--card)] border-0 rounded-xl shadow-xs relative mt-0 top-0">
+                  <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
+                      <div class="flex items-center justify-between">
+                        <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.rufname_kommando">Rufname (/Kommando)</span>
+                        <span id="prof-callsign-status" class="text-[9px] font-mono text-emerald-500 font-bold hidden">✓ Gespeichert</span>
+                      </div>
+                      <input 
+                        type="text" 
+                        id="prof-edit-callsign" 
+                        onchange="onProfileCallsignChanged(this.value)"
+                        placeholder="z. B. robert" 
+                        class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-1.5 py-0.5 text-xs font-mono font-bold text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-sky-500 shadow-2xs"
+                       data-i18n-placeholder="view.agent_profiles.placeholder_z_b_robert">
+                    </div>
+                    <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.direkter_supervisor_lead">Direkter Supervisor / Lead</span>
+                      <div id="kpi-val-supervisor" class="text-xs font-bold text-[var(--foreground)] truncate">Alex Rivera (Owner / CEO)</div>
+                    </div>
+                    <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.verarbeitete_tasks">Verarbeitete Tasks</span>
+                      <div id="kpi-val-tasks" class="text-xs font-bold text-[var(--foreground)] truncate">24 Tasks abgeschlossen</div>
+                    </div>
+                    <div class="p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-0.5">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.status_erfolgsquote">Status & Erfolgsquote</span>
+                      <div id="kpi-val-success" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate">99.4% (Einsatzbereit)</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 2: 🛠️ FÄHIGKEITEN (SKILL- & MCP-STUDIO) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-skills" class="hidden flex-1 min-h-0 flex flex-col gap-2.5 overflow-hidden">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col gap-2.5 overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
+                  
+                  <!-- ========================================================= -->
+                  <!-- EBENE 1: FACH-SKILLS & KOMPETENZEN (DREITEILIG)           -->
+                  <!-- ========================================================= -->
+                  <div class="flex-1 min-h-0 flex flex-col p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-2xs overflow-hidden">
+                    <!-- Ebene 1 Header -->
+                    <div class="flex items-center justify-between shrink-0 pb-1.5 mb-1.5 border-b border-[var(--border)]">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="zap" class="w-4 h-4 text-emerald-500"></i>
+                        <h4 class="text-xs font-bold font-mono uppercase text-[var(--foreground)] tracking-wide" data-i18n="view.agent_profiles.ebene_1_fach_skills_kompetenzen">Ebene 1: Fach-Skills &amp; Kompetenzen</h4>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span id="prof-skills-summary-badge" class="text-[10px] font-mono font-bold text-[var(--muted-foreground)]">0 zugewiesen</span>
+                      </div>
+                    </div>
+                    
+                    <!-- Dreiteiliges Raster Ebene 1 -->
+                    <div class="grid grid-cols-12 gap-2 flex-1 min-h-0 overflow-hidden">
+                      
+                      <!-- Spalte 1 (Links): Zugewiesene Skills -->
+                      <div class="col-span-3 min-h-0 flex flex-col rounded-lg border border-[var(--border)] bg-[var(--background)] p-2 overflow-hidden shadow-2xs">
+                        <div class="flex items-center justify-between pb-1.5 mb-1 border-b border-[var(--border)] shrink-0">
+                          <span class="text-[10px] font-mono font-bold uppercase text-[var(--foreground)]" data-i18n="view.agent_profiles.zugewiesen">Zugewiesen</span>
+                          <span id="prof-skills-count" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]">0 aktiv</span>
+                        </div>
+                        <div id="prof-active-skills-tags" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-wrap content-start gap-1 p-0.5">
+                          <!-- Dynamische Pillen mit Minus-Button -->
+                        </div>
+                      </div>
+                      
+                      <!-- Spalte 2 (Mitte): Skill-Erklärung & SKILL.md Preview -->
+                      <div class="col-span-5 min-h-0 flex flex-col rounded-lg border border-[var(--border)] bg-[var(--background)] p-2.5 overflow-hidden shadow-2xs">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[var(--border)] shrink-0">
+                          <div class="flex items-center gap-1.5 min-w-0">
+                            <i data-lucide="file-text" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i>
+                            <span id="prof-skill-inspector-title" class="text-xs font-bold font-mono text-[var(--foreground)] truncate" data-i18n="view.agent_profiles.skill_erklaerung">Skill-Erklärung</span>
+                          </div>
+                          <div class="flex items-center gap-1.5 shrink-0">
+                            <span id="prof-skill-inspector-category" class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]" data-i18n="view.agent_profiles.allgemein">Allgemein</span>
+                            <button type="button" id="prof-skill-edit-btn" onclick="openSkillDetailModalFromInspector()" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--card)] hover:bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1 shadow-2xs" title="Skill im Vollbild-Editor bearbeiten" data-i18n-title="view.agent_profiles.title_skill_im_vollbild_editor_bearbeiten">
+                              <i data-lucide="external-link" class="w-3 h-3"></i> <span data-i18n="view.agent_profiles.editor">Editor</span>
+                            </button>
+                          </div>
+                        </div>
+                        <!-- Meta & Beschreibung -->
+                        <div id="prof-skill-inspector-desc" class="text-[11px] text-[var(--foreground)] leading-snug p-2 rounded-md bg-[var(--card)] border border-[var(--border)] mb-1.5 shrink-0 select-text font-medium shadow-2xs" data-i18n="view.agent_profiles.waehle_links_oder_rechts_einen_skill_aus_u">
+                          Wähle links oder rechts einen Skill aus, um Erklärung und Datei-Inhalte anzuzeigen.
+                        </div>
+                        <div class="flex items-center justify-between text-[9.5px] font-mono text-[var(--muted-foreground)] pb-1 shrink-0">
+                          <span data-i18n="view.agent_profiles.spezifikationsdatei_skill_md">Spezifikationsdatei (SKILL.md):</span>
+                          <span id="prof-skill-inspector-path" class="truncate max-w-[220px] text-[9px] opacity-75"></span>
+                        </div>
+                        <!-- Markdown/Text Box -->
+                        <div id="prof-skill-inspector-content" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 rounded-md bg-[var(--card)] border border-[var(--border)] font-mono text-[10.5px] leading-relaxed text-[var(--foreground)] whitespace-pre-wrap select-text shadow-2xs">
+                        </div>
+                      </div>
+                      
+                      <!-- Spalte 3 (Rechts): Verfügbare Skills (Katalog) -->
+                      <div class="col-span-4 min-h-0 flex flex-col rounded-lg border border-[var(--border)] bg-[var(--background)] p-2 overflow-hidden shadow-2xs">
+                        <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
+                          <span class="text-[10px] font-mono font-bold uppercase text-[var(--foreground)]" data-i18n="view.agent_profiles.verfuegbarer_katalog">Verfügbarer Katalog</span>
+                          <span id="prof-skills-available-count" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]">0</span>
+                        </div>
+                        <div class="relative w-full my-1 shrink-0">
+                          <i data-lucide="search" class="w-3 h-3 absolute left-2 top-2 text-[var(--muted-foreground)]"></i>
+                          <input type="text" id="prof-available-skills-search" oninput="filterAvailableSkillsCatalog(this.value)" placeholder="Skill suchen..." class="w-full bg-[var(--card)] border border-[var(--border)] rounded-md pl-6 pr-6 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none" data-i18n-placeholder="view.agent_profiles.placeholder_skill_suchen">
+                          <button type="button" onclick="document.getElementById('prof-available-skills-search').value=''; filterAvailableSkillsCatalog('')" class="absolute right-1.5 top-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-[10px] cursor-pointer">✕</button>
+                        </div>
+                        <div id="prof-available-skills-tags" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-wrap content-start gap-1 p-0.5">
+                          <!-- Dynamische Pillen mit Plus-Button -->
+                        </div>
+                      </div>
+                      
+                    </div>
+                  </div>
+                  
+                  <!-- ========================================================= -->
+                  <!-- EBENE 2: SYSTEM- & MCP-TOOLS (DREITEILIG)                  -->
+                  <!-- ========================================================= -->
+                  <div class="flex-1 min-h-0 flex flex-col p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-2xs overflow-hidden">
+                    <!-- Ebene 2 Header -->
+                    <div class="flex items-center justify-between shrink-0 pb-1.5 mb-1.5 border-b border-[var(--border)]">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="wrench" class="w-4 h-4 text-blue-500"></i>
+                        <h4 class="text-xs font-bold font-mono uppercase text-[var(--foreground)] tracking-wide" data-i18n="view.agent_profiles.ebene_2_system_mcp_tools">Ebene 2: System- &amp; MCP-Tools</h4>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span id="prof-tools-summary-badge" class="text-[10px] font-mono font-bold text-[var(--muted-foreground)]">0 zugewiesen</span>
+                      </div>
+                    </div>
+                    
+                    <!-- Dreiteiliges Raster Ebene 2 -->
+                    <div class="grid grid-cols-12 gap-2 flex-1 min-h-0 overflow-hidden">
+                      
+                      <!-- Spalte 1 (Links): Zugewiesene Tools -->
+                      <div class="col-span-3 min-h-0 flex flex-col rounded-lg border border-[var(--border)] bg-[var(--background)] p-2 overflow-hidden shadow-2xs">
+                        <div class="flex items-center justify-between pb-1.5 mb-1 border-b border-[var(--border)] shrink-0">
+                          <span class="text-[10px] font-mono font-bold uppercase text-[var(--foreground)]" data-i18n="view.agent_profiles.zugewiesen">Zugewiesen</span>
+                          <span id="prof-tools-count" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]">0 aktiv</span>
+                        </div>
+                        <div id="prof-active-tools-tags" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-wrap content-start gap-1 p-0.5">
+                          <!-- Dynamische Tool-Pillen mit Minus-Button -->
+                        </div>
+                      </div>
+                      
+                      <!-- Spalte 2 (Mitte): Tool-Spezifikation & Parameter -->
+                      <div class="col-span-5 min-h-0 flex flex-col rounded-lg border border-[var(--border)] bg-[var(--background)] p-2.5 overflow-hidden shadow-2xs">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[var(--border)] shrink-0">
+                          <div class="flex items-center gap-1.5 min-w-0">
+                            <i data-lucide="cpu" class="w-3.5 h-3.5 text-blue-500 shrink-0"></i>
+                            <span id="prof-tool-inspector-title" class="text-xs font-bold font-mono text-[var(--foreground)] truncate" data-i18n="view.agent_profiles.tool_spezifikation">Tool-Spezifikation</span>
+                          </div>
+                          <div class="flex items-center gap-1.5 shrink-0">
+                            <span id="prof-tool-inspector-mode" class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]" data-i18n="view.agent_profiles.sandbox">Sandbox</span>
+                            <button type="button" id="prof-tool-config-btn" onclick="openToolConfigModalFromInspector(event)" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--card)] hover:bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1 shadow-2xs" title="Tool-Parameter konfigurieren" data-i18n-title="view.agent_profiles.title_tool_parameter_konfigurieren">
+                              <i data-lucide="settings" class="w-3 h-3"></i> <span data-i18n="view.agent_profiles.parameter">Parameter</span>
+                            </button>
+                          </div>
+                        </div>
+                        <!-- Meta & Erklärung -->
+                        <div id="prof-tool-inspector-desc" class="text-[11px] text-[var(--foreground)] leading-snug p-2 rounded-md bg-[var(--card)] border border-[var(--border)] mb-1.5 shrink-0 select-text font-medium shadow-2xs" data-i18n="view.agent_profiles.waehle_links_oder_rechts_ein_tool_aus_um_s">
+                          Wähle links oder rechts ein Tool aus, um Spezifikation, Subtools und Parameter anzuzeigen.
+                        </div>
+                        <div class="flex items-center justify-between text-[9.5px] font-mono text-[var(--muted-foreground)] pb-1 shrink-0">
+                          <span data-i18n="view.agent_profiles.befehle_mcp_subtools">Befehle &amp; MCP-Subtools:</span>
+                          <span id="prof-tool-inspector-timeout" class="text-[9px] font-mono font-bold" data-i18n="view.agent_profiles.timeout_60s">Timeout: 60s</span>
+                        </div>
+                        <!-- Subtools Chips -->
+                        <div id="prof-tool-inspector-subtools" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 rounded-md bg-[var(--card)] border border-[var(--border)] flex flex-wrap content-start gap-1 select-text shadow-2xs">
+                        </div>
+                      </div>
+                      
+                      <!-- Spalte 3 (Rechts): Verfügbare Tools (Katalog) -->
+                      <div class="col-span-4 min-h-0 flex flex-col rounded-lg border border-[var(--border)] bg-[var(--background)] p-2 overflow-hidden shadow-2xs">
+                        <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
+                          <span class="text-[10px] font-mono font-bold uppercase text-[var(--foreground)]" data-i18n="view.agent_profiles.verfuegbarer_katalog">Verfügbarer Katalog</span>
+                          <span id="prof-tools-available-count" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]">0</span>
+                        </div>
+                        <div class="relative w-full my-1 shrink-0">
+                          <i data-lucide="search" class="w-3 h-3 absolute left-2 top-2 text-[var(--muted-foreground)]"></i>
+                          <input type="text" id="prof-available-tools-search" oninput="filterAvailableToolsCatalog(this.value)" placeholder="Tools durchsuchen..." class="w-full bg-[var(--card)] border border-[var(--border)] rounded-md pl-6 pr-6 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none" data-i18n-placeholder="view.agent_profiles.placeholder_tools_durchsuchen">
+                          <button type="button" onclick="document.getElementById('prof-available-tools-search').value=''; filterAvailableToolsCatalog('')" class="absolute right-1.5 top-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-[10px] cursor-pointer">✕</button>
+                        </div>
+                        <div id="prof-available-tools-tags" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-wrap content-start gap-1 p-0.5">
+                          <!-- Dynamische Tool-Pillen mit Plus-Button -->
+                        </div>
+                      </div>
+                      
+                    </div>
+                  </div>
+                  
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 3: 💬 CHAT (MASTER-CHAT ENGINE & THREAD-MANAGER) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-chat" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
+                  
+                  <!-- Chat Header: Session-Auswahl & Neue Session & Master-Konsole Sprung -->
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0 gap-2">
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                      <span class="text-xs font-mono font-bold text-[var(--muted-foreground)] shrink-0" data-i18n="view.agent_profiles.sitzung">Sitzung:</span>
+                      <select id="agent-chat-session-select" onchange="loadAgentTabChatMessages(this.value)" class="flex-1 max-w-md bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] font-semibold focus:outline-none cursor-pointer shadow-2xs truncate">
+                        <!-- Dynamisch geladene Live-Sessions aus Master-Chat Backend -->
+                      </select>
+                      <button type="button" onclick="renameCurrentAgentTabSession()" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-2xs shrink-0" title="Aktuelle Sitzung umbenennen" data-i18n-title="view.agent_profiles.title_aktuelle_sitzung_umbenennen">
+                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button type="button" onclick="createNewAgentChatSession()" class="px-3 py-1 rounded-lg text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0" title="Neue Chat-Sitzung mit diesem Agenten starten" data-i18n-title="view.agent_profiles.title_neue_chat_sitzung_mit_diesem_agenten">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        <span data-i18n="view.agent_profiles.neue_session">Neue Session</span>
+                      </button>
+                      <button type="button" onclick="jumpToMasterChatWithCurrentAgent()" class="px-2.5 py-1 rounded-lg text-xs font-mono transition flex items-center gap-1.5 cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0" title="Diesen Agenten in der Master-Konsole öffnen" data-i18n-title="view.agent_profiles.title_diesen_agenten_in_der_master_konsole">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline" data-i18n="view.agent_profiles.master_konsole">Master-Konsole</span>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Chat Verlauf (mit Markdown & SSE Streaming) -->
+                  <div id="agent-tab-chat-messages" class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-[var(--background)] border border-[var(--border)] rounded-xl my-2">
+                    <!-- Nachrichtenverlauf -->
+                  </div>
+                  <!-- Attachment Preview Bar (bis zu 5 Dateien) -->
+                  <div id="agent-tab-attachment-bar" class="px-2.5 py-1.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg mb-1 flex flex-wrap items-center justify-between gap-1.5 text-xs hidden">
+                  </div>
+                  <!-- Prompt Eingabe & Toolbar (Feature-Parität mit Master-Konsole) -->
+                  <div class="shrink-0 pt-1">
+                    <div id="agent-tab-input-card" class="border border-[var(--border)] rounded-xl p-2.5 bg-[var(--background)] shadow-xs focus-within:border-zinc-500 transition flex flex-col gap-2">
+                      <!-- Hidden File Input -->
+                      <input type="file" id="agent-tab-file-input" multiple onchange="handleAgentTabFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
+                      
+                      <!-- 1. Textarea mit voller Breite (w-full) und dynamischem Auto-Resize -->
+                      <textarea 
+                        id="agent-tab-chat-input" 
+                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAgentTabChatMessage();}else if(event.key==='ArrowUp'&&!this.value.trim()){event.preventDefault();if(window.lastSentUserChatMessage){this.value=window.lastSentUserChatMessage;autoResizeAgentTabInput(this);}}"
+                        oninput="autoResizeAgentTabInput(this)"
+                        onpaste="handleAgentTabInputPaste(event)"
+                        placeholder="Nachricht an diesen Agenten eingeben (Enter zum Senden, Shift+Enter für Zeilenumbruch)..." 
+                        rows="2"
+                        style="max-height: 25vh; min-height: 48px;"
+                        class="w-full bg-transparent border-none p-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none resize-none font-sans leading-relaxed custom-scrollbar"
+                       data-i18n-placeholder="view.agent_profiles.placeholder_nachricht_an_diesen_agenten_ei"></textarea>
+                      <!-- 2. Toolbar-Reihe: Hilfs-Tools links, Senden-Button rechts -->
+                      <div class="flex items-center justify-between gap-2 pt-1 border-t border-[var(--border)]/40">
+                        <div class="flex items-center gap-1 sm:gap-1.5">
+                          <!-- Attachment Button (Paperclip) -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-attach-btn"
+                            onclick="document.getElementById('agent-tab-file-input').click()" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="Datei anhängen (PDF, TXT, CSV, MD, Bild, Code)"
+                           data-i18n-title="view.agent_profiles.title_datei_anhaengen_pdf_txt_csv_md_bild">
+                            <i data-lucide="paperclip" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                          <!-- Screen / Browser Capture Button (Vision) -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-screen-capture-btn"
+                            onclick="captureScreenForAgentChat()" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="Bildschirm- / Browser-Foto aufnehmen (Vision / Screenshot)"
+                           data-i18n-title="view.agent_profiles.title_bildschirm_browser_foto_aufnehmen_vi">
+                            <i data-lucide="camera" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                          <!-- Speech / Microphone Button -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-mic-btn"
+                            onclick="toggleAgentTabDictation()" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="Spracheingabe / Diktat starten (Mikrofon)"
+                           data-i18n-title="view.agent_profiles.title_spracheingabe_diktat_starten_mikrofo">
+                            <i data-lucide="mic" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                          <!-- Archon Prompt Studio Button (1.079 Vorlagen) -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-sureprompts-btn"
+                            onclick="openSurePromptsModal('agent-tab')" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="Archon Prompt Studio (1.079 Vorlagen: Enterprise &amp; Fabric SOP)"
+                           data-i18n-title="view.agent_profiles.title_archon_prompt_studio_1_079_vorlagen">
+                            <i data-lucide="layers" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                          <!-- KI-Prompt-Optimizer Button -->
+                          <button 
+                            type="button" 
+                            id="agent-tab-optimize-btn"
+                            onclick="optimizeMasterChatPrompt('agent-tab')" 
+                            class="p-1.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] bg-[var(--card)] transition shrink-0 cursor-pointer shadow-2xs" 
+                            title="KI-Optimizer: Rohtext in professionellen 5-Felder-Prompt transformieren"
+                           data-i18n-title="view.agent_profiles.title_ki_optimizer_rohtext_in_professionel">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-black dark:text-white"></i>
+                          </button>
+                        </div>
+                        <!-- Senden Button -->
+                        <button 
+                          type="button" 
+                          id="agent-tab-send-btn"
+                          onclick="sendAgentTabChatMessage()" 
+                          class="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
+                          title="Nachricht senden (Enter)"
+                         data-i18n-title="view.agent_profiles.title_nachricht_senden_enter">
+                          <span data-i18n="view.agent_profiles.senden">Senden</span>
+                          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <!-- Footer Toolbar mit Modell, JEV & Status -->
+                    <div id="agent-tab-chat-footer" class="mt-1.5 flex items-center justify-between text-[11px] font-mono px-1 text-[var(--muted-foreground)]">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide" data-i18n="view.agent_profiles.provider">Provider:</span>
+                        <div class="inline-flex items-center gap-1">
+                          <select id="agent-tab-provider-select" onchange="onAgentTabProviderChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1.5 py-0.5 text-[11px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs">
+                            <option value="openrouter" selected data-i18n="view.agent_profiles.openrouter">OpenRouter</option>
+                            <option value="google" data-i18n="view.agent_profiles.google_ai_gemini">Google AI (Gemini)</option>
+                            <option value="omniroute" data-i18n="view.agent_profiles.omniroute">OmniRoute</option>
+                            <option value="groq" data-i18n="view.agent_profiles.groq">Groq</option>
+                            <option value="openai" data-i18n="view.agent_profiles.openai">OpenAI</option>
+                            <option value="nvidia" data-i18n="view.agent_profiles.nvidia_nim">NVIDIA NIM</option>
+                          </select>
+                          <button type="button" onclick="openPriceCatalogForAgentTab()" class="p-0.5 rounded bg-[var(--secondary)] hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-[var(--border)] cursor-pointer transition shrink-0 flex items-center justify-center shadow-2xs" title="Preise & Modell-Katalog öffnen" data-i18n-title="view.agent_profiles.title_preise_modell_katalog_oeffnen">
+                            <i data-lucide="circle-dollar-sign" class="w-3.5 h-3.5"></i>
+                          </button>
+                        </div>
+                        <span class="font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide ml-1" data-i18n="view.agent_profiles.modell">Modell:</span>
+                        <div class="inline-flex items-center gap-1">
+                          <select id="agent-tab-model-select" onchange="onAgentTabModelChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1.5 py-0.5 text-[11px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs max-w-[200px] truncate">
+                            <option value="meta-llama/llama-3.3-70b-instruct" selected>meta-llama/llama-3.3-70b-instruct</option>
+                            <option value="anthropic/claude-3.7-sonnet">anthropic/claude-3.7-sonnet</option>
+                            <option value="deepseek/deepseek-v3">deepseek/deepseek-v3</option>
+                            <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+                          </select>
+                        </div>
+                        <span id="agent-tab-model-cost" class="text-[9.5px] text-amber-500 font-mono font-bold ml-1.5 bg-amber-500/10 px-1.5 py-0.5 rounded hidden"></span>
+                        <button type="button" id="agent-tab-refresh-prices-btn" onclick="refreshAgentTabPrices(this)" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-emerald-500 transition cursor-pointer shrink-0 ml-0.5" title="Tokenpreise jetzt live aktualisieren" data-i18n-title="view.agent_profiles.title_tokenpreise_jetzt_live_aktualisieren">
+                          <i data-lucide="rotate-cw" class="w-3 h-3"></i>
+                        </button>
+                      </div>
+                        <span class="text-[var(--border)]">|</span>
+                        <!-- JEV Einstellung Button/Badge -->
+                        <div class="flex items-center gap-1">
+                          <span class="font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide" data-i18n="view.agent_profiles.reasoning">🧠 Reasoning:</span>
+                          <select id="agent-tab-reasoning-select" onchange="onAgentTabReasoningChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded px-1.5 py-0.5 text-[11px] text-[var(--foreground)] font-mono cursor-pointer focus:outline-none shadow-2xs" title="Denkzeit & Reasoning-Budget steuern" data-i18n-title="view.agent_profiles.title_denkzeit_reasoning_budget_steuern">
+                            <option value="off" data-i18n="view.agent_profiles.aus_0_tok_2">Aus (0 Tok)</option>
+                            <option value="minimal" data-i18n="view.agent_profiles.minimal_1k_2">Minimal (~1k)</option>
+                            <option value="low" data-i18n="view.agent_profiles.niedrig_2k_2">Niedrig (~2k)</option>
+                            <option value="medium" selected data-i18n="view.agent_profiles.mittel_4k_2">Mittel (~4k)</option>
+                            <option value="high" data-i18n="view.agent_profiles.hoch_8k_2">Hoch (~8k)</option>
+                            <option value="max" data-i18n="view.agent_profiles.maximal_16k_2">Maximal (~16k)</option>
+                          </select>
+                        </div>
+                        <span class="text-[var(--border)]">|</span>
+                        <!-- SOUL.md Modus Umschalter (Standard ~3k | Pro ~6.8k | Full-SOUL ~17k) -->
+                        <div class="flex items-center gap-1" title="SOUL.md Experten-Tiefe umschalten (Standard ~3k Zeichen | Pro ~6.8k Zeichen inkl. Skill-Blaupausen | Full-SOUL ~17k Zeichen inkl. 59-Agenten-Verzeichnis)" data-i18n-title="view.agent_profiles.title_soul_md_experten_tiefe_umschalten_st">
+                          <span class="font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide" data-i18n="view.agent_profiles.soul_2">🧬 SOUL:</span>
+                          <div id="agent-tab-soul-mode-switch" class="flex items-center rounded border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono select-none shadow-2xs">
+                            <button type="button" id="agent-chat-soul-btn-compact" onclick="switchGlobalOrAgentSoulMode('compact', false)" class="px-2 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer" data-i18n="view.agent_profiles.standard_3k">⚡ Standard (~3k)</button>
+                            <button type="button" id="agent-chat-soul-btn-pro" onclick="switchGlobalOrAgentSoulMode('pro', false)" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer" data-i18n="view.agent_profiles.pro_6_8k">🎯 Pro (~6.8k)</button>
+                            <button type="button" id="agent-chat-soul-btn-full" onclick="switchGlobalOrAgentSoulMode('full', false)" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer" data-i18n="view.agent_profiles.full_soul">🔥 Full-SOUL</button>
+                          </div>
+                        </div>
+                        <span class="text-[var(--border)]">|</span>
+                        <!-- Flat-Version Direkt / Mission Switch -->
+                        <div 
+                          id="agent-tab-mode-flat-switch" 
+                          onclick="toggleAgentTabModeSwitch()" 
+                          class="flex items-center rounded border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono select-none cursor-pointer transition-all shadow-2xs" 
+                          title="Zwischen Direkt-Dialog und Mission umschalten"
+                         data-i18n-title="view.agent_profiles.title_zwischen_direkt_dialog_und_mission_u">
+                          <span id="agent-tab-flat-direct" class="px-2 py-0.5 rounded font-bold transition-all bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer" data-i18n="view.agent_profiles.direkt">Direkt</span>
+                          <span id="agent-tab-flat-mission" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer" data-i18n="view.agent_profiles.mission">Mission</span>
+                        </div>
+                      </div>
+                      <div id="agent-tab-status-indicator" class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]" data-i18n="view.agent_profiles.online">Online</span>
+                        <span id="agent-tab-chat-status" class="text-[10px]">Bereit</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <!-- ========================================================= -->
+              <!-- SUBTAB PANE: BOT SCREEN (INTERAKTIVER DESKTOP & WEB NAVIGATOR) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-botscreen" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden relative">
+                <style>
+                  #agent-pane-botscreen.botscreen-fullscreen-mode {
+                    position: fixed !important;
+                    inset: 0 !important;
+                    width: 100vw !important;
+                    height: 100vh !important;
+                    max-width: 100vw !important;
+                    max-height: 100vh !important;
+                    z-index: 9999 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    border-radius: 0 !important;
+                    background-color: #09090b !important;
+                  }
+                  #agent-pane-botscreen.botscreen-fullscreen-mode .prof-panel-card {
+                    border-radius: 0 !important;
+                    border: 0 !important;
+                    padding: 0 !important;
+                    height: 100vh !important;
+                    max-height: 100vh !important;
+                  }
+                  #agent-pane-botscreen.botscreen-fullscreen-mode #cadre-botscreen-topbar {
+                    padding-left: 1rem !important;
+                    border-radius: 0 !important;
+                    border-left: 0 !important;
+                    border-right: 0 !important;
+                    border-top: 0 !important;
+                    background: #18181b !important;
+                  }
+                  #agent-pane-botscreen.botscreen-fullscreen-mode #cadre-botscreen-viewport-wrap {
+                    border-radius: 0 !important;
+                    margin: 0 !important;
+                    border: 0 !important;
+                  }
+                  #agent-pane-botscreen.botscreen-fullscreen-mode #cadre-botscreen-control-bar {
+                    position: fixed !important;
+                    bottom: 1.5rem !important;
+                    left: 50% !important;
+                    transform: translateX(-50%) !important;
+                    width: 92% !important;
+                    max-width: 58rem !important;
+                    z-index: 10000 !important;
+                    background: rgba(9, 9, 11, 0.90) !important;
+                    backdrop-filter: blur(16px) !important;
+                    -webkit-backdrop-filter: blur(16px) !important;
+                    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8) !important;
+                    border-radius: 1.25rem !important;
+                  }
+                </style>
+
+                <div class="prof-panel-card p-3 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
+                  
+                  <!-- 1. OBERE LEISTE: ADRESSLEISTE & NAVIGATION (pl-28 sm:pl-32 verhindert Avatar-Kollision) -->
+                  <div id="cadre-botscreen-topbar" class="p-2.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-between gap-3 shrink-0 text-xs pl-28 sm:pl-32 transition-all">
+                    <!-- URL-Eingabefeld -->
+                    <div class="flex-1 flex items-center gap-2 bg-[var(--background)] px-3 py-1.5 rounded-lg border border-[var(--border)] shadow-2xs">
+                      <i data-lucide="globe" class="w-4 h-4 text-sky-500 shrink-0"></i>
+                      <input type="text" id="cadre-botscreen-url" placeholder="Webadresse eingeben (z. B. https://stepstone.de oder https://linkedin.com)..." value="https://karriere.portal.internal" class="flex-1 bg-transparent text-xs text-[var(--foreground)] font-mono outline-none placeholder:text-[var(--muted-foreground)]" onkeydown="if(event.key==='Enter') navigateCadreBotScreen()" data-i18n-placeholder="view.agent_profiles.placeholder_webadresse_eingeben_z_b_https">
+                      <button type="button" onclick="navigateCadreBotScreen()" class="px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-mono font-bold text-[11px] transition cursor-pointer flex items-center gap-1">
+                        <span data-i18n="view.agent_profiles.oeffnen">Öffnen</span> <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                      </button>
+                    </div>
+
+                    <!-- Status & Controls Rechts -->
+                    <div class="flex items-center gap-2 shrink-0">
+                      <!-- a11y Pruning Toggle -->
+                      <button type="button" id="btn-cadre-botscreen-a11y" onclick="toggleCadreBotScreenA11y()" class="px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-mono text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-2xs" title="a11y Observation Pruning: Filtert 80-90% DOM-Müll heraus und spart Tokens" data-i18n-title="view.agent_profiles.title_a11y_observation_pruning_filtert_80">
+                        <span id="dot-botscreen-a11y" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span class="font-bold">a11y Pruning</span>
+                        <span id="badge-botscreen-a11y" class="text-[9px] px-1 py-0.2 rounded bg-emerald-500/30 text-emerald-300 font-bold">-85%</span>
+                      </button>
+
+                      <span class="text-[10.5px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Display :99 (CDP 9222)
+                      </span>
+                      <button type="button" onclick="refreshCadreBotScreen()" class="p-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--background)] text-[var(--foreground)] transition cursor-pointer" title="Bildschirm neu laden" data-i18n-title="view.agent_profiles.title_bildschirm_neu_laden">
+                        <i data-lucide="rotate-right" class="w-3.5 h-3.5 text-zinc-400"></i>
+                      </button>
+                      <!-- Vollbild-Umschalter -->
+                      <button type="button" id="btn-cadre-botscreen-fullscreen" onclick="toggleCadreBotScreenFullscreen()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs flex items-center gap-1.5 transition cursor-pointer shadow-2xs" title="Vollbildmodus aktivieren/deaktivieren (Esc zum Beenden)" data-i18n-title="view.agent_profiles.title_vollbildmodus_aktivieren_deaktiviere">
+                        <i data-lucide="maximize-2" id="icon-botscreen-fullscreen" class="w-3.5 h-3.5 text-sky-500"></i>
+                        <span id="label-botscreen-fullscreen" class="hidden sm:inline" data-i18n="view.agent_profiles.vollbild">Vollbild</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- 2. MITTE: INTERAKTIVER BOT-SCREEN VIEWPORT -->
+                  <div id="cadre-botscreen-viewport-wrap" class="flex-1 min-h-0 bg-black rounded-xl border border-zinc-800 overflow-hidden relative flex flex-col my-2">
+                    <!-- Simulation / Live-Viewer Frame -->
+                    <div class="w-full h-full flex flex-col bg-zinc-950 overflow-hidden relative">
+                      <div class="h-7 bg-zinc-900 border-b border-zinc-800 px-3 flex items-center justify-between text-[10.5px] text-zinc-400 select-none shrink-0 font-mono">
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                          <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          <span id="cadre-botscreen-title" class="ml-2 text-zinc-300 truncate">Karriere &amp; Bewerbungs-Portal — Autonome Sitzung</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <span id="cadre-botscreen-mode-pill" class="text-[9.5px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 font-bold" data-i18n="view.agent_profiles.manueller_modus_login_aktiv">👤 Manueller Modus (Login aktiv)</span>
+                        </div>
+                      </div>
+
+                      <!-- Viewport Canvas mit Login/Interaktionsbereich & Prominentem Agenten-Mauszeiger -->
+                      <div class="flex-1 relative overflow-auto bg-slate-100 dark:bg-zinc-900 p-6 flex flex-col items-center justify-center cursor-default select-none" id="cadre-botscreen-canvas">
+                        
+                        <!-- Prominenter Live-Agenten-Mauszeiger mit Animation & Namensbadge -->
+                        <div id="botscreen-agent-cursor" class="absolute z-30 pointer-events-none transition-all duration-300 ease-out hidden" style="left: 50%; top: 50%;">
+                          <div class="relative flex items-center">
+                            <!-- Stylishe Leucht-Pfeilspitze -->
+                            <svg class="w-7 h-7 text-purple-400 drop-shadow-[0_2px_10px_rgba(168,85,247,0.85)] filter" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M4 0l16 12-7 2-4 9-2-1 3-8-6-2v-12z"/>
+                            </svg>
+                            <!-- Radar Klick-Welle -->
+                            <span id="botscreen-cursor-ripple" class="hidden absolute -top-2 -left-2 w-9 h-9 rounded-full bg-purple-500/50 animate-ping"></span>
+                            <!-- Namens-Badge -->
+                            <span id="botscreen-cursor-badge" class="ml-1.5 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-purple-600 text-white shadow-lg border border-purple-400/40 whitespace-nowrap" data-i18n="view.agent_profiles.default">
+                              🤖 Default
+                            </span>
+                          </div>
+                        </div>
+
+                        <!-- Login-Kachel / Web-Content -->
+                        <div class="w-full max-w-lg p-6 rounded-2xl bg-white text-zinc-900 shadow-2xl border border-zinc-200 space-y-4 font-sans pointer-events-auto">
+                          <div class="flex items-center justify-between pb-3 border-b border-zinc-100">
+                            <div class="flex items-center gap-2.5">
+                              <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md">
+                                <i data-lucide="briefcase" class="w-4 h-4"></i>
+                              </div>
+                              <div>
+                                <h4 class="font-bold text-sm text-zinc-900 leading-tight">Bewerbungs- &amp; Karriereportal</h4>
+                                <span class="text-[11px] text-zinc-500">Eingeloggte Sitzung: Michael (Geschäftsleitung)</span>
+                              </div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-bold font-mono">Sitzung Aktiv</span>
+                          </div>
+
+                          <div class="space-y-2 text-xs">
+                            <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-between">
+                              <span class="font-medium text-zinc-700">12 neue Bewerbungen eingegangen</span>
+                              <span class="font-mono font-bold text-sky-600">3 ungeprüft</span>
+                            </div>
+                            <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-between">
+                              <span class="font-medium text-zinc-700">Initiativ-Bewerbungen &amp; Matchmaking</span>
+                              <span class="font-mono font-bold text-emerald-600">Bereit</span>
+                            </div>
+                          </div>
+
+                          <div class="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-2 font-mono">
+                            <i data-lucide="shield-alert" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                            <span>Logge dich hier ein. Sobald du fertig bist, autorisiere unten den Agenten und gib ihm den Arbeitsauftrag.</span>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 3. UNTERE LEISTE / FLOATING OVERLAY: AUTORISIERUNG, NOTFALL-STOPP & PROMPT -->
+                  <div id="cadre-botscreen-control-bar" class="p-2.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex flex-col gap-2 shrink-0 transition-all">
+                    
+                    <!-- PbD Aufnahmezustand Banner (wird bei aktiver Aufnahme eingeblendet) -->
+                    <div id="cadre-botscreen-pbd-banner" class="hidden p-2 rounded-lg bg-rose-950/60 border border-rose-500/50 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-rose-200">
+                      <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                        <span class="font-bold" data-i18n="view.agent_profiles.pbd_aufnahme_aktiv">🔴 PbD-Aufnahme aktiv:</span>
+                        <span id="pbd-banner-status" class="text-zinc-300" data-i18n="view.agent_profiles.bediene_den_bildschirm_aktionen_werden_gel">Bediene den Bildschirm. Aktionen werden gelernt.</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <input type="text" id="pbd-step-commentary" placeholder="Sprach-/Absichts-Kommentar anheften..." class="w-64 px-2 py-1 rounded bg-black/70 border border-rose-500/40 text-xs text-white placeholder:text-zinc-500 outline-none" onkeydown="if(event.key==='Enter') addPbDCommentary()"  data-i18n-placeholder="view.agent_profiles.placeholder_sprach_absichts_kommentar_anhe"/>
+                        <button type="button" onclick="addPbDCommentary()" class="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold cursor-pointer" data-i18n="view.agent_profiles.kommentieren">Kommentieren</button>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs font-mono">
+                      <!-- Zweistufiger Autorisierungs-Button + PbD Recording + Notfall-Abbruch -->
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <button type="button" id="btn-cadre-botscreen-auth" onclick="toggleBotScreenAgentAuthorization()" class="px-3.5 py-1.5 rounded-lg font-bold text-xs font-mono flex items-center gap-2 transition cursor-pointer shadow-xs bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700">
+                          <span id="cadre-botscreen-auth-dot" class="w-2 h-2 rounded-full bg-zinc-500"></span>
+                          <span id="cadre-botscreen-auth-label" data-i18n="view.agent_profiles.dein_zugriff_agent_wartet">👤 Dein Zugriff (Agent wartet)</span>
+                        </button>
+
+                        <!-- PbD Vormachen & Aufnehmen Button -->
+                        <button type="button" id="btn-cadre-botscreen-record" onclick="toggleBotScreenPbDRecording()" class="px-3 py-1.5 rounded-lg border border-purple-500/50 bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs" title="Programming by Demonstration: Zeige dem Agenten den Ablauf durch Vormachen, damit er ihn als Skill lernt" data-i18n-title="view.agent_profiles.title_programming_by_demonstration_zeige_d">
+                          <span id="dot-botscreen-record" class="w-2 h-2 rounded-full bg-rose-500"></span>
+                          <span id="label-botscreen-record">Vormachen &amp; Aufnehmen</span>
+                          <span id="badge-botscreen-record-count" class="hidden px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9.5px]">0 Steps</span>
+                        </button>
+                        
+                        <!-- Notfall-Abbruch-Button -->
+                        <button type="button" id="btn-cadre-botscreen-abort" onclick="emergencyAbortBotScreen()" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer" title="Notfall-Abbruch: Stoppt alle Aktionen und entzieht dem Agenten sofort die Kontrolle" data-i18n-title="view.agent_profiles.title_notfall_abbruch_stoppt_alle_aktionen">
+                          <i data-lucide="octagon-alert" class="w-3.5 h-3.5"></i>
+                          <span data-i18n="view.agent_profiles.notfall_stopp">Notfall-Stopp</span>
+                        </button>
+
+                        <!-- Zeiger-Test Button -->
+                        <button type="button" onclick="testCadreAgentCursor()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--card)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-mono text-[10.5px] flex items-center gap-1 transition cursor-pointer" title="Mauszeiger-Demonstration starten" data-i18n-title="view.agent_profiles.title_mauszeiger_demonstration_starten">
+                          <i data-lucide="mouse-pointer" class="w-3 h-3 text-purple-400"></i>
+                          <span data-i18n="view.agent_profiles.zeiger_demo">Zeiger-Demo</span>
+                        </button>
+                      </div>
+
+                      <span class="text-[10px] text-[var(--muted-foreground)] hidden md:inline" data-i18n="view.agent_profiles.berechtigte_steuerer_robert_default_micha">Berechtigte Steuerer: Robert, default, Micha</span>
+                    </div>
+
+                    <!-- Prompt-Eingabe mit Senden-Button -->
+                    <div class="flex items-center gap-2">
+                      <input type="text" id="cadre-botscreen-prompt" placeholder="Weise den Agenten an... (z. B. 'Prüfe alle 12 Bewerbungen, filtere nach Senior Coder und fasse sie zusammen')" class="flex-1 h-9 px-3 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-sans placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-sky-500" onkeydown="if(event.key==='Enter') sendCadreBotScreenInstruction()" data-i18n-placeholder="view.agent_profiles.placeholder_weise_den_agenten_an_z_b_pruef">
+                      <button type="button" onclick="sendCadreBotScreenInstruction()" id="btn-cadre-botscreen-send" class="h-9 px-4 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                        <span data-i18n="view.agent_profiles.instruieren">Instruieren</span>
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- ========================================================= -->
+              <!-- REITER 4: 🧬 SOUL (INLINE-EDITOR) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-soul" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
+                  
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0 gap-2 flex-wrap">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <i data-lucide="dna" class="w-4 h-4 text-purple-500 shrink-0"></i>
+                      <span class="text-xs font-mono font-bold text-[var(--foreground)] truncate" data-i18n="view.agent_profiles.soul_md_direktiven_system_prompt">SOUL.md Direktiven & System-Prompt</span>
+                      <code id="prof-soul-path-label" class="text-[10px] font-mono text-[var(--muted-foreground)] px-2 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] truncate">~/.hermes/profiles/SOUL.md</code>
+                      <span id="prof-soul-char-badge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0">~2.200 Zeichen</span>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                      <!-- SOUL-Tiefe Umschalter (Standard ~3k | Pro ~6.8k | Full-SOUL ~17k) -->
+                      <div class="flex items-center rounded-lg border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10.5px] font-mono select-none shadow-2xs" title="Zwischen Standard (~3.100 Zeichen), Pro (~6.800 Zeichen inkl. SKILL.md-Volltexten & Tool-Matrix) und Full-SOUL (~17.200 Zeichen inkl. 59-Agenten-Verzeichnis) wechseln" data-i18n-title="view.agent_profiles.title_zwischen_standard_3_100_zeichen_pro">
+                        <button type="button" id="prof-soul-mode-btn-compact" onclick="switchGlobalOrAgentSoulMode('compact', true)" class="px-2.5 py-0.5 rounded-md font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer" data-i18n="view.agent_profiles.standard_3k">
+                          ⚡ Standard (~3k)
+                        </button>
+                        <button type="button" id="prof-soul-mode-btn-pro" onclick="switchGlobalOrAgentSoulMode('pro', true)" class="px-2.5 py-0.5 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer" data-i18n="view.agent_profiles.pro_skills_6_8k">
+                          🎯 Pro / Skills+ (~6.8k)
+                        </button>
+                        <button type="button" id="prof-soul-mode-btn-full" onclick="switchGlobalOrAgentSoulMode('full', true)" class="px-2.5 py-0.5 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer" data-i18n="view.agent_profiles.full_soul_17k">
+                          🔥 Full-SOUL (~17k)
+                        </button>
+                      </div>
+                      <span id="prof-soul-save-status" class="text-[10px] font-mono text-[var(--muted-foreground)]">Bereit</span>
+                      <button type="button" onclick="copyInlineSoulMarkdown(this)" class="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-1.5" title="SOUL.md in Zwischenablage kopieren" data-i18n-title="view.agent_profiles.title_soul_md_in_zwischenablage_kopieren">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span data-i18n="view.agent_profiles.kopieren">Kopieren</span>
+                      </button>
+                      <button type="button" onclick="loadInlineSoulMarkdown()" class="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]" title="Neu aus Datei laden" data-i18n="view.agent_profiles.neu_laden" data-i18n-title="view.agent_profiles.title_neu_aus_datei_laden">
+                        ↺ Neu laden
+                      </button>
+                      <button type="button" onclick="saveInlineSoulMarkdown()" class="px-3.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer shadow-xs bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950" data-i18n="view.agent_profiles.soul_md_separat_speichern">
+                        💾 SOUL.md separat speichern
+                      </button>
+                    </div>
+                  </div>
+                  <div class="flex-1 min-h-0 my-2 relative group">
+                    <textarea 
+                      id="prof-soul-inline-editor" 
+                      class="w-full h-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 pr-12 text-xs text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-inner"
+                      placeholder="Lade SOUL.md Direktiven..."
+                     data-i18n-placeholder="view.agent_profiles.placeholder_lade_soul_md_direktiven"></textarea>
+                    <button type="button" onclick="copyInlineSoulMarkdown(this)" class="absolute top-2.5 right-3 p-1.5 rounded-lg bg-[var(--card)]/90 hover:bg-[var(--secondary)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] shadow-xs transition opacity-70 group-hover:opacity-100 flex items-center gap-1 text-[11px] font-mono cursor-pointer z-10" title="Text dieses Feldes kopieren" data-i18n-title="view.agent_profiles.title_text_dieses_feldes_kopieren">
+                      <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                  <div class="text-[10.5px] font-mono text-[var(--muted-foreground)] flex items-center justify-between shrink-0 pt-1">
+                    <span data-i18n="view.agent_profiles.definiert_die_identitaet_fach_instruktione">Definiert die Identität, Fach-Instruktionen, Denkweise und System-SOPs dieses Agenten.</span>
+                    <span class="text-[10px]" data-i18n="view.agent_profiles.wird_auch_automatisch_beim_globalen_speich">Wird auch automatisch beim globalen Speichern gesichert.</span>
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 5: 📋 PERSONALAKTE (OBSIDIAN-DOSSIER) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-personalakte" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
+                  
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <i data-lucide="clipboard-list" class="w-4 h-4 text-[#EF233C] shrink-0"></i>
+                      <span class="text-xs font-mono font-bold text-[var(--foreground)] truncate" data-i18n="view.agent_profiles.digitale_personalakte_obsidian_vault">Digitale Personalakte (Obsidian Vault)</span>
+                      <code id="pa-inline-path" class="text-[10px] font-mono text-[var(--muted-foreground)] px-2 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] truncate">00_HR_Agenten/Personalakten/agent.md</code>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <div class="flex items-center p-0.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)]">
+                        <button type="button" id="btn-pa-inline-dossier" onclick="toggleInlinePersonalakteView('dossier')" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer" data-i18n="view.agent_profiles.dossier">
+                          Dossier
+                        </button>
+                        <button type="button" id="btn-pa-inline-raw" onclick="toggleInlinePersonalakteView('raw')" class="px-2 py-0.5 rounded text-[10px] font-mono text-[var(--muted-foreground)] hover:text-[var(--foreground)] bg-transparent cursor-pointer" data-i18n="view.agent_profiles.markdown">
+                          Markdown
+                        </button>
+                      </div>
+                      <span id="pa-inline-save-status" class="text-[10px] font-mono text-[var(--muted-foreground)]">Synchronisiert</span>
+                      <button type="button" onclick="copyInlinePersonalakteMarkdown(this)" class="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer shadow-xs bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-1.5" title="Personalakte kopieren" data-i18n-title="view.agent_profiles.title_personalakte_kopieren">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span data-i18n="view.agent_profiles.kopieren">Kopieren</span>
+                      </button>
+                      <button type="button" onclick="saveInlinePersonalakteMarkdown()" class="px-3.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer shadow-xs bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950" data-i18n="view.agent_profiles.personalakte_speichern">
+                        💾 Personalakte speichern
+                      </button>
+                    </div>
+                  </div>
+                  <!-- DOSSIER ANSICHT -->
+                  <div id="pa-inline-dossier-view" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar my-2 space-y-3 pr-1">
+                    
+                    <!-- Stammdaten Kachel -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                        <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.persoenlicher_name">Persönlicher Name</span>
+                        <div id="pa-inline-person-name" class="text-xs font-bold text-[var(--foreground)]">Alexander Richter</div>
+                      </div>
+                      <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                        <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.stellenbeschreibung">Stellenbeschreibung</span>
+                        <div id="pa-inline-role-name" class="text-xs font-bold text-[var(--foreground)]">Executive Decision Architect</div>
+                      </div>
+                      <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                        <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.direkter_supervisor_lead">Direkter Supervisor / Lead</span>
+                        <div id="pa-inline-supervisor" class="text-xs font-bold text-[var(--foreground)]">[[Alex Rivera (Owner / CEO)]]</div>
+                      </div>
+                    </div>
+                    <!-- Kernauftrag & Tätigkeitsfeld -->
+                    <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-1 shadow-2xs">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="target" class="w-4 h-4 text-[#EF233C]"></i>
+                        <h4 class="font-bold text-xs uppercase tracking-wide text-[var(--foreground)]" data-i18n="view.agent_profiles.kernauftrag_taetigkeitsfeld">Kernauftrag & Tätigkeitsfeld</h4>
+                      </div>
+                      <p id="pa-inline-desc" class="text-xs text-[var(--muted-foreground)] leading-relaxed" data-i18n="view.agent_profiles.trifft_hochkomplexe_strategische_unternehm">
+                        Trifft hochkomplexe strategische Unternehmensentscheidungen, führt Risiko- und Trade-Off-Analysen durch und strukturiert Entscheidungsvorlagen für die Geschäftsführung.
+                      </p>
+                    </div>
+                    <!-- Operative Leitlinie (SOP) mit schwarzem Text, weißem Hintergrund und rotem Rand -->
+                    <div id="pa-sop-callout" class="pa-sop-box p-3.5 rounded-xl shadow-xs space-y-1.5" style="background-color: #ffffff !important; border: 2px solid #EF233C !important; color: #000000 !important;">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="alert-circle" class="w-4 h-4 shrink-0" style="color: #EF233C !important; stroke: #EF233C !important;"></i>
+                        <h4 class="font-bold text-xs uppercase tracking-wide" style="color: #000000 !important;" data-i18n="view.agent_profiles.operative_leitlinie_sop">Operative Leitlinie (SOP)</h4>
+                      </div>
+                      <p id="pa-inline-sop" class="text-xs leading-relaxed font-semibold" style="color: #000000 !important;" data-i18n="view.agent_profiles.arbeitet_eigenstaendig_faktenbasiert_und_e">
+                        Arbeitet eigenständig, faktenbasiert und ergebnisorientiert. Trifft keine vagen Annahmen, liefert konkrete Handlungsempfehlungen und dokumentiert alle wesentlichen Entscheidungen im Obsidian-Vault.
+                      </p>
+                    </div>
+                    <!-- ========================================================= -->
+                    <!-- AGENT SCORECARD & LEISTUNGSÜBERSICHT (t-f257ba)              -->
+                    <!-- ========================================================= -->
+                    <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3 shadow-2xs">
+                      <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+                        <div class="flex items-center gap-2">
+                          <i data-lucide="award" class="w-4 h-4 text-amber-500"></i>
+                          <h4 class="font-bold text-xs uppercase tracking-wide text-[var(--foreground)]" data-i18n="view.agent_profiles.agent_scorecard_leistungsmetriken">Agent-Scorecard &amp; Leistungsmetriken</h4>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <span id="pa-scorecard-status" class="px-2 py-0.5 rounded text-[9.5px] font-mono bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 font-bold">Live Telemetrie</span>
+                          <button type="button" onclick="refreshAgentScorecard()" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer" title="Scorecard aktualisieren" data-i18n-title="view.agent_profiles.title_scorecard_aktualisieren">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- 6 KPI Kacheln -->
+                      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                        <!-- 1. Erfolgsquote -->
+                        <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between shadow-2xs">
+                          <span class="text-[9px] font-mono uppercase text-[var(--muted-foreground)] font-bold flex items-center justify-between">
+                            <span data-i18n="view.agent_profiles.erfolgsquote">Erfolgsquote</span>
+                            <span class="text-emerald-500">🎯</span>
+                          </span>
+                          <div id="pa-kpi-success" class="text-sm font-black font-mono text-[var(--foreground)] mt-1">--%</div>
+                          <span id="pa-kpi-success-sub" class="text-[9px] font-mono text-[var(--muted-foreground)] truncate">0 Reviews</span>
+                        </div>
+
+                        <!-- 2. Token-Effizienz -->
+                        <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between shadow-2xs">
+                          <span class="text-[9px] font-mono uppercase text-[var(--muted-foreground)] font-bold flex items-center justify-between">
+                            <span data-i18n="view.agent_profiles.token_effizienz">Token-Effizienz</span>
+                            <span class="text-blue-500">🪙</span>
+                          </span>
+                          <div id="pa-kpi-tokens" class="text-sm font-black font-mono text-[var(--foreground)] mt-1">--k</div>
+                          <span id="pa-kpi-tokens-sub" class="text-[9px] font-mono text-[var(--muted-foreground)] truncate">$0.00 / Task</span>
+                        </div>
+
+                        <!-- 3. Durchlaufzeit -->
+                        <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between shadow-2xs">
+                          <span class="text-[9px] font-mono uppercase text-[var(--muted-foreground)] font-bold flex items-center justify-between">
+                            <span data-i18n="view.agent_profiles.durchlaufzeit">Durchlaufzeit</span>
+                            <span class="text-purple-500">⏱️</span>
+                          </span>
+                          <div id="pa-kpi-speed" class="text-sm font-black font-mono text-[var(--foreground)] mt-1">--m</div>
+                          <span id="pa-kpi-speed-sub" class="text-[9px] font-mono text-[var(--muted-foreground)] truncate" data-i18n="view.agent_profiles.start_bis_done">Ø Start-bis-Done</span>
+                        </div>
+
+                        <!-- 4. Feedback-Wert -->
+                        <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between shadow-2xs">
+                          <span class="text-[9px] font-mono uppercase text-[var(--muted-foreground)] font-bold flex items-center justify-between">
+                            <span data-i18n="view.agent_profiles.feedback">Feedback</span>
+                            <span class="text-amber-500">👍</span>
+                          </span>
+                          <div id="pa-kpi-feedback" class="text-sm font-black font-mono text-[var(--foreground)] mt-1">--%</div>
+                          <span id="pa-kpi-feedback-sub" class="text-[9px] font-mono text-[var(--muted-foreground)] truncate">0 Ratings</span>
+                        </div>
+
+                        <!-- 5. Autonomie-Index -->
+                        <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between shadow-2xs">
+                          <span class="text-[9px] font-mono uppercase text-[var(--muted-foreground)] font-bold flex items-center justify-between">
+                            <span data-i18n="view.agent_profiles.autonomie">Autonomie</span>
+                            <span class="text-indigo-500">🤖</span>
+                          </span>
+                          <div id="pa-kpi-autonomy" class="text-sm font-black font-mono text-[var(--foreground)] mt-1">--%</div>
+                          <span id="pa-kpi-autonomy-sub" class="text-[9px] font-mono text-[var(--muted-foreground)] truncate" data-i18n="view.agent_profiles.first_pass_rate">First-Pass Rate</span>
+                        </div>
+
+                        <!-- 6. Erkenntnisgewinn -->
+                        <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between shadow-2xs">
+                          <span class="text-[9px] font-mono uppercase text-[var(--muted-foreground)] font-bold flex items-center justify-between">
+                            <span data-i18n="view.agent_profiles.erkenntnisse">Erkenntnisse</span>
+                            <span class="text-yellow-500">💡</span>
+                          </span>
+                          <div id="pa-kpi-learnings" class="text-sm font-black font-mono text-[var(--foreground)] mt-1">0</div>
+                          <span id="pa-kpi-learnings-sub" class="text-[9px] font-mono text-[var(--muted-foreground)] truncate" data-i18n="view.agent_profiles.learnings">Learnings</span>
+                        </div>
+                      </div>
+
+                      <!-- Projekte & Letzte Meilensteine -->
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                        <!-- Aktive Projekte -->
+                        <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-1.5 shadow-2xs">
+                          <div class="flex items-center gap-1.5 text-[10px] font-mono font-bold text-[var(--muted-foreground)] uppercase">
+                            <i data-lucide="folder-kanban" class="w-3.5 h-3.5 text-blue-500"></i>
+                            <span data-i18n="view.agent_profiles.beteiligte_projekte_obsidian_sphaeren">Beteiligte Projekte (Obsidian Sphären)</span>
+                          </div>
+                          <div id="pa-scorecard-projects" class="flex flex-wrap gap-1 text-[10px] font-mono min-h-[24px]">
+                            <!-- Dynamische Badges -->
+                          </div>
+                        </div>
+
+                        <!-- Letzte Meilensteine -->
+                        <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-1.5 shadow-2xs">
+                          <div class="flex items-center gap-1.5 text-[10px] font-mono font-bold text-[var(--muted-foreground)] uppercase">
+                            <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-500"></i>
+                            <span data-i18n="view.agent_profiles.letzte_meilensteine_kanban">Letzte Meilensteine (Kanban)</span>
+                          </div>
+                          <div id="pa-scorecard-milestones" class="space-y-1 text-[10px] font-mono min-h-[24px]">
+                            <!-- Dynamische Tasks -->
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- ========================================================= -->
+                    <!-- OPERATOR-BEURTEILUNG & ARBEITSANWEISUNGEN (Option A)      -->
+                    <!-- ========================================================= -->
+                    <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-2 shadow-2xs">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                          <i data-lucide="user-check" class="w-4 h-4 text-indigo-500"></i>
+                          <h4 class="font-bold text-xs uppercase tracking-wide text-[var(--foreground)]" data-i18n="view.agent_profiles.operator_beurteilung_arbeitsanweisungen">Operator-Beurteilung &amp; Arbeitsanweisungen</h4>
+                        </div>
+                        <button type="button" onclick="saveOperatorNotes()" class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition cursor-pointer shadow-2xs flex items-center gap-1">
+                          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                          <span data-i18n="view.agent_profiles.beurteilung_sichern">Beurteilung sichern</span>
+                        </button>
+                      </div>
+                      <p class="text-[11px] text-[var(--muted-foreground)] leading-relaxed" data-i18n="view.agent_profiles.manuelle_beurteilung_staerken_schwaechen_u">
+                        Manuelle Beurteilung, Stärken, Schwächen und operative Leitplanken für diesen Agenten. Wird persistent gespeichert und in die Obsidian-Personalakte synchronisiert.
+                      </p>
+                      <textarea id="pa-operator-notes" rows="3" class="w-full p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:ring-1 focus:ring-indigo-500 focus:outline-none custom-scrollbar leading-relaxed" placeholder="z.B. Sehr präzise bei Code-Analysen. Bei Architekturfragen stets Rücksprache mit Robert halten..." data-i18n-placeholder="view.agent_profiles.placeholder_z_b_sehr_praezise_bei_code_ana"></textarea>
+                    </div>
+                    <!-- Vollständige Personalakte & Einsatzhistorie aus Obsidian gerendert -->
+                    <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-2 shadow-2xs">
+                      <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+                        <div class="flex items-center gap-2">
+                          <i data-lucide="file-check-2" class="w-4 h-4 text-emerald-500"></i>
+                          <h4 class="font-bold text-xs uppercase tracking-wide text-[var(--foreground)]" data-i18n="view.agent_profiles.dokumentierte_personalakte_einsatzhistorie">Dokumentierte Personalakte &amp; Einsatzhistorie (Obsidian)</h4>
+                        </div>
+                        <span id="pa-inline-sync-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">Synchronisiert</span>
+                      </div>
+                      <div id="pa-inline-rendered-markdown" class="select-text text-xs leading-relaxed max-w-none prose dark:prose-invert">
+                        <!-- Hier wird der vollständige Markdown-Inhalt aus Obsidian formatiert gerendert -->
+                      </div>
+                    </div>
+                  </div>
+                  <!-- RAW MARKDOWN EDITOR ANSICHT -->
+                  <div id="pa-inline-raw-view" class="hidden flex-1 min-h-0 my-2 relative group">
+                    <textarea 
+                      id="pa-inline-raw-markdown" 
+                      class="w-full h-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 pr-12 text-xs text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-inner"
+                      placeholder="Lade Obsidian Personalakte..."
+                     data-i18n-placeholder="view.agent_profiles.placeholder_lade_obsidian_personalakte"></textarea>
+                    <button type="button" onclick="copyInlinePersonalakteMarkdown(this)" class="absolute top-2.5 right-3 p-1.5 rounded-lg bg-[var(--card)]/90 hover:bg-[var(--secondary)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] shadow-xs transition opacity-70 group-hover:opacity-100 flex items-center gap-1 text-[11px] font-mono cursor-pointer z-10" title="Text dieses Feldes kopieren" data-i18n-title="view.agent_profiles.title_text_dieses_feldes_kopieren">
+                      <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                  <div class="text-[10.5px] font-mono text-[var(--muted-foreground)] flex items-center justify-between shrink-0 pt-1">
+                    <span data-i18n="view.agent_profiles.synchronisiert_mit_dem_lokalen_obsidian_hr">Synchronisiert mit dem lokalen Obsidian HR-Vault (`./obsidian_vault\00_HR_Agenten\Personalakten\`).</span>
+                    <span class="text-[10px]" data-i18n="view.agent_profiles.zwei_wege_sync_aktiv">Zwei-Wege-Sync aktiv</span>
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 4: ⚡ OPERATIONS (TASK- & TEAM-DISPOSITION) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-operations" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
+                  
+                  <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+                    <div class="flex items-center gap-2">
+                      <i data-lucide="kanban" class="w-4 h-4 text-indigo-500"></i>
+                      <span class="text-xs font-mono font-bold text-[var(--foreground)]" data-i18n="view.agent_profiles.operations_task_disposition">Operations &amp; Task-Disposition</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button type="button" onclick="openNewTaskModal('todo', currentSelectedProfileId)" class="px-3 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer shadow-xs bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] flex items-center gap-1.5">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        <span data-i18n="view.agent_profiles.aufgabe_zuweisen">+ Aufgabe zuweisen</span>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Operations Info Kacheln -->
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 my-2 shrink-0">
+                    <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.disposition_status">Disposition Status</span>
+                      <div id="operations-pane-status" class="text-xs font-bold text-[var(--foreground)] flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span data-i18n="view.agent_profiles.bereit_fuer_aufgaben">Bereit für Aufgaben</span>
+                      </div>
+                    </div>
+                    <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.orchestrierung">Orchestrierung</span>
+                      <div class="text-xs font-bold text-[var(--foreground)]" data-i18n="view.agent_profiles.hermes_core_task_engine">Hermes Core Task Engine</div>
+                    </div>
+                    <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-0.5 shadow-2xs">
+                      <span class="text-[9.5px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.netzwerk_anbindung">Netzwerk-Anbindung</span>
+                      <div class="text-xs font-bold text-emerald-600 dark:text-emerald-400" data-i18n="view.agent_profiles.archon_mesh_online">Archon Mesh / Online</div>
+                    </div>
+                  </div>
+                  <!-- Zugewiesene Tasks & Workflows -->
+                  <div class="prof-box-card p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] flex-1 min-h-0 flex flex-col justify-between space-y-1.5 shadow-xs">
+                    <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] shrink-0">
+                      <h4 class="text-xs font-bold font-mono uppercase text-[var(--foreground)]" data-i18n="view.agent_profiles.zugewiesene_aufgaben_workflows">Zugewiesene Aufgaben &amp; Workflows</h4>
+                      <span id="operations-tasks-count" class="text-xs font-mono text-[var(--muted-foreground)]">0 aktive Tasks</span>
+                    </div>
+                    <div id="operations-assigned-tasks-list" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg space-y-2 shadow-2xs">
+                      <div class="p-3 text-center text-xs text-[var(--muted-foreground)] font-mono" data-i18n="view.agent_profiles.keine_aktiven_aufgaben_zugewiesen">Keine aktiven Aufgaben zugewiesen.</div>
+                    </div>
+                  </div>
+                  <div class="text-[10.5px] font-mono text-[var(--muted-foreground)] pt-1 shrink-0" data-i18n="view.agent_profiles.ermoeglicht_die_kontinuierliche_zuordnung">
+                    Ermöglicht die kontinuierliche Zuordnung von autonomen Teilaufgaben an den Agenten über das Operations Control Center.
+                  </div>
+                </div>
+              </div>
+              <!-- ========================================================= -->
+              <!-- REITER 7: 🛒 MARKTPLATZ (TALENT- & SKILL-STORE) -->
+              <!-- ========================================================= -->
+              <div id="agent-pane-marketplace" class="hidden flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                <div class="prof-panel-card p-3 pt-12 flex-1 min-h-0 flex flex-col justify-between overflow-hidden bg-[var(--card)] border-0 rounded-2xl shadow-xs">
+                  
+                  <!-- Tab Header: 2 Tabs (Talent-Marktplatz & Skill-Marktplatz) -->
+                  <div class="space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] shrink-0">
+                      <div class="grid grid-cols-2 gap-1 w-full p-1 rounded-xl bg-[var(--secondary)] border border-[var(--border)] shadow-xs">
+                        <button type="button" id="tab-market-talent" onclick="switchMarketplaceTab('talent')" class="py-1 px-2 rounded-lg text-xs font-bold font-mono transition text-center cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]" data-i18n="view.agent_profiles.talent_marktplatz_rollen_vorlagen">
+                          Talent-Marktplatz (Rollen & Vorlagen)
+                        </button>
+                        <button type="button" id="tab-market-skill" onclick="switchMarketplaceTab('skill')" class="py-1 px-2 rounded-lg text-xs font-medium font-mono transition text-center cursor-pointer bg-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent" data-i18n="view.agent_profiles.skill_marktplatz_module_mcp">
+                          Skill-Marktplatz (Module & MCP)
+                        </button>
+                      </div>
+                    </div>
+                    <!-- TAB 1: TALENT-MARKTPLATZ INHALT -->
+                    <div id="market-tab-content-talent" class="space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+                        <div>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.katalog_quelle">Katalog-Quelle</label>
+                          <select id="market-source-select" onchange="onMarketplaceSourceSelectChange()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                            <option value="fabric" selected data-i18n="view.agent_profiles.daniel_miessler_fabric_255_patterns">Daniel Miessler Fabric (255 Patterns)</option>
+                            <option value="crewai" data-i18n="view.agent_profiles.crewai_business_roles_51_rollen">CrewAI Business Roles (51 Rollen)</option>
+                            <option value="personas" data-i18n="view.agent_profiles.professional_persona_hub_2_090_experten">Professional Persona Hub (2.090+ Experten)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.vorlage_suchen_filtern">Vorlage suchen & filtern</label>
+                          <div class="relative">
+                            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2 top-2 text-black dark:text-white pointer-events-none"></i>
+                            <input type="text" id="market-search-input" oninput="toggleClearBtn('market-search-input'); onMarketplaceSearchInput()" placeholder="Vorlagen durchsuchen..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg pl-6 pr-6 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none font-medium shadow-2xs" data-i18n-placeholder="view.agent_profiles.placeholder_vorlagen_durchsuchen">
+                            <button id="market-search-input-clear" onclick="clearSearchInput('market-search-input', () => loadMarketplaceTemplates())" class="hidden absolute right-1.5 top-1.5 text-black dark:text-white hover:opacity-75 text-[10px] font-bold cursor-pointer" title="Suche zurücksetzen" data-i18n-title="view.agent_profiles.title_suche_zuruecksetzen">✕</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="shrink-0">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.ausgewaehlte_vorlage">Ausgewählte Vorlage</label>
+                        <select id="market-template-select" onchange="onMarketplaceTemplateSelectChange()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                          <!-- Dynamisch befüllt -->
+                        </select>
+                      </div>
+                      <div class="space-y-0.5 flex-1 min-h-0 flex flex-col">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold shrink-0" data-i18n="view.agent_profiles.vorlagen_vorschau">Vorlagen-Vorschau</label>
+                        <textarea id="market-template-preview" readonly class="w-full flex-1 min-h-[90px] bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-[11px] text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar cursor-default shadow-2xs" placeholder="Wähle eine Vorlage zur Vorschau..." data-i18n-placeholder="view.agent_profiles.placeholder_waehle_eine_vorlage_zur_vorsch"></textarea>
+                      </div>
+                      <div class="pt-1 shrink-0">
+                        <button onclick="recruitSelectedMarketplaceTemplate()" class="w-full py-2 px-3 rounded-xl hover:bg-[var(--secondary)] font-bold text-xs font-mono transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-zinc-900 dark:border-zinc-100">
+                          <i data-lucide="zap" class="w-3.5 h-3.5 text-black dark:text-white"></i> <span data-i18n="view.agent_profiles.vorlage_in_diesen_agenten_importieren">⚡ Vorlage in diesen Agenten importieren</span>
+                        </button>
+                      </div>
+                    </div>
+                    <!-- TAB 2: SKILL-MARKTPLATZ INHALT -->
+                    <div id="market-tab-content-skill" class="hidden space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+                        <div>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.skill_quelle">Skill-Quelle</label>
+                          <select id="skill-market-source-select" onchange="onSkillMarketSourceSelectChange()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                            <option value="hermes_skills" selected data-i18n="view.agent_profiles.hermes_skills_hermes_skills">Hermes Skills (~/.hermes/skills)</option>
+                            <option value="gemini_skills" data-i18n="view.agent_profiles.gemini_skills_sh_catalog_420_skills">Gemini & Skills.sh Catalog (420+ Skills)</option>
+                            <option value="science_plugins" data-i18n="view.agent_profiles.science_mcp_plugins_41_skills">Science & MCP Plugins (41 Skills)</option>
+                            <option value="deutsch_fachskills" data-i18n="view.agent_profiles.deutsche_fach_skills_74_module">Deutsche Fach-Skills (74 Module)</option>
+                            <option value="realestate_skills" data-i18n="view.agent_profiles.german_real_estate_law_pack">German Real Estate & Law Pack</option>
+                            <option value="mcp_tools" data-i18n="view.agent_profiles.model_context_protocol_mcp_registry">Model Context Protocol MCP Registry</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.skill_suchen_filtern">Skill suchen & filtern</label>
+                          <div class="relative">
+                            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2 top-2 text-black dark:text-white pointer-events-none"></i>
+                            <input type="text" id="skill-market-search-input" oninput="toggleClearBtn('skill-market-search-input'); onSkillMarketSearchInput()" placeholder="Skills durchsuchen..." class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg pl-6 pr-6 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none font-medium shadow-2xs" data-i18n-placeholder="view.agent_profiles.placeholder_skills_durchsuchen">
+                            <button id="skill-market-search-input-clear" onclick="clearSearchInput('skill-market-search-input', () => loadSkillMarketplaceItems())" class="hidden absolute right-1.5 top-1.5 text-black dark:text-white hover:opacity-75 text-[10px] font-bold cursor-pointer" title="Suche zurücksetzen" data-i18n-title="view.agent_profiles.title_suche_zuruecksetzen">✕</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="shrink-0">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.skill_auswaehlen">Skill auswählen</label>
+                        <select id="skill-market-item-select" onchange="onSkillMarketItemSelectChange()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1 text-xs text-[var(--foreground)] focus:outline-none cursor-pointer shadow-2xs">
+                          <!-- Dynamisch befüllt -->
+                        </select>
+                      </div>
+                      <div class="space-y-0.5 flex-1 min-h-0 flex flex-col">
+                        <label class="block text-[10px] font-mono uppercase text-[var(--foreground)] font-bold shrink-0" data-i18n="view.agent_profiles.skill_spezifikation">Skill-Spezifikation</label>
+                        <textarea id="skill-market-preview" readonly class="w-full flex-1 min-h-[90px] bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-[11px] text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar cursor-default shadow-2xs" placeholder="Wähle einen Skill zur Vorschau..." data-i18n-placeholder="view.agent_profiles.placeholder_waehle_einen_skill_zur_vorscha"></textarea>
+                      </div>
+                      <div class="pt-1 shrink-0">
+                        <button onclick="assignSelectedMarketplaceSkillToProfile()" class="w-full py-2 px-3 rounded-xl hover:bg-[var(--secondary)] font-bold text-xs font-mono transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs bg-[var(--card)] text-[var(--foreground)] border border-zinc-900 dark:border-zinc-100">
+                          <i data-lucide="globe" class="w-3.5 h-3.5 text-black dark:text-white"></i> <span data-i18n="view.agent_profiles.skill_diesem_agenten_zuweisen">⚡ Skill diesem Agenten zuweisen</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: AVATAR-BIBLIOTHEK (174 PORTRÄTS FARBLICH SORTIERT)                  -->
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 3. MODALS (AVATAR-BIBLIOTHEK, SKILL-EDITOR, TOOL-CONFIG)                  -->
+  <!-- ========================================================================= -->
+<!-- ========================================================================= -->
+        <div id="avatar-picker-modal" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 w-full max-w-6xl h-[88vh] max-h-[88vh] flex flex-col shadow-2xl space-y-3.5">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-3 shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-xs"></span>
+                <h3 class="text-base font-bold uppercase tracking-wider font-mono truncate text-[var(--foreground)]" data-i18n="view.agent_profiles.avatar_bibliothek_174_portraets">
+                  Avatar-Bibliothek (174 Porträts)
+                </h3>
+              </div>
+              <button type="button" onclick="closeAvatarLibraryModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer p-1.5 rounded-lg transition">
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
+            <!-- Info & Quick Action Bar -->
+            <div class="flex items-center justify-between text-xs text-[var(--muted-foreground)] shrink-0 pb-1">
+              <span data-i18n="view.agent_profiles.klicke_auf_ein_portraet_um_es_fuer_das_akt">Klicke auf ein Porträt, um es für das aktuelle Profil zu übernehmen:</span>
+              <button type="button" onclick="handleDiceClick(null); closeAvatarLibraryModal();" class="px-3 py-1.5 rounded-xl bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shadow-xs text-xs font-bold font-mono transition flex items-center gap-1.5 cursor-pointer" data-i18n="view.agent_profiles.zufaellig_waehlen">
+                🎲 Zufällig wählen
+              </button>
+            </div>
+            <!-- Color Filter Tabs Bar -->
+            <div id="avatar-color-filters" class="flex items-center gap-2 overflow-x-auto pb-1.5 shrink-0 text-xs font-mono">
+            </div>
+            <!-- Avatar Grid (Scrollable) -->
+            <div id="avatar-library-grid" class="flex-1 overflow-y-auto p-4 rounded-xl bg-[var(--background)] border border-[var(--border)] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 content-start custom-scrollbar">
+              <!-- Dynamisch generiert -->
+            </div>
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-between border-t border-[var(--border)] pt-2.5 shrink-0">
+              <span id="avatar-library-count-text" class="text-[11px] font-mono text-[var(--muted-foreground)]">174 Porträts verfügbar – farblich sortiert</span>
+              <button type="button" onclick="closeAvatarLibraryModal()" class="px-4 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-xs font-bold text-[var(--foreground)] transition cursor-pointer shadow-xs" data-i18n="view.agent_profiles.schliessen">
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: SKILL-EDITOR (INSPEKTION & BEARBEITUNG)                             -->
+        <!-- ========================================================================= -->
+        <div id="skill-editor-modal" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-5 w-full max-w-4xl h-[92vh] max-h-[92vh] flex flex-col shadow-2xl space-y-3.5">
+            <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5 shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block shadow-xs"></span>
+                <h3 id="skill-modal-title" class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate" data-i18n="view.agent_profiles.skill_spezifikation_bearbeiten">
+                  Skill-Spezifikation bearbeiten
+                </h3>
+              </div>
+              <button type="button" onclick="closeSkillDetailModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer p-1 rounded-lg transition">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="space-y-3 flex-1 min-h-0 flex flex-col overflow-hidden pr-1">
+              <input type="hidden" id="skill-edit-id" value="">
+              <div class="grid grid-cols-2 gap-2.5 shrink-0">
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.skill_name">Skill-Name</label>
+                  <input type="text" id="skill-edit-name" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-bold focus:outline-none shadow-xs">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.kategorie">Kategorie</label>
+                  <input type="text" id="skill-edit-category" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:outline-none shadow-xs">
+                </div>
+              </div>
+              <div class="shrink-0">
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.tags_schlagwoerter_kommagetrennt">Tags / Schlagwörter (kommagetrennt)</label>
+                <input type="text" id="skill-edit-tags" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] font-mono focus:outline-none shadow-xs" placeholder="Architektur, Coding, Review" data-i18n-placeholder="view.agent_profiles.placeholder_architektur_coding_review">
+              </div>
+              <div class="shrink-0">
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-0.5 font-bold" data-i18n="view.agent_profiles.kurzbeschreibung">Kurzbeschreibung</label>
+                <input type="text" id="skill-edit-desc" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:outline-none shadow-xs">
+              </div>
+              <div class="space-y-1 flex-1 min-h-0 flex flex-col">
+                <div class="flex items-center justify-between shrink-0">
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold" data-i18n="view.agent_profiles.vollstaendige_spezifikation_skill_md_promp">Vollständige Spezifikation / SKILL.md Prompt</label>
+                  <span class="text-[9px] font-mono text-[var(--muted-foreground)]" data-i18n="view.agent_profiles.markdown_instruktionen">Markdown / Instruktionen</span>
+                </div>
+                <textarea id="skill-edit-content" class="w-full flex-1 min-h-[200px] bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 text-xs text-[var(--foreground)] font-mono leading-relaxed focus:outline-none resize-none overflow-y-auto custom-scrollbar shadow-xs"></textarea>
+              </div>
+            </div>
+            <div class="flex items-center justify-between border-t border-[var(--border)] pt-3 shrink-0">
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="closeSkillDetailModal()" class="px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-bold text-[var(--foreground)] hover:bg-[var(--secondary)] transition cursor-pointer" data-i18n="view.agent_profiles.abbrechen">
+                  Abbrechen
+                </button>
+                <button type="button" id="skill-modal-reset-btn" onclick="resetSkillDetailsToOriginal()" class="px-3.5 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                  <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span data-i18n="view.agent_profiles.auf_original_zuruecksetzen">Auf Original zurücksetzen</span>
+                </button>
+              </div>
+              <button type="button" onclick="saveSkillDetailsFromModal()" class="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i> <span data-i18n="view.agent_profiles.skill_speichern">Skill speichern</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: TOOL-EINSTELLUNGEN & PARAMETER                                     -->
+        <!-- ========================================================================= -->
+        <div id="tool-config-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+          <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4 max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-xs"></span>
+                <h3 id="tool-modal-title" class="text-sm font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate" data-i18n="view.agent_profiles.tool_einstellungen">Tool-Einstellungen</h3>
+              </div>
+              <button type="button" onclick="closeToolConfigModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition font-bold text-base cursor-pointer">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar text-xs">
+              <input type="hidden" id="tool-modal-tool-id">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1" data-i18n="view.agent_profiles.tool_name_identifikator">Tool-Name &amp; Identifikator</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <input type="text" id="tool-modal-name" readonly class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] font-semibold focus:outline-none">
+                  <input type="text" id="tool-modal-id-display" readonly class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] font-mono text-[11px] focus:outline-none">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1" data-i18n="view.agent_profiles.funktionsbeschreibung">Funktionsbeschreibung</label>
+                <input type="text" id="tool-modal-desc" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] focus:outline-none">
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1" data-i18n="view.agent_profiles.ausfuehrungsmodus">Ausführungsmodus</label>
+                  <select id="tool-modal-mode" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] focus:outline-none cursor-pointer">
+                    <option value="sandbox" data-i18n="view.agent_profiles.isolierte_sandbox_container">Isolierte Sandbox (Container)</option>
+                    <option value="direct" data-i18n="view.agent_profiles.direkter_system_zugriff_host">Direkter System-Zugriff (Host)</option>
+                    <option value="remote_mcp" data-i18n="view.agent_profiles.remote_mcp_protocol">Remote MCP Protocol</option>
+                    <option value="read_only" data-i18n="view.agent_profiles.read_only_modus">Read-Only Modus</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1" data-i18n="view.agent_profiles.timeout_sekunden">Timeout (Sekunden)</label>
+                  <input type="number" id="tool-modal-timeout" value="60" min="5" max="600" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl px-2.5 py-1.5 text-[var(--foreground)] focus:outline-none">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] font-bold mb-1" data-i18n="view.agent_profiles.erweiterte_parameter_konfiguration_json">Erweiterte Parameter / Konfiguration (JSON)</label>
+                <textarea id="tool-modal-config" class="w-full h-24 bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 font-mono text-[11px] text-[var(--foreground)] leading-relaxed focus:outline-none resize-none overflow-y-auto shadow-xs" placeholder="{&quot;enabled&quot;: true}" data-i18n-placeholder="view.agent_profiles.placeholder_enabled_true"></textarea>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                <div>
+                  <span class="font-bold text-[var(--foreground)] block text-xs" data-i18n="view.agent_profiles.aktivitaets_status_fuer_dieses_profil">Aktivitäts-Status für dieses Profil</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)] block" data-i18n="view.agent_profiles.dem_aktuellen_agenten_zur_verfuegung_stell">Dem aktuellen Agenten zur Verfügung stellen</span>
+                </div>
+                <input type="checkbox" id="tool-modal-active-toggle" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+              </div>
+            </div>
+            <div class="pt-2 border-t border-[var(--border)] flex items-center justify-between shrink-0">
+              <button type="button" onclick="closeToolConfigModal()" class="px-4 py-1.5 rounded-xl border border-[var(--border)] text-xs font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer" data-i18n="view.agent_profiles.abbrechen">
+                Abbrechen
+              </button>
+              <button type="button" onclick="saveToolConfigFromModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-1.5 rounded-xl text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="check" class="w-3.5 h-3.5"></i> <span data-i18n="view.agent_profiles.einstellungen_uebernehmen">Einstellungen übernehmen</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================================== -->
+        <!-- HAFTUNGS- & BERUFSRECHTS-HINWEIS MODAL (RDG / StBerG / WpHG / EU-MDR) -->
+        <!-- ===================================================================== -->
+        <div id="archon-liability-disclaimer-modal" class="hidden fixed inset-0 z-[120] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div class="bg-[var(--card)] border border-amber-500/40 rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4">
+            <div class="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
+              <div class="flex items-center gap-2.5">
+                <div id="liability-modal-icon-box" class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 text-base font-bold">
+                  ⚖️
+                </div>
+                <div>
+                  <h4 id="liability-modal-title" class="text-sm font-black uppercase tracking-wider text-[var(--foreground)] font-mono" data-i18n="view.agent_profiles.rechtlicher_berufsrechtlicher_hinweis">
+                    Rechtlicher &amp; Berufsrechtlicher Hinweis
+                  </h4>
+                  <p id="liability-modal-subtitle" class="text-[11px] text-[var(--muted-foreground)] font-semibold" data-i18n="view.agent_profiles.spezialisten_profil_decision_support_entwu">
+                    Spezialisten-Profil (Decision Support &amp; Entwurfswerkzeug)
+                  </p>
+                </div>
+              </div>
+              <button type="button" onclick="closeLiabilityDisclaimerModal(false)" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1 cursor-pointer">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <div class="space-y-2.5 text-xs text-[var(--foreground)] leading-relaxed">
+              <div id="liability-modal-law-pill" class="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25" data-i18n="view.agent_profiles.hinweis_gemaess_3_rdg_5_stberg_2_wphg_art">
+                Hinweis gemäß § 3 RDG, § 5 StBerG, § 2 WpHG &amp; Art. 2 EU-MDR
+              </div>
+              <p id="liability-modal-body" class="text-xs text-[var(--foreground)] leading-relaxed" data-i18n="view.agent_profiles.dieses_spezialisten_profil_dient_ausschlie">
+                Dieses Spezialisten-Profil dient ausschließlich als KI-gestütztes Recherche-, Strukturierungs- und Entwurfswerkzeug für Fachanwender.
+              </p>
+              <div id="liability-modal-bullets" class="p-3 rounded-xl bg-[var(--secondary)]/60 border border-[var(--border)] text-[11px] text-[var(--muted-foreground)] space-y-1.5">
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-3">
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]" data-i18n="view.agent_profiles.status_ki_entwurfsassistent_kein_berufstra">
+                Status: KI-Entwurfsassistent (Kein Berufsträger)
+              </span>
+              <button
+                type="button"
+                onclick="closeLiabilityDisclaimerModal(true)"
+                class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-sm cursor-pointer"
+               data-i18n="view.agent_profiles.hinweis_verstanden_fortfahren">
+                Hinweis verstanden &amp; fortfahren
+              </button>
+            </div>
+          </div>
+        </div>
+

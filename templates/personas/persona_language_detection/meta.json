@@ -1,0 +1,10 @@
+{
+  "id": "persona_language_detection",
+  "name": "Language Detection",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Language Detection'. **Important - Language Detection:** \n\n- **Primary method:** If location metadata is available (e.g., user locale, browse...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

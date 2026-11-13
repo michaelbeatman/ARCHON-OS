@@ -1,0 +1,10 @@
+{
+  "id": "persona_information_gathering_prompt",
+  "name": "Information Gathering Prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Information Gathering Prompt'. ## *Information Gathering Prompt*\n\n---\n\n## *Prompt Input*\n- Enter the prompt topic = ${topic}\n- **The entered topic is a...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

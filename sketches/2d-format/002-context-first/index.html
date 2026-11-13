@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2d · Variante B — Kontext zuerst (ruhig, gegliedert)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         -webkit-font-smoothing: antialiased; color: #242424; background: #f4f2ee;
+         padding: 20px; max-width: 880px; }
+  h1 { font-size: 15px; margin-bottom: 2px; }
+  .sub { font-size: 12px; color: #6f6a61; margin-bottom: 18px; }
+  .spalten { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+  .block > h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+                color: #6f6a61; margin-bottom: 8px; font-weight: 700; }
+
+  /* ---- Telegram-Mockup ---- */
+  .phone { width: 320px; background: #0e1621; border-radius: 18px; padding: 10px 8px 14px;
+           box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  .bubble { background: #182533; color: #e9eef3; border-radius: 12px; padding: 11px 12px;
+            font-size: 12.5px; line-height: 1.5; }
+  .bubble .kopf { display: flex; align-items: center; gap: 6px; font-weight: 700;
+                  font-size: 12.5px; color: #7fd4a0; }
+  .kopf .zeit { margin-left: auto; color: #6a7d8f; font-size: 10px; font-weight: 400; }
+  .feld { display: flex; gap: 8px; margin-top: 5px; font-size: 11.5px; }
+  .feld .lab { color: #8fa3b5; width: 74px; flex: 0 0 74px; }
+  .feld .val { color: #e9eef3; }
+  .blocktitel { font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+                color: #8fa3b5; margin: 11px 0 4px; font-weight: 700; }
+  .zahlen { display: flex; gap: 14px; margin-top: 8px; font-size: 11.5px; color: #c8d4de; }
+  .zahlen b { color: #e9eef3; }
+  .anhang { display: flex; align-items: center; gap: 8px; background: #222f3e;
+            border-radius: 8px; padding: 7px 9px; margin-top: 9px; font-size: 11.5px; }
+  .btns { display: flex; gap: 6px; margin-top: 10px; }
+  .btn { flex: 1; text-align: center; padding: 8px 0; border-radius: 8px;
+         font-size: 12px; font-weight: 600; border: 1px solid; }
+  .btn.ok { background: rgba(127,212,160,.14); border-color: rgba(127,212,160,.5); color: #7fd4a0; }
+  .btn.no { background: rgba(226,110,110,.14); border-color: rgba(226,110,110,.5); color: #e26e6e; }
+  .textweg { margin-top: 8px; color: #8fa3b5; font-size: 10.5px; }
+  .textweg code { background: #222f3e; padding: 1px 5px; border-radius: 4px; color: #c8d4de; }
+
+  /* ---- Kanban-Card-Mockup ---- */
+  .spalte { width: 232px; background: #efece6; border-radius: 12px; padding: 8px; }
+  .kopfzeile { font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 8px;
+               margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .card { background: #fbfaf7; border: 1px solid #e4e0d8; border-radius: 12px; padding: 10px; }
+  .banner { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+            background: #fdf3e2; border-bottom: 1px solid #e8c37a; border-radius: 8px 8px 0 0;
+            margin: -10px -10px 8px; padding: 6px 9px; font-size: 10px; font-weight: 700; color: #8a5d10;
+            letter-spacing: .05em; text-transform: uppercase; }
+  .pill { font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 6px; border: 1px solid; }
+  .titel { font-size: 12.5px; font-weight: 600; line-height: 1.35; }
+  .zweit { font-size: 11px; color: #6f6a61; line-height: 1.4; margin-top: 4px; }
+  .projekt { font-family: ui-monospace, monospace; font-size: 10px; color: #8a857c;
+             background: #f1eee8; border-radius: 5px; padding: 2px 6px; display: inline-block; margin-top: 7px; }
+  .fuss { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+          margin-top: 9px; padding-top: 7px; border-top: 1px solid #eeeae2; font-size: 10.5px; color: #6f6a61; }
+  .avat { width: 20px; height: 20px; border-radius: 50%; background: #cfd6dd; display: inline-block; }
+  .kern { font-size: 10.5px; color: #8a857c; margin-top: 5px; font-family: ui-monospace, monospace; }
+</style></head>
+<body>
+<h1>Variante B — Kontext zuerst, ruhig und gegliedert</h1>
+<div class="sub">Alle Fakten auf einen Blick, beschriftet statt geraten. Mehr Höhe, weniger Rückfragen.</div>
+
+<div class="spalten">
+
+  <div class="block">
+    <h2>Telegram — Freigabe-Anfrage</h2>
+    <div class="phone">
+      <div class="bubble">
+        <div class="kopf">🔐 ENTSCHEIDUNG NÖTIG <span class="zeit">heute 17:21</span></div>
+        <div class="feld"><span class="lab">Was</span><span class="val">Synthese freigeben</span></div>
+        <div class="feld"><span class="lab">Projekt</span><span class="val">Agentenplattform Q1</span></div>
+        <div class="feld"><span class="lab">Von</span><span class="val">Lisa · Ergebnis-Kuratorin</span></div>
+        <div class="feld"><span class="lab">Referenz</span><span class="val">projekt-agenten-q1</span></div>
+
+        <div class="blocktitel">Worum es geht</div>
+        <div>Lisa hat 3 Teilberichte zusammengeführt. Ein Widerspruch bleibt offen: AP1 rechnet mit 38 % Deckungsbeitrag, AP3 mit 34 % — ohne Belegquelle.</div>
+
+        <div class="zahlen">
+          <span>Teilberichte <b>3/3</b></span>
+          <span>Offene Punkte <b>2</b></span>
+        </div>
+
+        <div class="anhang"><span>📎</span><span>Synthese-Entwurf · HTML · 12 KB</span></div>
+        <div class="btns"><div class="btn ok">✅ Freigeben</div><div class="btn no">❌ Ablehnen</div></div>
+        <div class="textweg">Kein Knopf zur Hand? <code>Erlauben t-84189c</code></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>Kanban — Card mit offener Entscheidung</h2>
+    <div class="spalte">
+      <div class="kopfzeile" style="background:#7CA982;color:#2f4a33"><span>Review &amp; QA</span><span>1</span></div>
+      <div class="card">
+        <div class="banner"><span>⏳ Offene Entscheidung</span><span class="pill" style="background:#fff;border-color:#e8c37a;color:#8a5d10">P1</span></div>
+        <div class="titel">Synthese freigeben — Agentenplattform Q1</div>
+        <div class="zweit">Synthese freigeben · 3 Teilberichte · 1 Widerspruch offen</div>
+        <div class="projekt">📁 20261012-projekt-agenten-q1</div>
+        <div class="fuss">
+          <span><span class="avat"></span> Robert</span>
+          <span>⏱ seit 2 h</span>
+        </div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:16px">Kanban — normale Card</h2>
+    <div class="spalte">
+      <div class="kopfzeile" style="background:#EED65B;color:#6b5c10"><span>In Bearbeitung</span><span>2</span></div>
+      <div class="card">
+        <div class="titel">Technische Architektur der Maklerplattform entwerfen</div>
+        <div class="zweit">Systemarchitekt · AP1</div>
+        <div class="projekt">📁 20261012-projekt-agenten-q1</div>
+        <div class="fuss">
+          <span><span class="avat"></span> Robert</span>
+          <span>📄 · P2</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body></html>

@@ -1,0 +1,10 @@
+{
+  "id": "persona_mechanical_part_render_to_technical_drawing_converter",
+  "name": "Mechanical Part Render to Technical Drawing Converter",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'Mechanical Part Render to Technical Drawing Converter'. {\n  \"task\": \"image_to_image\",\n  \"description\": \"Convert a 3D mechanical part render into a fully dimensioned manufacturi...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

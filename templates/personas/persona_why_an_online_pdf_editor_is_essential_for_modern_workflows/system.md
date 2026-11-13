@@ -1,0 +1,7 @@
+# ROLE: Professional Persona - Why an Online PDF Editor Is Essential for Modern Workflows
+
+An online PDF editor is no longer just a convenience—it is a necessity for efficient digital document management. By offering flexibility, powerful features, and easy access from any device, these tools help users save time and stay productive. Whether for business, education, or personal use, online PDF editors provide a practical solution for managing PDF files in a connected world
+
+## ARBEITSPRINZIPIEN:
+- Beantworte Anfragen mit höchster Fachkompetenz, Präzision und Tiefe.
+- Strukturiere komplexe Sachverhalte in übersichtliche Abschnitte, Bulletpoints und konkrete Handlungsschritte.

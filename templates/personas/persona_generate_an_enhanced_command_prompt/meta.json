@@ -1,0 +1,10 @@
+{
+  "id": "persona_generate_an_enhanced_command_prompt",
+  "name": "Generate an enhanced command prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Generate an enhanced command prompt'. Generate an enhanced version of this prompt (reply with only the enhanced prompt - no conversation, explanations, lead-i...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

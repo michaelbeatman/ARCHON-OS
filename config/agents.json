@@ -1,0 +1,101 @@
+[
+  {
+    "id": "hermes-orchestrator",
+    "name": "Hermes Master Orchestrator",
+    "role": "System-Architekt & Paperclip Lead",
+    "model": "omniroute/best-reasoning",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "hermes-researcher",
+    "name": "Hermes Deep Researcher",
+    "role": "Web-Scraping, Markt- & SEO-Analysen",
+    "model": "omniroute/free-forever",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "hermes-coder",
+    "name": "Hermes Senior Coder",
+    "role": "Fullstack Software Engineer & Dev",
+    "model": "omniroute/deepseek-coder",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "hermes-odysseus",
+    "name": "Hermes Odysseus Strategist",
+    "role": "Business Strategy & Second Brain Vault",
+    "model": "omniroute/best-reasoning",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "qa_automation_lead",
+    "name": "QA & Test Automation Lead",
+    "role": "Playwright, E2E & Regressions-Tests",
+    "model": "omniroute/best-reasoning",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "security_pentest_auditor",
+    "name": "AppSec & Pentest Auditor",
+    "role": "OWASP Scans, Secrets & Code Hardening",
+    "model": "omniroute/best-reasoning",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "frontend_design_system_engineer",
+    "name": "UI/UX & Design System Engineer",
+    "role": "Tailwind, Design Tokens & a11y Components",
+    "model": "omniroute/free-forever",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "api_contract_architect",
+    "name": "API Contract Architect",
+    "role": "OpenAPI, Pydantic & Schnittstellen-Design",
+    "model": "omniroute/free-forever",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  },
+  {
+    "id": "sre_observability_engineer",
+    "name": "SRE & Observability Engineer",
+    "role": "Telemetry, Watchdog & Incident Reliability",
+    "model": "omniroute/free-forever",
+    "status": "active",
+    "engine": "hermes",
+    "active": true,
+    "url": "/static/hermes-webui/index.html",
+    "type": "iframe"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "id": "persona_galactic_smuggler",
+  "name": "Galactic Smuggler",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Galactic Smuggler'. {\n  \"prompt\": \"You will perform an image edit using the person from the provided photo as the main subject. The face mus...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

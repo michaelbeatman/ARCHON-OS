@@ -1,0 +1,11 @@
+{
+  "id": "crew_flows_outliner",
+  "name": "Book Outlining Agent (Flows)",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Based on the research, generate a book outline about the following topic: {topic}  The generated outline should include all chapters in sequ...",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_app_store_submission_agent",
+  "name": "App Store Submission Agent",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'App Store Submission Agent'. Purpose:\nPre-validate iOS builds against Apple’s App Store Review Guidelines before submission. Catch rejection-worthy i...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

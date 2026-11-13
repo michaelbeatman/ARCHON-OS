@@ -1,0 +1,323 @@
+        <!-- SUB-VIEW 2: KANBAN BOARD (Vollwertiges Operations-Kanban in Mission Control) -->
+        <main id="ops-view-kanban" class="hidden flex-1 w-full p-3 flex flex-col gap-2.5 min-h-0 overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
+          <!-- BOARD-TOOLBAR: Neue Aufgabe links vom Suchfeld, Filter, WIP, Stats, Sync links vom Archiv -->
+          <div id="ops-kanban-toolbar" class="flex items-center gap-2 shrink-0 flex-wrap">
+            <button onclick="openNewTaskModal()" class="h-8 px-3 rounded-lg bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] font-semibold transition cursor-pointer text-xs flex items-center gap-1.5 shadow-xs shrink-0">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span data-i18n="view.operations.action_new_task">Neue Aufgabe</span>
+            </button>
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-custom/60 pointer-events-none"></i>
+              <input data-i18n-placeholder="view.operations.ph_search" id="ops-kanban-search" type="text" placeholder="Suchen… (Titel, Text, ID)" oninput="onOpsKanbanFilterChange()"
+                class="pl-8 pr-2.5 h-8 w-52 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-primary-custom focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+            </div>
+            <select id="ops-kanban-filter-assignee" onchange="onOpsKanbanFilterChange()" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-primary-custom cursor-pointer focus:outline-none">
+              <option data-i18n="view.operations.opt_all_agents" value="">Alle Agenten</option>
+            </select>
+            <select data-i18n-title="view.operations.title_filter_prio" id="ops-kanban-filter-prio" onchange="onOpsKanbanFilterChange()" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-primary-custom cursor-pointer focus:outline-none" title="Priorität filtern">
+              <option data-i18n="view.operations.opt_all_priorities" value="">Alle Prioritäten</option>
+              <option data-i18n="view.operations.opt_p0" value="3">P0 (Kritisch)</option>
+              <option data-i18n="view.operations.opt_p1" value="2">P1 (Hoch)</option>
+              <option data-i18n="view.operations.opt_p2" value="1">P2 (Mittel)</option>
+              <option data-i18n="view.operations.opt_p3" value="0">P3 (Normal)</option>
+            </select>
+            <select data-i18n-title="view.operations.title_sort" id="ops-kanban-sort" onchange="onOpsKanbanFilterChange()" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-primary-custom cursor-pointer focus:outline-none" title="Sortierung in den Spalten">
+              <option data-i18n="view.operations.opt_sort_engine" value="default">Sortierung: Engine</option>
+              <option data-i18n="view.operations.opt_sort_prio" value="prio">Nach Priorität</option>
+              <option data-i18n="view.operations.opt_sort_newest" value="newest">Neueste zuerst</option>
+              <option data-i18n="view.operations.opt_sort_title" value="title">Titel (A–Z)</option>
+            </select>
+            <div data-i18n-title="view.operations.title_wip" class="flex items-center gap-1 h-8 pl-2 pr-1 rounded-lg border border-[var(--border)] bg-[var(--background)]" title="WIP-Limit je Spalte (0 = aufheben)">
+              <span data-i18n="view.operations.label_wip" class="text-[10px] font-mono font-bold text-muted-custom">WIP</span>
+              <select id="ops-kanban-wip-col" class="h-6 px-1 text-xs bg-transparent text-primary-custom focus:outline-none cursor-pointer">
+                <option data-i18n="view.operations.opt_col_todo" value="todo">To-Do</option>
+                <option data-i18n="view.operations.opt_col_in_progress" value="in_progress">In Arbeit</option>
+                <option data-i18n="view.operations.opt_col_review" value="review">Review</option>
+                <option data-i18n="view.operations.opt_col_blocked" value="blocked">Blockiert</option>
+                <option data-i18n="view.operations.opt_col_done" value="done">Erledigt</option>
+              </select>
+              <input id="ops-kanban-wip-n" type="number" min="0" max="99" placeholder="n" class="w-10 h-6 px-1 text-xs bg-transparent text-primary-custom focus:outline-none" />
+              <button data-i18n-title="view.operations.title_wip_save" onclick="saveOpsKanbanWip()" class="h-6 px-1.5 rounded bg-[var(--secondary)] hover:opacity-80 text-xs font-bold cursor-pointer text-primary-custom" title="WIP-Limit speichern">✓</button>
+            </div>
+            <div id="ops-kanban-stats" class="flex items-center gap-2.5 text-[10px] font-mono text-muted-custom"></div>
+            <div class="ml-auto flex items-center gap-1.5 shrink-0">
+              <button data-i18n-title="view.operations.title_refresh" onclick="loadOperationsData()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="Aktualisieren">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
+                <span data-i18n="view.operations.action_sync">Sync</span>
+              </button>
+              <button id="ops-kanban-archive-btn" onclick="toggleOpsKanbanArchive()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-bold text-primary-custom transition cursor-pointer flex items-center gap-1.5">
+                <i data-lucide="archive" class="w-3.5 h-3.5"></i> <span>Archiv (…)</span>
+              </button>
+            </div>
+          </div>
+          <!-- ARCHIV-ANSICHT (versteckt, Toggle über Toolbar-Button) -->
+          <div id="ops-kanban-archive" class="hidden flex-1 min-h-0 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+            <div class="flex items-center justify-between mb-2.5">
+              <h4 data-i18n="view.operations.archive_title" class="text-xs font-bold uppercase font-mono tracking-wider text-primary-custom">🗂 Archivierte Tasks</h4>
+              <button data-i18n="view.operations.action_close" onclick="toggleOpsKanbanArchive(false)" class="h-7 px-2.5 rounded-lg border border-[var(--border)] text-xs font-bold cursor-pointer hover:bg-[var(--secondary)] text-primary-custom">Schließen ✕</button>
+            </div>
+            <div id="ops-kanban-archive-list" class="space-y-2"></div>
+          </div>
+          <div id="ops-kanban-columns-container" class="flex gap-1.5 w-full flex-1 min-h-0 overflow-x-auto pb-1">
+            <!-- Dynamische Spalten -->
+          </div>
+
+          <!-- FLOATING BULK-ACTION TOOLBAR (t-c2b384: Option A) -->
+          <div id="ops-kanban-bulk-toolbar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl border border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-md text-[var(--foreground)] shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-150">
+            <div class="flex items-center gap-2 pr-3 border-r border-[var(--border)]">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
+              <span id="ops-kanban-bulk-count" class="text-xs font-mono font-bold text-indigo-500">0 markiert</span>
+              <button data-i18n="view.operations.action_deselect" type="button" onclick="clearOpsKanbanSelection()" class="text-[10px] font-mono text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline cursor-pointer ml-1">
+                Aufheben
+              </button>
+            </div>
+
+            <!-- 1. Spalte verschieben Popover / Dropdown -->
+            <div class="relative">
+              <button type="button" onclick="toggleOpsBulkMoveMenu()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                <i data-lucide="arrow-right-circle" class="w-3.5 h-3.5 text-blue-500"></i>
+                <span data-i18n="view.operations.action_move">Verschieben</span>
+                <i data-lucide="chevron-down" class="w-3 h-3 text-[var(--muted-foreground)]"></i>
+              </button>
+              <div id="ops-bulk-move-menu" class="hidden absolute bottom-full mb-2 left-0 w-44 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-xl p-1.5 space-y-1 text-xs font-mono z-50">
+                <div data-i18n="view.operations.menu_target_column" class="px-2 py-1 text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider">Ziel-Spalte</div>
+                <button type="button" onclick="executeBulkMove('backlog')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-slate-400"></span> Backlog
+                </button>
+                <button type="button" onclick="executeBulkMove('todo')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-indigo-500"></span> To-Do
+                </button>
+                <button type="button" onclick="executeBulkMove('in_progress')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-amber-500"></span> In Arbeit
+                </button>
+                <button type="button" onclick="executeBulkMove('review')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-purple-500"></span> Review
+                </button>
+                <button type="button" onclick="executeBulkMove('blocked')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-rose-500"></span> Blockiert
+                </button>
+                <button type="button" onclick="executeBulkMove('done')" class="w-full text-left px-2 py-1 rounded-lg hover:bg-[var(--secondary)] flex items-center gap-2 cursor-pointer">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Erledigt
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. Zuweisen Dropdown -->
+            <div class="relative">
+              <button type="button" onclick="toggleOpsBulkAssignMenu()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                <i data-lucide="user-check" class="w-3.5 h-3.5 text-emerald-500"></i>
+                <span data-i18n="view.operations.action_assign">Zuweisen</span>
+                <i data-lucide="chevron-down" class="w-3 h-3 text-[var(--muted-foreground)]"></i>
+              </button>
+              <div id="ops-bulk-assign-menu" class="hidden absolute bottom-full mb-2 left-0 w-52 max-h-56 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-xl p-1.5 space-y-1 text-xs font-mono z-50 custom-scrollbar">
+                <!-- Dynamisch mit Agenten befüllt -->
+              </div>
+            </div>
+
+            <!-- 3. Taggen Popover -->
+            <div class="relative">
+              <button type="button" onclick="toggleOpsBulkTagMenu()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                <i data-lucide="tag" class="w-3.5 h-3.5 text-indigo-500"></i>
+                <span data-i18n="view.operations.action_tag">Taggen</span>
+                <i data-lucide="chevron-down" class="w-3 h-3 text-[var(--muted-foreground)]"></i>
+              </button>
+              <div id="ops-bulk-tag-menu" class="hidden absolute bottom-full mb-2 left-0 w-56 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-xl p-2.5 space-y-2 text-xs font-mono z-50">
+                <div data-i18n="view.operations.menu_add_tag" class="text-[10px] font-bold text-[var(--muted-foreground)] uppercase">Tag hinzufügen</div>
+                <div class="flex gap-1">
+                  <input data-i18n-placeholder="view.operations.ph_tag" type="text" id="ops-bulk-tag-input" placeholder="z.B. Sprint-1, P1" class="flex-1 px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono focus:outline-none">
+                  <button type="button" onclick="executeBulkTag('add')" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer">+</button>
+                </div>
+                <div class="flex gap-1 pt-1 border-t border-[var(--border)]">
+                  <button data-i18n="view.operations.action_remove_tag" type="button" onclick="executeBulkTag('remove')" class="w-full text-center py-1 rounded hover:bg-rose-500/10 text-rose-500 text-[10px] font-mono cursor-pointer">Tag entfernen...</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Löschen / Archivieren -->
+            <button data-i18n-title="view.operations.title_archive_selected" type="button" onclick="executeBulkDelete()" class="h-8 px-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs" title="Ausgewählte Aufgaben archivieren">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              <span data-i18n="view.operations.action_archive_selected">Archivieren</span>
+            </button>
+
+            <!-- Schließen -->
+            <button data-i18n-title="view.operations.title_clear_selection" type="button" onclick="clearOpsKanbanSelection()" class="p-1.5 rounded-lg hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer ml-1" title="Auswahl aufheben (Esc)">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- 10-MINUTEN UNDO FLOATING TOAST -->
+          <div id="ops-kanban-undo-toast" class="hidden fixed bottom-6 right-6 z-50 max-w-md px-4 py-3 rounded-2xl border border-indigo-500/30 bg-zinc-950/95 text-white shadow-2xl flex items-center justify-between gap-3 text-xs font-mono animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div class="min-w-0">
+                <div id="ops-kanban-undo-msg" class="font-bold truncate">Aufgaben aktualisiert</div>
+                <div class="text-[10px] text-zinc-400 flex items-center gap-1">
+                  <span data-i18n="view.operations.undo_hint">Rückgängig möglich:</span>
+                  <span id="ops-kanban-undo-timer" class="font-bold text-amber-400">10:00</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" onclick="triggerOpsBulkUndo()" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition shadow-xs">
+                <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.action_undo">Rückgängig</span>
+              </button>
+              <button type="button" onclick="dismissOpsUndoToast()" class="p-1 rounded text-zinc-400 hover:text-white cursor-pointer">✕</button>
+            </div>
+          </div>
+        </main>
+
+        <!-- SUB-VIEW 3: ORGANISATION & TEAMS (ABLAUFDIAGRAMM & TEAMS) -->
+        <main id="ops-view-org" class="hidden flex-1 w-full flex flex-col min-h-0 rounded-2xl border-0 bg-[var(--card)] shadow-xs overflow-hidden">
+          <!-- ORG TOOLBAR -->
+          <div class="px-4 py-2.5 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between shrink-0 shadow-2xs gap-3">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold uppercase tracking-wider text-primary-custom flex items-center gap-1.5">
+                <i data-lucide="network" class="w-4 h-4 text-[#d42a2b]"></i>
+                <span data-i18n="view.operations.org_title">Ablaufdiagramm &amp; Organigramm</span>
+              </span>
+              <button data-i18n-title="view.operations.title_org_help" type="button" onclick="openContextHelp('org')" title="Hilfe zum Ablaufdiagramm &amp; Organigramm" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+                <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+              </button>
+              <span data-i18n="view.operations.org_hint" class="text-[10px] text-muted-custom font-mono hidden md:inline">· Klicke auf eine Kachel für Eigenschaften &amp; Ergebnisse · Ziehe Verbindungspunkte für Berichtslinien</span>
+            </div>
+
+            <!-- View Mode Switcher: Flowchart vs. Grid -->
+            <div class="flex items-center gap-1.5 bg-[var(--secondary)] p-1 rounded-xl border border-[var(--border)] text-xs font-mono">
+              <button id="ops-org-mode-flow" onclick="setOpsOrgViewMode('flow')" class="px-3 py-1 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer bg-[var(--card)] text-primary-custom shadow-xs border border-[var(--border)]">
+                <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.org_mode_flow">Interaktiver Flowchart-Baum</span>
+              </button>
+              <button id="ops-org-mode-grid" onclick="setOpsOrgViewMode('grid')" class="px-3 py-1 rounded-lg font-medium transition flex items-center gap-1.5 cursor-pointer text-muted-custom hover:text-primary-custom">
+                <i data-lucide="grid" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.org_mode_grid">Kompakte Team-Karten</span>
+              </button>
+            </div>
+
+            <!-- Flowchart Actions -->
+            <div class="flex items-center gap-2">
+              <button data-i18n-title="view.operations.title_org_reset" onclick="resetOrgHierarchyToDefault()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-muted-custom hover:text-primary-custom transition cursor-pointer text-xs flex items-center gap-1.5" title="Setzt auf die 6 Standard-Teams zurück">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.action_org_reset">Reset (6 Teams)</span>
+              </button>
+              <button data-i18n-title="view.operations.title_org_align" onclick="autoAlignOrgHierarchy()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-muted-custom hover:text-primary-custom transition cursor-pointer text-xs flex items-center gap-1.5" title="Richtet alle Knoten überlappungsfrei am 20px-Raster aus">
+                <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.action_org_align">Am Raster ausrichten</span>
+              </button>
+              <button onclick="saveCurrentOrgHierarchy()" class="px-3.5 py-1.5 rounded-lg bg-[#d42a2b] hover:bg-[#b82223] text-white font-semibold transition cursor-pointer text-xs flex items-center gap-1.5 shadow-xs">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.action_org_save">Hierarchie speichern</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- FLOWCHART CANVAS VIEW -->
+          <div id="ops-org-flow-container" class="flex-1 w-full relative overflow-auto bg-[var(--page-bg)] select-none" style="background-image: radial-gradient(var(--border) 1.2px, transparent 1.2px); background-size: 20px 20px;">
+            <svg id="ops-org-flow-svg" class="absolute inset-0 pointer-events-none" style="min-width: 3200px; min-height: 4000px; width: 3200px; height: 4000px; z-index: 5;">
+              <defs>
+                <marker id="flow-arrow-down" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#71717a" />
+                </marker>
+                <marker id="flow-arrow-hover" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#d42a2b" />
+                </marker>
+              </defs>
+              <g id="ops-flow-links-group" style="pointer-events: auto;"></g>
+              <path id="ops-flow-temp-line" d="" fill="none" stroke="#d42a2b" stroke-width="2" stroke-dasharray="6 4" class="hidden opacity-90 pointer-events-none" />
+            </svg>
+            <div id="ops-org-flow-nodes" class="absolute inset-0 pointer-events-auto" style="min-width: 3200px; min-height: 4000px; width: 3200px; height: 4000px; z-index: 10;">
+              <!-- Dynamische Ablaufdiagramm-Karten -->
+            </div>
+          </div>
+
+          <!-- GRID VIEW (FALLBACK / KOMPAKTE KARTEN) -->
+          <div id="ops-org-grid-container" class="hidden flex-1 w-full p-6 overflow-y-auto min-h-0 bg-[var(--page-bg)] space-y-8">
+            <div id="ops-org-chart-container" class="max-w-7xl mx-auto space-y-8">
+              <!-- Dynamisches Team-Karten Organigramm -->
+            </div>
+          </div>
+        </main>
+
+        <!-- SUB-VIEW 4: INTERNE KOMMUNIKATION (MULTI-AGENTEN GRUPPENCHAT & LIVE-ARENA) -->
+        <main id="ops-view-comm" class="hidden flex-1 w-full flex overflow-hidden min-h-0 rounded-2xl border-0 bg-[var(--card)] shadow-xs os-island">
+          <!-- LINKS: KANÄLE & THEMEN-STREAM -->
+          <aside class="w-72 border-r border-[var(--border)] bg-[var(--card)] flex flex-col shrink-0">
+            <div class="p-3 border-b border-[var(--border)] flex items-center justify-between">
+              <span data-i18n="view.operations.comm_channels_title" class="text-[11px] font-mono uppercase font-bold text-[var(--muted-foreground)]">Kommunikations-Kanäle</span>
+              <span data-i18n-title="view.operations.title_comm_live" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Live Stream verbunden"></span>
+            </div>
+            
+            <!-- Standard-Kanäle -->
+            <div class="p-2 space-y-1 shrink-0 border-b border-[var(--border)]">
+              <!-- 1. All-Stream -->
+              <button type="button" onclick="switchCommChannel('all')" id="comm-channel-btn-all" class="w-full px-2.5 py-2 rounded-xl text-left text-xs font-mono transition cursor-pointer flex items-center justify-between bg-indigo-600 text-white font-bold shadow-xs">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                  <span>#all-stream</span>
+                </div>
+                <span data-i18n="view.operations.comm_badge_live" class="text-[9.5px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono" id="comm-badge-all">Live</span>
+              </button>
+              
+              <!-- 2. Boardroom Debatten -->
+              <button type="button" onclick="switchCommChannel('boardroom')" id="comm-channel-btn-boardroom" class="w-full px-2.5 py-2 rounded-xl text-left text-xs font-mono transition cursor-pointer flex items-center justify-between hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="landmark" class="w-3.5 h-3.5 text-amber-500"></i>
+                  <span>#boardroom</span>
+                </div>
+                <span data-i18n="view.operations.comm_badge_arena" class="text-[9.5px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 font-mono font-bold" id="comm-badge-boardroom">Arena</span>
+              </button>
+
+              <!-- 3. Projekte & Tasks -->
+              <button type="button" onclick="switchCommChannel('projects')" id="comm-channel-btn-projects" class="w-full px-2.5 py-2 rounded-xl text-left text-xs font-mono transition cursor-pointer flex items-center justify-between hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="folder-git-2" class="w-3.5 h-3.5 text-sky-500"></i>
+                  <span>#projekte-tasks</span>
+                </div>
+                <span data-i18n="view.operations.comm_badge_tasks" class="text-[9.5px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-600 dark:text-sky-400 font-mono font-bold">Tasks</span>
+              </button>
+            </div>
+
+            <!-- Agenten Filter -->
+            <div class="p-2 pb-1">
+              <span data-i18n="view.operations.comm_filter_title" class="text-[9.5px] font-mono uppercase font-bold text-[var(--muted-foreground)] px-1">Teilnehmer-Filter</span>
+            </div>
+            <div id="ops-comm-channels" class="p-2 pt-0 space-y-1 overflow-y-auto flex-1 custom-scrollbar">
+              <!-- Dynamisch mit Agenten befüllt -->
+            </div>
+          </aside>
+
+          <!-- RECHTS: GRUPPENCHAT NACHRICHTEN FEED -->
+          <section class="flex-1 flex flex-col bg-[var(--background)] overflow-hidden">
+            <!-- Header Bar -->
+            <div class="p-3 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between gap-3 shrink-0">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                <span id="ops-comm-active-title" class="text-xs font-bold text-[var(--foreground)] font-mono truncate">📡 #all-stream — Gesamt-Funkverkehr aller Agenten</span>
+                <span id="ops-comm-active-desc" class="text-[10px] text-[var(--muted-foreground)] font-mono hidden md:inline">· Echtzeit-Streaming aktiv</span>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button data-i18n-title="view.operations.title_comm_refresh" type="button" onclick="loadOperationsComm(currentCommFilterAgent)" class="p-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono transition cursor-pointer" title="Feed aktualisieren">
+                  <i data-lucide="refresh-cw" class="w-3 h-3 text-blue-500"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Nachrichtenfeed mit Realtime SSE -->
+            <div id="ops-comm-messages" class="flex-1 p-4 overflow-y-auto space-y-3 os-console custom-scrollbar select-text">
+              <!-- Dynamischer Chat-Feed -->
+            </div>
+
+            <!-- BROADCAST / FUNKSPRUCH EINGABE -->
+            <div class="p-3 border-t border-[var(--border)] bg-[var(--card)] flex items-center gap-2 shrink-0">
+              <select id="ops-comm-sender" class="h-9 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 shrink-0">
+                <option value="commander">👑 Commander</option>
+                <option value="system_dispatcher">🤖 Dispatcher</option>
+              </select>
+              <input data-i18n-placeholder="view.operations.ph_comm_input" type="text" id="ops-comm-input" placeholder="Funkspruch oder Anweisung an den Kanal senden (Enter)..." class="flex-1 h-9 px-3 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-[var(--foreground)] font-sans placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeydown="if(event.key==='Enter') sendOperationsBroadcast()" />
+              <button type="button" onclick="sendOperationsBroadcast()" class="h-9 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.action_send">Senden</span>
+              </button>
+            </div>
+          </section>
+        </main>

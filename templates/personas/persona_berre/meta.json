@@ -1,0 +1,10 @@
+{
+  "id": "persona_berre",
+  "name": "berre",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'berre'. {\n  \"reference\": {\n    \"face_identity\": \"${face_identity:uploaded reference image never change face and hair}\",\n    \"ide...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

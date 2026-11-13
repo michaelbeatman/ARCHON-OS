@@ -1,0 +1,10 @@
+{
+  "id": "persona_giant_object_in_city",
+  "name": "Giant Object in City",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Giant Object in City'. You're in a ${location} crowd looking up at a giant monumental concrete ${object}, weathered with rust, moss and light i...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

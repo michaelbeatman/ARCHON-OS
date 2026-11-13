@@ -1,0 +1,433 @@
+/* ==========================================================================
+   ARCHON OS - UNIFIED B2B SAAS DESIGN SYSTEM
+   Standard: Border-First Principle (Shadcn-Slate Standard)
+   Version: 2.0 (Indigo/Slate Core)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. DESIGN-TOKEN DEFINITION (CSS-VARIABLEN)
+   -------------------------------------------------------------------------- */
+:root {
+  --bg-canvas: #F8FAFC;        /* Globaler Hintergrund (Slate 50) */
+  --bg-surface: #FFFFFF;       /* Karten, Container, Modals */
+  --bg-subtle: #F1F5F9;        /* Hover-Zustände, Tab-Leisten (Slate 100) */
+  --border-default: #E2E8F0;   /* Standard-Trennung 1px (Slate 200) */
+  --border-strong: #CBD5E1;    /* Aktive Inputs, Fokus-Ränder (Slate 300) */
+  --text-main: #0F172A;        /* Fließtext und Titel (Slate 900) */
+  --text-muted: #64748B;       /* Sub-Labels, Metadaten (Slate 500) */
+  --primary: #4F46E5;          /* Primär-Aktionen (Indigo 600) */
+  --primary-hover: #4338CA;    /* Tasten-Hover (Indigo 700) */
+  --primary-subtle: #EEF2FF;   /* Aktive Badges, Markierungen (Indigo 50) */
+  --danger: #EF4444;           /* Fehler, Not-Aus (Red 500) */
+  --danger-subtle: #FEF2F2;    /* Fehler-Container (Red 50) */
+  --warning: #F59E0B;          /* Gates, Warnungen (Amber 500) */
+  --warning-subtle: #FFFBEB;   /* Warnungs-Container (Amber 50) */
+  --success: #10B981;          /* Erfolgsmeldungen (Emerald 500) */
+  --success-subtle: #ECFDF5;   /* Erfolgs-Container (Emerald 50) */
+
+  /* AppShell Layout Tokens */
+  --appshell-header-height: 56px;
+  --appshell-canvas-padding: 24px;
+}
+
+/* --------------------------------------------------------------------------
+   2. SYSTEMLEITPLANKEN: ZERO SHADOWS & BORDER-FIRST RESET
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. GLOBALE APP & TYPOGRAFIE
+   -------------------------------------------------------------------------- */
+html, body {
+  background-color: var(--bg-canvas) !important;
+  color: var(--text-main) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.stApp,
+section.main,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"] {
+  background-color: var(--bg-canvas) !important;
+  color: var(--text-main) !important;
+}
+
+[data-testid="stHeader"] {
+  background-color: var(--bg-canvas) !important;
+  border-bottom: 1px solid var(--border-default) !important;
+}
+
+[data-testid="stSidebar"] {
+  background-color: var(--bg-surface) !important;
+  border-right: 1px solid var(--border-default) !important;
+}
+
+h1, h2, h3, h4, h5, h6,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {
+  color: var(--text-main) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.015em;
+}
+
+p, span, label, div {
+  color: inherit;
+}
+
+.text-muted, [data-testid="stWidgetLabel"] label, small {
+  color: var(--text-muted) !important;
+}
+
+hr, [data-testid="stDivider"] {
+  border: 0 !important;
+  border-top: 1px solid var(--border-default) !important;
+  margin: 1.5rem 0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. KARTEN & CONTAINER (CARD-SYSTEM)
+   -------------------------------------------------------------------------- */
+.card,
+.inbox-card,
+.inbox-card-st,
+.showroom-card,
+[data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stExpander"],
+div.stContainer {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  padding: 16px !important;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.card:hover,
+.inbox-card:hover,
+.showroom-card:hover {
+  border-color: var(--border-strong) !important;
+  box-shadow: none !important;
+}
+
+/* Modals & Dialogs */
+[data-testid="stDialog"] > div,
+div[role="dialog"] {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. TAB-NAVIGATION (FLAT & MINIMALIST)
+   -------------------------------------------------------------------------- */
+div[data-baseweb="tab-list"],
+.stTabs [role="tablist"] {
+  background-color: transparent !important;
+  border-bottom: 1px solid var(--border-default) !important;
+  padding: 0 !important;
+  gap: 16px !important;
+}
+
+div[data-baseweb="tab-border"],
+div[data-baseweb="tab-highlight"] {
+  display: none !important;
+}
+
+button[data-baseweb="tab"],
+.stTabs [role="tab"] {
+  background-color: transparent !important;
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  padding: 10px 4px !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+button[data-baseweb="tab"]:hover,
+.stTabs [role="tab"]:hover {
+  color: var(--text-main) !important;
+  background-color: transparent !important;
+  border-bottom-color: var(--border-strong) !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"],
+.stTabs [role="tab"][aria-selected="true"] {
+  color: var(--primary) !important;
+  background-color: transparent !important;
+  border-bottom: 2px solid var(--primary) !important;
+  font-weight: 600 !important;
+}
+
+/* --------------------------------------------------------------------------
+   6. BUTTON-SYSTEM (SHADCN BORDER-FIRST)
+   -------------------------------------------------------------------------- */
+/* Standard / Sekundär Button */
+.stButton > button,
+button[data-testid="baseButton-secondary"],
+.btn-secondary {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 6px 14px !important;
+  box-shadow: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.stButton > button:hover,
+button[data-testid="baseButton-secondary"]:hover,
+.btn-secondary:hover {
+  background-color: var(--bg-subtle) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-main) !important;
+}
+
+/* Primär Button (Indigo 600) */
+.stButton > button[kind="primary"],
+button[data-testid="baseButton-primary"],
+.btn-primary {
+  background-color: var(--primary) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--primary) !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 6px 14px !important;
+  box-shadow: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.stButton > button[kind="primary"]:hover,
+button[data-testid="baseButton-primary"]:hover,
+.btn-primary:hover {
+  background-color: var(--primary-hover) !important;
+  border-color: var(--primary-hover) !important;
+  color: #FFFFFF !important;
+}
+
+/* Destruktiver Button (Red 500 Outline) */
+button[kind="secondaryFormSubmit"],
+.btn-danger {
+  background-color: transparent !important;
+  color: var(--danger) !important;
+  border: 1px solid var(--danger) !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 6px 14px !important;
+  box-shadow: none !important;
+}
+
+button[kind="secondaryFormSubmit"]:hover,
+.btn-danger:hover {
+  background-color: var(--danger-subtle) !important;
+  color: var(--danger) !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. FORMULAR-ELEMENTE & EINGABEFELDER
+   -------------------------------------------------------------------------- */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+textarea,
+[data-baseweb="input"],
+[data-baseweb="textarea"],
+[data-baseweb="select"] > div,
+.stTextInput > div > div > input,
+.stTextArea textarea {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 6px !important;
+  color: var(--text-main) !important;
+  font-size: 13px !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease;
+}
+
+input:focus,
+textarea:focus,
+[data-baseweb="input"]:focus-within,
+[data-baseweb="textarea"]:focus-within,
+[data-baseweb="select"]:focus-within,
+.stTextInput > div > div > input:focus,
+.stTextArea textarea:focus {
+  border-color: var(--primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 1px var(--primary) !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. STATUS-BADGES & PILLS
+   -------------------------------------------------------------------------- */
+.badge,
+.status-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  border-radius: 9999px !important;
+  padding: 2px 8px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  box-shadow: none !important;
+}
+
+/* [SYSTEM] -> Indigo */
+.badge-system,
+.badge-primary {
+  background-color: var(--primary-subtle) !important;
+  color: var(--primary) !important;
+  border: 1px solid #C7D2FE !important;
+}
+
+/* [GATE] -> Amber / Warning */
+.badge-gate,
+.badge-warning {
+  background-color: var(--warning-subtle) !important;
+  color: var(--warning) !important;
+  border: 1px solid #FDE68A !important;
+}
+
+/* [ERROR] -> Red / Danger */
+.badge-error,
+.badge-danger {
+  background-color: var(--danger-subtle) !important;
+  color: var(--danger) !important;
+  border: 1px solid #FECACA !important;
+}
+
+/* [SUCCESS] -> Emerald / Success */
+.badge-success {
+  background-color: var(--success-subtle) !important;
+  color: var(--success) !important;
+  border: 1px solid #A7F3D0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. METRIKEN, CODE & ZUSATZKOMPONENTEN
+   -------------------------------------------------------------------------- */
+[data-testid="stMetric"] {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+}
+
+[data-testid="stMetricValue"] {
+  color: var(--text-main) !important;
+  font-weight: 600 !important;
+}
+
+code, pre, .stCodeBlock {
+  background-color: var(--bg-subtle) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 6px !important;
+  color: var(--text-main) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+}
+
+/* --------------------------------------------------------------------------
+   10. WEB UI & NAVIGATION SPECIFICS (BORDER-FIRST)
+   -------------------------------------------------------------------------- */
+.archon-nav-item {
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.archon-nav-item:hover {
+  background-color: var(--bg-subtle) !important;
+  border-color: var(--border-default) !important;
+}
+
+.archon-nav-item.nav-item-active {
+  background-color: var(--primary-subtle) !important;
+  color: var(--primary) !important;
+  border: 1px solid #C7D2FE !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+
+.archon-nav-item.nav-item-active svg,
+.archon-nav-item.nav-item-active i {
+  color: var(--primary) !important;
+}
+
+/* Master Chat & Cards in Web UI */
+#master-chat-header-bar {
+  border-bottom: 1px solid var(--border-default) !important;
+  box-shadow: none !important;
+  background-color: var(--bg-surface) !important;
+}
+
+#master-chat-profile-select,
+#master-chat-model-select {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+.shadcn-card,
+.prof-panel-card,
+.prof-box-card {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   11. STANDARDIZED VIEW HEADER (LOGO-ALIGNED APPSHELL STANDARD)
+   -------------------------------------------------------------------------- */
+#sidebar-logo-header {
+  height: var(--appshell-header-height, 56px) !important;
+  min-height: var(--appshell-header-height, 56px) !important;
+  max-height: var(--appshell-header-height, 56px) !important;
+  box-sizing: border-box !important;
+}
+
+.app-view-header {
+  height: var(--appshell-header-height, 56px) !important;
+  min-height: var(--appshell-header-height, 56px) !important;
+  max-height: var(--appshell-header-height, 56px) !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  border-bottom: 1px solid var(--border-default) !important;
+  background-color: var(--bg-surface) !important;
+  padding: 0 1.25rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-shrink: 0 !important;
+  z-index: 10 !important;
+}
+
+.app-view-body,
+#design-system-body {
+  flex: 1 1 0% !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  height: calc(100% - var(--appshell-header-height, 56px)) !important;
+  max-height: calc(100% - var(--appshell-header-height, 56px)) !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  padding: var(--appshell-canvas-padding, 24px) !important;
+}
+

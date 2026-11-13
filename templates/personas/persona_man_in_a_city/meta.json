@@ -1,0 +1,10 @@
+{
+  "id": "persona_man_in_a_city",
+  "name": "Man in a City",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Man in a City'. Create a photo capturing a man in ${city:Istanbul}, using the following customizable variables:\n\n- **Location**: Include...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

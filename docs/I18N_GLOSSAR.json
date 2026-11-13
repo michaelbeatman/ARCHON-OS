@@ -1,0 +1,360 @@
+{
+  "version": 1,
+  "reference_language": "de",
+  "source": "docs/I18N_ETAPPE1_INVENTUR.md §6 (Terminologie-Glossar)",
+  "rule": "Ein Begriff = eine Übersetzung, über die gesamte UI (HTML, JS, api.*). \"fixed\": true markiert Marken-/Fachbegriffe, die in allen Sprachen unverändert bleiben. \"keys\" nennt die Katalogpfade, in denen der Begriff die Übersetzung bestimmt; tests/test_locale_parity.py prueft, dass die kanonische Form dort als Teilstring steht.",
+  "terms": [
+    {
+      "id": "agent",
+      "term_de": "Agent",
+      "fixed": false,
+      "translations": {
+        "de": "Agent",
+        "en": "Agent",
+        "es": "Agente",
+        "fr": "Agent",
+        "pt": "Agente",
+        "ru": "Агент",
+        "ja": "エージェント",
+        "ko": "에이전트",
+        "zh": "智能体"
+      },
+      "keys": []
+    },
+    {
+      "id": "cadre",
+      "term_de": "Agentenkader",
+      "fixed": false,
+      "translations": {
+        "de": "Agentenkader",
+        "en": "Agent Cadre",
+        "es": "Cuadro de agentes",
+        "fr": "Cadre des agents",
+        "pt": "Quadro de Agentes",
+        "ru": "Кадры агентов",
+        "ja": "エージェント幹部",
+        "ko": "에이전트 편제",
+        "zh": "智能体花名册"
+      },
+      "keys": [
+        "nav.cadre"
+      ]
+    },
+    {
+      "id": "mission",
+      "term_de": "Mission",
+      "fixed": false,
+      "translations": {
+        "de": "Mission",
+        "en": "Mission",
+        "es": "Misión",
+        "fr": "Mission",
+        "pt": "Missão",
+        "ru": "Миссия",
+        "ja": "ミッション",
+        "ko": "미션",
+        "zh": "任务"
+      },
+      "keys": []
+    },
+    {
+      "id": "run",
+      "term_de": "Run (Lauf)",
+      "fixed": false,
+      "translations": {
+        "de": "Run",
+        "en": "Run",
+        "es": "Ejecución",
+        "fr": "Exécution",
+        "pt": "Execução",
+        "ru": "Запуск",
+        "ja": "実行",
+        "ko": "실행",
+        "zh": "运行"
+      },
+      "keys": []
+    },
+    {
+      "id": "workflow",
+      "term_de": "Workflow",
+      "fixed": false,
+      "translations": {
+        "de": "Workflow",
+        "en": "Workflow",
+        "es": "Flujo de trabajo",
+        "fr": "Flux de travail",
+        "pt": "Fluxo de trabalho",
+        "ru": "Рабочий процесс",
+        "ja": "ワークフロー",
+        "ko": "워크플로",
+        "zh": "工作流"
+      },
+      "keys": []
+    },
+    {
+      "id": "watchdog",
+      "term_de": "Watchdog (Internet-Watchdog)",
+      "fixed": true,
+      "translations": {
+        "de": "Internet Watchdog",
+        "en": "Internet Watchdog",
+        "es": "Internet Watchdog",
+        "fr": "Internet Watchdog",
+        "pt": "Internet Watchdog",
+        "ru": "Internet Watchdog",
+        "ja": "Internet Watchdog",
+        "ko": "Internet Watchdog",
+        "zh": "Internet Watchdog"
+      },
+      "keys": [
+        "nav.watchdog"
+      ]
+    },
+    {
+      "id": "showroom",
+      "term_de": "Showroom",
+      "fixed": true,
+      "translations": {
+        "de": "Showroom",
+        "en": "Showroom",
+        "es": "Showroom",
+        "fr": "Showroom",
+        "pt": "Showroom",
+        "ru": "Showroom",
+        "ja": "Showroom",
+        "ko": "Showroom",
+        "zh": "Showroom"
+      },
+      "keys": [
+        "nav.showroom"
+      ]
+    },
+    {
+      "id": "boardroom",
+      "term_de": "Boardroom (AI-Boardroom)",
+      "fixed": true,
+      "translations": {
+        "de": "AI-Boardroom",
+        "en": "AI-Boardroom",
+        "es": "AI-Boardroom",
+        "fr": "AI-Boardroom",
+        "pt": "AI-Boardroom",
+        "ru": "AI-Boardroom",
+        "ja": "AI-Boardroom",
+        "ko": "AI-Boardroom",
+        "zh": "AI-Boardroom"
+      },
+      "keys": [
+        "nav.boardroom"
+      ]
+    },
+    {
+      "id": "inbox",
+      "term_de": "Posteingang",
+      "fixed": false,
+      "translations": {
+        "de": "Posteingang",
+        "en": "Inbox",
+        "es": "Bandeja de entrada",
+        "fr": "Boîte de réception",
+        "pt": "Caixa de entrada",
+        "ru": "Входящие",
+        "ja": "受信トレイ",
+        "ko": "받은편지함",
+        "zh": "收件箱"
+      },
+      "keys": [
+        "nav.inbox"
+      ]
+    },
+    {
+      "id": "case",
+      "term_de": "Vorgang",
+      "fixed": false,
+      "translations": {
+        "de": "Vorgang",
+        "en": "Case",
+        "es": "Expediente",
+        "fr": "Dossier",
+        "pt": "Processo",
+        "ru": "Дело",
+        "ja": "案件",
+        "ko": "건",
+        "zh": "工单"
+      },
+      "keys": []
+    },
+    {
+      "id": "receipt",
+      "term_de": "Beleg",
+      "fixed": false,
+      "translations": {
+        "de": "Beleg",
+        "en": "Receipt",
+        "es": "Comprobante",
+        "fr": "Justificatif",
+        "pt": "Comprovante",
+        "ru": "Документ",
+        "ja": "証憑",
+        "ko": "전표",
+        "zh": "凭证"
+      },
+      "keys": []
+    },
+    {
+      "id": "approval",
+      "term_de": "Freigabe",
+      "fixed": false,
+      "translations": {
+        "de": "Freigabe",
+        "en": "Approval",
+        "es": "Aprobación",
+        "fr": "Validation",
+        "pt": "Aprovação",
+        "ru": "Согласование",
+        "ja": "承認",
+        "ko": "승인",
+        "zh": "审批"
+      },
+      "keys": []
+    },
+    {
+      "id": "policy",
+      "term_de": "Richtlinie",
+      "fixed": false,
+      "translations": {
+        "de": "Richtlinie",
+        "en": "Policy",
+        "es": "Política",
+        "fr": "Politique",
+        "pt": "Política",
+        "ru": "Политика",
+        "ja": "ポリシー",
+        "ko": "정책",
+        "zh": "策略"
+      },
+      "keys": []
+    },
+    {
+      "id": "log",
+      "term_de": "Protokoll / Log",
+      "fixed": false,
+      "translations": {
+        "de": "Protokoll / Log",
+        "en": "Log",
+        "es": "Registro",
+        "fr": "Journal",
+        "pt": "Registro",
+        "ru": "Журнал",
+        "ja": "ログ",
+        "ko": "로그",
+        "zh": "日志"
+      },
+      "keys": []
+    },
+    {
+      "id": "knowledge_graph",
+      "term_de": "Wissensgraph",
+      "fixed": false,
+      "translations": {
+        "de": "Wissensgraph",
+        "en": "Knowledge Graph",
+        "es": "Gráfico de conocimiento",
+        "fr": "Graphe de connaissances",
+        "pt": "Grafo de Conhecimento",
+        "ru": "Граф знаний",
+        "ja": "ナレッジグラフ",
+        "ko": "지식 그래프",
+        "zh": "知识图谱"
+      },
+      "keys": [
+        "nav.brain"
+      ]
+    },
+    {
+      "id": "template",
+      "term_de": "Vorlage",
+      "fixed": false,
+      "translations": {
+        "de": "Vorlage",
+        "en": "Template",
+        "es": "Plantilla",
+        "fr": "Modèle",
+        "pt": "Modelo",
+        "ru": "Шаблон",
+        "ja": "テンプレート",
+        "ko": "템플릿",
+        "zh": "模板"
+      },
+      "keys": []
+    },
+    {
+      "id": "token",
+      "term_de": "Token",
+      "fixed": true,
+      "translations": {
+        "de": "Token",
+        "en": "Token",
+        "es": "Token",
+        "fr": "Token",
+        "pt": "Token",
+        "ru": "Токен",
+        "ja": "トークン",
+        "ko": "토큰",
+        "zh": "Token"
+      },
+      "keys": []
+    },
+    {
+      "id": "sandbox",
+      "term_de": "Sandbox",
+      "fixed": true,
+      "translations": {
+        "de": "Sandbox",
+        "en": "Sandbox",
+        "es": "Sandbox",
+        "fr": "Sandbox",
+        "pt": "Sandbox",
+        "ru": "Sandbox",
+        "ja": "Sandbox",
+        "ko": "Sandbox",
+        "zh": "Sandbox"
+      },
+      "keys": []
+    },
+    {
+      "id": "kpi",
+      "term_de": "KPI",
+      "fixed": true,
+      "translations": {
+        "de": "KPI",
+        "en": "KPI",
+        "es": "KPI",
+        "fr": "KPI",
+        "pt": "KPI",
+        "ru": "KPI",
+        "ja": "KPI",
+        "ko": "KPI",
+        "zh": "KPI"
+      },
+      "keys": []
+    },
+    {
+      "id": "cockpit",
+      "term_de": "Cockpit",
+      "fixed": false,
+      "translations": {
+        "de": "Cockpit",
+        "en": "Cockpit",
+        "es": "Cabina",
+        "fr": "Cockpit",
+        "pt": "Cockpit",
+        "ru": "Кокпит",
+        "ja": "コックピット",
+        "ko": "콕핏",
+        "zh": "驾驶舱"
+      },
+      "keys": []
+    }
+  ]
+}

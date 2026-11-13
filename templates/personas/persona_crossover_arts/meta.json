@@ -1,0 +1,10 @@
+{
+  "id": "persona_crossover_arts",
+  "name": "Crossover arts",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Crossover arts'. Create a cinematic crossover scene featuring ${character1} and ${character2} in ${location:fantasy world}. \n\nArt style: ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

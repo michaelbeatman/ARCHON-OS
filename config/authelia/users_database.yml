@@ -1,0 +1,19 @@
+# config/authelia/users_database.yml
+# Authelia user directory template for Archon OS
+# Generate real Argon2id hashes via: docker run --rm authelia/authelia:4.38 authelia crypto hash generate argon2 --password 'CHANGE_ME'
+
+users:
+  admin:
+    displayname: "Archon Administrator"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$dummyhashfordevelopment2026$X8zYwQ5eJ91dummyhashvalueonlyforlocalsetup"
+    email: "admin@archon.local"
+    groups:
+      - admins
+      - operators
+
+  operator:
+    displayname: "Operations Lead"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$dummyhashfordevelopment2026$X8zYwQ5eJ91dummyhashvalueonlyforlocalsetup"
+    email: "operator@archon.local"
+    groups:
+      - operators

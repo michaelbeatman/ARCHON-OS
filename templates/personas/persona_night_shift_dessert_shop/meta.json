@@ -1,0 +1,10 @@
+{
+  "id": "persona_night_shift_dessert_shop",
+  "name": "Night Shift Dessert Shop",
+  "category": "2. Handel, Beschaffung & E-Commerce",
+  "description": "Fach-Experte: 'Night Shift Dessert Shop'. {\n  \"name\": \"night_shift_dessert_shop\",\n  \"prompt\": \"ultra-realistic single photograph, evening interior of a small Turk...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

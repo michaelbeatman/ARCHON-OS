@@ -1,0 +1,10 @@
+{
+  "id": "persona_diff",
+  "name": "diff",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'diff'. The \"Deep-Scan Comparative\" Prompt\n\"Act as an Expert Educator. I want to learn about [INSERT SUBJECT/TOPIC].\n\nTask 1: Th...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

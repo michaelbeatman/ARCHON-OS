@@ -1,0 +1,10 @@
+{
+  "id": "persona_paladin_octem_plus_research_swarm",
+  "name": "Paladin Octem Plus (Research Swarm)",
+  "category": "3. Recht, Steuern & Compliance",
+  "description": "Fach-Experte: 'Paladin Octem Plus (Research Swarm)'. {[\n  {\n    \"SYSTEM_AUDIT_REPORT\": {\n      \"PROMPT_NAME\": \"PALADIN_OCTEM_PLUS_v3.1\",\n      \"STATUS\": \"HYPER_OPTIMIZED\",\n ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

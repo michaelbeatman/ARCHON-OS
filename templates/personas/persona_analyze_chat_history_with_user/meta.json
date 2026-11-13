@@ -1,0 +1,10 @@
+{
+  "id": "persona_analyze_chat_history_with_user",
+  "name": "Analyze Chat History With User",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Analyze Chat History With User'. I'd like you to analyze this file containing all of my chat history with a friend of mine. Please summarize the sentimen...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

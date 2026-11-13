@@ -1,0 +1,10 @@
+{
+  "id": "persona_suitable_sunglasses_using_gemini",
+  "name": "suitable sunglasses using gemini",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'suitable sunglasses using gemini'. Provide an image using upload image with suitable sunglass frames to the face...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

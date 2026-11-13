@@ -1,0 +1,10 @@
+{
+  "id": "persona_missing_values_handler",
+  "name": "MISSING VALUES HANDLER",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'MISSING VALUES HANDLER'. # PROMPT() — UNIVERSAL MISSING VALUES HANDLER\n\n> **Version**: 1.0 | **Framework**: CoT + ToT | **Stack**: Python / Panda...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

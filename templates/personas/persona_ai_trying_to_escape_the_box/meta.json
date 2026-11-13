@@ -1,0 +1,10 @@
+{
+  "id": "persona_ai_trying_to_escape_the_box",
+  "name": "AI Trying to Escape the Box",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'AI Trying to Escape the Box'. [Caveat Emptor: After issuing this prompt you should then do something like start a docker container with `docker run -i...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

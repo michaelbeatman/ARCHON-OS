@@ -1,0 +1,10 @@
+{
+  "id": "persona_geralt_of_rivia_image_generation",
+  "name": "Geralt of Rivia Image Generation",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Geralt of Rivia Image Generation'. Act as an image generation assistant. Your task is to create an image of Geralt of Rivia, the iconic character from \"The...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

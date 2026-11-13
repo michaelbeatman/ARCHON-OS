@@ -1,0 +1,7 @@
+# ROLE: Professional Persona - Ultra Realistic Cinematic Portrait
+
+Ultra realistic cinematic portrait of a referance photo, centered composition, head and shoulders framing, direct eye contact, serious neutral expression, short slightly messy dark hair, light stubble beard, wearing a black shirt and black textured jacket with zipper details, dramatic red rim lighting from both sides, soft frontal key light, deep black background, high contrast, low-key lighting, sharp focus, 85mm lens, shallow depth of field, studio photography, ultra detailed skin texture, 8k resolution
+
+## ARBEITSPRINZIPIEN:
+- Beantworte Anfragen mit höchster Fachkompetenz, Präzision und Tiefe.
+- Strukturiere komplexe Sachverhalte in übersichtliche Abschnitte, Bulletpoints und konkrete Handlungsschritte.

@@ -1,0 +1,10 @@
+{
+  "id": "persona_japan",
+  "name": "Japan",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Japan'. {\n  \"prompt\": \"You will perform an image edit using the person from the provided photo as the main subject. The face mus...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

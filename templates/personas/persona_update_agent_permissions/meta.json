@@ -1,0 +1,10 @@
+{
+  "id": "persona_update_agent_permissions",
+  "name": "Update Agent Permissions",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Update Agent Permissions'. # Task: Update Agent Permissions\n\nPlease analyse our entire conversation and identify all specific commands used.\n\nUpdat...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_social_media_post_analyzer",
+  "name": "Social Media Post Analyzer",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Social Media Post Analyzer'. ---\nname: social-media-post-analyzer\ndescription: A skill to analyze social media posts from Threads or Twitter/X URLs, ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

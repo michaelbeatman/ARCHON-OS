@@ -1,0 +1,1253 @@
+<!-- VIEW CONTAINER: ADRESSEN & CRM (SÄULE 3: WIRTSCHAFT & ERP) -->
+<div id="view-addresses" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="height: 100vh !important; max-height: 100vh !important;">
+
+  <!-- ========================================================================= -->
+  <!-- 80px HEADER: ADRESSEN, CRM, KUNDEN, LIEFERANTEN, NACHRICHTEN, KALENDER & BERICHT -->
+  <!-- ========================================================================= -->
+  <header id="addresses-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h2 id="addresses-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate" data-i18n="view.addresses.kontakte_crm_adressstamm">
+            Kontakte — CRM Adressstamm
+          </h2>
+          <button type="button" onclick="openContextHelp('crm')" title="Hilfe zu Adressen &amp; CRM" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0" data-i18n-title="view.addresses.title_hilfe_zu_adressen_crm">
+            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          </button>
+          <span id="erp-addr-tenant-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25 shrink-0" data-i18n="view.addresses.mandant_archon_systems">
+            Mandant: archon-systems
+          </span>
+          <span id="erp-addr-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">
+            2.331 Kontakte
+          </span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>SQLite Engine (WAL)</span>
+          </span>
+        </div>
+        <p id="addresses-main-subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1" data-i18n="view.addresses.vollstaendige_kontakt_crm_tabelle_high_per">
+          Vollständige Kontakt- &amp; CRM-Tabelle (High-Performance SQLite)
+        </p>
+      </div>
+    </div>
+
+    <!-- Rechts: 6 Cadre-Subtab-Kacheln (72px) -->
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <!-- TAB 1: KONTAKTE -->
+      <button
+        type="button"
+        id="crm-tab-btn-kontakte"
+        onclick="crmStudio.switchSubTab('kontakte')"
+        class="crm-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap active-tile w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/overview.png" alt="Kontakte" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none" data-i18n="view.addresses.kontakte">Kontakte</span>
+      </button>
+
+      <!-- TAB 2: KUNDEN -->
+      <button
+        type="button"
+        id="crm-tab-btn-kunden"
+        onclick="crmStudio.switchSubTab('kunden')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/organisation.png" alt="Kunden" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="view.addresses.kunden">Kunden</span>
+      </button>
+
+      <!-- TAB 3: LIEFERANTEN -->
+      <button
+        type="button"
+        id="crm-tab-btn-lieferanten"
+        onclick="crmStudio.switchSubTab('lieferanten')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/marketplace.png" alt="Lieferanten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="view.addresses.lieferanten">Lieferanten</span>
+      </button>
+
+      <!-- TAB 4: ALLE NACHRICHTEN -->
+      <button
+        type="button"
+        id="crm-tab-btn-nachrichten"
+        onclick="crmStudio.switchSubTab('nachrichten')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/chat.png" alt="Nachrichten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="drawer.messages">Nachrichten</span>
+      </button>
+
+      <!-- TAB 5: KALENDER -->
+      <button
+        type="button"
+        id="crm-tab-btn-kalender"
+        onclick="crmStudio.switchSubTab('kalender')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/operations.png" alt="Kalender" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="view.addresses.kalender">Kalender</span>
+      </button>
+
+      <!-- TAB 6: BERICHT (MISSIONSKONTROLLE) -->
+      <button
+        type="button"
+        id="crm-tab-btn-bericht"
+        onclick="crmStudio.switchSubTab('bericht')"
+        class="crm-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[58px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+      >
+        <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/berichte.png" alt="Bericht" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span class="crm-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="view.addresses.bericht">Bericht</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="flex-1 min-h-0 w-full flex flex-col p-2 gap-2 overflow-hidden">
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 1: KONTAKTE (Screenshot 1: Vollständige CRM-Tabelle)              -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-kontakte" class="flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 shadow-xs">
+    
+    <!-- Filter Toolbar (Screenshot 1) -->
+    <div class="flex items-center justify-between gap-2.5 flex-wrap shrink-0 pb-2 border-b border-[var(--border)]">
+      <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+        <!-- Hits Badge -->
+        <span id="crm-kontakte-hits-badge" class="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-[var(--foreground)] text-xs font-mono font-bold shrink-0">
+          2331 Treffer
+        </span>
+
+        <!-- Search Input -->
+        <div class="relative min-w-[220px] max-w-sm flex-1">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+            🔍
+          </span>
+          <input
+            type="text"
+            id="crm-search-input"
+            oninput="crmStudio.onSearchInput(this.value)"
+            placeholder="Suchbegriff oder filter..."
+            class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+           data-i18n-placeholder="view.addresses.placeholder_suchbegriff_oder_filter">
+        </div>
+
+        <!-- Status Filter Dropdown -->
+        <select
+          id="crm-filter-status"
+          onchange="crmStudio.onStatusChange(this.value)"
+          class="px-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs font-medium text-[var(--foreground)] focus:outline-none cursor-pointer shrink-0"
+        >
+          <option value="all" data-i18n="view.addresses.status_alle">Status (Alle)</option>
+        </select>
+
+        <!-- Region Filter Dropdown -->
+        <select
+          id="crm-filter-region"
+          onchange="crmStudio.onRegionChange(this.value)"
+          class="px-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs font-medium text-[var(--foreground)] focus:outline-none cursor-pointer shrink-0"
+        >
+          <option value="all" data-i18n="view.addresses.alle_regionen">Alle Regionen</option>
+        </select>
+
+        <!-- Reset Button -->
+        <button
+          type="button"
+          onclick="crmStudio.resetFilters()"
+          class="p-1.5 rounded-xl bg-[var(--secondary)] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 text-xs transition cursor-pointer"
+          title="Filter zurücksetzen"
+         data-i18n-title="view.addresses.title_filter_zuruecksetzen">
+          🔄
+        </button>
+      </div>
+
+      <!-- Action Button Right -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onclick="crmStudio.createNewContact()"
+          class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+        >
+          <span>+</span>
+          <span data-i18n="view.addresses.neuer_kontakt">Neuer Kontakt</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Scrollable Table (Screenshot 1) -->
+    <div class="flex-1 min-h-0 overflow-auto border border-[var(--border)] rounded-xl">
+      <table class="w-full border-collapse text-left">
+        <thead class="bg-slate-50 dark:bg-slate-900/80 sticky top-0 z-10 border-b border-[var(--border)] text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">
+          <tr>
+            <th class="p-2.5 w-8 text-center"><input type="checkbox" class="rounded border-slate-300"></th>
+            <th class="p-2.5 whitespace-nowrap text-emerald-600 dark:text-emerald-400">T <span data-i18n="view.addresses.th_name">NAME</span> ↑</th>
+            <th class="p-2.5 whitespace-nowrap">T <span data-i18n="view.addresses.th_company">UNTERNEHMEN</span></th>
+            <th class="p-2.5 whitespace-nowrap">T <span data-i18n="view.addresses.th_role">ROLLE / POSITION</span></th>
+            <th class="p-2.5 w-10 text-center" data-i18n="view.addresses.foto">FOTO</th>
+            <th class="p-2.5 whitespace-nowrap text-center" data-i18n="view.addresses.bewertung"># BEWERTUNG</th>
+            <th class="p-2.5 whitespace-nowrap" data-i18n="view.addresses.status">≡ STATUS</th>
+            <th class="p-2.5 whitespace-nowrap text-center" data-i18n="view.addresses.nachrichten">{} NACHRICHTEN</th>
+            <th class="p-2.5 whitespace-nowrap" data-i18n="view.addresses.vernetzt">📅 VERNETZT</th>
+            <th class="p-2.5 whitespace-nowrap">T <span data-i18n="view.addresses.th_next_step">NÄCHSTER SCHRITT</span></th>
+            <th class="p-2.5 whitespace-nowrap text-right" data-i18n="view.addresses.aktionen">AKTIONEN</th>
+          </tr>
+        </thead>
+        <tbody id="crm-kontakte-table-body" class="divide-y divide-[var(--border)] bg-[var(--card)]">
+          <!-- Dynamically populated rows -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Table Footer / Pagination -->
+    <div class="flex items-center justify-between gap-3 pt-2 shrink-0 border-t border-[var(--border)]">
+      <div class="flex items-center gap-2 text-xs font-mono text-[var(--muted-foreground)]">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span data-i18n="view.addresses.sqlite_wal_engine_direkter_db_zugriff">SQLite WAL Engine · Direkter DB-Zugriff</span>
+      </div>
+      <div id="crm-kontakte-pagination"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 2: KUNDEN (DEBITOREN 10000+)                                      -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-kunden" class="hidden flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 shadow-xs">
+    <div class="px-3 py-2 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-between text-xs font-mono text-sky-700 dark:text-sky-300 shrink-0">
+      <span class="font-bold" data-i18n="view.addresses.kundenstamm_debitoren_10000_aktive_auftrag">Kundenstamm (Debitoren 10000+): Aktive Auftraggeber, Zahlungsziele &amp; Rechnungsbelege</span>
+      <span data-i18n="view.addresses.gobd_datev_synchron">GoBD &amp; DATEV synchron</span>
+    </div>
+    <!-- Uses same table component populated via loadKunden() -->
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 3: LIEFERANTEN (KREDITOREN 70000+)                                -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-lieferanten" class="hidden flex-1 min-h-0 w-full flex flex-col gap-2 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 shadow-xs">
+    <div class="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs font-mono text-amber-700 dark:text-amber-300 shrink-0">
+      <span class="font-bold" data-i18n="view.addresses.lieferantenstamm_kreditoren_70000_externe">Lieferantenstamm (Kreditoren 70000+): Externe Partner, SaaS-Tools &amp; Aufwandskonten</span>
+      <span data-i18n="view.addresses.eingangsrechnungs_workflow">Eingangsrechnungs-Workflow</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 4: ALLE NACHRICHTEN (Screenshot 2: Timeline)                     -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-nachrichten" class="hidden flex-1 min-h-0 w-full flex flex-col gap-2.5 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 shadow-xs">
+    
+    <!-- Filter Toolbar (Screenshot 2) -->
+    <div class="flex flex-col gap-2.5 shrink-0 pb-3 border-b border-[var(--border)]">
+      <!-- Row 1: Search & Sort -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="relative flex-1 min-w-[260px]">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">🔍</span>
+          <input
+            type="text"
+            oninput="crmStudio.onMsgSearchInput(this.value)"
+            placeholder="Nachrichten durchsuchen (Name, Text...)"
+            class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none"
+           data-i18n-placeholder="view.addresses.placeholder_nachrichten_durchsuchen_name_t">
+        </div>
+
+        <select class="px-3 py-1.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-xs font-medium text-[var(--foreground)]">
+          <option value="newest" data-i18n="view.addresses.neueste_zuerst">Neueste zuerst</option>
+          <option value="oldest" data-i18n="view.addresses.aelteste_zuerst">Älteste zuerst</option>
+        </select>
+
+        <!-- Inbound / Outbound Direction Pills -->
+        <div class="flex items-center bg-[var(--secondary)] p-0.5 rounded-xl border border-[var(--border)] text-xs font-semibold">
+          <button type="button" id="crm-msg-dir-all" onclick="crmStudio.setMsgDirectionFilter('all')" class="crm-msg-dir-pill px-3 py-1 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 transition">
+            <span data-i18n="view.addresses.alle">Alle (</span><span id="crm-msg-cnt-all">2229</span>)
+          </button>
+          <button type="button" id="crm-msg-dir-received" onclick="crmStudio.setMsgDirectionFilter('received')" class="crm-msg-dir-pill px-3 py-1 rounded-lg text-[var(--foreground)] transition">
+            <span data-i18n="view.addresses.erhalten">📥 Erhalten (</span><span id="crm-msg-cnt-inbound">492</span>)
+          </button>
+          <button type="button" id="crm-msg-dir-sent" onclick="crmStudio.setMsgDirectionFilter('sent')" class="crm-msg-dir-pill px-3 py-1 rounded-lg text-[var(--foreground)] transition">
+            <span data-i18n="view.addresses.gesendet">📤 Gesendet (</span><span id="crm-msg-cnt-outbound">1737</span>)
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Channel Filter Pills (Screenshot 2) -->
+      <div class="flex items-center gap-1.5 flex-wrap text-xs">
+        <button type="button" id="crm-msg-ch-all" onclick="crmStudio.setMsgChannelFilter('all')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-bold bg-indigo-600 text-white border border-indigo-600 transition" data-i18n="view.addresses.alle_2229">
+          Alle (2229)
+        </button>
+        <button type="button" id="crm-msg-ch-linkedin" onclick="crmStudio.setMsgChannelFilter('linkedin')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          <span data-i18n="view.addresses.linkedin">🔗 LinkedIn (</span><span id="crm-msg-cnt-linkedin">2220</span>)
+        </button>
+        <button type="button" id="crm-msg-ch-email" onclick="crmStudio.setMsgChannelFilter('email')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          <span data-i18n="view.addresses.e_mail">✉️ E-Mail (</span><span id="crm-msg-cnt-email">3</span>)
+        </button>
+        <button type="button" id="crm-msg-ch-meeting" onclick="crmStudio.setMsgChannelFilter('meeting')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          <span data-i18n="view.addresses.treffen">👥 Treffen (</span><span id="crm-msg-cnt-meeting">3</span>)
+        </button>
+        <button type="button" id="crm-msg-ch-audio" onclick="crmStudio.setMsgChannelFilter('audio')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          <span data-i18n="view.addresses.audio_diktat">🎙️ Audio-Diktat (</span><span id="crm-msg-cnt-audio">0</span>)
+        </button>
+        <button type="button" id="crm-msg-ch-note" onclick="crmStudio.setMsgChannelFilter('note')" class="crm-msg-channel-pill px-3 py-1 rounded-full font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-400 transition">
+          <span data-i18n="view.addresses.notiz">📝 Notiz (</span><span id="crm-msg-cnt-note">3</span>)
+        </button>
+      </div>
+    </div>
+
+    <!-- Message Feed -->
+    <div id="crm-messages-feed" class="flex-1 min-h-0 overflow-y-auto pr-1">
+      <!-- Populated via renderMessagesFeed() -->
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 5: KALENDER                                                      -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-kalender" class="hidden flex-1 min-h-0 w-full flex flex-col gap-3 overflow-hidden bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 shadow-xs">
+    <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+      <div class="text-xs font-bold text-[var(--foreground)] flex items-center gap-2">
+        <span>📅</span>
+        <span data-i18n="view.addresses.terminuebersicht_google_kalender_sync_fris">Terminübersicht, Google-Kalender Sync &amp; Fristen</span>
+      </div>
+      <button type="button" onclick="crmStudio.loadCalendar()" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] text-xs font-mono hover:bg-slate-200 dark:hover:bg-slate-700 transition" data-i18n="view.addresses.aktualisieren">
+        Aktualisieren
+      </button>
+    </div>
+    <div id="crm-calendar-container" class="flex-1 min-h-0 overflow-y-auto">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUB-VIEW 6: BERICHT (MISSIONSKONTROLLE - Screenshot 4)                     -->
+  <!-- ========================================================================= -->
+  <div id="crm-view-bericht" class="hidden flex-1 min-h-0 w-full overflow-y-auto p-1">
+    <div id="crm-bericht-container" class="space-y-4">
+      <!-- Populated dynamically via loadReport() -->
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL / DRAWER: ANSICHT EINES DATENSATZES (Screenshot 3: KontaktDrawer)   -->
+  <!-- ========================================================================= -->
+  <div id="crm-contact-drawer" onclick="if(event.target === this) crmStudio.closeContactDrawer()" class="hidden fixed inset-0 z-[999] flex items-stretch justify-center bg-black/70 px-4 md:px-8 font-sans backdrop-blur-sm overflow-hidden py-0 cursor-pointer">
+    <div onclick="event.stopPropagation()" class="w-full max-w-[1350px] h-screen max-h-screen border-x flex flex-col overflow-hidden shadow-2xl relative bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 cursor-default">
+      
+      <!-- Drawer Top Bar (Height 80px) with Navigation Tabs for Adresse (VARIO-Prinzip) -->
+      <div class="h-20 px-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 flex items-center justify-between gap-4 shrink-0">
+        <!-- Contact Meta -->
+        <div class="flex items-center gap-3.5 min-w-0 max-w-[310px] shrink-0">
+          <div id="crm-drawer-avatar-wrap" class="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-500/40 shadow-sm shrink-0 flex items-center justify-center bg-emerald-500/10 text-emerald-600 font-bold font-mono text-base">
+            <img id="crm-drawer-avatar-img" src="" alt="Avatar" class="w-full h-full object-cover hidden" onerror="this.classList.add('hidden')">
+            <span id="crm-drawer-initials">??</span>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <h2 id="crm-drawer-title" class="text-base font-black tracking-tight text-zinc-900 dark:text-zinc-100 truncate" data-i18n="view.addresses.kontaktname">
+                Kontaktname
+              </h2>
+              <a id="crm-drawer-google-search" href="#" target="_blank" rel="noopener noreferrer" class="p-1 rounded-full text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition" title="Auf Google suchen" data-i18n-title="view.addresses.title_auf_google_suchen">
+                🔍
+              </a>
+            </div>
+            <p id="crm-drawer-id" class="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate">
+              ID: -
+            </p>
+          </div>
+        </div>
+
+        <!-- Center: Cadre Icon-Tabs for Adresse Teilansichten (Identisch zu Hauptansichten) -->
+        <div class="flex items-center gap-1 sm:gap-2 overflow-x-auto overflow-y-hidden py-0.5 shrink-0 custom-scrollbar h-full">
+          
+          <!-- TAB 1: ÜBERSICHT -->
+          <button
+            type="button"
+            id="cd-tabbtn-uebersicht"
+            onclick="crmStudio.switchDrawerTab('uebersicht')"
+            class="cd-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Übersicht"
+           data-i18n-title="view.addresses.title_uebersicht">
+            <div class="tile-icon-wrap active-tile w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_uebersicht.png" alt="Übersicht" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none" data-i18n="drawer.overview">Übersicht</span>
+          </button>
+
+          <!-- TAB 2: NACHRICHTEN -->
+          <button
+            type="button"
+            id="cd-tabbtn-nachrichten"
+            onclick="crmStudio.switchDrawerTab('nachrichten')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Nachrichten"
+           data-i18n-title="view.addresses.title_nachrichten">
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_nachrichten.png" alt="Nachrichten" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="drawer.messages">Nachrichten</span>
+          </button>
+
+          <!-- TAB 3: KAUFMÄNNISCH -->
+          <button
+            type="button"
+            id="cd-tabbtn-kaufmaennisch"
+            onclick="crmStudio.switchDrawerTab('kaufmaennisch')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Kaufmännisch"
+           data-i18n-title="view.addresses.title_kaufmaennisch">
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_kaufmaennisch.png" alt="Kaufmännisch" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="drawer.commercial">Kaufmännisch</span>
+          </button>
+
+          <!-- TAB 4: BELEGE & VORGÄNGE -->
+          <button
+            type="button"
+            id="cd-tabbtn-vorgaenge"
+            onclick="crmStudio.switchDrawerTab('vorgaenge')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Belege &amp; Vorgänge"
+           data-i18n-title="view.addresses.title_belege_vorgaenge">
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_vorgaenge.png" alt="Belege &amp; Vorgänge" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="drawer.receipts_ops">Belege &amp; Vorgänge</span>
+          </button>
+
+          <!-- TAB 5: ANSPRECHPARTNER -->
+          <button
+            type="button"
+            id="cd-tabbtn-ansprechpartner"
+            onclick="crmStudio.switchDrawerTab('ansprechpartner')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="Ansprechpartner"
+           data-i18n-title="view.addresses.title_ansprechpartner">
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_ansprechpartner.png" alt="Ansprechpartner" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="drawer.contacts">Ansprechpartner</span>
+          </button>
+
+          <!-- TAB 6: DSGVO -->
+          <button
+            type="button"
+            id="cd-tabbtn-dsgvo"
+            onclick="crmStudio.switchDrawerTab('dsgvo')"
+            class="cd-header-tile flex flex-col items-center justify-between min-w-[54px] sm:min-w-[62px] h-[72px] py-1 px-1 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+            title="DSGVO"
+           data-i18n-title="view.addresses.title_dsgvo">
+            <div class="tile-icon-wrap w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center mb-0.5">
+              <img src="/static/img/cadre_icons/contact_dsgvo.png" alt="DSGVO" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+            </div>
+            <span class="cd-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="drawer.gdpr">DSGVO</span>
+          </button>
+
+        </div>
+
+        <!-- Right: Prominent Close Button -->
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" onclick="crmStudio.closeContactDrawer()" class="w-9 h-9 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition cursor-pointer text-xl font-bold leading-none shadow-xs border border-zinc-200 dark:border-zinc-700" title="Schließen (Esc oder Klick außerhalb)" data-i18n-title="view.addresses.title_schliessen_esc_oder_klick_ausserhalb">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="crm-drawer-loading" class="flex-1 p-12 flex flex-col items-center justify-center text-xs font-mono text-slate-400 gap-2">
+        <span class="animate-spin text-2xl">⏳</span>
+        <span data-i18n="view.addresses.lade_kontaktdaten_nachrichtenverlauf">Lade Kontaktdaten &amp; Nachrichtenverlauf...</span>
+      </div>
+
+      <!-- TEILANSICHT 1: ÜBERSICHT (Side-by-Side: Stammdaten + Verlauf) -->
+      <div id="cd-view-uebersicht" class="cd-subview flex-1 min-h-0 flex flex-row gap-6 p-6 overflow-hidden" style="display: flex; flex-direction: row; height: 100%; min-height: 0;">
+        
+        <!-- LINKE SPALTE: Stammdaten-Formular (50% Breite, eigenständig scrollbar) -->
+        <div class="w-1/2 h-full min-h-0 min-w-0 overflow-y-auto pr-3 space-y-4" style="flex: 0 0 50%; max-width: 50%; width: 50%; height: 100%; min-height: 0;">
+          
+          <!-- Top Row: Name, Firma, Rolle (8 Cols) & Foto-Preview / Rating (4 Cols) -->
+          <div class="grid grid-cols-12 gap-4 items-start pb-1">
+            <div class="col-span-8 space-y-3">
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.name">Name *</label>
+                <input type="text" id="cd-name" placeholder="Vorname Nachname" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.unternehmen">Unternehmen</label>
+                <input type="text" id="cd-unternehmen" placeholder="Firma GmbH" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.rolle_position">Rolle / Position</label>
+                <input type="text" id="cd-rolle" placeholder="Position / Rolle" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition" data-i18n-placeholder="view.addresses.placeholder_position_rolle">
+              </div>
+            </div>
+
+            <!-- Thumbnail & Rating Box (145x145) -->
+            <div class="col-span-4 flex flex-col items-center justify-start pt-1 space-y-2">
+              <div class="w-[145px] h-[145px] rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 overflow-hidden flex flex-col items-center justify-center relative shadow-xs text-center p-2">
+                <img id="cd-box-avatar-img" src="" alt="Profilfoto" class="w-full h-full object-cover hidden" onerror="this.classList.add('hidden')">
+                <div id="cd-box-avatar-placeholder" class="flex flex-col items-center justify-center text-zinc-400 gap-1 select-none">
+                  <span class="text-2xl">🖼️</span>
+                  <span class="text-[11px] font-mono leading-tight" data-i18n="view.addresses.kein_foto">Kein Foto</span>
+                  <span class="text-[9px] font-mono text-emerald-600 dark:text-emerald-400" data-i18n="view.addresses.strg_v_zum_einfuegen">Strg+V zum Einfügen</span>
+                </div>
+              </div>
+              <div id="crm-drawer-stars" class="flex items-center gap-1 py-1" data-rating="0"></div>
+            </div>
+          </div>
+
+          <!-- Contact Channels Grid (2 Cols) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.e_mail_adresse">E-Mail-Adresse</label>
+              <input type="email" id="cd-email" placeholder="name@firma.de" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300" data-i18n="view.addresses.linkedin_profil_url">LinkedIn Profil URL</label>
+                <a id="cd-linkedin-open-link" href="#" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer">
+                  <span>🔗</span><span data-i18n="view.addresses.oeffnen">Öffnen</span>
+                </a>
+              </div>
+              <input type="url" id="cd-linkedin" placeholder="https://www.linkedin.com/in/..." class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.telefon_1_hauptnummer">Telefon 1 (Hauptnummer)</label>
+              <input type="tel" id="cd-tel1" placeholder="+49 30 123456" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.region">Region</label>
+              <input type="text" id="cd-region" placeholder="DACH / Berlin" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.telefon_2_zweitnummer">Telefon 2 (Zweitnummer)</label>
+              <input type="tel" id="cd-tel2" placeholder="+49 170 123456" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300" data-i18n="view.addresses.webseite">Webseite</label>
+                <a id="cd-webseite-open-link" href="#" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer">
+                  <span>🔗</span><span data-i18n="view.addresses.oeffnen">Öffnen</span>
+                </a>
+              </div>
+              <input type="url" id="cd-webseite" placeholder="https://www.firma.de" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+            </div>
+          </div>
+
+          <!-- Status & Rollen-Zuordnung (2 Cols) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.status_pipeline_phase">Status (Pipeline-Phase)</label>
+              <select id="cd-status" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition font-semibold">
+                <option value="Vernetzt" data-i18n="view.addresses.vernetzt_2">🟡 Vernetzt</option>
+                <option value="Erstnachricht" data-i18n="view.addresses.erstnachricht">Erstnachricht</option>
+                <option value="Im Dialog" data-i18n="view.addresses.im_dialog">Im Dialog</option>
+                <option value="Regelmäßiger Kontakt" data-i18n="view.addresses.regelmaessiger_kontakt">Regelmäßiger Kontakt</option>
+                <option value="Interview" data-i18n="view.addresses.interview_vereinbart">Interview vereinbart</option>
+                <option value="Parkposition" data-i18n="view.addresses.parkposition">Parkposition</option>
+                <option value="Kunde" data-i18n="view.addresses.kunde_debitor">Kunde (Debitor)</option>
+                <option value="Lieferant" data-i18n="view.addresses.lieferant_kreditor">Lieferant (Kreditor)</option>
+                <option value="Kein_Interesse" data-i18n="view.addresses.kein_interesse">Kein Interesse</option>
+                <option value="Irrelevant" data-i18n="view.addresses.irrelevant">Irrelevant</option>
+                <option value="Gesperrt_1Jahr" data-i18n="view.addresses.gesperrt_1_jahr">Gesperrt (1 Jahr)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.rollen_zuordnung_mission_control">Rollen-Zuordnung (Mission Control)</label>
+              <select id="cd-rollen-zuordnung" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition font-semibold">
+                <option value="" data-i18n="view.addresses.automatisch_erkennen">(Automatisch erkennen)</option>
+                <option value="Executive Search" data-i18n="view.addresses.executive_search">Executive Search</option>
+                <option value="Recruiter / Headhunter" data-i18n="view.addresses.recruiter_headhunter">Recruiter / Headhunter</option>
+                <option value="GF / Inhaber / CEO" data-i18n="view.addresses.gf_inhaber_ceo">GF / Inhaber / CEO</option>
+                <option value="Entscheider / Führung" data-i18n="view.addresses.entscheider_fuehrung">Entscheider / Führung</option>
+                <option value="Private Equity / Investor" data-i18n="view.addresses.private_equity_investor">Private Equity / Investor</option>
+                <option value="Finance / CFO" data-i18n="view.addresses.finance_cfo">Finance / CFO</option>
+                <option value="HR / Personal" data-i18n="view.addresses.hr_personal">HR / Personal</option>
+                <option value="Consulting / Beratung" data-i18n="view.addresses.consulting_beratung">Consulting / Beratung</option>
+                <option value="Quality / GMP" data-i18n="view.addresses.quality_gmp">Quality / GMP</option>
+                <option value="Healthcare / Pharma" data-i18n="view.addresses.healthcare_pharma">Healthcare / Pharma</option>
+                <option value="Interim / Freelance" data-i18n="view.addresses.interim_freelance">Interim / Freelance</option>
+                <option value="Sonstige" data-i18n="view.addresses.sonstige">Sonstige</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Nächster Schritt -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.naechster_schritt">Nächster Schritt</label>
+            <input type="text" id="cd-naechster-schritt" placeholder="zB Erstnachricht auf LinkedIn senden" class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition" data-i18n-placeholder="view.addresses.placeholder_zb_erstnachricht_auf_linkedin">
+          </div>
+
+          <!-- 3-Column Dates Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.vernetzt_seit">Vernetzt seit</label>
+              <input type="date" id="cd-vernetzt-am" class="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.zurueckgezogen">Zurückgezogen</label>
+              <input type="date" id="cd-zurueckgezogen" class="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.naechster_termin">Nächster Termin</label>
+              <input type="text" id="cd-naechster-termin" placeholder="tt.mm.jjjj --:--" class="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition" data-i18n-placeholder="view.addresses.placeholder_tt_mm_jjjj">
+            </div>
+          </div>
+
+          <!-- Textareas: Adresse & Kommentar -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.adresse_mehrzeilig">Adresse (Mehrzeilig)</label>
+              <textarea id="cd-adresse" rows="3" placeholder="Musterstraße 123, 10115 Berlin, Deutschland" class="w-full p-2.5 border rounded-lg text-xs font-mono leading-relaxed bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition"></textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.notizen_kommentar">Notizen &amp; Kommentar</label>
+              <textarea id="cd-kommentar" rows="3" placeholder="Wichtige Notizen oder Gesprächsprotokoll..." class="w-full p-2.5 border rounded-lg text-xs font-mono leading-relaxed bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition" data-i18n-placeholder="view.addresses.placeholder_wichtige_notizen_oder_gespraec"></textarea>
+            </div>
+          </div>
+
+          <!-- TAGS / SCHLAGWÖRTER (Screenshot) -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.tags_schlagwoerter">Tags / Schlagwörter</label>
+            <div id="cd-tags-container" class="p-2 border rounded-lg transition min-h-[42px] flex flex-wrap items-center gap-1.5 bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus-within:border-emerald-500">
+              <!-- Dynamically populated tags chips -->
+              <input
+                type="text"
+                id="cd-new-tag-input"
+                placeholder="+ Tag..."
+                class="flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs font-mono py-1 px-1"
+                onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();crmStudio.addTagFromInput();}"
+               data-i18n-placeholder="view.addresses.placeholder_tag">
+            </div>
+          </div>
+
+          <!-- LINKEDIN-ÜBERSCHRIFT (Screenshot) -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.linkedin_ueberschrift">LinkedIn-Überschrift</label>
+            <input type="text" id="cd-linkedin-header" placeholder="Consultant &amp; Co-Lead Private Equity..." class="w-full px-3 py-2 border rounded-lg text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 outline-none transition">
+          </div>
+
+          <!-- LINKEDIN INFO (MEHRZEILIG) (Screenshot) -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5" data-i18n="view.addresses.linkedin_info_mehrzeilig">LinkedIn Info (Mehrzeilig)</label>
+            <textarea id="cd-linkedin-info" rows="4" placeholder="Aus LinkedIn kopierter Profiltext..." class="w-full p-2.5 border rounded-lg text-xs font-mono leading-relaxed bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none transition" data-i18n-placeholder="view.addresses.placeholder_aus_linkedin_kopierter_profilt"></textarea>
+          </div>
+
+        </div>
+
+        <!-- RECHTE SPALTE: Nachrichtenverlauf (50% Breite, eigenständig scrollbar) -->
+        <div class="w-1/2 h-full min-h-0 min-w-0 flex flex-col border-l border-zinc-200 dark:border-zinc-800 pl-6 overflow-hidden" style="flex: 0 0 50%; max-width: 50%; width: 50%; height: 100%; min-height: 0; display: flex; flex-direction: column;">
+          
+          <!-- Header Nachrichtenverlauf & Kanal-Filter Buttons (Screenshot) -->
+          <div class="pb-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 mb-3 gap-2">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold font-sans" data-i18n="view.addresses.nachrichtenverlauf">Nachrichtenverlauf</h3>
+            </div>
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              <button type="button" id="cd-mf-all" onclick="crmStudio.filterDrawerMessages('all')" class="px-3 py-1 rounded-full text-[11px] font-mono font-bold transition cursor-pointer shrink-0 bg-accent-main text-white border border-accent-main shadow-xs" data-i18n="view.addresses.alle_2">
+                Alle
+              </button>
+              <button type="button" id="cd-mf-linkedin" onclick="crmStudio.filterDrawerMessages('linkedin')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200" data-i18n="view.addresses.linkedin_2">
+                LinkedIn
+              </button>
+              <button type="button" id="cd-mf-email" onclick="crmStudio.filterDrawerMessages('email')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200" data-i18n="view.addresses.e_mail_2">
+                E-Mail
+              </button>
+              <button type="button" id="cd-mf-meeting" onclick="crmStudio.filterDrawerMessages('meeting')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200" data-i18n="view.addresses.treffen_2">
+                Treffen
+              </button>
+              <button type="button" id="cd-mf-note" onclick="crmStudio.filterDrawerMessages('note')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200" data-i18n="view.addresses.notizen">
+                Notizen
+              </button>
+            </div>
+          </div>
+
+          <!-- Messages Scroll Thread -->
+          <div id="crm-drawer-messages-list" class="flex-1 min-h-0 overflow-y-auto space-y-3 pr-2 font-sans text-xs">
+            <!-- Dynamically populated messages -->
+          </div>
+
+          <!-- Quick Note & Voice Input Actions (Screenshot) -->
+          <div class="pt-3 border-t border-zinc-200 dark:border-zinc-800 shrink-0 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                onclick="crmStudio.promptAddNote()"
+                class="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <span>+</span>
+                <span data-i18n="view.addresses.notiz_2">Notiz</span>
+              </button>
+              <button
+                type="button"
+                onclick="crmStudio.triggerAudioDictation()"
+                class="py-1.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <span>🎙️</span>
+                <span data-i18n="view.addresses.audio_diktat_2">Audio-Diktat</span>
+              </button>
+              <button
+                type="button"
+                onclick="crmStudio.triggerMeetingDictation()"
+                class="py-1.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <span>👥</span>
+                <span data-i18n="view.addresses.meeting_diktat">Meeting-Diktat</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 2: NACHRICHTEN (Fokussierter Vollbild Kommunikations-Hub) -->
+      <!-- ================================================================= -->
+      <div id="cd-view-nachrichten" class="cd-subview hidden flex-1 min-h-0 flex flex-col p-6 overflow-hidden space-y-4">
+        <!-- Filter Bar -->
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0 gap-3">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-bold font-sans" data-i18n="view.addresses.vollstaendiger_kommunikationsverlauf">Vollständiger Kommunikationsverlauf</h3>
+            <span id="cd-full-msg-count" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300" data-i18n="view.addresses.0_nachrichten">0 Nachrichten</span>
+          </div>
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <button type="button" onclick="crmStudio.filterDrawerMessages('all')" class="px-3 py-1 rounded-full text-[11px] font-mono font-bold transition cursor-pointer shrink-0 bg-accent-main text-white shadow-xs" data-i18n="view.addresses.alle_2">Alle</button>
+            <button type="button" onclick="crmStudio.filterDrawerMessages('linkedin')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200" data-i18n="view.addresses.linkedin_2">LinkedIn</button>
+            <button type="button" onclick="crmStudio.filterDrawerMessages('email')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200" data-i18n="view.addresses.e_mail_2">E-Mail</button>
+            <button type="button" onclick="crmStudio.filterDrawerMessages('meeting')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200" data-i18n="view.addresses.treffen_2">Treffen</button>
+            <button type="button" onclick="crmStudio.filterDrawerMessages('note')" class="px-3 py-1 rounded-full text-[11px] font-mono font-semibold transition cursor-pointer shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200" data-i18n="view.addresses.notizen">Notizen</button>
+          </div>
+        </div>
+
+        <!-- Scrollable Thread -->
+        <div id="crm-drawer-full-messages-list" class="flex-1 min-h-0 overflow-y-auto space-y-3 pr-2 font-sans text-xs">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Composer Box -->
+        <div class="p-3 border rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 shrink-0 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold font-sans" data-i18n="view.addresses.neuen_eintrag_gespraechsprotokoll_erfassen">Neuen Eintrag / Gesprächsprotokoll erfassen:</span>
+            <div class="flex items-center gap-1">
+              <select id="cd-new-msg-channel" class="text-xs font-mono font-semibold px-2 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                <option value="note" data-i18n="view.addresses.interne_notiz">📝 Interne Notiz</option>
+                <option value="linkedin" data-i18n="view.addresses.linkedin_nachricht">🔗 LinkedIn Nachricht</option>
+                <option value="email" data-i18n="view.addresses.e_mail_3">✉️ E-Mail</option>
+                <option value="meeting" data-i18n="view.addresses.meeting_protokoll">👥 Meeting-Protokoll</option>
+                <option value="call" data-i18n="view.addresses.telefonat">📞 Telefonat</option>
+              </select>
+            </div>
+          </div>
+          <textarea id="cd-new-msg-text" rows="2" placeholder="Gesprächsinhalt, Notiz oder Nachrichtentext eingeben..." class="w-full p-2.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 outline-none focus:border-emerald-500" data-i18n-placeholder="view.addresses.placeholder_gespraechsinhalt_notiz_oder_na"></textarea>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="crmStudio.triggerAudioDictation()" class="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 text-xs font-bold hover:bg-rose-100 flex items-center gap-1 cursor-pointer">
+                <span>🎙️</span><span data-i18n="view.addresses.audio_diktat_2">Audio-Diktat</span>
+              </button>
+              <button type="button" onclick="crmStudio.triggerMeetingDictation()" class="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/60 text-xs font-bold hover:bg-blue-100 flex items-center gap-1 cursor-pointer">
+                <span>👥</span><span data-i18n="view.addresses.meeting_diktat">Meeting-Diktat</span>
+              </button>
+            </div>
+            <button type="button" onclick="crmStudio.sendComposerMessage()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+              <span data-i18n="view.addresses.senden_speichern">Senden / Speichern</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 3: KAUFMÄNNISCH (Enterprise ERP-Standard Finanzdaten)           -->
+      <!-- ================================================================= -->
+      <div id="cd-view-kaufmaennisch" class="cd-subview hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Box 1: Konditionen & Debitoren/Kreditoren -->
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+              <span>💳</span><span data-i18n="view.addresses.zahlung_konditionen_vario">Zahlung &amp; Konditionen (VARIO)</span>
+            </h4>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.debitor_nr">Debitor-Nr.</label>
+                <input type="text" id="cd-debitor-nr" placeholder="D-10042" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.kreditor_nr">Kreditor-Nr.</label>
+                <input type="text" id="cd-kreditor-nr" placeholder="K-70018" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.zahlungsart">Zahlungsart</label>
+              <select id="cd-zahlungsart" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="Rechnung" data-i18n="view.addresses.rechnung_standard">Rechnung (Standard)</option>
+                <option value="SEPA-Basislastschrift" data-i18n="view.addresses.sepa_basislastschrift">SEPA-Basislastschrift</option>
+                <option value="SEPA-Firmenlastschrift" data-i18n="view.addresses.sepa_firmenlastschrift_b2b">SEPA-Firmenlastschrift B2B</option>
+                <option value="Vorkasse" data-i18n="view.addresses.vorkasse">Vorkasse</option>
+                <option value="Nachnahme" data-i18n="view.addresses.nachnahme">Nachnahme</option>
+                <option value="Kreditkarte" data-i18n="view.addresses.kreditkarte">Kreditkarte</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.zahlungsziel">Zahlungsziel</label>
+                <input type="number" id="cd-zahlungsziel-tage" placeholder="14" class="w-full px-2 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.skonto">Skonto %</label>
+                <input type="number" step="0.1" id="cd-skonto-prozent" placeholder="2.0" class="w-full px-2 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.skonto_tage">Skonto Tage</label>
+                <input type="number" id="cd-skonto-tage" placeholder="7" class="w-full px-2 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.kreditlimit">Kreditlimit (€)</label>
+              <input type="number" id="cd-kreditlimit" placeholder="15000" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.preis_rabattgruppe">Preis- &amp; Rabattgruppe</label>
+              <select id="cd-preisgruppe" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="Standard" data-i18n="view.addresses.standard_endkunde_einzelpreise">Standard (Endkunde / Einzelpreise)</option>
+                <option value="Grosskunde A" data-i18n="view.addresses.grosskunde_a_10">Großkunde A (-10%)</option>
+                <option value="B2B Fachhandel" data-i18n="view.addresses.b2b_fachhandel_20">B2B Fachhandel (-20%)</option>
+                <option value="Konzernpartner" data-i18n="view.addresses.konzernpartner_rahmenvertrag">Konzernpartner / Rahmenvertrag</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Box 2: Bankverbindung & SEPA -->
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+              <span>🏦</span><span data-i18n="view.addresses.bankverbindung_sepa">Bankverbindung &amp; SEPA</span>
+            </h4>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.kreditinstitut_bankname">Kreditinstitut / Bankname</label>
+              <input type="text" id="cd-bank-name" placeholder="Commerzbank Frankfurt" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.iban">IBAN</label>
+              <input type="text" id="cd-iban" placeholder="DE89 3704 0044 0532 0130 00" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.bic">BIC</label>
+              <input type="text" id="cd-bic" placeholder="COBADEFFXXX" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div class="p-2.5 border rounded-xl bg-white dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-700 text-xs space-y-1.5">
+              <span class="font-bold text-[11px] text-zinc-700 dark:text-zinc-300" data-i18n="view.addresses.sepa_lastschriftmandat">SEPA-Lastschriftmandat:</span>
+              <p class="text-[10px] text-zinc-500 font-mono"><span data-i18n="view.addresses.mandatsreferenz">Mandatsreferenz:</span> <span id="cd-sepa-ref" class="font-bold text-zinc-800 dark:text-zinc-200">SEPA-AUTOGEN</span></p>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/20" data-i18n="view.addresses.aktiv">Aktiv</span>
+            </div>
+          </div>
+
+          <!-- Box 3: Steuer, E-Rechnung & Mahnwesen -->
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <span>⚖️</span><span data-i18n="view.addresses.steuern_e_rechnung">Steuern &amp; E-Rechnung</span>
+            </h4>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.umsatzsteuer_id_ust_idnr">Umsatzsteuer-ID (USt-IdNr.)</label>
+              <input type="text" id="cd-ust-id" placeholder="DE 123456789" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.steuernummer">Steuernummer</label>
+              <input type="text" id="cd-steuernummer" placeholder="13/815/08152" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.steuergebiet">Steuergebiet</label>
+              <select id="cd-steuergebiet" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="Inland (19%)" data-i18n="view.addresses.inland_regelsteuersatz_19_7">Inland (Regelsteuersatz 19% / 7%)</option>
+                <option value="EU steuerfrei mit USt-Id" data-i18n="view.addresses.steuerfreie_innergem_lieferung_4_nr_1b_ust">Steuerfreie innergem. Lieferung (§ 4 Nr. 1b UStG)</option>
+                <option value="Drittland steuerfrei" data-i18n="view.addresses.drittland_ausfuhrlieferung_steuerfrei">Drittland (Ausfuhrlieferung steuerfrei)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.leitweg_id_xrechnung_zugferd">Leitweg-ID (XRechnung / ZUGFeRD)</label>
+              <input type="text" id="cd-leitweg-id" placeholder="04011000-12345-67" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 4: BELEGE & VORGÄNGE (VARIO Belege)                    -->
+      <!-- ================================================================= -->
+      <div id="cd-view-vorgaenge" class="cd-subview hidden flex-1 min-h-0 flex flex-col p-6 overflow-hidden space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-bold font-sans" data-i18n="view.addresses.kaufmaennische_vorgaenge_belege">Kaufmännische Vorgänge &amp; Belege</h3>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 border border-indigo-200" data-i18n="view.addresses.vario_belegfluss">VARIO Belegfluss</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="crmStudio.openNewDocBuilder('offer')" class="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5">
+              <span>+</span><span data-i18n="view.addresses.neues_angebot">Neues Angebot</span>
+            </button>
+            <button type="button" onclick="crmStudio.openNewDocBuilder('order')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5">
+              <span>+</span><span data-i18n="view.addresses.neuer_auftrag">Neuer Auftrag</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- NEUER BELEG BUILDER (Einklappbar) -->
+        <div id="cd-new-doc-panel" class="hidden p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 space-y-3 shrink-0 shadow-2xs">
+          <div class="flex items-center justify-between">
+            <h4 id="cd-new-doc-title" class="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400" data-i18n="view.addresses.neues_angebot_kalkulieren">Neues Angebot kalkulieren</h4>
+            <button type="button" onclick="crmStudio.toggleDocBuilder(false)" class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-sm">✕</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+            <div>
+              <label class="block text-[10px] font-bold text-zinc-500 mb-1" data-i18n="view.addresses.belegnummer">Belegnummer</label>
+              <input type="text" id="cd-doc-number" class="w-full px-2.5 py-1.5 border rounded-lg font-mono font-bold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-[10px] font-bold text-zinc-500 mb-1" data-i18n="view.addresses.artikel_leistung_auswaehlen">Artikel / Leistung auswählen</label>
+              <select id="cd-doc-item-select" onchange="crmStudio.onDocItemSelect()" class="w-full px-2.5 py-1.5 border rounded-lg bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="180" data-unit="Std." data-title="Senior AI Architecture Consulting">Senior AI Architecture Consulting (180,00 € / Std.)</option>
+                <option value="4500" data-unit="Pauschal" data-title="Archon OS Enterprise Subscription">Archon OS Enterprise Subscription (4.500,00 € / Pauschal)</option>
+                <option value="950" data-unit="Setup" data-title="Dedizierter Agenten-Cluster &amp; Setup">Dedizierter Agenten-Cluster &amp; Setup (950,00 € / Setup)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-zinc-500 mb-1" data-i18n="view.addresses.menge_einheit">Menge / Einheit</label>
+              <div class="flex items-center gap-1.5">
+                <input type="number" id="cd-doc-qty" value="10" oninput="crmStudio.calcDocTotals()" class="w-20 px-2 py-1.5 border rounded-lg font-mono text-center font-bold bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <span id="cd-doc-unit" class="text-zinc-500 font-mono text-xs">Std.</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-indigo-200/60 dark:border-indigo-800/60">
+            <div class="text-xs font-mono">
+              <span data-i18n="view.addresses.netto">Netto:</span> <strong id="cd-doc-sum-net">1.800,00 €</strong> <span data-i18n="view.addresses.brutto">· Brutto:</span> <strong id="cd-doc-sum-gross" class="text-indigo-600 dark:text-indigo-400">2.142,00 €</strong> <span data-i18n="view.addresses.inkl_19_ust">(inkl. 19% USt)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="crmStudio.toggleDocBuilder(false)" class="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs cursor-pointer" data-i18n="view.addresses.abbrechen">Abbrechen</button>
+              <button type="button" onclick="crmStudio.submitNewDocument()" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1.5">
+                <span>📄</span><span data-i18n="view.addresses.beleg_anlegen_din_pdf_oeffnen">Beleg anlegen &amp; DIN-PDF öffnen</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Belege Tabelle -->
+        <div class="flex-1 min-h-0 overflow-y-auto border rounded-xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60">
+          <table class="w-full text-left text-xs font-sans">
+            <thead class="bg-zinc-50 dark:bg-zinc-800/70 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 font-mono text-[10px] uppercase sticky top-0">
+              <tr>
+                <th class="py-2.5 px-3" data-i18n="view.addresses.belegart">Belegart</th>
+                <th class="py-2.5 px-3" data-i18n="view.addresses.beleg_nr">Beleg-Nr.</th>
+                <th class="py-2.5 px-3" data-i18n="view.addresses.datum">Datum</th>
+                <th class="py-2.5 px-3" data-i18n="view.addresses.netto_2">Netto</th>
+                <th class="py-2.5 px-3" data-i18n="view.addresses.brutto_2">Brutto</th>
+                <th class="py-2.5 px-3" data-i18n="view.addresses.status_2">Status</th>
+                <th class="py-2.5 px-3 text-right" data-i18n="view.addresses.aktion">Aktion</th>
+              </tr>
+            </thead>
+            <tbody id="cd-vorgaenge-tbody" class="divide-y divide-zinc-200 dark:divide-zinc-800 font-mono">
+              <tr>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">Angebot</span></td>
+                <td class="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100">ANG-2026-0842</td>
+                <td class="py-3 px-3 text-zinc-500">24.10.2026</td>
+                <td class="py-3 px-3">12.500,00 €</td>
+                <td class="py-3 px-3 font-bold">14.875,00 €</td>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">In Prüfung</span></td>
+                <td class="py-3 px-3 text-right"><button type="button" onclick="crmStudio.openDocumentPdf('ANG-2026-0842', 'offer', 12500, 'Nordstern Digital AG')" class="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 font-bold text-xs cursor-pointer border border-emerald-200 dark:border-emerald-800 shadow-2xs">📄 DIN-PDF</button></td>
+              </tr>
+              <tr>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Auftrag</span></td>
+                <td class="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100">AB-2026-0199</td>
+                <td class="py-3 px-3 text-zinc-500">12.09.2026</td>
+                <td class="py-3 px-3">34.000,00 €</td>
+                <td class="py-3 px-3 font-bold">40.460,00 €</td>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Bestätigt</span></td>
+                <td class="py-3 px-3 text-right"><button type="button" onclick="crmStudio.openDocumentPdf('AB-2026-0199', 'order_confirmation', 34000, 'Bormann Bioscience LLC')" class="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 font-bold text-xs cursor-pointer border border-emerald-200 dark:border-emerald-800 shadow-2xs">📄 DIN-PDF</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 5: ANSPRECHPARTNER & FILIALEN (VARIO)                  -->
+      <!-- ================================================================= -->
+      <div id="cd-view-ansprechpartner" class="cd-subview hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+          <div>
+            <h3 class="text-sm font-bold font-sans" data-i18n="view.addresses.zusaetzliche_ansprechpartner_standorte">Zusätzliche Ansprechpartner &amp; Standorte</h3>
+            <p class="text-xs text-zinc-500" data-i18n="view.addresses.mehrere_personen_und_abweichende_lieferans">Mehrere Personen und abweichende Lieferanschriften dieser Adresse erfassen</p>
+          </div>
+          <button type="button" onclick="crmStudio.promptAddContactPerson()" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5">
+            <span>+</span><span data-i18n="view.addresses.ansprechpartner_hinzufuegen">Ansprechpartner hinzufügen</span>
+          </button>
+        </div>
+
+        <div id="cd-ansprechpartner-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Dr. Markus Weimer</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 font-bold">Einkauf / CPO</span>
+            </div>
+            <p class="text-xs text-zinc-500 font-mono">m.weimer@bormann-bio.de</p>
+            <p class="text-xs text-zinc-500 font-mono">+49 541 98765-22</p>
+          </div>
+          <div class="p-4 border rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Sabine Lindemann</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-50 text-emerald-700 font-bold">Buchhaltung / AP</span>
+            </div>
+            <p class="text-xs text-zinc-500 font-mono">finance@bormann-bio.de</p>
+            <p class="text-xs text-zinc-500 font-mono">+49 541 98765-40</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- TEILANSICHT 6: DSGVO & COMPLIANCE (Art. 6, 7, 15, 17, 20, 21)        -->
+      <!-- ================================================================= -->
+      <div id="cd-view-dsgvo" class="cd-subview hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+        
+        <!-- Status Banner mit Live-Rechtsgrundlage -->
+        <div id="drw-dsgvo-banner" class="p-5 border rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 flex items-start gap-4">
+          <span class="text-3xl" id="drw-dsgvo-banner-icon">🛡️</span>
+          <div class="space-y-1 flex-1">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <h4 id="drw-dsgvo-banner-title" class="text-sm font-bold text-emerald-900 dark:text-emerald-200" data-i18n="view.addresses.datenschutz_status_dsgvo_konform_verarbeit">Datenschutz-Status: DSGVO-Konform verarbeitet</h4>
+              <span id="drw-dsgvo-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-600 text-white" data-i18n="view.addresses.rechtsgrundlage_validiert">Rechtsgrundlage validiert</span>
+            </div>
+            <p id="drw-dsgvo-banner-desc" class="text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed" data-i18n="view.addresses.die_verarbeitung_personenbezogener_daten_s">
+              Die Verarbeitung personenbezogener Daten stützt sich auf die nachfolgend dokumentierte Rechtsgrundlage gem. Art. 6 DSGVO und berücksichtigt die aktiven Werbeeinwilligungen.
+            </p>
+          </div>
+        </div>
+
+        <!-- 2 Grid-Spalten: Rechtsgrundlage & Einwilligungen vs. Fristen & Widerspruch -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <!-- Box 1: Rechtsgrundlage & Opt-Ins -->
+          <div class="p-5 border rounded-2xl bg-white dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4 shadow-2xs">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+              <span>⚖️</span><span data-i18n="view.addresses.rechtsgrundlage_gem_art_6_dsgvo">Rechtsgrundlage gem. Art. 6 DSGVO</span>
+            </h4>
+            
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.massgebliche_rechtsgrundlage">Maßgebliche Rechtsgrundlage</label>
+              <select id="drw-dsgvo-legal-basis" onchange="crmStudio.onDsgvoChange()" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="art6_1_f" data-i18n="view.addresses.art_6_abs_1_lit_f_berechtigtes_interesse_b">Art. 6 Abs. 1 lit. f: Berechtigtes Interesse (B2B-Erstkontakt &amp; Direktmarketing)</option>
+                <option value="art6_1_b" data-i18n="view.addresses.art_6_abs_1_lit_b_vertragserfuellung_vorve">Art. 6 Abs. 1 lit. b: Vertragserfüllung &amp; Vorvertragliche Maßnahmen</option>
+                <option value="art6_1_a" data-i18n="view.addresses.art_6_abs_1_lit_a_ausdrueckliche_einwillig">Art. 6 Abs. 1 lit. a: Ausdrückliche Einwilligung (Opt-In)</option>
+                <option value="art6_1_c" data-i18n="view.addresses.art_6_abs_1_lit_c_rechtliche_verpflichtung">Art. 6 Abs. 1 lit. c: Rechtliche Verpflichtung (z. B. HGB / AO)</option>
+              </select>
+            </div>
+
+            <div class="pt-2 border-t border-zinc-200 dark:border-zinc-700 space-y-3">
+              <label class="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300" data-i18n="view.addresses.zulaessige_kontaktkanaele_art_7_dsgvo_7_uw">Zulässige Kontaktkanäle (Art. 7 DSGVO / § 7 UWG)</label>
+              <div class="space-y-2">
+                <label class="flex items-center gap-2.5 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                  <input type="checkbox" id="drw-dsgvo-opt-email" class="rounded w-4 h-4 text-indigo-600">
+                  <span data-i18n="view.addresses.e_mail_kommunikation_geschaeftliche_korres">E-Mail-Kommunikation &amp; geschäftliche Korrespondenz gestattet</span>
+                </label>
+                <label class="flex items-center gap-2.5 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                  <input type="checkbox" id="drw-dsgvo-opt-phone" class="rounded w-4 h-4 text-indigo-600">
+                  <span data-i18n="view.addresses.telefonische_kontaktaufnahme_gestattet">Telefonische Kontaktaufnahme gestattet</span>
+                </label>
+                <label class="flex items-center gap-2.5 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                  <input type="checkbox" id="drw-dsgvo-opt-postal" class="rounded w-4 h-4 text-indigo-600">
+                  <span data-i18n="view.addresses.postalisches_direktmarketing_gestattet">Postalisches Direktmarketing gestattet</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.opt_in_datum">Opt-In Datum</label>
+                <input type="date" id="drw-dsgvo-opt-date" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.nachweis_quelle">Nachweis-Quelle</label>
+                <input type="text" id="drw-dsgvo-opt-source" placeholder="z. B. LinkedIn Kontaktaufnahme" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700" data-i18n-placeholder="view.addresses.placeholder_z_b_linkedin_kontaktaufnahme">
+              </div>
+            </div>
+          </div>
+
+          <!-- Box 2: Fristen & Widerspruch -->
+          <div class="p-5 border rounded-2xl bg-white dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4 shadow-2xs">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <span>⏱️</span><span data-i18n="view.addresses.aufbewahrungs_loeschfristen_gobd_hgb">Aufbewahrungs- &amp; Löschfristen (GoBD / HGB)</span>
+            </h4>
+
+            <div>
+              <label class="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1" data-i18n="view.addresses.aufbewahrungskategorie">Aufbewahrungskategorie</label>
+              <select id="drw-dsgvo-retention-category" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+                <option value="commercial_10y" data-i18n="view.addresses.10_jahre_aufbewahrung_147_ao_257_hgb_buchu">10 Jahre Aufbewahrung (§ 147 AO / § 257 HGB – Buchungsbelege &amp; Rechnungen)</option>
+                <option value="general_3y" data-i18n="view.addresses.3_jahre_regelmaessige_verjaehrungsfrist_19">3 Jahre regelmäßige Verjährungsfrist (§ 195 BGB – Geschäftskorrespondenz)</option>
+                <option value="applicant_6m" data-i18n="view.addresses.6_monate_nach_zweckfortfall_bewerberdaten">6 Monate nach Zweckfortfall (Bewerberdaten gem. AGG)</option>
+                <option value="immediate" data-i18n="view.addresses.sofortige_loeschung_nach_zweckfortfall">Sofortige Löschung nach Zweckfortfall</option>
+              </select>
+            </div>
+
+            <!-- Werbewiderspruch Art. 21 -->
+            <div class="p-4 border rounded-xl bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 space-y-3">
+              <div class="flex items-center justify-between">
+                <h5 class="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                  <span>🛑</span><span data-i18n="view.addresses.werbewiderspruch_art_21_dsgvo">Werbewiderspruch (Art. 21 DSGVO)</span>
+                </h5>
+                <span id="drw-dsgvo-optout-pill" class="hidden px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white" data-i18n="view.addresses.gesperrt">Gesperrt</span>
+              </div>
+              <label class="flex items-center gap-2 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                <input type="checkbox" id="drw-dsgvo-opt-out" onchange="crmStudio.onDsgvoChange()" class="rounded w-4 h-4 text-rose-600">
+                <span class="font-bold text-rose-700 dark:text-rose-400" data-i18n="view.addresses.kontakt_hat_werbewiderspruch_eingelegt_wer">Kontakt hat Werbewiderspruch eingelegt (Werbesperre)</span>
+              </label>
+              <div>
+                <label class="block text-[10.5px] font-mono text-zinc-500 mb-1" data-i18n="view.addresses.widerspruchsdatum">Widerspruchsdatum</label>
+                <input type="date" id="drw-dsgvo-opt-out-date" class="w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700">
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+              <button
+                type="button"
+                onclick="crmStudio.saveContactFromDrawer()"
+                class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>💾</span><span data-i18n="view.addresses.dsgvo_status_speichern">DSGVO-Status speichern</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 2 Action Columns: Art. 15/20 Export vs. Art. 17 Deletion -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+          
+          <!-- Box 1: Export -->
+          <div class="p-5 border rounded-2xl bg-white dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 space-y-4 shadow-2xs">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">📥</span>
+              <div>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-100" data-i18n="view.addresses.art_15_20_dsgvo_datenexport">Art. 15 &amp; 20 DSGVO: Datenexport</h4>
+                <p class="text-[11px] text-zinc-500" data-i18n="view.addresses.auskunftsrecht_recht_auf_datenuebertragbar">Auskunftsrecht &amp; Recht auf Datenübertragbarkeit</p>
+              </div>
+            </div>
+            <p class="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed" data-i18n="view.addresses.generieren_sie_auf_anfrage_der_betroffenen">
+              Generieren Sie auf Anfrage der betroffenen Person einen vollständigen, maschinenlesbaren JSON-Auszug aller hinterlegten Stammdaten, Kontaktkanäle, Nachrichten, Einwilligungen und Belege.
+            </p>
+            <button
+              type="button"
+              onclick="crmStudio.exportContactGdpr()"
+              class="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>📥</span>
+              <span data-i18n="view.addresses.personenbezogene_daten_als_json_exportiere">Personenbezogene Daten als JSON exportieren</span>
+            </button>
+          </div>
+
+          <!-- Box 2: Anonymization / Deletion -->
+          <div class="p-5 border rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60 space-y-4 shadow-2xs">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🗑️</span>
+              <div>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400" data-i18n="view.addresses.art_17_dsgvo_recht_auf_vergessenwerden">Art. 17 DSGVO: Recht auf Vergessenwerden</h4>
+                <p class="text-[11px] text-rose-600 dark:text-rose-500" data-i18n="view.addresses.datenschutzkonforme_loeschung_anonymisieru">Datenschutzkonforme Löschung / Anonymisierung</p>
+              </div>
+            </div>
+            <p class="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed" data-i18n="view.addresses.unwiderrufliche_anonymisierung_aller_perso">
+              Unwiderrufliche Anonymisierung aller personenbezogenen Kennungen (Name, Mail, Telefon, Notizen, Profilfoto). Gesetzliche steuerrechtliche Aufbewahrungsfristen (z. B. Beleg-Buchungen gem. § 147 AO) bleiben unberührt.
+            </p>
+            <button
+              type="button"
+              onclick="crmStudio.anonymizeContactGdpr()"
+              class="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>🗑️</span>
+              <span data-i18n="view.addresses.datensatz_gemaess_art_17_dsgvo_anonymisier">Datensatz gemäß Art. 17 DSGVO anonymisieren</span>
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- MODAL FOOTER BAR (Screenshot) -->
+      <div class="p-4 border-t flex-shrink-0 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800">
+        <!-- Left: Delete, Reset Rating, Layout -->
+        <div class="flex items-center gap-1.5">
+          <button
+            type="button"
+            onclick="crmStudio.deleteContactFromDrawer()"
+            class="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-500/10 transition cursor-pointer text-lg leading-none"
+            title="Kontakt löschen"
+           data-i18n-title="view.addresses.title_kontakt_loeschen">
+            🗑️
+          </button>
+          <button
+            type="button"
+            onclick="crmStudio.setDrawerRating(0)"
+            class="p-2 rounded-xl text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 transition cursor-pointer text-lg leading-none"
+            title="Sterne-Bewertung auf 0 zurücksetzen"
+           data-i18n-title="view.addresses.title_sterne_bewertung_auf_0_zuruecksetzen">
+            🔄
+          </button>
+          <button
+            type="button"
+            onclick="alert('Formular-Felder &amp; Layout-Editor aktiv')"
+            class="p-2 rounded-xl text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 transition cursor-pointer text-lg leading-none"
+            title="Formular-Felder anpassen"
+           data-i18n-title="view.addresses.title_formular_felder_anpassen">
+            ⚙️
+          </button>
+        </div>
+
+        <!-- Middle: Appointment Scheduling -->
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            onclick="crmStudio.scheduleFollowUp()"
+            class="px-3.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+            title="Grünen CRM-Termin zum Nachfassen planen"
+           data-i18n-title="view.addresses.title_gruenen_crm_termin_zum_nachfassen_pl">
+            <span>📅</span>
+            <span data-i18n="view.addresses.nachfassen_crm">Nachfassen (CRM)</span>
+          </button>
+          <button
+            type="button"
+            onclick="crmStudio.scheduleGoogleCalendar()"
+            class="px-3.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 hover:bg-blue-100 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+            title="Google-Kalender-Termin eintragen"
+           data-i18n-title="view.addresses.title_google_kalender_termin_eintragen">
+            <span>📅</span>
+            <span data-i18n="view.addresses.termin_google">Termin (Google)</span>
+          </button>
+        </div>
+
+        <!-- Right: Cancel & Save -->
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            onclick="crmStudio.closeContactDrawer()"
+            class="px-4 py-2 rounded-lg text-xs font-mono font-bold border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+           data-i18n="view.addresses.abbrechen">
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            id="cd-btn-save"
+            onclick="crmStudio.saveContactFromDrawer()"
+            class="px-5 py-2 rounded-lg bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs transition shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <span>💾</span>
+            <span data-i18n="view.addresses.speichern">Speichern</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </div>
+
+</div>

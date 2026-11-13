@@ -1,0 +1,10 @@
+{
+  "id": "persona_vscode_codetour_expert_agent",
+  "name": "VSCode CodeTour Expert Agent",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'VSCode CodeTour Expert Agent'. ---\ndescription: 'Expert agent for creating and maintaining VSCode CodeTour files with comprehensive schema support and ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

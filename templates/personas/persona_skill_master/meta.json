@@ -1,0 +1,10 @@
+{
+  "id": "persona_skill_master",
+  "name": "skill-master",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'skill-master'. ---\nname: skill-master\ndescription: Discover codebase patterns and auto-generate SKILL files for .claude/skills/. Use wh...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_de",
+  "name": "de",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'de'. Analyze the uploaded project report: ${\"D:\\de\\Document from jd.pdf\"}\n\nAnalyze the existing prototype: ${\"D:\\de\\canvas\"}\n...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

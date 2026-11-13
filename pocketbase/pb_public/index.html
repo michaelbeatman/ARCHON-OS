@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PocketBase CRM - AutoGen Studio Style</title>
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- PocketBase JS SDK -->
+  <script src="https://unpkg.com/pocketbase@latest/dist/pocketbase.umd.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              500: '#10b981',
+              600: '#059669',
+              900: '#064e3b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Scrollbars & Animations */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    .drawer-open { transform: translateX(0); }
+    .drawer-closed { transform: translateX(100%); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased h-screen flex overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-200">
+
+  <!-- LEFT SIDEBAR -->
+  <aside className="w-64 border-r border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex flex-col justify-between shrink-0">
+    <div className="w-64 border-r border-slate-800/80 bg-slate-900/80 backdrop-blur-md flex flex-col justify-between h-full shrink-0">
+      <div>
+        <!-- Brand Header -->
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold font-mono text-base shadow-lg shadow-emerald-500/10">
+              PB
+            </div>
+            <div>
+              <h1 className="font-bold text-sm text-slate-100 tracking-tight">PocketBase CRM</h1>
+              <p className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                localhost:8090
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar Navigation -->
+        <nav className="p-3 space-y-1">
+          <button onclick="switchView('pipeline')" id="nav-pipeline" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 transition">
+            <i data-lucide="layout-grid" class="w-4 h-4"></i>
+            <span>Pipeline (Kanban)</span>
+            <span id="badge-count" class="ml-auto font-mono text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300">0</span>
+          </button>
+
+          <button onclick="switchView('tabelle')" id="nav-tabelle" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition">
+            <i data-lucide="list" class="w-4 h-4"></i>
+            <span>Kontakte (Tabelle)</span>
+          </button>
+
+          <button onclick="switchView('import')" id="nav-import" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition">
+            <i data-lucide="file-up" class="w-4 h-4"></i>
+            <span>Daten-Import (CSV/JSON)</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div className="p-3 border-t border-slate-800/80 bg-slate-950/60">
+        <a href="/_/" target="_blank" class="flex items-center justify-between text-xs text-slate-400 hover:text-emerald-400 transition font-mono">
+          <span class="flex items-center gap-2">
+            <i data-lucide="database" class="w-3.5 h-3.5 text-emerald-400"></i>
+            Admin Dashboard
+          </span>
+          <span>↗</span>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT AREA -->
+  <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-950">
+
+    <!-- TOP BAR HEADER -->
+    <header class="h-16 border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md px-6 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-4">
+        <h2 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+          <span id="page-title">📊 Pipeline Board</span>
+          <span id="total-count-badge" class="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">0 Kontakte</span>
+        </h2>
+      </div>
+
+      <!-- Filters & Actions -->
+      <div class="flex items-center gap-3">
+        <!-- Theme Toggle Switcher (Bright / Dark) -->
+        <div class="flex items-center p-1 rounded-lg border border-slate-700 bg-slate-900 text-xs font-semibold">
+          <button id="theme-btn-light" onclick="toggleTheme('light')" class="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-bold">
+            <i data-lucide="sun" class="w-3.5 h-3.5"></i>
+            <span>Hell</span>
+          </button>
+          <button id="theme-btn-dark" onclick="toggleTheme('dark')" class="flex items-center gap-1 px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">
+            <i data-lucide="moon" class="w-3.5 h-3.5"></i>
+            <span>Dunkel</span>
+          </button>
+        </div>
+
+        <!-- Search Input -->
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-500"></i>
+          <input
+            type="text"
+            id="search-input"
+            oninput="handleFilterChange()"
+            placeholder="Name, Firma, Region..."
+            class="pl-9 pr-3 py-1.5 w-60 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500/60 transition"
+          >
+        </div>
+
+        <!-- Rating Filter -->
+        <select
+          id="rating-filter"
+          onchange="handleFilterChange()"
+          class="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 focus:outline-none focus:border-emerald-500/60 transition font-mono"
+        >
+          <option value="ALL">⭐ Alle Ratings</option>
+          <option value="5">⭐⭐⭐⭐⭐ (5 Sterne)</option>
+          <option value="4">⭐⭐⭐⭐ (4 Sterne)</option>
+          <option value="3">⭐⭐⭐ (3 Sterne)</option>
+          <option value="2">⭐⭐ (2 Sterne)</option>
+          <option value="1">⭐ (1 Stern)</option>
+        </select>
+
+        <!-- New Contact Button -->
+        <button
+          onclick="openDrawer(null)"
+          class="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-emerald-500/20 flex items-center gap-1.5"
+        >
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Neuer Kontakt</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENT WRAPPER -->
+    <div class="flex-1 overflow-auto p-6 bg-slate-950/90">
+
+      <!-- PIPELINE KANBAN VIEW -->
+      <div id="view-pipeline" class="h-full flex gap-4 overflow-x-auto pb-4">
+        <!-- Spalten werden dynamisch generiert -->
+      </div>
+
+      <!-- TABELLE VIEW -->
+      <div id="view-tabelle" class="hidden rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-950 border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px] tracking-wider">
+            <tr>
+              <th class="p-3">Name</th>
+              <th class="p-3">Unternehmen & Rolle</th>
+              <th class="p-3">Status</th>
+              <th class="p-3">Region</th>
+              <th class="p-3">Rating</th>
+              <th class="p-3">Sperrfrist Date</th>
+              <th class="p-3 text-right">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="tabelle-body" class="divide-y divide-slate-800/60">
+            <!-- Dynamisch befüllt -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- DATEN-IMPORT VIEW -->
+      <div id="view-import" class="hidden max-w-2xl mx-auto space-y-6">
+        <div class="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-4">
+          <div class="flex items-center gap-3 pb-3 border-b border-slate-800">
+            <i data-lucide="file-up" class="w-6 h-6 text-emerald-400"></i>
+            <div>
+              <h3 class="text-sm font-bold text-slate-100">Kontakte Batch-Import (JSON / CSV)</h3>
+              <p class="text-xs text-slate-400">Füge strukturierte Kontakt-Daten ein, um sie direkt in die PocketBase Collection <code class="text-emerald-400">kontakte</code> zu importieren.</p>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">JSON / CSV Daten Payload</label>
+            <textarea
+              id="import-payload"
+              rows="10"
+              placeholder='[
+  {
+    "name": "Max Mustermann",
+    "unternehmen": "Muster GmbH",
+    "status": "Vernetzt",
+    "rating": 5,
+    "region": "Berlin"
+  }
+]'
+              class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500/60"
+            ></textarea>
+          </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <span id="import-status-msg" class="text-xs font-mono text-slate-400"></span>
+            <button
+              onclick="executeBatchImport()"
+              class="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+            >
+              <i data-lucide="upload" class="w-4 h-4"></i>
+              <span>Import Starten</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- SLIDE-OVER DETAIL DRAWER -->
+  <div id="drawer-backdrop" onclick="closeDrawer()" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden transition-opacity"></div>
+  
+  <div id="drawer-panel" class="fixed right-0 top-0 bottom-0 z-50 w-full max-w-xl bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl transition-transform duration-200 ease-out drawer-closed">
+    
+    <!-- Drawer Header -->
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+      <div class="flex items-center gap-3">
+        <div id="drawer-avatar" class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold font-mono text-lg">
+          ??
+        </div>
+        <div>
+          <h2 id="drawer-title" class="text-base font-semibold text-slate-100">Kontakt Bearbeiten</h2>
+          <p id="drawer-id-badge" class="text-xs font-mono text-slate-400">ID: -</p>
+        </div>
+      </div>
+      <button onclick="closeDrawer()" class="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="flex-1 overflow-y-auto p-6 space-y-5">
+
+      <!-- Cooldown Warning Banner -->
+      <div id="cooldown-banner" class="hidden p-4 rounded-xl bg-rose-950/40 border border-rose-900/60 text-rose-200 space-y-1">
+        <div class="flex items-center gap-2 font-medium text-sm text-rose-300">
+          <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+          <span>1-Jahres Cooldown Aktiv</span>
+        </div>
+        <p class="text-xs text-rose-300/80">
+          Einladung zurückgezogen am: <span id="cooldown-date-val" class="font-mono text-rose-200">-</span>
+        </p>
+      </div>
+
+      <!-- Form Inputs -->
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Name *</label>
+          <input type="text" id="field-name" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:border-emerald-500/60 outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Unternehmen</label>
+            <input type="text" id="field-unternehmen" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:border-emerald-500/60 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Rolle</label>
+            <input type="text" id="field-rolle" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:border-emerald-500/60 outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Region</label>
+            <input type="text" id="field-region" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:border-emerald-500/60 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Status (Pipeline)</label>
+            <select id="field-status" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:border-emerald-500/60 outline-none">
+              <option value="Ausstehend">⏳ Ausstehend</option>
+              <option value="Vernetzt">🤝 Vernetzt</option>
+              <option value="Erstnachricht">💬 Erstnachricht</option>
+              <option value="Im Dialog">🔄 Im Dialog</option>
+              <option value="Interview vereinbart">📅 Interview vereinbart</option>
+              <option value="Gesperrt_1Jahr">⛔ Gesperrt (1 Jahr)</option>
+              <option value="Parkposition">📁 Parkposition</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Rating (1-5)</label>
+            <select id="field-rating" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:border-emerald-500/60 outline-none font-mono">
+              <option value="1">⭐ (1/5)</option>
+              <option value="2">⭐⭐ (2/5)</option>
+              <option value="3">⭐⭐⭐ (3/5)</option>
+              <option value="4">⭐⭐⭐⭐ (4/5)</option>
+              <option value="5">⭐⭐⭐⭐⭐ (5/5)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nächster Schritt</label>
+            <input type="text" id="field-naechster-schritt" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:border-emerald-500/60 outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Vernetzt am</label>
+            <input type="date" id="field-vernetzt-am" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 focus:border-emerald-500/60 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Einladung zurückgezogen am</label>
+            <input type="date" id="field-zurueckgezogen-am" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 focus:border-emerald-500/60 outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Notizen & Kommentar</label>
+          <textarea id="field-kommentar" rows="5" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 font-mono focus:border-emerald-500/60 outline-none leading-relaxed"></textarea>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Drawer Footer -->
+    <div class="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between">
+      <button id="btn-delete" onclick="deleteCurrentRecord()" class="px-3.5 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 text-xs font-medium transition flex items-center gap-1.5">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span>Löschen</span>
+      </button>
+      <div class="flex items-center gap-3">
+        <button onclick="closeDrawer()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">Abbrechen</button>
+        <button onclick="saveCurrentRecord()" class="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs transition shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+          <i data-lucide="save" class="w-4 h-4"></i>
+          <span>Speichern</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- APPLICATION LOGIC SCRIPT -->
+  <script>
+    // Initialize PocketBase Client
+    const pb = new PocketBase(window.location.origin);
+    let allKontakte = [];
+    let currentEditId = null;
+
+    const STATUSES = [
+      { id: 'Ausstehend', title: 'Ausstehend', icon: '⏳', color: 'border-slate-800 bg-slate-900/40 text-slate-300' },
+      { id: 'Vernetzt', title: 'Vernetzt', icon: '🤝', color: 'border-blue-900/60 bg-blue-950/30 text-blue-300' },
+      { id: 'Erstnachricht', title: 'Erstnachricht', icon: '💬', color: 'border-purple-900/60 bg-purple-950/30 text-purple-300' },
+      { id: 'Im Dialog', title: 'Im Dialog', icon: '🔄', color: 'border-cyan-900/60 bg-cyan-950/30 text-cyan-300' },
+      { id: 'Interview vereinbart', title: 'Interview vereinbart', icon: '📅', color: 'border-emerald-900/60 bg-emerald-950/30 text-emerald-300' },
+      { id: 'Gesperrt_1Jahr', title: 'Gesperrt (1 Jahr)', icon: '⛔', color: 'border-rose-900/80 bg-rose-950/40 text-rose-300' },
+      { id: 'Parkposition', title: 'Parkposition', icon: '📁', color: 'border-amber-900/60 bg-amber-950/30 text-amber-300' }
+    ];
+
+    // Load data on startup
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadKontakte();
+      setupRealtime();
+    });
+
+    async function loadKontakte() {
+      try {
+        allKontakte = await pb.collection('kontakte').getFullList({ sort: '-updated' });
+        renderApp();
+      } catch (err) {
+        console.warn('Error loading contacts:', err);
+      }
+    }
+
+    function setupRealtime() {
+      pb.collection('kontakte').subscribe('*', (e) => {
+        if (e.action === 'create') {
+          allKontakte.unshift(e.record);
+        } else if (e.action === 'update') {
+          const idx = allKontakte.findIndex(k => k.id === e.record.id);
+          if (idx >= 0) allKontakte[idx] = e.record;
+        } else if (e.action === 'delete') {
+          allKontakte = allKontakte.filter(k => k.id !== e.record.id);
+        }
+        renderApp();
+      }).catch(err => console.warn('Realtime error:', err));
+    }
+
+    function getFilteredKontakte() {
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const rating = document.getElementById('rating-filter').value;
+
+      return allKontakte.filter(k => {
+        const matchesSearch = !search ||
+          (k.name && k.name.toLowerCase().includes(search)) ||
+          (k.unternehmen && k.unternehmen.toLowerCase().includes(search)) ||
+          (k.region && k.region.toLowerCase().includes(search));
+        
+        const matchesRating = rating === 'ALL' || String(k.rating) === rating;
+        return matchesSearch && matchesRating;
+      });
+    }
+
+    function renderApp() {
+      const items = getFilteredKontakte();
+      document.getElementById('total-count-badge').innerText = `${items.length} Kontakte`;
+      document.getElementById('badge-count').innerText = items.length;
+
+      renderPipeline(items);
+      renderTabelle(items);
+      lucide.createIcons();
+    }
+
+    function renderPipeline(items) {
+      const pipelineContainer = document.getElementById('view-pipeline');
+      pipelineContainer.innerHTML = '';
+
+      STATUSES.forEach(statusCol => {
+        const columnItems = items.filter(k => k.status === statusCol.id);
+        const colEl = document.createElement('div');
+        colEl.className = `w-72 shrink-0 rounded-xl border ${statusCol.color} p-3 flex flex-col h-full bg-slate-900/40 backdrop-blur-sm`;
+        
+        let cardsHtml = columnItems.map(k => `
+          <div onclick="openDrawer('${k.id}')" class="p-3.5 rounded-lg bg-slate-950 border border-slate-800/80 hover:border-emerald-500/50 hover:bg-slate-900/60 transition cursor-pointer space-y-2">
+            <div class="flex items-start justify-between">
+              <h4 class="font-semibold text-xs text-slate-100">${escapeHtml(k.name)}</h4>
+              ${k.rating ? `<span class="text-[10px] font-mono text-amber-400">⭐ ${k.rating}</span>` : ''}
+            </div>
+            ${k.unternehmen ? `<p class="text-[11px] text-slate-400">🏢 ${escapeHtml(k.unternehmen)} ${k.rolle ? `(${escapeHtml(k.rolle)})` : ''}</p>` : ''}
+            ${k.region ? `<p class="text-[10px] text-slate-500">📍 ${escapeHtml(k.region)}</p>` : ''}
+            ${k.status === 'Gesperrt_1Jahr' ? `<div class="p-1.5 rounded bg-rose-950/60 border border-rose-900/80 text-[10px] text-rose-300 font-mono flex items-center gap-1">⛔ Sperrfrist Aktiv</div>` : ''}
+            ${k.naechster_schritt ? `<div class="pt-1.5 border-t border-slate-900 text-[10px] text-emerald-400 font-mono truncate">➔ ${escapeHtml(k.naechster_schritt)}</div>` : ''}
+          </div>
+        `).join('');
+
+        if (!columnItems.length) {
+          cardsHtml = `<div class="h-24 border border-dashed border-slate-800/80 rounded-lg flex items-center justify-center text-slate-600 text-xs">Keine Kontakte</div>`;
+        }
+
+        colEl.innerHTML = `
+          <div class="flex items-center justify-between pb-2.5 border-b border-slate-800/60 mb-3">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">${statusCol.icon}</span>
+              <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">${statusCol.title}</h3>
+            </div>
+            <span class="text-[10px] font-mono font-bold bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800 text-slate-300">${columnItems.length}</span>
+          </div>
+          <div class="flex-1 overflow-y-auto space-y-3 pr-1">${cardsHtml}</div>
+        `;
+        pipelineContainer.appendChild(colEl);
+      });
+    }
+
+    function renderTabelle(items) {
+      const body = document.getElementById('tabelle-body');
+      body.innerHTML = items.map(k => `
+        <tr onclick="openDrawer('${k.id}')" class="hover:bg-slate-800/40 transition cursor-pointer">
+          <td class="p-3 font-semibold text-slate-100">${escapeHtml(k.name)}</td>
+          <td class="p-3 text-slate-400">${escapeHtml(k.unternehmen || '-')} ${k.rolle ? `(${escapeHtml(k.rolle)})` : ''}</td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-mono border border-slate-700 bg-slate-950 text-slate-300">${k.status}</span></td>
+          <td class="p-3 text-slate-400">${escapeHtml(k.region || '-')}</td>
+          <td class="p-3 font-mono text-amber-400">${k.rating ? `⭐ ${k.rating}/5` : '-'}</td>
+          <td class="p-3 font-mono text-[11px] text-slate-400">${k.einladung_zurueckgezogen_am ? k.einladung_zurueckgezogen_am.substring(0, 10) : '-'}</td>
+          <td class="p-3 text-right font-mono text-emerald-400">Bearbeiten ➔</td>
+        </tr>
+      `).join('');
+    }
+
+    function switchView(viewName) {
+      document.getElementById('view-pipeline').classList.add('hidden');
+      document.getElementById('view-tabelle').classList.add('hidden');
+      document.getElementById('view-import').classList.add('hidden');
+
+      document.getElementById('nav-pipeline').className = "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition";
+      document.getElementById('nav-tabelle').className = "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition";
+      document.getElementById('nav-import').className = "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition";
+
+      document.getElementById(`view-${viewName}`).classList.remove('hidden');
+      document.getElementById(`nav-${viewName}`).className = "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 transition";
+
+      const titles = { pipeline: '📊 Pipeline Board', tabelle: '👥 Kontakte Liste', import: '📥 Batch Data Import' };
+      document.getElementById('page-title').innerText = titles[viewName];
+    }
+
+    function handleFilterChange() {
+      renderApp();
+    }
+
+    function openDrawer(id) {
+      currentEditId = id;
+      const backdrop = document.getElementById('drawer-backdrop');
+      const panel = document.getElementById('drawer-panel');
+
+      backdrop.classList.remove('hidden');
+      panel.classList.remove('drawer-closed');
+      panel.classList.add('drawer-open');
+
+      if (id) {
+        const k = allKontakte.find(item => item.id === id);
+        if (k) {
+          document.getElementById('drawer-title').innerText = 'Kontakt Bearbeiten';
+          document.getElementById('drawer-id-badge').innerText = `ID: ${k.id}`;
+          document.getElementById('drawer-avatar').innerText = k.name ? k.name.substring(0, 2).toUpperCase() : '??';
+          document.getElementById('field-name').value = k.name || '';
+          document.getElementById('field-unternehmen').value = k.unternehmen || '';
+          document.getElementById('field-rolle').value = k.rolle || '';
+          document.getElementById('field-region').value = k.region || '';
+          document.getElementById('field-status').value = k.status || 'Ausstehend';
+          document.getElementById('field-rating').value = String(k.rating || 3);
+          document.getElementById('field-naechster-schritt').value = k.naechster_schritt || '';
+          document.getElementById('field-vernetzt-am').value = k.vernetzt_am ? k.vernetzt_am.substring(0, 10) : '';
+          document.getElementById('field-zurueckgezogen-am').value = k.einladung_zurueckgezogen_am ? k.einladung_zurueckgezogen_am.substring(0, 10) : '';
+          document.getElementById('field-kommentar').value = k.kommentar || '';
+          
+          if (k.status === 'Gesperrt_1Jahr') {
+            document.getElementById('cooldown-banner').classList.remove('hidden');
+            document.getElementById('cooldown-date-val').innerText = k.einladung_zurueckgezogen_am ? k.einladung_zurueckgezogen_am.substring(0, 10) : 'Heute (wird auto-gesetzt)';
+          } else {
+            document.getElementById('cooldown-banner').classList.add('hidden');
+          }
+
+          document.getElementById('btn-delete').classList.remove('hidden');
+        }
+      } else {
+        document.getElementById('drawer-title').innerText = 'Neuer Kontakt';
+        document.getElementById('drawer-id-badge').innerText = 'Neu in Collection kontakte';
+        document.getElementById('drawer-avatar').innerText = '+';
+        document.getElementById('field-name').value = '';
+        document.getElementById('field-unternehmen').value = '';
+        document.getElementById('field-rolle').value = '';
+        document.getElementById('field-region').value = '';
+        document.getElementById('field-status').value = 'Ausstehend';
+        document.getElementById('field-rating').value = '3';
+        document.getElementById('field-naechster-schritt').value = '';
+        document.getElementById('field-vernetzt-am').value = '';
+        document.getElementById('field-zurueckgezogen-am').value = '';
+        document.getElementById('field-kommentar').value = '';
+        document.getElementById('cooldown-banner').classList.add('hidden');
+        document.getElementById('btn-delete').classList.add('hidden');
+      }
+    }
+
+    function closeDrawer() {
+      const backdrop = document.getElementById('drawer-backdrop');
+      const panel = document.getElementById('drawer-panel');
+      panel.classList.remove('drawer-open');
+      panel.classList.add('drawer-closed');
+      setTimeout(() => backdrop.classList.add('hidden'), 200);
+    }
+
+    async function saveCurrentRecord() {
+      const name = document.getElementById('field-name').value.trim();
+      if (!name) return alert('Bitte Namen angeben.');
+
+      const recordData = {
+        name: name,
+        unternehmen: document.getElementById('field-unternehmen').value.trim(),
+        rolle: document.getElementById('field-rolle').value.trim(),
+        region: document.getElementById('field-region').value.trim(),
+        status: document.getElementById('field-status').value,
+        rating: Number(document.getElementById('field-rating').value),
+        naechster_schritt: document.getElementById('field-naechster-schritt').value.trim(),
+        vernetzt_am: document.getElementById('field-vernetzt-am').value,
+        einladung_zurueckgezogen_am: document.getElementById('field-zurueckgezogen-am').value,
+        kommentar: document.getElementById('field-kommentar').value.trim()
+      };
+
+      try {
+        if (currentEditId) {
+          await pb.collection('kontakte').update(currentEditId, recordData);
+        } else {
+          await pb.collection('kontakte').create(recordData);
+        }
+        closeDrawer();
+        loadKontakte();
+      } catch (err) {
+        alert('Fehler beim Speichern: ' + err.message);
+      }
+    }
+
+    async function deleteCurrentRecord() {
+      if (!currentEditId) return;
+      if (!confirm('Kontakt wirklich löschen?')) return;
+      try {
+        await pb.collection('kontakte').delete(currentEditId);
+        closeDrawer();
+        loadKontakte();
+      } catch (err) {
+        alert('Fehler beim Löschen: ' + err.message);
+      }
+    }
+
+    async function executeBatchImport() {
+      const payload = document.getElementById('import-payload').value.trim();
+      const msg = document.getElementById('import-status-msg');
+      if (!payload) return alert('Bitte JSON/CSV Payload einfügen.');
+
+      try {
+        const items = JSON.parse(payload);
+        if (!Array.isArray(items)) return alert('Payload muss ein JSON-Array aus Kontakten sein.');
+
+        msg.innerText = `Importiere ${items.length} Kontakte...`;
+        let count = 0;
+        for (let item of items) {
+          await pb.collection('kontakte').create(item);
+          count++;
+        }
+        msg.innerText = `✓ Erfolgreich ${count} Kontakte importiert!`;
+        document.getElementById('import-payload').value = '';
+        loadKontakte();
+      } catch (err) {
+        msg.innerText = `Fehler beim Import: ${err.message}`;
+      }
+    }
+
+    function toggleTheme(mode) {
+      if (mode === 'light') {
+        document.documentElement.classList.remove('dark');
+        document.getElementById('theme-btn-light').className = 'flex items-center gap-1 px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-bold';
+        document.getElementById('theme-btn-dark').className = 'flex items-center gap-1 px-2 py-0.5 rounded text-slate-400 hover:text-slate-200';
+      } else {
+        document.documentElement.classList.add('dark');
+        document.getElementById('theme-btn-light').className = 'flex items-center gap-1 px-2 py-0.5 rounded text-slate-400 hover:text-slate-200';
+        document.getElementById('theme-btn-dark').className = 'flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-bold';
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>

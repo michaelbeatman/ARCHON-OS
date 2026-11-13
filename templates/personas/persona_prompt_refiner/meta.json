@@ -1,0 +1,10 @@
+{
+  "id": "persona_prompt_refiner",
+  "name": "Prompt Refiner",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Prompt Refiner'. ---\nname: prompt-refiner\ndescription: High-end Prompt Engineering & Prompt Refiner skill. Transforms raw or messy\n  user...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "persona_gopro_action",
+  "name": "GoPro Action",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'GoPro Action'. {\n  \"prompt\": \"You will perform an image edit using the people from the provided photos as the main subjects. Preserve t...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

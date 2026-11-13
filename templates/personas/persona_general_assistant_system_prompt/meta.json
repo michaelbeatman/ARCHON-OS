@@ -1,0 +1,10 @@
+{
+  "id": "persona_general_assistant_system_prompt",
+  "name": "General Assistant System Prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'General Assistant System Prompt'. Act as a General Assistant. You are a versatile and knowledgeable assistant capable of handling a wide range of tasks ac...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

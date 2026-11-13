@@ -1,0 +1,11 @@
+[2026-07-21 19:48:03] [SYSTEM] Container audio-processor neu gestartet.
+[2026-07-21 19:49:33] [SYSTEM] Container jcode neu gestartet.
+[2026-07-21 19:50:43] [SYSTEM] Container ai-job-search-container neu gestartet.
+[2026-07-21 19:51:45] [SYSTEM] Container omniroute neu gestartet.
+[2026-07-22 21:18:02] [System] Run gestartet: '@agent-os-container test'
+[2026-07-22 21:18:02] [Agent Os Container] Leite Anforderung an 'agent-os-container' weiter...
+[2026-07-22 21:18:02] [Agent Os Container] Fehler: Unknown external agent ID: agent-os-container
+[2026-07-22 21:18:02] [Agent Os Ui] Leite Anforderung an 'agent-os-ui' weiter...
+[2026-07-22 21:18:02] [Agent Os Ui] Fehler: Unknown external agent ID: agent-os-ui
+[2026-07-22 21:18:02] [Omniroute] Leite Anforderung an 'omniroute' weiter...
+[2026-07-22 21:18:02] [Omniroute] Fehler: Unknown external agent ID: omniroute

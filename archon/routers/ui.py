@@ -1,0 +1,228 @@
+"""Router fuer Live UI Editor und Design Studio (Text Replacement, HTML Freeze)."""
+from __future__ import annotations
+from fastapi import Depends as _ArchonDepends
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
+import asyncio
+import logging
+import os
+import time
+from typing import List, Optional
+
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
+
+from archon.core.constants import STUDIO_BG_UPLOAD_DIR
+
+logger = logging.getLogger("archon.routers.ui")
+
+router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["ui"])
+
+
+def _require_admin(request: Request):
+    import main as app_main
+
+    if hasattr(app_main, "require_admin"):
+        app_main.require_admin(request)
+
+
+def _full_html_target_files() -> list:
+    """Die Zieldateien fuer "HTML einfrieren" (existierende Kandidaten)."""
+    import main as app_main
+
+    workspace_dir = getattr(app_main, "WORKSPACE_DIR", "/app")
+    candidates = [
+        "/app/static/index.html",
+        "static/index.html",
+        os.path.join(os.path.dirname(os.path.abspath(app_main.__file__)), "static", "index.html"),
+        os.path.join(workspace_dir, "static", "index.html"),
+    ]
+    return [p for p in set(candidates) if os.path.exists(p)]
+
+
+class TextReplacementItem(BaseModel):
+    original: str
+    replacement: str
+
+
+class TextReplacementsRequest(BaseModel):
+    replacements: List[TextReplacementItem]
+
+
+@router.post("/api/v1/ui/save-text-replacements")
+def api_save_text_replacements(request: Request, req: TextReplacementsRequest):
+    _require_admin(request)
+    import main as app_main
+
+    workspace_dir = getattr(app_main, "WORKSPACE_DIR", "/app")
+    candidates = [
+        "/app/static/index.html",
+        "static/index.html",
+        os.path.join(os.path.dirname(os.path.abspath(app_main.__file__)), "static", "index.html"),
+        os.path.join(workspace_dir, "static", "index.html"),
+    ]
+    target_files = [p for p in set(candidates) if os.path.exists(p)]
+    if not target_files:
+        raise HTTPException(status_code=404, detail="Keine static/index.html Datei gefunden.")
+
+    total_replaced = 0
+    for target_path in target_files:
+        try:
+            with open(target_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            file_replaced = 0
+            for item in req.replacements:
+                orig = item.original
+                repl = item.replacement
+                if orig and repl and orig != repl and orig in content:
+                    content = content.replace(orig, repl)
+                    file_replaced += 1
+
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            total_replaced = max(total_replaced, file_replaced)
+        except Exception as err:
+            logger.warning(f"Error saving replacements to {target_path}: {err}")
+
+    if hasattr(app_main, "add_ticker"):
+        app_main.add_ticker(
+            "Live UI Editor",
+            f"{total_replaced} Texte dauerhaft in index.html eingefroren & gespeichert.",
+        )
+    return {"status": "success", "replaced_count": total_replaced}
+
+
+class FullHtmlSaveRequest(BaseModel):
+    html: Optional[str] = None
+    custom_css: Optional[str] = None
+
+
+@router.post("/api/v1/ui/save-full-html")
+def api_save_full_html(request: Request, req: FullHtmlSaveRequest):
+    _require_admin(request)
+    import main as app_main
+
+    fn_targets = getattr(app_main, "_full_html_target_files", _full_html_target_files)
+    target_files = fn_targets()
+    if not target_files:
+        raise HTTPException(status_code=404, detail="Keine static/index.html Datei gefunden.")
+
+    if not req.html or len(req.html.strip()) <= 100:
+        raise HTTPException(
+            status_code=400,
+            detail="HTML fehlt oder ist zu kurz (< 100 Zeichen) — es wurde nichts geschrieben.",
+        )
+
+    written, failed = [], {}
+    for target_path in target_files:
+        tmp_path = f"{target_path}.tmp.{os.getpid()}"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(req.html)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, target_path)
+            written.append(target_path)
+        except Exception as err:
+            failed[target_path] = str(err)
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+    if not written:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "ui_html_save_failed", "params": {"failed": failed}},
+        )
+    if failed:
+        logger.warning(f"[Design Studio] HTML nur teilweise gespeichert: {failed}")
+
+    if hasattr(app_main, "add_ticker"):
+        app_main.add_ticker("Design Studio", "HTML & Design-Stand erfolgreich eingefroren und gespeichert.")
+    return {"status": "success", "written_to": written, "failed": failed}
+
+
+@router.post("/api/studio/upload-bg")
+async def api_studio_upload_bg(file: UploadFile = File(...)):
+    """Lädt ein Hintergrundbild (JPG/PNG/WebP) für das CSS Live Studio hoch.
+    Speichert unter /static/uploads/ und liefert die URL zurück."""
+    allowed_ext = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed_ext:
+        raise HTTPException(status_code=400, detail={"code": "ui_file_type_not_allowed", "params": {"ext": ext}})
+    content = await file.read()
+    if len(content) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Bild zu groß (max. 8 MB).")
+    os.makedirs(STUDIO_BG_UPLOAD_DIR, exist_ok=True)
+    ts = int(time.time() * 1000)
+    safe_ext = ext if ext else ".jpg"
+    out_name = f"studio-bg_{ts}{safe_ext}"
+    out_path = os.path.join(STUDIO_BG_UPLOAD_DIR, out_name)
+    def _write_studio_bg(path: str, data: bytes) -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+    await asyncio.to_thread(_write_studio_bg, out_path, content)
+    import main as app_main
+
+    if hasattr(app_main, "add_ticker"):
+        app_main.add_ticker("CSS Studio", f"Hintergrundbild hochgeladen: {out_name}")
+    return {"status": "success", "url": f"/static/uploads/{out_name}", "filename": out_name, "size": len(content)}
+
+
+@router.get("/hud")
+def get_hud_page():
+    hud_file = os.path.join("static", "hermes-hud", "index.html")
+    if os.path.exists(hud_file):
+        return FileResponse(hud_file)
+    return FileResponse(os.path.join("static", "index.html"))
+
+
+@router.get("/mobile")
+@router.get("/m")
+def get_mobile_cockpit():
+    return FileResponse(
+        os.path.join("static", "mobile.html"),
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+@router.get("/manifest.json")
+def get_manifest():
+    manifest_path = os.path.join("static", "manifest.json")
+    if os.path.exists(manifest_path):
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    return JSONResponse(
+        {"name": "Archon Mobile", "short_name": "Archon", "start_url": "/mobile", "display": "standalone"}
+    )
+
+
+@router.get("/v2")
+def get_index_v2():
+    return FileResponse("static/index.html")
+
+
+@router.get("/")
+def get_index():
+    return FileResponse(
+        os.path.join("static", "index.html"),
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+

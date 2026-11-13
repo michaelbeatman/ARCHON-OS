@@ -1,0 +1,10 @@
+{
+  "id": "persona_email_lead_generator_tracker",
+  "name": "Email Lead Generator & Tracker",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Email Lead Generator & Tracker'. # Email Lead Generator & Tracker (WordPilot skill)\n\nUse this playbook when the user asks to research and find qualified ...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

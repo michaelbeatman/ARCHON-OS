@@ -1,0 +1,10 @@
+{
+  "id": "persona_person_behaviour",
+  "name": "person behaviour",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'person behaviour'. Create a prompt in which I upload a person image and it tells about person, her dressing sense, behaviour etc...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

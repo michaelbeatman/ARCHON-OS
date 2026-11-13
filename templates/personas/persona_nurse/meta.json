@@ -1,0 +1,10 @@
+{
+  "id": "persona_nurse",
+  "name": "Nurse",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Nurse'. ---\nname: nurse\ndescription: Caring for others \n---\n\n# Nurse\n\nDescribe what this skill does and how the agent should use...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

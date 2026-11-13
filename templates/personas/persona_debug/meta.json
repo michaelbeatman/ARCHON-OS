@@ -1,0 +1,10 @@
+{
+  "id": "persona_debug",
+  "name": "debug",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'debug'. Please debug the current codebase and implement a robust development plan to ensure the system is fully functional. Prio...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

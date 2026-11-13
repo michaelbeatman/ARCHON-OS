@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2d · Variante A — Entscheidung zuerst (kompakt)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         -webkit-font-smoothing: antialiased; color: #242424; background: #f4f2ee;
+         padding: 20px; max-width: 880px; }
+  h1 { font-size: 15px; margin-bottom: 2px; }
+  .sub { font-size: 12px; color: #6f6a61; margin-bottom: 18px; }
+  .spalten { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+  .block { }
+  .block > h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+                color: #6f6a61; margin-bottom: 8px; font-weight: 700; }
+
+  /* ---- Telegram-Mockup ---- */
+  .phone { width: 320px; background: #0e1621; border-radius: 18px; padding: 10px 8px 14px;
+           box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  .bubble { background: #182533; color: #e9eef3; border-radius: 12px; padding: 10px 11px;
+            font-size: 12.5px; line-height: 1.5; position: relative; }
+  .bubble .kopf { display: flex; align-items: center; gap: 6px; font-weight: 700;
+                  font-size: 12.5px; color: #7fd4a0; margin-bottom: 6px; }
+  .bubble hr { border: none; border-top: 1px solid #26384a; margin: 8px 0; }
+  .typ { color: #ffffff; font-weight: 700; font-size: 13px; }
+  .meta { color: #8fa3b5; font-size: 11.5px; margin-top: 2px; }
+  .body { margin-top: 8px; }
+  .anhang { display: flex; align-items: center; gap: 8px; background: #222f3e;
+            border-radius: 8px; padding: 7px 9px; margin-top: 9px; font-size: 11.5px; }
+  .anhang .icon { font-size: 15px; }
+  .btns { display: flex; gap: 6px; margin-top: 9px; }
+  .btn { flex: 1; text-align: center; padding: 7px 0; border-radius: 8px;
+         font-size: 12px; font-weight: 600; border: 1px solid; }
+  .btn.ok { background: rgba(127,212,160,.14); border-color: rgba(127,212,160,.5); color: #7fd4a0; }
+  .btn.no { background: rgba(226,110,110,.14); border-color: rgba(226,110,110,.5); color: #e26e6e; }
+  .zeit { text-align: right; color: #6a7d8f; font-size: 10px; margin-top: 6px; }
+  .pfeil { color: #8fa3b5; }
+
+  /* ---- Kanban-Card-Mockup ---- */
+  .spalte { width: 232px; background: #efece6; border-radius: 12px; padding: 8px; }
+  .spalte > .kopfzeile { font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 8px;
+                         margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .card { background: #fbfaf7; border: 1px solid #e4e0d8; border-radius: 12px; padding: 10px;
+          margin-bottom: 8px; }
+  .card.entsch { border: 1.5px solid #c98a2e; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .pill { font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 6px; border: 1px solid; }
+  .titel { font-size: 12.5px; font-weight: 600; line-height: 1.35; margin-top: 7px; }
+  .zweit { font-size: 11px; color: #6f6a61; line-height: 1.4; margin-top: 4px; }
+  .fuss { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+          margin-top: 9px; padding-top: 7px; border-top: 1px solid #eeeae2; font-size: 10.5px; color: #6f6a61; }
+  .avat { width: 20px; height: 20px; border-radius: 50%; background: #cfd6dd; display: inline-block; }
+  .kern { font-size: 10.5px; color: #8a857c; margin-top: 5px; font-family: ui-monospace, monospace; }
+  .signal { display: inline-flex; align-items: center; gap: 5px; background: #fdf3e2;
+            border: 1px solid #e8c37a; color: #8a5d10; font-size: 10px; font-weight: 700;
+            padding: 2px 7px; border-radius: 999px; }
+</style></head>
+<body>
+<h1>Variante A — Entscheidung zuerst, kompakt</h1>
+<div class="sub">Ein Gedanke pro Zeile. Die Entscheidung dominiert, alles andere tritt zurück.</div>
+
+<div class="spalten">
+
+  <div class="block">
+    <h2>Telegram — Freigabe-Anfrage</h2>
+    <div class="phone">
+      <div class="bubble">
+        <div class="kopf">🔐 ENTSCHEIDUNG NÖTIG</div>
+        <div class="typ">Synthese freigeben</div>
+        <div class="meta">Agentenplattform Q1 · 3 Teilberichte</div>
+        <hr>
+        <div class="body">Lisa hat die Teilergebnisse zusammengeführt. Offen bleibt: AP1 rechnet mit 38 % Deckungsbeitrag, AP3 mit 34 % — ohne Belegquelle.</div>
+        <div class="anhang"><span class="icon">📎</span><span>synthese_entwurf.html · 12 KB</span></div>
+        <div class="btns"><div class="btn ok">✅ Freigeben</div><div class="btn no">❌ Ablehnen</div></div>
+        <div class="zeit">17:21</div>
+      </div>
+    </div>
+    <p class="zweit" style="margin-top:8px;width:320px">
+      Kein Typ-Slug, keine ID, keine Fallback-Anleitung, kein zweiter Pfad-Hinweis.
+      Bei Erfolg die Bestätigung: <span class="kern">✅ Freigegeben — Kanban: Abgeschlossen</span>
+    </p>
+  </div>
+
+  <div class="block">
+    <h2>Kanban — Card mit offener Entscheidung</h2>
+    <div class="spalte">
+      <div class="kopfzeile" style="background:#7CA982;color:#2f4a33"><span>Review &amp; QA</span><span>1</span></div>
+      <div class="card entsch">
+        <div class="row">
+          <span class="signal">⏳ offene Entscheidung</span>
+          <span class="pill" style="background:#fdf3e2;border-color:#e8c37a;color:#8a5d10">P1</span>
+        </div>
+        <div class="titel">Synthese freigeben — Agentenplattform Q1</div>
+        <div class="zweit">Lisa hat 3 Teilberichte zusammengeführt · 1 Widerspruch offen</div>
+        <div class="fuss">
+          <span><span class="avat"></span> Robert</span>
+          <span>⏱ seit 2 h</span>
+        </div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:16px">Kanban — normale Card</h2>
+    <div class="spalte">
+      <div class="kopfzeile" style="background:#EED65B;color:#6b5c10"><span>In Bearbeitung</span><span>2</span></div>
+      <div class="card">
+        <div class="titel">Technische Architektur der Maklerplattform entwerfen</div>
+        <div class="zweit">AP1 · Systemarchitekt</div>
+        <div class="fuss">
+          <span><span class="avat"></span> Robert</span>
+          <span>📄 · P2</span>
+        </div>
+      </div>
+    </div>
+    <p class="zweit" style="margin-top:8px;width:232px">
+      Kein <span class="kern">Archiv</span>-Knopf auf der Card, keine <span class="kern">t-xxxx</span> im Kopf.
+      Details erst im Dialog.
+    </p>
+  </div>
+
+</div>
+</body></html>

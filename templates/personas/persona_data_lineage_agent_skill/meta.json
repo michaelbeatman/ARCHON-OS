@@ -1,0 +1,10 @@
+{
+  "id": "persona_data_lineage_agent_skill",
+  "name": "Data Lineage Agent Skill",
+  "category": "7. Tech, Software & Data",
+  "description": "Fach-Experte: 'Data Lineage Agent Skill'. ---\nname: data-lineage-agent\ndescription: A skill for creating an agent to analyze data lineage and linkage across datab...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

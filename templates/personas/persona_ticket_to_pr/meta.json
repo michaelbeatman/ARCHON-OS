@@ -1,0 +1,10 @@
+{
+  "id": "persona_ticket_to_pr",
+  "name": "ticket-to-pr",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'ticket-to-pr'. ---\nname: ticket-to-pr\ndescription: Full development lifecycle for a Jira ticket. Fetches ticket requirements, designs w...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

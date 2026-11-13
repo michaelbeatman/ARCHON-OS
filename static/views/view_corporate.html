@@ -1,0 +1,657 @@
+<!-- VIEW CONTAINER: CORPORATE HUB & MULTI-COMPANY MANAGER -->
+<div id="view-corporate" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="height: 100vh !important; max-height: 100vh !important;">
+  
+  <!-- 80px TOP-HEADER (FLUCHTLINIE, VOLLE BREITE, DURCHGEHEND) -->
+  <header id="corporate-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h2 data-i18n="view.corporate.title" id="corporate-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight leading-none truncate">Corporate &amp; Mandanten</h2>
+          <button data-i18n-title="view.corporate.title_help" type="button" onclick="openContextHelp('corporate')" title="Hilfe zu Corporate &amp; Mandanten" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          </button>
+          <span data-i18n="view.corporate.badge_multi_company" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25 shrink-0">Multi-Company</span>
+        </div>
+        <p data-i18n="view.corporate.subtitle" class="text-xs font-semibold text-[var(--muted-foreground)] truncate mt-1">Unternehmensdaten, Corporate Design &amp; Rechtssichere Vorlagen</p>
+      </div>
+    </div>
+
+    <!-- Right Controls: Company Switcher & Actions -->
+    <div class="flex items-center gap-2.5 shrink-0">
+      <!-- Active Company Selector -->
+      <div class="flex items-center gap-1.5 text-xs">
+        <span data-i18n="view.corporate.company_label" class="text-[var(--muted-foreground)] text-[11px] font-mono hidden sm:inline">Unternehmen:</span>
+        <select 
+          id="corp-company-select" 
+          onchange="onCorporateCompanySelect(this.value)" 
+          class="px-2.5 py-1 rounded-md text-xs font-semibold bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+        >
+          <option value="archon-systems">Archon Systems GmbH (Standard)</option>
+        </select>
+      </div>
+
+      <button data-i18n-title="view.corporate.title_new_company" 
+        type="button" 
+        onclick="openNewCompanyModal()" 
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-xs font-medium text-[var(--foreground)] transition cursor-pointer"
+        title="Weiteres Unternehmen oder Tochtergesellschaft anlegen"
+      >
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+        <span data-i18n="view.corporate.btn_new">Neu</span>
+      </button>
+
+      <button 
+        type="button" 
+        id="btn-save-corporate" 
+        onclick="saveCorporateCompany()" 
+        class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition cursor-pointer"
+      >
+        <i data-lucide="save" class="w-3.5 h-3.5"></i>
+        <span data-i18n="view.corporate.btn_save">Speichern</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- NAVIGATION TABS -->
+  <div class="px-4 border-b border-[var(--border)] bg-[var(--secondary)]/40 flex items-center gap-1 shrink-0">
+    <button 
+      id="tab-btn-corp-master" 
+      onclick="switchCorporateSubTab('master')" 
+      class="px-3 py-2 text-xs font-semibold border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 transition flex items-center gap-1.5"
+    >
+      <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+      <span data-i18n="view.corporate.tab_master">Stammdaten &amp; Design</span>
+    </button>
+    <button 
+      id="tab-btn-corp-templates" 
+      onclick="switchCorporateSubTab('templates')" 
+      class="px-3 py-2 text-xs font-medium border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition flex items-center gap-1.5"
+    >
+      <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+      <span data-i18n="view.corporate.tab_templates">Formulare &amp; Vorlagen-Studio</span>
+    </button>
+  </div>
+
+  <!-- CONTENT VIEW 1: STAMMDATEN & CORPORATE DESIGN -->
+  <div id="corp-subview-master" class="flex-1 overflow-y-auto p-4 space-y-4">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      <!-- CARD 1: BASISDATEN & ANSCHRIFT -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+          <div class="flex items-center gap-2">
+            <i data-lucide="building" class="w-4 h-4 text-indigo-500"></i>
+            <span data-i18n="view.corporate.card_master_title" class="font-bold text-xs text-[var(--foreground)] uppercase tracking-wider">Unternehmens-Stammdaten</span>
+          </div>
+          <span data-i18n="view.corporate.card_master_sub" class="text-[10px] font-mono text-[var(--muted-foreground)]">Rechtsform &amp; Sitz</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2.5">
+          <div class="col-span-2">
+            <label data-i18n="view.corporate.field_name" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Firmenname (offiziell)</label>
+            <input data-i18n-placeholder="view.corporate.ph_name" type="text" id="corp-input-name" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] focus:ring-1 focus:ring-indigo-500" placeholder="z. B. Archon Systems GmbH">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_legal" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Rechtsform</label>
+            <input data-i18n-placeholder="view.corporate.ph_legal" type="text" id="corp-input-legal" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] focus:ring-1 focus:ring-indigo-500" placeholder="GmbH, AG, UG...">
+          </div>
+        </div>
+
+        <div>
+          <label data-i18n="view.corporate.field_slogan" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Unternehmens-Slogan / Claim</label>
+          <input data-i18n-placeholder="view.corporate.ph_slogan" type="text" id="corp-input-slogan" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] focus:ring-1 focus:ring-indigo-500" placeholder="Autonomous Agentic Operating System">
+        </div>
+
+        <div class="grid grid-cols-3 gap-2.5 pt-1">
+          <div class="col-span-2">
+            <label data-i18n="view.corporate.field_street" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Straße &amp; Hausnummer</label>
+            <input type="text" id="corp-input-street" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="Friedrichstraße 123">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_zip" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">PLZ</label>
+            <input type="text" id="corp-input-zip" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="10117">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label data-i18n="view.corporate.field_city" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Stadt / Ort</label>
+            <input type="text" id="corp-input-city" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="Berlin">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_country" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Land</label>
+            <input data-i18n-placeholder="view.corporate.ph_country" type="text" id="corp-input-country" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="Deutschland">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2.5 pt-1 border-t border-[var(--border)]/60">
+          <div>
+            <label data-i18n="view.corporate.field_phone" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Telefon</label>
+            <input type="text" id="corp-input-phone" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="+49 30 123456">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_email" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">E-Mail</label>
+            <input type="text" id="corp-input-email" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="kontakt@firma.de">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_web" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Website</label>
+            <input type="text" id="corp-input-web" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="https://firma.de">
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 2: REGISTER, GESCHÄFTSFÜHRUNG & STEUERN -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+          <div class="flex items-center gap-2">
+            <i data-lucide="scale" class="w-4 h-4 text-emerald-500"></i>
+            <span data-i18n="view.corporate.card_registry_title" class="font-bold text-xs text-[var(--foreground)] uppercase tracking-wider">Handelsregister &amp; Steuern</span>
+          </div>
+          <span data-i18n="view.corporate.card_registry_sub" class="text-[10px] font-mono text-[var(--muted-foreground)]">HGB &amp; UStG konform</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label data-i18n="view.corporate.field_court" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Registergericht</label>
+            <input type="text" id="corp-input-court" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="Amtsgericht Charlottenburg">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_hrb" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Handelsregisternummer</label>
+            <input type="text" id="corp-input-hrb" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="HRB 248910 B">
+          </div>
+        </div>
+
+        <div>
+          <label data-i18n="view.corporate.field_directors" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Vertretungsberechtigte Geschäftsführer</label>
+          <input type="text" id="corp-input-directors" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="Michael Mustermann, Dr. Anna Schmidt">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5 pt-1">
+          <div>
+            <label data-i18n="view.corporate.field_vatid" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Umsatzsteuer-ID (USt-IdNr.)</label>
+            <input type="text" id="corp-input-vatid" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-mono" placeholder="DE345678901">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_taxnum" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Steuernummer</label>
+            <input type="text" id="corp-input-taxnum" class="w-full px-2.5 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-mono" placeholder="30/215/12345">
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="corp-check-smallbiz" class="rounded border-zinc-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+          <label data-i18n="view.corporate.field_smallbiz" for="corp-check-smallbiz" class="text-xs text-[var(--foreground)] cursor-pointer select-none">
+            Kleinunternehmer nach § 19 UStG (keine Umsatzsteuer ausweisen)
+          </label>
+        </div>
+
+        <!-- BANKVERBINDUNG -->
+        <div class="pt-2 border-t border-[var(--border)]/60 space-y-2">
+          <div class="text-[11px] font-bold text-[var(--foreground)] flex items-center gap-1.5">
+            <i data-lucide="credit-card" class="w-3.5 h-3.5 text-indigo-500"></i>
+            <span data-i18n="view.corporate.card_bank_title">Geschäftskonto / Bankverbindung</span>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label data-i18n="view.corporate.field_bankname" class="block text-[10.5px] text-[var(--muted-foreground)] mb-0.5">Bankname</label>
+              <input type="text" id="corp-input-bankname" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="Deutsche Bank Berlin">
+            </div>
+            <div>
+              <label data-i18n="view.corporate.field_iban" class="block text-[10.5px] text-[var(--muted-foreground)] mb-0.5">IBAN</label>
+              <input type="text" id="corp-input-iban" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-mono" placeholder="DE89 1007 0000 0123 4567 89">
+            </div>
+            <div>
+              <label data-i18n="view.corporate.field_bic" class="block text-[10.5px] text-[var(--muted-foreground)] mb-0.5">BIC / SWIFT</label>
+              <input type="text" id="corp-input-bic" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-mono" placeholder="DEUTDEDDBER">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 3: CORPORATE DESIGN & BRANDING -->
+      <div class="col-span-1 md:col-span-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+          <div class="flex items-center gap-2">
+            <i data-lucide="palette" class="w-4 h-4 text-purple-500"></i>
+            <span data-i18n="view.corporate.card_design_title" class="font-bold text-xs text-[var(--foreground)] uppercase tracking-wider">Corporate Design &amp; Farbpalette</span>
+          </div>
+          <span data-i18n="view.corporate.card_design_sub" class="text-[10px] font-mono text-[var(--muted-foreground)]">Visuelle Identität</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
+          <!-- Primary Color -->
+          <div>
+            <label data-i18n="view.corporate.field_primary_color" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Primärfarbe (Markenfarbe)</label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="corp-picker-primary" onchange="document.getElementById('corp-input-primary').value = this.value" class="w-8 h-8 rounded border border-[var(--border)] cursor-pointer">
+              <input type="text" id="corp-input-primary" oninput="document.getElementById('corp-picker-primary').value = this.value" class="w-24 px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-mono" value="#4f46e5">
+            </div>
+          </div>
+
+          <!-- Secondary Color -->
+          <div>
+            <label data-i18n="view.corporate.field_secondary_color" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Sekundärfarbe</label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="corp-picker-secondary" onchange="document.getElementById('corp-input-secondary').value = this.value" class="w-8 h-8 rounded border border-[var(--border)] cursor-pointer">
+              <input type="text" id="corp-input-secondary" oninput="document.getElementById('corp-picker-secondary').value = this.value" class="w-24 px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-mono" value="#06b6d4">
+            </div>
+          </div>
+
+          <!-- Logo URL -->
+          <div>
+            <label data-i18n="view.corporate.field_logo" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Firmenlogo (URL / Pfad)</label>
+            <input type="text" id="corp-input-logo" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" placeholder="/static/img/logo.png">
+          </div>
+
+          <!-- Font Family -->
+          <div>
+            <label data-i18n="view.corporate.field_font" class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Schriftart (Typografie)</label>
+            <select id="corp-select-font" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]">
+              <option data-i18n="view.corporate.font_inter" value="Inter, system-ui, sans-serif">Inter (Modern &amp; Klar)</option>
+              <option data-i18n="view.corporate.font_roboto" value="'Roboto', sans-serif">Roboto</option>
+              <option data-i18n="view.corporate.font_segoe" value="'Segoe UI', system-ui, sans-serif">Segoe UI</option>
+              <option data-i18n="view.corporate.font_times" value="'Times New Roman', serif">Times New Roman (Klassisch)</option>
+              <option data-i18n="view.corporate.font_mono" value="monospace">Monospace (Code / Nerd)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT VIEW 2: VORLAGEN-STUDIO (BRIEFKOPF, RECHNUNG, NDA) -->
+  <div id="corp-subview-templates" class="hidden flex-1 overflow-hidden flex flex-col md:flex-row h-full">
+    
+    <!-- LEFT PANE: TEMPLATE PARAMETERS -->
+    <div class="w-full md:w-80 lg:w-96 border-r border-[var(--border)] bg-[var(--card)] p-4 flex flex-col gap-3 overflow-y-auto shrink-0">
+      
+      <!-- Template Type Selector -->
+      <div>
+        <label data-i18n="view.corporate.field_template" class="block text-[11px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider mb-1">Vorlage auswählen</label>
+        <select 
+          id="tmpl-select-type" 
+          onchange="onTemplateTypeChanged(this.value)" 
+          class="w-full px-2.5 py-1.5 rounded-md text-xs font-semibold bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+        >
+          <option data-i18n="view.corporate.opt_letterhead" value="letterhead">DIN 5008 Geschäftsbrief (Briefkopf)</option>
+          <option data-i18n="view.corporate.opt_invoice" value="invoice">Ausgangsrechnung (§ 14 UStG)</option>
+          <option data-i18n="view.corporate.opt_nda" value="nda">Geheimhaltungsvereinbarung (NDA)</option>
+        </select>
+      </div>
+
+      <!-- Empfänger-Angaben (mit Live-CRM-Stammdaten-Auswahl) -->
+      <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/50 space-y-2">
+        <div class="flex items-center justify-between">
+          <span data-i18n="view.corporate.recipient_title" class="text-[11px] font-bold text-[var(--foreground)]">Empfänger / Vertragspartner</span>
+          <span data-i18n="view.corporate.recipient_badge" class="text-[9.5px] font-mono text-indigo-500">Live-CRM</span>
+        </div>
+        <div>
+          <label data-i18n="view.corporate.field_crm_pick" class="block text-[10px] text-[var(--muted-foreground)]">Aus Adressstamm (Mandanten-DB) übernehmen</label>
+          <select id="tmpl-select-crm-entity" onchange="onCorporateCrmEntitySelected(this.value)" class="w-full px-2 py-1 text-xs rounded border border-indigo-500/30 bg-[var(--card)] text-[var(--foreground)] font-semibold cursor-pointer">
+            <option data-i18n="view.corporate.opt_crm_placeholder" value="">-- Adresse aus CRM wählen --</option>
+          </select>
+        </div>
+        <div>
+          <label data-i18n="view.corporate.field_rec_name" class="block text-[10px] text-[var(--muted-foreground)]">Firma / Name</label>
+          <input type="text" id="tmpl-input-rec-name" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]" value="Musterempfänger GmbH">
+        </div>
+        <div>
+          <label data-i18n="view.corporate.field_rec_contact" class="block text-[10px] text-[var(--muted-foreground)]">Zu Händen / Ansprechpartner</label>
+          <input type="text" id="tmpl-input-rec-contact" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]" value="Herrn Max Mustermann">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label data-i18n="view.corporate.field_rec_street" class="block text-[10px] text-[var(--muted-foreground)]">Straße &amp; Nr.</label>
+            <input type="text" id="tmpl-input-rec-street" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]" value="Musterweg 42">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_rec_city" class="block text-[10px] text-[var(--muted-foreground)]">PLZ &amp; Ort</label>
+            <input type="text" id="tmpl-input-rec-city" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]" value="10115 Berlin">
+          </div>
+        </div>
+      </div>
+
+      <!-- INHALT / PARAMETER (BRIEF / INVOICE) -->
+      <div id="tmpl-controls-letter" class="space-y-2">
+        <div>
+          <label data-i18n="view.corporate.field_subject" class="block text-[10.5px] font-medium text-[var(--muted-foreground)]">Betreffzeile</label>
+          <input type="text" id="tmpl-input-subject" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" value="Projekt-Update Archon OS 2026">
+        </div>
+        <div>
+          <label data-i18n="view.corporate.field_body" class="block text-[10.5px] font-medium text-[var(--muted-foreground)]">Nachrichtentext</label>
+          <textarea data-i18n-placeholder="view.corporate.ph_body" data-i18n="view.corporate.body_default" id="tmpl-input-body" oninput="renderTemplateLivePreview()" rows="6" class="w-full px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-sans" placeholder="Sehr geehrte Damen und Herren...">Sehr geehrte Damen und Herren,
+
+wir freuen uns, Ihnen die aktuellen Fortschritte unseres autonomen Agentic Operating Systems vorstellen zu dürfen. 
+
+Gerne stehen wir für Rückfragen jederzeit zur Verfügung.
+
+Mit besten Grüßen,</textarea>
+        </div>
+      </div>
+
+      <!-- INVOICE SPECIFIC CONTROLS -->
+      <div id="tmpl-controls-invoice" class="hidden space-y-2">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label data-i18n="view.corporate.field_inv_num" class="block text-[10px] text-[var(--muted-foreground)]">Rechnungs-Nr.</label>
+            <input type="text" id="tmpl-input-inv-num" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-mono" value="RE-2026-001">
+          </div>
+          <div>
+            <label data-i18n="view.corporate.field_inv_due" class="block text-[10px] text-[var(--muted-foreground)]">Zahlungsziel</label>
+            <input type="text" id="tmpl-input-inv-due" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" value="14.11.2026">
+          </div>
+        </div>
+        <div data-i18n="view.corporate.hint_auto_items" class="text-[11px] text-[var(--muted-foreground)]">
+          Standard-Leistungsposten werden automatisch aus dem Mandantenkatalog berechnet (19% MwSt. bzw. § 19 UStG).
+        </div>
+      </div>
+
+      <div class="mt-auto pt-3 border-t border-[var(--border)] flex gap-2">
+        <button 
+          type="button" 
+          onclick="printTemplatePreview()" 
+          class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs cursor-pointer"
+        >
+          <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+          <span data-i18n="view.corporate.btn_print">Drucken / PDF</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT PANE: LIVE PREVIEW CANVAS -->
+    <div class="flex-1 bg-zinc-100 dark:bg-zinc-950 p-6 overflow-y-auto flex justify-center">
+      <div id="tmpl-preview-container" class="w-full max-w-[850px] transition-all">
+        <!-- Rendered template HTML will be injected here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Corporate Hub Client Logic
+let currentCorpCompany = null;
+let allCorpCompanies = [];
+
+async function initCorporateView() {
+  await loadCorporateCompanies();
+  renderTemplateLivePreview();
+}
+
+async function loadCorporateCompanies() {
+  try {
+    const res = await fetch("/api/corporate/companies");
+    if (!res.ok) return;
+    const data = await res.json();
+    allCorpCompanies = data.companies || [];
+    
+    const select = document.getElementById("corp-company-select");
+    if (select) {
+      select.innerHTML = "";
+      allCorpCompanies.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = `${c.name} ${c.is_active ? '(Aktiv)' : ''}`;
+        if (c.is_active) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    const active = allCorpCompanies.find(c => c.is_active) || allCorpCompanies[0];
+    if (active) {
+      await loadCompanyDetails(active.id);
+    }
+  } catch (e) {
+    console.error("Error loading corporate companies:", e);
+  }
+}
+
+async function loadCompanyDetails(companyId) {
+  try {
+    const res = await fetch(`/api/corporate/companies/${companyId}`);
+    if (!res.ok) return;
+    currentCorpCompany = await res.json();
+    populateCompanyForm(currentCorpCompany);
+    renderTemplateLivePreview();
+  } catch (e) {
+    console.error("Error loading company details:", e);
+  }
+}
+
+function populateCompanyForm(c) {
+  if (!c) return;
+  document.getElementById("corp-input-name").value = c.name || "";
+  document.getElementById("corp-input-legal").value = c.legal_form || "";
+  document.getElementById("corp-input-slogan").value = c.slogan || "";
+  
+  const addr = c.address || {};
+  document.getElementById("corp-input-street").value = addr.street || "";
+  document.getElementById("corp-input-zip").value = addr.postal_code || "";
+  document.getElementById("corp-input-city").value = addr.city || "";
+  document.getElementById("corp-input-country").value = addr.country || "Deutschland";
+
+  const cont = c.contact || {};
+  document.getElementById("corp-input-phone").value = cont.phone || "";
+  document.getElementById("corp-input-email").value = cont.email || "";
+  document.getElementById("corp-input-web").value = cont.website || "";
+
+  const reg = c.registry || {};
+  document.getElementById("corp-input-court").value = reg.court || "";
+  document.getElementById("corp-input-hrb").value = reg.number || "";
+  document.getElementById("corp-input-directors").value = reg.managing_directors || "";
+
+  const tax = c.tax || {};
+  document.getElementById("corp-input-vatid").value = tax.vat_id || "";
+  document.getElementById("corp-input-taxnum").value = tax.tax_number || "";
+  document.getElementById("corp-check-smallbiz").checked = !!tax.small_business;
+
+  const bank = c.bank || {};
+  document.getElementById("corp-input-bankname").value = bank.bank_name || "";
+  document.getElementById("corp-input-iban").value = bank.iban || "";
+  document.getElementById("corp-input-bic").value = bank.bic || "";
+
+  const des = c.design || {};
+  document.getElementById("corp-input-primary").value = des.primary_color || "#4f46e5";
+  document.getElementById("corp-picker-primary").value = des.primary_color || "#4f46e5";
+  document.getElementById("corp-input-secondary").value = des.secondary_color || "#06b6d4";
+  document.getElementById("corp-picker-secondary").value = des.secondary_color || "#06b6d4";
+  document.getElementById("corp-input-logo").value = des.logo_url || "";
+  if (des.font_family) {
+    document.getElementById("corp-select-font").value = des.font_family;
+  }
+}
+
+async function onCorporateCompanySelect(companyId) {
+  await loadCompanyDetails(companyId);
+  await fetch(`/api/corporate/companies/${companyId}/set-active`, { method: "POST" });
+}
+
+async function saveCorporateCompany() {
+  const saveBtn = document.getElementById("btn-save-corporate");
+  const origHtml = saveBtn.innerHTML;
+  saveBtn.innerHTML = `<span class="animate-spin">⏳</span> Speichern...`;
+
+  const payload = {
+    id: currentCorpCompany ? currentCorpCompany.id : undefined,
+    name: document.getElementById("corp-input-name").value.trim(),
+    legal_form: document.getElementById("corp-input-legal").value.trim(),
+    slogan: document.getElementById("corp-input-slogan").value.trim(),
+    address: {
+      street: document.getElementById("corp-input-street").value.trim(),
+      postal_code: document.getElementById("corp-input-zip").value.trim(),
+      city: document.getElementById("corp-input-city").value.trim(),
+      country: document.getElementById("corp-input-country").value.trim()
+    },
+    contact: {
+      phone: document.getElementById("corp-input-phone").value.trim(),
+      email: document.getElementById("corp-input-email").value.trim(),
+      website: document.getElementById("corp-input-web").value.trim()
+    },
+    registry: {
+      court: document.getElementById("corp-input-court").value.trim(),
+      number: document.getElementById("corp-input-hrb").value.trim(),
+      managing_directors: document.getElementById("corp-input-directors").value.trim()
+    },
+    tax: {
+      vat_id: document.getElementById("corp-input-vatid").value.trim(),
+      tax_number: document.getElementById("corp-input-taxnum").value.trim(),
+      small_business: document.getElementById("corp-check-smallbiz").checked
+    },
+    bank: {
+      bank_name: document.getElementById("corp-input-bankname").value.trim(),
+      iban: document.getElementById("corp-input-iban").value.trim(),
+      bic: document.getElementById("corp-input-bic").value.trim()
+    },
+    design: {
+      primary_color: document.getElementById("corp-input-primary").value.trim(),
+      secondary_color: document.getElementById("corp-input-secondary").value.trim(),
+      logo_url: document.getElementById("corp-input-logo").value.trim(),
+      font_family: document.getElementById("corp-select-font").value
+    }
+  };
+
+  try {
+    const res = await fetch("/api/corporate/companies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      currentCorpCompany = data.company;
+      await loadCorporateCompanies();
+      renderTemplateLivePreview();
+      saveBtn.innerHTML = `✓ Gespeichert!`;
+      setTimeout(() => { saveBtn.innerHTML = origHtml; }, 2000);
+    } else {
+      saveBtn.innerHTML = `Fehler!`;
+      setTimeout(() => { saveBtn.innerHTML = origHtml; }, 2000);
+    }
+  } catch (e) {
+    console.error("Error saving corporate company:", e);
+    saveBtn.innerHTML = origHtml;
+  }
+}
+
+function switchCorporateSubTab(tab) {
+  const masterView = document.getElementById("corp-subview-master");
+  const tmplView = document.getElementById("corp-subview-templates");
+  const btnMaster = document.getElementById("tab-btn-corp-master");
+  const btnTmpl = document.getElementById("tab-btn-corp-templates");
+
+  if (tab === "master") {
+    masterView.classList.remove("hidden");
+    tmplView.classList.add("hidden");
+    btnMaster.classList.add("border-indigo-500", "text-indigo-600", "dark:text-indigo-400");
+    btnMaster.classList.remove("border-transparent", "text-[var(--muted-foreground)]");
+    btnTmpl.classList.remove("border-indigo-500", "text-indigo-600", "dark:text-indigo-400");
+    btnTmpl.classList.add("border-transparent", "text-[var(--muted-foreground)]");
+  } else {
+    masterView.classList.add("hidden");
+    tmplView.classList.remove("hidden");
+    btnTmpl.classList.add("border-indigo-500", "text-indigo-600", "dark:text-indigo-400");
+    btnTmpl.classList.remove("border-transparent", "text-[var(--muted-foreground)]");
+    btnMaster.classList.remove("border-indigo-500", "text-indigo-600", "dark:text-indigo-400");
+    btnMaster.classList.add("border-transparent", "text-[var(--muted-foreground)]");
+    renderTemplateLivePreview();
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function onTemplateTypeChanged(val) {
+  const ctrlLetter = document.getElementById("tmpl-controls-letter");
+  const ctrlInv = document.getElementById("tmpl-controls-invoice");
+  if (val === "invoice") {
+    ctrlLetter.classList.add("hidden");
+    ctrlInv.classList.remove("hidden");
+  } else {
+    ctrlLetter.classList.remove("hidden");
+    ctrlInv.classList.add("hidden");
+  }
+  renderTemplateLivePreview();
+}
+
+async function renderTemplateLivePreview() {
+  const container = document.getElementById("tmpl-preview-container");
+  if (!container) return;
+
+  const type = document.getElementById("tmpl-select-type").value;
+  const custom = {
+    recipient_name: document.getElementById("tmpl-input-rec-name")?.value || "",
+    recipient_contact: document.getElementById("tmpl-input-rec-contact")?.value || "",
+    recipient_street: document.getElementById("tmpl-input-rec-street")?.value || "",
+    recipient_city: document.getElementById("tmpl-input-rec-city")?.value || "",
+    subject: document.getElementById("tmpl-input-subject")?.value || "",
+    body_text: document.getElementById("tmpl-input-body")?.value || "",
+    invoice_num: document.getElementById("tmpl-input-inv-num")?.value || "RE-2026-001",
+    due_date: document.getElementById("tmpl-input-inv-due")?.value || "14.11.2026"
+  };
+
+  try {
+    const res = await fetch("/api/corporate/render-template", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        template_type: type,
+        company_id: currentCorpCompany ? currentCorpCompany.id : undefined,
+        custom: custom
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      container.innerHTML = data.html;
+    }
+  } catch (e) {
+    console.error("Error rendering template preview:", e);
+  }
+}
+
+function printTemplatePreview() {
+  const container = document.getElementById("tmpl-preview-container");
+  if (!container) return;
+  const printWindow = window.open("", "_blank");
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Ausdruck - Vorlage</title>
+        <style>
+          @page { margin: 15mm; size: A4; }
+          body { margin: 0; padding: 0; background: #fff; }
+        </style>
+      </head>
+      <body>
+        ${container.innerHTML}
+        <script>
+          window.onload = function() { window.print(); window.close(); }
+        <\/script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+function openNewCompanyModal() {
+  const name = prompt("Name des neuen Unternehmens / der Tochtergesellschaft:");
+  if (!name) return;
+  const newComp = {
+    name: name,
+    legal_form: "GmbH",
+    slogan: "",
+    address: { street: "", postal_code: "", city: "", country: "Deutschland" },
+    contact: { phone: "", email: "", website: "" },
+    registry: { court: "", number: "", managing_directors: "" },
+    tax: { vat_id: "", tax_number: "", small_business: false },
+    bank: { bank_name: "", iban: "", bic: "" },
+    design: { primary_color: "#2563eb", secondary_color: "#38bdf8", logo_url: "" }
+  };
+  fetch("/api/corporate/companies", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(newComp)
+  }).then(r => r.json()).then(data => {
+    if (data.company) {
+      loadCorporateCompanies().then(() => {
+        onCorporateCompanySelect(data.company.id);
+      });
+    }
+  });
+}
+</script>

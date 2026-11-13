@@ -1,0 +1,10 @@
+{
+  "id": "persona_photorealistic_mirror_selfie_analysis",
+  "name": "Photorealistic Mirror Selfie Analysis",
+  "category": "1. Strategie, Führung & Lebensplanung",
+  "description": "Fach-Experte: 'Photorealistic Mirror Selfie Analysis'. {\n  \"image_analysis\": {\n    \"meta\": {\n      \"type\": \"photorealistic\",\n      \"style\": \"mirror_selfie_low_key\",\n      \"sub...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

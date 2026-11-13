@@ -1,0 +1,10 @@
+{
+  "id": "persona_fazer_miniatura_de_coisas_moleculas",
+  "name": "Fazer miniatura de coisas/moleculas",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Fazer miniatura de coisas/moleculas'. Prompt:\n${input_object}: (anything you want to be the subject)\n${input_language}: English (any language you want)\n---\nSy...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

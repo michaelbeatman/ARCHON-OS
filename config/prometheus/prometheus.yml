@@ -1,0 +1,23 @@
+# config/prometheus/prometheus.yml
+# Prometheus Scrape-Konfiguration für Archon OS und Docker-Dienste
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "archon-os"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["archon-os:8501"]
+        labels:
+          environment: "production"
+          service: "archon-fastapi-core"
+
+  - job_name: "omniroute"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["omniroute:20128"]
+        labels:
+          environment: "production"
+          service: "llm-router"

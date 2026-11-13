@@ -1,0 +1,307 @@
+<div id="view-showroom" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="height: 100vh !important; max-height: 100vh !important;">
+
+  <!-- ========================================================================= -->
+  <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, DURCHGEHEND: ELEMENT 2)       -->
+  <!-- ========================================================================= -->
+  <div id="showroom-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+
+    <!-- LINKSBÜNDIG: ÜBERSCHRIFT, STATUS, BADGE, SUBTITLE -->
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <h2 data-i18n="view.showroom.title" id="showroom-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
+        Showroom · Projekt-Explorer
+      </h2>
+      <button data-i18n-title="view.showroom.title_help" type="button" onclick="openContextHelp('showroom')" title="Hilfe zum Showroom" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+        <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+      </button>
+      <span id="showroom-total-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
+        <span id="showroom-projects-count-badge">0 Projekte</span>
+      </span>
+      <span data-i18n="view.showroom.subtitle" id="showroom-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-semibold truncate hidden xl:inline pl-1">
+        · Dateibaumstruktur nach Windows Explorer: Zwischenberichte, Medien &amp; Endprodukte
+      </span>
+    </div>
+
+    <!-- RECHTSBÜNDIG: DIE 4 GROSSEN ICON-KACHELN IM KADER-STIL (72px) -->
+    <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 h-full py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
+      
+      <!-- 1. Alle / Explorer -->
+      <button data-i18n-title="view.showroom.title_tab_all" 
+        type="button" 
+        id="showroom-tab-btn-all" 
+        onclick="filterShowroomCategory('all')" 
+        class="showroom-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="Gesamten Dateibaum anzeigen"
+      >
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/explorer.png?v=3" alt="Explorer" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.showroom.tab_all" class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Explorer</span>
+      </button>
+
+      <!-- 2. Zwischenberichte -->
+      <button data-i18n-title="view.showroom.title_tab_reports" 
+        type="button" 
+        id="showroom-tab-btn-berichte" 
+        onclick="filterShowroomCategory('zwischenberichte')" 
+        class="showroom-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="01_Zwischenberichte fokussieren"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/berichte.png?v=3" alt="Berichte" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.showroom.tab_reports" class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Berichte</span>
+      </button>
+
+      <!-- 3. Medien -->
+      <button data-i18n-title="view.showroom.title_tab_media" 
+        type="button" 
+        id="showroom-tab-btn-medien" 
+        onclick="filterShowroomCategory('medien')" 
+        class="showroom-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="02_Medien fokussieren"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/medien.png?v=3" alt="Medien" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.showroom.tab_media" class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Medien</span>
+      </button>
+
+      <!-- 4. Endprodukte -->
+      <button data-i18n-title="view.showroom.title_tab_products" 
+        type="button" 
+        id="showroom-tab-btn-endprodukte" 
+        onclick="filterShowroomCategory('endprodukte')" 
+        class="showroom-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        title="03_Endprodukte fokussieren"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/endprodukte.png?v=3" alt="Endprodukte" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.showroom.tab_products" class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Endprodukte</span>
+      </button>
+
+      <!-- 5. Web-Apps & Shops (Headless Local Preview) -->
+      <button data-i18n-title="view.showroom.title_tab_apps" 
+        type="button" 
+        id="showroom-tab-btn-apps" 
+        onclick="filterShowroomCategory('apps')" 
+        class="showroom-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150" 
+        title="Lokale Web-Apps & Webshops testen"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 bg-sky-500/10 rounded-xl border border-sky-500/20">
+          <i data-lucide="layout-grid" class="w-6 h-6 text-sky-500"></i>
+        </div>
+        <span data-i18n="view.showroom.tab_apps" class="showroom-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Web-Apps</span>
+      </button>
+
+    </div>
+
+    <!-- Versteckte Kompatibilitätsanker für Skripte -->
+    <div class="hidden" aria-hidden="true">
+      <img id="showroom-main-header-img" src="/static/img/cadre_icons/showroom.png?v=3" alt="">
+      <div id="showroom-main-header-avatar"></div>
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 2. HAUPT-WORKSPACE (EXPLORER LINKS & DATEI-VORSCHAU RECHTS)                 -->
+  <!-- ========================================================================= -->
+  <div class="flex-1 min-h-0 w-full flex p-2 gap-2 overflow-hidden">
+    
+    <!-- 1. LINKE SPALTE: PROJEKT-ORDNER DATEIBAUM (260px) -->
+    <div id="showroom-catalog-col" class="w-[260px] min-w-[260px] max-w-[260px] h-full min-h-0 flex flex-col justify-between prof-panel-card p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs shrink-0 transition-all duration-200">
+      
+      <!-- Explorer Sidebar Header -->
+      <div class="shrink-0 pb-2 border-b border-[var(--border)] space-y-2">
+        <div class="h-9 flex items-center justify-between">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i data-lucide="folder-tree" class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0"></i>
+            <h3 data-i18n="view.showroom.tree_title" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">Projekt-Explorer</h3>
+          </div>
+          <button data-i18n-title="view.showroom.title_help" type="button" onclick="openContextHelp('showroom')" title="Hilfe zum Showroom" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
+            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        
+        <!-- Integriertes Suchfeld -->
+        <div class="relative w-full">
+          <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2 text-[var(--muted-foreground)] pointer-events-none"></i>
+          <input data-i18n-placeholder="view.showroom.ph_tree_search" type="text" id="showroom-tree-filter" oninput="filterShowroomTree(this.value)" placeholder="Dateien oder Projekte suchen..." class="w-full text-xs font-mono rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] pl-8 pr-2.5 py-1.5 outline-none focus:border-zinc-500 shadow-2xs">
+        </div>
+      </div>
+      
+      <!-- Baum-Container mit Scrollbar (Volle Resthöhe) -->
+      <div id="showroom-tree-container" class="flex-1 overflow-y-auto pr-1 py-1.5 space-y-1 font-mono text-xs select-none custom-scrollbar min-h-0">
+        <div class="p-4 text-center text-xs text-[var(--muted-foreground)] italic font-mono">
+          Lade Projekt-Dateibaum...
+        </div>
+      </div>
+
+      <!-- Footer mit Sync & Status -->
+      <div class="pt-2 shrink-0 border-t border-[var(--border)] flex items-center justify-between">
+        <button data-i18n-title="view.showroom.title_refresh" type="button" onclick="loadShowroomView(true)" title="Projekt-Explorer aktualisieren" class="h-7 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-[11px] font-mono font-medium flex items-center gap-1.5 transition shadow-2xs cursor-pointer">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
+          <span data-i18n="view.showroom.action_sync">Sync</span>
+        </button>
+        <span class="text-[10px] font-mono text-[var(--muted-foreground)] truncate">
+          01_PROJEKTE
+        </span>
+      </div>
+    </div>
+
+    <!-- 2. RECHTE HAUPTSPALTE: DATEI-VORSCHAU & AKTIONEN -->
+    <div id="showroom-main-area" class="flex-1 h-full min-h-0 flex flex-col min-w-0 overflow-hidden">
+      
+      <!-- DATEI-VORSCHAU CONTAINER (Volle Höhe) -->
+      <div class="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 sm:p-4 shadow-xs flex flex-col flex-1 min-h-0 overflow-hidden os-island">
+        <!-- Preview Header & Breadcrumb -->
+        <div class="flex flex-wrap items-center justify-between pb-3 border-b border-[var(--border)] gap-2 shrink-0">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <i id="showroom-file-icon" data-lucide="file-text" class="w-4 h-4 text-zinc-500 shrink-0"></i>
+            <div class="truncate">
+              <div id="showroom-file-name" class="text-xs font-bold font-mono text-[var(--foreground)] truncate">Keine Datei ausgewählt</div>
+              <div id="showroom-file-breadcrumb" class="text-[10px] font-mono text-[var(--muted-foreground)] truncate">Wähle links im Explorer einen Zwischenbericht, Medien oder ein Endprodukt</div>
+            </div>
+          </div>
+          <!-- Action Bar Rechts -->
+          <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+            <!-- Toggle: Formatiert / Quelltext / HTML (nur bei Markdown/Text aktiv) -->
+            <div id="showroom-md-toggle-group" class="hidden inline-flex rounded-md border border-[var(--border)] bg-[var(--background)] p-0.5">
+              <button data-i18n="view.showroom.md_mode_render" data-i18n-title="view.showroom.title_md_mode_render" id="btn-md-mode-render" onclick="setShowroomMarkdownMode('render')" title="Formatierte Markdown-Ansicht" class="px-2 py-1 text-[10px] font-mono font-medium rounded bg-[var(--card)] text-[var(--foreground)] shadow-xs">Formatiert</button>
+              <button data-i18n="view.showroom.md_mode_raw" data-i18n-title="view.showroom.title_md_mode_raw" id="btn-md-mode-raw" onclick="setShowroomMarkdownMode('raw')" title="Roher Quelltext" class="px-2 py-1 text-[10px] font-mono font-medium rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]">Quelltext</button>
+              <button data-i18n="view.showroom.md_mode_html" data-i18n-title="view.showroom.title_md_mode_html" id="btn-md-mode-html" onclick="setShowroomMarkdownMode('html')" title="Formatiertes HTML (Word-kompatibel)" class="px-2 py-1 text-[10px] font-mono font-bold rounded text-blue-600 dark:text-blue-400 hover:text-[var(--foreground)]">HTML</button>
+            </div>
+            <!-- Pure Icon Actions -->
+            <!-- Live Sandbox Button -->
+            <button data-i18n-title="view.showroom.title_sandbox_run" id="btn-showroom-run" onclick="runShowroomCodeSandbox()" title="Code in isolierter Sandbox ausführen" class="hidden px-2 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+              <i data-lucide="play" class="w-3.5 h-3.5 text-emerald-500 fill-emerald-500"></i>
+              <span data-i18n="view.showroom.action_sandbox_run">Sandbox Run</span>
+            </button>
+            <!-- Copy Button -->
+            <button data-i18n-title="view.showroom.title_copy" id="btn-showroom-copy" onclick="copyCurrentFileContent()" title="Inhalt in Zwischenablage kopieren" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--secondary)] flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-300"></i>
+            </button>
+            <!-- Diskette / Download Button -->
+            <button data-i18n-title="view.showroom.title_download" id="btn-showroom-download" onclick="downloadCurrentShowroomFile()" title="Datei herunterladen" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--secondary)] flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="save" class="w-3.5 h-3.5 text-emerald-500"></i>
+            </button>
+            <!-- Trash / Delete Button (Verschieben in Papierkorb) -->
+            <button data-i18n-title="view.showroom.title_delete" id="btn-showroom-delete" onclick="deleteCurrentShowroomFile()" title="In den Papierkorb verschieben" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-500"></i>
+            </button>
+            <!-- Restore Button (nur im Papierkorb sichtbar) -->
+            <button data-i18n-title="view.showroom.title_restore" id="btn-showroom-restore" onclick="restoreCurrentShowroomFile()" title="Aus Papierkorb wiederherstellen" class="hidden p-1.5 rounded-lg border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="undo-2" class="w-3.5 h-3.5 text-emerald-600"></i>
+            </button>
+            <!-- Purge Button (nur im Papierkorb sichtbar) -->
+            <button data-i18n-title="view.showroom.title_purge" id="btn-showroom-purge" onclick="purgeCurrentShowroomFile()" title="Endgültig vernichten" class="hidden p-1.5 rounded-lg border border-red-500/40 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 hover:bg-red-100 flex items-center justify-center transition cursor-pointer">
+              <i data-lucide="x-circle" class="w-3.5 h-3.5 text-red-600"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Datei-Inhaltsbereich mit Preview-Typen -->
+        <div id="showroom-viewer-container" class="flex-1 min-h-0 overflow-y-auto mt-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-4 relative custom-scrollbar">
+          
+          <!-- Placeholder: Keine Datei gewählt -->
+          <div id="showroom-viewer-placeholder" class="h-full flex flex-col items-center justify-center text-center p-8 text-[var(--muted-foreground)]">
+            <i data-lucide="folder-search" class="w-12 h-12 mb-3 stroke-[1.25] text-zinc-400"></i>
+            <div data-i18n="view.showroom.placeholder_no_file" class="text-sm font-semibold font-mono text-[var(--foreground)] mb-1">Keine Datei ausgewählt</div>
+            <div data-i18n="view.showroom.placeholder_hint" class="text-xs font-mono max-w-md">Klicke links auf ein Projekt und öffne Zwischenberichte, Medien oder Endprodukte, um die Vorschau zu laden.</div>
+          </div>
+          <!-- Markdown Gerendert (Standard für .md) -->
+          <div id="showroom-viewer-markdown" class="hidden select-text text-xs leading-relaxed max-w-none prose dark:prose-invert showroom-markdown-view">
+            <!-- Gerenderter Markdown HTML Inhalt -->
+          </div>
+          <!-- Quelltext Raw / Code -->
+          <pre id="showroom-viewer-raw" class="hidden select-text font-mono text-xs whitespace-pre-wrap leading-relaxed m-0 text-[var(--foreground)]"></pre>
+          <!-- Formatiertes HTML Ansichts-Panel direkt im Ansichtsfenster -->
+          <div id="showroom-viewer-html-panel" class="hidden select-text text-xs leading-relaxed max-w-none">
+            <div class="flex items-center justify-between pb-2 mb-3 border-b border-[var(--border)] bg-[var(--card)] p-2 rounded">
+              <span data-i18n="view.showroom.html_panel_title" class="text-[10px] font-mono text-[var(--muted-foreground)]">Formatiertes HTML (Word-kompatibel)</span>
+              <button onclick="copyCurrentHtmlContent()" class="px-2 py-1 rounded border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[11px] font-mono flex items-center gap-1 cursor-pointer">
+                <i data-lucide="copy" class="w-3 h-3 text-blue-500"></i>
+                <span data-i18n="view.showroom.action_copy_html">HTML Kopieren</span>
+              </button>
+            </div>
+            <div id="showroom-viewer-html-content" class="p-3 bg-white text-zinc-900 rounded border border-zinc-200"></div>
+          </div>
+          <!-- Bild-Vorschau -->
+          <div id="showroom-viewer-image" class="hidden h-full flex flex-col items-center justify-center p-4">
+            <img data-i18n-title="view.showroom.title_image_zoom" id="showroom-img-elem" src="" alt="Vorschau" class="max-h-[70vh] max-w-full rounded shadow-md border border-[var(--border)] object-contain cursor-zoom-in" ondblclick="openShowroomImageModal(this.src)" title="Doppelklick für Vollansicht">
+            <div data-i18n="view.showroom.image_hint" class="text-[11px] font-mono text-[var(--muted-foreground)] mt-2">Tipp: Doppelklick für Großansicht</div>
+          </div>
+          <!-- HTML / Web-App Iframe -->
+          <div id="showroom-viewer-iframe-wrap" class="hidden h-full flex flex-col">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)]">
+              <span data-i18n="view.showroom.iframe_title" class="text-xs font-mono text-[var(--muted-foreground)]">Interaktive HTML / Web-App Vorschau</span>
+              <button onclick="openCurrentIframeNewTab()" class="text-xs font-mono underline hover:text-[var(--foreground)] flex items-center gap-1">
+                <i data-lucide="external-link" class="w-3 h-3"></i> Im neuen Tab öffnen
+              </button>
+            </div>
+            <iframe id="showroom-viewer-iframe" src="about:blank" sandbox="allow-scripts allow-forms allow-same-origin" class="flex-1 w-full h-[65vh] border-none rounded bg-white"></iframe>
+          </div>
+        </div>
+
+        <!-- Terminal Console Drawer für Code Sandbox -->
+        <div id="showroom-sandbox-console" class="hidden mt-3 rounded-xl border border-[var(--border)] bg-slate-950 text-slate-100 p-3.5 font-mono text-xs shadow-lg space-y-2 shrink-0">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div class="flex items-center gap-2">
+              <span id="showroom-sandbox-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span data-i18n="view.showroom.sandbox_output_title" class="text-[11px] font-bold tracking-tight text-slate-300">Sandbox Terminal Output</span>
+              <span id="showroom-sandbox-duration" class="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-400">0 ms</span>
+            </div>
+            <button type="button" onclick="document.getElementById('showroom-sandbox-console').classList.add('hidden')" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <pre id="showroom-sandbox-output" class="max-h-48 overflow-y-auto whitespace-pre-wrap text-slate-200 text-[11.5px] leading-relaxed custom-scrollbar select-text"></pre>
+        </div>
+
+        <!-- Toast-Feedback unten -->
+        <div id="showroom-toast" class="hidden mt-2 p-2 rounded text-xs font-mono border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] text-center transition-all"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: HTML VORSCHAU & WORD-EXPORT -->
+  <div id="showroom-html-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+    <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-xl p-5 w-[92vw] max-w-4xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="file-code" class="w-4 h-4 text-blue-500"></i>
+          <h3 data-i18n="view.showroom.modal_title" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)]">HTML VORSCHAU &amp; WORD-EXPORT</h3>
+        </div>
+        <button onclick="closeShowroomHtmlModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <!-- Modal Action Bar -->
+      <div class="flex items-center justify-between py-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 px-3 my-2 rounded">
+        <span data-i18n="view.showroom.modal_sub" class="text-[11px] font-mono text-[var(--muted-foreground)]">Formatiertes HTML für Microsoft Word &amp; Outlook</span>
+        <div class="flex items-center gap-2">
+          <button onclick="copyHtmlForWord()" class="px-3 py-1.5 rounded text-xs font-mono font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 flex items-center gap-1.5 transition cursor-pointer shadow-xs">
+            <i data-lucide="clipboard-copy" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.showroom.action_copy_word">In Zwischenablage (Word-kompatibel) kopieren</span>
+          </button>
+          <button onclick="downloadHtmlFile()" class="px-2.5 py-1.5 rounded text-xs font-mono font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] flex items-center gap-1 transition cursor-pointer">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.showroom.action_save_html">HTML speichern</span>
+          </button>
+        </div>
+      </div>
+      <!-- Modal Body (Gerendertes HTML) -->
+      <div id="showroom-html-preview-body" class="flex-1 overflow-y-auto p-4 rounded border border-[var(--border)] bg-white text-zinc-900 font-sans text-sm leading-normal select-text custom-scrollbar">
+        <!-- Dynamisch mit HTML gefüllt -->
+      </div>
+      
+      <div id="showroom-html-toast" class="hidden mt-2 p-1.5 rounded text-xs font-mono bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-center"></div>
+    </div>
+  </div>
+  <!-- MODAL: BILD VOLLANSICHT -->
+  <div id="showroom-image-modal" onclick="closeShowroomImageModal()" class="hidden fixed inset-0 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 z-50 cursor-zoom-out">
+    <img id="showroom-modal-img" src="" alt="Vollbild" class="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl">
+  </div>
+</div>

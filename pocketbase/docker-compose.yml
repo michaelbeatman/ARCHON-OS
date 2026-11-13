@@ -1,0 +1,25 @@
+name: CRM
+
+services:
+  CRM:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: crm-frontend:latest
+    container_name: CRM
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+
+  Pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: Pocketbase
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./pb_data:/pb_data
+      - ./pb_hooks:/pb_hooks
+      - ./pb_public:/pb_public

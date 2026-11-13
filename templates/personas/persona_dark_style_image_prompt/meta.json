@@ -1,0 +1,10 @@
+{
+  "id": "persona_dark_style_image_prompt",
+  "name": "Dark Style Image Prompt",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Dark Style Image Prompt'. Create an image with a ${style:dark} aesthetic. Your image should feature:\n\n- **Lighting:** Moody and low-key, highlight...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

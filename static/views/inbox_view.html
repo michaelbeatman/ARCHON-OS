@@ -1,0 +1,717 @@
+<div id="view-inbox" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view" style="height: 100vh !important; max-height: 100vh !important;">
+
+  <!-- ========================================================================= -->
+  <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, DURCHGEHEND: ELEMENT 2)       -->
+  <!-- ========================================================================= -->
+  <div id="inbox-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+
+    <!-- LINKSBÜNDIG: ÜBERSCHRIFT, STATUS, BADGE, SUBTITLE -->
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <h2 data-i18n="view.inbox.title" id="inbox-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
+        Posteingang &amp; Übersicht
+      </h2>
+      <button type="button" onclick="openContextHelp('inbox')" data-i18n-title="view.inbox.title_help" title="Hilfe zum Posteingang &amp; Triage" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+        <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+      </button>
+      <span id="inbox-total-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
+        0 Items
+      </span>
+      <span data-i18n="view.inbox.subtitle" id="inbox-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-semibold truncate hidden xl:inline pl-1">
+        · Operative Triage: Webhooks, Interne Aufgaben, E-Mail &amp; Messenger
+      </span>
+    </div>
+
+    <!-- RECHTSBÜNDIG: DIE 5 SUBTAB-ICONS (Übersicht, Webhooks, Intern, E-Mail, Messenger) -->
+    <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 h-full py-0.5 overflow-x-auto overflow-y-hidden custom-scrollbar">
+      
+      <!-- 1. Übersicht -->
+      <button 
+        type="button" 
+        id="inbox-filter-all" 
+        onclick="setInboxCategoryFilter('all')" 
+        class="inbox-header-tile active-cadre-tab flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        data-i18n-title="view.inbox.tab_overview_title" title="Übersicht aller 4 Kanäle"
+      >
+        <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/overview.png" alt="Übersicht" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.inbox.tab_overview" class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none">Übersicht</span>
+      </button>
+
+      <!-- 2. Webhooks -->
+      <button 
+        type="button" 
+        id="inbox-filter-webhook" 
+        onclick="setInboxCategoryFilter('webhook')" 
+        class="inbox-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        data-i18n-title="view.inbox.tab_webhooks_title" title="Webhooks &amp; APIs"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/inbox_webhooks.png" alt="Webhooks" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.inbox.tab_webhooks" class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Webhooks</span>
+      </button>
+
+      <!-- 3. Intern -->
+      <button 
+        type="button" 
+        id="inbox-filter-intern" 
+        onclick="setInboxCategoryFilter('intern')" 
+        class="inbox-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        data-i18n-title="view.inbox.tab_intern_title" title="Interne Aufgaben &amp; Freigaben"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/inbox_intern.png" alt="Intern" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.inbox.tab_intern" class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Intern</span>
+      </button>
+
+      <!-- 4. E-Mail -->
+      <button 
+        type="button" 
+        id="inbox-filter-email" 
+        onclick="setInboxCategoryFilter('email')" 
+        class="inbox-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        data-i18n-title="view.inbox.tab_email_title" title="E-Mail Postfach"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/inbox_email.png" alt="E-Mail" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.inbox.tab_email" class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">E-Mail</span>
+      </button>
+
+      <!-- 5. Messenger -->
+      <button 
+        type="button" 
+        id="inbox-filter-messenger" 
+        onclick="setInboxCategoryFilter('messenger')" 
+        class="inbox-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
+        data-i18n-title="view.inbox.tab_messenger_title" title="Messenger Stream (Telegram &amp; Bots)"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5">
+          <img src="/static/img/cadre_icons/inbox_messenger.png" alt="Messenger" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+        </div>
+        <span data-i18n="view.inbox.tab_messenger" class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Messenger</span>
+      </button>
+
+      <!-- 6. Freigaben (E-Mail Draft Queue t-7ca8cd) -->
+      <button 
+        type="button" 
+        id="inbox-filter-approvals" 
+        onclick="setInboxCategoryFilter('approvals')" 
+        class="inbox-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150 relative"
+        data-i18n-title="view.inbox.tab_approvals_title" title="Freigabe-Queue (KI-E-Mail-Entwürfe mit GoBD-Prüfpfad)"
+      >
+        <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+          <img src="/static/img/cadre_icons/telemetry_audit.png" alt="Freigaben" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
+          <span id="inbox-approvals-counter-badge" class="hidden absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500 text-black shadow-xs">0</span>
+        </div>
+        <span data-i18n="view.inbox.tab_approvals" class="inbox-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Freigaben</span>
+      </button>
+
+    </div>
+
+    <!-- Versteckte Kompatibilitätsanker für Skripte -->
+    <div class="hidden" aria-hidden="true">
+      <img id="inbox-main-header-img" src="/static/img/cadre_icons/overview.png" alt="">
+      <div id="inbox-main-header-avatar"></div>
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 2. SUB-TOOLBAR: SCHNELLFILTER, 5 FARBFELDER, PINNED & RECHTS SUCHE + SYNC    -->
+  <!-- ========================================================================= -->
+  <div id="inbox-sub-toolbar" class="h-11 min-h-[44px] max-h-[44px] w-full px-4 bg-[var(--card)]/90 border-b border-[var(--border)] shrink-0 flex items-center justify-between gap-3 text-xs font-mono z-10 shadow-2xs">
+    
+    <!-- LINKS: STATUS-FILTER, PINNED-FILTER & DIE 5 FARBFELDER -->
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0 overflow-x-auto py-1 custom-scrollbar">
+      
+      <!-- Schnell-Filter Pills -->
+      <div class="inline-flex p-0.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/60 text-[10.5px] shrink-0">
+        <button data-i18n="view.inbox.quick_filter_all" type="button" id="inbox-quick-filter-all" onclick="setInboxQuickFilter('all')" class="px-2.5 py-1 rounded font-bold bg-[var(--card)] text-red-600 dark:text-red-400 shadow-2xs transition cursor-pointer">
+          Alle
+        </button>
+        <button type="button" id="inbox-quick-filter-pinned" onclick="setInboxQuickFilter('pinned')" class="px-2.5 py-1 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1" data-i18n-title="view.inbox.quick_pinned_title" title="Nur angepinnte / markierte Nachrichten">
+          <span>📌</span> <span data-i18n="view.inbox.quick_filter_pinned">Schwarzes Brett</span>
+          <span id="inbox-pinned-count-pill" class="ml-0.5 px-1 rounded-full text-[9px] bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">0</span>
+        </button>
+      </div>
+
+      <div class="h-4 w-px bg-[var(--border)] shrink-0"></div>
+
+      <!-- DIE 5 FARBFELDER (FARBMARKIERUNGS-FILTER) -->
+      <div class="flex items-center gap-1.5 shrink-0" data-i18n-title="view.inbox.marker_title" title="Nach Farbmarkierung filtern">
+        <span data-i18n="view.inbox.marker_label" class="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider hidden md:inline">Marker:</span>
+        
+        <!-- Rot: Prio 1 / Eskalation -->
+        <button type="button" id="inbox-color-filter-red" onclick="toggleInboxColorFilter('red')" class="w-5 h-5 rounded-full bg-red-500 hover:scale-125 transition-transform cursor-pointer border-2 border-transparent shadow-xs relative" data-i18n-title="view.inbox.color_red_title" title="Rot: Hohe Priorität / Sofort">
+          <span data-i18n="view.inbox.color_red" class="sr-only">Rot</span>
+        </button>
+
+        <!-- Orange: In Bearbeitung -->
+        <button type="button" id="inbox-color-filter-orange" onclick="toggleInboxColorFilter('orange')" class="w-5 h-5 rounded-full bg-amber-500 hover:scale-125 transition-transform cursor-pointer border-2 border-transparent shadow-xs relative" data-i18n-title="view.inbox.color_orange_title" title="Orange: In Bearbeitung">
+          <span data-i18n="view.inbox.color_orange" class="sr-only">Orange</span>
+        </button>
+
+        <!-- Gelb: Review / Wichtig -->
+        <button type="button" id="inbox-color-filter-yellow" onclick="toggleInboxColorFilter('yellow')" class="w-5 h-5 rounded-full bg-yellow-400 hover:scale-125 transition-transform cursor-pointer border-2 border-transparent shadow-xs relative" data-i18n-title="view.inbox.color_yellow_title" title="Gelb: Review nötig">
+          <span data-i18n="view.inbox.color_yellow" class="sr-only">Gelb</span>
+        </button>
+
+        <!-- Grün: Erledigt / Freigabe -->
+        <button type="button" id="inbox-color-filter-green" onclick="toggleInboxColorFilter('green')" class="w-5 h-5 rounded-full bg-emerald-500 hover:scale-125 transition-transform cursor-pointer border-2 border-transparent shadow-xs relative" data-i18n-title="view.inbox.color_green_title" title="Grün: Erledigt / Freigegeben">
+          <span data-i18n="view.inbox.color_green" class="sr-only">Grün</span>
+        </button>
+
+        <!-- Blau: Info / Referenz -->
+        <button type="button" id="inbox-color-filter-blue" onclick="toggleInboxColorFilter('blue')" class="w-5 h-5 rounded-full bg-sky-500 hover:scale-125 transition-transform cursor-pointer border-2 border-transparent shadow-xs relative" data-i18n-title="view.inbox.color_blue_title" title="Blau: Information / Referenz">
+          <span data-i18n="view.inbox.color_blue" class="sr-only">Blau</span>
+        </button>
+
+        <!-- Filter Aufheben (Zurücksetzen) -->
+        <button data-i18n="view.inbox.reset_filter" type="button" id="inbox-color-filter-clear" onclick="toggleInboxColorFilter(null)" class="hidden ml-1 px-1.5 py-0.5 rounded text-[10px] border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer" data-i18n-title="view.inbox.reset_filter_title" title="Farbfilter aufheben">
+          ✕ Reset
+        </button>
+      </div>
+
+    </div>
+
+    <!-- RECHTSBÜNDIG: SUCHE & SYNC-BUTTON (Wunsch des Nutzers) -->
+    <div class="flex items-center gap-2 shrink-0">
+      
+      <!-- Suchfeld -->
+      <div class="relative w-44 sm:w-56 lg:w-64 h-7">
+        <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] pointer-events-none"></i>
+        <input 
+          type="text" 
+          id="inbox-search-input" 
+          oninput="toggleClearBtn('inbox-search-input'); filterInboxItems(this.value)" 
+          data-i18n-placeholder="view.inbox.ph_filter" placeholder="Nachrichten filtern..." 
+          class="w-full h-7 bg-[var(--background)] border border-[var(--border)] rounded-lg pl-8 pr-6 text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-zinc-500 font-mono shadow-2xs"
+        >
+        <button 
+          id="inbox-search-input-clear" 
+          onclick="clearSearchInput('inbox-search-input', () => filterInboxItems(''))" 
+          class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs font-bold cursor-pointer" 
+          data-i18n-title="view.inbox.search_clear_title" title="Suche zurücksetzen"
+        >✕</button>
+      </div>
+
+      <!-- Sync-Button -->
+      <button 
+        type="button" 
+        onclick="triggerManualEmailSync()" 
+        class="h-7 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium flex items-center gap-1.5 transition shadow-2xs cursor-pointer shrink-0"
+        data-i18n-title="view.inbox.sync_title" title="Streams &amp; Postfächer synchronisieren"
+      >
+        <i id="inbox-imap-spin-icon" data-lucide="refresh-cw" class="w-3 h-3 text-blue-500"></i>
+        <span data-i18n="view.inbox.sync" class="text-[11px] hidden sm:inline">Sync</span>
+      </button>
+
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 3. HAUPT-WORKSPACE (SCHWARZES BRETT / STREAM LINKS & 4-SPALTEN / DETAIL RECHTS)-->
+  <!-- ========================================================================= -->
+  <div class="flex-1 min-h-0 w-full flex p-2 gap-2 overflow-hidden">
+    
+    <!-- 1. LINKE SPALTE: E-MAIL FREIGABEN OBEN & ANGEPINNT UNTEN (260px) -->
+    <div id="inbox-catalog-col" class="w-[260px] min-w-[260px] max-w-[260px] h-full min-h-0 flex flex-col prof-panel-card p-2.5 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs shrink-0 transition-all duration-200 overflow-hidden">
+      
+      <!-- COLLAPSED HEADER (Wenn auf 64px eingeklappt) -->
+      <div id="inbox-catalog-collapsed-header" class="hidden flex flex-col items-center gap-2 pb-2 border-b border-[var(--border)] shrink-0 w-full">
+        <button type="button" onclick="toggleInboxCatalogCollapse()" class="w-full py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-2xs" data-i18n-title="view.inbox.expand_title" title="Spalte ausklappen">
+          ▶
+        </button>
+        <button type="button" onclick="triggerManualEmailSync()" class="p-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition flex items-center justify-center cursor-pointer shadow-2xs" data-i18n-title="view.inbox.sync_short_title" title="Sync">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
+        </button>
+      </div>
+
+      <!-- OBERE HÄLFTE: E-MAIL FREIGABEN (QUEUE) -->
+      <div id="inbox-catalog-drafts-half" class="h-1/2 flex flex-col min-h-0 pb-1.5 overflow-hidden">
+        <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] shrink-0">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-xs">✉️</span>
+            <h4 data-i18n="view.inbox.drafts_title" class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] truncate">E-Mail Freigaben</h4>
+          </div>
+          <div class="flex items-center gap-1">
+            <span id="inbox-left-drafts-badge" class="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+              0
+            </span>
+            <button type="button" onclick="loadEmailDrafts()" class="p-1 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer" data-i18n-title="view.inbox.reload_drafts_title" title="Entwürfe neu laden">
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="inbox-drafts-overview-list" class="flex-1 overflow-y-auto space-y-1.5 my-1.5 pr-0.5 min-h-0 custom-scrollbar w-full text-xs">
+          <!-- Dynamisch befüllt mit simplen E-Mail-Freigabe-Karten -->
+        </div>
+      </div>
+
+      <!-- UNTERE HÄLFTE: ANGEPINNTE DINGE (SCHWARZES BRETT) -->
+      <div id="inbox-catalog-pinned-half" class="h-1/2 flex flex-col min-h-0 pt-1.5 border-t border-[var(--border)] overflow-hidden">
+        <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border)] shrink-0">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-xs">📌</span>
+            <h4 data-i18n="view.inbox.pinned_title" class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)] truncate">Angepinnt</h4>
+          </div>
+          <div class="flex items-center gap-1">
+            <span id="inbox-stream-count-badge" class="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
+              0
+            </span>
+            <button type="button" id="btn-inbox-catalog-collapse" onclick="toggleInboxCatalogCollapse()" class="h-5 w-5 rounded border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition text-[9px] font-mono font-bold flex items-center justify-center cursor-pointer shadow-2xs" data-i18n-title="view.inbox.collapse_title" title="Spalte minimieren">
+              ◀
+            </button>
+          </div>
+        </div>
+
+        <div id="inbox-stream-list" class="flex-1 overflow-y-auto space-y-1.5 my-1.5 pr-0.5 min-h-0 custom-scrollbar w-full text-xs">
+          <!-- Dynamisch befüllt mit simplen angepinnten Elementen -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2. RECHTE HAUPT-SPALTE: 4-SPALTEN-UEBERSICHT ODER VOLLBILD-DETAILANSICHT -->
+    <div class="flex-1 h-full min-h-0 flex flex-col min-w-0 overflow-hidden">
+      
+      <!-- HAUPTINHALTS-BEREICH -->
+      <div class="flex-1 min-h-0 overflow-hidden relative">
+
+        <!-- 1. UEBERSICHTS-MODUS: DIE 4 VORSCHAU-SPALTEN -->
+        <div id="inbox-overview-container" class="grid grid-cols-4 gap-2.5 h-full min-h-0 overflow-hidden w-full">
+          
+          <!-- SPALTE 1: WEBHOOKS -->
+          <div id="inbox-col-webhook" class="min-w-0 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="/static/img/cadre_icons/inbox_webhooks.png" alt="Webhooks" class="w-5 h-5 object-contain shrink-0">
+                <h3 data-i18n="view.inbox.col_webhooks" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">WEBHOOKS</h3>
+              </div>
+              <span id="inbox-badge-webhook" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
+            </div>
+            <div id="inbox-list-webhook" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
+              <div data-i18n="view.inbox.empty_webhooks" class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Webhooks</div>
+            </div>
+          </div>
+
+          <!-- SPALTE 2: INTERN -->
+          <div id="inbox-col-intern" class="min-w-0 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="/static/img/cadre_icons/inbox_intern.png" alt="Intern" class="w-5 h-5 object-contain shrink-0">
+                <h3 data-i18n="view.inbox.col_intern" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">INTERN</h3>
+              </div>
+              <span id="inbox-badge-intern" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
+            </div>
+            <div id="inbox-list-intern" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
+              <div data-i18n="view.inbox.empty_intern" class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine internen Meldungen</div>
+            </div>
+          </div>
+
+          <!-- SPALTE 3: E-MAIL -->
+          <div id="inbox-col-email" class="min-w-0 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="/static/img/cadre_icons/inbox_email.png" alt="E-Mail" class="w-5 h-5 object-contain shrink-0">
+                <h3 data-i18n="view.inbox.col_email" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">E-MAIL</h3>
+              </div>
+              <span id="inbox-badge-email" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
+            </div>
+            <div id="inbox-list-email" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
+              <div data-i18n="view.inbox.empty_email" class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine neuen E-Mails</div>
+            </div>
+          </div>
+
+          <!-- SPALTE 4: MESSENGER -->
+          <div id="inbox-col-messenger" class="min-w-0 border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="/static/img/cadre_icons/inbox_messenger.png" alt="Messenger" class="w-5 h-5 object-contain shrink-0">
+                <h3 data-i18n="view.inbox.col_messenger" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">MESSENGER</h3>
+              </div>
+              <span id="inbox-badge-messenger" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
+            </div>
+            <div id="inbox-list-messenger" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
+              <div data-i18n="view.inbox.empty_messenger" class="p-6 rounded-xl border border-dashed border-[var(--border)] bg-[var(--secondary)]/20 text-center font-mono text-xs text-[var(--muted-foreground)]">Keine Messenger-Nachrichten</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 2. EINZELANSICHT-MODUS: MASTER-DETAIL SPLIT -->
+        <div id="inbox-split-container" class="hidden flex gap-2.5 h-full min-h-0 overflow-hidden w-full">
+          
+          <!-- Master-Liste fuer aktive Kategorie (340px) -->
+          <div class="w-[340px] min-w-[340px] max-w-[340px] h-full min-h-0 flex flex-col border border-[var(--border)] bg-[var(--card)] rounded-2xl p-3 shadow-xs shrink-0 overflow-hidden">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)] shrink-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <img id="inbox-split-icon-img" src="/static/img/cadre_icons/inbox_webhooks.png" alt="" class="w-5 h-5 object-contain shrink-0">
+                <h3 data-i18n="view.inbox.col_postbox" id="inbox-split-title" class="text-xs font-bold uppercase tracking-wider font-mono text-[var(--foreground)] truncate">POSTFACH</h3>
+              </div>
+              <span id="inbox-split-badge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] shrink-0">0</span>
+            </div>
+            <div id="inbox-split-list" class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar min-w-0">
+              <!-- Dynamische Liste -->
+            </div>
+          </div>
+
+          <!-- Detail-Vollansicht -->
+          <div class="flex-1 h-full min-h-0 flex flex-col border border-[var(--border)] bg-[var(--card)] rounded-2xl p-4 shadow-xs min-w-0 overflow-hidden">
+            
+            <!-- Leerer Zustand -->
+            <div id="inbox-detail-empty" class="h-full flex flex-col items-center justify-center text-center p-8 text-[var(--muted-foreground)] font-mono text-xs">
+              <i data-lucide="inbox" class="w-12 h-12 mb-3 stroke-1 opacity-50"></i>
+              <p data-i18n="view.inbox.no_selection" class="font-bold text-sm text-[var(--foreground)] mb-1">Kein Eintrag ausgewählt</p>
+              <p data-i18n="view.inbox.no_selection_hint" class="text-xs max-w-sm">Wähle eine Nachricht aus der Liste links, um den vollständigen Inhalt, JSON-Payloads oder E-Mails einzusehen.</p>
+            </div>
+
+            <!-- Ausgewählter Inhalt -->
+            <div id="inbox-detail-content" class="hidden h-full flex flex-col min-h-0 overflow-hidden">
+              
+              <!-- Detail Header -->
+              <div class="pb-3 mb-3 border-b border-[var(--border)] shrink-0 space-y-2">
+                <div class="flex items-start justify-between gap-3 mb-2">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                      <span data-i18n="view.inbox.kind_event" id="inbox-detail-badge" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">EVENT</span>
+                      <span id="inbox-detail-date" class="text-xs font-mono text-[var(--muted-foreground)]"></span>
+                      <!-- Farbwähler in Detail Header -->
+                      <div id="inbox-detail-color-picker" class="flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full border border-[var(--border)] bg-[var(--background)]"></div>
+                    </div>
+                    <h2 id="inbox-detail-title" class="text-base font-bold font-mono text-[var(--foreground)] break-words"></h2>
+                  </div>
+                  <!-- Aktionen -->
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <button id="inbox-detail-pin-btn" onclick="toggleCurrentInboxDetailPin()" data-i18n-title="view.inbox.pin_title" title="An Schwarzes Brett heften" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs flex items-center justify-center transition cursor-pointer">
+                      <span class="text-sm">📌</span>
+                    </button>
+                    <button id="inbox-detail-task-btn" onclick="convertCurrentInboxDetailToTask()" data-i18n-title="view.inbox.delegate_title" title="Als Aufgabe an Agenten delegieren" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium flex items-center gap-1 transition cursor-pointer">
+                      <i data-lucide="plus" class="w-3.5 h-3.5 text-[#d42a2b]"></i>
+                      <span data-i18n="view.inbox.create_task" class="hidden sm:inline">Task erstellen</span>
+                    </button>
+                    <button id="inbox-detail-copy-btn" onclick="copyInboxDetailText()" data-i18n-title="view.inbox.copy_title" title="Text in Zwischenablage kopieren" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs flex items-center justify-center transition cursor-pointer">
+                      <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button id="inbox-detail-analyze-btn" onclick="analyzeInboxDetailInChat()" data-i18n-title="view.inbox.analyze_console" title="In Master Console analysieren" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold text-white dark:text-zinc-950 flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 transition shadow-xs cursor-pointer">
+                      <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                      <span data-i18n="view.inbox.open_console" class="hidden sm:inline">In Konsole</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono text-[var(--muted-foreground)] bg-[var(--secondary)]/40 p-2.5 rounded-xl border border-[var(--border)]">
+                  <div class="flex items-center gap-1.5">
+                    <strong data-i18n="view.inbox.from_label" class="text-[var(--foreground)]">Von:</strong> 
+                    <span id="inbox-detail-sender"></span>
+                    <button 
+                      type="button" 
+                      id="inbox-sender-trust-btn"
+                      onclick="toggleCurrentSenderTrust(event)"
+                      class="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono transition cursor-pointer flex items-center gap-1 bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 hover:border-zinc-400 select-none shadow-2xs"
+                      data-i18n-title="view.inbox.trust_title" title="Klicken, um diesen Absender als vertrauenswürdig [T] einzustufen (Dual-LLM Quarantäne Bypass)"
+                    >
+                      <span class="font-bold">T</span>
+                      <span data-i18n="view.inbox.quarantine_badge" id="inbox-sender-trust-label" class="text-[9px] uppercase">Quarantäne</span>
+                    </button>
+                  </div>
+                  <div id="inbox-detail-path-wrap" class="truncate max-w-sm"><strong data-i18n="view.inbox.source_label" class="text-[var(--foreground)]">Quelle:</strong> <span id="inbox-detail-path" class="truncate"></span></div>
+                </div>
+              </div>
+
+              <!-- HTML vs Text Toggle (falls HTML Payload verfuegbar) -->
+              <div id="inbox-detail-html-toggle-wrap" class="hidden flex items-center justify-end mb-2 shrink-0">
+                <div class="inline-flex p-0.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] text-[10px] font-mono">
+                  <button data-i18n="view.inbox.tab_html" id="inbox-btn-view-html" onclick="setInboxDetailBodyMode('html')" class="px-2.5 py-0.5 rounded font-bold bg-[var(--card)] text-blue-600 dark:text-blue-400 shadow-2xs">HTML</button>
+                  <button data-i18n="view.inbox.tab_text" id="inbox-btn-view-text" onclick="setInboxDetailBodyMode('text')" class="px-2.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]">Text</button>
+                </div>
+              </div>
+
+              <!-- Body Bereich -->
+              <div class="flex-1 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--background)] p-3.5 custom-scrollbar">
+                <div id="inbox-detail-body-html" class="hidden w-full h-full min-h-[350px]">
+                  <iframe id="inbox-detail-iframe" sandbox="allow-same-origin" class="w-full h-full min-h-[400px] border-none rounded bg-white text-black"></iframe>
+                </div>
+                <pre id="inbox-detail-body-text" class="select-text font-mono text-xs whitespace-pre-wrap leading-relaxed m-0 text-[var(--foreground)]"></pre>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 3. FREIGABEN-QUEUE-MODUS (Reiter oben rechts aktiv: t-7ca8cd) -->
+        <div id="inbox-approvals-container" class="hidden flex-1 h-full min-h-0 flex flex-col border border-[var(--border)] bg-[var(--card)] rounded-2xl p-4 shadow-xs min-w-0 overflow-hidden">
+          <!-- Approvals Header & Toolbar -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-[var(--border)] gap-2 shrink-0">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <i data-lucide="shield-check" class="w-5 h-5 text-amber-500"></i>
+              </div>
+              <div class="min-w-0">
+                <h3 class="text-xs sm:text-sm font-bold font-mono uppercase tracking-wider text-[var(--foreground)] flex items-center gap-2 flex-wrap">
+                  <span data-i18n="view.inbox.approvals_title">E-Mail Freigabe-Queue</span>
+                  <span data-i18n="view.inbox.hitl_badge" id="inbox-approvals-badge-status" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                    HITL-Gate aktiv
+                  </span>
+                </h3>
+                <p data-i18n="view.inbox.approvals_desc" class="text-[11px] font-mono text-[var(--muted-foreground)] truncate">
+                  Menschliche Freigabe für KI-generierte E-Mails · GoBD-konforme SHA-256 Hash-Kette
+                </p>
+              </div>
+            </div>
+
+            <!-- Filter Buttons & Refresh -->
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <div class="inline-flex p-0.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] text-[10px] font-mono">
+                <button data-i18n="view.inbox.filter_all" type="button" onclick="filterDraftsTable('all')" id="btn-draft-filter-all" class="px-2.5 py-1 rounded font-bold bg-[var(--card)] text-[var(--foreground)] shadow-2xs cursor-pointer">Alle</button>
+                <button data-i18n="view.inbox.filter_pending" type="button" onclick="filterDraftsTable('pending')" id="btn-draft-filter-pending" class="px-2.5 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">Ausstehend</button>
+                <button data-i18n="view.inbox.filter_approved" type="button" onclick="filterDraftsTable('approved')" id="btn-draft-filter-approved" class="px-2.5 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">Freigegeben</button>
+                <button data-i18n="view.inbox.filter_snoozed" type="button" onclick="filterDraftsTable('snoozed')" id="btn-draft-filter-snoozed" class="px-2.5 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">Zurückgestellt</button>
+                <button data-i18n="view.inbox.filter_discarded" type="button" onclick="filterDraftsTable('rejected')" id="btn-draft-filter-rejected" class="px-2.5 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">Verworfen</button>
+              </div>
+              <button type="button" onclick="loadEmailDrafts()" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-2xs" data-i18n-title="view.inbox.reload_drafts_title" title="Entwürfe neu laden">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Entwürfe Tabelle / Kartenliste -->
+          <div class="flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-0">
+            <div id="inbox-approvals-table" class="space-y-2.5">
+              <!-- Dynamisch durch loadEmailDrafts() befüllt -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Detail Modal fuer Klick auf Karten in der 4-Spalten-Uebersicht -->
+  <div id="inbox-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+    <div class="w-full max-w-2xl rounded-2xl border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border)] bg-[var(--secondary)]">
+        <div class="flex items-center gap-2 truncate">
+          <span data-i18n="view.inbox.kind_event" id="inbox-modal-badge" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)]">EVENT</span>
+          <h3 data-i18n="view.inbox.message_title" id="inbox-modal-title" class="text-xs font-bold font-mono uppercase text-[var(--foreground)] truncate">Nachricht</h3>
+        </div>
+        <button onclick="closeInboxModal()" class="p-1 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)] transition cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4 text-[var(--foreground)]"></i>
+        </button>
+      </div>
+
+      <!-- Subheader Bar: Meta info & Rohdaten-Toggle -->
+      <div class="flex items-center justify-between px-5 py-2.5 border-b border-[var(--border)] bg-[var(--secondary)]/40 text-xs font-mono">
+        <div id="inbox-modal-meta" class="text-[11px] text-[var(--muted-foreground)] truncate max-w-xs sm:max-w-md"></div>
+        <div class="flex items-center gap-2">
+          <!-- Farbwähler im Modal -->
+          <div id="inbox-modal-color-picker" class="flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)] bg-[var(--background)]"></div>
+          <button id="inbox-modal-pin-btn" onclick="toggleModalInboxPin()" data-i18n-title="view.inbox.pin_title" title="An Schwarzes Brett heften" class="p-1 rounded border border-[var(--border)] hover:bg-[var(--card)] text-xs cursor-pointer">📌</button>
+          <div id="inbox-modal-view-toggle" class="inline-flex p-0.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] text-[10px] shrink-0">
+            <button data-i18n="view.inbox.view_formatted" id="inbox-modal-btn-formatted" onclick="setInboxModalViewMode('formatted')" class="px-2.5 py-1 rounded font-semibold bg-[var(--card)] text-[var(--foreground)] shadow-2xs transition cursor-pointer">Formatierte Ansicht</button>
+            <button data-i18n="view.inbox.view_raw" id="inbox-modal-btn-raw" onclick="setInboxModalViewMode('raw')" class="px-2.5 py-1 rounded font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">Rohdaten</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="px-5 py-4 overflow-y-auto flex-1 text-xs space-y-3 custom-scrollbar bg-[var(--card)] min-h-[300px]">
+        <div id="inbox-modal-formatted" class="space-y-3"></div>
+        <pre id="inbox-modal-raw" class="hidden p-3.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/50 text-[var(--foreground)] font-mono text-xs whitespace-pre-wrap leading-relaxed m-0 select-text overflow-x-auto"></pre>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] bg-[var(--secondary)]/50">
+        <div class="flex items-center gap-2">
+          <button data-i18n="view.inbox.close" onclick="closeInboxModal()" class="px-3.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-xs font-mono font-medium text-[var(--foreground)] transition cursor-pointer">
+            Schliessen
+          </button>
+          <button onclick="convertModalInboxToTask()" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-xs font-mono font-medium text-[var(--foreground)] transition cursor-pointer flex items-center gap-1">
+            <i data-lucide="plus" class="w-3.5 h-3.5 text-[#d42a2b]"></i>
+            <span data-i18n="view.inbox.create_task">Task erstellen</span>
+          </button>
+        </div>
+        <button id="inbox-modal-analyze-btn" class="px-4 py-1.5 rounded-lg text-xs font-mono font-bold text-white dark:text-zinc-950 flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 transition shadow-xs cursor-pointer">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <span data-i18n="view.inbox.analyze_console">In Master Console analysieren</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- 5. E-MAIL ENTWURF REVIEW & FREIGABE MODAL (t-7ca8cd: 5 AKTIONEN)          -->
+  <!-- ========================================================================= -->
+  <div id="modal-email-draft-review" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-4">
+    <div class="w-full max-w-3xl rounded-2xl border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] bg-[var(--secondary)]">
+        <div class="flex items-center gap-2.5 truncate">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
+          <span data-i18n="view.inbox.draft_badge" id="modal-draft-badge" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-[var(--background)] border border-[var(--border)] text-amber-500">
+            DRAFT
+          </span>
+          <h3 data-i18n="view.inbox.draft_title" class="text-xs sm:text-sm font-bold font-mono uppercase text-[var(--foreground)] truncate">
+            E-Mail Entwurf prüfen &amp; freigeben
+          </h3>
+        </div>
+        <button onclick="closeDraftReviewModal()" class="p-1 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)] transition cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Subheader Bar: Governance, Agent, GoBD Audit-Hash -->
+      <div class="px-5 py-2.5 border-b border-[var(--border)] bg-[var(--secondary)]/40 text-[11px] font-mono flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span><strong data-i18n="view.inbox.agent_label">Agent:</strong> <span id="modal-draft-agent" class="text-[var(--foreground)]"></span></span>
+          <span><strong data-i18n="view.inbox.created_label">Erstellt:</strong> <span id="modal-draft-created" class="text-[var(--muted-foreground)]"></span></span>
+          <span id="modal-draft-task-wrap" class="hidden"><strong data-i18n="view.inbox.task_label">Task:</strong> <span id="modal-draft-task" class="text-sky-500"></span></span>
+        </div>
+        <div class="flex items-center gap-1.5 text-[10px]">
+          <span data-i18n="view.inbox.gobd_hash_label" class="text-[var(--muted-foreground)]">GoBD-Hash:</span>
+          <code id="modal-draft-hash" class="px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] font-mono text-[9.5px] text-emerald-600 dark:text-emerald-400 select-all" data-i18n-title="view.inbox.hash_title" title="Kryptografischer Hash-Prüfpfad"></code>
+        </div>
+      </div>
+
+      <!-- Modal Body (Inputs) -->
+      <div class="px-5 py-4 overflow-y-auto flex-1 space-y-3.5 custom-scrollbar bg-[var(--card)] text-xs">
+        <input type="hidden" id="modal-draft-id-hidden" value="">
+
+        <!-- Empfänger & Absender Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label data-i18n="view.inbox.field_recipient" class="block text-[11px] font-mono font-bold text-[var(--muted-foreground)] mb-1">Empfänger (An:)</label>
+            <input type="email" id="modal-draft-recipient" class="w-full px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <div>
+            <label data-i18n="view.inbox.field_sender" class="block text-[11px] font-mono font-bold text-[var(--muted-foreground)] mb-1">Absender</label>
+            <input type="text" id="modal-draft-sender" readonly class="w-full px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/50 text-[var(--muted-foreground)] font-mono text-xs cursor-not-allowed">
+          </div>
+        </div>
+
+        <!-- Betreff -->
+        <div>
+          <label data-i18n="view.inbox.field_subject" class="block text-[11px] font-mono font-bold text-[var(--muted-foreground)] mb-1">Betreff</label>
+          <input type="text" id="modal-draft-subject" class="w-full px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono text-xs font-semibold focus:ring-1 focus:ring-amber-500 focus:outline-none">
+        </div>
+
+        <!-- Nachrichtentext (Vorschau / Edit) -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label data-i18n="view.inbox.field_body" class="text-[11px] font-mono font-bold text-[var(--muted-foreground)]">E-Mail Text (Direkt editierbar)</label>
+            <span data-i18n="view.inbox.edit_notice" class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">✓ Manuelle Bearbeitung wird GoBD-protokolliert</span>
+          </div>
+          <textarea id="modal-draft-body" rows="10" class="w-full p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono text-xs leading-relaxed focus:ring-1 focus:ring-amber-500 focus:outline-none custom-scrollbar select-text"></textarea>
+        </div>
+
+        <!-- Inline Box: Neu generieren (Prompt-Feedback) -->
+        <div id="modal-draft-regen-box" class="hidden p-3 rounded-xl border border-purple-500/30 bg-purple-500/10 space-y-2">
+          <div class="flex items-center justify-between text-xs font-mono font-bold text-purple-600 dark:text-purple-400">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              <span data-i18n="view.inbox.regen_label">Instruktionen an Agenten zur Neu-Generierung</span>
+            </span>
+            <button type="button" onclick="toggleDraftRegenBox(false)" class="text-xs hover:opacity-80">✕</button>
+          </div>
+          <p data-i18n="view.inbox.regen_hint" class="text-[11px] font-mono text-[var(--muted-foreground)]">
+            Beschreibe, was geändert oder ergänzt werden soll (z.B. "Tonalität sachlicher fassen, Frist auf 14 Tage verkürzen"):
+          </p>
+          <div class="flex gap-2">
+            <input type="text" id="modal-draft-regen-prompt" data-i18n-placeholder="view.inbox.ph_regen" placeholder="Feedback an den Agenten..." class="flex-1 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono text-xs focus:outline-none">
+            <button data-i18n="view.inbox.regenerate" type="button" onclick="submitDraftRegenerate()" class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-mono font-bold text-xs shadow-xs cursor-pointer">
+              Neu generieren
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline Box: Abbrechen / Verwerfen (Begründung) -->
+        <div id="modal-draft-reject-box" class="hidden p-3 rounded-xl border border-red-500/30 bg-red-500/10 space-y-2">
+          <div class="flex items-center justify-between text-xs font-mono font-bold text-red-600 dark:text-red-400">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+              <span data-i18n="view.inbox.discard_section">Entwurf verwerfen (Audit-Grund angeben)</span>
+            </span>
+            <button type="button" onclick="toggleDraftRejectBox(false)" class="text-xs hover:opacity-80">✕</button>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" id="modal-draft-reject-reason" data-i18n-placeholder="view.inbox.ph_discard_reason" placeholder="Grund für die Ablehnung (z.B. Veraltet, Falscher Empfänger)..." class="flex-1 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono text-xs focus:outline-none">
+            <button data-i18n="view.inbox.discard_confirm" type="button" onclick="submitDraftReject()" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-mono font-bold text-xs shadow-xs cursor-pointer">
+              Unwiderruflich verwerfen
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline Box: Später erinnern (Snooze Wahl) -->
+        <div id="modal-draft-snooze-box" class="hidden p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-2">
+          <div class="flex items-center justify-between text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+              <span data-i18n="view.inbox.snooze_section">Zurückstellen (Snooze)</span>
+            </span>
+            <button type="button" onclick="toggleDraftSnoozeBox(false)" class="text-xs hover:opacity-80">✕</button>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap text-xs font-mono">
+            <button data-i18n="view.inbox.snooze_1h" type="button" onclick="submitDraftSnooze(1)" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-semibold cursor-pointer shadow-2xs">
+              +1 Stunde
+            </button>
+            <button data-i18n="view.inbox.snooze_4h" type="button" onclick="submitDraftSnooze(4)" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-semibold cursor-pointer shadow-2xs">
+              +4 Stunden
+            </button>
+            <button data-i18n="view.inbox.snooze_24h" type="button" onclick="submitDraftSnooze(24)" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-semibold cursor-pointer shadow-2xs">
+              +24 Stunden (Morgen)
+            </button>
+            <button data-i18n="view.inbox.snooze_3d" type="button" onclick="submitDraftSnooze(72)" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-semibold cursor-pointer shadow-2xs">
+              +3 Tage
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer (Die 5 Haupt-Aktionen) -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-5 py-3 border-t border-[var(--border)] bg-[var(--secondary)]/50 gap-2 shrink-0">
+        <!-- Sekundäre Aktionen links: Verwerfen, Später erinnern, Neu generieren -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button type="button" onclick="toggleDraftRejectBox()" class="px-2.5 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-mono font-medium flex items-center gap-1 cursor-pointer transition shadow-2xs" data-i18n-title="view.inbox.discard_title" title="5. Entwurf abbrechen oder löschen">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.inbox.discard">Verwerfen</span>
+          </button>
+          <button type="button" onclick="toggleDraftSnoozeBox()" class="px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-mono font-medium flex items-center gap-1 cursor-pointer transition shadow-2xs" data-i18n-title="view.inbox.snooze_title" title="3. Später erinnern">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.inbox.snooze">Später erinnern</span>
+          </button>
+          <button type="button" onclick="toggleDraftRegenBox()" class="px-2.5 py-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-xs font-mono font-medium flex items-center gap-1 cursor-pointer transition shadow-2xs" data-i18n-title="view.inbox.regenerate_title" title="4. Durch KI überarbeiten lassen">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.inbox.regenerate">Neu generieren</span>
+          </button>
+        </div>
+
+        <!-- Primäre Aktionen rechts: Bearbeiten & Speichern, Freigeben & Senden -->
+        <div class="flex items-center gap-2 justify-end">
+          <button type="button" onclick="submitDraftSaveEdits()" class="px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition shadow-2xs" data-i18n-title="view.inbox.save_title" title="2. Text & Empfänger speichern">
+            <i data-lucide="save" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.inbox.save">Speichern</span>
+          </button>
+          <button type="button" onclick="submitDraftApproveAndSend()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition shadow-md" data-i18n-title="view.inbox.approve_title" title="1. Freigeben & E-Mail absenden">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.inbox.approve_send">Freigeben &amp; Senden</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>

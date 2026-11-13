@@ -1,0 +1,10 @@
+{
+  "id": "persona_snowy_street_cozy_winter_fit_cinematic",
+  "name": "Snowy Street Cozy (winter fit, cinematic)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Fach-Experte: 'Snowy Street Cozy (winter fit, cinematic)'. {\n  \"category\": \"SNOWY_STREET_WINTER_CANDID\",\n  \"identity_lock\": {\n    \"enabled\": true,\n    \"priority\": \"ABSOLUTE_MAX\",\n...",
+  "skills": [
+    "Research",
+    "Tool Execution"
+  ]
+}

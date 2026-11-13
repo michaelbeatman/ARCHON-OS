@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archon OS - Einheitliches Icon-Tab-System</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    .tab-transition { transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
+  </style>
+</head>
+<body class="bg-transparent text-[var(--foreground)] antialiased p-4 sm:p-6 selection:bg-indigo-500 selection:text-white">
+
+  <div class="max-w-4xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm">
+      <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-mono font-semibold mb-2">
+        <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+        ICON-BASIERTES TAB-SYSTEM
+      </div>
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[var(--foreground)]">
+        Dein Vorschlag: Jeder Tab bekommt ein Icon
+      </h1>
+      <p class="text-sm text-[var(--muted-foreground)] mt-1">
+        Hier ist die konkrete Umsetzung für die wichtigsten Bereiche: Einstellungen, Personalakte, Library und der überarbeitete Agenten-Kader.
+      </p>
+    </div>
+
+    <!-- BEREICH 1: SYSTEM CONTROL CENTER (EINSTELLUNGEN) -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm space-y-4">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <div class="flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+            ⚙️
+          </span>
+          <div>
+            <h2 class="text-sm font-bold text-[var(--foreground)]">System Control Center (Einstellungen)</h2>
+            <p class="text-xs text-[var(--muted-foreground)]">Ersetzt die alten Folder-Tabs durch schlanke Icon-Pills</p>
+          </div>
+        </div>
+        <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">7 Bereiche</span>
+      </div>
+
+      <!-- Icon Tab Bar Einstellungen -->
+      <div class="flex p-1 bg-zinc-200/60 dark:bg-zinc-800/70 rounded-xl border border-zinc-300/40 dark:border-zinc-700/50 gap-1 overflow-x-auto" id="settings-tab-bar">
+        <button onclick="pickSettingsTab(this, 'Core', 'Kernel, Daemon & Background Watchdog')" class="st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs border border-zinc-200/80 dark:border-zinc-700/80 tab-transition shrink-0">
+          <span class="text-indigo-500 text-sm">🛡️</span>
+          <span>Hermes Core</span>
+        </button>
+
+        <button onclick="pickSettingsTab(this, 'Dienste', 'Docker Container, Health-Checks & Ports')" class="st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">📦</span>
+          <span>Container & Dienste</span>
+        </button>
+
+        <button onclick="pickSettingsTab(this, 'Gateway', 'OmniRoute, Multi-Provider & API-Keys')" class="st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">⚡</span>
+          <span>Provider & Gateway</span>
+        </button>
+
+        <button onclick="pickSettingsTab(this, 'Methodiken', '23 Denk-Frameworks & Prompt-Pipelines')" class="st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">📚</span>
+          <span>Methodiken</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-zinc-300/60 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">23</span>
+        </button>
+
+        <button onclick="pickSettingsTab(this, 'Plugins', '8 Erweiterungsmodule & Werkzeuge')" class="st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">🧩</span>
+          <span>Plugins</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-zinc-300/60 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">8</span>
+        </button>
+
+        <button onclick="pickSettingsTab(this, 'Kommunikation', 'E-Mail Guard, Telegram & Sync-Mesh')" class="st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">💬</span>
+          <span>Kommunikation</span>
+        </button>
+
+        <button onclick="pickSettingsTab(this, 'Design', 'CSS Studio, Theme-Tokens & Layout-Presets')" class="st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">🎨</span>
+          <span>Design & Studio</span>
+        </button>
+      </div>
+
+      <div id="settings-preview-content" class="p-3.5 rounded-xl bg-[var(--secondary)]/30 border border-[var(--border)] text-xs font-mono text-[var(--muted-foreground)]">
+        Aktiver Reiter: <span class="text-indigo-600 dark:text-indigo-400 font-bold">Hermes Core</span> – Kernel, Daemon & Background Watchdog
+      </div>
+    </div>
+
+    <!-- BEREICH 2: AGENTEN-KADER (VORHER VS NACHHER) -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm space-y-4">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <div class="flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+            👥
+          </span>
+          <div>
+            <h2 class="text-sm font-bold text-[var(--foreground)]">Agenten-Kader: Kompakte Icon-Leiste</h2>
+            <p class="text-xs text-[var(--muted-foreground)]">Gleiche Icons wie bisher, aber 50px mehr Arbeitsbereich für den Inhalt</p>
+          </div>
+        </div>
+        <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">+50px Platz</span>
+      </div>
+
+      <!-- Kompakte Icon-Tab-Leiste für den Agenten-Kader -->
+      <div class="flex p-1 bg-zinc-200/60 dark:bg-zinc-800/70 rounded-xl border border-zinc-300/40 dark:border-zinc-700/50 gap-1 overflow-x-auto" id="kader-tab-bar">
+        <button onclick="pickKaderTab(this, 'Übersicht', '360° Dossier & Agenten-Visitenkarte')" class="kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs border border-zinc-200/80 dark:border-zinc-700/80 tab-transition shrink-0">
+          <span class="text-emerald-500 text-sm">📊</span>
+          <span>Übersicht</span>
+        </button>
+
+        <button onclick="pickKaderTab(this, 'Direkt-Chat', 'Interaktiver Chat mit dem ausgewählten Agenten')" class="kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">💬</span>
+          <span>Chat</span>
+        </button>
+
+        <button onclick="pickKaderTab(this, 'Fähigkeiten', 'Skills-Zuweisung und MCP-Tools')" class="kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">⚡</span>
+          <span>Fähigkeiten</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-zinc-300/60 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">14</span>
+        </button>
+
+        <button onclick="pickKaderTab(this, 'Operations', 'Aktive Aufgaben & Disposition')" class="kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">📋</span>
+          <span>Operations</span>
+        </button>
+
+        <button onclick="pickKaderTab(this, 'SOUL Direktiven', 'System-Prompt & Verhaltensregeln')" class="kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">🧠</span>
+          <span>SOUL</span>
+        </button>
+
+        <button onclick="pickKaderTab(this, 'Personalakte', 'Dossier, Standard-Operating-Procedures & Historie')" class="kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">📁</span>
+          <span>Personalakte</span>
+        </button>
+
+        <button onclick="pickKaderTab(this, 'Marktplatz', 'Neue Skills und Erweiterungen installieren')" class="kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0">
+          <span class="text-zinc-500 text-sm">🛒</span>
+          <span>Marktplatz</span>
+        </button>
+      </div>
+
+      <div id="kader-preview-content" class="p-3.5 rounded-xl bg-[var(--secondary)]/30 border border-[var(--border)] text-xs font-mono text-[var(--muted-foreground)]">
+        Aktiver Reiter: <span class="text-emerald-600 dark:text-emerald-400 font-bold">Übersicht</span> – 360° Dossier & Agenten-Visitenkarte
+      </div>
+    </div>
+
+    <!-- BEREICH 3: PERSONALAKTE MODAL & LIBRARY -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      <!-- Personalakte Modal Tabs -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-3">
+        <h3 class="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider flex items-center gap-2">
+          <span>📁</span> Personalakte Modal
+        </h3>
+        <div class="flex p-1 bg-zinc-200/60 dark:bg-zinc-800/70 rounded-xl border border-zinc-300/40 dark:border-zinc-700/50 gap-1 overflow-x-auto">
+          <button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs">
+            <span class="text-rose-500">🪪</span>
+            <span>Identität</span>
+          </button>
+          <button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+            <span>🧠</span>
+            <span>SOUL</span>
+          </button>
+          <button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+            <span>🛠️</span>
+            <span>Tools</span>
+          </button>
+          <button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+            <span>📜</span>
+            <span>Audit</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Library Tabs -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-3">
+        <h3 class="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider flex items-center gap-2">
+          <span>📖</span> Library & Knowledge
+        </h3>
+        <div class="flex p-1 bg-zinc-200/60 dark:bg-zinc-800/70 rounded-xl border border-zinc-300/40 dark:border-zinc-700/50 gap-1 overflow-x-auto">
+          <button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs">
+            <span class="text-indigo-500">🔍</span>
+            <span>RAG Query</span>
+          </button>
+          <button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+            <span>📥</span>
+            <span>Erfasser</span>
+          </button>
+          <button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+            <span>🗄️</span>
+            <span>Vault Files</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Fazit & Vorteile -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm text-xs space-y-2 font-mono">
+      <div class="font-bold text-[var(--foreground)] flex items-center gap-2">
+        <span>✨ Vorteile dieser einheitlichen Icon-Lösung:</span>
+      </div>
+      <ul class="text-[var(--muted-foreground)] space-y-1 list-disc list-inside font-sans text-xs">
+        <li><strong>Sofortige Orientierung:</strong> Das Gehirn erfasst das Icon in <100ms, bevor der Text gelesen werden muss.</li>
+        <li><strong>100% einheitliche CSS-Klasse:</strong> Alle Tabs im System nutzen dieselbe saubere Struktur (`tab-bar` + `tab-btn`).</li>
+        <li><strong>Viel mehr Platz:</strong> Der Agenten-Kader gewinnt 50–60px vertikalen Bildschirmplatz für Chat-Ausgaben und Code.</li>
+        <li><strong>Echtes Betriebssystem-Gefühl:</strong> Einheitliche Hover-, Aktiv- und Schattenzustände in hellem und dunklem Design.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <script>
+    function pickSettingsTab(btn, name, desc) {
+      document.querySelectorAll('.st-tab-btn').forEach(b => {
+        b.className = 'st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0';
+      });
+      btn.className = 'st-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs border border-zinc-200/80 dark:border-zinc-700/80 tab-transition shrink-0';
+      document.getElementById('settings-preview-content').innerHTML = `Aktiver Reiter: <span class="text-indigo-600 dark:text-indigo-400 font-bold">${name}</span> – ${desc}`;
+    }
+
+    function pickKaderTab(btn, name, desc) {
+      document.querySelectorAll('.kader-tab-btn').forEach(b => {
+        b.className = 'kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-700/40 tab-transition shrink-0';
+      });
+      btn.className = 'kader-tab-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs border border-zinc-200/80 dark:border-zinc-700/80 tab-transition shrink-0';
+      document.getElementById('kader-preview-content').innerHTML = `Aktiver Reiter: <span class="text-emerald-600 dark:text-emerald-400 font-bold">${name}</span> – ${desc}`;
+    }
+  </script>
+</body>
+</html>

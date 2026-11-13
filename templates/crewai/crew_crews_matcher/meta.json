@@ -1,0 +1,11 @@
+{
+  "id": "crew_crews_matcher",
+  "name": "Candidate Matcher and Scorer (Crews)",
+  "category": "5. Kreation, Medien & Content",
+  "description": "Match the candidates to the best jobs and score them",
+  "skills": [
+    "Research",
+    "Strategic Planning",
+    "Tool Execution"
+  ]
+}

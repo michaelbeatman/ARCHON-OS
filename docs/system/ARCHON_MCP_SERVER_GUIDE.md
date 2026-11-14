@@ -1,14 +1,20 @@
 # Archon OS als MCP-Server (Model Context Protocol)
 
 ## Überblick
-Archon OS stellt einen vollwertigen, dem MCP-Standard (Version `2024-11-05`) entsprechenden **MCP-Server** bereit (`scripts/archon_mcp_server.py`). 
+Archon OS stellt einen vollwertigen, dem MCP-Standard (`2024-11-05` & `2025-03-26` Streamable HTTP + SSE) entsprechenden **MCP-Server** bereit:
+- **HTTP/SSE Gateway (M48):** `POST /mcp`, `GET /mcp` (`/mcp/sse`), `DELETE /mcp` und `GET /mcp/info` (`archon/routers/mcp_gateway.py` + `backend/mcp_gateway.py`).
+- **Lokaler stdio-Server:** `scripts/archon_mcp_server.py`.
 
-Damit können externe Clients wie **Claude Desktop**, **Cursor**, **Antigravity**, **Hermes** oder automatisierte Workflows direkt auf die Kernfähigkeiten des Betriebssystems zugreifen:
+Damit können externe Clients wie **Claude Desktop**, **Cursor**, **VS Code**, **Antigravity** oder **Hermes** direkt auf die Kernfähigkeiten des Betriebssystems zugreifen (inkl. Scoped API-Keys `read_only` / `kanban_rw` / `agent_execute` / `admin_full` und HITL-Freigabe-Gate):
 - Erstellen und Verwalten von Kanban-Aufgaben
+- Auflisten und Delegieren an die 70 Fachspezialisten (`archon__list_specialists`, `archon__ask_specialist`)
+- Durchsuchen des lokalen Obsidian-Vaults (`archon__search_vault`)
 - CRM- und Kontaktrecherche in PocketBase
 - Auslesen der Triage-Inbox (E-Mails, Telegram, Systemmeldungen)
-- Anstoßen strukturierter Debatten im AI Boardroom
-- Abfrage von System- und Observability-Metriken
+- Anstoßen strukturierter Debatten im AI Boardroom (HITL-geschützt)
+- Abfrage von System- und Observability-Metriken (`resources/list`, `prompts/list`)
+
+> **Tipp:** Rufen Sie `GET /mcp/info` auf Ihrer laufenden Instanz auf, um fertige Copy-Paste-Konfigurationen für **Claude Desktop**, **Cursor** und **VS Code** (Streamable HTTP + `Authorization: Bearer archon_live_...`) zu erhalten.
 
 ---
 

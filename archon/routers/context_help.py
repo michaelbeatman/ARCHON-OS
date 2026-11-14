@@ -13,14 +13,14 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 HELP_CONTEXT_DATA = {
     "operations": {
         "title": "Operations",
-        "subtitle": "Echtzeit-Leitstand und Flotten-Überwachung",
-        "purpose": "Hier steuerst du den operativen Betrieb aller 56 Spezial-Agenten. Du siehst aktuelle System-KPIs, laufende Hintergrundprozesse, aktive Container und den Ticker.",
+        "subtitle": "Echtzeit-Leitstand, Playbooks, Kalender & EU AI Act / GoBD Compliance",
+        "purpose": "Hier steuerst du den operativen Betrieb aller 70 Spezialisten, wechselst oben rechts per Multi-Mandanten-Switcher (Holding / GmbH / SPV) die aktive Gesellschaft (physisch isolierte SQLite-DBs) und exportierst mit einem Klick die prüferfertige GoBD- & EU-AI-Act-Verfahrensdokumentation als PDF.",
         "top_actions": [
-            "Klicke auf eine KPI-Karte (Flottenlast, TPM, Latenz), um Detailanalysen zu öffnen.",
-            "Nutze 'Neuer autonomer Task', um einer Rolle einen Arbeitsauftrag mit Prompt-Studio zu erteilen.",
-            "Prüfe im 'Live Task-Stream' den aktuellen Fortschritt und Logs autonomer Aufgaben."
+            "Nutze die Kachel 'AI Act / GoBD', um das 70er-Risikoregister, Art.-4-Kompetenznachweise und den 1-Klick-PDF-Export der Verfahrensdokumentation zu öffnen.",
+            "Starte fertige Mehr-Schritt-Prozesse über 'Playbooks' oder prüfe Fristen im 'Operations-Kalender'.",
+            "Wechsle über den Mandanten-Umschalter in der Topbar zwischen Holding, operativer GmbH und SPV (inkl. getrennter Nummernkreise & DBs)."
         ],
-        "starter_prompt": "Erkläre mir, wie ich im Operations-Dashboard einen neuen Task an den passenden Agenten delegiere und den Fortschritt überwache."
+        "starter_prompt": "Erkläre mir, wie ich im Operations-Dashboard die GoBD- und EU-AI-Act-Verfahrensdokumentation für meinen aktiven Mandanten als PDF exportiere."
     },
     "inbox": {
         "title": "Eingang & Triage (Intake)",

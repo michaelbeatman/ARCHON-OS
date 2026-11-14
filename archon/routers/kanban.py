@@ -23,7 +23,16 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 def _get_kanban_cards_file() -> str:
     main_mod = sys.modules.get("main")
     if main_mod and hasattr(main_mod, "KANBAN_CARDS_FILE"):
-        return getattr(main_mod, "KANBAN_CARDS_FILE")
+        cand = getattr(main_mod, "KANBAN_CARDS_FILE")
+        if cand != KANBAN_CARDS_FILE:
+            return cand
+    try:
+        from backend.tenant_context import tenant_context, PRIMARY_TENANT_IDS
+        tid = tenant_context.get_active_tenant_id()
+        if tid not in PRIMARY_TENANT_IDS:
+            return os.path.join(tenant_context.get_tenant_dir(tid), "kanban_cards.json")
+    except Exception:
+        pass
     return KANBAN_CARDS_FILE
 
 
@@ -41,11 +50,25 @@ def _atomic_write_json(path, data):
     return atomic_write_json(path, data)
 
 
+def _resolve_active_kanban_db() -> str:
+    hermes_home = _get_hermes_home()
+    if hermes_home != HERMES_HOME:
+        cand_db = os.path.join(hermes_home, "kanban.db")
+        return cand_db if os.path.exists(cand_db) else (KANBAN_DB_PATH if os.path.exists(KANBAN_DB_PATH) else cand_db)
+    try:
+        from backend.tenant_context import tenant_context, PRIMARY_TENANT_IDS
+        tid = tenant_context.get_active_tenant_id()
+        if tid not in PRIMARY_TENANT_IDS:
+            return tenant_context.resolve_active_db("kanban.db", tid)
+    except Exception:
+        pass
+    cand_db = os.path.join(hermes_home, "kanban.db")
+    return cand_db if os.path.exists(cand_db) else (KANBAN_DB_PATH if os.path.exists(KANBAN_DB_PATH) else cand_db)
+
+
 @router.get("/api/kanban")
 def api_get_kanban():
-    hermes_home = _get_hermes_home()
-    cand_db = os.path.join(hermes_home, "kanban.db")
-    kanban_db = cand_db if os.path.exists(cand_db) else (KANBAN_DB_PATH if os.path.exists(KANBAN_DB_PATH) else cand_db)
+    kanban_db = _resolve_active_kanban_db()
     if os.path.exists(kanban_db):
         kconn = None
         try:
@@ -76,9 +99,7 @@ async def api_save_kanban(request: Request):
         cards = await request.json()
         cards_file = _get_kanban_cards_file()
         _atomic_write_json(cards_file, cards)
-        hermes_home = _get_hermes_home()
-        cand_db = os.path.join(hermes_home, "kanban.db")
-        kanban_db = cand_db if os.path.exists(cand_db) else (KANBAN_DB_PATH if os.path.exists(KANBAN_DB_PATH) else cand_db)
+        kanban_db = _resolve_active_kanban_db()
         if os.path.exists(kanban_db) and isinstance(cards, list):
             kconn = None
             try:

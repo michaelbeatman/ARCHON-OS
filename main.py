@@ -1918,3 +1918,45 @@ try:
     app.include_router(_demo_r)
 except Exception as _err_demo:
     logger.warning(f"[Router] demo nicht geladen: {_err_demo}")
+
+try:
+    from archon.routers.mcp_gateway import router as _mcp_gateway_r
+    app.include_router(_mcp_gateway_r)
+except Exception as _err_mcp_gw:
+    logger.warning(f"[Router] mcp_gateway nicht geladen: {_err_mcp_gw}")
+
+try:
+    from archon.routers.squad_packs import router as _squad_packs_r
+    app.include_router(_squad_packs_r)
+except Exception as _err_sp:
+    logger.warning(f"[Router] squad_packs nicht geladen: {_err_sp}")
+
+try:
+    from archon.routers.tenants import router as _tenants_r
+    app.include_router(_tenants_r)
+except Exception as _err_ten:
+    logger.warning(f"[Router] tenants nicht geladen: {_err_ten}")
+
+try:
+    from archon.routers.playbooks import router as _playbooks_r
+    app.include_router(_playbooks_r)
+except Exception as _err_pb:
+    logger.warning(f"[Router] playbooks nicht geladen: {_err_pb}")
+
+try:
+    from archon.routers.preflight_shadow import router as _preflight_r
+    app.include_router(_preflight_r)
+except Exception as _err_pf:
+    logger.warning(f"[Router] preflight_shadow nicht geladen: {_err_pf}")
+
+try:
+    from archon.routers.epistemic_hygiene import router as _hygiene_r
+    app.include_router(_hygiene_r)
+except Exception as _err_hyg:
+    logger.warning(f"[Router] epistemic_hygiene nicht geladen: {_err_hyg}")
+
+try:
+    from archon.routers.operations_calendar import router as _cal_r
+    app.include_router(_cal_r)
+except Exception as _err_cal:
+    logger.warning(f"[Router] operations_calendar nicht geladen: {_err_cal}")

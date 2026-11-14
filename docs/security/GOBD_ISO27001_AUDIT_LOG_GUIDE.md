@@ -77,3 +77,13 @@ curl -s http://127.0.0.1:8501/api/governance/audit-log/verify
 4. **Suchfeld:** Durchsuche Einträge nach Akteur, Aktionsname oder Datensatz-ID.
 5. **Detail-Modal:** Klicke auf eine Zeile, um die Rohdaten, den Hash und den `previous_hash` forensisch zu prüfen.
 6. **Prüfbericht exportieren:** Klicke oben rechts auf **Exportieren** (`JSON` oder `CSV (Prüfer-Format)`).
+
+---
+
+## 5. Kombinierte 1-Klick GoBD- & EU-AI-Act-Verfahrensdokumentation als PDF (M49)
+
+Für Betriebsprüfungen (Z3 / GoBD Rz. 151 ff.), Wirtschaftsprüfer und Aufsichtsbehörden nach **Verordnung (EU) 2024/1689 (EU AI Act)** erzeugt Archon OS auf Knopfdruck eine vollständige, mehrseitige DIN-A4-Verfahrensdokumentation als PDF direkt aus dem Live-Systemzustand (`backend/compliance_engine.py`, `backend/compliance_pdf.py`):
+
+- **UI-Aufruf:** In **Operations** auf die Header-Kachel **`AI Act / GoBD`** klicken → Button **„GoBD + EU AI Act PDF herunterladen“**.
+- **Direkter API-Download:** `GET /api/v1/governance/compliance/verfahrensdokumentation.pdf?company_id=<mandant>` (liefert `application/pdf` inkl. HTTP-Header `X-Document-SHA256` und schreibt automatisch einen Prüfvermerk in diese SHA-256-Audit-Kette).
+- **Vertiefendes Handbuch:** Siehe [`docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md`](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md).

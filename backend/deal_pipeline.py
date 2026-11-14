@@ -15,7 +15,9 @@ import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "deals.db")
+_DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "deals.db")
+DB_PATH = _DEFAULT_DB_PATH
+_INITIALIZED_DEAL_DBS: set = set()
 
 STAGE_CONFIG = {
     "lead": {"name_de": "Qualifizierung", "default_prob": 0.10, "is_active": True},
@@ -27,13 +29,48 @@ STAGE_CONFIG = {
 }
 
 
-def _get_connection() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+def _resolve_deals_db_path(company_id: Optional[str] = None) -> str:
+    if DB_PATH != _DEFAULT_DB_PATH:
+        return DB_PATH
+    try:
+        from backend.tenant_context import tenant_context
+        return tenant_context.resolve_active_db("deals.db", company_id)
+    except Exception:
+        return DB_PATH
+
+
+def _get_connection(company_id: Optional[str] = None) -> sqlite3.Connection:
+    target_db = _resolve_deals_db_path(company_id)
+    os.makedirs(os.path.dirname(target_db), exist_ok=True)
+    conn = sqlite3.connect(target_db, timeout=10.0)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous = NORMAL;")
     conn.execute("PRAGMA busy_timeout=5000;")
     conn.row_factory = sqlite3.Row
+    if target_db not in _INITIALIZED_DEAL_DBS:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS deals (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    partner_name TEXT NOT NULL,
+                    contact_email TEXT,
+                    stage TEXT NOT NULL DEFAULT 'lead',
+                    probability REAL DEFAULT 0.10,
+                    deal_value REAL DEFAULT 0.0,
+                    currency TEXT DEFAULT 'EUR',
+                    expected_close_date TEXT,
+                    actual_close_date TEXT,
+                    assigned_agent TEXT DEFAULT 'Robert',
+                    notes TEXT,
+                    lost_reason TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_stage ON deals(stage);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_partner ON deals(partner_name);")
+        _INITIALIZED_DEAL_DBS.add(target_db)
     return conn
 
 

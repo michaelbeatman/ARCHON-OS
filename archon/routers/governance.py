@@ -87,6 +87,92 @@ def api_ai_act_export():
     return {"status": "success", "markdown_report": eu_ai_act_inventory_manager.export_report_markdown()}
 
 
+@router.get("/api/governance/ai-act/literacy-register")
+@router.get("/api/v1/governance/ai-act/literacy-register")
+def api_ai_act_literacy_list():
+    from backend.compliance_engine import compliance_engine
+    entries = compliance_engine.list_literacy_entries()
+    return {"status": "success", "entries": entries, "count": len(entries)}
+
+
+@router.post("/api/governance/ai-act/literacy-register")
+@router.post("/api/v1/governance/ai-act/literacy-register")
+def api_ai_act_literacy_add(request: Request, payload: dict = Body(...)):
+    require_admin_or_503(request)
+    from backend.compliance_engine import compliance_engine
+    try:
+        entry = compliance_engine.add_literacy_entry(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "success", "entry": entry}
+
+
+@router.delete("/api/governance/ai-act/literacy-register/{entry_id}")
+@router.delete("/api/v1/governance/ai-act/literacy-register/{entry_id}")
+def api_ai_act_literacy_delete(request: Request, entry_id: str):
+    require_admin_or_503(request)
+    from backend.compliance_engine import compliance_engine
+    deleted = compliance_engine.delete_literacy_entry(entry_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Eintrag '{entry_id}' nicht gefunden.")
+    return {"status": "success", "deleted": True, "id": entry_id}
+
+
+@router.get("/api/governance/ai-act/guardrails")
+@router.get("/api/v1/governance/ai-act/guardrails")
+def api_ai_act_guardrails_check(agent_id: Optional[str] = None):
+    from backend.compliance_engine import compliance_engine
+    if agent_id:
+        return {"status": "success", "activation_check": compliance_engine.check_activation_allowed(agent_id)}
+    return {"status": "success", "guardrails": compliance_engine.evaluate_guardrails()}
+
+
+@router.get("/api/governance/compliance/snapshot")
+@router.get("/api/v1/governance/compliance/snapshot")
+def api_compliance_verfahrensdoku_snapshot(company_id: Optional[str] = None):
+    from backend.compliance_engine import compliance_engine
+    snap = compliance_engine.collect_verfahrensdokumentation_snapshot(company_id=company_id)
+    return {"status": "success", "snapshot": snap}
+
+
+@router.get("/api/governance/ai-act/export/pdf")
+@router.get("/api/v1/governance/compliance/verfahrensdokumentation.pdf")
+def api_export_verfahrensdokumentation_pdf(company_id: Optional[str] = None):
+    """Erzeugt live das prüferfertige GoBD- & EU-AI-Act-Verfahrensdokumentations-PDF (M49)."""
+    from backend.compliance_engine import compliance_engine
+    from backend.compliance_pdf import build_verfahrensdokumentation_pdf
+
+    snap = compliance_engine.collect_verfahrensdokumentation_snapshot(company_id=company_id)
+    pdf_bytes, pdf_sha256 = build_verfahrensdokumentation_pdf(snap)
+
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="governance",
+            action="verfahrensdokumentation_pdf_exported",
+            agent_id="compliance_engine",
+            payload={
+                "document_id": snap["document_id"],
+                "tenant_id": snap["tenant_id"],
+                "pdf_sha256": pdf_sha256,
+                "size_bytes": len(pdf_bytes),
+            },
+        )
+    except Exception:
+        pass
+
+    filename = f"Archon_Verfahrensdokumentation_GoBD_EU_AI_Act_{snap['tenant_id']}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Document-SHA256": pdf_sha256,
+            "X-Document-ID": snap["document_id"],
+        },
+    )
+
+
 @router.post("/api/governance/data-classification/classify")
 @router.post("/api/v1/governance/data-classification/classify")
 def api_classify_content(payload: dict = Body(...)):

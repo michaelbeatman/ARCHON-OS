@@ -14,7 +14,17 @@ All notable changes to **Archon OS** are documented in this file.
 - **M47 — "Zero-Install" Read-Only Live-Demo Mode (`ARCHON_DEMO_MODE=true`):**
   - Hardened ASGI `DemoModeMiddleware` + `docker-compose.demo.yml` for zero-risk, zero-token public showcase hosting (*"Mittelstand Muster GmbH"* pre-populated 6-phase Boardroom debate, Kanban tasks, CRM/ERP sample records, and deterministic instant chat simulation).
 - **M35 & M36 — Public Launch Kit & Ecosystem Integration Pack:**
-  - Added `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, GitHub Issue/PR templates, and `deploy/ecosystem/` manifests & migration guides (*Awesome-Selfhosted*, *Awesome-AI-Agents*, CrewAI/AutoGen/Relevance AI migration).
+  - Added `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, GitHub Issue/PR templates, and `deploy/ecosystem/` manifests & migration guides (*Awesome-Selfhosted*, *Awesome-AI-Agents*, *Awesome-MCP-Servers*, CrewAI/AutoGen/Relevance AI migration).
+- **M48 — Native Archon OS MCP Server (`/mcp` Gateway):**
+  - Streamable HTTP (`POST /mcp`), SSE (`GET /mcp`, `/mcp/sse`), and client config helper (`GET /mcp/info`) for Claude Desktop, Cursor & VS Code with Scoped API-Keys and HITL approval gates.
+- **M51 — Portable `.archonpack` Squad Blueprint Manager:**
+  - Verified ZIP export/inspect/import for agent squads, 3-stage `SOUL.md`, skills, boardroom frameworks, prompt templates & n8n workflows with SHA-256 verification and Zip-Slip protection.
+- **M43 — Multi-Tenant Switcher & End-to-End SQLite Isolation (Holding / GmbH / SPV):**
+  - Topbar tenant switcher & isolation modal (`static/js/tenant_switcher.js`), physical per-tenant SQLite WAL DB isolation (`data/tenants/<id>/` wired across `erp.db`, `kanban.db`, `crm.db`, `contracts.db`, and `deals.db` with non-destructive primary-tenant migration), company provisioning (`POST /api/v1/tenants/companies`), and atomic per-tenant document number ranges.
+- **M49 — EU AI Act Compliance Engine & 1-Click GoBD / AI Act Procedural Documentation PDF:**
+  - Precision specialist risk classification across all 70 specialists (`HIGH_RISK` Annex III, `SPECIFIC_TRANSPARENCY` Art. 50, `MINIMAL_RISK` Art. 95) with cryptographic `SOUL.md` SHA-256 hashes, Art. 4 AI Literacy & Competence Register (`backend/compliance_engine.py`), mandatory guardrail checks, Operations Compliance Studio (`static/js/eu_ai_act_studio.js`), and dependency-free multi-page DIN-A4 PDF 1.4 export (`GET /api/v1/governance/compliance/verfahrensdokumentation.pdf`).
+- **M44, M52, M53 & M25 — Business Playbooks, Pre-Flight/Shadow-Mode, Epistemic Hygiene & Operations Calendar:**
+  - Added 10 active + 15 catalog Business Playbooks with editor CRUD (`backend/playbooks_engine.py`), chain cost estimation & >90% Shadow-Mode graduation (`backend/shadow_mode.py`), Obsidian vault conflict/staleness scanner (`backend/epistemic_hygiene.py`), and unified Operations Calendar (`backend/operations_calendar.py`).
 
 ## [v0.5.2] — 2026-11-13 (Zero-Trust & Multi-Arch Hardening)
 

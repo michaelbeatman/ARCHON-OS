@@ -17,16 +17,71 @@ import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "contracts.db")
+_DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "contracts.db")
+DB_PATH = _DEFAULT_DB_PATH
+_INITIALIZED_CONTRACT_DBS: set = set()
 
 
-def _get_connection() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+def _resolve_contracts_db_path(company_id: Optional[str] = None) -> str:
+    if DB_PATH != _DEFAULT_DB_PATH:
+        return DB_PATH
+    try:
+        from backend.tenant_context import tenant_context
+        return tenant_context.resolve_active_db("contracts.db", company_id)
+    except Exception:
+        return DB_PATH
+
+
+def _get_connection(company_id: Optional[str] = None) -> sqlite3.Connection:
+    target_db = _resolve_contracts_db_path(company_id)
+    os.makedirs(os.path.dirname(target_db), exist_ok=True)
+    conn = sqlite3.connect(target_db, timeout=10.0)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous = NORMAL;")
     conn.execute("PRAGMA busy_timeout=5000;")
     conn.row_factory = sqlite3.Row
+    if target_db not in _INITIALIZED_CONTRACT_DBS:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS contracts (
+                    id TEXT PRIMARY KEY,
+                    contract_name TEXT NOT NULL,
+                    partner_name TEXT NOT NULL,
+                    category TEXT DEFAULT 'SaaS',
+                    start_date TEXT,
+                    end_date TEXT,
+                    notice_period_days INTEGER DEFAULT 30,
+                    notice_period_type TEXT DEFAULT 'days',
+                    next_notice_deadline TEXT,
+                    auto_renewal_months INTEGER DEFAULT 12,
+                    payment_due_days INTEGER DEFAULT 14,
+                    cost_amount REAL DEFAULT 0.0,
+                    cost_currency TEXT DEFAULT 'EUR',
+                    billing_cycle TEXT DEFAULT 'monatlich',
+                    status TEXT DEFAULT 'active',
+                    notes TEXT,
+                    source_file TEXT,
+                    alert_thresholds_json TEXT DEFAULT '[60, 30, 14, 7, 3, 1]',
+                    last_alert_sent TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS contract_alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    contract_id TEXT NOT NULL,
+                    alert_type TEXT NOT NULL,
+                    days_remaining INTEGER NOT NULL,
+                    message TEXT NOT NULL,
+                    dispatched_via TEXT DEFAULT 'system',
+                    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (contract_id) REFERENCES contracts (id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_contracts_deadline ON contracts(next_notice_deadline);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(status);")
+        _INITIALIZED_CONTRACT_DBS.add(target_db)
     return conn
 
 

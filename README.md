@@ -15,7 +15,7 @@
 
 **🇬🇧 English** · [🇩🇪 Deutsch](README.de.md) · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M53)](docs/system/ROADMAP_2026.md)
+[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M56)](docs/system/ROADMAP_2026.md)
 
 </div>
 
@@ -63,7 +63,7 @@ And the best part: Archon OS is a **self-improving system built on Hermes Agent*
 | **Complete Feature List (`v0.5.2.1`)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | Full module catalog, Bilingual Global Edition, Live Demo Mode, First-Run Wizard, FinOps & Security |
 | **AI Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 55 structured Decision Engine methodologies (EN & DE) & index |
 
-*More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M53)](docs/system/ROADMAP_2026.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+*More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M56)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Guide (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Features & Playbooks Guide](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -75,8 +75,8 @@ And the best part: Archon OS is a **self-improving system built on Hermes Agent*
 | **Strategic Decisions** | One-shot answer | Iterative tool loop | **AI Boardroom**: isolated multi-perspective debate, critic cross-examination & synthesis across **55 frameworks** |
 | **Long-Term Memory** | Flat chat history | Vector store snippets | **Obsidian Vault sync**, per-agent HR scorecards (`Personalakten/`), WAL SQLite DBs & LRU-K paging |
 | **Privacy & Egress** | All data to cloud APIs | API keys in runtime env | **Zero-Egress Router** (Ollama / LM Studio for finance/HR/CRM) + **Dual-LLM Prompt-Injection Guard** |
-| **Governance & Liability** | Blind output | Unchecked tool calls | **Human-in-the-Loop (HITL)Approval Gates**, **SHA-256 hash-chained Audit Log** & mandatory **Regulatory Warning Modals** |
-| **Business Ops** | None | External SaaS integrations | Native **Kanban (with 4-eyes review gate)**, **Email Triage**, **CRM** & **ERP *(Alpha)*** |
+| **Governance & Liability** | Blind output | Unchecked tool calls | **EU AI Act Engine (Art. 4 / Annex III)**, **1-Click GoBD Procedural PDF**, **HITL Gates** & **SHA-256 Audit Chain** |
+| **Business Ops** | None | External SaaS integrations | **Multi-Tenant SQLite Isolation (Holding/GmbH/SPV)**, **Kanban (4-eyes gate)**, **Email Triage**, **CRM** & **ERP *(Alpha)*** |
 
 ---
 

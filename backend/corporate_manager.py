@@ -119,6 +119,7 @@ class CorporateManager:
             result.append({
                 "id": c.get("id"),
                 "name": c.get("name"),
+                "entity_type": c.get("entity_type", "operative_gmbh"),
                 "legal_form": c.get("legal_form", ""),
                 "city": c.get("address", {}).get("city", ""),
                 "vat_id": c.get("tax", {}).get("vat_id", ""),
@@ -172,6 +173,7 @@ class CorporateManager:
             company_record = {
                 "id": company_id,
                 "name": payload.get("name", "Neues Unternehmen"),
+                "entity_type": payload.get("entity_type", "operative_gmbh"),
                 "legal_form": payload.get("legal_form", ""),
                 "slogan": payload.get("slogan", ""),
                 "address": {

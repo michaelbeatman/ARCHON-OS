@@ -17,9 +17,9 @@
      5. **Corporate & Vorlagen** (`nav-corporate` – zieht aus Infrastruktur hierher um)
    - *Infrastruktur & Governance* (Säule 4) enthält künftig ausschließlich technische Governance-Funktionen (`Approval Policies`, `Guardian`, `Log Stream`).
 
-2. **Physische Mandanten-Trennung (DSGVO-Trennungsgebot & GoBD/Z3-Prüfungssicherheit):**
-   - Jede eigene Unternehmung (`company_id` aus [corporate_manager.py](../../backend/corporate_manager.py)) erhält eine **physisch isolierte SQLite-Datenbank im WAL-Modus**:
-     `data/tenants/{company_id}/erp.db`
+2. **Physische Mandanten-Trennung (DSGVO-Trennungsgebot & GoBD/Z3-Prüfungssicherheit — M43 aktiv):**
+   - Jede eigene Unternehmung (`company_id` aus [corporate_manager.py](../../backend/corporate_manager.py) / [tenant_context.py](../../backend/tenant_context.py)) erhält unter `data/tenants/{company_id}/` **fünf physisch isolierte SQLite-Datenbanken im WAL-Modus**:
+     `erp.db`, `kanban.db`, `crm.db`, `contracts.db` und `deals.db` (umschaltbar in Echtzeit über den Topbar-Mandantenswitcher `static/js/tenant_switcher.js` bzw. `POST /api/v1/tenants/switch`).
    - Keine Vermischung personenbezogener Daten (`crm_contacts`, Kommunikationsverläufe, DSGVO-Opt-Ins) oder steuerlicher Belege zwischen verschiedenen rechtlichen Einheiten.
    - Eigene, lückenlose DATEV-Nummernkreise pro Mandant:
      - **Debitoren (Kunden):** ab `10001`

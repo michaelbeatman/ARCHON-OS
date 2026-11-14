@@ -41,20 +41,37 @@ def _resolve_kanban_db_path() -> str:
     return "/opt/data/kanban.db"
 
 
-KANBAN_DB_PATH = _resolve_kanban_db_path()
+_DEFAULT_KANBAN_DB_PATH = _resolve_kanban_db_path()
+KANBAN_DB_PATH = _DEFAULT_KANBAN_DB_PATH
 
 
 _KANBAN_JOURNAL_INIT = False
+_KANBAN_JOURNAL_INIT_DBS: set = set()
 
-def _get_kanban_connection():
+
+def _get_active_kanban_db_path(company_id: Optional[str] = None) -> str:
+    if KANBAN_DB_PATH != _DEFAULT_KANBAN_DB_PATH:
+        return KANBAN_DB_PATH
+    try:
+        from backend.tenant_context import tenant_context
+        resolved = tenant_context.resolve_active_db("kanban.db", company_id)
+        if resolved:
+            return resolved
+    except Exception:
+        pass
+    return KANBAN_DB_PATH
+
+
+def _get_kanban_connection(company_id: Optional[str] = None):
     global _KANBAN_JOURNAL_INIT
-    if not os.path.exists(KANBAN_DB_PATH):
-        raise HTTPException(status_code=503, detail=f"kanban.db nicht gefunden unter {KANBAN_DB_PATH}")
-    conn = sqlite3.connect(KANBAN_DB_PATH, timeout=10.0)
+    target_db = _get_active_kanban_db_path(company_id)
+    if not os.path.exists(target_db):
+        raise HTTPException(status_code=503, detail=f"kanban.db nicht gefunden unter {target_db}")
+    conn = sqlite3.connect(target_db, timeout=10.0)
     conn.execute("PRAGMA busy_timeout=5000;")
-    if not _KANBAN_JOURNAL_INIT:
+    if (not _KANBAN_JOURNAL_INIT) or (target_db not in _KANBAN_JOURNAL_INIT_DBS):
         try:
-            if str(KANBAN_DB_PATH).replace("\\", "/").startswith("/opt/data"):
+            if str(target_db).replace("\\", "/").startswith("/opt/data"):
                 conn.execute("PRAGMA journal_mode=DELETE;")
             else:
                 conn.execute("PRAGMA journal_mode=WAL;")
@@ -77,6 +94,7 @@ def _get_kanban_connection():
         except Exception:
             pass
         _KANBAN_JOURNAL_INIT = True
+        _KANBAN_JOURNAL_INIT_DBS.add(target_db)
     conn.row_factory = sqlite3.Row
     return conn
 

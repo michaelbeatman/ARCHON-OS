@@ -1176,6 +1176,7 @@ def rebuild_clean_docx():
         ("IV.10 Approval Policies & Schwellenwert-Governance", "docs/system/APPROVAL_POLICIES_GUIDE.md"),
         ("IV.11 Notification Policy & Quiet Hours", "docs/system/NOTIFICATION_POLICY_QUIET_HOURS_GUIDE.md"),
         ("IV.12 Config Validation & Linting", "docs/system/CONFIG_VALIDATION_GUIDE.md"),
+        ("IV.13 EU AI Act Compliance-Engine & 1-Klick GoBD-Verfahrensdokumentation (M49)", "docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md"),
     ]
     for title, rel_path in sec_guides:
         new_body.extend(make_guide_elements(title, rel_path))
@@ -1213,6 +1214,7 @@ def rebuild_clean_docx():
         ("V.20 Systemarchitektur & Technisches Audit 2026", "docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md"),
         ("V.21 Archon OS Strategische Roadmap 2026", "docs/system/ROADMAP_2026.md"),
         ("V.22 Archon ERP & CRM Architektur-Spezifikation (Säule 3)", "docs/system/ARCHON_ERP_ARCHITECTURE_SPEC.md"),
+        ("V.23 Enterprise-Erweiterungen, Multi-Mandanten & Playbooks (M25, M43, M44, M48–M53)", "docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md"),
     ]
     for title, rel_path in sys_guides:
         new_body.extend(make_guide_elements(title, rel_path))

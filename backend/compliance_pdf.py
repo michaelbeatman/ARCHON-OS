@@ -402,13 +402,20 @@ def build_verfahrensdokumentation_pdf(snapshot: Dict[str, Any]) -> Tuple[bytes, 
     guard = snapshot.get("guardrails") or {}
 
     chain_ok = "VERIFIZIERT & UNVERSEHRT (0 Manipulationen)" if audit.get("valid") else f"PRÜFFehler: {audit.get('error', 'Prüfung erforderlich')}"
+    worker_net_label = (
+        f"{priv.get('worker_network_name', 'archon-worker-zero-egress_net')} — ISOLIERT (Internal=true, keine Internet-Route)"
+        if priv.get("worker_network_internal")
+        else f"{priv.get('worker_network_name', 'archon-worker-zero-egress_net')} (Bereit / On-Demand)"
+    )
     pdf.add_kv_grid(
         [
             ("GoBD SHA-256 Hashkette (M21)", chain_ok),
-            ("Geprüfte Audit-Blöcke", str(audit.get("checked_blocks", audit.get("total_entries", 0)))),
-            ("Aktueller Merkle-Head-Hash", str(audit.get("head_hash", "0" * 64))),
-            ("Sensibles Lokal-Routing (Zero-Egress)", "AKTIV" if priv.get("sensitive_local_routing") else "BEREIT (On-Demand / EU-Fallback)"),
+            ("Geprüfte Audit-Blöcke (inkl. LLM-Calls)", f"{audit.get('checked_blocks', audit.get('total_records', 0))} gesamt | {audit.get('llm_dispatch_records', 0)} LLM-Dispatches (Provider/Modell/Host)"),
+            ("Aktueller Merkle-Head-Hash", str(audit.get("head_hash", audit.get("latest_hash", "0" * 64)))),
+            ("Zero-Egress & Privacy-Router Modus", "STRICT ZERO-EGRESS (Gesamtsystem)" if priv.get("zero_egress_strict") else ("AKTIV (On-Premise für Sensibel)" if priv.get("sensitive_local_routing") else "BEREIT")),
+            ("Hard-Block bei Offline-Lokalmodell", "ERZWUNGEN (Fail-Closed für Finanzen/Verträge/CRM)" if priv.get("hard_block_on_local_offline", True) else "DEAKTIVIERT"),
             ("Lokaler LLM-Endpunkt / Modell", f"{priv.get('local_llm_url', '-')}  ({priv.get('local_llm_model', '-')})"),
+            ("Docker-Worker-Netzwerk-Isolation", worker_net_label),
             ("Geschützte Datenkategorien", ", ".join(priv.get("sensitive_categories") or [])),
             ("Prompt-Injection-Abwehr (M23)", "Dual-LLM Quarantäne-Sanitizer + Pfad-Jail + Non-Root Container (UID 1000)"),
             ("EU-AI-Act Guardrail-Prüfstatus", "ALLE PFLICHT-GUARDRAILS AKTIV" if guard.get("all_guardrails_passed") else f"{len(guard.get('violations', []))} Hinweise"),

@@ -5,6 +5,13 @@ networks:
     driver: bridge
   archon-admin_net:
     internal: true
+  archon-worker-zero-egress_net:
+    driver: bridge
+    # Strict Zero-Egress network for workers: no default internet route, no NAT gateway.
+    internal: true
+  archon-sandbox_net:
+    driver: bridge
+    internal: true
 
 services:
   archon-os:
@@ -19,6 +26,8 @@ services:
       - agentic_mesh
       # Dedicated admin network for Zero-Trust Docker Socket Proxy
       - archon-admin_net
+      # Internal Zero-Egress bridge to isolated workers & On-Premise inference
+      - archon-worker-zero-egress_net
     depends_on:
       - docker-socket-proxy
       - omniroute
@@ -311,6 +320,7 @@ services:
     restart: unless-stopped
     networks:
       - agentic_mesh
+      - archon-worker-zero-egress_net
     ports:
       - "${ARCHON_BIND_IP:-127.0.0.1}:${ANYTHINGLLM_HOST_PORT:-3001}:3001"
     environment:
@@ -340,6 +350,7 @@ services:
     profiles: ["rag", "full", "all"]
     networks:
       - agentic_mesh
+      - archon-worker-zero-egress_net
     volumes:
       - ollama_embed_data:/root/.ollama
     environment:
@@ -356,7 +367,7 @@ services:
     container_name: ${CHROMA_CONTAINER_NAME:-chroma}
     restart: unless-stopped
     networks:
-      - agentic_mesh
+      - archon-worker-zero-egress_net
     volumes:
       - chroma_data:/chroma/chroma
     environment:
@@ -367,6 +378,31 @@ services:
         limits:
           memory: 2048M
           cpus: "2.0"
+
+  archon-worker:
+    image: python:3.11-alpine@sha256:bb1d70c1df30d8ee1e05214dbe82d6cdfd29833c1f47ce917f20991aca93acaa
+    container_name: ${ARCHON_WORKER_CONTAINER_NAME:-archon-worker-zero-egress}
+    restart: unless-stopped
+    profiles: ["workers"]
+    user: "${ARCHON_UID:-1000}:${ARCHON_GID:-1000}"
+    networks:
+      - archon-worker-zero-egress_net
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    mem_limit: 512m
+    memswap_limit: 512m
+    command: ["python", "-c", "import time; time.sleep(86400)"]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+          pids: 50
 
   litestream:
     image: litestream/litestream:0.3.13

@@ -814,7 +814,9 @@ async def api_chat_stream(req: ChatStreamRequest):
                 provider=provider,
                 model=model,
                 api_keys=all_keys,
-                reasoning_level=reasoning_level
+                reasoning_level=reasoning_level,
+                agent_id=agent_id,
+                role=str((prof or {}).get("name") or ""),
             ):
                 if chunk.startswith("ERROR: "):
                     provider_failed = True
@@ -951,6 +953,26 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
     provider = (req.provider or "openrouter").strip().lower()
 
     if provider == "openrouter":
+        from backend.llm_egress_guard import (
+            ZeroEgressBlockedError,
+            evaluate_and_gate_llm_dispatch,
+            log_completed_llm_dispatch,
+        )
+        target_img_ep = "https://openrouter.ai/api/v1/chat/completions"
+        try:
+            gate = evaluate_and_gate_llm_dispatch(
+                agent_id="image_generate",
+                provider=provider,
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                intended_url=target_img_ep,
+            )
+        except ZeroEgressBlockedError as ze_err:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": ze_err.error_code, "message": str(ze_err)},
+            )
+
         or_key = all_keys.get("OPENROUTER_API_KEY")
         if not or_key:
             raise HTTPException(status_code=400, detail={"code": "chat_openrouter_key_missing", "params": {}})
@@ -967,7 +989,16 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
         }
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+                resp = await client.post(target_img_ep, headers=headers, json=payload)
+                log_completed_llm_dispatch(
+                    agent_id="image_generate",
+                    provider=provider,
+                    model=model,
+                    target_endpoint=target_img_ep,
+                    http_status=resp.status_code,
+                    data_category=gate["data_category"],
+                    zero_egress_active=gate["zero_egress_active"],
+                )
                 if resp.status_code != 200:
                     raise HTTPException(status_code=resp.status_code, detail={"code": "chat_openrouter_error", "params": {"error": resp.text[:300]}})
                 data = resp.json()

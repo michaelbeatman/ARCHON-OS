@@ -101,6 +101,14 @@
       keywords: ['routing', 'gateway', 'fallback', 'provider', 'ausweich', 'latenz', 'rate-limit', 'openrouter', 'ausfallschutz']
     },
     {
+      tab: 'autonomy',
+      elementId: 'sec4-zero-egress-governance-card',
+      title: 'Zero-Egress, Privacy-Router Hard-Block & SHA-256 LLM-Dispatch-Kette',
+      section: 'Sicherheit & Zero-Egress (Modul 32)',
+      description: 'Harter Fail-Closed Block bei Offline-Lokalmodell für Finanzen/Verträge/CRM, isoliertes Docker-Worker-Netz ohne Internet-Route (Internal=true) und SHA-256-Protokollierung jedes LLM-Calls.',
+      keywords: ['zero-egress', 'zero egress', 'privacy-router', 'hard-block', 'hard block', 'dsgvo', 'lokal', 'ollama', 'sha-256', 'hashkette', 'audit-log', 'llm-dispatch', 'worker', 'internal', 'docker-netzwerk', 'crm', 'finanzen', 'verträge']
+    },
+    {
       tab: 'comm',
       elementId: 'settings-tab-comm',
       title: 'Kommunikation (Telegram, SMTP, Webhooks)',

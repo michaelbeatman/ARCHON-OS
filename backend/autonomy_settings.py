@@ -44,7 +44,9 @@ DEFAULT_AUTONOMY_SETTINGS: Dict[str, Dict[str, Any]] = {
         "memory_limit_mb": 512,
         "cpu_limit": 1.0,
         "timeout_seconds": 30,
-        "network_enabled": False
+        "network_enabled": False,
+        "zero_egress_worker_net": False,
+        "worker_network_name": "archon-worker-zero-egress_net"
     },
     # Gruppe 5: Replay, Time-Travel Debugger & Pre-Write Snapshots
     "time_travel_snapshots": {
@@ -319,6 +321,24 @@ DEFAULT_AUTONOMY_SETTINGS: Dict[str, Dict[str, Any]] = {
         "ephemeral_lifespan_minutes": 15,
         "auto_purge_on_completion": True,
         "allow_graduation_to_cadre": True
+    },
+    # Paket 4 (Modul 32): Zero-Egress Gate, Privacy-Router Hard-Block & SHA-256 Dispatch-Audit
+    "zero_egress_governance": {
+        "zero_egress_strict": False,
+        "sensitive_local_routing": True,
+        "hard_block_on_local_offline": True,
+        "block_crm_erp_prefetch_on_cloud": True,
+        "local_llm_url": "http://127.0.0.1:11434/v1",
+        "local_llm_model": "llama3.2",
+        "worker_isolation_network": "archon-worker-zero-egress_net",
+        "sensitive_categories": [
+            "finance", "finanzen", "receipts", "buchhaltung", "erp", "invoices",
+            "contracts", "verträge", "vertraege", "legal",
+            "crm", "kunden", "contacts",
+            "gdpr", "dsgvo", "personalakte", "hr"
+        ],
+        # GoBD-Revisionspflicht: SHA-256-Hashkette für LLM-Dispatches ist unveränderbar erzwungen
+        "sha256_dispatch_audit_enforced": True
     }
 }
 
@@ -342,6 +362,28 @@ def load_all_settings() -> Dict[str, Any]:
             merged = dict(defaults)
             merged.update(data[section])
             data[section] = merged
+
+    # Konsolidiere Zero-Egress-Governance live mit backend.privacy_router (Single Source of Truth)
+    try:
+        from backend.privacy_router import get_privacy_config
+        pcfg = get_privacy_config()
+        ze_sec = dict(data.get("zero_egress_governance", {}))
+        for k in (
+            "zero_egress_strict",
+            "sensitive_local_routing",
+            "hard_block_on_local_offline",
+            "block_crm_erp_prefetch_on_cloud",
+            "local_llm_url",
+            "local_llm_model",
+            "worker_isolation_network",
+            "sensitive_categories",
+        ):
+            if k in pcfg:
+                ze_sec[k] = pcfg[k]
+        ze_sec["sha256_dispatch_audit_enforced"] = True
+        data["zero_egress_governance"] = ze_sec
+    except Exception:
+        data["zero_egress_governance"]["sha256_dispatch_audit_enforced"] = True
 
     return data
 
@@ -369,6 +411,24 @@ def save_autonomy_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
                 current[key].update(val)
             else:
                 current[key] = val
+        if isinstance(current.get("zero_egress_governance"), dict):
+            # Unveränderbare GoBD-Invariante erzwingen
+            current["zero_egress_governance"]["sha256_dispatch_audit_enforced"] = True
+            if current["zero_egress_governance"].get("zero_egress_strict"):
+                current["zero_egress_governance"]["sensitive_local_routing"] = True
+                current["zero_egress_governance"]["hard_block_on_local_offline"] = True
         return current  # Rueckgabe: voller Settings-Stand (wie vorher)
 
-    return atomic_update_settings(SETTINGS_FILE, _apply, loader=load_all_settings)
+    saved = atomic_update_settings(SETTINGS_FILE, _apply, loader=load_all_settings)
+
+    # Bidirektionale Synchronisation mit data/privacy_routing.json
+    if isinstance(updates.get("zero_egress_governance"), dict):
+        try:
+            from backend.privacy_router import save_privacy_config
+            ze = dict(saved.get("zero_egress_governance") or {})
+            ze.pop("sha256_dispatch_audit_enforced", None)
+            save_privacy_config(ze, operator="system_settings")
+        except Exception:
+            pass
+
+    return saved

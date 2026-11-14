@@ -1714,10 +1714,21 @@ def _harden_secret_permissions():
         logger.warning(f"[Secrets] Rechte-Pruefung fehlgeschlagen: {e}")
 
 
+def _ensure_zero_egress_worker_networks():
+    """Stellt beim Start sicher, dass die isolierten Worker-/Sandbox-Docker-Netzwerke (`Internal=true`, ohne Internet-Route) bereitstehen."""
+    try:
+        from backend.llm_egress_guard import ensure_worker_zero_egress_network
+        ensure_worker_zero_egress_network("archon-worker-zero-egress_net")
+        ensure_worker_zero_egress_network("archon-sandbox_net")
+    except Exception as e:
+        logger.debug(f"[ZeroEgress] Worker-Netzwerk-Init Hinweis: {e}")
+
+
 _STARTUP_HOOKS.extend([
     _start_watchdog_daemon,      # 1. Watchdog/Supervisor
     on_startup_drain_recovery,   # 2. Task-Recovery nach Absturz
     _harden_secret_permissions,  # 3. Secret-Dateien auf 600 setzen
+    _ensure_zero_egress_worker_networks,  # 3b. Isolierte Docker-Worker-Netze (--internal, keine Internet-Route)
     _start_gateway_idle_loop,    # 4. IMAP/Inbox/Internet-Watchdog-Loops
     _warm_hermes_skill_caches,   # 4. Skills-Cache vorwärmen (Thread)
     _check_rag_api_key_config,   # 5. RAG-Key vorhanden? Fehlt er -> ERROR-Zeile

@@ -462,22 +462,50 @@ async def generate_grounded_llm_response(prompt: str, context_chunks: List[dict]
     ]
 
     if httpx:
+        from backend.llm_egress_guard import (
+            ZeroEgressBlockedError,
+            evaluate_and_gate_llm_dispatch,
+            log_completed_llm_dispatch,
+        )
         for url, extra_payload in endpoints:
             try:
+                prov_id = "omniroute" if "omniroute" in url else "hermes"
+                mod_id = str(extra_payload.get("model") or "hermes-gateway")
+                gate = evaluate_and_gate_llm_dispatch(
+                    agent_id="notebook_engine",
+                    provider=prov_id,
+                    model=mod_id,
+                    messages=[{"role": "user", "content": prompt}],
+                    intended_url=url,
+                )
+                eff_url = gate["target_url"] if gate.get("routed_to_local") else url
+                eff_prov = gate["provider"] if gate.get("routed_to_local") else prov_id
+                eff_mod = gate["model"] if gate.get("routed_to_local") else mod_id
                 payload = {
                     "messages": [
                         {"role": "system", "content": system_instruction},
                         {"role": "user", "content": prompt}
                     ],
-                    **extra_payload
+                    **({"model": eff_mod} if gate.get("routed_to_local") else extra_payload),
                 }
                 async with httpx.AsyncClient(timeout=25.0) as client:
-                    resp = await client.post(url, json=payload)
+                    resp = await client.post(eff_url, json=payload)
+                    log_completed_llm_dispatch(
+                        agent_id="notebook_engine",
+                        provider=eff_prov,
+                        model=eff_mod,
+                        target_endpoint=eff_url,
+                        http_status=resp.status_code,
+                        data_category=gate["data_category"],
+                        zero_egress_active=gate["zero_egress_active"],
+                    )
                     if resp.status_code == 200:
                         res_json = resp.json()
                         content = res_json.get("choices", [{}])[0].get("message", {}).get("content", "")
                         if content:
                             return content
+            except ZeroEgressBlockedError:
+                break
             except Exception:
                 continue
 

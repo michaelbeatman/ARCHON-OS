@@ -72,6 +72,29 @@ services:
       - agents_net
       # F20: eigener Verwaltungsnetz-Zugang zum Socket-Proxy (nur ARCHON-OS).
       - archon-admin_net
+      # Zero-Egress Worker-Isolationsnetz (internal: true -> keine Internet-Route fuer Worker)
+      - archon-worker-zero-egress_net
+
+  # Isolierter Zero-Egress Worker-Pool (keine Internet-Route, kein NAT-Gateway, read-only, cap_drop ALL)
+  archon-worker:
+    image: python:3.11-alpine@sha256:bb1d70c1df30d8ee1e05214dbe82d6cdfd29833c1f47ce917f20991aca93acaa
+    container_name: archon-worker-zero-egress
+    profiles: ["workers"]
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 50
+    command: ["python", "-c", "import time; time.sleep(86400)"]
+    restart: unless-stopped
+    networks:
+      - archon-worker-zero-egress_net
 
   # Docker-API-Proxy: einziger durch die Anwendung genutzter Weg zum Daemon.
   # Ist-Stand 1:1 übernommen (netzwerk-, mount- und env-gleich), bewusst nur
@@ -149,4 +172,14 @@ networks:
     name: archon-admin_net
     # internal: kein Gateway, kein NAT -> der Proxy ist aus dem Internet/LAN
     # nicht erreichbar, auch nicht per Portveroeffentlichung.
+    internal: true
+  archon-worker-zero-egress_net:
+    name: archon-worker-zero-egress_net
+    driver: bridge
+    # Zero-Egress Isolation fuer Agenten-Worker: internal=true erzwingt auf Kernel-Ebene
+    # KEINE Default-Route ins Internet und KEIN IP-Masquerading/NAT.
+    internal: true
+  archon-sandbox_net:
+    name: archon-sandbox_net
+    driver: bridge
     internal: true

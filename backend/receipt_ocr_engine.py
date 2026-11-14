@@ -120,14 +120,44 @@ class ReceiptOCREngine:
             "temperature": 0.1
         }
 
-        # 1. Versuch: OmniRoute Vision
-        endpoints = [
-            self.omniroute_url,
-            "http://omniroute:20128/v1/chat/completions"
-        ]
+        # Zero-Egress & Privacy-Router Pre-Flight Gate (Belege = sensible Finanzdaten!)
+        from backend.llm_egress_guard import (
+            ZeroEgressBlockedError,
+            evaluate_and_gate_llm_dispatch,
+            log_completed_llm_dispatch,
+        )
+
+        try:
+            gate = evaluate_and_gate_llm_dispatch(
+                agent_id="receipt_ocr_engine",
+                provider="omniroute",
+                model="auto/best-vision",
+                messages=[{"role": "user", "content": f"Receipt OCR: {filename}"}],
+                explicit_category="finance",
+            )
+        except ZeroEgressBlockedError as ze_err:
+            raise ze_err
+
+        if gate.get("routed_to_local"):
+            endpoints = [gate["target_url"]]
+            payload["model"] = gate.get("model") or "llama3.2-vision"
+            eff_provider = "local"
+        else:
+            endpoints = [
+                self.omniroute_url,
+                "http://omniroute:20128/v1/chat/completions"
+            ]
+            eff_provider = "omniroute"
 
         for ep in endpoints:
             try:
+                hop_gate = evaluate_and_gate_llm_dispatch(
+                    agent_id="receipt_ocr_engine",
+                    provider=eff_provider,
+                    model=str(payload.get("model") or "auto/best-vision"),
+                    explicit_category="finance",
+                    intended_url=ep,
+                )
                 data_bytes = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
                     ep,
@@ -135,6 +165,15 @@ class ReceiptOCREngine:
                     headers={"Content-Type": "application/json", "Authorization": "Bearer internal-archon"}
                 )
                 with urllib.request.urlopen(req, timeout=12.0) as resp:
+                    log_completed_llm_dispatch(
+                        agent_id="receipt_ocr_engine",
+                        provider=eff_provider,
+                        model=str(payload.get("model") or "auto/best-vision"),
+                        target_endpoint=ep,
+                        http_status=resp.status,
+                        data_category="finance",
+                        zero_egress_active=hop_gate["zero_egress_active"],
+                    )
                     if resp.status == 200:
                         res = json.loads(resp.read().decode("utf-8"))
                         content = res["choices"][0]["message"]["content"].strip()
@@ -143,8 +182,9 @@ class ReceiptOCREngine:
                             lines = content.split("\n")
                             content = "\n".join(lines[1:-1] if lines[-1].strip().startswith("```") else lines[1:])
                         return json.loads(content)
+            except ZeroEgressBlockedError:
+                raise
             except Exception as e:
-                # print(f"[ReceiptOCR] Vision call failed on {ep}: {e}", file=sys.stderr)
                 continue
 
         # Fallback Heuristik, falls kein LLM erreichbar

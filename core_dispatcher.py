@@ -98,7 +98,18 @@ async def dispatch_to_hermes(agent_name: str, prompt: str, timeout: int = 30) ->
     Routet Anfragen physisch an den Hermes Agent (Port 9119).
     Da Hermes eine Authentifizierung erfordert, muss ggf. ein API-Token als Header mitgeschickt werden.
     """
+    from backend.llm_egress_guard import ZeroEgressBlockedError, evaluate_and_gate_llm_dispatch, log_completed_llm_dispatch
     url = f"{HERMES_URL}/api/chat"
+    try:
+        gate = evaluate_and_gate_llm_dispatch(
+            agent_id=agent_name or "hermes",
+            provider="hermes",
+            model="hermes-gateway",
+            messages=[{"role": "user", "content": prompt}],
+            intended_url=url,
+        )
+    except ZeroEgressBlockedError as ze:
+        return {"status": "blocked", "error_code": ze.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}"}
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {os.getenv('HERMES_API_TOKEN', '')}"
@@ -110,6 +121,15 @@ async def dispatch_to_hermes(agent_name: str, prompt: str, timeout: int = 30) ->
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
+            log_completed_llm_dispatch(
+                agent_id=agent_name or "hermes",
+                provider="hermes",
+                model="hermes-gateway",
+                target_endpoint=url,
+                http_status=resp.status_code,
+                data_category=gate["data_category"],
+                zero_egress_active=gate["zero_egress_active"],
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 # Versuche Standard-Chat-Completion Format zu lesen
@@ -124,7 +144,18 @@ async def dispatch_to_odysseus(agent_name: str, prompt: str, timeout: int = 30) 
     """
     Routet Anfragen physisch an den Odysseus Agent (Port 7000).
     """
+    from backend.llm_egress_guard import ZeroEgressBlockedError, evaluate_and_gate_llm_dispatch, log_completed_llm_dispatch
     url = f"{ODYSSEUS_URL}/api/run"
+    try:
+        gate = evaluate_and_gate_llm_dispatch(
+            agent_id=agent_name or "odysseus",
+            provider="odysseus",
+            model="odysseus-agent",
+            messages=[{"role": "user", "content": prompt}],
+            intended_url=url,
+        )
+    except ZeroEgressBlockedError as ze:
+        return {"status": "blocked", "error_code": ze.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}"}
     headers = {
         "Content-Type": "application/json"
     }
@@ -135,6 +166,15 @@ async def dispatch_to_odysseus(agent_name: str, prompt: str, timeout: int = 30) 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
+            log_completed_llm_dispatch(
+                agent_id=agent_name or "odysseus",
+                provider="odysseus",
+                model="odysseus-agent",
+                target_endpoint=url,
+                http_status=resp.status_code,
+                data_category=gate["data_category"],
+                zero_egress_active=gate["zero_egress_active"],
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 content = data.get("result", data.get("response", str(data)))
@@ -149,7 +189,18 @@ async def dispatch_to_openclaw(agent_name: str, prompt: str, timeout: int = 30) 
     Routet Anfragen physisch an OpenClaw. 
     (Kann über HTTP oder Subprocess aufgerufen werden, hier generisch als HTTP mock, bis CLI-Befehl bekannt ist).
     """
+    from backend.llm_egress_guard import ZeroEgressBlockedError, evaluate_and_gate_llm_dispatch, log_completed_llm_dispatch
     url = f"{OPENCLAW_URL}/api/execute"
+    try:
+        gate = evaluate_and_gate_llm_dispatch(
+            agent_id=agent_name or "openclaw",
+            provider="openclaw",
+            model="openclaw-agent",
+            messages=[{"role": "user", "content": prompt}],
+            intended_url=url,
+        )
+    except ZeroEgressBlockedError as ze:
+        return {"status": "blocked", "error_code": ze.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}"}
     headers = {
         "Content-Type": "application/json"
     }
@@ -160,6 +211,15 @@ async def dispatch_to_openclaw(agent_name: str, prompt: str, timeout: int = 30) 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
+            log_completed_llm_dispatch(
+                agent_id=agent_name or "openclaw",
+                provider="openclaw",
+                model="openclaw-agent",
+                target_endpoint=url,
+                http_status=resp.status_code,
+                data_category=gate["data_category"],
+                zero_egress_active=gate["zero_egress_active"],
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 content = data.get("output", str(data))
@@ -485,16 +545,137 @@ async def _dispatch_to_omniroute_or_container_exec(
     else:
         selected_model = model.strip() if (model and model not in ("free-forever", "gpt-4o-mini", "default")) else "deepseek/deepseek-chat"
 
+    # Zero-Egress & Privacy-Router Pre-Flight Gate + SHA-256 Dispatch Auditor
+    from backend.llm_egress_guard import (
+        ZeroEgressBlockedError,
+        evaluate_and_gate_llm_dispatch,
+        log_completed_llm_dispatch,
+    )
+    from backend.privacy_router import get_privacy_config
+
+    try:
+        preflight_gate = evaluate_and_gate_llm_dispatch(
+            agent_id=agent_id,
+            provider=prov_lower or "omniroute",
+            model=selected_model,
+            messages=messages,
+            role=role,
+        )
+    except ZeroEgressBlockedError as ze_err:
+        return {
+            "status": "blocked",
+            "error": str(ze_err),
+            "error_code": ze_err.error_code,
+            "content": f"🛑 [ZERO-EGRESS / PRIVACY-ROUTER HARD-BLOCK]: {ze_err}",
+            "audit_event": ze_err.audit_event,
+        }
+
+    # Schutz gegen Datenleck: Spekulativ vorgeladene CRM-/ERP-Daten dürfen niemals an externe Cloud-Modelle gehen,
+    # wenn sensibles lokales Routing aktiv ist und dieser Call NICHT lokal geroutet wird.
+    if prefetch_addon and not preflight_gate.get("routed_to_local"):
+        try:
+            p_cfg_chk = get_privacy_config()
+            if bool(p_cfg_chk.get("block_crm_erp_prefetch_on_cloud", True)) and bool(p_cfg_chk.get("sensitive_local_routing", True)):
+                full_system_prompt_no_prefetch = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{memory_context_addon}".strip()
+                messages = [
+                    {"role": "system", "content": full_system_prompt_no_prefetch},
+                    {"role": "user", "content": prompt},
+                ]
+        except Exception:
+            pass
+
+    async def _audited_post(http_client: httpx.AsyncClient, url: str, *, provider_id: str, model_id: str, headers: dict | None = None, json_body: dict | None = None):
+        hop_gate = evaluate_and_gate_llm_dispatch(
+            agent_id=agent_id,
+            provider=provider_id,
+            model=model_id,
+            messages=messages,
+            role=role,
+            intended_url=url,
+        )
+        r = await http_client.post(url, headers=headers, json=json_body)
+        log_completed_llm_dispatch(
+            agent_id=agent_id,
+            provider=provider_id,
+            model=model_id,
+            target_endpoint=url,
+            http_status=r.status_code,
+            data_category=hop_gate["data_category"],
+            zero_egress_active=hop_gate["zero_egress_active"],
+            task_id=task_id,
+        )
+        return r
+
+    # 0. On-Premise Lokales LLM (erzwungen durch Privacy-Router / Zero-Egress oder explizit prov_lower == 'local')
+    if preflight_gate.get("routed_to_local") or prov_lower in ("local", "ollama", "lmstudio", "vllm"):
+        p_cfg = get_privacy_config()
+        base_local = str(preflight_gate.get("target_url") or p_cfg.get("local_llm_url", "http://127.0.0.1:11434/v1")).rstrip("/")
+        local_ep = base_local if base_local.endswith("/chat/completions") else f"{base_local}/chat/completions"
+        local_model = str(preflight_gate.get("model") or p_cfg.get("local_llm_model", "llama3.2"))
+        try:
+            client = _get_dispatcher_http_client()
+            resp = await _audited_post(
+                client,
+                local_ep,
+                provider_id="local",
+                model_id=local_model,
+                headers={"Content-Type": "application/json"},
+                json_body={"model": local_model, "messages": messages, "max_tokens": 2048, "temperature": 0.3},
+            )
+            if resp.status_code == 200:
+                content = parse_omniroute_response(resp.text)
+                if content:
+                    i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                    _log_dispatcher_usage(agent_id, local_model, i_tok, o_tok, task_id)
+                    return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": local_model, "provider": "local"}
+            if preflight_gate.get("zero_egress_active"):
+                return {
+                    "status": "blocked",
+                    "error_code": "LOCAL_LLM_HTTP_ERROR_HARD_BLOCK",
+                    "error": f"Lokales Modell lieferte HTTP {resp.status_code}",
+                    "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: Lokales Modell ({local_ep}) antwortete mit HTTP {resp.status_code} — kein Cloud-Fallback erlaubt.",
+                }
+        except ZeroEgressBlockedError as ze_err:
+            return {
+                "status": "blocked",
+                "error": str(ze_err),
+                "error_code": ze_err.error_code,
+                "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}",
+                "audit_event": ze_err.audit_event,
+            }
+        except Exception as loc_err:
+            if preflight_gate.get("zero_egress_active"):
+                ev = log_completed_llm_dispatch(
+                    agent_id=agent_id,
+                    provider="local",
+                    model=local_model,
+                    target_endpoint=local_ep,
+                    http_status=0,
+                    data_category=preflight_gate["data_category"],
+                    zero_egress_active=True,
+                    task_id=task_id,
+                )
+                return {
+                    "status": "blocked",
+                    "error_code": "LOCAL_LLM_OFFLINE_HARD_BLOCK",
+                    "error": str(loc_err),
+                    "content": f"🛑 [PRIVACY-ROUTER HARD-BLOCK]: Lokales On-Premise-Modell ({local_ep}) ist nicht erreichbar ({loc_err}) — keine Daten verlassen das Haus.",
+                    "audit_event": ev,
+                }
+
     # 1. Spezifischer Provider: GROQ
     if prov_lower == "groq" and groq_api_key:
         try:
             g_model = selected_model if ("llama" in selected_model or "gemma" in selected_model or "mixtral" in selected_model) else "llama-3.3-70b-versatile"
             client = _get_dispatcher_http_client()
             if True:
-                resp = await client.post(
+                resp = await _audited_post(
+                    client,
                     "https://api.groq.com/openai/v1/chat/completions",
+                    provider_id="groq",
+                    model_id=g_model,
                     headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
-                    json={"model": g_model, "messages": messages, "max_tokens": 1500, "temperature": 0.4}
+                    json_body={"model": g_model, "messages": messages, "max_tokens": 1500, "temperature": 0.4},
                 )
                 if resp.status_code == 200:
                     content = parse_omniroute_response(resp.text)
@@ -502,6 +683,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
                         _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": g_model}
+        except ZeroEgressBlockedError as ze_err:
+            return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
             print(f"[DISPATCHER] Groq direct call failed: {e}")
 
@@ -511,10 +694,13 @@ async def _dispatch_to_omniroute_or_container_exec(
             o_model = selected_model if "gpt" in selected_model else "gpt-4o-mini"
             client = _get_dispatcher_http_client()
             if True:
-                resp = await client.post(
+                resp = await _audited_post(
+                    client,
                     "https://api.openai.com/v1/chat/completions",
+                    provider_id="openai",
+                    model_id=o_model,
                     headers={"Authorization": f"Bearer {openai_api_key}", "Content-Type": "application/json"},
-                    json={"model": o_model, "messages": messages, "max_tokens": 1500, "temperature": 0.4}
+                    json_body={"model": o_model, "messages": messages, "max_tokens": 1500, "temperature": 0.4},
                 )
                 if resp.status_code == 200:
                     content = parse_omniroute_response(resp.text)
@@ -522,6 +708,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
                         _log_dispatcher_usage(agent_id, o_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": o_model}
+        except ZeroEgressBlockedError as ze_err:
+            return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
             print(f"[DISPATCHER] OpenAI direct call failed: {e}")
 
@@ -531,15 +719,18 @@ async def _dispatch_to_omniroute_or_container_exec(
             a_model = selected_model if "claude" in selected_model else "claude-3-5-sonnet-20241022"
             client = _get_dispatcher_http_client()
             if True:
-                resp = await client.post(
+                resp = await _audited_post(
+                    client,
                     "https://api.anthropic.com/v1/messages",
+                    provider_id="anthropic",
+                    model_id=a_model,
                     headers={
                         "x-api-key": anthropic_api_key,
                         "anthropic-version": "2023-06-01",
                         "anthropic-beta": "prompt-caching-2024-07-31",
                         "Content-Type": "application/json"
                     },
-                    json={
+                    json_body={
                         "model": a_model,
                         "system": [
                             {
@@ -550,7 +741,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                         ],
                         "messages": [{"role": "user", "content": prompt}],
                         "max_tokens": 1500
-                    }
+                    },
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -559,6 +750,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
                         _log_dispatcher_usage(agent_id, a_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": a_model}
+        except ZeroEgressBlockedError as ze_err:
+            return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
             print(f"[DISPATCHER] Anthropic direct call failed: {e}")
 
@@ -580,15 +773,18 @@ async def _dispatch_to_omniroute_or_container_exec(
 
             client = _get_dispatcher_http_client()
             if True:
-                resp = await client.post(
+                resp = await _audited_post(
+                    client,
                     "https://openrouter.ai/api/v1/chat/completions",
+                    provider_id="openrouter",
+                    model_id=selected_model,
                     headers={
                         "Authorization": f"Bearer {openrouter_api_key}",
                         "Content-Type": "application/json",
                         "HTTP-Referer": "http://localhost:8501",
                         "X-Title": "ArchonOS"
                     },
-                    json=or_payload
+                    json_body=or_payload,
                 )
                 if resp.status_code == 200:
                     content = parse_omniroute_response(resp.text)
@@ -596,6 +792,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
                         _log_dispatcher_usage(agent_id, selected_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": selected_model}
+        except ZeroEgressBlockedError as ze_err:
+            return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
             print(f"[DISPATCHER] OpenRouter call failed with model {selected_model}: {e}")
 
@@ -605,18 +803,21 @@ async def _dispatch_to_omniroute_or_container_exec(
         for g_model in groq_models:
             try:
                 async with httpx.AsyncClient(timeout=timeout) as client:
-                    resp = await client.post(
+                    resp = await _audited_post(
+                        client,
                         "https://api.groq.com/openai/v1/chat/completions",
+                        provider_id="groq",
+                        model_id=g_model,
                         headers={
                             "Authorization": f"Bearer {groq_api_key}",
                             "Content-Type": "application/json"
                         },
-                        json={
+                        json_body={
                             "model": g_model,
                             "messages": messages,
                             "max_tokens": 1200,
                             "temperature": 0.5
-                        }
+                        },
                     )
                     if resp.status_code == 200:
                         content = parse_omniroute_response(resp.text)
@@ -624,6 +825,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                             i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
                             _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
                             return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": g_model}
+            except ZeroEgressBlockedError as ze_err:
+                return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
             except Exception as e:
                 continue
 
@@ -632,18 +835,27 @@ async def _dispatch_to_omniroute_or_container_exec(
         "http://omniroute:20128/v1/chat/completions",
         f"{OMNIROUTE_URL}/chat/completions"
     ]
+    omni_model = model if (model and model != "free-forever") else "auto/best-coding"
     omni_payload = {
-        "model": model if (model and model != "free-forever") else "auto/best-coding",
+        "model": omni_model,
         "messages": messages
     }
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for omni_url in omni_urls:
             try:
-                resp = await client.post(omni_url, json=omni_payload)
+                resp = await _audited_post(
+                    client,
+                    omni_url,
+                    provider_id="omniroute",
+                    model_id=omni_model,
+                    json_body=omni_payload,
+                )
                 if resp.status_code == 200:
                     content = parse_omniroute_response(resp.text)
                     return {"status": "success", "content": content}
+            except ZeroEgressBlockedError as ze_err:
+                return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
             except Exception as e:
                 continue
 
@@ -663,16 +875,21 @@ async def _dispatch_to_omniroute_or_container_exec(
             if or_model.startswith("auto/") or or_model in ("", "free-forever"):
                 or_model = "deepseek/deepseek-chat"
             async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(
+                resp = await _audited_post(
+                    client,
                     "https://openrouter.ai/api/v1/chat/completions",
+                    provider_id="openrouter",
+                    model_id=or_model,
                     headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
-                    json={"model": or_model, "messages": messages, "max_tokens": 4096}
+                    json_body={"model": or_model, "messages": messages, "max_tokens": 4096},
                 )
                 if resp.status_code == 200:
                     data = resp.json()
                     content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
                     if content:
                         return {"status": "success", "content": content}
+        except ZeroEgressBlockedError as ze_err:
+            return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception:
             pass
 
@@ -685,11 +902,19 @@ async def _dispatch_to_omniroute_or_container_exec(
     async with httpx.AsyncClient(timeout=5) as client:
         for url in direct_urls:
             try:
-                resp = await client.post(url, json={"prompt": prompt, "messages": messages})
+                resp = await _audited_post(
+                    client,
+                    url,
+                    provider_id="container",
+                    model_id=selected_model,
+                    json_body={"prompt": prompt, "messages": messages},
+                )
                 if resp.status_code == 200:
                     data = resp.json()
                     content = data.get("content") or data.get("output") or data.get("result") or str(data)
                     return {"status": "success", "content": content}
+            except ZeroEgressBlockedError as ze_err:
+                return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
             except Exception:
                 continue
 

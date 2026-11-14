@@ -564,16 +564,46 @@ class AgentRouter:
                 
         return target_url, request_headers, client_payload
 
-    async def chat_completion(self, messages: List[Dict], provider: str, model: str, api_keys: Dict[str, str], max_tokens: int = 4096, reasoning_level: str = "medium") -> str:
+    async def chat_completion(
+        self,
+        messages: List[Dict],
+        provider: str,
+        model: str,
+        api_keys: Dict[str, str],
+        max_tokens: int = 4096,
+        reasoning_level: str = "medium",
+        agent_id: str = "master_chat",
+        role: str = "",
+        category: str = "",
+    ) -> str:
         """
-        Synchronous-style asynchronous chat completion via the HAL with Token Guard & Auto-Fallback.
+        Synchronous-style asynchronous chat completion via the HAL with Token Guard,
+        Zero-Egress / Privacy-Router Hard-Block & SHA-256 Dispatch Audit.
         """
+        from backend.llm_egress_guard import (
+            ZeroEgressBlockedError,
+            evaluate_and_gate_llm_dispatch,
+            log_completed_llm_dispatch,
+        )
+
         messages, model, reasoning_level = self._enforce_token_guard(messages, provider, model, reasoning_level)
+        gate = evaluate_and_gate_llm_dispatch(
+            agent_id=agent_id,
+            provider=provider,
+            model=model,
+            messages=messages,
+            role=role,
+            explicit_category=category,
+        )
+        if gate.get("routed_to_local"):
+            provider = "local"
+            model = str(gate.get("model") or model)
+
         prov_low = provider.lower().strip()
         if prov_low == "openrouter" and model in AUTO_MODEL_MAP:
             model = AUTO_MODEL_MAP[model]
         candidate_models = [model]
-        if prov_low == "openrouter":
+        if prov_low == "openrouter" and not gate.get("zero_egress_active"):
             for fb in OPENROUTER_FALLBACK_CHAIN:
                 if fb != model and fb not in candidate_models:
                     candidate_models.append(fb)
@@ -586,7 +616,25 @@ class AgentRouter:
                     target_url, request_headers, client_payload = self._build_request_payload(
                         messages, provider, m_try, api_keys, stream=False, max_tokens=max_tokens, reasoning_level=reasoning_level
                     )
+                    hop_gate = evaluate_and_gate_llm_dispatch(
+                        agent_id=agent_id,
+                        provider=provider,
+                        model=m_try,
+                        messages=messages,
+                        role=role,
+                        explicit_category=category,
+                        intended_url=target_url,
+                    )
                     resp = await client.post(target_url, headers=request_headers, json=client_payload)
+                    log_completed_llm_dispatch(
+                        agent_id=agent_id,
+                        provider=provider,
+                        model=m_try,
+                        target_endpoint=target_url,
+                        http_status=resp.status_code,
+                        data_category=hop_gate["data_category"],
+                        zero_egress_active=hop_gate["zero_egress_active"],
+                    )
                     if resp.status_code in (429, 500, 502, 503, 504, 404) and idx < len(candidate_models) - 1:
                         logger.warning(f"[AgentRouter] Model '{m_try}' returned {resp.status_code}, falling back to '{candidate_models[idx+1]}'...")
                         continue
@@ -595,6 +643,8 @@ class AgentRouter:
                     if prov_low == "anthropic":
                         return data.get("content", [{}])[0].get("text", "")
                     return data["choices"][0]["message"]["content"]
+                except ZeroEgressBlockedError:
+                    raise
                 except Exception as e:
                     last_err = e
                     if idx < len(candidate_models) - 1:
@@ -602,18 +652,53 @@ class AgentRouter:
                         continue
                     raise last_err
 
-    async def stream_chat_completion(self, messages: List[Dict], provider: str, model: str, api_keys: Dict[str, str], reasoning_level: str = "medium") -> AsyncGenerator[str, None]:
+    async def stream_chat_completion(
+        self,
+        messages: List[Dict],
+        provider: str,
+        model: str,
+        api_keys: Dict[str, str],
+        reasoning_level: str = "medium",
+        agent_id: str = "master_chat",
+        role: str = "",
+        category: str = "",
+    ) -> AsyncGenerator[str, None]:
         """
-        Stream chat completion via the HAL with Token Guard & Auto-Fallback.
+        Stream chat completion via the HAL with Token Guard,
+        Zero-Egress / Privacy-Router Hard-Block & SHA-256 Dispatch Audit.
         """
+        from backend.llm_egress_guard import (
+            ZeroEgressBlockedError,
+            evaluate_and_gate_llm_dispatch,
+            log_completed_llm_dispatch,
+        )
+
         try:
             messages, model, reasoning_level = self._enforce_token_guard(messages, provider, model, reasoning_level)
         except BudgetExceededError as budget_err:
             yield f"ERROR: [Token Guard] {budget_err}"
             return
+
+        try:
+            gate = evaluate_and_gate_llm_dispatch(
+                agent_id=agent_id,
+                provider=provider,
+                model=model,
+                messages=messages,
+                role=role,
+                explicit_category=category,
+            )
+        except ZeroEgressBlockedError as ze_err:
+            yield f"ERROR: [Zero-Egress Hard-Block] {ze_err}"
+            return
+
+        if gate.get("routed_to_local"):
+            provider = "local"
+            model = str(gate.get("model") or model)
+
         prov_low = provider.lower().strip()
         candidate_models = [model]
-        if prov_low == "openrouter":
+        if prov_low == "openrouter" and not gate.get("zero_egress_active"):
             for fb in OPENROUTER_FALLBACK_CHAIN:
                 if fb != model and fb not in candidate_models:
                     candidate_models.append(fb)
@@ -623,6 +708,18 @@ class AgentRouter:
                 target_url, request_headers, client_payload = self._build_request_payload(
                     messages, provider, m_try, api_keys, stream=True, reasoning_level=reasoning_level
                 )
+                hop_gate = evaluate_and_gate_llm_dispatch(
+                    agent_id=agent_id,
+                    provider=provider,
+                    model=m_try,
+                    messages=messages,
+                    role=role,
+                    explicit_category=category,
+                    intended_url=target_url,
+                )
+            except ZeroEgressBlockedError as ze_err:
+                yield f"ERROR: [Zero-Egress Hard-Block] {ze_err}"
+                return
             except ValueError as ve:
                 yield f"ERROR: {ve}"
                 return
@@ -631,6 +728,15 @@ class AgentRouter:
                 client = self._get_shared_client()
                 if True:
                     async with client.stream("POST", target_url, headers=request_headers, json=client_payload) as response:
+                        log_completed_llm_dispatch(
+                            agent_id=agent_id,
+                            provider=provider,
+                            model=m_try,
+                            target_endpoint=target_url,
+                            http_status=response.status_code,
+                            data_category=hop_gate["data_category"],
+                            zero_egress_active=hop_gate["zero_egress_active"],
+                        )
                         if response.status_code != 200:
                             err_body = await response.aread()
                             if response.status_code in (429, 500, 502, 503, 504, 404) and idx < len(candidate_models) - 1:

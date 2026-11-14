@@ -41,6 +41,18 @@ class ConfigValidator:
         if max_workers is not None and (not isinstance(max_workers, int) or max_workers < 1 or max_workers > 32):
             errors.append(f"settings.json: max_concurrent_agents muss zwischen 1 und 32 liegen (ist: {max_workers}).")
 
+        # Pruefe Zero-Egress & Privacy-Router Konsistenz (LOCAL_ON_PREM + Hard-Block)
+        try:
+            from backend.privacy_router import verify_zero_egress_config, get_privacy_config
+            ze_report = verify_zero_egress_config(get_privacy_config())
+            for issue in ze_report.get("issues", []):
+                if issue.startswith("Kritisch:"):
+                    errors.append(f"privacy_router: {issue}")
+                else:
+                    warnings.append(f"privacy_router: {issue}")
+        except Exception as ze_exc:
+            warnings.append(f"privacy_router Validierung übersprungen: {ze_exc}")
+
         return errors, warnings, {"sections": len(data)}
 
     def validate_agent_profiles(self) -> Tuple[List[str], List[str], Dict[str, Any], set]:

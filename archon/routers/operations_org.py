@@ -698,18 +698,59 @@ def update_concurrency_settings(request: Request, req: ConcurrencyUpdateRequest)
 def get_audit_log_entries(
     category: Optional[str] = None,
     search: Optional[str] = None,
+    provider: Optional[str] = None,
+    target_host: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ):
-    """Liefert die Einträge des revisionssicheren SHA-256 GoBD/ISO 27001 Audit-Logs mit Filterung."""
+    """Liefert die Einträge des revisionssicheren SHA-256 GoBD/ISO 27001 Audit-Logs mit Filterung (inkl. Provider & Ziel-Host)."""
     from backend.audit_log import chained_audit_log
-    res = chained_audit_log.list_events(category=category, search=search, limit=limit, offset=offset)
+    res = chained_audit_log.list_events(
+        category=category,
+        search=search,
+        provider=provider,
+        target_host=target_host,
+        limit=limit,
+        offset=offset,
+    )
     return {
         "status": "success",
         "total": res["total"],
         "limit": res["limit"],
         "offset": res["offset"],
         "entries": res["entries"],
+    }
+
+
+@router.get("/governance/audit-log/llm-dispatches")
+def get_audit_llm_dispatches(
+    provider: Optional[str] = None,
+    target_host: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Liefert alle kryptografisch verketteten LLM-Dispatch-Nachweise (Provider, Modell, Ziel-Host, realer Ziel-Endpunkt)."""
+    from backend.audit_log import chained_audit_log
+    dispatches = chained_audit_log.list_llm_dispatches(
+        limit=limit,
+        offset=offset,
+        provider=provider,
+        target_host=target_host,
+    )
+    return {
+        "status": "success",
+        "count": len(dispatches),
+        "dispatches": dispatches,
+    }
+
+
+@router.get("/governance/zero-egress-audit")
+def get_zero_egress_posture_audit():
+    """Live-Prüfbericht für Zero-Egress-Konfiguration, Privacy-Router Hard-Block, Docker-Worker-Netzwerk (Internal=true) und SHA-256-Hashkette."""
+    from backend.llm_egress_guard import audit_zero_egress_posture
+    return {
+        "status": "success",
+        "posture": audit_zero_egress_posture(),
     }
 
 

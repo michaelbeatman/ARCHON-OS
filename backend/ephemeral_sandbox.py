@@ -30,9 +30,14 @@ SANDBOX_IMAGE_DEFAULT = (
 )
 # Netz fuer den Opt-in-Fall: intern (kein Egress), eigener Name, kein Default-Bridge.
 SANDBOX_NETWORK = os.environ.get("ARCHON_SANDBOX_NETWORK", "archon-sandbox_net")
+ZERO_EGRESS_WORKER_NETWORK = os.environ.get("ARCHON_WORKER_ZERO_EGRESS_NETWORK", "archon-worker-zero-egress_net")
 # Nicht root in der Sandbox.
 SANDBOX_USER = os.environ.get("ARCHON_SANDBOX_USER", "1000:1000")
 SANDBOX_PIDS_LIMIT = 50
+
+
+class ZeroEgressNetworkIsolationError(RuntimeError):
+    """Wird geworfen, wenn ein Worker-/Sandbox-Docker-Netzwerk NICHT als Internal=true (ohne Internet-Route) isoliert ist."""
 
 
 def _sandbox_image() -> str:
@@ -46,22 +51,40 @@ def _sandbox_image() -> str:
     return ref
 
 
-def _ensure_sandbox_network() -> None:
-    """Legt `archon-sandbox_net` als internes Docker-Netz an (idempotent).
-
-    `--internal` heisst: kein Gateway, kein NAT, kein Egress. Der Opt-in
-    `network_enabled=true` gibt Code also nur Kontakt zu anderem Sandbox-Code,
-    nicht ins Internet. Bereits vorhandenes Netz wird ignoriert.
+def _ensure_sandbox_network(net_name: Optional[str] = None) -> None:
+    """Legt `archon-sandbox_net` bzw. `archon-worker-zero-egress_net` als internes Docker-Netz an
+    und verifiziert zwingend `Internal == true` (keine Internet-Route, kein NAT-Gateway).
     """
+    target_net = (net_name or SANDBOX_NETWORK).strip()
+    if target_net in ("host", "bridge", "default"):
+        raise ZeroEgressNetworkIsolationError(
+            f"Zero-Egress Verletzung: Docker-Netzwerk '{target_net}' besitzt eine Internet-Route und ist für Worker verboten."
+        )
     try:
         subprocess.run(
             ["docker", *docker_cli_host_args(), "network", "create",
-             "--internal", SANDBOX_NETWORK],
+             "--internal", target_net],
             capture_output=True, text=True, timeout=10,
         )
     except Exception:
-        # Nicht fatal fuer den Start; das `docker run` scheitert sichtbar,
-        # falls das Netz wirklich fehlt.
+        pass
+
+    # Fail-Closed Verifikation: Existierendes Netzwerk MUSS Internal=true sein (keine Internet-Route!)
+    try:
+        insp = subprocess.run(
+            ["docker", *docker_cli_host_args(), "network", "inspect", target_net],
+            capture_output=True, text=True, timeout=5,
+        )
+        if insp.returncode == 0 and insp.stdout.strip():
+            data = json.loads(insp.stdout)
+            if isinstance(data, list) and data:
+                if not bool(data[0].get("Internal", False)):
+                    raise ZeroEgressNetworkIsolationError(
+                        f"Zero-Egress Verletzung: Docker-Netzwerk '{target_net}' ist NICHT internal (Internal=false, Internet-Route vorhanden) — Ausführung verweigert!"
+                    )
+    except ZeroEgressNetworkIsolationError:
+        raise
+    except Exception:
         pass
 
 
@@ -174,12 +197,14 @@ class EphemeralSandbox:
         memory_limit_mb: Optional[int] = None,
         cpu_limit: Optional[float] = None,
         timeout_seconds: Optional[int] = None,
-        network_enabled: Optional[bool] = None
+        network_enabled: Optional[bool] = None,
+        zero_egress_worker_net: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Führt den Code in einem flüchtigen, temporären Docker-Container aus.
         Gibt Ausgaben, Laufzeit, Speicherverbrauch und Exit-Code zurück.
         """
+        worker_net_name = ZERO_EGRESS_WORKER_NETWORK
         try:
             from backend.autonomy_settings import get_module_config
             cfg = get_module_config("ephemeral_sandbox")
@@ -193,11 +218,16 @@ class EphemeralSandbox:
                 timeout_seconds = int(cfg.get("timeout_seconds", 30))
             if network_enabled is None:
                 network_enabled = bool(cfg.get("network_enabled", False))
+            if zero_egress_worker_net is None:
+                zero_egress_worker_net = bool(cfg.get("zero_egress_worker_net", False))
+            if cfg.get("worker_network_name"):
+                worker_net_name = str(cfg.get("worker_network_name")).strip()
         except Exception:
             memory_limit_mb = memory_limit_mb or 512
             cpu_limit = cpu_limit or 1.0
             timeout_seconds = timeout_seconds or 30
             network_enabled = bool(network_enabled)
+            zero_egress_worker_net = bool(zero_egress_worker_net)
 
         run_id = f"sandbox-{uuid.uuid4().hex[:8]}"
         run_file = os.path.join(self.temp_dir, f"{run_id}.py" if language == "python" else f"{run_id}.sh")
@@ -207,9 +237,12 @@ class EphemeralSandbox:
                 f.write(code)
 
             t0 = time.time()
-            # Netz-Isolation: Default ist `none`. Der Opt-in-Fall haengt am
-            # internen Sandbox-Netz (kein Egress), nicht am Default-Bridge.
-            if network_enabled:
+            # Netz-Isolation: Default ist `none`. Der Opt-in-Fall bzw. Worker-Modus haengt
+            # ausschliesslich an einem verifizierten `--internal` Docker-Netzwerk ohne Internet-Route.
+            if zero_egress_worker_net:
+                _ensure_sandbox_network(worker_net_name)
+                net_flag = ["--network", worker_net_name]
+            elif network_enabled:
                 _ensure_sandbox_network()
                 net_flag = ["--network", SANDBOX_NETWORK]
             else:

@@ -323,24 +323,38 @@ class ComplianceEngine:
 
         try:
             from backend.privacy_router import get_privacy_config
+            from backend.llm_egress_guard import inspect_worker_network_isolation
             privacy_cfg = get_privacy_config()
+            worker_net = inspect_worker_network_isolation(
+                privacy_cfg.get("worker_isolation_network", "archon-worker-zero-egress_net")
+            )
             # Keine API-Keys im Snapshot exponieren
             privacy_summary = {
-                "sensitive_local_routing": bool(privacy_cfg.get("sensitive_local_routing")),
+                "zero_egress_strict": bool(privacy_cfg.get("zero_egress_strict", False)),
+                "sensitive_local_routing": bool(privacy_cfg.get("sensitive_local_routing", True)),
+                "hard_block_on_local_offline": bool(privacy_cfg.get("hard_block_on_local_offline", True)),
+                "block_crm_erp_prefetch_on_cloud": bool(privacy_cfg.get("block_crm_erp_prefetch_on_cloud", True)),
                 "local_llm_url": privacy_cfg.get("local_llm_url", ""),
                 "local_llm_model": privacy_cfg.get("local_llm_model", ""),
-                "fallback_to_eu": bool(privacy_cfg.get("fallback_to_eu")),
+                "fallback_to_eu": bool(privacy_cfg.get("fallback_to_eu", False)),
                 "eu_mistral_configured": bool(privacy_cfg.get("mistral_api_key")),
                 "sensitive_categories": privacy_cfg.get("sensitive_categories", []),
+                "worker_network_name": worker_net.get("network_name", "archon-worker-zero-egress_net"),
+                "worker_network_internal": bool(worker_net.get("internal_no_internet_route", False)),
             }
         except Exception:
             privacy_summary = {
-                "sensitive_local_routing": False,
+                "zero_egress_strict": False,
+                "sensitive_local_routing": True,
+                "hard_block_on_local_offline": True,
+                "block_crm_erp_prefetch_on_cloud": True,
                 "local_llm_url": "http://127.0.0.1:11434/v1",
                 "local_llm_model": "llama3.2",
-                "fallback_to_eu": True,
+                "fallback_to_eu": False,
                 "eu_mistral_configured": False,
                 "sensitive_categories": ["finance", "receipts", "contracts", "crm", "gdpr", "hr"],
+                "worker_network_name": "archon-worker-zero-egress_net",
+                "worker_network_internal": False,
             }
 
         inv_mgr = self._get_inventory_mgr()

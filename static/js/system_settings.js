@@ -1308,6 +1308,7 @@
         if (el('aut-sandbox-ram') && sb.memory_limit_mb) el('aut-sandbox-ram').value = sb.memory_limit_mb;
         if (el('aut-sandbox-cpu') && sb.cpu_limit) el('aut-sandbox-cpu').value = sb.cpu_limit;
         if (el('aut-sandbox-timeout') && sb.timeout_seconds) el('aut-sandbox-timeout').value = sb.timeout_seconds;
+        if (el('aut-sandbox-zero-egress-net')) el('aut-sandbox-zero-egress-net').checked = !!sb.zero_egress_worker_net;
 
         // Gruppe 5: Time-Travel Debugger & Pre-Write Snapshots
         const tt = s.time_travel_snapshots || {};
@@ -1471,6 +1472,18 @@
         if (el('sec4-rcpt-chain')) el('sec4-rcpt-chain').checked = rcpt.chain_receipts !== false;
         if (el('sec4-rcpt-cost')) el('sec4-rcpt-cost').checked = rcpt.include_cost_breakdown !== false;
 
+        const zeg = s.zero_egress_governance || {};
+        if (el('sec4-ze-sensitive')) el('sec4-ze-sensitive').checked = zeg.sensitive_local_routing !== false;
+        if (el('sec4-ze-hardblock')) el('sec4-ze-hardblock').checked = zeg.hard_block_on_local_offline !== false;
+        if (el('sec4-ze-strict')) el('sec4-ze-strict').checked = !!zeg.zero_egress_strict;
+        if (el('sec4-ze-noprefetch')) el('sec4-ze-noprefetch').checked = zeg.block_crm_erp_prefetch_on_cloud !== false;
+        if (el('sec4-ze-local-url') && zeg.local_llm_url) el('sec4-ze-local-url').value = zeg.local_llm_url;
+        if (el('sec4-ze-local-model') && zeg.local_llm_model) el('sec4-ze-local-model').value = zeg.local_llm_model;
+        if (el('sec4-ze-worker-net') && zeg.worker_isolation_network) el('sec4-ze-worker-net').value = zeg.worker_isolation_network;
+        if (el('sec4-ze-categories') && Array.isArray(zeg.sensitive_categories)) {
+          el('sec4-ze-categories').value = zeg.sensitive_categories.join(', ');
+        }
+
         // Paket 5 (Features 21–25): Selbst-Optimierung, Evaluation & Schwarm-Intelligenz
         const popt = s.prompt_optimizer || {};
         if (el('evo5-popt-enabled')) el('evo5-popt-enabled').checked = popt.enabled !== false;
@@ -1529,6 +1542,8 @@
         ephemeral_sandbox: {
           enabled: !!el('aut-sandbox-enabled')?.checked,
           network_enabled: !!el('aut-sandbox-network')?.checked,
+          zero_egress_worker_net: !!el('aut-sandbox-zero-egress-net')?.checked,
+          worker_network_name: (el('sec4-ze-worker-net')?.value || "archon-worker-zero-egress_net").trim(),
           memory_limit_mb: parseInt(el('aut-sandbox-ram')?.value || "512", 10),
           cpu_limit: parseFloat(el('aut-sandbox-cpu')?.value || "1.0"),
           timeout_seconds: parseInt(el('aut-sandbox-timeout')?.value || "30", 10)
@@ -1687,6 +1702,18 @@
           chain_receipts: !!el('sec4-rcpt-chain')?.checked,
           include_cost_breakdown: !!el('sec4-rcpt-cost')?.checked
         },
+        zero_egress_governance: {
+          sensitive_local_routing: !!el('sec4-ze-sensitive')?.checked,
+          hard_block_on_local_offline: !!el('sec4-ze-hardblock')?.checked,
+          zero_egress_strict: !!el('sec4-ze-strict')?.checked,
+          block_crm_erp_prefetch_on_cloud: !!el('sec4-ze-noprefetch')?.checked,
+          local_llm_url: (el('sec4-ze-local-url')?.value || "http://127.0.0.1:11434/v1").trim(),
+          local_llm_model: (el('sec4-ze-local-model')?.value || "llama3.2").trim(),
+          worker_isolation_network: (el('sec4-ze-worker-net')?.value || "archon-worker-zero-egress_net").trim(),
+          sensitive_categories: (el('sec4-ze-categories')?.value || "finance, contracts, crm, hr, gdpr")
+            .split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+          sha256_dispatch_audit_enforced: true
+        },
         prompt_optimizer: {
           enabled: !!el('evo5-popt-enabled')?.checked,
           auto_apply_patches: !!el('evo5-popt-autoapply')?.checked,
@@ -1743,14 +1770,53 @@
       }
     }
 
+    async function verifyZeroEgressSettingsPosture(targetBoxId = 'sec4-ze-posture-box') {
+      const box = document.getElementById(targetBoxId);
+      if (box) {
+        box.classList.remove('hidden');
+        box.textContent = 'Prüfe Zero-Egress-Konfiguration, Docker-Worker-Netzwerk (Internal=true) & SHA-256-Hashkette...';
+      }
+      try {
+        const res = await fetch('/api/operations/governance/zero-egress-audit');
+        const data = await res.json();
+        const p = data.posture || {};
+        const net = p.docker_worker_network || {};
+        const chain = p.audit_chain || {};
+        const ok = Boolean(p.fail_closed_verified && net.internal_no_internet_route && chain.valid);
+        if (box) {
+          box.className = ok
+            ? 'p-2.5 rounded-lg text-[10.5px] font-mono border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+            : 'p-2.5 rounded-lg text-[10.5px] font-mono border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400';
+          box.textContent =
+            `${ok ? '✓ VERIFIZIERT' : '⚠ HINWEIS'} | ` +
+            `Hard-Block: ${p.hard_block_on_local_offline ? 'EIN' : 'AUS'} | ` +
+            `Strict: ${p.zero_egress_strict ? 'EIN' : 'AUS'} | ` +
+            `Worker-Netz (${net.network_name || 'archon-worker-zero-egress_net'}): Internal=${Boolean(net.internal_no_internet_route)} | ` +
+            `SHA-256 Kette: ${chain.valid ? 'INTAKT' : 'FEHLER'} (${chain.total_records || 0} Blöcke, ${chain.llm_dispatch_records || 0} LLM-Dispatches)`;
+        }
+      } catch (err) {
+        if (box) {
+          box.className = 'p-2.5 rounded-lg text-[10.5px] font-mono border border-rose-500/30 bg-rose-500/10 text-rose-600';
+          box.textContent = `Prüffehler: ${err.message}`;
+        }
+      }
+    }
+
     window.loadAutonomyModulesSettings = loadAutonomyModulesSettings;
     window.saveAutonomyModulesSettings = saveAutonomyModulesSettings;
+    window.verifyZeroEgressSettingsPosture = verifyZeroEgressSettingsPosture;
 
     // =========================================================================
     // ELASTISCHE 3-TEILIGE MODUL-ERKLÄRUNGEN (PROBLEM / LÖSUNG / PREIS & SCHATTENSEITE)
     // + SCHWELLENWERT-KIPPPUNKTE FÜR ALLE 36 AUTONOMIE-MODULE & PLUGIN-MODALS
     // =========================================================================
     const AUTONOMY_MODULE_TRADEOFFS = {
+      "sec4-ze-hardblock": {
+        problem: "Fällt das lokale On-Premise-Modell (Ollama/LM Studio) aus, würden klassische Fallback-Ketten sensible Finanz-, Vertrags- oder CRM-Daten stillschweigend an Cloud-APIs oder über OmniRoute nach außen senden.",
+        solution: "Erzwingt vor dem ersten Netzwerk-Byte einen harten Fail-Closed-Stopp für geschützte Kategorien, isoliert Worker im Docker-Netz ohne Internet-Route (`Internal=true`) und signiert jeden Call samt Provider, Modell und Ziel-Host in der SHA-256-Hashkette.",
+        tradeoff: "Ist das lokale LLM gestoppt, lehnen Finanz-, Vertrags- und CRM-Spezialisten Anfragen sofort ab, bis der lokale Inferenzdienst wieder läuft.",
+        when_to_disable: "Nur dann deaktivieren, wenn ein auftragsverarbeitungsvertraglich abgesicherter EU-Cloud-Provider (z. B. Mistral AI Paris) bewusst als Ausweichziel genutzt werden darf."
+      },
       "cfg-memory-consolidation-enabled": {
         problem: "Temporäre Traces, Heartbeat-Logs und redundante Einzelfakten blähen SQLite- und Vektorspeicher über Wochen auf und verlangsamen jede Abfrage.",
         solution: "Führt nachts (Standard 03:00 Uhr) einen Sleep-Cycle aus, dedupliziert ähnliche Erinnerungen per Cosine-Schwellenwert und bereinigt abgelaufene Roh-Logs.",

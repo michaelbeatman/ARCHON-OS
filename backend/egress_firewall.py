@@ -73,6 +73,43 @@ class EgressFirewall:
         parsed = urlparse(target_url if "://" in target_url else f"https://{target_url}")
         host = (parsed.hostname or "").lower().strip()
 
+        zero_strict = False
+        try:
+            from backend.privacy_router import get_privacy_config
+            zero_strict = bool(get_privacy_config().get("zero_egress_strict", False))
+        except Exception:
+            zero_strict = (os.environ.get("PRIVACY_ZERO_EGRESS") or "").strip().lower() in ("1", "true", "yes", "on")
+
+        if zero_strict:
+            from backend.audit_log import sanitize_llm_endpoint, chained_audit_log
+            clean_ep, _, zone = sanitize_llm_endpoint(target_url)
+            if zone != "LOCAL_ON_PREM":
+                reason = f"Zero-Egress Strict aktiv: Externes Ziel '{host}' ({zone}) hart blockiert."
+                now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+                    conn.execute(
+                        "INSERT INTO egress_firewall_logs (agent_id, target_url, hostname, allowed, reason, created_at) VALUES (?, ?, ?, 0, ?, ?)",
+                        (agent_id, clean_ep, host, reason, now_iso),
+                    )
+                    conn.commit()
+                try:
+                    chained_audit_log.record_event(
+                        category="security",
+                        action="zero_egress_firewall_blocked",
+                        agent_id=agent_id,
+                        payload={"target_endpoint": clean_ep, "target_host": host, "egress_zone": zone, "reason": reason},
+                    )
+                except Exception:
+                    pass
+                return {
+                    "allowed": False,
+                    "blocked": True,
+                    "agent_id": agent_id,
+                    "target_url": clean_ep,
+                    "hostname": host,
+                    "reason": reason,
+                }
+
         if not enabled:
             return {"allowed": True, "bypassed": True, "hostname": host, "url": target_url}
 

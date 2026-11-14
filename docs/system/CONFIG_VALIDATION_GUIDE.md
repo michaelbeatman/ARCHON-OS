@@ -20,7 +20,8 @@ Der **Pre-Flight Config Validator** ([`backend/config_validator.py`](../../backe
 
 | Konfigurationsdatei | Prüfkriterien & Validierung |
 | :--- | :--- |
-| `settings.json` | JSON-Syntax, Pflichtabschnitte (`concurrency`, `fleet_and_hygiene`), Grenzwerte für parallele Worker (1–32). |
+| `settings.json` | JSON-Syntax, Pflichtabschnitte (`concurrency`, `fleet_and_hygiene`, `zero_egress_governance`), Grenzwerte für parallele Worker (1–32). |
+| `data/privacy_routing.json` | Zero-Egress-Prüfung (`verify_zero_egress_config`): `local_llm_url` muss zwingend auf `LOCAL_ON_PREM` zeigen, `hard_block_on_local_offline` und Pflichtkategorien (`finance`, `contracts`, `crm`). |
 | `agent_profiles.json` | Eindeutigkeit aller Profil-IDs (keine Dubletten), Pflichtfelder (`id`, `name`, `status`, Prompts). |
 | `config/teams.json` | Konsistenz der Teams und Verknüpfung der `lead_id` mit existierenden Agenten. |
 | `config/org_hierarchy.json` | Vollständigkeit von `nodes` und `links`, Warnungen bei unregistrierten Knoten. |

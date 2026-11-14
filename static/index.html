@@ -8673,6 +8673,8 @@ ${logExcerpt}
 
           // Category badge styles
           const catColors = {
+            llm_dispatch: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20",
+            security: "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20",
             config: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
             api_keys: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
             agents: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20",
@@ -8686,6 +8688,14 @@ ${logExcerpt}
           tbody.innerHTML = entries.map((e, idx) => {
             const rawPayload = typeof e.payload_json === "string" ? e.payload_json : (typeof e.payload === "string" ? e.payload : JSON.stringify(e.payload || {}));
             let payloadShort = rawPayload.length > 50 ? rawPayload.substring(0, 50) + "..." : rawPayload;
+            if ((e.category || "").toLowerCase() === "llm_dispatch") {
+              const pObj = e.payload_parsed || {};
+              const prov = e.provider || pObj.provider || "?";
+              const mod = e.model || pObj.model || "?";
+              const host = e.target_host || pObj.target_host || "?";
+              const ep = e.target_endpoint || pObj.target_endpoint || "";
+              payloadShort = `${prov} / ${mod} → ${host}${ep ? " (" + ep + ")" : ""}`;
+            }
             const hashShort = e.hash || e.current_hash ? (e.hash || e.current_hash).substring(0, 16) + "..." : "GENESIS";
             const cat = (e.category || "system").toLowerCase();
             const catClass = catColors[cat] || catColors.system;
@@ -12993,7 +13003,11 @@ ${logExcerpt}
           const data = await res.json();
           const cfg = data.config || {};
           const tgl = document.getElementById("privacy-cfg-sensitive-routing");
-          if (tgl) tgl.checked = Boolean(cfg.sensitive_local_routing);
+          if (tgl) tgl.checked = cfg.sensitive_local_routing !== false;
+          const zeStrict = document.getElementById("privacy-cfg-zero-egress-strict");
+          if (zeStrict) zeStrict.checked = Boolean(cfg.zero_egress_strict);
+          const hbOffline = document.getElementById("privacy-cfg-hard-block-offline");
+          if (hbOffline) hbOffline.checked = cfg.hard_block_on_local_offline !== false;
           const u = document.getElementById("privacy-cfg-local-url");
           if (u) u.value = cfg.local_llm_url || "http://127.0.0.1:11434/v1";
           const m = document.getElementById("privacy-cfg-local-model");
@@ -13003,7 +13017,11 @@ ${logExcerpt}
           const mm = document.getElementById("privacy-cfg-mistral-model");
           if (mm) mm.value = cfg.mistral_model || "mistral-large-latest";
           const fb = document.getElementById("privacy-cfg-fallback-eu");
-          if (fb) fb.checked = cfg.fallback_to_eu !== false;
+          if (fb) fb.checked = Boolean(cfg.fallback_to_eu);
+          const bpf = document.getElementById("privacy-cfg-block-prefetch");
+          if (bpf) bpf.checked = cfg.block_crm_erp_prefetch_on_cloud !== false;
+          const cats = document.getElementById("privacy-cfg-sensitive-categories");
+          if (cats && Array.isArray(cfg.sensitive_categories)) cats.value = cfg.sensitive_categories.join(", ");
         }
       } catch (e) {
         console.error(e);
@@ -13094,14 +13112,24 @@ ${logExcerpt}
       const btn = document.getElementById("btn-save-privacy-settings");
       if (btn) btn.disabled = true;
 
+      const zeEl = document.getElementById("privacy-cfg-zero-egress-strict");
+      const hbEl = document.getElementById("privacy-cfg-hard-block-offline");
+      const bpfEl = document.getElementById("privacy-cfg-block-prefetch");
+      const catsEl = document.getElementById("privacy-cfg-sensitive-categories");
       const payload = {
+        zero_egress_strict: zeEl ? Boolean(zeEl.checked) : false,
         sensitive_local_routing: Boolean(document.getElementById("privacy-cfg-sensitive-routing").checked),
+        hard_block_on_local_offline: hbEl ? Boolean(hbEl.checked) : true,
+        block_crm_erp_prefetch_on_cloud: bpfEl ? Boolean(bpfEl.checked) : true,
         local_llm_url: document.getElementById("privacy-cfg-local-url").value.trim() || "http://127.0.0.1:11434/v1",
         local_llm_model: document.getElementById("privacy-cfg-local-model").value.trim() || "llama3.2",
         mistral_api_key: document.getElementById("privacy-cfg-mistral-key").value.trim(),
         mistral_model: document.getElementById("privacy-cfg-mistral-model").value.trim() || "mistral-large-latest",
         fallback_to_eu: Boolean(document.getElementById("privacy-cfg-fallback-eu").checked)
       };
+      if (catsEl && catsEl.value.trim()) {
+        payload.sensitive_categories = catsEl.value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+      }
 
       try {
         const res = await fetch("/api/llm-providers/privacy-routing", {
@@ -13367,6 +13395,46 @@ ${logExcerpt}
           <input type="checkbox" id="privacy-cfg-sensitive-routing" class="sr-only peer">
           <div class="w-9 h-5 bg-zinc-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
         </label>
+      </div>
+
+      <!-- Hard-Block & Strict Zero-Egress Controls -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="p-3 rounded-xl border border-rose-500/25 bg-[var(--background)] flex items-center justify-between gap-2">
+          <div>
+            <div class="font-bold text-[var(--foreground)] text-[11px]">Hard-Block bei Offline-Lokalmodell</div>
+            <p class="text-[10px] text-[var(--muted-foreground)] mt-0.5">Erzwingt harten Stopp für Finanzen, Verträge &amp; CRM statt Cloud-Fallback.</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer shrink-0">
+            <input type="checkbox" id="privacy-cfg-hard-block-offline" checked class="sr-only peer">
+            <div class="w-9 h-5 bg-zinc-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+          </label>
+        </div>
+        <div class="p-3 rounded-xl border border-amber-500/25 bg-[var(--background)] flex items-center justify-between gap-2">
+          <div>
+            <div class="font-bold text-[var(--foreground)] text-[11px]">Strict Zero-Egress (Gesamtsystem)</div>
+            <p class="text-[10px] text-[var(--muted-foreground)] mt-0.5">Blockiert ausnahmslos alle Cloud-Modelle &amp; externe LLM-Endpunkte.</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer shrink-0">
+            <input type="checkbox" id="privacy-cfg-zero-egress-strict" class="sr-only peer">
+            <div class="w-9 h-5 bg-zinc-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Sensible Kategorien & Prefetch-Sperre -->
+      <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-bold text-[11px] text-[var(--foreground)]">Geschützte Kategorien (Hard-Block)</span>
+          <label class="flex items-center gap-1.5 cursor-pointer text-[10px]">
+            <input type="checkbox" id="privacy-cfg-block-prefetch" checked class="rounded text-emerald-600">
+            <span>CRM/ERP-Prefetch in Cloud sperren</span>
+          </label>
+        </div>
+        <input type="text" id="privacy-cfg-sensitive-categories" value="finance, finanzen, receipts, buchhaltung, erp, invoices, contracts, verträge, crm, kunden, gdpr, dsgvo, personalakte, hr" class="w-full px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] text-[11px] text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-emerald-500">
+        <div class="flex items-center justify-between text-[10px] text-[var(--muted-foreground)]">
+          <span>Worker-Docker-Netz: <code class="text-emerald-600 dark:text-emerald-400">archon-worker-zero-egress_net (Internal=true)</code></span>
+          <span>SHA-256 Dispatch-Kette: <strong class="text-teal-600 dark:text-teal-400">Pflicht-Aktiv</strong></span>
+        </div>
       </div>
 
       <!-- Bereich 1: Lokales LLM -->

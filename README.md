@@ -74,8 +74,8 @@ And the best part: Archon OS is a **self-improving system built on Hermes Agent*
 | **Agent Roster** | 1 generic assistant | 1 generalist with tool plugins | **70 distinct specialists** (`agent_profiles.json`) with **3-tier `SOUL.md`** (`Compact` / `Pro` / `Full`) |
 | **Strategic Decisions** | One-shot answer | Iterative tool loop | **AI Boardroom**: isolated multi-perspective debate, critic cross-examination & synthesis across **55 frameworks** |
 | **Long-Term Memory** | Flat chat history | Vector store snippets | **Obsidian Vault sync**, per-agent HR scorecards (`Personalakten/`), WAL SQLite DBs & LRU-K paging |
-| **Privacy & Egress** | All data to cloud APIs | API keys in runtime env | **Zero-Egress Router** (Ollama / LM Studio for finance/HR/CRM) + **Dual-LLM Prompt-Injection Guard** |
-| **Governance & Liability** | Blind output | Unchecked tool calls | **EU AI Act Engine (Art. 4 / Annex III)**, **1-Click GoBD Procedural PDF**, **HITL Gates** & **SHA-256 Audit Chain** |
+| **Privacy & Egress** | All data to cloud APIs | API keys in runtime env | **Zero-Egress Gate & Privacy-Router Hard-Block** (fail-closed for finance/contracts/CRM when local LLM is offline) + **`internal: true` Worker Network (no internet route)** + **Dual-LLM Guard** |
+| **Governance & Liability** | Blind output | Unchecked tool calls | **EU AI Act Engine (Art. 4 / Annex III)**, **1-Click GoBD Procedural PDF**, **HITL Gates** & **SHA-256 Audit Chain (incl. per-call LLM-Dispatch provider/model/host proof)** |
 | **Business Ops** | None | External SaaS integrations | **Multi-Tenant SQLite Isolation (Holding/GmbH/SPV)**, **Kanban (4-eyes gate)**, **Email Triage**, **CRM** & **ERP *(Alpha)*** |
 
 ---

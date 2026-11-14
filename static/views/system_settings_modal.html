@@ -639,23 +639,32 @@
             <!-- Dynamisch über loadLLMProvidersSettings() gefüllt -->
           </div>
 
-          <!-- Sensitive Routing & Privacy Banner (t-c4489c) -->
-          <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                <i data-lucide="shield-check" class="w-4 h-4"></i>
-              </div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <span class="font-bold text-xs font-mono text-[var(--foreground)]" data-i18n="settings.routing.privacy_title">Datenschutz-Routing für sensible Daten</span>
-                  <span class="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold" data-i18n="settings.routing.zero_egress">Zero Egress</span>
+          <!-- Sensitive Routing, Zero-Egress & SHA-256 Dispatch Governance Banner (t-c4489c) -->
+          <div id="settings-routing-zero-egress-card" class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-3 shadow-2xs">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                  <i data-lucide="shield-check" class="w-4 h-4"></i>
                 </div>
-                <p class="text-[11px] text-[var(--muted-foreground)]" data-i18n="settings.routing.privacy_desc">Finanz-, Vertrags- und CRM-Daten verlassen das System nie unverschlüsselt (Delegation an Lokales LLM / Mistral AI).</p>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-xs font-mono text-[var(--foreground)]" data-i18n="settings.routing.privacy_title">Zero-Egress, Privacy-Router Hard-Block &amp; SHA-256 Dispatch-Audit</span>
+                    <span class="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold" data-i18n="settings.routing.zero_egress">Zero Egress</span>
+                    <span class="px-1.5 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-mono font-bold border border-teal-500/25" title="GoBD-Revisionspflicht: Nicht abschaltbar">SHA-256 Hashkette: PFLICHT-AKTIV</span>
+                  </div>
+                  <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5" data-i18n="settings.routing.privacy_desc">Finanzen, Verträge &amp; CRM erzwingen bei Offline-Lokalmodell einen harten Block; Worker laufen ohne Internet-Route (`Internal=true`) und jeder LLM-Call wird kryptografisch verkettet.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                <button type="button" onclick="window.verifyZeroEgressSettingsPosture && window.verifyZeroEgressSettingsPosture('routing-ze-posture-box')" class="px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-mono text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                  <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> <span>Posture prüfen</span>
+                </button>
+                <button type="button" onclick="openPrivacySettingsModal()" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                  <i data-lucide="settings" class="w-3.5 h-3.5"></i> <span data-i18n="settings.routing.configure_btn">Konfigurieren</span>
+                </button>
               </div>
             </div>
-            <button type="button" onclick="openPrivacySettingsModal()" class="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs shrink-0">
-              <i data-lucide="settings" class="w-3.5 h-3.5"></i> <span data-i18n="settings.routing.configure_btn">Konfigurieren</span>
-            </button>
+            <div id="routing-ze-posture-box" class="hidden p-2.5 rounded-lg text-[11px] font-mono border border-[var(--border)] bg-[var(--card)]"></div>
           </div>
           <!-- Provider Cards Grid -->
           <div>
@@ -1837,16 +1846,20 @@
 
               <!-- Modul 5: Ephemeral Docker Sandbox -->
               <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-2.5">
-                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-1.5 flex-wrap gap-1.5">
                   <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]" data-i18n="settings.autonomy.modul_5_ephemeral_docker_sandbox">Modul 5: Ephemeral Docker Sandbox</span>
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 flex-wrap">
                     <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
                       <input type="checkbox" id="aut-sandbox-enabled" checked class="rounded text-indigo-600">
                       <span data-i18n="settings.autonomy.aktiv">Aktiv</span>
                     </label>
                     <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
                       <input type="checkbox" id="aut-sandbox-network" class="rounded text-indigo-600">
-                      <span data-i18n="settings.autonomy.netzwerk">Netzwerk</span>
+                      <span data-i18n="settings.autonomy.netzwerk">Sandbox-Netz</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono" title="Verbindet Worker mit archon-worker-zero-egress_net (--internal, ohne Internet-Route, mit Zugriff auf lokales On-Premise Ollama)">
+                      <input type="checkbox" id="aut-sandbox-zero-egress-net" class="rounded text-emerald-600">
+                      <span>Worker Zero-Egress</span>
                     </label>
                   </div>
                 </div>
@@ -2624,9 +2637,63 @@
                     </label>
                   </div>
                 </div>
-                <div class="flex justify-end pt-1">
+              </div>
+
+              <!-- Modul 32: Zero-Egress Gate, Privacy-Router Hard-Block & LLM-Dispatch SHA-256 Ledger -->
+              <div id="sec4-zero-egress-governance-card" class="p-3.5 rounded-lg border border-emerald-500/30 bg-[var(--card)] space-y-3 md:col-span-2">
+                <div class="flex items-center justify-between border-b border-[var(--border)]/60 pb-2 flex-wrap gap-2">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold font-mono text-[11px] uppercase text-[var(--foreground)]">Modul 32: Zero-Egress Gate, Privacy-Router Hard-Block &amp; LLM-Dispatch SHA-256 Ledger</span>
+                    <span class="px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30 text-[9.5px] font-mono font-bold" title="Revisionspflicht nach GoBD / ISO 27001: Jeder LLM-Dispatch protokolliert Provider, Modell, Ziel-Host &amp; Ziel-Endpunkt unveränderbar in der SHA-256-Hashkette">SHA-256 Dispatch-Audit: ERZWUNGEN</span>
+                  </div>
+                  <div class="flex items-center gap-3 flex-wrap">
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-ze-sensitive" checked class="rounded text-emerald-600">
+                      <span>Sensibles Lokal-Routing</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-ze-hardblock" checked class="rounded text-rose-600">
+                      <span>Hard-Block (Lokal offline)</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-ze-strict" class="rounded text-amber-600">
+                      <span>Strict Zero-Egress (Alle)</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono">
+                      <input type="checkbox" id="sec4-ze-noprefetch" checked class="rounded text-indigo-600">
+                      <span>Cloud-Prefetch-Sperre</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)] mb-0.5">Lokaler On-Premise Endpunkt (`LOCAL_ON_PREM`)</label>
+                    <input type="text" id="sec4-ze-local-url" value="http://127.0.0.1:11434/v1" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)] mb-0.5">Lokales On-Premise Modell</label>
+                    <input type="text" id="sec4-ze-local-model" value="llama3.2" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-mono text-[var(--muted-foreground)] mb-0.5">Isoliertes Worker-Docker-Netz (`Internal=true`)</label>
+                    <input type="text" id="sec4-ze-worker-net" value="archon-worker-zero-egress_net" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-mono text-[var(--muted-foreground)] mb-0.5">Geschützte Kategorien für Hard-Block (kommagetrennt)</label>
+                  <input type="text" id="sec4-ze-categories" value="finance, finanzen, receipts, buchhaltung, erp, invoices, contracts, verträge, crm, kunden, gdpr, dsgvo, personalakte, hr" class="w-full bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs font-mono">
+                </div>
+
+                <div id="sec4-ze-posture-box" class="hidden p-2 rounded text-[10.5px] font-mono border border-[var(--border)] bg-[var(--background)]"></div>
+
+                <div class="flex items-center justify-between pt-1 flex-wrap gap-2">
+                  <button type="button" onclick="window.verifyZeroEgressSettingsPosture && window.verifyZeroEgressSettingsPosture('sec4-ze-posture-box')" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-500"></i> <span>Zero-Egress, Worker-Netz &amp; SHA-256-Kette prüfen</span>
+                  </button>
                   <button type="button" onclick="saveAutonomyModulesSettings(true)" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs">
-                    <i data-lucide="check" class="w-3.5 h-3.5"></i> <span data-i18n="settings.autonomy.module_27_bis_31_sichern">Module 27 bis 31 sichern</span>
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> <span data-i18n="settings.autonomy.module_27_bis_31_sichern">Sicherheit &amp; Zero-Egress sichern</span>
                   </button>
                 </div>
               </div>

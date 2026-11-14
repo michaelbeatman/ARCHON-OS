@@ -133,15 +133,26 @@ HELP_CONTEXT_DATA = {
         "starter_prompt": "Wie nutze ich den CSS Studio Inspector, um Abstände eines Elements live anzupassen?"
     },
     "log_stream": {
-        "title": "Live Log-Stream",
-        "subtitle": "Echtzeit-Telemetrie & System-Audit-Trail",
-        "purpose": "Zentraler Stream aller Kernel-Ereignisse, Agenten-Ausführungen, Tool-Calls und Fehlermeldungen in Echtzeit mit Filter- und Suchfunktion.",
+        "title": "Telemetrie, Logs & GoBD-Revisions-Kette",
+        "subtitle": "Echtzeit-Telemetrie, SHA-256 Audit-Log & LLM-Dispatch-Nachweise",
+        "purpose": "Zentraler Stream aller Kernel-Ereignisse sowie das unveränderliche GoBD/ISO-27001 Audit-Log. Jeder ausgeführte oder durch Zero-Egress geblockte LLM-Call ist unter 'LLM-Dispatches' mit realem Ziel-Endpunkt, Provider, Modell, Ziel-Host und SHA-256-Hashkette prüfbar.",
         "top_actions": [
-            "Filtere nach Loglevel (DEBUG, INFO, WARNING, ERROR).",
-            "Suche nach spezifischen Task-IDs oder Agenten-Namen.",
-            "Pausiere den Stream für eine detaillierte Ursachenanalyse."
+            "Wähle im Reiter 'GoBD / Revisions-Log' den Filter 'LLM-Dispatches', um Provider, Modell und Ziel-Host jedes KI-Aufrufs einzusehen.",
+            "Prüfe die mathematische Unversehrtheit aller Blöcke per Klick auf 'Kette verifizieren' oder exportiere den Prüferbericht als CSV/JSON.",
+            "Filtere im Live-Stream nach Loglevel (DEBUG, INFO, WARNING, ERROR) oder Agenten-ID."
         ],
-        "starter_prompt": "Wie filtere ich im Log-Stream nach Fehlern eines bestimmten Agenten?"
+        "starter_prompt": "Wie prüfe ich im GoBD-Audit-Log, an welchen Ziel-Host und Provider ein LLM-Dispatch gesendet wurde?"
+    },
+    "system_settings": {
+        "title": "System Control Center (Einstellungen)",
+        "subtitle": "Zentrale Steuerung für Hermes Core, 36+ Autonomie-Module, Zero-Egress & RBAC",
+        "purpose": "Verwaltet alle Laufzeit-, Sicherheits- und Datenschutz-Richtlinien. Über 'AUTONOMIE & MODULE -> Modul 32' sowie 'PROVIDER & GATEWAY' steuerst du Zero-Egress, den Privacy-Router Hard-Block für Finanzen/Verträge/CRM und das isolierte Docker-Worker-Netzwerk (Internal=true), während die SHA-256-LLM-Dispatch-Hashkette als GoBD-Invariante dauerhaft erzwungen wird.",
+        "top_actions": [
+            "Drücke '/' für die globale Schnellsuche (z. B. 'Zero-Egress', 'Hard-Block', 'Worker', 'SHA-256') und springe direkt zur Karte.",
+            "Prüfe per Klick auf 'Posture prüfen' live die Zero-Egress-Konfiguration, das Worker-Netz (Internal=true) und die SHA-256-Hashkette.",
+            "Nutze 'Live-Dock' oben rechts, um das Einstellungsfenster seitlich anzudocken."
+        ],
+        "starter_prompt": "Welche Einstellungen gibt es für Zero-Egress, den Privacy-Router Hard-Block und das isolierte Worker-Netzwerk?"
     }
 }
 

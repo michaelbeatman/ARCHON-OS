@@ -58,7 +58,7 @@
 | **53** | **„Epistemic Hygiene“-Wächter für den Obsidian-Vault** | Mittel | Abgeschlossen | Konsistenz-Scan über den Obsidian-Vault zur Erkennung widersprüchlicher Zahlen/Konditionen, veralteter Vertragsdaten & verwaister Notizen |
 | **54** | **Voice-to-Workflow & 2-Stufen-KI-Spezifikations-Helfer (Editoren)** | Hoch | Geplant | Mikrofon-Diktat (Whisper STT) + 2-stufige KI-Auswertung mit gezielten Rückfragen bei Unklarheiten zur fehlerfreien Übersetzung gesprochener Sprache in deterministische Playbooks/Prozessabläufe |
 | **55** | **Enterprise-Kalender-Ausbau (M25 Full-UI)** | Hoch | Geplant | Vollwertiges Monats-/Wochen-/Tagesraster, Drag-&-Drop-Terminplanung, Serientermine, Erinnerungen/Benachrichtigungen & Ressourcen-/Agenten-Ansicht |
-| **56** | **Archon OS Versions- & GitHub-Update-Badge (Sidebar unten links)** | Hoch | Geplant | Analog zur Hermes-Versionsanzeige unten links: Anzeige der aktuellen Archon-OS-Version mit sofortigem Update-Badge bei neuem GitHub-Release/Commit und 1-Klick-Sprung in *Settings → System-Update* |
+| **56** | **Archon OS Versions- & GitHub-Update-Badge (Sidebar unten links)** | Hoch | Abgeschlossen | Analog zur Hermes-Versionsanzeige unten links: Anzeige der aktuellen Archon-OS-Version (`archon_version_badge.js`) mit sofortigem Update-Badge bei neuem GitHub-Release/Commit und 1-Klick-Sprung in *Settings → System-Update* |
 
 ---
 
@@ -359,7 +359,7 @@
 - **Verfallsdatum- & Rechtsstand-Radar:** Markiert Notizen, Kalkulationen und Vorlagen mit abgelaufenen Vertragsständen, überholten Steuersätzen/Gesetzesfassungen oder verwaisten Querverweisen.
 - **Saubere Bereinigungs-Tickets statt stiller Korrektur:** Legt erkannte Diskrepanzen mit exaktem Zitat-Paar (Dokument A vs. Dokument B) als prüfbares Klärungs-Ticket im Triage-/Kanban-Board an, ohne das Second Brain ungefragt umzuschreiben.
 
-### Meilenstein 56: Archon OS Versions- & GitHub-Update-Badge in der linken unteren Seitenleiste (Geplant – Hoch)
+### Meilenstein 56: Archon OS Versions- & GitHub-Update-Badge in der linken unteren Seitenleiste (Abgeschlossen)
 - **Versions- & Update-Anzeige analog zu Hermes Agent:** Unten links in der Seitenleiste (direkt neben/über der Hermes-Agent-Versionsanzeige) wird die aktuell installierte Archon-OS-Version permanent angezeigt.
 - **Sofortiger GitHub-Update-Badge:** Liegt auf GitHub eine neuere Version bzw. ein neues Release vor, erscheint sofort ein gut sichtbarer Update-Badge an der Archon-Versionsanzeige.
 - **1-Klick-Sprung zum System-Update:** Ein Klick auf den Badge öffnet direkt *Settings → System-Update & Server-Sync*, sodass das Update unmittelbar gezogen werden kann.

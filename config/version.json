@@ -1,8 +1,8 @@
 {
-  "version": "v0.5.2.3",
+  "version": "v0.5.2.4",
   "codename": "Archon Global Hardened",
-  "released_at": "2026-11-14 00:18",
-  "previous_version": "v0.5.2.2",
+  "released_at": "2026-11-14 00:45",
+  "previous_version": "v0.5.2.3",
   "commit": "e06f8183",
   "features": [
     "M31 Global Edition: Bilingual parity (EN/DE) across 70 Specialists, 832 Prompt Templates, and 55 Boardroom Frameworks",

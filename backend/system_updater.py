@@ -395,6 +395,33 @@ def get_local_update_status() -> Dict[str, Any]:
     }
 
 
+def _parse_version_tuple(ver_str: str) -> Tuple[int, ...]:
+    """Wandelt z. B. 'v0.5.2.3' in (0, 5, 2, 3) für sauberen Semver-Vergleich um."""
+    cleaned = (ver_str or "").strip().lstrip("vV")
+    parts: List[int] = []
+    for token in cleaned.split("."):
+        digits = "".join(ch for ch in token if ch.isdigit())
+        if digits:
+            parts.append(int(digits))
+        else:
+            break
+    return tuple(parts) if parts else (0,)
+
+
+def _read_remote_version_from_origin(branch: str = "main") -> Optional[str]:
+    """Liest die auf GitHub (origin/<branch>) liegende Archon-Version aus config/version.json."""
+    show_res = _run_git(["show", f"origin/{branch}:config/version.json"], timeout=5)
+    if show_res["success"] and show_res["stdout"]:
+        try:
+            rdata = json.loads(show_res["stdout"])
+            rver = str(rdata.get("version") or "").strip()
+            if rver:
+                return rver
+        except Exception:
+            pass
+    return None
+
+
 @ttl_cache(seconds=60)
 def get_update_status() -> Dict[str, Any]:
     """Prüft, ob auf dem Remote-Repository (GitHub) neue Commits vorliegen."""
@@ -460,14 +487,20 @@ def get_update_status() -> Dict[str, Any]:
     remote_head_res = _run_git(["rev-parse", "--short", "origin/main"])
     remote_commit = remote_head_res["stdout"] if remote_head_res["success"] else "unknown"
 
+    remote_version = _read_remote_version_from_origin("main") or sys_version
+    version_newer = _parse_version_tuple(remote_version) > _parse_version_tuple(sys_version)
+    has_update = (commits_behind > 0) or version_newer
+
     return {
         "status": "success",
         "version": sys_version,
+        "remote_version": remote_version,
+        "version_newer": version_newer,
         "version_codename": sys_codename,
         "next_version": next_version,
         "version_steps": version_steps,
         "auth": auth,
-        "update_available": commits_behind > 0,
+        "update_available": has_update,
         "current_commit": current_commit,
         "remote_commit": remote_commit,
         "branch": branch,
@@ -477,7 +510,11 @@ def get_update_status() -> Dict[str, Any]:
         "has_local_changes": dirty,
         "changed_files_count": changed_files_count,
         "changed_files": changed_files,
-        "message": f"{commits_behind} neue Commits verfügbar." if commits_behind > 0 else "System ist auf dem neuesten Stand."
+        "message": (
+            f"Neue Archon-Version {remote_version} ({commits_behind} Commits) auf GitHub verfügbar."
+            if version_newer
+            else (f"{commits_behind} neue Commits verfügbar." if commits_behind > 0 else "System ist auf dem neuesten Stand.")
+        ),
     }
 
 

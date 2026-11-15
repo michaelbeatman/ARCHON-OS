@@ -70,7 +70,17 @@ class AgentRouter:
         total = 0.0
         ok = False
         deadline = now + 2.0
-        dbs = sorted(glob.glob("/opt/data/profiles/*/state.db") + ["/opt/data/state.db"])
+        dbs = []
+        try:
+            from archon.core.paths import HERMES_PROFILES_BASE, STATE_DB_PATH
+            dbs.extend(glob.glob(os.path.join(HERMES_PROFILES_BASE, "*", "state.db")))
+            dbs.append(STATE_DB_PATH)
+        except Exception:
+            pass
+        dbs.extend(glob.glob("/opt/data/profiles/*/state.db"))
+        dbs.append("/opt/data/state.db")
+        dbs.append(os.path.expanduser("~/.hermes/state.db"))
+        dbs = sorted({os.path.abspath(p) for p in dbs if p and os.path.exists(p)})
         for db in dbs:
             if time.time() > deadline:
                 break
@@ -248,13 +258,14 @@ class AgentRouter:
         total_len = sum(len(str(m.get("content", ""))) for m in compressed)
         if total_len > max_ctx_chars:
             trimmed = [sys_msg, compact_msg] + ([anchor] if anchor else [])
+            insert_idx = 3 if anchor else 2
             acc = len(str(sys_msg.get("content", ""))) + len(compact_text)
             if anchor:
                 acc += len(str(anchor.get("content", "")))
             for m in reversed(recent_msgs):
                 m_len = len(str(m.get("content", "")))
                 if acc + m_len <= max_ctx_chars or len(trimmed) < 3:
-                    trimmed.insert(2, m)
+                    trimmed.insert(insert_idx, m)
                     acc += m_len
                 else:
                     break
@@ -342,10 +353,7 @@ class AgentRouter:
         cb_res = self.check_loop_or_circuit_breaker(messages)
         if cb_res.get("tripped"):
             logger.critical(f"[AgentRouter] CIRCUIT BREAKER AUSGELÖST: {cb_res.get('reason')}")
-            messages = [
-                messages[0],
-                {"role": "system", "content": f"### [SYSTEM-NOTFALLSTOPP / CIRCUIT BREAKER]:\n{cb_res.get('reason')}\nBreche Ausführung sicher ab und fordere alternative Benutzeranweisung an."}
-            ]
+            raise BudgetExceededError(f"[CIRCUIT BREAKER]: {cb_res.get('reason')}")
 
         daily_budget = float(policy.get("daily_budget", 2.0) or 0.0)
         current_spend = float(policy.get("current_spend", 0.0) or 0.0)
@@ -598,6 +606,9 @@ class AgentRouter:
         if gate.get("routed_to_local"):
             provider = "local"
             model = str(gate.get("model") or model)
+        elif gate.get("provider"):
+            provider = str(gate.get("provider"))
+            model = str(gate.get("model") or model)
 
         prov_low = provider.lower().strip()
         if prov_low == "openrouter" and model in AUTO_MODEL_MAP:
@@ -616,6 +627,7 @@ class AgentRouter:
                     target_url, request_headers, client_payload = self._build_request_payload(
                         messages, provider, m_try, api_keys, stream=False, max_tokens=max_tokens, reasoning_level=reasoning_level
                     )
+                    from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
                     hop_gate = evaluate_and_gate_llm_dispatch(
                         agent_id=agent_id,
                         provider=provider,
@@ -625,7 +637,19 @@ class AgentRouter:
                         explicit_category=category,
                         intended_url=target_url,
                     )
-                    resp = await client.post(target_url, headers=request_headers, json=client_payload)
+                    enforce_egress_firewall_for_url(target_url, agent_id=agent_id)
+                    _, _, ep_zone = sanitize_llm_endpoint(target_url)
+                    is_local_hop = (
+                        bool(hop_gate.get("routed_to_local"))
+                        or ep_zone == "LOCAL_ON_PREM"
+                        or (provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
+                    )
+                    safe_payload = sanitize_outbound_llm_payload(
+                        client_payload,
+                        agent_id=agent_id,
+                        is_local=is_local_hop,
+                    )
+                    resp = await client.post(target_url, headers=request_headers, json=safe_payload)
                     log_completed_llm_dispatch(
                         agent_id=agent_id,
                         provider=provider,
@@ -641,7 +665,12 @@ class AgentRouter:
                     resp.raise_for_status()
                     data = resp.json()
                     if prov_low == "anthropic":
-                        return data.get("content", [{}])[0].get("text", "")
+                        blocks = data.get("content") or []
+                        return "".join(
+                            b.get("text", "")
+                            for b in blocks
+                            if isinstance(b, dict) and b.get("type") == "text"
+                        )
                     return data["choices"][0]["message"]["content"]
                 except ZeroEgressBlockedError:
                     raise
@@ -695,8 +724,13 @@ class AgentRouter:
         if gate.get("routed_to_local"):
             provider = "local"
             model = str(gate.get("model") or model)
+        elif gate.get("provider"):
+            provider = str(gate.get("provider"))
+            model = str(gate.get("model") or model)
 
         prov_low = provider.lower().strip()
+        if prov_low == "openrouter" and model in AUTO_MODEL_MAP:
+            model = AUTO_MODEL_MAP[model]
         candidate_models = [model]
         if prov_low == "openrouter" and not gate.get("zero_egress_active"):
             for fb in OPENROUTER_FALLBACK_CHAIN:
@@ -708,6 +742,7 @@ class AgentRouter:
                 target_url, request_headers, client_payload = self._build_request_payload(
                     messages, provider, m_try, api_keys, stream=True, reasoning_level=reasoning_level
                 )
+                from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
                 hop_gate = evaluate_and_gate_llm_dispatch(
                     agent_id=agent_id,
                     provider=provider,
@@ -716,6 +751,18 @@ class AgentRouter:
                     role=role,
                     explicit_category=category,
                     intended_url=target_url,
+                )
+                enforce_egress_firewall_for_url(target_url, agent_id=agent_id)
+                _, _, ep_zone = sanitize_llm_endpoint(target_url)
+                is_local_hop = (
+                    bool(hop_gate.get("routed_to_local"))
+                    or ep_zone == "LOCAL_ON_PREM"
+                    or (provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
+                )
+                safe_payload = sanitize_outbound_llm_payload(
+                    client_payload,
+                    agent_id=agent_id,
+                    is_local=is_local_hop,
                 )
             except ZeroEgressBlockedError as ze_err:
                 yield f"ERROR: [Zero-Egress Hard-Block] {ze_err}"
@@ -727,7 +774,7 @@ class AgentRouter:
             try:
                 client = self._get_shared_client()
                 if True:
-                    async with client.stream("POST", target_url, headers=request_headers, json=client_payload) as response:
+                    async with client.stream("POST", target_url, headers=request_headers, json=safe_payload) as response:
                         log_completed_llm_dispatch(
                             agent_id=agent_id,
                             provider=provider,

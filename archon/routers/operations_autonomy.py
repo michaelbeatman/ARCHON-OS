@@ -84,11 +84,10 @@ def simulate_mcts_trajectories(req: MCTSSimulationRequest):
     """Simuliert Handlungsstränge mittels Monte Carlo Tree Search vor deren Ausführung."""
     from backend.mcts_engine import get_mcts_engine
     engine = get_mcts_engine()
-    res = engine.evaluate_action_paths(
+    res = engine.evaluate_trajectories(
         task_goal=req.task_goal,
         candidate_actions=req.candidate_actions,
-        simulations_per_candidate=req.simulations_per_candidate,
-        agent_id=req.agent_id,
+        simulation_rollouts=req.simulations_per_candidate,
     )
     return res
 
@@ -98,10 +97,7 @@ def trigger_speculative_prefetch(req: PrefetchRequest):
     """Erkennt spekulativ Entitäten (CRM, ERP, Learnings) und legt sie in den schnellen RAM-Cache."""
     from backend.speculative_prefetcher import get_speculative_prefetcher
     prefetcher = get_speculative_prefetcher()
-    res = prefetcher.prefetch_for_prompt(
-        user_prompt=req.user_prompt,
-        agent_id=req.agent_id,
-    )
+    res = prefetcher.prefetch_for_task(prompt=req.user_prompt)
     return res
 
 
@@ -111,10 +107,14 @@ def execute_jit_persona_task(request: Request, req: JITPersonaTaskRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.jit_persona_engine import get_jit_persona_engine
     engine = get_jit_persona_engine()
-    res = engine.execute_ephemeral_task(
+    persona = engine.analyze_and_induct_persona(
         task_description=req.task_description,
         creator_agent=req.creator_agent,
-        auto_purge_on_complete=req.auto_purge_on_complete,
+        ttl_hours=2 if req.auto_purge_on_complete else 24,
+    )
+    res = engine.execute_with_persona(
+        persona_id=persona["persona_id"],
+        task_prompt=req.task_description,
         context=req.context,
     )
     return res

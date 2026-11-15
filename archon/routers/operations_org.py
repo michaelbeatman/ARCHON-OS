@@ -393,6 +393,60 @@ def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] =
     }
 
 
+def _poll_comm_feed_sync(
+    last_seen_time: str,
+    _get_kanban_connection,
+    _load_profiles_map,
+    _get_fallback_avatar,
+) -> tuple[str, list]:
+    conn = _get_kanban_connection()
+    items = []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT e.id, e.task_id, e.kind, e.payload, e.created_at, t.title as task_title, t.assignee
+            FROM task_events e
+            LEFT JOIN tasks t ON e.task_id = t.id
+            WHERE e.created_at > ?
+            ORDER BY e.created_at ASC
+            LIMIT 20
+        """, (last_seen_time,))
+        new_events = cursor.fetchall()
+        if not new_events:
+            return last_seen_time, items
+        profiles = _load_profiles_map()
+        for r in new_events:
+            row = dict(r)
+            last_seen_time = max(last_seen_time, row["created_at"])
+            payload_data = {}
+            try:
+                payload_data = json.loads(row["payload"])
+            except Exception:
+                pass
+            kind = row.get("kind") or "event"
+            author_id = payload_data.get("author") or "commander"
+            prof = profiles.get(author_id, {})
+            author_name = prof.get("name") or ("Commander (Leitstand)" if author_id == "commander" else author_id)
+            author_avatar = prof.get("avatar") or ("/static/avatars/avatar_001.jpg" if author_id == "commander" else _get_fallback_avatar(author_id))
+            items.append({
+                "type": "new_message",
+                "id": f"event_{row['id']}",
+                "timestamp": row["created_at"],
+                "author_id": author_id,
+                "author_name": author_name,
+                "author_avatar": author_avatar,
+                "target_id": payload_data.get("target") or row.get("assignee"),
+                "task_id": row["task_id"],
+                "task_title": row.get("task_title") or "System",
+                "kind": kind,
+                "message": payload_data.get("message") or str(payload_data),
+                "takeover_requested": kind == "human_takeover_requested",
+            })
+    finally:
+        conn.close()
+    return last_seen_time, items
+
+
 @router.get("/comm-feed/stream")
 async def stream_comm_feed(request: Request):
     """Server-Sent Events (SSE) Stream für Realtime-Inter-Agenten-Kommunikation."""
@@ -401,61 +455,32 @@ async def stream_comm_feed(request: Request):
     async def sse_event_generator():
         last_seen_time = datetime.datetime.now().isoformat()
         yield f"data: {json.dumps({'type': 'init', 'timestamp': last_seen_time, 'message': 'Comm-Feed Stream verbunden'})}\n\n"
+        idle_ticks = 0
 
         while True:
             if await request.is_disconnected():
                 break
 
             try:
-                conn = _get_kanban_connection()
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT e.id, e.task_id, e.kind, e.payload, e.created_at, t.title as task_title, t.assignee
-                    FROM task_events e
-                    LEFT JOIN tasks t ON e.task_id = t.id
-                    WHERE e.created_at > ?
-                    ORDER BY e.created_at ASC
-                    LIMIT 20
-                """, (last_seen_time,))
-                new_events = cursor.fetchall()
-                profiles = _load_profiles_map()
-
-                for r in new_events:
-                    row = dict(r)
-                    last_seen_time = max(last_seen_time, row["created_at"])
-                    payload_data = {}
-                    try:
-                        payload_data = json.loads(row["payload"])
-                    except Exception:
-                        pass
-
-                    kind = row.get("kind") or "event"
-                    author_id = payload_data.get("author") or "commander"
-                    prof = profiles.get(author_id, {})
-                    author_name = prof.get("name") or ("Commander (Leitstand)" if author_id == "commander" else author_id)
-                    author_avatar = prof.get("avatar") or ("/static/avatars/avatar_001.jpg" if author_id == "commander" else _get_fallback_avatar(author_id))
-
-                    item = {
-                        "type": "new_message",
-                        "id": f"event_{row['id']}",
-                        "timestamp": row["created_at"],
-                        "author_id": author_id,
-                        "author_name": author_name,
-                        "author_avatar": author_avatar,
-                        "target_id": payload_data.get("target") or row.get("assignee"),
-                        "task_id": row["task_id"],
-                        "task_title": row.get("task_title") or "System",
-                        "kind": kind,
-                        "message": payload_data.get("message") or str(payload_data),
-                        "takeover_requested": kind == "human_takeover_requested",
-                    }
+                last_seen_time, items = await asyncio.to_thread(
+                    _poll_comm_feed_sync,
+                    last_seen_time,
+                    _get_kanban_connection,
+                    _load_profiles_map,
+                    _get_fallback_avatar,
+                )
+                for item in items:
+                    idle_ticks = 0
                     yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
-
-                conn.close()
+                if not items:
+                    idle_ticks += 1
+                    if idle_ticks >= 10:
+                        idle_ticks = 0
+                        yield ": keepalive\n\n"
             except Exception:
                 pass
 
-            await asyncio.sleep(1.2)
+            await asyncio.sleep(1.5)
 
     return StreamingResponse(
         sse_event_generator(),
@@ -671,22 +696,30 @@ class ConcurrencyUpdateRequest(BaseModel):
 def get_concurrency_settings():
     """Liefert aktuellen Concurrency Throttle Status und Task-Semaphore."""
     import core_dispatcher
+    sems = getattr(core_dispatcher, "_TASK_SEMAPHORES", {}) or {}
+    active_sem = next(iter(sems.values()), None)
+    max_t = int(getattr(core_dispatcher, "MAX_CONCURRENT_AGENT_TASKS", 5))
+    avail = int(getattr(active_sem, "_value", max_t)) if active_sem is not None else max_t
     return {
         "status": "success",
-        "max_tasks": core_dispatcher.MAX_CONCURRENT_AGENT_TASKS,
-        "active_semaphore_slots": core_dispatcher.MAX_CONCURRENT_AGENT_TASKS - core_dispatcher._TASK_SEMAPHORE._value,
-        "available_slots": core_dispatcher._TASK_SEMAPHORE._value,
+        "max_tasks": max_t,
+        "active_semaphore_slots": max(0, max_t - avail),
+        "available_slots": avail,
     }
 
 
 @router.post("/governance/concurrency")
-def update_concurrency_settings(request: Request, req: ConcurrencyUpdateRequest):
+async def update_concurrency_settings(request: Request, req: ConcurrencyUpdateRequest):
     """Passt das Limit für gleichzeitige LLM-Tasks dynamisch im laufenden System an."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     import core_dispatcher
     val = max(1, min(20, req.max_tasks))
     core_dispatcher.MAX_CONCURRENT_AGENT_TASKS = val
-    core_dispatcher._TASK_SEMAPHORE = asyncio.Semaphore(val)
+    loop_id = id(asyncio.get_running_loop())
+    sems = getattr(core_dispatcher, "_TASK_SEMAPHORES", None)
+    if isinstance(sems, dict):
+        sems.clear()
+        sems[loop_id] = asyncio.Semaphore(val)
     return {
         "status": "success",
         "message": f"Concurrency-Limit erfolgreich auf {val} Tasks gesetzt.",

@@ -74,14 +74,32 @@
     <div class="lg:col-span-7 h-full min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 flex flex-col gap-2.5 overflow-hidden shadow-xs">
       <div class="flex items-center justify-between gap-2 shrink-0">
         <span data-i18n="view.operations_erp.list_title" class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">Aktuelle Angebote (ANG) &amp; Aufträge (AB)</span>
-        <button
-          type="button"
-          onclick="resetErpOfferBuilder()"
-          class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-        >
-          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-          <span data-i18n="view.operations_erp.action_new_offer">Neues Angebot</span>
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            onclick="openErpBankImportModal()"
+            class="px-3 py-1.5 rounded-xl bg-[var(--secondary)] hover:bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <i data-lucide="landmark" class="w-3.5 h-3.5 text-sky-500"></i>
+            <span data-i18n="view.operations_erp.action_bank_import">Bank-Import &amp; OPOS</span>
+          </button>
+          <button
+            type="button"
+            onclick="exportErpDatevCsv()"
+            class="px-3 py-1.5 rounded-xl bg-[var(--secondary)] hover:bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-500"></i>
+            <span data-i18n="view.operations_erp.action_export_datev">DATEV EXTF</span>
+          </button>
+          <button
+            type="button"
+            onclick="resetErpOfferBuilder()"
+            class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span data-i18n="view.operations_erp.action_new_offer">Neues Angebot</span>
+          </button>
+        </div>
       </div>
 
       <div id="erp-offers-list-container" class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
@@ -207,6 +225,53 @@
       </div>
     </div>
   </div>
+  </div>
+
+  <!-- MODAL: BANK-IMPORT (CAMT.053 XML / MT940 / CSV) & OPOS-ZAHLUNGSABGLEICH -->
+  <div id="erp-bank-import-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="w-full max-w-3xl max-h-[90vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="landmark" class="w-4 h-4 text-sky-500"></i>
+          <h3 data-i18n="view.operations_erp.bank_modal_title" class="text-sm font-bold text-[var(--foreground)]">Bankkonten-Import &amp; OPOS-Zahlungsabgleich</h3>
+        </div>
+        <button type="button" onclick="closeErpBankImportModal()" class="p-1 rounded-lg hover:bg-[var(--secondary)] text-[var(--muted-foreground)] cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="p-4 flex-1 min-h-0 overflow-y-auto space-y-3 text-xs">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p data-i18n="view.operations_erp.bank_modal_desc" class="text-[11px] text-[var(--muted-foreground)]">
+            Importiert ISO 20022 CAMT.053 (.xml), SWIFT MT940 (.sta) oder Bank-CSV und gleicht automatisch mit offenen Ausgangsrechnungen ab.
+          </p>
+          <label class="px-3 py-1.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--card)] border border-[var(--border)] text-xs font-bold cursor-pointer flex items-center gap-1.5">
+            <i data-lucide="upload" class="w-3.5 h-3.5 text-sky-500"></i>
+            <span data-i18n="view.operations_erp.bank_select_file">Datei laden (.xml / .sta / .csv)</span>
+            <input type="file" id="erp-bank-file-input" accept=".xml,.sta,.txt,.csv" class="hidden" onchange="handleErpBankFileSelect(event)">
+          </label>
+        </div>
+
+        <textarea id="erp-bank-raw-input" rows="5" data-i18n-placeholder="view.operations_erp.bank_ph_content" placeholder="CAMT.053 XML, MT940 (:61:/:86:) oder CSV-Umsätze hier einfügen..." class="w-full p-2.5 rounded-xl bg-[var(--background)] border border-[var(--border)] font-mono text-[11px] text-[var(--foreground)]"></textarea>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <label class="flex items-center gap-2 text-xs cursor-pointer">
+            <input type="checkbox" id="erp-bank-auto-paid" checked>
+            <span data-i18n="view.operations_erp.bank_auto_paid">Sichere Treffer (Konfidenz ≥ 90 %) automatisch als bezahlt verbuchen</span>
+          </label>
+          <button type="button" onclick="submitErpBankImport()" class="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer">
+            <span data-i18n="view.operations_erp.bank_run_import">Umsätze importieren &amp; abgleichen</span>
+          </button>
+        </div>
+
+        <div id="erp-bank-import-summary" class="hidden p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-[11px] font-mono"></div>
+
+        <div class="border-t border-[var(--border)] pt-3">
+          <div data-i18n="view.operations_erp.bank_tx_heading" class="text-[11px] font-mono font-bold uppercase text-[var(--muted-foreground)] mb-2">Importierte Bankumsätze &amp; OPOS-Zuordnung</div>
+          <div id="erp-bank-tx-list" class="space-y-1.5 max-h-60 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
 </div>

@@ -85,12 +85,16 @@ def api_get_guardian_stats(timeframe: str = "all"):
             prof_name = db.split('/')[-2] if 'profiles' in db else 'root'
             con = get_db_connection(db, timeout=5.0)
             
-            # Hole Einzelzeilen für Zeitfilterung und Tages-Trend
+            # Hole Einzelzeilen für Zeitfilterung und Tages-Trend (SQLite-Filter bei Zeitfenster)
             query = '''
                 SELECT session_id, model, api_call_count, input_tokens, output_tokens, cache_read_tokens, estimated_cost_usd, first_seen, last_seen
                 FROM session_model_usage
             '''
-            rows = con.execute(query).fetchall()
+            if min_ts > 0:
+                query += " WHERE COALESCE(last_seen, first_seen, 0) >= ?"
+                rows = con.execute(query, (min_ts,)).fetchall()
+            else:
+                rows = con.execute(query).fetchall()
             
             p_tokens = 0
             p_cache = 0
@@ -426,11 +430,14 @@ def api_get_guardian_config():
                 p_tools = p_info.get("provides_tools", []) or p_info.get("tools", []) or []
                 p_icon = icon_map.get(p_id, p_info.get("icon", "puzzle"))
 
+                if p_id.startswith("evey-") and p_id not in enabled_plugins:
+                    # Veraltete externe evey-* Plugin-Artefakte standardmäßig ausblenden
+                    continue
                 if p_id in plugin_autonomy_bridge:
                     grp, key = plugin_autonomy_bridge[p_id]
                     is_enabled = bool(aut_settings.get(grp, {}).get(key, True))
                 else:
-                    is_enabled = (p_id in enabled_plugins) or (p_id == "evey-telegram-ux")
+                    is_enabled = p_id in enabled_plugins
 
                 discovered_plugins.append({
                     "id": p_id,
@@ -1173,7 +1180,7 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@router.post("/api/guardian/cache/clear")
+@router.post("/api/guardian/cache/clear", dependencies=[_ArchonDepends(require_admin_or_503)])
 def api_clear_guardian_cache():
     """Leert den Delegation- und Prompt-Cache."""
     cache_file = os.path.expanduser("~/.hermes/workspace/orchestrator/delegation-cache.json")

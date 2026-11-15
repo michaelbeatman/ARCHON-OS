@@ -10,6 +10,8 @@ import os
 import sys
 import json
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
 import httpx
 from pydantic import BaseModel
@@ -140,34 +142,63 @@ def get_container_logs_api(container_name: str, tail: int = 150):
     return {"logs": logs}
 
 
+def _read_file_tail(file_path: str, max_lines: int = 150, max_bytes: int = 131072) -> List[str]:
+    """Liest die letzten ``max_lines`` Zeilen einer Logdatei ohne Voll-Einlesen in den RAM."""
+    if max_lines <= 0:
+        return []
+    try:
+        file_size = os.path.getsize(file_path)
+    except OSError:
+        return []
+    with open(file_path, "rb") as f:
+        if file_size > max_bytes:
+            f.seek(file_size - max_bytes)
+            f.readline()  # Teilzeile am Seek-Offset verwerfen
+        tail_lines = deque(maxlen=max_lines)
+        for raw_line in f:
+            line = raw_line.decode("utf-8", errors="ignore").strip()
+            if line:
+                tail_lines.append(line)
+        return list(tail_lines)
+
+
 @router.get("/api/v1/container/all-logs")
 def get_all_container_logs_api(tail: int = 40):
-    containers = ["hermes", "ARCHON-OS", "CRM", "Pocketbase", "n8n", "omniroute", "docker-socket-proxy"]
-    combined_logs = []
-    for c in containers:
+    containers = ["hermes", "ARCHON-OS", "n8n", "omniroute", "docker-socket-proxy"]
+    if (os.environ.get("POCKETBASE_ENABLED") or "").strip().lower() in ("1", "true", "yes"):
+        containers.extend(["CRM", "Pocketbase"])
+    ignore_patterns = (
+        "Python 3 is missing from this system",
+        "Launching a Python runner in internal mode",
+        "TypeError fetch failed | getaddrinfo ENOTFOUND aihorde.net",
+        "native fetch fallback ALSO failed",
+        "combo trace combo-",
+        "RuntimeError: The current task is not holding this lock",
+        "Temporary failure in name resolution",
+        "Telegram polling degraded",
+        "Telegram network error",
+        "All connection attempts failed",
+        "failed initial connection after 3 attempts, parking until a reconnect is requested",
+        "Server disconnected without sending a response",
+    )
+
+    def _fetch_one(container_name: str) -> List[str]:
+        out: List[str] = []
         try:
-            raw = _dsr("GET", f"/containers/{c}/logs?tail={tail}&stdout=true&stderr=true")
+            raw = _dsr("GET", f"/containers/{container_name}/logs?tail={tail}&stdout=true&stderr=true")
             if raw:
                 parsed = parse_docker_stream(raw)
-                ignore_patterns = [
-                    "Python 3 is missing from this system",
-                    "Launching a Python runner in internal mode",
-                    "TypeError fetch failed | getaddrinfo ENOTFOUND aihorde.net",
-                    "native fetch fallback ALSO failed",
-                    "combo trace combo-",
-                    "RuntimeError: The current task is not holding this lock",
-                    "Temporary failure in name resolution",
-                    "Telegram polling degraded",
-                    "Telegram network error",
-                    "All connection attempts failed",
-                    "failed initial connection after 3 attempts, parking until a reconnect is requested",
-                    "Server disconnected without sending a response"
-                ]
                 for line in parsed.splitlines():
                     if line.strip() and not any(p in line for p in ignore_patterns):
-                        combined_logs.append(f"[{c}] {line}")
+                        out.append(f"[{container_name}] {line}")
         except Exception:
             pass
+        return out
+
+    combined_logs: List[str] = []
+    with ThreadPoolExecutor(max_workers=min(len(containers), 8)) as pool:
+        for lines_part in pool.map(_fetch_one, containers):
+            combined_logs.extend(lines_part)
     return {"logs": "\n".join(combined_logs)}
 
 
@@ -177,29 +208,29 @@ def get_hermes_profile_logs_api(profile_id: str, tail: int = 150):
     hermes_home = config.hermes_home
     profile_dir = os.path.join(hermes_home, "profiles", profile_id)
     
-    # 1. Profile specific logs
+    # 1. Profile specific logs (Tail-Read statt Voll-RAM-Einlesen)
     prof_logs_dir = os.path.join(profile_dir, "logs")
     if os.path.exists(prof_logs_dir):
         for log_file in sorted(os.listdir(prof_logs_dir)):
             if log_file.endswith(".log"):
                 lp = os.path.join(prof_logs_dir, log_file)
                 try:
-                    with open(lp, "r", encoding="utf-8", errors="ignore") as f:
-                        for l in f.readlines()[-tail:]:
-                            if l.strip():
-                                lines.append(f"[{log_file}] {l.strip()}")
+                    for l in _read_file_tail(lp, max_lines=tail):
+                        lines.append(f"[{log_file}] {l}")
                 except Exception:
                     pass
 
-    # 2. Check main logs matching profile ID
+    # 2. Check main logs matching profile ID (zeilenweises Streaming mit begrenztem Puffer)
     for log_name in ["agent.log", "errors.log", "gateway.log", "hermes-update.log"]:
         lp = os.path.join(hermes_home, "logs", log_name)
         if os.path.exists(lp):
             try:
+                matched = deque(maxlen=max(tail, 1))
                 with open(lp, "r", encoding="utf-8", errors="ignore") as f:
-                    for l in f.readlines():
+                    for l in f:
                         if profile_id in l:
-                            lines.append(f"[{log_name}] {l.strip()}")
+                            matched.append(f"[{log_name}] {l.strip()}")
+                lines.extend(matched)
             except Exception:
                 pass
 

@@ -48,6 +48,20 @@
       langDe: 'Deutsch (DACH)',
       errCompanyRequired: 'Please enter a Company / Organization Name to continue.',
 
+      existingDataBannerTitle: 'Existing Archon OS Data Detected',
+      existingDataBannerDesc: 'Skipping keeps all existing databases, settings, and API keys untouched. You can save updates here or reopen this assistant anytime in Settings > Design.',
+      brandSection: 'CI Brand & Corner Logo (Top-Left Sidebar)',
+      brandDesc: 'Choose which logo appears in the top-left corner of your workspace or upload a custom company mark.',
+      brandCornerPreview: 'Top-Left Corner Preview',
+      brandUploadBtn: 'Upload Custom Logo...',
+      brandResetBtn: 'Archon Standard',
+      brandCustomUrl: 'Logo Path / URL',
+      brandCustomUrlPlaceholder: '/static/archon_os_logo.png',
+      brandPresetStandard: 'Archon OS Standard',
+      brandPresetCompact: 'Compact Emblem',
+      brandPresetBadge: 'Classic Badge',
+      brandInvalidFile: 'Please select a PNG, JPG, WEBP, or GIF image under 240 KB.',
+
       step2Title: 'AI Providers & Zero-Egress Privacy Routing',
       step2Desc: 'Connect cloud APIs, local engines (Ollama / LM Studio), or OmniRoute. Secret keys are saved with strict 0600 permissions.',
       zeroEgressTitle: 'Enforce Zero-Egress Privacy Routing (GDPR / Strict Local)',
@@ -127,6 +141,20 @@
       langEn: 'English (International)',
       langDe: 'Deutsch (DACH)',
       errCompanyRequired: 'Bitte geben Sie einen Firmen- bzw. Organisationsnamen ein.',
+
+      existingDataBannerTitle: 'Bestehende Archon-OS-Daten erkannt',
+      existingDataBannerDesc: 'Beim Überspringen bleiben alle vorhandenen Datenbanken, Einstellungen und API-Keys vollständig erhalten. Sie können diesen Assistenten jederzeit unter Einstellungen > Design erneut öffnen.',
+      brandSection: 'CI-Brand & Ecken-Logo (Sidebar oben links)',
+      brandDesc: 'Wählen Sie das Logo für die Ecke oben links aus oder laden Sie Ihr eigenes Firmenlogo hoch.',
+      brandCornerPreview: 'Vorschau Sidebar-Ecke',
+      brandUploadBtn: 'Eigenes Logo hochladen...',
+      brandResetBtn: 'Archon Standard',
+      brandCustomUrl: 'Logo-Pfad / URL',
+      brandCustomUrlPlaceholder: '/static/archon_os_logo.png',
+      brandPresetStandard: 'Archon OS Standard',
+      brandPresetCompact: 'Kompakt-Emblem',
+      brandPresetBadge: 'Classic Badge',
+      brandInvalidFile: 'Bitte wählen Sie ein PNG-, JPG-, WEBP- oder GIF-Bild unter 240 KB aus.',
 
       step2Title: 'KI-Provider & Zero-Egress Datenschutz-Routing',
       step2Desc: 'Verbinden Sie Cloud-APIs, lokale Modelle (Ollama / LM Studio) oder OmniRoute. API-Keys werden gehärtet (chmod 0600) abgelegt.',
@@ -226,6 +254,7 @@
       bic: '',
       currency: 'EUR',
       language: 'en',
+      logo_url: '/static/archon_os_logo.png',
       zero_egress: false,
       providerKeys: {},
       providerUrls: {},
@@ -282,12 +311,96 @@
         overflow: hidden;
       }
       .aow-header {
-        padding: 20px 24px 16px;
+        padding: 16px 24px 14px;
         border-bottom: 1px solid var(--border, #e2e8f0);
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         gap: 16px;
+      }
+      .aow-brand-hero {
+        padding: 12px 24px 10px;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .aow-brand-hero img {
+        height: 46px;
+        width: auto;
+        max-width: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      .aow-existing-banner {
+        margin: 10px 24px 0;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(2, 132, 199, 0.32);
+        background: rgba(2, 132, 199, 0.08);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .aow-brand-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .aow-brand-card {
+        border: 1px solid var(--border, #cbd5e1);
+        border-radius: 10px;
+        padding: 8px;
+        background: #ffffff;
+        color: #0f172a;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        text-align: center;
+        transition: all 0.15s ease;
+      }
+      .aow-brand-card:hover {
+        border-color: #0284c7;
+      }
+      .aow-brand-card.is-selected {
+        border-color: #0284c7;
+        box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25);
+      }
+      .aow-brand-card img {
+        height: 30px;
+        width: auto;
+        max-width: 100%;
+        object-fit: contain;
+      }
+      .aow-corner-preview {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px dashed var(--border, #cbd5e1);
+        background: var(--muted, rgba(148, 163, 184, 0.08));
+        margin-top: 8px;
+      }
+      .aow-corner-frame {
+        width: 156px;
+        height: 44px;
+        padding: 5px 10px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .aow-corner-frame img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
       }
       .aow-badge {
         display: inline-block;
@@ -598,6 +711,15 @@
     state.form.bic = cp.bic || '';
     state.form.currency = cp.currency || 'EUR';
     state.form.language = cp.language || data.language || state.lang || 'en';
+    let storedCornerLogo = '';
+    try {
+      const savedThemeRaw = localStorage.getItem('archon_theme_custom');
+      if (savedThemeRaw) {
+        const parsedTheme = JSON.parse(savedThemeRaw);
+        if (parsedTheme && parsedTheme.logoUrl) storedCornerLogo = parsedTheme.logoUrl;
+      }
+    } catch (_) { /* ignore storage parse issues */ }
+    state.form.logo_url = cp.logo_url || storedCornerLogo || '/static/archon_os_logo.png';
     state.form.zero_egress = Boolean(data && data.zero_egress);
 
     const catalog = (data && data.providers_catalog) || [];
@@ -622,12 +744,70 @@
     state.form.active_domains = activeIds;
   }
 
+  function getBrandPresets() {
+    return [
+      { id: 'standard', label: t('brandPresetStandard'), url: '/static/archon_os_logo.png' },
+      { id: 'compact', label: t('brandPresetCompact'), url: '/static/img/logo.png' },
+      { id: 'classic', label: t('brandPresetBadge'), url: '/static/logo.png' }
+    ];
+  }
+
+  function previewCornerLogo(url, persist) {
+    const clean = (url || '').trim() || '/static/archon_os_logo.png';
+    state.form.logo_url = clean;
+    if (typeof window.applyCustomizerSetting === 'function') {
+      window.applyCustomizerSetting('logoUrl', clean, Boolean(persist));
+    } else {
+      const sbImg = document.getElementById('sidebar-logo-img');
+      if (sbImg) sbImg.src = clean;
+    }
+    const prevImg = document.getElementById('aow-corner-preview-img');
+    if (prevImg) prevImg.src = clean;
+  }
+
   function renderStep1() {
     const f = state.form;
     const currencies = ['EUR', 'USD', 'GBP', 'CHF'];
+    const currentLogo = f.logo_url || '/static/archon_os_logo.png';
+    const presetsHtml = getBrandPresets().map(function (preset) {
+      const selected = currentLogo === preset.url;
+      return `
+        <button type="button" class="aow-brand-card ${selected ? 'is-selected' : ''}" data-brand-preset="${esc(preset.url)}">
+          <img src="${esc(preset.url)}" alt="${esc(preset.label)}" />
+          <span style="font-size:11px;font-weight:700">${esc(preset.label)}</span>
+        </button>
+      `;
+    }).join('');
     return `
       <h3 class="aow-section-title">${esc(t('step1Title'))}</h3>
       <p class="aow-section-desc">${esc(t('step1Desc'))}</p>
+      <div class="aow-subbox">
+        <div class="aow-subbox-title">${esc(t('brandSection'))}</div>
+        <p style="font-size:11.5px;color:var(--muted-foreground,#64748b);margin:0 0 10px">${esc(t('brandDesc'))}</p>
+        <div class="aow-brand-grid">${presetsHtml}</div>
+        <div class="aow-grid-2" style="align-items:end">
+          <div class="aow-field">
+            <label class="aow-label" for="aow-logo-url">${esc(t('brandCustomUrl'))}</label>
+            <input id="aow-logo-url" class="aow-input aow-mono" type="text" value="${esc(currentLogo)}" placeholder="${esc(t('brandCustomUrlPlaceholder'))}" />
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label class="aow-btn" style="display:inline-flex;align-items:center;gap:6px">
+              <input id="aow-logo-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" />
+              ${esc(t('brandUploadBtn'))}
+            </label>
+            <button type="button" class="aow-btn" id="aow-logo-reset-btn">${esc(t('brandResetBtn'))}</button>
+          </div>
+        </div>
+        <div class="aow-corner-preview">
+          <div class="aow-corner-frame">
+            <img id="aow-corner-preview-img" src="${esc(currentLogo)}" alt="Corner Brand Preview" />
+          </div>
+          <div style="font-size:11.5px;color:var(--muted-foreground,#64748b)">
+            <strong style="color:var(--foreground,#0f172a);display:block">${esc(t('brandCornerPreview'))}</strong>
+            <span class="aow-mono">${esc(currentLogo.startsWith('data:') ? 'Custom Uploaded Image (Base64)' : currentLogo)}</span>
+          </div>
+        </div>
+      </div>
       <div class="aow-grid-2">
         <div class="aow-field">
           <label class="aow-label" for="aow-company-name">${esc(t('companyName'))}</label>
@@ -901,6 +1081,8 @@
       if (cu) f.currency = cu.value;
       const lg = root.querySelector('#aow-language');
       if (lg) f.language = lg.value;
+      const lu = root.querySelector('#aow-logo-url');
+      if (lu && lu.value.trim()) f.logo_url = lu.value.trim();
     } else if (state.step === 1) {
       const ze = root.querySelector('#aow-zero-egress');
       if (ze) f.zero_egress = ze.checked;
@@ -1063,7 +1245,8 @@
         iban: f.iban,
         bic: f.bic,
         currency: f.currency,
-        language: f.language
+        language: f.language,
+        logo_url: f.logo_url || '/static/archon_os_logo.png'
       },
       zero_egress: Boolean(f.zero_egress),
       providers: {
@@ -1101,6 +1284,7 @@
         return;
       }
       applyUiLanguage(f.language);
+      previewCornerLogo(f.logo_url || '/static/archon_os_logo.png', true);
       state.busy = false;
       closeWizard();
       showCompletionBanner(t('completedToast'));
@@ -1145,8 +1329,13 @@
 
     const isLast = state.step === 3;
 
+    const existingDetected = Boolean(state.statusData && state.statusData.existing_data_detected);
+
     overlay.innerHTML = `
       <div class="aow-dialog">
+        <div class="aow-brand-hero">
+          <img src="/static/archon_os_logo.png" alt="Archon OS — Agentic Operating System" />
+        </div>
         <div class="aow-header">
           <div>
             <span class="aow-badge">${esc(t('badge'))}</span>
@@ -1168,6 +1357,13 @@
             return `<button type="button" class="aow-step-pill ${cls}" data-goto-step="${idx}">${esc(lbl)}</button>`;
           }).join('')}
         </div>
+
+        ${existingDetected ? `
+          <div class="aow-existing-banner">
+            <strong style="display:block;color:#0284c7;margin-bottom:2px">${esc(t('existingDataBannerTitle'))}</strong>
+            <span>${esc(t('existingDataBannerDesc'))}</span>
+          </div>
+        ` : ''}
 
         <div class="aow-body">${bodyContent}</div>
 
@@ -1204,6 +1400,60 @@
       langSelect.addEventListener('change', function () {
         captureCurrentStepInputs(overlay);
         applyUiLanguage(langSelect.value);
+      });
+    }
+
+    overlay.querySelectorAll('[data-brand-preset]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        captureCurrentStepInputs(overlay);
+        const url = btn.getAttribute('data-brand-preset');
+        previewCornerLogo(url, false);
+        state.errorMsg = '';
+        renderModal();
+      });
+    });
+
+    const logoUrlInput = overlay.querySelector('#aow-logo-url');
+    if (logoUrlInput) {
+      logoUrlInput.addEventListener('change', function () {
+        captureCurrentStepInputs(overlay);
+        previewCornerLogo(logoUrlInput.value, false);
+        renderModal();
+      });
+    }
+
+    const logoResetBtn = overlay.querySelector('#aow-logo-reset-btn');
+    if (logoResetBtn) {
+      logoResetBtn.addEventListener('click', function () {
+        captureCurrentStepInputs(overlay);
+        previewCornerLogo('/static/archon_os_logo.png', false);
+        state.errorMsg = '';
+        renderModal();
+      });
+    }
+
+    const logoFileInput = overlay.querySelector('#aow-logo-file-input');
+    if (logoFileInput) {
+      logoFileInput.addEventListener('change', function (ev) {
+        const file = ev.target && ev.target.files && ev.target.files[0];
+        if (!file) return;
+        const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+        if (allowed.indexOf(file.type) === -1 || file.size > 240 * 1024) {
+          state.errorMsg = t('brandInvalidFile');
+          renderModal();
+          return;
+        }
+        captureCurrentStepInputs(overlay);
+        const reader = new FileReader();
+        reader.onload = function (loadEv) {
+          const resUrl = loadEv && loadEv.target ? String(loadEv.target.result || '') : '';
+          if (resUrl) {
+            previewCornerLogo(resUrl, false);
+            state.errorMsg = '';
+            renderModal();
+          }
+        };
+        reader.readAsDataURL(file);
       });
     }
 

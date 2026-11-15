@@ -90,3 +90,66 @@ def api_render_corporate_template(request: Request, payload: Dict = Body(...)):
         # Stammdaten einer anderen Rechtsperson drucken.
         raise HTTPException(status_code=404, detail=str(verr))
     return result
+
+
+@router.get("/api/corporate/template-layout")
+def api_get_corporate_template_layout(
+    template_type: str = Query("letterhead"),
+    company_id: Optional[str] = Query(None),
+):
+    from backend.corporate_manager import corporate_manager
+    try:
+        layout = corporate_manager.get_template_layout(company_id=company_id, template_type=template_type)
+    except ValueError as verr:
+        raise HTTPException(status_code=404, detail=str(verr))
+    return {"status": "ok", "template_type": template_type, "company_id": company_id, "layout": layout}
+
+
+@router.post("/api/corporate/template-layout")
+def api_save_corporate_template_layout(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)
+    from backend.corporate_manager import corporate_manager
+    template_type = str(payload.get("template_type") or "letterhead")
+    company_id = payload.get("company_id")
+    layout = payload.get("layout") if isinstance(payload.get("layout"), dict) else {}
+    try:
+        saved = corporate_manager.save_template_layout(
+            company_id=company_id,
+            template_type=template_type,
+            layout=layout,
+        )
+    except ValueError as verr:
+        raise HTTPException(status_code=404, detail=str(verr))
+    return {"status": "ok", "template_type": template_type, "company_id": company_id, "layout": saved}
+
+
+@router.post("/api/corporate/render-pdf")
+def api_render_corporate_template_pdf(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)
+    from backend.corporate_manager import corporate_manager
+    from backend.erp_zugferd_pdf import build_corporate_template_pdf
+    template_type = str(payload.get("template_type") or "letterhead")
+    company_id = payload.get("company_id")
+    custom = payload.get("custom") if isinstance(payload.get("custom"), dict) else {}
+    try:
+        rendered = corporate_manager.render_template(
+            template_type=template_type,
+            company_id=company_id,
+            custom=custom,
+        )
+        pdf_bytes = build_corporate_template_pdf(rendered)
+    except ValueError as verr:
+        raise HTTPException(status_code=404, detail=str(verr))
+    doc_num = re.sub(
+        r"[^a-zA-Z0-9._-]+",
+        "_",
+        str((rendered.get("pdf_meta") or {}).get("doc_number") or template_type),
+    ).strip("_") or "beleg"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="archon-{doc_num}.pdf"',
+            "Cache-Control": "no-store",
+        },
+    )

@@ -90,6 +90,53 @@ class ApolloVoiceEngine:
                 result_details = info
             except Exception as e:
                 spoken_reply = "Docker-Prüfung konnte nicht ausgeführt werden."
+        elif action == "sync_emails":
+            try:
+                from backend.email_polling_daemon import EmailPollingDaemon
+                daemon = EmailPollingDaemon()
+                sync_res = await asyncio.to_thread(daemon.poll_once)
+                fetched = sync_res.get("new_emails", 0) if isinstance(sync_res, dict) else 0
+                spoken_reply = f"E-Mail-Abgleich abgeschlossen. {fetched} neue Nachrichten verarbeitet."
+                result_details = sync_res if isinstance(sync_res, dict) else {"result": sync_res}
+            except Exception as e:
+                spoken_reply = f"E-Mail-Sync nicht verfügbar: {str(e)[:60]}"
+        elif action == "create_task":
+            try:
+                from archon.core.mission_control import save_mission_control_data, load_mission_control_data
+                import uuid as _uuid
+                task_id = f"voice_{_uuid.uuid4().hex[:8]}"
+                title = clean_prompt[:120]
+                data = load_mission_control_data()
+                tasks = data.setdefault("tasks", [])
+                tasks.insert(0, {
+                    "id": task_id,
+                    "title": title,
+                    "body": clean_prompt,
+                    "status": "todo",
+                    "assignee": "executive_decision_architect",
+                    "created_via": "voice",
+                })
+                save_mission_control_data(data)
+                spoken_reply = f"Aufgabe '{title[:50]}' wurde im Mission Control angelegt."
+                result_details = {"task_id": task_id, "title": title}
+            except Exception as e:
+                spoken_reply = f"Aufgabe konnte nicht gespeichert werden: {str(e)[:60]}"
+        else:
+            try:
+                import core_dispatcher
+                d_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                    agent_id="executive_decision_architect",
+                    agent_name="Apollo Assistant",
+                    prompt=clean_prompt,
+                    role="Voice Assistant",
+                    timeout=15,
+                )
+                reply_txt = str(d_res.get("content") or "").strip()
+                if reply_txt and d_res.get("status") == "success":
+                    spoken_reply = reply_txt[:400]
+                result_details = d_res
+            except Exception as e:
+                result_details = {"error": str(e)}
 
         # 3. Audio-Antwort generieren
         audio_bytes = await self.synthesize_speech(spoken_reply)

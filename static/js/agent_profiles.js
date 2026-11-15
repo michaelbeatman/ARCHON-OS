@@ -556,8 +556,12 @@
       });
       if (window.lucide) lucide.createIcons();
     }
+    let _profileFilterTimer = null;
     function onProfileSearchOrFilter() {
-      renderHermesProfilesList();
+      clearTimeout(_profileFilterTimer);
+      _profileFilterTimer = setTimeout(() => {
+        renderHermesProfilesList();
+      }, 180);
     }
     function filterProfilesByCategory(cat) {
       activeProfileCategoryFilter = cat;
@@ -4471,7 +4475,6 @@ window.openToolConfigModalFromInspector = typeof openToolConfigModalFromInspecto
         const left = Math.max(10, Math.min(window.innerWidth - 300, rect.left + (rect.width / 2) - 130));
         toolbar.style.top = `${top}px`;
         toolbar.style.left = `${left}px`;
-        if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
       }
 
       document.addEventListener("selectionchange", () => {

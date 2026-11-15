@@ -430,6 +430,30 @@ def _update_both_settings(mutator) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Step 1: Company & Tenant Profile Validation & Persistence
 # ---------------------------------------------------------------------------
+_STATIC_LOGO_RE = re.compile(r"^/static/[A-Za-z0-9_./-]{1,200}(\?[A-Za-z0-9_=&.-]{1,80})?$")
+_DATA_IMAGE_RE = re.compile(r"^data:image/(?:png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]{8,350000}$")
+
+
+def validate_logo_url(raw_url: Optional[str]) -> str:
+    """Validates and sanitizes a corner/CI-Brand logo reference (static asset, https URL, or raster data-URI)."""
+    val = str(raw_url or "").strip()
+    if not val:
+        return ""
+    if any(ch in val for ch in ('"', "'", "<", ">", "\r", "\n", "\0")):
+        raise ValueError("Invalid characters in logo_url.")
+    if ".." in val:
+        raise ValueError("Path traversal is not permitted in logo_url.")
+    if _STATIC_LOGO_RE.match(val):
+        return val
+    if val.startswith(("https://", "http://")):
+        if len(val) > 500 or any(c.isspace() for c in val):
+            raise ValueError("Invalid HTTP logo_url.")
+        return val
+    if _DATA_IMAGE_RE.match(val):
+        return val
+    raise ValueError("Unsupported logo_url format (use /static/..., https://..., or raster PNG/JPEG/WEBP/GIF data URI).")
+
+
 def validate_company_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
     """Validates and normalizes Step 1 Company & Tenant profile fields."""
     if not isinstance(raw, dict):
@@ -474,6 +498,8 @@ def validate_company_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
     if language not in ("en", "de"):
         raise ValueError("Invalid language (must be 'en' or 'de').")
 
+    logo_url = validate_logo_url(raw.get("logo_url") or "")
+
     return {
         "company_name": company_name,
         "legal_form": legal_form,
@@ -484,6 +510,7 @@ def validate_company_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
         "bic": bic_clean,
         "currency": currency,
         "language": language,
+        "logo_url": logo_url,
     }
 
 
@@ -501,6 +528,10 @@ def save_company_profile(profile_data: Dict[str, Any]) -> Dict[str, Any]:
         def _mutate(s: Dict[str, Any]) -> None:
             s["company_profile"] = dict(validated)
             s["language"] = validated["language"]
+            if validated.get("logo_url"):
+                branding = s.get("branding") if isinstance(s.get("branding"), dict) else {}
+                branding["corner_logo_url"] = validated["logo_url"]
+                s["branding"] = branding
 
         _update_both_settings(_mutate)
         upsert_env_secrets({"ARCHON_LANGUAGE": validated["language"]})
@@ -1154,6 +1185,26 @@ def get_onboarding_status() -> Dict[str, Any]:
     )
 
     detected_providers = get_detected_providers_booleans()
+
+    # Detect existing instance data safely using only derived/monkeypatched path bases
+    existing_data_reasons: List[str] = []
+    if os.path.exists(ROOT_SETTINGS_FILE):
+        root_keys = {
+            k for k in _load_json_dict(ROOT_SETTINGS_FILE).keys()
+            if k not in ("onboarding", "onboarding_completed", "completed_at")
+        }
+        if len(root_keys) >= 3:
+            existing_data_reasons.append("settings")
+    if any(detected_providers.values()):
+        existing_data_reasons.append("providers")
+    if isinstance(company_profile, dict) and company_profile.get("company_name"):
+        existing_data_reasons.append("company_profile")
+    derived_data_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(TENANT_PROFILE_FILE))))
+    if os.path.isdir(derived_data_dir):
+        for db_name in ("kanban.db", "erp.db", "guardian.db", "crm.db", "decisions.db"):
+            if os.path.exists(os.path.join(derived_data_dir, db_name)):
+                existing_data_reasons.append(f"db:{db_name}")
+                break
     providers_catalog = [
         {
             "id": prov_id,
@@ -1215,6 +1266,8 @@ def get_onboarding_status() -> Dict[str, Any]:
         "completed_at": completed_at,
         "dismissed_at": dismissed_at,
         "demo_mode": demo,
+        "existing_data_detected": bool(existing_data_reasons),
+        "existing_data_reasons": existing_data_reasons,
         "language": lang,
         "zero_egress": zero_egress,
         "company_profile": company_profile or {},

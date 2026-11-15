@@ -14,7 +14,7 @@ import yaml
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request
 from archon.routers._rbac import require_admin_or_503
-from archon.core.runtime import add_ticker, logger
+from archon.core.runtime import APP_ROOT, add_ticker, logger
 from archon.core.paths import (
     HERMES_CONFIG_YAML,
     HERMES_PROFILES_BASE,
@@ -673,8 +673,8 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
                 pdata["llm"]["reasoning_level"] = r_eff
             with open(prof_yaml, "w", encoding="utf-8") as fy:
                 yaml.dump(pdata, fy, allow_unicode=True, sort_keys=False)
-            # agent_profiles.json nachziehen
-            ap_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
+            # agent_profiles.json nachziehen (SSOT im Projekt-Root)
+            ap_file = os.path.join(APP_ROOT, "agent_profiles.json")
             if os.path.exists(ap_file):
                 with open(ap_file, "r", encoding="utf-8") as fap:
                     ap_list = json.load(fap)

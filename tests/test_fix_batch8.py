@@ -115,7 +115,15 @@ def test_r33_gdpr_export_flags_truncation(tmp_path, monkeypatch):
     engine.memory_db = str(tmp_path / "nonexistent_memory.db")
     engine.obsidian_dir = str(tmp_path / "nonexistent_obsidian")
 
-    res = engine.export_subject_data("Max Mustermann")
+    # Art. 15 DSGVO Standardverhalten: ungekuerzter Voll-Export via Pagination
+    res_full = engine.export_subject_data("Max Mustermann")
+    assert len(res_full["sources"]["chat_messages"]) == 150
+    assert res_full["sources"].get("chat_messages_truncated") is False
+    assert res_full.get("is_truncated") is False
+    assert res_full["sources"].get("chat_messages_total_count") == 150
+
+    # Optionale Vorschau-Begrenzung muss Truncation weiterhin transparent flaggen
+    res = engine.export_subject_data("Max Mustermann", max_messages=100)
     assert len(res["sources"]["chat_messages"]) == 100
     assert res["sources"].get("chat_messages_truncated") is True, "R-33 BUG: chat_messages_truncated Flag fehlt!"
     assert res.get("is_truncated") is True, "R-33 BUG: is_truncated Flag auf Root-Ebene fehlt!"

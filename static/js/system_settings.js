@@ -490,31 +490,35 @@
               ${plugins.map(p => {
                 const isEnabled = !!p.enabled;
                 const tools = Array.isArray(p.tools) ? p.tools : [];
+                const safeId = escapeHtml(p.id).replace(/'/g, '&#39;');
+                const safeName = escapeHtml(p.name || p.id).replace(/'/g, '&#39;');
+                const safeIcon = escapeHtml(p.icon || 'puzzle');
+                const safeVer = escapeHtml(p.version || '1.0.0');
                 return `
                   <div class="border border-[var(--border)] rounded-xl p-3.5 bg-[var(--card)] flex flex-col justify-between gap-3 shadow-2xs hover:border-zinc-400 dark:hover:border-zinc-700 transition">
                     <div class="space-y-2">
                       <div class="flex items-start justify-between gap-2">
                         <div class="flex items-center gap-2.5 min-w-0">
                           <div class="w-8 h-8 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center shrink-0 text-[var(--foreground)]">
-                            <i data-lucide="${p.icon || 'puzzle'}" class="w-4 h-4"></i>
+                            <i data-lucide="${safeIcon}" class="w-4 h-4"></i>
                           </div>
                           <div class="min-w-0">
                             <div class="font-bold font-mono text-xs text-[var(--foreground)] flex items-center gap-1.5 truncate">
-                              <span class="truncate">${p.name || p.id}</span>
-                              <span class="text-[9px] font-mono px-1 py-0.2 rounded bg-[var(--secondary)] text-[var(--muted-foreground)] shrink-0">v${p.version || '1.0.0'}</span>
+                              <span class="truncate">${safeName}</span>
+                              <span class="text-[9px] font-mono px-1 py-0.2 rounded bg-[var(--secondary)] text-[var(--muted-foreground)] shrink-0">v${safeVer}</span>
                             </div>
-                            <div class="text-[10px] font-mono text-[var(--muted-foreground)] uppercase">${cfgT(PLUGIN_CAT_LABEL_KEYS[p.category], p.category || 'Plugin')}</div>
+                            <div class="text-[10px] font-mono text-[var(--muted-foreground)] uppercase">${escapeHtml(cfgT(PLUGIN_CAT_LABEL_KEYS[p.category], p.category || 'Plugin'))}</div>
                           </div>
                         </div>
 
                         <!-- Actions: Gear Button + Toggle Switch -->
                         <div class="flex items-center gap-2 shrink-0">
-                          <button type="button" onclick="openPluginConfigModal('${p.id}', '${(p.name || p.id).replace(/'/g, "\\'")}')" title="Plugin-Einstellungen anpassen" class="w-7 h-7 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] flex items-center justify-center transition cursor-pointer shadow-2xs">
+                          <button type="button" onclick="openPluginConfigModal('${safeId}', '${safeName}')" title="Plugin-Einstellungen anpassen" class="w-7 h-7 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] flex items-center justify-center transition cursor-pointer shadow-2xs">
                             <i data-lucide="settings" class="w-3.5 h-3.5"></i>
                           </button>
                           
                           <label class="relative inline-flex items-center cursor-pointer shrink-0" title="${isEnabled ? cfgT('ui.system_settings.plugin_toggle_enabled_hint', 'Aktiviert - Klicken zum Deaktivieren') : cfgT('ui.system_settings.plugin_toggle_disabled_hint', 'Deaktiviert - Klicken zum Aktivieren')}">
-                            <input type="checkbox" id="setting-pl-chk-${p.id}" ${isEnabled ? 'checked' : ''} onchange="togglePluginInSettings('${p.id}', this.checked)" class="sr-only peer">
+                            <input type="checkbox" id="setting-pl-chk-${safeId}" ${isEnabled ? 'checked' : ''} onchange="togglePluginInSettings('${safeId}', this.checked)" class="sr-only peer">
                             <div class="w-9 h-5 bg-zinc-300 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-600"></div>
                           </label>
                         </div>
@@ -525,20 +529,20 @@
                         <div class="space-y-1.5 pt-1 text-[11px] leading-relaxed">
                           <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]/70">
                             <span class="font-mono font-bold text-rose-500 uppercase text-[10px] block">${cfgT('ui.system_settings.plugin_problem_label', 'Problem (Ohne Modul):')}</span>
-                            <span class="text-[var(--foreground)]">${p.problem}</span>
+                            <span class="text-[var(--foreground)]">${escapeHtml(p.problem)}</span>
                           </div>
                           <div class="p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
                             <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase text-[10px] block">${cfgT('ui.system_settings.plugin_solution_label', 'Lösung (Wie es greift):')}</span>
-                            <span class="text-[var(--foreground)]">${p.solution}</span>
+                            <span class="text-[var(--foreground)]">${escapeHtml(p.solution)}</span>
                           </div>
                           <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
                             <span class="font-mono font-bold text-amber-600 dark:text-amber-400 uppercase text-[10px] block">${cfgT('ui.system_settings.plugin_tradeoff_label', 'Preis &amp; Schattenseite (Trade-off):')}</span>
-                            <span class="text-[var(--foreground)]">${p.tradeoff}</span>
-                            ${p.when_to_disable ? `<div class="mt-1 pt-1 border-t border-amber-500/20 text-[10.5px] text-[var(--muted-foreground)]"><strong class="font-mono text-[var(--foreground)]">Wann ausschalten?</strong> ${p.when_to_disable}</div>` : ''}
+                            <span class="text-[var(--foreground)]">${escapeHtml(p.tradeoff)}</span>
+                            ${p.when_to_disable ? `<div class="mt-1 pt-1 border-t border-amber-500/20 text-[10.5px] text-[var(--muted-foreground)]"><strong class="font-mono text-[var(--foreground)]">Wann ausschalten?</strong> ${escapeHtml(p.when_to_disable)}</div>` : ''}
                           </div>
                         </div>
                       ` : `
-                        <p class="text-[11px] text-[var(--muted-foreground)] leading-relaxed">${p.desc || p.description || cfgT('ui.system_settings.plugin_extension_kernel', 'Erweiterung für den Archon Kernel.')}</p>
+                        <p class="text-[11px] text-[var(--muted-foreground)] leading-relaxed">${escapeHtml(p.desc || p.description || cfgT('ui.system_settings.plugin_extension_kernel', 'Erweiterung für den Archon Kernel.'))}</p>
                       `}
                     </div>
 
@@ -546,13 +550,13 @@
                     <div class="flex flex-col gap-2 pt-2 border-t border-[var(--border)]/60">
                       <div class="flex flex-wrap items-center gap-1.5 min-h-[22px]">
                         ${tools.length > 0 
-                          ? tools.map(t => `<span class="px-2 py-0.5 rounded-md bg-[var(--secondary)] text-[var(--foreground)] text-[9.5px] font-mono border border-[var(--border)] flex items-center gap-1"><i data-lucide="wrench" class="w-2.5 h-2.5 text-[var(--muted-foreground)]"></i> ${t}</span>`).join('')
+                          ? tools.map(t => `<span class="px-2 py-0.5 rounded-md bg-[var(--secondary)] text-[var(--foreground)] text-[9.5px] font-mono border border-[var(--border)] flex items-center gap-1"><i data-lucide="wrench" class="w-2.5 h-2.5 text-[var(--muted-foreground)]"></i> ${escapeHtml(t)}</span>`).join('')
                           : `<span class="text-[9.5px] text-[var(--muted-foreground)] font-mono italic">${cfgT('ui.system_settings.plugin_background_service', 'Hintergrund-Dienst (Keine MCP-Tools)')}</span>`
                         }
                       </div>
                       <div class="flex items-center justify-between text-[10px] font-mono pt-1">
-                        <span class="text-[var(--muted-foreground)] font-mono">ID: @${p.id}</span>
-                        <span id="setting-pl-badge-${p.id}" class="${isEnabled ? 'text-emerald-500 font-bold' : 'text-[var(--muted-foreground)]'}">${isEnabled ? cfgT('ui.system_settings.badge_active', '● Aktiv') : cfgT('ui.system_settings.badge_deactivated', '○ Deaktiviert')}</span>
+                        <span class="text-[var(--muted-foreground)] font-mono">ID: @${safeId}</span>
+                        <span id="setting-pl-badge-${safeId}" class="${isEnabled ? 'text-emerald-500 font-bold' : 'text-[var(--muted-foreground)]'}">${isEnabled ? cfgT('ui.system_settings.badge_active', '● Aktiv') : cfgT('ui.system_settings.badge_deactivated', '○ Deaktiviert')}</span>
                       </div>
                     </div>
                   </div>
@@ -2966,9 +2970,11 @@
           const rpmText = k.rate_limit_rpm ? `${k.rate_limit_rpm} / Min` : "∞";
           const rpdText = k.rate_limit_rpd ? `${k.rate_limit_rpd} / Tag` : "∞";
 
+          const safeKeyId = escapeHtml(k.key_id).replace(/'/g, '&#39;');
+          const safeKeyName = escapeHtml(k.name).replace(/'/g, '&#39;');
           const actionBtn = isActive
-            ? `<button type="button" onclick="revokeApiKey('${k.key_id}', '${escapeHtml(k.name)}')" class="px-2 py-1 rounded text-[10px] font-mono font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border border-amber-500/30 transition cursor-pointer" title="Key sperren">${cfgT('ui.system_settings.state_revoke', 'Widerrufen')}</button>`
-            : `<button type="button" onclick="deleteApiKey('${k.key_id}', '${escapeHtml(k.name)}')" class="px-2 py-1 rounded text-[10px] font-mono font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/30 transition cursor-pointer" title="${cfgT('ui.system_settings.remove_key', 'Key endgültig entfernen')}">${cfgT('ui.system_settings.delete', 'Löschen')}</button>`;
+            ? `<button type="button" onclick="revokeApiKey('${safeKeyId}', '${safeKeyName}')" class="px-2 py-1 rounded text-[10px] font-mono font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border border-amber-500/30 transition cursor-pointer" title="Key sperren">${cfgT('ui.system_settings.state_revoke', 'Widerrufen')}</button>`
+            : `<button type="button" onclick="deleteApiKey('${safeKeyId}', '${safeKeyName}')" class="px-2 py-1 rounded text-[10px] font-mono font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/30 transition cursor-pointer" title="${cfgT('ui.system_settings.remove_key', 'Key endgültig entfernen')}">${cfgT('ui.system_settings.delete', 'Löschen')}</button>`;
 
           return `
             <tr class="hover:bg-[var(--secondary)]/20 transition-colors">

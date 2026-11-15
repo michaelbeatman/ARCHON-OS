@@ -134,8 +134,20 @@ def _connect_kanban(db_path: Optional[str] = None) -> sqlite3.Connection:
     return conn
 
 
+_MC_TABLES_INITIALIZED: set[str] = set()
+
+
 def _ensure_mc_tables(conn: sqlite3.Connection) -> None:
     """Stellt sicher, dass Kern- und MC-Erweiterungstabellen in kanban.db existieren."""
+    db_file = ""
+    try:
+        rows = conn.execute("PRAGMA database_list").fetchall()
+        if rows:
+            db_file = str(rows[0][2] or "")
+    except Exception:
+        db_file = ""
+    if db_file and db_file in _MC_TABLES_INITIALIZED:
+        return
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS tasks (
@@ -179,6 +191,8 @@ def _ensure_mc_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_mc_events_kind ON task_events(kind, id);
         """
     )
+    if db_file:
+        _MC_TABLES_INITIALIZED.add(db_file)
 
 
 def _mc_status_to_db(mc_status: Optional[str]) -> str:
@@ -631,6 +645,102 @@ def mc_load_state_from_sqlite() -> Dict[str, Any]:
         conn.close()
 
 
+def _load_single_task_from_conn(conn: sqlite3.Connection, task_id: str) -> Optional[Dict[str, Any]]:
+    """Lädt einen einzelnen Task samt task_links und mc_task_meta ohne Full-DB-Scan."""
+    _ensure_mc_tables(conn)
+    tid_str = str(task_id)
+    r = conn.execute(
+        """
+        SELECT t.id, t.title, t.body, t.assignee, t.status, t.priority, t.created_by,
+               t.created_at, t.started_at, t.completed_at, t.project_id, t.result,
+               t.model_override, m.meta_json
+        FROM tasks t
+        LEFT JOIN mc_task_meta m ON m.task_id = t.id
+        WHERE t.id = ? AND LOWER(COALESCE(t.status, '')) != 'archived'
+        LIMIT 1
+        """,
+        (tid_str,),
+    ).fetchone()
+    if r is None:
+        return None
+
+    parent_id: Optional[str] = None
+    children: List[str] = []
+    for lr in conn.execute(
+        "SELECT parent_id, child_id FROM task_links WHERE parent_id = ? OR child_id = ?",
+        (tid_str, tid_str),
+    ).fetchall():
+        p, c = lr["parent_id"], lr["child_id"]
+        if c == tid_str and p and p != tid_str and parent_id is None:
+            parent_id = p
+        if p == tid_str and c and c != tid_str and c not in children:
+            children.append(c)
+
+    meta: Dict[str, Any] = {}
+    if r["meta_json"]:
+        try:
+            parsed = json.loads(r["meta_json"])
+            if isinstance(parsed, dict):
+                meta = parsed
+        except Exception:
+            pass
+
+    mc_status = _db_status_to_mc(r["status"], meta.get("mc_status"))
+    agent_id = r["assignee"] or "system"
+    agent_name = meta.get("agent_name") or agent_id or "System Agent"
+    parent_pid = r["project_id"] or meta.get("parent_project_id") or meta.get("parent_task_id") or parent_id
+    if parent_pid == tid_str:
+        parent_pid = None
+
+    sub_ids: List[str] = []
+    for sid in (meta.get("subtask_ids") or []) + children:
+        if sid and sid not in sub_ids and sid != tid_str:
+            sub_ids.append(sid)
+
+    task_dict: Dict[str, Any] = {
+        "id": tid_str,
+        "title": r["title"] or tid_str,
+        "capture_input": meta.get("capture_input") if meta.get("capture_input") is not None else (r["body"] or ""),
+        "plan": meta.get("plan") if isinstance(meta.get("plan"), list) else ["Autonomer Task aus kanban.db"],
+        "agent_id": agent_id,
+        "agent_name": agent_name,
+        "model": r["model_override"] or "omniroute/best-free",
+        "estimated_tokens": meta.get("estimated_tokens", 15000),
+        "estimated_cost_eur": meta.get("estimated_cost_eur", 0.0),
+        "subagents_count": meta.get("subagents_count", max(1, len(sub_ids))),
+        "status": mc_status,
+        "created_at": _format_created_str(r["created_at"], meta.get("created_at_str")),
+        "result_summary": r["result"] if r["result"] is not None else meta.get("result_summary", ""),
+        "artifact_path": meta.get("artifact_path", ""),
+        "parent_project_id": parent_pid,
+        "subtask_ids": sub_ids,
+        "target_action": meta.get("target_action", "none"),
+        "phase": meta.get("phase", "execution"),
+    }
+    for opt_k in (
+        "parent_project_title",
+        "parent_task_id",
+        "kanban_task_id",
+        "active_tool",
+        "created_via",
+        "synthesis_started",
+        "synthesis_draft_path",
+        "synthesis_finalized",
+        "paperclip_issue",
+    ):
+        if opt_k in meta and meta[opt_k] is not None:
+            task_dict[opt_k] = meta[opt_k]
+    if r["started_at"] is not None:
+        task_dict["started_at"] = r["started_at"]
+    elif meta.get("started_at") is not None:
+        task_dict["started_at"] = meta["started_at"]
+    if meta.get("completed_at_str"):
+        task_dict["completed_at"] = meta["completed_at_str"]
+    elif r["completed_at"] is not None:
+        task_dict["completed_at"] = r["completed_at"]
+    return task_dict
+
+
 def mc_get_task_sqlite(task_id: str) -> Optional[Dict[str, Any]]:
     """Lädt einen einzelnen Task samt Erweiterungs-Metadaten direkt aus kanban.db."""
     if not task_id:
@@ -638,8 +748,12 @@ def mc_get_task_sqlite(task_id: str) -> Optional[Dict[str, Any]]:
     if _is_file_override():
         data = _load_mission_control_data()
         return next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
-    state = mc_load_state_from_sqlite()
-    return next((t for t in state.get("tasks", []) if str(t.get("id")) == str(task_id)), None)
+    _maybe_auto_migrate()
+    conn = _connect_kanban()
+    try:
+        return _load_single_task_from_conn(conn, task_id)
+    finally:
+        conn.close()
 
 
 def mc_append_audit_sqlite(
@@ -732,8 +846,7 @@ def mc_update_task_sqlite(
         conn = _connect_kanban()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            state = _load_sqlite_state_from_conn(conn)
-            t = next((x for x in state.get("tasks", []) if str(x.get("id")) == str(task_id)), None)
+            t = _load_single_task_from_conn(conn, task_id)
             if t is None:
                 conn.rollback()
                 return None

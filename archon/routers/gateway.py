@@ -104,7 +104,7 @@ async def _gateway_idle_stop_loop():
                 last_used = cfg.get("last_used", {})
                 autostart = cfg.get("autostart", {})
                 now = datetime.datetime.now()
-                rc, stdout, _ = _run_docker_exec(["hermes", "gateway", "list"])
+                rc, stdout, _ = await asyncio.to_thread(_run_docker_exec, ["hermes", "gateway", "list"])
                 if rc != 0:
                     continue
                 running_profiles = [
@@ -121,7 +121,7 @@ async def _gateway_idle_stop_loop():
                             last_dt = datetime.datetime.fromisoformat(last)
                             idle_min = (now - last_dt).total_seconds() / 60
                             if idle_min >= timeout_min:
-                                _run_docker_exec(["hermes", "gateway", "stop", pid])
+                                await asyncio.to_thread(_run_docker_exec, ["hermes", "gateway", "stop", pid])
                                 print(f"[GatewayManager] Auto-stopped idle gateway: {pid} (idle {idle_min:.0f}m)")
                         except Exception:
                             pass
@@ -134,7 +134,9 @@ async def _gateway_idle_stop_loop():
 def _require_admin(request: Request):
     import main as app_main
     if hasattr(app_main, "require_admin"):
-        app_main.require_admin(request)
+        return app_main.require_admin(request)
+    from archon.routers._rbac import require_admin_or_503
+    return require_admin_or_503(request)
 
 
 def _load_gateway_config() -> Dict:

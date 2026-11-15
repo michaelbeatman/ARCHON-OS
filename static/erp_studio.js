@@ -18,10 +18,34 @@
   // Null-sicherer Feld-Setzer: die Legacy-IDs (erp-f-*, erp-flag-*, ...) existieren
   // in keinem aktiven View (Details am Legacy-Block unten bei createNewErpAddress).
   // Ohne ihn stirbt jeder Zugriff mit "Cannot set properties of null".
+  const escapeErpHtml = (val) =>
+    String(val ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const safeErpUrl = (url) => {
+    const raw = String(url ?? "").trim();
+    return /^https?:\/\//i.test(raw) ? escapeErpHtml(raw) : "#";
+  };
+
   const erpSetVal = (id, val) => {
     const el = document.getElementById(id);
     if (el) el.value = val !== undefined && val !== null ? val : "";
   };
+
+  function erpT(key, fallback, params) {
+    const i18n = window.archonI18n;
+    let text = i18n ? i18n.t(key, fallback) : fallback;
+    if (params) {
+      Object.keys(params).forEach((name) => {
+        text = text.split(`{${name}}`).join(String(params[name]));
+      });
+    }
+    return text;
+  }
 
   const INITIAL_ENTITIES = [
     {
@@ -533,76 +557,82 @@
   }
 
   // Metadaten für die 4 Top-Icon-Tabs in Adressen & CRM
-  const ADDRESS_TAB_META = {
-    all: {
-      title: "Adressen & CRM — Gesamtübersicht",
-      subtitle: "Alle Geschäftspartner, LinkedIn-Kontakte (0–5★), Debitoren (10000+) & Kreditoren (70000+) in isolierter Mandanten-DB",
-      bannerLabel: "Ansicht: Alle Adressen & Kontakte",
-      bannerClass: "px-2.5 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
-      labelColor: "font-bold text-indigo-600 dark:text-indigo-400",
-      defaultDetailTab: "timeline"
-    },
-    network: {
-      title: "Adressen & CRM — LinkedIn & Netzwerk",
-      subtitle: "Persönliche Netzwerk-Kontakte, Leads, Beziehungs-Scoring (0–5★) & direkte Kommunikations-Timeline",
-      bannerLabel: "Ansicht: LinkedIn & Netzwerk-Kontakte",
-      bannerClass: "px-2.5 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
-      labelColor: "font-bold text-sky-600 dark:text-sky-400",
-      defaultDetailTab: "timeline"
-    },
-    customers: {
-      title: "Adressen & CRM — Kundenstamm (Debitoren 10000+)",
-      subtitle: "Aktive Rechnungsempfänger im DATEV-Nummernkreis 10000+, USt-IdNr., Zahlungsziele, Skonto & Kunden-Belege",
-      bannerLabel: "Ansicht: Kundenstamm (Debitoren 10000+)",
-      bannerClass: "px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
-      labelColor: "font-bold text-emerald-600 dark:text-emerald-400",
-      defaultDetailTab: "bwl"
-    },
-    suppliers: {
-      title: "Adressen & CRM — Lieferantenstamm (Kreditoren 70000+)",
-      subtitle: "Lieferanten, Rechenzentren & Dienstleister im DATEV-Nummernkreis 70000+, IBAN/Bankdaten & Einkaufskonditionen",
-      bannerLabel: "Ansicht: Lieferantenstamm (Kreditoren 70000+)",
-      bannerClass: "px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
-      labelColor: "font-bold text-amber-600 dark:text-amber-400",
-      defaultDetailTab: "bwl"
-    }
-  };
+  function getAddressTabMeta(key) {
+    const table = {
+      all: {
+        title: erpT("ui.erp_studio.addr_tab_all_title", "Adressen & CRM — Gesamtübersicht"),
+        subtitle: erpT("ui.erp_studio.addr_tab_all_subtitle", "Alle Geschäftspartner, LinkedIn-Kontakte (0–5★), Debitoren (10000+) & Kreditoren (70000+) in isolierter Mandanten-DB"),
+        bannerLabel: erpT("ui.erp_studio.addr_tab_all_banner", "Ansicht: Alle Adressen & Kontakte"),
+        bannerClass: "px-2.5 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
+        labelColor: "font-bold text-indigo-600 dark:text-indigo-400",
+        defaultDetailTab: "timeline"
+      },
+      network: {
+        title: erpT("ui.erp_studio.addr_tab_network_title", "Adressen & CRM — LinkedIn & Netzwerk"),
+        subtitle: erpT("ui.erp_studio.addr_tab_network_subtitle", "Persönliche Netzwerk-Kontakte, Leads, Beziehungs-Scoring (0–5★) & direkte Kommunikations-Timeline"),
+        bannerLabel: erpT("ui.erp_studio.addr_tab_network_banner", "Ansicht: LinkedIn & Netzwerk-Kontakte"),
+        bannerClass: "px-2.5 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
+        labelColor: "font-bold text-sky-600 dark:text-sky-400",
+        defaultDetailTab: "timeline"
+      },
+      customers: {
+        title: erpT("ui.erp_studio.addr_tab_customers_title", "Adressen & CRM — Kundenstamm (Debitoren 10000+)"),
+        subtitle: erpT("ui.erp_studio.addr_tab_customers_subtitle", "Aktive Rechnungsempfänger im DATEV-Nummernkreis 10000+, USt-IdNr., Zahlungsziele, Skonto & Kunden-Belege"),
+        bannerLabel: erpT("ui.erp_studio.addr_tab_customers_banner", "Ansicht: Kundenstamm (Debitoren 10000+)"),
+        bannerClass: "px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
+        labelColor: "font-bold text-emerald-600 dark:text-emerald-400",
+        defaultDetailTab: "bwl"
+      },
+      suppliers: {
+        title: erpT("ui.erp_studio.addr_tab_suppliers_title", "Adressen & CRM — Lieferantenstamm (Kreditoren 70000+)"),
+        subtitle: erpT("ui.erp_studio.addr_tab_suppliers_subtitle", "Lieferanten, Rechenzentren & Dienstleister im DATEV-Nummernkreis 70000+, IBAN/Bankdaten & Einkaufskonditionen"),
+        bannerLabel: erpT("ui.erp_studio.addr_tab_suppliers_banner", "Ansicht: Lieferantenstamm (Kreditoren 70000+)"),
+        bannerClass: "px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
+        labelColor: "font-bold text-amber-600 dark:text-amber-400",
+        defaultDetailTab: "bwl"
+      }
+    };
+    return table[key] || table.all;
+  }
 
   // Metadaten für die 4 Top-Icon-Tabs in Artikel & Leistungen
-  const ITEMS_TAB_META = {
-    all: {
-      title: "Artikel & Leistungen — Gesamtkatalog",
-      subtitle: "Dienstleistungen, Pauschalen, SaaS-Lizenzen & Produkte inkl. VK/EK-Margenkalkulation und Lieferantenzuordnung",
-      bannerLabel: "Kategorie: Gesamtkatalog (Alle Typen)",
-      bannerClass: "px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
-      labelColor: "font-bold text-emerald-700 dark:text-emerald-400",
-      defaultItemType: "service"
-    },
-    service: {
-      title: "Artikel & Leistungen — Zeit & Consulting",
-      subtitle: "Stundensätze, Tagessätze & Werkvertrags-Pauschalen für Beratung, Engineering, Audits und Onboarding",
-      bannerLabel: "Kategorie: Zeit / Service & Pauschalen",
-      bannerClass: "px-2.5 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
-      labelColor: "font-bold text-indigo-600 dark:text-indigo-400",
-      defaultItemType: "service"
-    },
-    saas: {
-      title: "Artikel & Leistungen — SaaS & Abonnements",
-      subtitle: "Wiederkehrende Monats- und Jahreslizenzen (MRR / ARR), Managed Agent Nodes & Compliance-Abos",
-      bannerLabel: "Kategorie: SaaS-Lizenzen & Wiederkehrende Abos",
-      bannerClass: "px-2.5 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
-      labelColor: "font-bold text-sky-600 dark:text-sky-400",
-      defaultItemType: "saas"
-    },
-    product: {
-      title: "Artikel & Leistungen — Produkte & Hardware",
-      subtitle: "Physische Produkte, vorkonfigurierte Edge-AI-Appliances & Lizenz-Bundles inkl. Lagerbestand",
-      bannerLabel: "Kategorie: Physische Produkte & Hardware",
-      bannerClass: "px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
-      labelColor: "font-bold text-amber-600 dark:text-amber-400",
-      defaultItemType: "product"
-    }
-  };
+  function getItemsTabMeta(key) {
+    const table = {
+      all: {
+        title: erpT("ui.erp_studio.items_tab_all_title", "Artikel & Leistungen — Gesamtkatalog"),
+        subtitle: erpT("ui.erp_studio.items_tab_all_subtitle", "Dienstleistungen, Pauschalen, SaaS-Lizenzen & Produkte inkl. VK/EK-Margenkalkulation und Lieferantenzuordnung"),
+        bannerLabel: erpT("ui.erp_studio.items_tab_all_banner", "Kategorie: Gesamtkatalog (Alle Typen)"),
+        bannerClass: "px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
+        labelColor: "font-bold text-emerald-700 dark:text-emerald-400",
+        defaultItemType: "service"
+      },
+      service: {
+        title: erpT("ui.erp_studio.items_tab_service_title", "Artikel & Leistungen — Zeit & Consulting"),
+        subtitle: erpT("ui.erp_studio.items_tab_service_subtitle", "Stundensätze, Tagessätze & Werkvertrags-Pauschalen für Beratung, Engineering, Audits und Onboarding"),
+        bannerLabel: erpT("ui.erp_studio.items_tab_service_banner", "Kategorie: Zeit / Service & Pauschalen"),
+        bannerClass: "px-2.5 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
+        labelColor: "font-bold text-indigo-600 dark:text-indigo-400",
+        defaultItemType: "service"
+      },
+      saas: {
+        title: erpT("ui.erp_studio.items_tab_saas_title", "Artikel & Leistungen — SaaS & Abonnements"),
+        subtitle: erpT("ui.erp_studio.items_tab_saas_subtitle", "Wiederkehrende Monats- und Jahreslizenzen (MRR / ARR), Managed Agent Nodes & Compliance-Abos"),
+        bannerLabel: erpT("ui.erp_studio.items_tab_saas_banner", "Kategorie: SaaS-Lizenzen & Wiederkehrende Abos"),
+        bannerClass: "px-2.5 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
+        labelColor: "font-bold text-sky-600 dark:text-sky-400",
+        defaultItemType: "saas"
+      },
+      product: {
+        title: erpT("ui.erp_studio.items_tab_product_title", "Artikel & Leistungen — Produkte & Hardware"),
+        subtitle: erpT("ui.erp_studio.items_tab_product_subtitle", "Physische Produkte, vorkonfigurierte Edge-AI-Appliances & Lizenz-Bundles inkl. Lagerbestand"),
+        bannerLabel: erpT("ui.erp_studio.items_tab_product_banner", "Kategorie: Physische Produkte & Hardware"),
+        bannerClass: "px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-[11px] font-mono shrink-0",
+        labelColor: "font-bold text-amber-600 dark:text-amber-400",
+        defaultItemType: "product"
+      }
+    };
+    return table[key] || table.all;
+  }
 
   // ===========================================================================
   // 1. ADRESSEN & CRM (view-addresses)
@@ -612,15 +642,8 @@
     const cid = getActiveCompanyId();
     loadTenantLocalState(cid);
     const badge = document.getElementById("erp-addr-tenant-badge");
-    if (badge) badge.textContent = `Mandant: ${cid} (erp.db)`;
+    if (badge) badge.textContent = erpT("ui.erp_studio.tenant_badge", "Mandant: {cid} (erp.db)", { cid });
     await setAddressesRoleFilter(currentAddrRoleFilter || "all");
-  };
-
-  // Delegate initAddressesView directly to crmStudio
-  window.initAddressesView = function() {
-    if (window.crmStudio && typeof window.crmStudio.init === 'function') {
-      window.crmStudio.init();
-    }
   };
 
   function filterEntitiesClientSide(entities, roleFilter, searchQuery) {
@@ -672,7 +695,7 @@
       }
     });
 
-    const meta = ADDRESS_TAB_META[currentAddrRoleFilter] || ADDRESS_TAB_META.all;
+    const meta = getAddressTabMeta(currentAddrRoleFilter);
     const titleEl = document.getElementById("addresses-main-title");
     const subEl = document.getElementById("addresses-main-subtitle");
     if (titleEl) titleEl.textContent = meta.title;
@@ -714,26 +737,39 @@
     cachedEntities = filterEntitiesClientSide(allEntities, currentAddrRoleFilter, search);
 
     const countBadge = document.getElementById("erp-addr-count-badge");
-    if (countBadge) countBadge.textContent = `${cachedEntities.length} von ${allEntities.length} Adressen`;
+    if (countBadge) {
+      countBadge.textContent = erpT("ui.erp_studio.addr_count", "{count} von {total} Adressen", {
+        count: cachedEntities.length,
+        total: allEntities.length
+      });
+    }
 
     const bannerKpi = document.getElementById("erp-addr-mode-kpi");
     if (bannerKpi) {
       if (currentAddrRoleFilter === "customers") {
-        bannerKpi.textContent = `${cachedEntities.length} Debitoren (10001+)`;
+        bannerKpi.textContent = erpT("ui.erp_studio.kpi_debtors", "{count} Debitoren (10001+)", { count: cachedEntities.length });
       } else if (currentAddrRoleFilter === "suppliers") {
-        bannerKpi.textContent = `${cachedEntities.length} Kreditoren (70001+)`;
+        bannerKpi.textContent = erpT("ui.erp_studio.kpi_creditors", "{count} Kreditoren (70001+)", { count: cachedEntities.length });
       } else if (currentAddrRoleFilter === "network") {
-        bannerKpi.textContent = `${cachedEntities.length} LinkedIn-Profile / Leads`;
+        bannerKpi.textContent = erpT("ui.erp_studio.kpi_leads", "{count} LinkedIn-Profile / Leads", { count: cachedEntities.length });
       } else {
         const custCount = allEntities.filter((e) => e.is_customer).length;
         const suppCount = allEntities.filter((e) => e.is_supplier).length;
-        bannerKpi.textContent = `${custCount} Kunden · ${suppCount} Lieferanten`;
+        bannerKpi.textContent = erpT("ui.erp_studio.kpi_cust_supp", "{cust} Kunden · {supp} Lieferanten", {
+          cust: custCount,
+          supp: suppCount
+        });
       }
     }
 
     if (!container) return;
     if (!cachedEntities.length) {
-      container.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] p-6 text-center border border-dashed border-[var(--border)] rounded-xl">Keine Adressen für den Filter "${currentAddrRoleFilter.toUpperCase()}" gefunden.</div>`;
+      const emptyMsg = escapeErpHtml(
+        erpT("ui.erp_studio.addr_empty_filter", 'Keine Adressen für den Filter "{filter}" gefunden.', {
+          filter: currentAddrRoleFilter.toUpperCase()
+        })
+      );
+      container.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] p-6 text-center border border-dashed border-[var(--border)] rounded-xl">${emptyMsg}</div>`;
       return;
     }
 
@@ -755,33 +791,40 @@
     container.innerHTML = cachedEntities
       .map((ent) => {
         const isSel = ent.id === currentSelectedEntityId;
+        const safeId = escapeErpHtml(ent.id);
         const prim = ent.primary_contact || (ent.contacts && ent.contacts[0]) || {};
         const debBadge = ent.debtor_no
-          ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">Debitor ${ent.debtor_no}</span>`
+          ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">${escapeErpHtml(erpT("ui.erp_studio.debtor_badge", "Debitor {no}", { no: ent.debtor_no }))}</span>`
           : "";
         const credBadge = ent.creditor_no
-          ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">Kreditor ${ent.creditor_no}</span>`
+          ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">${escapeErpHtml(erpT("ui.erp_studio.creditor_badge", "Kreditor {no}", { no: ent.creditor_no }))}</span>`
           : "";
         const dunningBadge = ent.dunning_block
-          ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20">Mahnstopp</span>`
+          ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20">${escapeErpHtml(erpT("ui.erp_studio.dunning_block", "Mahnstopp"))}</span>`
           : "";
+        const roleFallback = erpT("ui.erp_studio.contact_role_default", "Ansprechpartner");
+        const orgFallback = erpT("ui.erp_studio.org_default", "Organisation");
+        const ratingTitle = escapeErpHtml(erpT("ui.erp_studio.rating_title", "Beziehungs-Score"));
+        const leadBadge = escapeErpHtml(erpT("ui.erp_studio.lead_badge", "LinkedIn / Lead"));
+        const persShort = escapeErpHtml(erpT("ui.erp_studio.contacts_short", "Pers."));
+        const msgShort = escapeErpHtml(erpT("ui.erp_studio.messages_short", "Msg"));
 
         return `
-          <div onclick="selectErpAddress('${ent.id}')" class="p-3 rounded-xl border ${
+          <div onclick="selectErpAddress('${safeId}')" class="p-3 rounded-xl border ${
             isSel
               ? "border-indigo-500 bg-indigo-500/10 shadow-xs"
               : "border-[var(--border)] bg-[var(--secondary)]/30 hover:bg-[var(--secondary)]/60"
           } transition cursor-pointer space-y-1.5">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <div class="text-xs font-bold text-[var(--foreground)] truncate">${ent.display_name} ${
-                  ent.legal_form ? `<span class="text-[10px] font-normal text-[var(--muted-foreground)]">(${ent.legal_form})</span>` : ""
+                <div class="text-xs font-bold text-[var(--foreground)] truncate">${escapeErpHtml(ent.display_name)} ${
+                  ent.legal_form ? `<span class="text-[10px] font-normal text-[var(--muted-foreground)]">(${escapeErpHtml(ent.legal_form)})</span>` : ""
                 }</div>
                 <div class="text-[11px] text-[var(--muted-foreground)] truncate">
-                  ${prim.full_name ? `👤 ${prim.full_name} · ${prim.role_title || "Ansprechpartner"}` : ent.industry || "Organisation"}
+                  ${prim.full_name ? `👤 ${escapeErpHtml(prim.full_name)} · ${escapeErpHtml(prim.role_title || roleFallback)}` : escapeErpHtml(ent.industry || orgFallback)}
                 </div>
               </div>
-              <span class="text-xs font-mono text-amber-500 shrink-0" title="Beziehungs-Score">${renderStars(ent.rating)}</span>
+              <span class="text-xs font-mono text-amber-500 shrink-0" title="${ratingTitle}">${renderStars(ent.rating)}</span>
             </div>
             <div class="flex items-center justify-between gap-2 pt-1 flex-wrap">
               <div class="flex items-center gap-1 flex-wrap">
@@ -790,12 +833,12 @@
                 ${dunningBadge}
                 ${
                   !debBadge && !credBadge
-                    ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-[var(--card)] text-sky-600 dark:text-sky-400 border border-sky-500/25">LinkedIn / Lead</span>`
+                    ? `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-[var(--card)] text-sky-600 dark:text-sky-400 border border-sky-500/25">${leadBadge}</span>`
                     : ""
                 }
               </div>
               <div class="text-[10px] font-mono text-[var(--muted-foreground)]">
-                ${ent.city || "DE"} · ${(ent.contacts && ent.contacts.length) || ent.contacts_count || 1} Pers. · ${(ent.interactions && ent.interactions.length) || ent.interactions_count || 1} Msg
+                ${escapeErpHtml(ent.city || "DE")} · ${(ent.contacts && ent.contacts.length) || ent.contacts_count || 1} ${persShort} · ${(ent.interactions && ent.interactions.length) || ent.interactions_count || 1} ${msgShort}
               </div>
             </div>
           </div>
@@ -844,17 +887,19 @@
     const docs = detail.documents || [];
 
     const titleEl = document.getElementById("erp-detail-title");
-    if (titleEl) titleEl.textContent = e.display_name || "Adresse";
+    if (titleEl) titleEl.textContent = e.display_name || erpT("ui.erp_studio.addr_default_title", "Adresse");
 
     const subEl = document.getElementById("erp-detail-subtitle");
     if (subEl) {
-      subEl.textContent = `${e.industry || "Geschäftspartner"} · ${e.postal_code || ""} ${e.city || ""} · Status: ${(e.status || "active").toUpperCase()}`;
+      const partnerFallback = erpT("ui.erp_studio.business_partner_default", "Geschäftspartner");
+      const statusLabel = erpT("ui.erp_studio.status_label", "Status:");
+      subEl.textContent = `${e.industry || partnerFallback} · ${e.postal_code || ""} ${e.city || ""} · ${statusLabel} ${(e.status || "active").toUpperCase()}`;
     }
 
     const debBadge = document.getElementById("erp-detail-debtor-badge");
     if (debBadge) {
       if (e.debtor_no) {
-        debBadge.textContent = `Debitor ${e.debtor_no}`;
+        debBadge.textContent = erpT("ui.erp_studio.debtor_badge", "Debitor {no}", { no: e.debtor_no });
         debBadge.classList.remove("hidden");
       } else {
         debBadge.classList.add("hidden");
@@ -864,7 +909,7 @@
     const credBadge = document.getElementById("erp-detail-creditor-badge");
     if (credBadge) {
       if (e.creditor_no) {
-        credBadge.textContent = `Kreditor ${e.creditor_no}`;
+        credBadge.textContent = erpT("ui.erp_studio.creditor_badge", "Kreditor {no}", { no: e.creditor_no });
         credBadge.classList.remove("hidden");
       } else {
         credBadge.classList.add("hidden");
@@ -904,26 +949,31 @@
     const cntList = document.getElementById("erp-contacts-list");
     if (cntList) {
       if (!contacts.length) {
-        cntList.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] italic">Noch kein Ansprechpartner hinterlegt.</div>`;
+        cntList.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] italic">${escapeErpHtml(erpT("ui.erp_studio.no_contacts_yet", "Noch kein Ansprechpartner hinterlegt."))}</div>`;
       } else {
+        const primLbl = escapeErpHtml(erpT("ui.erp_studio.primary_contact", "Hauptkontakt"));
+        const billLbl = escapeErpHtml(erpT("ui.erp_studio.billing_recipient", "Rechnungsempfänger"));
+        const roleNa = erpT("ui.erp_studio.role_na", "Rolle n.a.");
+        const noEmail = erpT("ui.erp_studio.no_email", "keine E-Mail");
+        const connectedLbl = erpT("ui.erp_studio.status_connected", "Vernetzt");
         cntList.innerHTML = contacts
           .map(
             (c) => `
             <div class="p-2.5 rounded-lg bg-[var(--card)] border border-[var(--border)] flex items-center justify-between gap-2 text-xs">
               <div class="min-w-0">
                 <div class="font-bold text-[var(--foreground)] flex items-center gap-1.5 flex-wrap">
-                  <span>${c.full_name}</span>
-                  ${c.is_primary ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-indigo-500/10 text-indigo-600">Hauptkontakt</span>` : ""}
-                  ${c.is_billing_recipient ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-600">Rechnungsempfänger</span>` : ""}
+                  <span>${escapeErpHtml(c.full_name)}</span>
+                  ${c.is_primary ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-indigo-500/10 text-indigo-600">${primLbl}</span>` : ""}
+                  ${c.is_billing_recipient ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-600">${billLbl}</span>` : ""}
                   <span class="text-[10px] font-mono text-amber-500">${renderStars(c.rating)}</span>
                 </div>
                 <div class="text-[11px] text-[var(--muted-foreground)] truncate">
-                  ${c.role_title || "Rolle n.a."} · ${c.email || "keine E-Mail"} ${c.phone_direct ? `· 📞 ${c.phone_direct}` : ""}
+                  ${escapeErpHtml(c.role_title || roleNa)} · ${escapeErpHtml(c.email || noEmail)} ${c.phone_direct ? `· 📞 ${escapeErpHtml(c.phone_direct)}` : ""}
                 </div>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
-                <span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-[var(--secondary)] text-[var(--muted-foreground)]">${c.connection_status || "Vernetzt"}</span>
-                ${c.linkedin_url ? `<a href="${c.linkedin_url}" target="_blank" class="px-2 py-0.5 rounded bg-sky-500/10 text-sky-600 font-mono text-[10px] font-bold hover:underline">LinkedIn &nearr;</a>` : ""}
+                <span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-[var(--secondary)] text-[var(--muted-foreground)]">${escapeErpHtml(c.connection_status || connectedLbl)}</span>
+                ${c.linkedin_url ? `<a href="${safeErpUrl(c.linkedin_url)}" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 rounded bg-sky-500/10 text-sky-600 font-mono text-[10px] font-bold hover:underline">LinkedIn &nearr;</a>` : ""}
               </div>
             </div>
           `
@@ -936,18 +986,19 @@
     const intList = document.getElementById("erp-interactions-list");
     if (intList) {
       if (!interactions.length) {
-        intList.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] italic">Noch keine Nachrichten oder Gesprächsnotizen vorhanden.</div>`;
+        intList.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] italic">${escapeErpHtml(erpT("ui.erp_studio.no_interactions_yet", "Noch keine Nachrichten oder Gesprächsnotizen vorhanden."))}</div>`;
       } else {
+        const senderFallback = erpT("ui.erp_studio.sender_contact", "Kontakt");
         intList.innerHTML = interactions
           .map(
             (i) => `
             <div class="p-2.5 rounded-lg bg-[var(--card)] border border-[var(--border)] space-y-1 text-xs">
               <div class="flex items-center justify-between text-[10px] font-mono text-[var(--muted-foreground)]">
-                <span class="font-bold text-indigo-500 uppercase">${i.channel} · ${i.sender_name || "Kontakt"}</span>
-                <span>${i.occurred_at || ""}</span>
+                <span class="font-bold text-indigo-500 uppercase">${escapeErpHtml(i.channel)} · ${escapeErpHtml(i.sender_name || senderFallback)}</span>
+                <span>${escapeErpHtml(i.occurred_at || "")}</span>
               </div>
-              <div class="font-semibold text-[var(--foreground)]">${i.subject || ""}</div>
-              <div class="text-[11.5px] text-[var(--muted-foreground)] whitespace-pre-line">${i.body_text || ""}</div>
+              <div class="font-semibold text-[var(--foreground)]">${escapeErpHtml(i.subject || "")}</div>
+              <div class="text-[11.5px] text-[var(--muted-foreground)] whitespace-pre-line">${escapeErpHtml(i.body_text || "")}</div>
             </div>
           `
           )
@@ -959,21 +1010,22 @@
     const docsList = document.getElementById("erp-entity-docs-list");
     if (docsList) {
       if (!docs.length) {
-        docsList.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] p-4 border border-dashed border-[var(--border)] rounded-xl text-center">Noch keine Angebote oder Rechnungen für diese Adresse vorhanden.</div>`;
+        docsList.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] p-4 border border-dashed border-[var(--border)] rounded-xl text-center">${escapeErpHtml(erpT("ui.erp_studio.no_docs_yet", "Noch keine Angebote oder Rechnungen für diese Adresse vorhanden."))}</div>`;
       } else {
+        const convertShortBtn = escapeErpHtml(erpT("ui.erp_studio.convert_to_invoice_short", "In Rechnung wandeln →"));
         docsList.innerHTML = docs
           .map(
             (d) => `
             <div class="p-3 rounded-xl bg-[var(--secondary)]/40 border border-[var(--border)] flex items-center justify-between gap-2 text-xs">
               <div>
-                <div class="font-bold text-[var(--foreground)]">${d.doc_number} <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600">${d.status}</span></div>
-                <div class="text-[11px] text-[var(--muted-foreground)]">Datum: ${d.issue_date} · Fällig: ${d.due_date || "-"}</div>
+                <div class="font-bold text-[var(--foreground)]">${escapeErpHtml(d.doc_number)} <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600">${escapeErpHtml(d.status)}</span></div>
+                <div class="text-[11px] text-[var(--muted-foreground)]">${escapeErpHtml(erpT("ui.erp_studio.doc_dates", "Datum: {issue} · Fällig: {due}", { issue: d.issue_date || "", due: d.due_date || "-" }))}</div>
               </div>
               <div class="flex items-center gap-2">
-                <span class="font-mono font-bold text-sm text-[var(--foreground)]">${Number(d.amount_gross || 0).toFixed(2)} ${d.currency || "EUR"}</span>
+                <span class="font-mono font-bold text-sm text-[var(--foreground)]">${Number(d.amount_gross || 0).toFixed(2)} ${escapeErpHtml(d.currency || "EUR")}</span>
                 ${
                   d.doc_type === "offer" && d.status !== "accepted"
-                    ? `<button type="button" onclick="convertErpDocToInvoice('${d.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold cursor-pointer">In Rechnung wandeln &rarr;</button>`
+                    ? `<button type="button" onclick="convertErpDocToInvoice('${d.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold cursor-pointer">${convertShortBtn}</button>`
                     : ""
                 }
               </div>
@@ -1012,7 +1064,7 @@
   window.createNewErpAddress = function () {
     currentSelectedEntityId = null;
     erpSetVal("erp-f-id", "");
-    erpSetVal("erp-f-display-name", "Neue Firma / Kontakt");
+    erpSetVal("erp-f-display-name", erpT("ui.erp_studio.new_company_default", "Neue Firma / Kontakt"));
     erpSetVal("erp-f-legal-form", "GmbH");
     erpSetVal("erp-f-debtor-no", "");
     erpSetVal("erp-f-creditor-no", "");
@@ -1054,7 +1106,7 @@
     const payload = {
       company_id: cid,
       id: entId,
-      display_name: document.getElementById("erp-f-display-name")?.value || "Neuer Geschäftspartner",
+      display_name: document.getElementById("erp-f-display-name")?.value || erpT("ui.erp_studio.new_partner_default", "Neuer Geschäftspartner"),
       legal_form: document.getElementById("erp-f-legal-form")?.value || "",
       is_customer: isCustomer,
       is_supplier: isSupplier,
@@ -1111,7 +1163,16 @@
     await loadErpAddresses(false);
     await selectErpAddress(currentSelectedEntityId, true);
     if (typeof window.showNotification === "function") {
-      window.showNotification("Adresse gespeichert", `${payload.display_name} (${debtorNo ? "Debitor " + debtorNo : creditorNo ? "Kreditor " + creditorNo : "CRM"}) aktualisiert.`, "success");
+      const refLabel = debtorNo
+        ? erpT("ui.erp_studio.debtor_badge", "Debitor {no}", { no: debtorNo })
+        : creditorNo
+        ? erpT("ui.erp_studio.creditor_badge", "Kreditor {no}", { no: creditorNo })
+        : "CRM";
+      window.showNotification(
+        erpT("ui.erp_studio.addr_saved_title", "Adresse gespeichert"),
+        erpT("ui.erp_studio.addr_saved_msg", "{name} ({ref}) aktualisiert.", { name: payload.display_name, ref: refLabel }),
+        "success"
+      );
     }
   };
 
@@ -1135,7 +1196,7 @@
       email: document.getElementById("erp-cnt-email")?.value || "",
       phone_direct: document.getElementById("erp-cnt-phone")?.value || "",
       linkedin_url: document.getElementById("erp-cnt-linkedin")?.value || "",
-      connection_status: "Vernetzt",
+      connection_status: erpT("ui.erp_studio.status_connected", "Vernetzt"),
       rating: parseInt(document.getElementById("erp-cnt-rating")?.value || "4", 10),
       is_primary: 0
     };
@@ -1176,7 +1237,7 @@
       entity_id: currentSelectedEntityId,
       channel: channel,
       sender_name: "Archon CRM",
-      subject: `CRM-Eintrag (${channel.toUpperCase()})`,
+      subject: erpT("ui.erp_studio.crm_entry_subject", "CRM-Eintrag ({channel})", { channel: channel.toUpperCase() }),
       body_text: bodyText,
       occurred_at: nowStr
     };
@@ -1203,7 +1264,7 @@
 
   window.syncErpWithPocketbase = async function () {
     const btn = document.getElementById("btn-erp-pb-sync");
-    if (btn) btn.innerHTML = `<span>Synchronisiere...</span>`;
+    if (btn) btn.innerHTML = `<span>${escapeErpHtml(erpT("ui.erp_studio.syncing", "Synchronisiere..."))}</span>`;
     try {
       const resp = await fetch("/api/erp/sync/pocketbase", {
         method: "POST",
@@ -1212,11 +1273,12 @@
       });
       const res = await resp.json();
       if (btn) {
-        btn.innerHTML = `<i data-lucide="check-circle" class="w-3 h-3"></i><span>${res.status === "ok" ? "Sync OK" : "Lokal Autark"}</span>`;
+        const statusTxt = res.status === "ok" ? erpT("ui.erp_studio.sync_ok", "Sync OK") : erpT("ui.erp_studio.sync_local", "Lokal Autark");
+        btn.innerHTML = `<i data-lucide="check-circle" class="w-3 h-3"></i><span>${escapeErpHtml(statusTxt)}</span>`;
       }
       await loadErpAddresses(false);
     } catch (e) {
-      if (btn) btn.innerHTML = `<span>Lokal Autark (erp.db)</span>`;
+      if (btn) btn.innerHTML = `<span>${escapeErpHtml(erpT("ui.erp_studio.sync_local_db", "Lokal Autark (erp.db)"))}</span>`;
     }
   };
 
@@ -1233,7 +1295,7 @@
       const recCity = document.getElementById("tmpl-input-rec-city");
       const typeSel = document.getElementById("tmpl-select-type");
       if (recName) recName.value = `${ent.display_name} ${ent.legal_form || ""}`.trim();
-      if (recCont) recCont.value = prim.full_name ? `${prim.salutation || ""} ${prim.full_name}`.trim() : "Geschäftsführung";
+      if (recCont) recCont.value = prim.full_name ? `${prim.salutation || ""} ${prim.full_name}`.trim() : erpT("ui.erp_studio.management_salutation", "Geschäftsführung");
       if (recStreet) recStreet.value = ent.street || "";
       if (recCity) recCity.value = `${ent.postal_code || ""} ${ent.city || ""}`.trim();
       if (typeSel && templateType) {
@@ -1255,7 +1317,7 @@
       const recStreet = document.getElementById("tmpl-input-rec-street");
       const recCity = document.getElementById("tmpl-input-rec-city");
       if (recName) recName.value = ent.display_name || "";
-      if (recCont) recCont.value = prim.full_name ? `${prim.salutation || ""} ${prim.full_name}`.trim() : "Geschäftsführung";
+      if (recCont) recCont.value = prim.full_name ? `${prim.salutation || ""} ${prim.full_name}`.trim() : erpT("ui.erp_studio.management_salutation", "Geschäftsführung");
       if (recStreet) recStreet.value = ent.street || "";
       if (recCity) recCity.value = `${ent.postal_code || ""} ${ent.city || ""}`.trim();
       if (typeof renderTemplateLivePreview === "function") renderTemplateLivePreview();
@@ -1287,10 +1349,12 @@
     const sel = document.getElementById("erp-itm-supplier");
     if (!sel) return;
     const suppliers = allEntities.filter((e) => e.is_supplier);
+    const selfOpt = escapeErpHtml(erpT("ui.erp_studio.supplier_self_option", "-- Eigenleistung / Kein Lieferant --"));
+    const credFallback = erpT("ui.erp_studio.creditor_default", "Kreditor");
     sel.innerHTML =
-      `<option value="">-- Eigenleistung / Kein Lieferant --</option>` +
+      `<option value="">${selfOpt}</option>` +
       suppliers
-        .map((s) => `<option value="${s.id}">${s.display_name} (${s.creditor_no || "Kreditor"})</option>`)
+        .map((s) => `<option value="${escapeErpHtml(s.id)}">${escapeErpHtml(s.display_name)} (${escapeErpHtml(s.creditor_no || credFallback)})</option>`)
         .join("");
   }
 
@@ -1330,7 +1394,7 @@
       }
     });
 
-    const meta = ITEMS_TAB_META[currentItemsTypeFilter] || ITEMS_TAB_META.all;
+    const meta = getItemsTabMeta(currentItemsTypeFilter);
     const titleEl = document.getElementById("items-main-title");
     const subEl = document.getElementById("items-main-subtitle");
     if (titleEl) titleEl.textContent = meta.title;
@@ -1347,13 +1411,27 @@
     await loadErpItems(true);
   };
 
+  let _erpItemsSearchTimer = null;
+  let _erpItemsAbort = null;
+  window.onErpItemsSearchInput = function () {
+    clearTimeout(_erpItemsSearchTimer);
+    _erpItemsSearchTimer = setTimeout(() => {
+      if (typeof window.loadErpItems === "function") window.loadErpItems();
+    }, 250);
+  };
+
   window.loadErpItems = async function (forceSelectFirst) {
     const cid = getActiveCompanyId();
     const q = document.getElementById("erp-items-search")?.value.trim() || "";
     const container = document.getElementById("erp-items-list-container");
 
+    if (_erpItemsAbort) {
+      try { _erpItemsAbort.abort(); } catch (_) {}
+    }
+    _erpItemsAbort = new AbortController();
+
     try {
-      const resp = await fetch(`/api/erp/items?company_id=${encodeURIComponent(cid)}&item_type=all`);
+      const resp = await fetch(`/api/erp/items?company_id=${encodeURIComponent(cid)}&item_type=all`, { signal: _erpItemsAbort.signal });
       if (resp.ok) {
         const data = await resp.json();
         if (Array.isArray(data.items) && data.items.length > 0) {
@@ -1368,7 +1446,12 @@
     cachedItems = filterItemsClientSide(allItems, currentItemsTypeFilter, q);
 
     const badge = document.getElementById("erp-items-count-badge");
-    if (badge) badge.textContent = `${cachedItems.length} von ${allItems.length} Artikeln`;
+    if (badge) {
+      badge.textContent = erpT("ui.erp_studio.items_count", "{count} von {total} Artikeln", {
+        count: cachedItems.length,
+        total: allItems.length
+      });
+    }
 
     const bannerKpi = document.getElementById("erp-items-mode-kpi");
     if (bannerKpi) {
@@ -1376,15 +1459,24 @@
         const avgMargin =
           cachedItems.reduce((acc, i) => acc + Number(i.margin_pct || 0), 0) / cachedItems.length;
         const sumVk = cachedItems.reduce((acc, i) => acc + Number(i.sales_price_net || 0), 0);
-        bannerKpi.textContent = `${cachedItems.length} Positionen · Ø Marge ${avgMargin.toFixed(1)}% · Volumen ${sumVk.toFixed(2)} €`;
+        bannerKpi.textContent = erpT("ui.erp_studio.items_kpi", "{count} Positionen · Ø Marge {margin}% · Volumen {volume} €", {
+          count: cachedItems.length,
+          margin: avgMargin.toFixed(1),
+          volume: sumVk.toFixed(2)
+        });
       } else {
-        bannerKpi.textContent = `0 Positionen`;
+        bannerKpi.textContent = erpT("ui.erp_studio.items_kpi_empty", "0 Positionen");
       }
     }
 
     if (!container) return;
     if (!cachedItems.length) {
-      container.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] p-6 text-center border border-dashed border-[var(--border)] rounded-xl">Keine Artikel für den Filter "${currentItemsTypeFilter.toUpperCase()}" vorhanden.</div>`;
+      const emptyMsg = escapeErpHtml(
+        erpT("ui.erp_studio.items_empty_filter", 'Keine Artikel für den Filter "{filter}" vorhanden.', {
+          filter: currentItemsTypeFilter.toUpperCase()
+        })
+      );
+      container.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] p-6 text-center border border-dashed border-[var(--border)] rounded-xl">${emptyMsg}</div>`;
       return;
     }
 
@@ -1398,44 +1490,60 @@
     renderItemsListHtml(container);
   };
 
+  function getErpItemTypeLabels() {
+    return {
+      service: erpT("ui.erp_studio.type_service", "Zeit/Service"),
+      flat_rate: erpT("ui.erp_studio.type_flat_rate", "Pauschale"),
+      saas: erpT("ui.erp_studio.type_saas", "SaaS/Abo"),
+      product: erpT("ui.erp_studio.type_product", "Produkt/HW")
+    };
+  }
+
   function renderItemsListHtml(container) {
     if (!container) container = document.getElementById("erp-items-list-container");
     if (!container) return;
 
+    const labels = getErpItemTypeLabels();
     const typeBadges = {
-      service: `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">Zeit/Service</span>`,
-      flat_rate: `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">Pauschale</span>`,
-      saas: `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">SaaS/Abo</span>`,
-      product: `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">Produkt/HW</span>`
+      service: `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">${escapeErpHtml(labels.service)}</span>`,
+      flat_rate: `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">${escapeErpHtml(labels.flat_rate)}</span>`,
+      saas: `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">${escapeErpHtml(labels.saas)}</span>`,
+      product: `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">${escapeErpHtml(labels.product)}</span>`
     };
+    const suppPrefix = escapeErpHtml(erpT("ui.erp_studio.supplier_prefix", "Lieferant:"));
+    const stockPrefix = escapeErpHtml(erpT("ui.erp_studio.stock_prefix", "Lagerbestand:"));
+    const netLbl = escapeErpHtml(erpT("ui.erp_studio.net_label", "netto"));
+    const marginPrefix = escapeErpHtml(erpT("ui.erp_studio.margin_prefix", "Marge:"));
+    const openVario = escapeErpHtml(erpT("ui.erp_studio.open_vario", "Öffnen (VARIO) →"));
 
     container.innerHTML = cachedItems
       .map((itm) => {
         const isSel = itm.id === currentSelectedItemId;
         const tBadge = typeBadges[itm.item_type] || "";
+        const safeItemId = escapeErpHtml(itm.id);
         return `
-        <div onclick="selectErpItem('${itm.id}'); openErpItemDrawer('${itm.id}')" class="p-3 rounded-xl border ${
+        <div onclick="selectErpItem('${safeItemId}'); openErpItemDrawer('${safeItemId}')" class="p-3 rounded-xl border ${
           isSel
             ? "border-emerald-500 bg-emerald-500/10 shadow-xs"
             : "border-[var(--border)] bg-[var(--secondary)]/30 hover:bg-[var(--secondary)]/60"
         } transition cursor-pointer flex items-center justify-between gap-3 group">
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]">${itm.item_no}</span>
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]">${escapeErpHtml(itm.item_no)}</span>
               ${tBadge}
-              <span class="text-xs font-bold text-[var(--foreground)] truncate">${itm.title}</span>
-              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">(${itm.unit})</span>
+              <span class="text-xs font-bold text-[var(--foreground)] truncate">${escapeErpHtml(itm.title)}</span>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">(${escapeErpHtml(itm.unit)})</span>
             </div>
-            <div class="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">${itm.description || itm.category}</div>
+            <div class="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">${escapeErpHtml(itm.description || itm.category)}</div>
             <div class="flex items-center gap-3 mt-0.5 flex-wrap">
-              ${itm.supplier_name ? `<span class="text-[10px] font-mono text-amber-600 dark:text-amber-400">Lieferant: ${itm.supplier_name}</span>` : ""}
-              ${itm.track_inventory ? `<span class="text-[10px] font-mono text-sky-600 dark:text-sky-400">Lagerbestand: ${itm.stock_qty || 0} ${itm.unit}</span>` : ""}
+              ${itm.supplier_name ? `<span class="text-[10px] font-mono text-amber-600 dark:text-amber-400">${suppPrefix} ${escapeErpHtml(itm.supplier_name)}</span>` : ""}
+              ${itm.track_inventory ? `<span class="text-[10px] font-mono text-sky-600 dark:text-sky-400">${stockPrefix} ${itm.stock_qty || 0} ${escapeErpHtml(itm.unit || "")}</span>` : ""}
             </div>
           </div>
           <div class="text-right shrink-0 flex flex-col items-end gap-0.5">
-            <div class="text-xs font-mono font-black text-[var(--foreground)]">${Number(itm.sales_price_net).toFixed(2)} EUR <span class="text-[10px] font-normal text-[var(--muted-foreground)]">netto</span></div>
-            <div class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">Marge: +${Number(itm.margin_eur).toFixed(2)} € (${itm.margin_pct}%)</div>
-            <span class="text-[10.5px] font-mono text-indigo-500 group-hover:underline font-semibold mt-0.5">Öffnen (VARIO) &rarr;</span>
+            <div class="text-xs font-mono font-black text-[var(--foreground)]">${Number(itm.sales_price_net).toFixed(2)} EUR <span class="text-[10px] font-normal text-[var(--muted-foreground)]">${netLbl}</span></div>
+            <div class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">${marginPrefix} +${Number(itm.margin_eur).toFixed(2)} € (${itm.margin_pct}%)</div>
+            <span class="text-[10.5px] font-mono text-indigo-500 group-hover:underline font-semibold mt-0.5">${openVario}</span>
           </div>
         </div>
       `;
@@ -1488,8 +1596,14 @@
     const itemType = itm?.item_type || (currentItemsTypeFilter !== "all" ? currentItemsTypeFilter : "service");
     const title = itm?.title || "";
     const desc = itm?.description || "";
-    const category = itm?.category || (itemType === "saas" ? "SaaS Lizenzen" : itemType === "product" ? "Hardware" : "Consulting");
-    const unit = itm?.unit || (itemType === "product" ? "Stk." : "Std.");
+    const category = itm?.category || (
+      itemType === "saas"
+        ? erpT("ui.erp_studio.cat_saas", "SaaS Lizenzen")
+        : itemType === "product"
+        ? erpT("ui.erp_studio.cat_hardware", "Hardware")
+        : erpT("ui.erp_studio.cat_consulting", "Consulting")
+    );
+    const unit = itm?.unit || (itemType === "product" ? erpT("ui.erp_studio.unit_pcs", "Stk.") : erpT("ui.erp_studio.unit_hrs", "Std."));
     const interval = itm?.billing_interval || (itemType === "saas" ? "monthly" : "one_off");
     const vk = itm?.sales_price_net != null ? Number(itm.sales_price_net) : (itemType === "service" ? 180.0 : 950.0);
     const ek = itm?.purchase_price_net != null ? Number(itm.purchase_price_net) : (itemType === "service" ? 45.0 : 150.0);
@@ -1504,10 +1618,14 @@
     const badgeEl = document.getElementById("erp-item-drawer-type-badge");
     const iconEl = document.getElementById("erp-item-drawer-icon");
 
-    if (titleEl) titleEl.textContent = title || "Neuer Artikel / Neue Leistung";
-    if (noEl) noEl.textContent = itemNo ? `Art-Nr: ${itemNo}` : "Neu (Automatische Nummerierung)";
+    if (titleEl) titleEl.textContent = title || erpT("ui.erp_studio.new_item_title", "Neuer Artikel / Neue Leistung");
+    if (noEl) {
+      noEl.textContent = itemNo
+        ? erpT("ui.erp_studio.item_no_prefix", "Art-Nr: {no}", { no: itemNo })
+        : erpT("ui.erp_studio.item_no_auto", "Neu (Automatische Nummerierung)");
+    }
     if (badgeEl) {
-      const typeLabels = { service: "Zeit/Service", flat_rate: "Pauschale", saas: "SaaS/Abo", product: "Produkt/HW" };
+      const typeLabels = getErpItemTypeLabels();
       badgeEl.textContent = typeLabels[itemType] || itemType;
     }
     if (iconEl) {
@@ -1535,7 +1653,7 @@
     setVal("drw-itm-account", itm?.account_no || (tax === "19.0" ? "8400 (SKR03)" : "8120 (SKR03)"));
     setVal("drw-itm-stock", stock);
     setVal("drw-itm-min-stock", itm?.min_stock_qty || 5);
-    setVal("drw-itm-bin", itm?.warehouse_bin || "Regal A-04");
+    setVal("drw-itm-bin", itm?.warehouse_bin || erpT("ui.erp_studio.bin_default", "Regal A-04"));
     setVal("drw-itm-seats", itm?.seats_limit || "");
     setVal("drw-itm-cancel-months", itm?.cancel_period_months || 3);
     setVal("drw-itm-seniority", itm?.seniority_level || "senior");
@@ -1547,36 +1665,41 @@
     const suppSelect = document.getElementById("drw-itm-supplier");
     if (suppSelect) {
       const suppliers = allEntities.filter((e) => e.is_supplier || e.is_partner);
-      suppSelect.innerHTML = `<option value="">-- Eigenleistung / Kein Lieferant --</option>` +
-        suppliers.map((s) => `<option value="${s.id}" ${s.id === suppId ? "selected" : ""}>${s.display_name} (${s.creditor_no || "Kreditor"})</option>`).join("");
+      const selfOpt = escapeErpHtml(erpT("ui.erp_studio.supplier_self_option", "-- Eigenleistung / Kein Lieferant --"));
+      const credFallback = erpT("ui.erp_studio.creditor_default", "Kreditor");
+      suppSelect.innerHTML = `<option value="">${selfOpt}</option>` +
+        suppliers.map((s) => `<option value="${escapeErpHtml(s.id)}" ${s.id === suppId ? "selected" : ""}>${escapeErpHtml(s.display_name)} (${escapeErpHtml(s.creditor_no || credFallback)})</option>`).join("");
     }
 
     // Verkaufshistorie befüllen
     const histTbody = document.getElementById("drw-itm-history-tbody");
     if (histTbody) {
       if (itm) {
+        const safeUnit = escapeErpHtml(unit);
+        const offerLbl = escapeErpHtml(erpT("ui.erp_studio.doc_type_offer", "Angebot"));
+        const orderLbl = escapeErpHtml(erpT("ui.erp_studio.doc_type_order", "Auftrag"));
         histTbody.innerHTML = `
           <tr>
             <td class="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100">ANG-2026-0842</td>
-            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">Angebot</span></td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">${offerLbl}</span></td>
             <td class="py-3 px-3">Nordstern Digital AG</td>
-            <td class="py-3 px-3">10 ${unit}</td>
+            <td class="py-3 px-3">10 ${safeUnit}</td>
             <td class="py-3 px-3">${vk.toFixed(2)} €</td>
             <td class="py-3 px-3 font-bold">${(vk * 10).toFixed(2)} €</td>
             <td class="py-3 px-3 text-zinc-500">24.10.2026</td>
           </tr>
           <tr>
             <td class="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100">AB-2026-0199</td>
-            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">Auftrag</span></td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">${orderLbl}</span></td>
             <td class="py-3 px-3">Bormann Bioscience LLC</td>
-            <td class="py-3 px-3">40 ${unit}</td>
+            <td class="py-3 px-3">40 ${safeUnit}</td>
             <td class="py-3 px-3">${vk.toFixed(2)} €</td>
             <td class="py-3 px-3 font-bold">${(vk * 40).toFixed(2)} €</td>
             <td class="py-3 px-3 text-zinc-500">12.09.2026</td>
           </tr>
         `;
       } else {
-        histTbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-xs text-zinc-400">Neuer Artikel: Noch keine Vorgänge vorhanden.</td></tr>`;
+        histTbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-xs text-zinc-400">${escapeErpHtml(erpT("ui.erp_studio.new_item_no_history", "Neuer Artikel: Noch keine Vorgänge vorhanden."))}</td></tr>`;
       }
     }
 
@@ -1615,13 +1738,13 @@
     const marginText = document.getElementById("drw-itm-margin-text");
     if (marginText) marginText.textContent = `${diff.toFixed(2)} € (${pct}%)`;
     const scale1 = document.getElementById("drw-scale-1");
-    if (scale1) scale1.textContent = `${vk.toFixed(2)} € (Basis 100%)`;
+    if (scale1) scale1.textContent = erpT("ui.erp_studio.scale_base_100", "{price} € (Basis 100%)", { price: vk.toFixed(2) });
   };
 
   window.onItemTypeChange = function (val) {
     const badgeEl = document.getElementById("erp-item-drawer-type-badge");
     const iconEl = document.getElementById("erp-item-drawer-icon");
-    const typeLabels = { service: "Zeit/Service", flat_rate: "Pauschale", saas: "SaaS/Abo", product: "Produkt/HW" };
+    const typeLabels = getErpItemTypeLabels();
     const typeIcons = { service: "💼", flat_rate: "📦", saas: "☁️", product: "🏷️" };
     if (badgeEl) badgeEl.textContent = typeLabels[val] || val;
     if (iconEl) iconEl.textContent = typeIcons[val] || "📦";
@@ -1645,7 +1768,7 @@
       itemNo = `ART-${maxNo + 1}`;
     }
 
-    const title = document.getElementById("drw-itm-title")?.value.trim() || "Neue Leistung";
+    const title = document.getElementById("drw-itm-title")?.value.trim() || erpT("ui.erp_studio.new_service_default", "Neue Leistung");
     const vk = parseFloat(document.getElementById("drw-itm-vk")?.value || "0");
     const ek = parseFloat(document.getElementById("drw-itm-ek")?.value || "0");
     const marginEur = Number((vk - ek).toFixed(2));
@@ -1702,13 +1825,17 @@
     await loadErpItems(false);
     selectErpItem(itmId);
     if (typeof window.showNotification === "function") {
-      window.showNotification("Artikel gespeichert", `${payload.item_no} · ${payload.title} aktualisiert.`, "success");
+      window.showNotification(
+        erpT("ui.erp_studio.item_saved_title", "Artikel gespeichert"),
+        erpT("ui.erp_studio.item_saved_msg", "{no} · {title} aktualisiert.", { no: payload.item_no, title: payload.title }),
+        "success"
+      );
     }
   };
 
   window.deleteCurrentErpItem = async function () {
     if (!currentSelectedItemId) return;
-    if (!confirm("Diesen Artikel wirklich aus dem Katalog entfernen / archivieren?")) return;
+    if (!confirm(erpT("ui.erp_studio.item_archive_confirm", "Diesen Artikel wirklich aus dem Katalog entfernen / archivieren?"))) return;
 
     const itmId = currentSelectedItemId;
     allItems = allItems.filter((x) => x.id !== itmId);
@@ -1718,19 +1845,13 @@
     await loadErpItems(true);
 
     if (typeof window.showNotification === "function") {
-      window.showNotification("Artikel archiviert", "Der Datensatz wurde aus dem aktiven Katalog entfernt.", "info");
+      window.showNotification(
+        erpT("ui.erp_studio.item_archived_title", "Artikel archiviert"),
+        erpT("ui.erp_studio.item_archived_msg", "Der Datensatz wurde aus dem aktiven Katalog entfernt."),
+        "info"
+      );
     }
   };
-
-  // Esc-Key Event Listener für Modal-Schließen
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") {
-      const itmDrawer = document.getElementById("erp-item-drawer");
-      if (itmDrawer && !itmDrawer.classList.contains("hidden")) {
-        closeErpItemDrawer();
-      }
-    }
-  });
 
   window.updateLiveItemMargin = function () {
     const vk = parseFloat(document.getElementById("erp-itm-vk")?.value || "0");
@@ -1765,10 +1886,10 @@
       id: itmId,
       item_no: itemNo,
       item_type: document.getElementById("erp-itm-type")?.value || "service",
-      title: document.getElementById("erp-itm-title")?.value || "Neue Leistung",
+      title: document.getElementById("erp-itm-title")?.value || erpT("ui.erp_studio.new_service_default", "Neue Leistung"),
       description: document.getElementById("erp-itm-desc")?.value || "",
-      category: document.getElementById("erp-itm-category")?.value || "Consulting",
-      unit: document.getElementById("erp-itm-unit")?.value || "Std.",
+      category: document.getElementById("erp-itm-category")?.value || erpT("ui.erp_studio.cat_consulting", "Consulting"),
+      unit: document.getElementById("erp-itm-unit")?.value || erpT("ui.erp_studio.unit_hrs", "Std."),
       billing_interval: document.getElementById("erp-itm-interval")?.value || "one_off",
       sales_price_net: vk,
       purchase_price_net: ek,
@@ -1801,7 +1922,11 @@
     await loadErpItems(false);
     selectErpItem(itmId);
     if (typeof window.showNotification === "function") {
-      window.showNotification("Artikel gespeichert", `${payload.item_no} · ${payload.title} aktualisiert.`, "success");
+      window.showNotification(
+        erpT("ui.erp_studio.item_saved_title", "Artikel gespeichert"),
+        erpT("ui.erp_studio.item_saved_msg", "{no} · {title} aktualisiert.", { no: payload.item_no, title: payload.title }),
+        "success"
+      );
     }
   };
 
@@ -1809,20 +1934,23 @@
   // 3. VORGÄNGE & VERTRÄGE (view-operations-erp)
   // ===========================================================================
 
-  const OPS_ERP_TAB_META = {
-    offers: {
-      title: "Vorgänge & Verträge — Angebote (ANG) & Aufträge (AB)",
-      subtitle: "Nuclos-Belegfluss: Angebot kalkulieren -> Auftrag bestätigen -> 1-Klick-Wandlung in GoBD-Rechnung (RE)"
-    },
-    pipeline: {
-      title: "Vorgänge & Verträge — Deal-Pipeline & Umsatz-Forecast",
-      subtitle: "Qualifizierte LinkedIn-Leads, offene Angebote und realisiertes Rechnungsvolumen im Phasen-Überblick"
-    },
-    contracts: {
-      title: "Vorgänge & Verträge — Vertrags- & Fristenradar",
-      subtitle: "Aktive SLA-Rahmenverträge, Lieferanten-Kontrakte, Kündigungsfristen und Vorlagen-Studio-Anbindung"
-    }
-  };
+  function getOpsErpTabMeta(key) {
+    const table = {
+      offers: {
+        title: erpT("ui.erp_studio.ops_tab_offers_title", "Vorgänge & Verträge — Angebote (ANG) & Aufträge (AB)"),
+        subtitle: erpT("ui.erp_studio.ops_tab_offers_subtitle", "Nuclos-Belegfluss: Angebot kalkulieren -> Auftrag bestätigen -> 1-Klick-Wandlung in GoBD-Rechnung (RE)")
+      },
+      pipeline: {
+        title: erpT("ui.erp_studio.ops_tab_pipeline_title", "Vorgänge & Verträge — Deal-Pipeline & Umsatz-Forecast"),
+        subtitle: erpT("ui.erp_studio.ops_tab_pipeline_subtitle", "Qualifizierte LinkedIn-Leads, offene Angebote und realisiertes Rechnungsvolumen im Phasen-Überblick")
+      },
+      contracts: {
+        title: erpT("ui.erp_studio.ops_tab_contracts_title", "Vorgänge & Verträge — Vertrags- & Fristenradar"),
+        subtitle: erpT("ui.erp_studio.ops_tab_contracts_subtitle", "Aktive SLA-Rahmenverträge, Lieferanten-Kontrakte, Kündigungsfristen und Vorlagen-Studio-Anbindung")
+      }
+    };
+    return table[key] || table.offers;
+  }
 
   window.initOperationsErpView = async function () {
     const cid = getActiveCompanyId();
@@ -1855,7 +1983,7 @@
       }
     });
 
-    const meta = OPS_ERP_TAB_META[sub] || OPS_ERP_TAB_META.offers;
+    const meta = getOpsErpTabMeta(sub);
     const titleEl = document.getElementById("ops-erp-main-title");
     const subEl = document.getElementById("ops-erp-main-subtitle");
     if (titleEl) titleEl.textContent = meta.title;
@@ -1869,23 +1997,25 @@
   function renderErpPipelineLeadsList() {
     const box = document.getElementById("erp-pipeline-leads-list");
     if (!box) return;
+    const openBtnLbl = escapeErpHtml(erpT("ui.erp_studio.open_record_btn", "Akte öffnen"));
     const rows = allEntities.map((ent) => {
       const entDocs = cachedOffers.filter((d) => d.entity_id === ent.id);
       const totalGross = entDocs.reduce((acc, d) => acc + Number(d.amount_gross || 0), 0);
       const stage = ent.is_customer
-        ? "Bestandskunde / Won (100%)"
+        ? erpT("ui.erp_studio.stage_customer", "Bestandskunde / Won (100%)")
         : ent.is_supplier
-        ? "Infrastruktur-Partner"
-        : "LinkedIn Lead / Discovery (25%)";
+        ? erpT("ui.erp_studio.stage_supplier", "Infrastruktur-Partner")
+        : erpT("ui.erp_studio.stage_lead", "LinkedIn Lead / Discovery (25%)");
+      const docsLabel = erpT("ui.erp_studio.docs_count_label", "{count} Beleg(e)", { count: entDocs.length });
       return `
         <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 flex items-center justify-between gap-3 text-xs">
           <div>
-            <div class="font-bold text-[var(--foreground)]">${ent.display_name} <span class="text-[10px] font-mono text-amber-500">${renderStars(ent.rating)}</span></div>
-            <div class="text-[11px] text-[var(--muted-foreground)]">${stage} · ${ent.city || "DE"} · ${entDocs.length} Beleg(e)</div>
+            <div class="font-bold text-[var(--foreground)]">${escapeErpHtml(ent.display_name)} <span class="text-[10px] font-mono text-amber-500">${renderStars(ent.rating)}</span></div>
+            <div class="text-[11px] text-[var(--muted-foreground)]">${escapeErpHtml(stage)} · ${escapeErpHtml(ent.city || "DE")} · ${escapeErpHtml(docsLabel)}</div>
           </div>
           <div class="flex items-center gap-2">
             <span class="font-mono font-bold text-[var(--foreground)]">${totalGross.toFixed(2)} EUR</span>
-            <button type="button" onclick="setTab('addresses'); selectErpAddress('${ent.id}');" class="px-2.5 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[11px] font-semibold cursor-pointer">Akte öffnen</button>
+            <button type="button" onclick="setTab('addresses'); selectErpAddress('${escapeErpHtml(ent.id)}');" class="px-2.5 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[11px] font-semibold cursor-pointer">${openBtnLbl}</button>
           </div>
         </div>
       `;
@@ -1896,8 +2026,12 @@
   function populateOfferBuilderSelects() {
     const entSel = document.getElementById("erp-doc-entity-select");
     if (entSel) {
+      const leadShort = erpT("ui.erp_studio.lead_short", "Lead");
       entSel.innerHTML = allEntities
-        .map((e) => `<option value="${e.id}">${e.display_name} (${e.debtor_no ? `Debitor ${e.debtor_no}` : "Lead"})</option>`)
+        .map((e) => {
+          const ref = e.debtor_no ? erpT("ui.erp_studio.debtor_badge", "Debitor {no}", { no: e.debtor_no }) : leadShort;
+          return `<option value="${escapeErpHtml(e.id)}">${escapeErpHtml(e.display_name)} (${escapeErpHtml(ref)})</option>`;
+        })
         .join("");
     }
     const linesBox = document.getElementById("erp-doc-lines-builder");
@@ -1912,13 +2046,14 @@
     const row = document.createElement("div");
     row.className = "grid grid-cols-12 gap-1.5 items-center erp-builder-line";
     const itemOptions = allItems
-      .map((i) => `<option value="${i.id}" data-price="${i.sales_price_net}">${i.item_no} · ${i.title} (${i.sales_price_net} €)</option>`)
+      .map((i) => `<option value="${escapeErpHtml(i.id)}" data-price="${Number(i.sales_price_net || 0)}">${escapeErpHtml(i.item_no)} · ${escapeErpHtml(i.title)} (${Number(i.sales_price_net || 0)} €)</option>`)
       .join("");
+    const qtyPlaceholder = escapeErpHtml(erpT("ui.erp_studio.qty_placeholder", "Menge"));
     row.innerHTML = `
       <select class="col-span-7 px-2 py-1 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)] erp-line-item-select">
         ${itemOptions}
       </select>
-      <input type="number" step="1" value="1" class="col-span-3 px-2 py-1 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-mono text-[var(--foreground)] erp-line-qty" placeholder="Menge">
+      <input type="number" step="1" value="1" class="col-span-3 px-2 py-1 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs font-mono text-[var(--foreground)] erp-line-qty" placeholder="${qtyPlaceholder}">
       <button type="button" onclick="this.parentElement.remove()" class="col-span-2 px-2 py-1 rounded-lg bg-rose-500/10 text-rose-600 text-xs font-bold cursor-pointer">✕</button>
     `;
     linesBox.appendChild(row);
@@ -1969,10 +2104,11 @@
       });
     } catch (e) {
       console.error("ERP-Dokument konnte nicht angelegt werden:", e);
+      const offlineMsg = erpT("ui.erp_studio.doc_create_offline", "Beleg konnte nicht angelegt werden — der Server war nicht erreichbar.");
       if (typeof showNotification === "function") {
-        showNotification("ERP", "Beleg konnte nicht angelegt werden — der Server war nicht erreichbar.", "error");
+        showNotification("ERP", offlineMsg, "error");
       } else {
-        alert("Beleg konnte nicht angelegt werden — der Server war nicht erreichbar.");
+        alert(offlineMsg);
       }
       return;
     }
@@ -1981,10 +2117,11 @@
       let detail = "";
       try { detail = await resp.text(); } catch (e) { detail = ""; }
       console.error("ERP-Dokument konnte nicht angelegt werden:", resp.status, detail);
+      const httpMsg = erpT("ui.erp_studio.doc_create_http_error", "Beleg konnte nicht angelegt werden (HTTP {status}). Es wurde nichts gebucht.", { status: resp.status });
       if (typeof showNotification === "function") {
-        showNotification("ERP", `Beleg konnte nicht angelegt werden (HTTP ${resp.status}). Es wurde nichts gebucht.`, "error");
+        showNotification("ERP", httpMsg, "error");
       } else {
-        alert(`Beleg konnte nicht angelegt werden (HTTP ${resp.status}). Es wurde nichts gebucht.`);
+        alert(httpMsg);
       }
       return;
     }
@@ -2010,24 +2147,42 @@
       .filter((d) => d.doc_type === "offer" && d.status !== "cancelled")
       .reduce((acc, d) => acc + Number(d.amount_net || 0), 0);
     const volBadge = document.getElementById("erp-ops-volume-badge");
-    if (volBadge) volBadge.textContent = `Angebotsvolumen: ${openOffersVol.toFixed(2)} EUR netto`;
+    if (volBadge) {
+      volBadge.textContent = erpT("ui.erp_studio.offer_volume_badge", "Angebotsvolumen: {vol} EUR netto", {
+        vol: openOffersVol.toFixed(2)
+      });
+    }
 
     const pipeCount = document.getElementById("erp-pipe-offers-count");
-    if (pipeCount) pipeCount.textContent = `${cachedOffers.filter((d) => d.doc_type === "offer").length} aktive Angebote`;
+    if (pipeCount) {
+      pipeCount.textContent = erpT("ui.erp_studio.active_offers_count", "{count} aktive Angebote", {
+        count: cachedOffers.filter((d) => d.doc_type === "offer").length
+      });
+    }
 
     const wonVol = cachedOffers
       .filter((d) => d.doc_type === "invoice" && d.status !== "cancelled")
       .reduce((acc, d) => acc + Number(d.amount_gross || 0), 0);
     const pipeWon = document.getElementById("erp-pipe-won-volume");
-    if (pipeWon) pipeWon.textContent = `${wonVol.toFixed(2)} EUR brutto`;
+    if (pipeWon) {
+      pipeWon.textContent = erpT("ui.erp_studio.gross_volume_badge", "{vol} EUR brutto", { vol: wonVol.toFixed(2) });
+    }
 
     renderErpPipelineLeadsList();
 
     if (!container) return;
     if (!cachedOffers.length) {
-      container.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] p-6 text-center">Noch keine Angebote oder Aufträge vorhanden.</div>`;
+      container.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] p-6 text-center">${escapeErpHtml(erpT("ui.erp_studio.no_offers_yet", "Noch keine Angebote oder Aufträge vorhanden."))}</div>`;
       return;
     }
+
+    const custFallback = erpT("ui.erp_studio.customer_default", "Kunde");
+    const inclVatLbl = escapeErpHtml(erpT("ui.erp_studio.incl_vat", "inkl. USt."));
+    const convertBtnLbl = escapeErpHtml(erpT("ui.erp_studio.convert_1click_btn", "1-Klick → Rechnung"));
+    const pdfBtnLbl = escapeErpHtml(erpT("ui.erp_studio.doc_pdf_btn", "Beleg-PDF / Druck"));
+    const editorBtnLbl = escapeErpHtml(erpT("ui.erp_studio.doc_editor_btn", "Beleg-Editor"));
+    const xrechnungBtnLbl = escapeErpHtml(erpT("ui.erp_studio.doc_xrechnung_btn", "XRechnung XML"));
+    const zugferdBtnLbl = escapeErpHtml(erpT("ui.erp_studio.doc_zugferd_btn", "ZUGFeRD PDF"));
 
     container.innerHTML = cachedOffers
       .map(
@@ -2039,23 +2194,30 @@
                 doc.doc_type === "invoice"
                   ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
                   : "bg-indigo-500/10 text-indigo-600 border border-indigo-500/20"
-              }">${doc.doc_number}</span>
-              <span class="text-xs font-bold text-[var(--foreground)]">${doc.entity_name || "Kunde"}</span>
-              <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)]">${doc.status}</span>
+              }">${escapeErpHtml(doc.doc_number)}</span>
+              <span class="text-xs font-bold text-[var(--foreground)]">${escapeErpHtml(doc.entity_name || custFallback)}</span>
+              <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)]">${escapeErpHtml(doc.status)}</span>
             </div>
             <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
-              Datum: ${doc.issue_date} · ${(doc.lines || []).length} Position(en) · Netto: ${Number(doc.amount_net).toFixed(2)} €
+              ${escapeErpHtml(erpT("ui.erp_studio.doc_summary_line", "Datum: {date} · {count} Position(en) · Netto: {net} €", {
+                date: doc.issue_date || "",
+                count: (doc.lines || []).length,
+                net: Number(doc.amount_net).toFixed(2)
+              }))}
             </div>
           </div>
           <div class="flex items-center gap-2 shrink-0">
             <div class="text-right">
               <div class="text-xs font-mono font-black text-[var(--foreground)]">${Number(doc.amount_gross).toFixed(2)} EUR</div>
-              <div class="text-[10px] font-mono text-[var(--muted-foreground)]">inkl. USt.</div>
+              <div class="text-[10px] font-mono text-[var(--muted-foreground)]">${inclVatLbl}</div>
             </div>
             ${
               doc.doc_type === "offer" && doc.status !== "accepted"
-                ? `<button type="button" onclick="convertErpDocToInvoice('${doc.id}')" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer shadow-xs">1-Klick &rarr; Rechnung</button>`
-                : `<button type="button" onclick="previewErpDocumentInStudio('${doc.id}')" class="px-2.5 py-1.5 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[11px] font-semibold text-[var(--foreground)] cursor-pointer">Beleg-PDF / Druck</button>`
+                ? `<button type="button" onclick="convertErpDocToInvoice('${escapeErpHtml(doc.id)}')" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer shadow-xs">${convertBtnLbl}</button>`
+                : `<button type="button" onclick="previewErpDocumentInStudio('${escapeErpHtml(doc.id)}')" class="px-2.5 py-1.5 rounded-lg bg-[var(--card)] border border-[var(--border)] text-[11px] font-semibold text-[var(--foreground)] cursor-pointer">${pdfBtnLbl}</button>
+                   <button type="button" onclick="if(typeof openDocumentInTemplateEditor==='function') openDocumentInTemplateEditor('${escapeErpHtml(doc.id)}','${escapeErpHtml(doc.doc_type)}')" class="px-2.5 py-1.5 rounded-lg bg-violet-600/15 hover:bg-violet-600/25 border border-violet-500/30 text-[11px] font-bold text-violet-600 dark:text-violet-400 cursor-pointer">${editorBtnLbl}</button>
+                   <button type="button" onclick="downloadErpXRechnungXml('${escapeErpHtml(doc.id)}')" class="px-2.5 py-1.5 rounded-lg bg-sky-600/15 hover:bg-sky-600/25 border border-sky-500/30 text-[11px] font-bold text-sky-600 dark:text-sky-400 cursor-pointer">${xrechnungBtnLbl}</button>
+                   <button type="button" onclick="downloadErpZugferdPdf('${escapeErpHtml(doc.id)}')" class="px-2.5 py-1.5 rounded-lg bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 cursor-pointer">${zugferdBtnLbl}</button>`
             }
           </div>
         </div>
@@ -2077,20 +2239,22 @@
       });
     } catch (e) {
       console.error("ERP-Umwandlung konnte nicht angelegt werden:", e);
+      const offlineMsg = erpT("ui.erp_studio.doc_convert_offline", "Umwandlung in Rechnung fehlgeschlagen — der Server war nicht erreichbar.");
       if (typeof showNotification === "function") {
-        showNotification("ERP", "Umwandlung in Rechnung fehlgeschlagen — der Server war nicht erreichbar.", "error");
+        showNotification("ERP", offlineMsg, "error");
       } else {
-        alert("Umwandlung in Rechnung fehlgeschlagen — der Server war nicht erreichbar.");
+        alert(offlineMsg);
       }
       return;
     }
 
     if (!resp.ok) {
       console.error("ERP-Umwandlung konnte nicht angelegt werden:", resp.status);
+      const httpMsg = erpT("ui.erp_studio.doc_convert_http_error", "Umwandlung in Rechnung fehlgeschlagen (HTTP {status}). Es wurde nichts gebucht.", { status: resp.status });
       if (typeof showNotification === "function") {
-        showNotification("ERP", `Umwandlung in Rechnung fehlgeschlagen (HTTP ${resp.status}). Es wurde nichts gebucht.`, "error");
+        showNotification("ERP", httpMsg, "error");
       } else {
-        alert(`Umwandlung in Rechnung fehlgeschlagen (HTTP ${resp.status}). Es wurde nichts gebucht.`);
+        alert(httpMsg);
       }
       return;
     }
@@ -2110,5 +2274,117 @@
 
   window.previewErpDocumentInStudio = function (docId) {
     openErpDocumentPdf(docId);
+  };
+
+  window.downloadErpXRechnungXml = function (docId) {
+    const cid = getActiveCompanyId();
+    const url = `/api/erp/documents/${encodeURIComponent(docId)}/xrechnung.xml?company_id=${encodeURIComponent(cid)}`;
+    window.open(url, "_blank");
+  };
+
+  window.exportErpDatevCsv = function () {
+    const cid = getActiveCompanyId();
+    const url = `/api/erp/export/datev.csv?company_id=${encodeURIComponent(cid)}`;
+    window.open(url, "_blank");
+  };
+
+  window.downloadErpZugferdPdf = function (docId) {
+    const cid = getActiveCompanyId();
+    const url = `/api/erp/documents/${encodeURIComponent(docId)}/zugferd.pdf?company_id=${encodeURIComponent(cid)}`;
+    window.open(url, "_blank");
+  };
+
+  window.openErpBankImportModal = function () {
+    const modal = document.getElementById("erp-bank-import-modal");
+    if (modal) modal.classList.remove("hidden");
+    loadErpBankTransactions();
+  };
+
+  window.closeErpBankImportModal = function () {
+    const modal = document.getElementById("erp-bank-import-modal");
+    if (modal) modal.classList.add("hidden");
+  };
+
+  window.handleErpBankFileSelect = function (event) {
+    const file = event && event.target && event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (ev) {
+      const ta = document.getElementById("erp-bank-raw-input");
+      if (ta && ev && ev.target) ta.value = String(ev.target.result || "");
+    };
+    reader.readAsText(file, "utf-8");
+  };
+
+  window.loadErpBankTransactions = async function () {
+    const cid = getActiveCompanyId();
+    const box = document.getElementById("erp-bank-tx-list");
+    if (!box) return;
+    try {
+      const resp = await fetch(`/api/erp/bank/transactions?company_id=${encodeURIComponent(cid)}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const txs = Array.isArray(data.items) ? data.items : [];
+      if (!txs.length) {
+        box.innerHTML = `<div class="text-[11px] text-[var(--muted-foreground)] p-3 text-center">${escapeErpHtml(erpT("ui.erp_studio.bank_no_tx", "Noch keine Bankumsätze importiert."))}</div>`;
+        return;
+      }
+      box.innerHTML = txs
+        .map((tx) => {
+          const badgeCls =
+            tx.match_status === "paid_applied"
+              ? "bg-emerald-500/15 text-emerald-600"
+              : tx.match_status === "matched"
+              ? "bg-amber-500/15 text-amber-600"
+              : "bg-slate-500/15 text-[var(--muted-foreground)]";
+          return `
+            <div class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/30 flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-mono font-bold">${escapeErpHtml(tx.booking_date)}</span>
+                  <span class="font-bold truncate">${escapeErpHtml(tx.counterparty_name || "-")}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${badgeCls}">${escapeErpHtml(tx.match_status)}${tx.matched_doc_number ? " · " + escapeErpHtml(tx.matched_doc_number) : ""}</span>
+                </div>
+                <div class="text-[10.5px] text-[var(--muted-foreground)] truncate">${escapeErpHtml(tx.remittance_info || "")}</div>
+              </div>
+              <div class="text-right font-mono font-black shrink-0">${Number(tx.amount || 0).toFixed(2)} ${escapeErpHtml(tx.currency || "EUR")}</div>
+            </div>
+          `;
+        })
+        .join("");
+    } catch (e) {}
+  };
+
+  window.submitErpBankImport = async function () {
+    const cid = getActiveCompanyId();
+    const content = (document.getElementById("erp-bank-raw-input")?.value || "").trim();
+    if (!content) return;
+    const autoPaid = Boolean(document.getElementById("erp-bank-auto-paid")?.checked);
+    const sumBox = document.getElementById("erp-bank-import-summary");
+    try {
+      const resp = await fetch("/api/erp/bank/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: cid, content: content, format: "auto", auto_mark_paid: autoPaid })
+      });
+      const res = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        if (sumBox) {
+          sumBox.classList.remove("hidden");
+          sumBox.textContent = res.detail || `HTTP ${resp.status}`;
+        }
+        return;
+      }
+      if (sumBox) {
+        sumBox.classList.remove("hidden");
+        sumBox.textContent = erpT(
+          "ui.erp_studio.bank_import_summary",
+          "Import: {imported} neu ({dups} Duplikate übersprungen) · OPOS-Treffer: {matched} · Auto-bezahlt: {paid}",
+          { imported: res.imported || 0, dups: res.duplicates_skipped || 0, matched: res.matched || 0, paid: res.auto_paid || 0 }
+        );
+      }
+      await loadErpBankTransactions();
+      await loadErpDocuments();
+    } catch (e) {}
   };
 })();

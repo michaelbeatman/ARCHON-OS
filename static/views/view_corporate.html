@@ -273,8 +273,22 @@
           class="w-full px-2.5 py-1.5 rounded-md text-xs font-semibold bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] focus:ring-1 focus:ring-indigo-500 cursor-pointer"
         >
           <option data-i18n="view.corporate.opt_letterhead" value="letterhead">DIN 5008 Geschäftsbrief (Briefkopf)</option>
+          <option data-i18n="view.corporate.opt_offer" value="offer">Angebot (DIN 5008)</option>
+          <option data-i18n="view.corporate.opt_order" value="order_confirmation">Auftragsbestätigung (AB)</option>
           <option data-i18n="view.corporate.opt_invoice" value="invoice">Ausgangsrechnung (§ 14 UStG)</option>
+          <option data-i18n="view.corporate.opt_dunning" value="dunning">Mahnung / Zahlungserinnerung</option>
           <option data-i18n="view.corporate.opt_nda" value="nda">Geheimhaltungsvereinbarung (NDA)</option>
+        </select>
+      </div>
+
+      <!-- ERP-Beleg direkt laden (M29 Datenbindung) -->
+      <div class="p-2.5 rounded-lg border border-indigo-500/20 bg-indigo-500/5 space-y-1.5">
+        <div class="flex items-center justify-between">
+          <label for="tmpl-select-erp-doc" data-i18n="view.corporate.field_erp_doc" class="text-[10.5px] font-bold text-indigo-500 uppercase tracking-wider">ERP-Beleg verknüpfen</label>
+          <span data-i18n="view.corporate.badge_live_sync" class="text-[9.5px] font-mono text-[var(--muted-foreground)]">Live-Sync</span>
+        </div>
+        <select id="tmpl-select-erp-doc" onchange="onCorporateErpDocumentSelected(this.value)" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] cursor-pointer">
+          <option data-i18n="view.corporate.opt_erp_doc_placeholder" value="">-- Optional: Live-Beleg aus ERP laden --</option>
         </select>
       </div>
 
@@ -328,21 +342,89 @@ Mit besten Grüßen,</textarea>
         </div>
       </div>
 
-      <!-- INVOICE SPECIFIC CONTROLS -->
+      <!-- INVOICE / OFFER / ORDER SPECIFIC CONTROLS -->
       <div id="tmpl-controls-invoice" class="hidden space-y-2">
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label data-i18n="view.corporate.field_inv_num" class="block text-[10px] text-[var(--muted-foreground)]">Rechnungs-Nr.</label>
+            <label data-i18n="view.corporate.field_inv_num" class="block text-[10px] text-[var(--muted-foreground)]">Rechnungs-/Beleg-Nr.</label>
             <input type="text" id="tmpl-input-inv-num" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] font-mono" value="RE-2026-001">
           </div>
           <div>
-            <label data-i18n="view.corporate.field_inv_due" class="block text-[10px] text-[var(--muted-foreground)]">Zahlungsziel</label>
+            <label data-i18n="view.corporate.field_inv_due" class="block text-[10px] text-[var(--muted-foreground)]">Zahlungsziel / Frist</label>
             <input type="text" id="tmpl-input-inv-due" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)]" value="14.11.2026">
+          </div>
+        </div>
+        <div id="tmpl-controls-dunning" class="hidden grid grid-cols-2 gap-2 p-2 rounded border border-amber-500/30 bg-amber-500/5">
+          <div>
+            <label for="tmpl-dunning-level" data-i18n="view.corporate.field_dunning_level" class="block text-[10px] text-amber-600 dark:text-amber-400 font-semibold">Mahnstufe</label>
+            <select id="tmpl-dunning-level" onchange="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]">
+              <option data-i18n="view.corporate.opt_dun_1" value="1">1 · Erinnerung (0 €)</option>
+              <option data-i18n="view.corporate.opt_dun_2" value="2">2 · 2. Mahnung (§ 288 BGB)</option>
+              <option data-i18n="view.corporate.opt_dun_3" value="3">3 · Letzte Mahnung</option>
+            </select>
+          </div>
+          <div>
+            <label for="tmpl-dunning-fee" data-i18n="view.corporate.field_dunning_fee" class="block text-[10px] text-amber-600 dark:text-amber-400 font-semibold">Mahngebühr (€)</label>
+            <input type="number" step="0.50" min="0" id="tmpl-dunning-fee" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] font-mono" value="0.00">
           </div>
         </div>
         <div data-i18n="view.corporate.hint_auto_items" class="text-[11px] text-[var(--muted-foreground)]">
           Standard-Leistungsposten werden automatisch aus dem Mandantenkatalog berechnet (19% MwSt. bzw. § 19 UStG).
         </div>
+      </div>
+
+      <!-- VISUELLER LAYOUT- & BLOCK-EDITOR (M29) -->
+      <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/40 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span data-i18n="view.corporate.layout_title" class="text-[11px] font-bold text-[var(--foreground)]">Layout, Blöcke &amp; Platzhalter</span>
+          <button type="button" onclick="saveCorporateTemplateLayout()" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold cursor-pointer" data-i18n="view.corporate.btn_save_layout">Vorlage speichern</button>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label for="tmpl-layout-margin" data-i18n="view.corporate.field_margin_mm" class="block text-[10px] text-[var(--muted-foreground)]">Rand (mm)</label>
+            <input type="number" id="tmpl-layout-margin" min="8" max="30" value="15" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] font-mono">
+          </div>
+          <div>
+            <label for="tmpl-layout-footer-cols" data-i18n="view.corporate.field_footer_cols" class="block text-[10px] text-[var(--muted-foreground)]">Fußzeile</label>
+            <select id="tmpl-layout-footer-cols" onchange="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]">
+              <option data-i18n="view.corporate.opt_cols_3" value="3">3 Spalten</option>
+              <option data-i18n="view.corporate.opt_cols_2" value="2">2 Spalten</option>
+            </select>
+          </div>
+          <div>
+            <label for="tmpl-layout-header-style" data-i18n="view.corporate.field_header_style" class="block text-[10px] text-[var(--muted-foreground)]">Kopfzeile</label>
+            <select id="tmpl-layout-header-style" onchange="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]">
+              <option data-i18n="view.corporate.opt_hdr_bar" value="bar">CI-Balken</option>
+              <option data-i18n="view.corporate.opt_hdr_min" value="minimal">Minimal</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 text-[11px] text-[var(--foreground)]">
+          <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="tmpl-layout-show-logo" checked onchange="renderTemplateLivePreview()"> <span data-i18n="view.corporate.opt_show_logo">Firmenlogo</span></label>
+          <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="tmpl-layout-show-girocode" checked onchange="renderTemplateLivePreview()"> <span data-i18n="view.corporate.opt_show_girocode">GiroCode EPC-QR</span></label>
+          <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="tmpl-layout-show-foldmarks" checked onchange="renderTemplateLivePreview()"> <span data-i18n="view.corporate.opt_show_foldmarks">DIN-Falzmarken</span></label>
+          <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="tmpl-layout-show-bankfooter" checked onchange="renderTemplateLivePreview()"> <span data-i18n="view.corporate.opt_show_bankfooter">Bank-Fußzeile</span></label>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="tmpl-input-intro" data-i18n="view.corporate.field_intro_block" class="text-[10px] text-[var(--muted-foreground)]">Einleitung / Zusatzblock</label>
+            <div id="tmpl-placeholder-chips" class="flex flex-wrap gap-1"></div>
+          </div>
+          <textarea data-i18n-placeholder="view.corporate.ph_intro_block" id="tmpl-input-intro" rows="2" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]" placeholder="Optionaler Einleitungstext mit {{customer.name}}..."></textarea>
+        </div>
+        <div>
+          <label for="tmpl-input-outro" data-i18n="view.corporate.field_outro_block" class="block text-[10px] text-[var(--muted-foreground)]">Schlusssatz / Steuer-Hinweis</label>
+          <textarea data-i18n-placeholder="view.corporate.ph_outro_block" id="tmpl-input-outro" rows="2" oninput="renderTemplateLivePreview()" class="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]" placeholder="Optionaler Schlusstext z.B. Reverse-Charge / Skonto..."></textarea>
+        </div>
+      </div>
+
+      <!-- § 14 UStG LIVE-COMPLIANCE-PRÜFUNG -->
+      <div id="tmpl-ustg-compliance-panel" class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 space-y-1.5">
+        <div class="flex items-center justify-between text-[11px] font-bold">
+          <span data-i18n="view.corporate.ustg_check_title">§ 14 UStG Pflichtfeld-Prüfung</span>
+          <span id="tmpl-ustg-badge" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-500">--%</span>
+        </div>
+        <ul id="tmpl-ustg-check-list" class="space-y-1 text-[10.5px] text-[var(--muted-foreground)]"></ul>
       </div>
 
       <div class="mt-auto pt-3 border-t border-[var(--border)] flex gap-2">
@@ -353,6 +435,14 @@ Mit besten Grüßen,</textarea>
         >
           <i data-lucide="printer" class="w-3.5 h-3.5"></i>
           <span data-i18n="view.corporate.btn_print">Drucken / PDF</span>
+        </button>
+        <button
+          type="button"
+          onclick="downloadCorporateTemplatePdf()"
+          class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)] border border-[var(--border)] text-xs font-semibold cursor-pointer"
+        >
+          <i data-lucide="file-down" class="w-3.5 h-3.5"></i>
+          <span data-i18n="view.corporate.btn_pdf_download">A4-PDF</span>
         </button>
       </div>
     </div>

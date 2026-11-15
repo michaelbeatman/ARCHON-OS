@@ -156,5 +156,8 @@
     setTimeout(() => checkArchonVersionBadge(false), 1200);
   }
 
-  setInterval(() => checkArchonVersionBadge(false), 5 * 60 * 1000);
+  setInterval(() => {
+    if (typeof document !== "undefined" && document.hidden) return;
+    checkArchonVersionBadge(false);
+  }, 5 * 60 * 1000);
 })();

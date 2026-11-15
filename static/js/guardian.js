@@ -373,18 +373,43 @@
       `).join('');
     }
 
+    function gdEsc(val) {
+      return String(val ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
     function renderGuardianSessions(sessions) {
       const tbody = document.getElementById("guard-sessions-table-body");
       if (!tbody) return;
+      if (!tbody.dataset.boundSessionClick) {
+        tbody.dataset.boundSessionClick = "1";
+        tbody.addEventListener("click", (evt) => {
+          const btn = evt.target && evt.target.closest ? evt.target.closest("button[data-session-id]") : null;
+          if (!btn) return;
+          if (typeof openSessionInMasterChat === "function") {
+            openSessionInMasterChat(btn.dataset.sessionId || "", btn.dataset.profile || "");
+          }
+        });
+      }
       if (!sessions || sessions.length === 0) {
         tbody.innerHTML = `<tr><td colspan="11" class="py-8 text-center text-slate-400 italic">${gdT('ui.guardian.sessions_empty', 'Keine Sitzungen im gewählten Zeitraum gefunden')}</td></tr>`;
         return;
       }
-      tbody.innerHTML = sessions.map(s => `
+      tbody.innerHTML = sessions.map(s => {
+        const sid = gdEsc(s.session_id);
+        const prof = gdEsc(s.profile);
+        const mdl = gdEsc(s.model);
+        const seen = gdEsc(s.last_seen || '-');
+        return `
         <tr class="hover:bg-slate-50 transition group">
           <td class="py-2.5 px-3 text-center">
-            <button 
-              onclick="openSessionInMasterChat('${s.session_id}', '${s.profile}')" 
+            <button
+              type="button"
+              data-session-id="${sid}"
+              data-profile="${prof}"
               class="w-7 h-7 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 transition flex items-center justify-center cursor-pointer shadow-2xs mx-auto"
               title="${gdT('ui.guardian.sessions_open_hint', 'Session im Master Chat öffnen')}"
             >
@@ -392,13 +417,13 @@
             </button>
           </td>
           <td class="py-2.5 px-4 font-bold text-slate-900">
-            <span class="font-mono text-[11px] truncate block max-w-[160px]" title="${s.session_id}">${s.session_id}</span>
+            <span class="font-mono text-[11px] truncate block max-w-[160px]" title="${sid}">${sid}</span>
           </td>
           <td class="py-2.5 px-4 font-semibold text-slate-700">
-            <span class="truncate block max-w-[130px]" title="${s.profile}">${s.profile}</span>
+            <span class="truncate block max-w-[130px]" title="${prof}">${prof}</span>
           </td>
           <td class="py-2.5 px-4 text-slate-600">
-            <span class="truncate block max-w-[150px]" title="${s.model}">${s.model}</span>
+            <span class="truncate block max-w-[150px]" title="${mdl}">${mdl}</span>
           </td>
           <td class="py-2.5 px-4 text-right font-bold text-slate-700">${(s.calls || 0).toLocaleString()}</td>
           <td class="py-2.5 px-4 text-right text-slate-700">${(s.input_tokens || 0).toLocaleString()}</td>
@@ -406,9 +431,9 @@
           <td class="py-2.5 px-4 text-right text-indigo-600 font-bold">${(s.cache_tokens || 0).toLocaleString()}</td>
           <td class="py-2.5 px-4 text-right font-extrabold ${s.total_tokens > 5000000 ? 'text-rose-600' : 'text-slate-900'}">${(s.total_tokens || 0).toLocaleString()}</td>
           <td class="py-2.5 px-4 text-right font-bold text-emerald-600">$${(s.cost || 0).toFixed(4)}</td>
-          <td class="py-2.5 px-4 text-right text-[11px] text-slate-500 font-mono">${s.last_seen || '-'}</td>
-        </tr>
-      `).join('');
+          <td class="py-2.5 px-4 text-right text-[11px] text-slate-500 font-mono">${seen}</td>
+        </tr>`;
+      }).join("");
       if (window.lucide) lucide.createIcons();
     }
 

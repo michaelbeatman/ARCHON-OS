@@ -20,7 +20,8 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.audit_log import chained_audit_log, sanitize_llm_endpoint
 from backend.privacy_router import (
@@ -366,3 +367,156 @@ def audit_zero_egress_posture(audit_logger: Any = None) -> Dict[str, Any]:
         "recent_dispatches": recent_dispatches[:10],
         "fail_closed_verified": no_cloud_leak_ready and bool(cfg_check.get("zero_egress_verified", False)),
     }
+
+
+_INTERNAL_EGRESS_HOSTS = frozenset({
+    "localhost", "127.0.0.1", "::1", "[::1]",
+    "omniroute", "ollama", "hermes", "hermes-agent", "hermes-dashboard",
+    "odysseus", "openclaw", "host.docker.internal", "vllm", "lmstudio",
+})
+
+
+def enforce_egress_firewall_for_url(
+    url: str,
+    *,
+    agent_id: str = "agent-worker",
+    audit_logger: Any = None,
+) -> Dict[str, Any]:
+    """
+    Prüft ausgehende LLM-Endpunkte gegen `egress_firewall.check_url(...)`.
+    Interne Docker-Service-Namen und LOCAL_ON_PREM-Hosts bleiben zulässig;
+    unautorisierte externe Cloud-Hosts lösen `ZeroEgressBlockedError` aus.
+    """
+    if not url:
+        return {"allowed": True, "blocked": False, "zone": "UNKNOWN", "reason": "empty_url"}
+
+    clean_ep, host, zone = sanitize_llm_endpoint(url)
+    host_low = (host or "").strip().lower()
+    if zone == "LOCAL_ON_PREM" or host_low in _INTERNAL_EGRESS_HOSTS or (zone == "INTERNAL_GATEWAY" and "." not in host_low):
+        return {"allowed": True, "blocked": False, "zone": zone, "reason": "local_or_internal_gateway"}
+
+    try:
+        from backend.egress_firewall import egress_firewall
+        fw_res = egress_firewall.check_url(url, agent_id=agent_id or "agent-worker")
+    except Exception as exc:
+        logger.warning("[EgressGuard] Firewall-Check fehlgeschlagen (%s): %s", clean_ep, exc)
+        return {"allowed": True, "blocked": False, "zone": zone, "reason": "firewall_check_error"}
+
+    if fw_res.get("blocked") or not fw_res.get("allowed", True):
+        reason = str(fw_res.get("reason") or f"Egress-Firewall blockiert '{clean_ep}'")
+        alog = audit_logger or chained_audit_log
+        ev = alog.record_llm_dispatch(
+            agent_id=agent_id or "system",
+            provider=host_low or "external",
+            model="egress-firewall",
+            target_endpoint=clean_ep,
+            action="llm_dispatch_blocked_egress_firewall",
+            data_category="egress_firewall",
+            http_status=0,
+            zero_egress_active=True,
+            extra={"reason": reason, "url": clean_ep},
+        )
+        raise ZeroEgressBlockedError(
+            reason,
+            audit_event=ev,
+            error_code="EGRESS_FIREWALL_BLOCKED",
+        )
+
+    return {"allowed": True, "blocked": False, "zone": zone, "reason": str(fw_res.get("reason", "allowed"))}
+
+
+def _sanitize_text_for_egress(text: str, session_id: str = "") -> Tuple[str, bool]:
+    """Wendet Secret-Masking und PII-Scrubbing nacheinander auf einen Textblock an."""
+    if not isinstance(text, str) or not text:
+        return text, False
+    current = text
+    changed = False
+    try:
+        from backend.secret_masker import mask_sensitive_text
+        masked, count = mask_sensitive_text(current)
+        if count:
+            current = masked
+            changed = True
+    except Exception:
+        pass
+    try:
+        from backend.pii_scrubber import pii_scrubber
+        scrub_res = pii_scrubber.scrub_text(current, session_id=session_id or "")
+        if isinstance(scrub_res, dict) and scrub_res.get("text"):
+            if scrub_res.get("scrubbed") or scrub_res["text"] != current:
+                current = scrub_res["text"]
+                changed = True
+    except Exception:
+        pass
+    return current, changed
+
+
+def sanitize_outbound_llm_payload(
+    payload: Optional[Dict[str, Any]],
+    *,
+    agent_id: str = "agent-worker",
+    session_id: str = "",
+    is_local: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """
+    Bereinigt ausgehende Cloud-LLM-Payloads (Secrets + PII) ohne Mutation der Eingabe-Dicts.
+    Für lokale On-Premise-Modelle (`is_local=True`) bleiben die Payloads unverändert.
+    """
+    if not isinstance(payload, dict) or is_local:
+        return payload
+
+    sid = session_id or f"{agent_id or 'agent'}-{int(time.time() // 3600)}"
+    out = dict(payload)
+
+    for key in ("system", "prompt", "input"):
+        if isinstance(out.get(key), str):
+            sanitized, _ = _sanitize_text_for_egress(out[key], session_id=sid)
+            out[key] = sanitized
+
+    if isinstance(out.get("messages"), list):
+        clean_msgs: List[Any] = []
+        for msg in out["messages"]:
+            if not isinstance(msg, dict):
+                clean_msgs.append(msg)
+                continue
+            m_copy = dict(msg)
+            content = m_copy.get("content")
+            if isinstance(content, str):
+                sanitized, _ = _sanitize_text_for_egress(content, session_id=sid)
+                m_copy["content"] = sanitized
+            elif isinstance(content, list):
+                clean_blocks: List[Any] = []
+                for blk in content:
+                    if isinstance(blk, dict) and isinstance(blk.get("text"), str):
+                        b_copy = dict(blk)
+                        sanitized, _ = _sanitize_text_for_egress(b_copy["text"], session_id=sid)
+                        b_copy["text"] = sanitized
+                        clean_blocks.append(b_copy)
+                    else:
+                        clean_blocks.append(blk)
+                m_copy["content"] = clean_blocks
+            clean_msgs.append(m_copy)
+        out["messages"] = clean_msgs
+
+    if isinstance(out.get("contents"), list):
+        clean_contents: List[Any] = []
+        for item in out["contents"]:
+            if not isinstance(item, dict) or not isinstance(item.get("parts"), list):
+                clean_contents.append(item)
+                continue
+            item_copy = dict(item)
+            clean_parts: List[Any] = []
+            for part in item_copy["parts"]:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    p_copy = dict(part)
+                    sanitized, _ = _sanitize_text_for_egress(p_copy["text"], session_id=sid)
+                    p_copy["text"] = sanitized
+                    clean_parts.append(p_copy)
+                else:
+                    clean_parts.append(part)
+            item_copy["parts"] = clean_parts
+            clean_contents.append(item_copy)
+        out["contents"] = clean_contents
+
+    return out
+

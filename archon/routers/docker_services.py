@@ -24,7 +24,9 @@ def _require_admin(request: Request):
     import main as app_main
 
     if hasattr(app_main, "require_admin"):
-        app_main.require_admin(request)
+        return app_main.require_admin(request)
+    from archon.routers._rbac import require_admin_or_503
+    return require_admin_or_503(request)
 
 
 def detect_container_port(container_identifier: str, inspected_port: int = None) -> int:

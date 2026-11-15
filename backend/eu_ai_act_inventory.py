@@ -213,7 +213,7 @@ class EUAIActInventoryManager:
             "soul_sha256": soul_sha256,
             "zero_egress_protected": zero_egress,
             "required_guardrails": required_guardrails,
-            "guardrails_verified": True,
+            "guardrails_verified": bool(soul_sha256) and ("HITL" in human_oversight if is_high_risk else True),
             "last_classified_at": datetime.datetime.now().strftime("%Y-%m-%d"),
         }
 

@@ -16,9 +16,13 @@ function corpT(key, fallback, params) {
 
 let currentCorpCompany = null;
 let allCorpCompanies = [];
+let currentSelectedErpDocId = "";
+let currentErpDocsCache = [];
 
 async function initCorporateView() {
   await loadCorporateCompanies();
+  await loadCorporateErpDocuments();
+  await loadCorporateTemplateLayout(document.getElementById("tmpl-select-type")?.value || "letterhead");
   await renderTemplateLivePreview();
 }
 
@@ -222,17 +226,248 @@ function switchCorporateSubTab(tab) {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function onTemplateTypeChanged(val) {
+async function onTemplateTypeChanged(val) {
   const ctrlLetter = document.getElementById("tmpl-controls-letter");
   const ctrlInv = document.getElementById("tmpl-controls-invoice");
-  if (val === "invoice") {
+  const ctrlDunning = document.getElementById("tmpl-controls-dunning");
+  const isCommercial = ["invoice", "offer", "order_confirmation", "dunning"].includes(val);
+  if (isCommercial) {
     if (ctrlLetter) ctrlLetter.classList.add("hidden");
     if (ctrlInv) ctrlInv.classList.remove("hidden");
   } else {
     if (ctrlLetter) ctrlLetter.classList.remove("hidden");
     if (ctrlInv) ctrlInv.classList.add("hidden");
   }
+  if (ctrlDunning) {
+    if (val === "dunning") ctrlDunning.classList.remove("hidden");
+    else ctrlDunning.classList.add("hidden");
+  }
+  await loadCorporateTemplateLayout(val);
+  await renderTemplateLivePreview();
+}
+
+function _collectLayoutPayload() {
+  return {
+    margin_mm: parseInt(document.getElementById("tmpl-layout-margin")?.value || "15", 10) || 15,
+    footer_columns: parseInt(document.getElementById("tmpl-layout-footer-cols")?.value || "3", 10) || 3,
+    header_style: document.getElementById("tmpl-layout-header-style")?.value || "bar",
+    show_logo: document.getElementById("tmpl-layout-show-logo")?.checked !== false,
+    show_girocode: document.getElementById("tmpl-layout-show-girocode")?.checked !== false,
+    show_fold_marks: document.getElementById("tmpl-layout-show-foldmarks")?.checked !== false,
+    show_bank_footer: document.getElementById("tmpl-layout-show-bankfooter")?.checked !== false,
+    intro_text: document.getElementById("tmpl-input-intro")?.value || "",
+    outro_text: document.getElementById("tmpl-input-outro")?.value || "",
+    dunning_level: parseInt(document.getElementById("tmpl-dunning-level")?.value || "1", 10) || 1,
+    dunning_fee: parseFloat(document.getElementById("tmpl-dunning-fee")?.value || "0") || 0,
+  };
+}
+
+function _applyLayoutToInputs(layout) {
+  if (!layout || typeof layout !== "object") return;
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = String(v); };
+  const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  setVal("tmpl-layout-margin", layout.margin_mm ?? 15);
+  setVal("tmpl-layout-footer-cols", layout.footer_columns ?? 3);
+  setVal("tmpl-layout-header-style", layout.header_style ?? "bar");
+  setChk("tmpl-layout-show-logo", layout.show_logo !== false);
+  setChk("tmpl-layout-show-girocode", layout.show_girocode !== false);
+  setChk("tmpl-layout-show-foldmarks", layout.show_fold_marks !== false);
+  setChk("tmpl-layout-show-bankfooter", layout.show_bank_footer !== false);
+  setVal("tmpl-input-intro", layout.intro_text || "");
+  setVal("tmpl-input-outro", layout.outro_text || "");
+  setVal("tmpl-dunning-level", layout.dunning_level || 1);
+  setVal("tmpl-dunning-fee", Number(layout.dunning_fee || 0).toFixed(2));
+}
+
+async function loadCorporateTemplateLayout(templateType) {
+  try {
+    const cid = currentCorpCompany?.id ? `&company_id=${encodeURIComponent(currentCorpCompany.id)}` : "";
+    const res = await fetch(`/api/corporate/template-layout?template_type=${encodeURIComponent(templateType || "letterhead")}${cid}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.layout) _applyLayoutToInputs(data.layout);
+  } catch (e) {}
+}
+
+async function saveCorporateTemplateLayout() {
+  const templateType = document.getElementById("tmpl-select-type")?.value || "letterhead";
+  const payload = {
+    template_type: templateType,
+    company_id: currentCorpCompany ? currentCorpCompany.id : undefined,
+    layout: _collectLayoutPayload(),
+  };
+  try {
+    const res = await fetch("/api/corporate/template-layout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok && typeof window.showToast === "function") {
+      window.showToast(corpT("ui.corporate_controller.layout_saved", "Formular-Vorlage gespeichert."), "success");
+    }
+  } catch (e) {
+    console.error("Error saving template layout:", e);
+  }
+}
+
+async function loadCorporateErpDocuments() {
+  const sel = document.getElementById("tmpl-select-erp-doc");
+  if (!sel) return;
+  try {
+    const cid = window.activeTenantId || currentCorpCompany?.id || "";
+    const q = cid ? `?company_id=${encodeURIComponent(cid)}&limit=40` : "?limit=40";
+    const res = await fetch(`/api/erp/documents${q}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    currentErpDocsCache = Array.isArray(data.items)
+      ? data.items
+      : (Array.isArray(data.documents) ? data.documents : (Array.isArray(data) ? data : []));
+    sel.innerHTML = `<option value="">${corpT("view.corporate.opt_erp_doc_placeholder", "-- Optional: Live-Beleg aus ERP laden --")}</option>`;
+    currentErpDocsCache.forEach((doc) => {
+      const opt = document.createElement("option");
+      opt.value = doc.id || "";
+      const amt = Number(doc.amount_gross || 0).toFixed(2);
+      opt.textContent = `${doc.doc_number || doc.id} · ${doc.entity_name || "-"} (${amt} €)`;
+      sel.appendChild(opt);
+    });
+    if (currentSelectedErpDocId) sel.value = currentSelectedErpDocId;
+  } catch (e) {}
+}
+
+async function onCorporateErpDocumentSelected(docId) {
+  currentSelectedErpDocId = String(docId || "").trim();
+  if (!currentSelectedErpDocId) {
+    await renderTemplateLivePreview();
+    return;
+  }
+  const doc = currentErpDocsCache.find((d) => String(d.id) === currentSelectedErpDocId);
+  if (doc) {
+    const typeMap = { offer: "offer", ang: "offer", order: "order_confirmation", order_confirmation: "order_confirmation", ab: "order_confirmation", invoice: "invoice" };
+    const mappedType = typeMap[String(doc.doc_type || "invoice").toLowerCase()] || "invoice";
+    const typeSel = document.getElementById("tmpl-select-type");
+    if (typeSel && typeSel.value !== mappedType) {
+      typeSel.value = mappedType;
+      await onTemplateTypeChanged(mappedType);
+    }
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+    setVal("tmpl-input-rec-name", doc.entity_name || "");
+    setVal("tmpl-input-inv-num", doc.doc_number || doc.id);
+    if (doc.due_date) setVal("tmpl-input-inv-due", String(doc.due_date).slice(0, 10));
+  }
+  await renderTemplateLivePreview();
+}
+
+function _renderPlaceholderChips(tokens) {
+  const host = document.getElementById("tmpl-placeholder-chips");
+  if (!host || host.dataset.populated === "1") return;
+  const list = Array.isArray(tokens) && tokens.length > 0
+    ? tokens.slice(0, 6).map((t) => `{{${t}}}`)
+    : ["{{customer.name}}", "{{doc.due_date}}", "{{company.vat_id}}"];
+  host.innerHTML = "";
+  list.forEach((tok) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] text-[9px] font-mono hover:border-indigo-500 cursor-pointer";
+    btn.textContent = tok;
+    btn.onclick = () => insertTemplatePlaceholder(tok);
+    host.appendChild(btn);
+  });
+  host.dataset.populated = "1";
+}
+
+function insertTemplatePlaceholder(token) {
+  const active = document.activeElement;
+  const target = (active && (active.id === "tmpl-input-intro" || active.id === "tmpl-input-outro" || active.id === "tmpl-input-body"))
+    ? active
+    : (document.getElementById("tmpl-input-intro") || document.getElementById("tmpl-input-body"));
+  if (!target) return;
+  const start = typeof target.selectionStart === "number" ? target.selectionStart : target.value.length;
+  const end = typeof target.selectionEnd === "number" ? target.selectionEnd : target.value.length;
+  target.value = target.value.slice(0, start) + token + target.value.slice(end);
+  target.focus();
   renderTemplateLivePreview();
+}
+
+function _renderUstgCompliancePanel(compliance) {
+  const badge = document.getElementById("tmpl-ustg-badge");
+  const list = document.getElementById("tmpl-ustg-check-list");
+  if (!badge || !list || !compliance) return;
+  const score = Number(compliance.score_pct ?? 0);
+  badge.textContent = `${score}% (${compliance.passed_count || 0}/${compliance.total_count || 0})`;
+  badge.className = compliance.valid
+    ? "px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-500"
+    : "px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-500";
+  list.innerHTML = "";
+  (compliance.checks || []).forEach((chk) => {
+    const li = document.createElement("li");
+    li.className = "flex items-start gap-1.5";
+    const icon = document.createElement("span");
+    icon.textContent = chk.ok ? "✓" : (chk.severity === "error" ? "✗" : "!");
+    icon.className = chk.ok ? "text-emerald-500 font-bold shrink-0" : (chk.severity === "error" ? "text-red-500 font-bold shrink-0" : "text-amber-500 font-bold shrink-0");
+    const txt = document.createElement("span");
+    txt.textContent = `${chk.law}: ${chk.label}`;
+    txt.title = chk.detail || "";
+    li.appendChild(icon);
+    li.appendChild(txt);
+    list.appendChild(li);
+  });
+}
+
+function _buildTemplateRequestPayload() {
+  const type = document.getElementById("tmpl-select-type")?.value || "letterhead";
+  const custom = {
+    recipient_name: document.getElementById("tmpl-input-rec-name")?.value || "",
+    recipient_contact: document.getElementById("tmpl-input-rec-contact")?.value || "",
+    recipient_street: document.getElementById("tmpl-input-rec-street")?.value || "",
+    recipient_city: document.getElementById("tmpl-input-rec-city")?.value || "",
+    subject: document.getElementById("tmpl-input-subject")?.value || "",
+    body_text: document.getElementById("tmpl-input-body")?.value || "",
+    invoice_num: document.getElementById("tmpl-input-inv-num")?.value || "RE-2026-001",
+    offer_num: document.getElementById("tmpl-input-inv-num")?.value || "ANG-2026-001",
+    order_num: document.getElementById("tmpl-input-inv-num")?.value || "AB-2026-001",
+    dunning_num: document.getElementById("tmpl-input-inv-num")?.value || "MAHN-2026-001",
+    due_date: document.getElementById("tmpl-input-inv-due")?.value || "14.11.2026",
+    layout: _collectLayoutPayload(),
+  };
+  if (currentSelectedErpDocId) custom.document_id = currentSelectedErpDocId;
+  return {
+    template_type: type,
+    company_id: currentCorpCompany ? currentCorpCompany.id : undefined,
+    custom,
+  };
+}
+
+async function downloadCorporateTemplatePdf() {
+  const payload = _buildTemplateRequestPayload();
+  try {
+    const res = await fetch("/api/corporate/render-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `archon-${payload.custom.invoice_num || payload.template_type}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (e) {
+    console.error("Error downloading corporate PDF:", e);
+  }
+}
+
+async function openDocumentInTemplateEditor(docId, docType) {
+  currentSelectedErpDocId = String(docId || "");
+  if (typeof window.setTab === "function") window.setTab("corporate");
+  setTimeout(async () => {
+    if (typeof window.switchCorporateSubTab === "function") window.switchCorporateSubTab("templates");
+    await loadCorporateErpDocuments();
+    await onCorporateErpDocumentSelected(currentSelectedErpDocId);
+  }, 150);
 }
 
 function buildFallbackTemplateHtml(type, c, custom) {
@@ -293,37 +528,27 @@ async function renderTemplateLivePreview() {
   const container = document.getElementById("tmpl-preview-container");
   if (!container) return;
 
-  const type = document.getElementById("tmpl-select-type")?.value || "letter";
-  const custom = {
-    recipient_name: document.getElementById("tmpl-input-rec-name")?.value || "",
-    recipient_contact: document.getElementById("tmpl-input-rec-contact")?.value || "",
-    recipient_street: document.getElementById("tmpl-input-rec-street")?.value || "",
-    recipient_city: document.getElementById("tmpl-input-rec-city")?.value || "",
-    subject: document.getElementById("tmpl-input-subject")?.value || "",
-    body_text: document.getElementById("tmpl-input-body")?.value || "",
-    invoice_num: document.getElementById("tmpl-input-inv-num")?.value || "RE-2026-001",
-    due_date: document.getElementById("tmpl-input-inv-due")?.value || "14.11.2026"
-  };
+  const payload = _buildTemplateRequestPayload();
 
   try {
     const res = await fetch("/api/corporate/render-template", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        template_type: type,
-        company_id: currentCorpCompany ? currentCorpCompany.id : undefined,
-        custom: custom
-      })
+      body: JSON.stringify(payload)
     });
     if (res.ok) {
       const data = await res.json();
+      _renderPlaceholderChips(data?.placeholders);
+      if (data && data.compliance) {
+        _renderUstgCompliancePanel(data.compliance);
+      }
       if (data && data.html) {
         container.innerHTML = data.html;
         return;
       }
     }
   } catch (e) {}
-  container.innerHTML = buildFallbackTemplateHtml(type, currentCorpCompany, custom);
+  container.innerHTML = buildFallbackTemplateHtml(payload.template_type, currentCorpCompany, payload.custom);
 }
 
 function printTemplatePreview() {
@@ -388,6 +613,12 @@ window.renderTemplateLivePreview = renderTemplateLivePreview;
 window.renderCorporateTemplatePreview = renderTemplateLivePreview;
 window.printTemplatePreview = printTemplatePreview;
 window.openNewCompanyModal = openNewCompanyModal;
+window.saveCorporateTemplateLayout = saveCorporateTemplateLayout;
+window.loadCorporateErpDocuments = loadCorporateErpDocuments;
+window.onCorporateErpDocumentSelected = onCorporateErpDocumentSelected;
+window.insertTemplatePlaceholder = insertTemplatePlaceholder;
+window.downloadCorporateTemplatePdf = downloadCorporateTemplatePdf;
+window.openDocumentInTemplateEditor = openDocumentInTemplateEditor;
 
 const _origSetBoardroomTab = typeof window.setBoardroomTab === "function" ? window.setBoardroomTab : null;
 window.setBoardroomTab = function(tab) {

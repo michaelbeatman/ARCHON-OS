@@ -7,14 +7,17 @@ gehashter Speicherung (SHA-256) und Sliding-Window Drosselung.
 import os
 import sqlite3
 import hashlib
+import hmac
 import secrets
 import json
 import time
 import datetime
+import threading
 from typing import Dict, Any, List, Optional, Tuple
 
 DB_FILE = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
-KEY_SALT = "ARCHON_OS_API_KEY_SALT_2026_SECURE"
+KEY_SALT = os.environ.get("ARCHON_API_KEY_PEPPER") or "ARCHON_OS_API_KEY_SALT_2026_SECURE"
+LEGACY_KEY_SALT = "ARCHON_OS_API_KEY_SALT_2026_SECURE"
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
 # Erlaubte Standard-Scopes
@@ -31,6 +34,7 @@ class ApiKeyManager:
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         # In-Memory Rate-Limiter Tracking: key_id -> [timestamps]
         self._request_history: Dict[str, List[float]] = {}
+        self._history_lock = threading.Lock()
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -75,8 +79,16 @@ class ApiKeyManager:
 
     @staticmethod
     def _hash_token(raw_token: str) -> str:
-        """Erzeugt einen SHA-256 Hash mit Salt fuer revisionssichere Speicherung."""
+        """Erzeugt einen keyed HMAC-SHA256 Hash mit Pepper (oder Legacy-Salt-Fallback)."""
+        pepper = os.environ.get("ARCHON_API_KEY_PEPPER")
+        if pepper:
+            return hmac.new(pepper.encode("utf-8"), raw_token.encode("utf-8"), hashlib.sha256).hexdigest()
         salted = f"{KEY_SALT}:{raw_token}".encode("utf-8")
+        return hashlib.sha256(salted).hexdigest()
+
+    @staticmethod
+    def _legacy_hash_token(raw_token: str) -> str:
+        salted = f"{LEGACY_KEY_SALT}:{raw_token}".encode("utf-8")
         return hashlib.sha256(salted).hexdigest()
 
     def _log_audit(self, key_id: str, action: str, details: Dict[str, Any], created_by: str = "admin", conn: Optional[sqlite3.Connection] = None):
@@ -252,12 +264,13 @@ class ApiKeyManager:
             return False, None, "Ungültiges Token-Format (erwartet: archon_live_...)"
 
         key_hash = self._hash_token(raw_token)
+        legacy_hash = self._legacy_hash_token(raw_token)
         with self._get_conn() as conn:
             row = conn.execute("""
                 SELECT key_id, name, scopes, rate_limit_rpm, rate_limit_rpd, is_active
                 FROM api_keys
-                WHERE key_hash = ?
-            """, (key_hash,)).fetchone()
+                WHERE key_hash = ? OR key_hash = ?
+            """, (key_hash, legacy_hash)).fetchone()
 
             if not row:
                 return False, None, "API-Key nicht gefunden oder ungültig."
@@ -279,29 +292,28 @@ class ApiKeyManager:
                 if "admin_full" not in scopes and required_scope not in scopes:
                     return False, None, f"Fehlende Berechtigung. Erforderlicher Scope: '{required_scope}'"
 
-            # Rate-Limiter (Sliding Window)
-            now = time.time()
-            if key_id not in self._request_history:
-                self._request_history[key_id] = []
+            # Rate-Limiter (Sliding Window, thread-safe)
+            with self._history_lock:
+                now = time.time()
+                hist = self._request_history.get(key_id, [])
+                cutoff_day = now - 86400.0
+                hist = [t for t in hist if t >= cutoff_day]
 
-            # Historie bereinigen (> 24h alte Timestamps entfernen)
-            cutoff_day = now - 86400.0
-            self._request_history[key_id] = [t for t in self._request_history[key_id] if t >= cutoff_day]
+                # 1. RPM Check (letzte 60 Sekunden)
+                if rpm > 0:
+                    cutoff_min = now - 60.0
+                    rpm_count = sum(1 for t in hist if t >= cutoff_min)
+                    if rpm_count >= rpm:
+                        self._request_history[key_id] = hist
+                        return False, None, f"Rate-Limit überschritten: Maximal {rpm} Anfragen pro Minute erlaubt."
 
-            # 1. RPM Check (letzte 60 Sekunden)
-            if rpm > 0:
-                cutoff_min = now - 60.0
-                rpm_count = sum(1 for t in self._request_history[key_id] if t >= cutoff_min)
-                if rpm_count >= rpm:
-                    return False, None, f"Rate-Limit überschritten: Maximal {rpm} Anfragen pro Minute erlaubt."
-
-            # 2. RPD Check (letzte 24 Stunden)
-            if rpd > 0:
-                if len(self._request_history[key_id]) >= rpd:
+                # 2. RPD Check (letzte 24 Stunden)
+                if rpd > 0 and len(hist) >= rpd:
+                    self._request_history[key_id] = hist
                     return False, None, f"Tageslimit überschritten: Maximal {rpd} Anfragen pro Tag erlaubt."
 
-            # Request registrieren
-            self._request_history[key_id].append(now)
+                hist.append(now)
+                self._request_history[key_id] = hist
 
             # Letzte Nutzung aktualisieren
             now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()

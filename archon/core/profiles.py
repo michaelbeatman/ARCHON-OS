@@ -717,19 +717,19 @@ def save_all_agent_profiles(profiles_list: List[Dict[str, Any]]):
     except Exception as e:
         logger.error(f"[Save Profiles] Error writing SSOT agent_profiles.json: {e}")
 
-    candidates = [
+    # Legacy-Spiegel nur synchronisieren, wenn sie bereits als reguläre Dateien existieren
+    # (verhindert unnötige 8-fach-Writes und versehentliches Überschreiben von roles.json).
+    mirror_candidates = [
         os.path.join(MEMORY_DIR, "agent_profiles.json"),
-        os.path.join(MEMORY_DIR, "roles.json"),
         "agent_profiles.json",
-        "roles.json",
         "/app/agent_profiles.json",
-        "/app/roles.json",
         os.path.join(APP_ROOT, "agent_workspace", "agent_profiles.json"),
-        os.path.join(APP_ROOT, "agent_workspace", "roles.json"),
     ]
-    for cand in candidates:
+    for cand in mirror_candidates:
         try:
-            _atomic_write_json(cand)
+            abs_c = os.path.abspath(cand)
+            if os.path.exists(abs_c) and not os.path.islink(abs_c):
+                _atomic_write_json(cand)
         except Exception:
             pass
 

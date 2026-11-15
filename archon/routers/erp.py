@@ -15,6 +15,7 @@ import os
 import re
 import sys
 import time
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -243,6 +244,108 @@ def api_erp_convert_document(request: Request, doc_id: str, payload: Dict = Body
         source_doc_id=doc_id, target_doc_type=target_type, company_id=company_id
     )
     return {"success": True, "document": converted}
+
+
+@router.get("/api/erp/documents/{doc_id}/xrechnung.xml")
+def api_erp_document_xrechnung_xml(doc_id: str, company_id: Optional[str] = None):
+    """Exportiert einen ERP-Beleg als EN-16931 / XRechnung-3.0-konforme UBL-XML-Datei."""
+    from backend.erp_manager import erp_manager
+    try:
+        doc_num, xml_str = erp_manager.export_xrechnung_xml(doc_id=doc_id, company_id=company_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", doc_num or doc_id).strip("_") or "xrechnung"
+    return Response(
+        content=xml_str.encode("utf-8"),
+        media_type="application/xml; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}_xrechnung.xml"'},
+    )
+
+
+@router.get("/api/erp/export/datev.csv")
+def api_erp_export_datev_csv(
+    company_id: Optional[str] = None,
+    include_drafts: bool = False,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Exportiert den DATEV-EXTF-Buchungsstapel (SKR03) als Semikolon-CSV mit UTF-8-BOM."""
+    from backend.erp_manager import erp_manager
+    csv_text = erp_manager.export_datev_extf_csv(
+        company_id=company_id,
+        include_drafts=include_drafts,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    bom_bytes = b"\xef\xbb\xbf" + csv_text.encode("utf-8")
+    return Response(
+        content=bom_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="EXTF_Buchungsstapel_Archon.csv"'},
+    )
+
+
+@router.get("/api/erp/documents/{doc_id}/zugferd.pdf")
+def api_erp_document_zugferd_pdf(doc_id: str, company_id: Optional[str] = None):
+    """Exportiert eine Hybrid-E-Rechnung im ZUGFeRD-2.2-/Factur-X-Format (PDF + `factur-x.xml`)."""
+    from backend.erp_manager import erp_manager
+    try:
+        doc_num, pdf_bytes = erp_manager.export_zugferd_pdf(doc_id=doc_id, company_id=company_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", doc_num or doc_id).strip("_") or "zugferd"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}_zugferd.pdf"'},
+    )
+
+
+@router.get("/api/erp/bank/transactions")
+def api_erp_list_bank_transactions(company_id: Optional[str] = None, match_status: Optional[str] = None):
+    """Listet importierte Bankumsätze und deren OPOS-Matching-Status."""
+    from backend.erp_manager import erp_manager
+    return erp_manager.list_bank_transactions(company_id=company_id, match_status=match_status)
+
+
+@router.post("/api/erp/bank/import")
+def api_erp_import_bank_statement(request: Request, payload: Dict = Body(...)):
+    """Importiert Kontoauszüge (ISO 20022 CAMT.053 XML, MT940, Bank-CSV) und führt automatischen OPOS-Abgleich aus."""
+    require_admin_or_503(request)  # RBAC: Rollenzaun
+    from backend.erp_manager import erp_manager
+    raw_content = payload.get("content") or ""
+    if not str(raw_content).strip():
+        raise HTTPException(status_code=400, detail="Kontoauszugs-Inhalt ('content') darf nicht leer sein.")
+    try:
+        return erp_manager.import_and_reconcile_bank_statement(
+            raw_content=str(raw_content),
+            fmt=str(payload.get("format") or "auto"),
+            auto_mark_paid=bool(payload.get("auto_mark_paid", False)),
+            company_id=payload.get("company_id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ET.ParseError as exc:
+        raise HTTPException(status_code=400, detail=f"Ungültiges CAMT.053-XML: {exc}") from exc
+
+
+@router.post("/api/erp/bank/transactions/{tx_id}/match")
+def api_erp_match_bank_transaction(request: Request, tx_id: str, payload: Dict = Body(...)):
+    """Ordnet eine importierte Banktransaktion einer Rechnung zu und verbucht optional als bezahlt."""
+    require_admin_or_503(request)  # RBAC: Rollenzaun
+    from backend.erp_manager import erp_manager
+    doc_id = str(payload.get("doc_id") or "").strip()
+    if not doc_id:
+        raise HTTPException(status_code=400, detail="doc_id ist erforderlich.")
+    try:
+        return erp_manager.match_bank_transaction(
+            tx_id=tx_id,
+            doc_id=doc_id,
+            mark_paid=bool(payload.get("mark_paid", True)),
+            company_id=payload.get("company_id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/api/erp/sync/pocketbase")

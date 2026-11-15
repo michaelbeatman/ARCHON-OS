@@ -896,9 +896,9 @@ class CRMService:
                 "opt_in_datum": contact.get("dsgvo_opt_in_datum"),
                 "opt_in_source": contact.get("dsgvo_opt_source"),
                 "consents": {
-                    "email_marketing": bool(contact.get("dsgvo_opt_email", 1)),
-                    "phone_marketing": bool(contact.get("dsgvo_opt_phone", 1)),
-                    "postal_marketing": bool(contact.get("dsgvo_opt_postal", 0))
+                    "email_marketing": bool(contact.get("dsgvo_opt_email") or 0),
+                    "phone_marketing": bool(contact.get("dsgvo_opt_phone") or 0),
+                    "postal_marketing": bool(contact.get("dsgvo_opt_postal") or 0)
                 },
                 "opt_out_objection_art21": {
                     "objection_active": bool(contact.get("dsgvo_opt_out", 0)),

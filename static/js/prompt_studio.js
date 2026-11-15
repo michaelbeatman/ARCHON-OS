@@ -1779,7 +1779,13 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
           dlBtn.href = `data:text/plain;charset=utf-8,${encodeURIComponent(data.content)}`;
           
           if (fileExt === "md") {
-            previewBox.innerHTML = `<div class="prose prose-sm dark:prose-invert max-w-none">${data.content.replace(/\n/g, '<br/>')}</div>`;
+            const safeMd = String(data.content || "")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#39;");
+            previewBox.innerHTML = `<div class="prose prose-sm dark:prose-invert max-w-none">${safeMd.replace(/\n/g, '<br/>')}</div>`;
           } else if (fileExt === "csv") {
             const rows = data.content.split('\n').filter(r => r.trim()).map(row => row.split(','));
             let html = '<table class="w-full text-left border-collapse text-[10px]">';

@@ -82,11 +82,15 @@ def delete_playbook(request: Request, playbook_id: str):
 
 
 @router.post("/{playbook_id}/run")
-def run_playbook(request: Request, playbook_id: str, payload: Dict[str, Any] = Body(default={})):
+async def run_playbook(request: Request, playbook_id: str, payload: Dict[str, Any] = Body(default={})):
     require_admin_or_503(request)
     variables = payload.get("variables") or {}
+    execute_now = bool(payload.get("execute", True))
     try:
         run_res = playbooks_engine.run_playbook(playbook_id, variables=variables)
+        if execute_now:
+            import asyncio
+            asyncio.create_task(playbooks_engine.execute_run_async(run_res))
         return {"status": "success", "run": run_res}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

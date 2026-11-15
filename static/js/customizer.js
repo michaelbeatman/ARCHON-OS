@@ -108,7 +108,7 @@
       gradientEnable: false,
       gradientStart: "#4f46e5",
       gradientEnd: "#6b7cff",
-      logoUrl: "/static/logo.png",
+      logoUrl: "/static/archon_os_logo.png",
       bgImageUrl: "",
       bgOpacity: 100
     };
@@ -264,7 +264,7 @@
     function updateLogo(url) {
       const logoImg = document.getElementById("sidebar-logo-img");
       if (logoImg) {
-        logoImg.src = url || "/static/logo.png";
+        logoImg.src = url || "/static/archon_os_logo.png";
       }
     }
     function updateBackgroundImage() {

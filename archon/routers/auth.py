@@ -87,6 +87,12 @@ def get_current_user_from_request(request: Request) -> dict:
     if isinstance(state_user, dict) and state_user.get("role"):
         return state_user
 
+    is_enabled = auth_service.is_auth_enabled()
+    if request is None:
+        if not is_enabled:
+            return auth_service.get_fallback_admin()
+        raise HTTPException(status_code=401, detail="Nicht authentifiziert.")
+
     candidates: List[str] = []
     auth_header = request.headers.get("authorization", "")
     if auth_header.lower().startswith("bearer "):
@@ -97,8 +103,6 @@ def get_current_user_from_request(request: Request) -> dict:
     cookie_session = (request.cookies.get("archon_session", "") or "").strip()
     if cookie_session:
         candidates.append(cookie_session)
-
-    is_enabled = auth_service.is_auth_enabled()
 
     for candidate in candidates:
         if not candidate:
@@ -183,9 +187,12 @@ def api_auth_toggle(request: Request, payload: dict = Body(...)):
     s["auth"]["mode"] = "multi_user" if enabled else "single_user"
     _save_json_helper(SETTINGS_FILE, s)
 
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     alt_paths = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json"),
-        "/app/settings.json"
+        os.path.join(repo_root, "agent_workspace", "settings.json"),
+        "/app/agent_workspace/settings.json",
+        os.path.join(repo_root, "settings.json"),
+        "/app/settings.json",
     ]
     for alt in alt_paths:
         try:
@@ -226,7 +233,18 @@ def api_auth_login(request: Request, payload: dict = Body(...)):
     if not session:
         raise HTTPException(status_code=401, detail="Ungültiger Benutzername oder falsches Passwort.")
     res = JSONResponse(content={"status": "success", **session})
-    res.set_cookie(key="archon_session", value=session["token"], max_age=86400 * 30, httponly=True, samesite="lax")
+    is_https = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower() == "https"
+    )
+    res.set_cookie(
+        key="archon_session",
+        value=session["token"],
+        max_age=86400 * 30,
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
+    )
     return res
 
 

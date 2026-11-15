@@ -7,10 +7,12 @@ die Datenbanken komprimiert im Ringpuffer (.hermes/backups/db/) mit konfigurierb
 
 import os
 import sys
+import glob
 import gzip
 import sqlite3
 import datetime
 import shutil
+import tempfile
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,21 +42,44 @@ class DBBackupManager:
         now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         backed_up = []
 
-        for db_path in DB_TARGETS:
-            if not os.path.exists(db_path):
-                continue
+        # Statische Kern-DBs + alle dynamischen Mandanten-DBs (ERP, Kanban, Contracts, Deals, CRM)
+        tenant_dbs = sorted(glob.glob(os.path.join(WORKSPACE_DIR, "data", "tenants", "*", "*.db")))
+        seen_paths = set()
+        all_targets = []
+        for candidate in list(DB_TARGETS) + tenant_dbs:
+            norm = os.path.abspath(candidate)
+            if norm not in seen_paths and os.path.exists(norm):
+                seen_paths.add(norm)
+                all_targets.append(norm)
 
-            db_name = os.path.basename(db_path)
-            try:
-                conn = sqlite3.connect(db_path, timeout=10.0)
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-                conn.close()
-            except Exception as e:
-                print(f"[DBBackupManager] Checkpoint notice for {db_name}: {e}", file=sys.stderr)
+        tenants_prefix = os.path.abspath(os.path.join(WORKSPACE_DIR, "data", "tenants")) + os.sep
+        for db_path in all_targets:
+            if db_path.startswith(tenants_prefix):
+                rel = db_path[len(tenants_prefix):].replace(os.sep, "__")
+                db_name = f"tenant_{rel}"
+            else:
+                db_name = os.path.basename(db_path)
 
             backup_file = os.path.join(self.backup_dir, f"{db_name}_{now_str}.db.gz")
+            tmp_snapshot = None
             try:
-                with open(db_path, "rb") as f_in:
+                src_conn = sqlite3.connect(db_path, timeout=10.0)
+                try:
+                    try:
+                        src_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                    except Exception as e:
+                        print(f"[DBBackupManager] Checkpoint notice for {db_name}: {e}", file=sys.stderr)
+                    fd, tmp_snapshot = tempfile.mkstemp(prefix="archon_bkp_", suffix=".db", dir=self.backup_dir)
+                    os.close(fd)
+                    dst_conn = sqlite3.connect(tmp_snapshot)
+                    try:
+                        src_conn.backup(dst_conn)
+                    finally:
+                        dst_conn.close()
+                finally:
+                    src_conn.close()
+
+                with open(tmp_snapshot, "rb") as f_in:
                     with gzip.open(backup_file, "wb") as f_out:
                         shutil.copyfileobj(f_in, f_out)
                 backed_up.append({
@@ -64,6 +89,12 @@ class DBBackupManager:
                 })
             except Exception as e:
                 print(f"[DBBackupManager] Backup error for {db_name}: {e}", file=sys.stderr)
+            finally:
+                if tmp_snapshot and os.path.exists(tmp_snapshot):
+                    try:
+                        os.unlink(tmp_snapshot)
+                    except OSError:
+                        pass
 
         self._rotate_backups(keep_days=keep_days)
 

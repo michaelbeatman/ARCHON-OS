@@ -30,7 +30,9 @@ def _require_admin(request: Request):
     import main as app_main
 
     if hasattr(app_main, "require_admin"):
-        app_main.require_admin(request)
+        return app_main.require_admin(request)
+    from archon.routers._rbac import require_admin_or_503
+    return require_admin_or_503(request)
 
 
 # =========================================================================
@@ -149,7 +151,14 @@ def _decision_self_api(method: str, path: str, payload: dict = None, timeout: fl
 
     url = f"http://127.0.0.1:8501{path}"
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"}
+    try:
+        svc_tok = app_main._get_service_token() if hasattr(app_main, "_get_service_token") else ""
+        if svc_tok:
+            headers["X-Archon-Service-Token"] = svc_tok
+    except Exception:
+        pass
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read().decode("utf-8") or "{}"
         return json.loads(raw)
@@ -458,7 +467,7 @@ async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
     return "Keine Folgeaktion nötig (Statusänderung genügt)."
 
 
-@router.post("/api/decisions/decide")
+@router.post("/api/decisions/decide", dependencies=[_ArchonDepends(_require_admin)])
 async def api_decide_decision(body: Dict = Body(...)):
     """EINZIGER Schreibpfad für Entscheidungen — Telegram UND Kanban rufen ihn."""
     import main as app_main

@@ -4,18 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ARCHON-OS</title>
-  <link rel="icon" type="image/png" href="/static/favicon.png">
-  <link rel="shortcut icon" href="/static/favicon.png">
-  <link rel="apple-touch-icon" href="/static/favicon.png">
+  <link rel="icon" type="image/png" href="/static/logo.png">
+  <link rel="shortcut icon" href="/static/favicon.ico">
+  <link rel="apple-touch-icon" href="/static/logo.png">
   <!-- Fonts laden -->
   <link href="/static/vendor/fonts/fonts.css" rel="stylesheet">
+  <!-- Precompiled Tailwind CSS (Offline-fähig, kein Runtime-JS-Compiler-Overhead) -->
+  <link rel="stylesheet" href="/static/css/tailwind.generated.css?v=20261115">
   <!-- Custom Studio CSS Overrides -->
   <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
   <link rel="stylesheet" href="/static/custom.css?v=2026111113">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
   <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=2026111113">
-  <!-- Tailwind CSS Local Bundle (Offline-fähig & kein CDN Latenz-Overhead) -->
-  <script src="/static/js/tailwind.cdn.js"></script>
   <script src="/static/vendor/lucide.min.js"></script>
   <script>
     // Performance-Booster: Verhindert, dass lucide.createIcons() bei jedem Aufruf alle 800+ bereits gerenderten SVGs
@@ -64,53 +64,6 @@
   <script src="/static/marked.min.js"></script>
   <!-- DOMPurify: Sanitizer fuer alle Markdown->HTML-Pfade (D-04, XSS im App-Origin) -->
   <script src="/static/vendor/dompurify.min.js"></script>
-  
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ["Outfit", "Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
-            outfit: ["Outfit", "sans-serif"],
-            mono: ["JetBrains Mono", "monospace"],
-            julius: ["Julius Sans One", "sans-serif"]
-          },
-          colors: {
-            border: "var(--border)",
-            input: "var(--input)",
-            ring: "var(--ring)",
-            background: "var(--background)",
-            foreground: "var(--foreground)",
-            primary: {
-              DEFAULT: "var(--primary)",
-              foreground: "var(--primary-foreground)"
-            },
-            secondary: {
-              DEFAULT: "var(--secondary)",
-              foreground: "var(--secondary-foreground)"
-            },
-            destructive: {
-              DEFAULT: "var(--destructive)",
-              foreground: "var(--destructive-foreground)"
-            },
-            muted: {
-              DEFAULT: "var(--muted)",
-              foreground: "var(--muted-foreground)"
-            },
-            accent: {
-              DEFAULT: "var(--accent-shadcn)",
-              foreground: "var(--accent-shadcn-foreground)"
-            },
-            card: {
-              DEFAULT: "var(--card)",
-              foreground: "var(--card-foreground)"
-            }
-          }
-        }
-      }
-    }
-  </script>
   <script>
     /* [ARCHIVED-INLINE-THEME-BOOT] Ausgeklammert zugunsten der 15-Bausteine Design-Engine (component_design_studio.js)
     (function() {
@@ -453,6 +406,12 @@
           <span id="dot-update" class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors"></span>
           <span id="label-update-text" data-i18n="telemetry.update">Update</span>
         </button>
+      </div>
+
+      <div class="px-2 pb-1 flex items-center justify-center gap-3 text-[10px] text-[var(--muted-foreground)]">
+        <a href="/api/legal/impressum" target="_blank" rel="noopener" data-i18n="ui.legal.impressum" class="hover:underline">Impressum</a>
+        <span>·</span>
+        <a href="/api/legal/datenschutz" target="_blank" rel="noopener" data-i18n="ui.legal.datenschutz" class="hover:underline">Datenschutz</a>
       </div>
 
       <!-- Bottom Controls Row: Palette, Gateway, Settings, Hermes [H], Theme -->
@@ -1008,7 +967,7 @@
         </div>
       </div>
       <!-- MISSION CONTROL ARTEFAKT MODAL (ERGEBNIS-VORSCHAU) -->
-      <div id="mc-artifact-modal" class="hidden fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <div id="mc-artifact-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
         <div class="shadcn-card w-[720px] max-w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
           <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--secondary)]">
             <div class="flex items-center gap-2">
@@ -1031,7 +990,7 @@
         </div>
       </div>
       <!-- MISSION CONTROL KPI DETAIL MODAL (LEICHTGEWICHTIGES TELEMETRIE-OVERLAY) -->
-      <div id="mc-kpi-modal" class="hidden fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <div id="mc-kpi-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
         <div class="shadcn-card w-[640px] max-w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl font-sans">
           <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--secondary)]">
             <div class="flex items-center gap-2">
@@ -1220,9 +1179,9 @@
           <div id="view-operations-mount"></div>
 
           <!-- SUB-VIEW 5: N8N WORKFLOW ENGINE (AUTOMATION) -->
-          <main id="ops-view-automation" class="hidden flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
+          <div id="ops-view-automation" class="hidden flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
             <iframe id="automation-n8n-iframe" src="" style="width: 100%; height: 100%; border: none;" allow="microphone; camera; clipboard-read; clipboard-write; display-capture; clipboard-share;" class="w-full h-full flex-1 border-none"></iframe>
-          </main>
+          </div>
 
         </div>
       </div>
@@ -1306,7 +1265,7 @@
               </a>
             </div>
             <div class="border theme-border rounded-md overflow-hidden bg-neutral-950/20" style="height: 850px;">
-              <iframe id="agent-dash-iframe" src="http://localhost:9119" style="width:100%; height:850px; border:none;" class="w-full h-full border-none"></iframe>
+              <iframe id="agent-dash-iframe" src="about:blank" data-src="http://localhost:9119" style="width:100%; height:850px; border:none;" class="w-full h-full border-none"></iframe>
             </div>
           </div>
           <!-- Tab 3: Artifacts Content -->
@@ -1418,7 +1377,8 @@
       <div id="view-hermes-dashboard" class="hidden flex-1 w-full h-full flex flex-col bg-[var(--page-bg)] overflow-hidden" style="height: 100vh; width: 100%;">
         <iframe
           id="hermes-dashboard-iframe"
-          src="http://localhost:9119"
+          src="about:blank"
+          data-src="http://localhost:9119"
           style="width: 100%; height: 100vh; border: none;"
           allow="microphone; camera; clipboard-read; clipboard-write; display-capture; clipboard-share;"
           sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals allow-downloads allow-top-navigation"
@@ -1848,7 +1808,7 @@
         <!-- ========================================================================= -->
         <!-- MODAL: LIVE-DIALOGFELD WENN DEBATTE AUS DEM DEBATTE-TAB GESTARTET WIRD -->
         <!-- ========================================================================= -->
-        <div id="boardroom-live-dialog-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div id="boardroom-live-dialog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div class="w-full max-w-3xl h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <!-- Modal Header -->
             <div class="flex items-center justify-between p-3.5 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
@@ -1892,7 +1852,7 @@
         <!-- ========================================================================= -->
         <!-- MODAL: DETAIL-DIALOG FÜR HISTORISCHE DEBATTEN AUS DER ÜBERSICHT -->
         <!-- ========================================================================= -->
-        <div id="boardroom-detail-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div id="boardroom-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div class="w-full max-w-2xl max-h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <!-- Modal Header -->
             <div class="flex items-center justify-between p-4 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
@@ -1949,7 +1909,7 @@
       <!-- ========================================================================= -->
       <!-- MODAL: OPENROUTER & LLM MODELL-PREISLISTE / KATALOG MIT DOLLAR-ICON AUFRUF -->
       <!-- ========================================================================= -->
-      <div id="llm-price-catalog-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div id="llm-price-catalog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div class="w-full max-w-4xl h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <!-- Modal Header -->
             <div class="flex items-center justify-between p-4 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
@@ -2710,33 +2670,54 @@ print('Ausführung erfolgreich!')</textarea>
       if (window.__archon_initialized) return;
       window.__archon_initialized = true;
       showLoadingOverlay("Archon OS wird initialisiert...", "Kernel-Dienste, Agenten-Flotte & Workspaces werden geladen");
-      // --- V2 COMPONENT FETCHES (Core Active Views First, Legacy Studios Deferred) ---
-      try {
-        await Promise.all([
-          fetch('/static/views/view_app_frame_studio.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-app-frame-studio-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); }),
-          fetch('/static/views/system_settings_modal.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('system-settings-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/agent_profiles_view.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-agent-profiles-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/master_chat_view.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-master-chat-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/operations_view.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/library_view.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-library-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/inbox_view.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-inbox-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_showroom.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-showroom-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/log_stream_view.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-log-stream-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_guardian.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-guardian-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_plugins.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-plugins-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/view_research.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-research-mount'); if (el) el.outerHTML = html; }),
-          fetch('/static/views/watchdog_view.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-watchdog-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }),
-          fetch('/static/views/view_finance.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-finance-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initFinanceView === 'function') initFinanceView(); }),
-          fetch('/static/views/view_approval_policies.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-approval-policies-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initApprovalPoliciesView === 'function') initApprovalPoliciesView(); }),
-          fetch('/static/views/view_addresses.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-addresses-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initAddressesView === 'function') initAddressesView(); }),
-          fetch('/static/views/view_items.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-items-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initItemsView === 'function') initItemsView(); }),
-          fetch('/static/views/view_operations_erp.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-operations-erp-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initOperationsErpView === 'function') initOperationsErpView(); }),
-          fetch('/static/views/view_corporate.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-corporate-mount'); if (el) el.outerHTML = html; if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initCorporateView === 'function') initCorporateView(); }),
-          fetch('/static/views/view_brain.html?v=2026111113').then(r => r.text()).then(html => { const el = document.getElementById('view-brain-mount'); if (el) el.outerHTML = html; })
-        ]);
-      } catch(err) {
-        console.error("V2 Fetch Error: ", err);
+      // --- V2 COMPONENT FETCHES (Core Active Views First, Secondary Views Non-Blocking) ---
+      const _v2Mount = (url, mountId, afterFn) =>
+        fetch(url).then(r => r.text()).then(html => {
+          const el = document.getElementById(mountId);
+          if (el) el.outerHTML = html;
+          if (afterFn) afterFn();
+        });
+      const _coreViews = [
+        _v2Mount('/static/views/view_app_frame_studio.html?v=2026111113', 'view-app-frame-studio-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); }),
+        _v2Mount('/static/views/system_settings_modal.html?v=2026111113', 'system-settings-mount'),
+        _v2Mount('/static/views/operations_view.html?v=2026111113', 'view-operations-mount'),
+        _v2Mount('/static/views/agent_profiles_view.html?v=2026111113', 'view-agent-profiles-mount'),
+        _v2Mount('/static/views/master_chat_view.html?v=2026111113', 'view-master-chat-mount'),
+      ];
+      const _deferredSpecs = [
+        ['library', '/static/views/library_view.html?v=2026111113', 'view-library-mount', null],
+        ['inbox', '/static/views/inbox_view.html?v=2026111113', 'view-inbox-mount', null],
+        ['showroom', '/static/views/view_showroom.html?v=2026111113', 'view-showroom-mount', null],
+        ['log-stream', '/static/views/log_stream_view.html?v=2026111113', 'view-log-stream-mount', null],
+        ['guardian', '/static/views/view_guardian.html?v=2026111113', 'view-guardian-mount', null],
+        ['plugins', '/static/views/view_plugins.html?v=2026111113', 'view-plugins-mount', null],
+        ['research', '/static/views/view_research.html?v=2026111113', 'view-research-mount', null],
+        ['watchdog', '/static/views/watchdog_view.html?v=2026111113', 'view-watchdog-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }],
+        ['finance', '/static/views/view_finance.html?v=2026111113', 'view-finance-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initFinanceView === 'function') initFinanceView(); }],
+        ['approval-policies', '/static/views/view_approval_policies.html?v=2026111113', 'view-approval-policies-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initApprovalPoliciesView === 'function') initApprovalPoliciesView(); }],
+        ['addresses', '/static/views/view_addresses.html?v=2026111113', 'view-addresses-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initAddressesView === 'function') initAddressesView(); }],
+        ['items', '/static/views/view_items.html?v=2026111113', 'view-items-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initItemsView === 'function') initItemsView(); }],
+        ['operations-erp', '/static/views/view_operations_erp.html?v=2026111113', 'view-operations-erp-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initOperationsErpView === 'function') initOperationsErpView(); }],
+        ['corporate', '/static/views/view_corporate.html?v=2026111113', 'view-corporate-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initCorporateView === 'function') initCorporateView(); }],
+        ['brain', '/static/views/view_brain.html?v=2026111113', 'view-brain-mount', null],
+      ];
+      const _activeStartTab = currentTab || 'mission-control';
+      const _bgSpecs = [];
+      for (const spec of _deferredSpecs) {
+        if (spec[0] === _activeStartTab) {
+          _coreViews.push(_v2Mount(spec[1], spec[2], spec[3]));
+        } else {
+          _bgSpecs.push(spec);
+        }
       }
+      try {
+        await Promise.all(_coreViews);
+      } catch(err) {
+        console.error("V2 Core Fetch Error: ", err);
+      }
+      Promise.allSettled(_bgSpecs.map(spec => _v2Mount(spec[1], spec[2], spec[3]))).catch(err => {
+        console.error("V2 Deferred Fetch Error: ", err);
+      });
       // -----------------------------
 
       // Wende Initialtheme an und zeige Start-Tab sofort
@@ -3034,6 +3015,12 @@ print('Ausführung erfolgreich!')</textarea>
           if (!iframe.src || iframe.src === "about:blank" || !iframe.src.includes("/n8n-proxy")) {
             iframe.src = expectedSrc;
           }
+        }
+      }
+      if (tabId === "hermes-dashboard") {
+        const hFrame = document.getElementById("hermes-dashboard-iframe");
+        if (hFrame && hFrame.dataset.src && (!hFrame.src || hFrame.src === "about:blank")) {
+          hFrame.src = hFrame.dataset.src;
         }
       }
       if (tabId === "omniroute") {
@@ -5728,7 +5715,7 @@ print('Ausführung erfolgreich!')</textarea>
   ${body.innerHTML}
 
   <!-- MODAL: MIXTURE OF AGENTS (MoA) KONFIGURATION -->
-  <div id="boardroom-moa-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+  <div id="boardroom-moa-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
     <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-5 w-[92vw] max-w-lg shadow-2xl overflow-hidden flex flex-col space-y-4 font-sans">
       <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
         <div class="flex items-center gap-2">
@@ -5911,8 +5898,6 @@ print('Ausführung erfolgreich!')</textarea>
       { id: "all", name: "Alle Container", desc: "Kombinierter Multi-Stream", port: "Multi", icon: "globe" },
       { id: "hermes", name: "hermes", desc: "Hermes Agent Runtime & Telegram", port: "8644", icon: "bot" },
       { id: "ARCHON-OS", name: "ARCHON-OS", desc: "Archon FastAPI & OS Engine", port: "8501", icon: "cpu" },
-      { id: "CRM", name: "CRM", desc: "PocketBase Next.js CRM", port: "3005", icon: "briefcase" },
-      { id: "Pocketbase", name: "Pocketbase", desc: "Haupt-Datenbank SQLite/PB", port: "8090", icon: "database" },
       { id: "Pocketbase-Media", name: "Pocketbase-Media", desc: "Media Files & Attachments", port: "8092", icon: "image" },
       { id: "n8n", name: "n8n", desc: "Workflow & Node Automation", port: "5678", icon: "zap" },
       { id: "omniroute", name: "omniroute", desc: "Multi-LLM Gateway Router", port: "20128", icon: "network" },
@@ -6638,16 +6623,17 @@ print('Ausführung erfolgreich!')</textarea>
       }
       if (badge) badge.innerText = `${activeWatchdogAlarms.length} Sicherheitsvorfall erfasst`;
       let html = "";
+      const _esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
       activeWatchdogAlarms.forEach((alarm, idx) => {
-        const agent = alarm.agent || alarm.profile_handle || "telegram_bot";
-        const reason = alarm.reason || "Token Usage Limit Exceeded (14.200 > 10.000 tok/min)";
-        const ts = alarm.timestamp ? new Date(alarm.timestamp).toLocaleString("de-DE") : "28.8.2026, 08:38:27";
+        const agent = _esc(alarm.agent || alarm.profile_handle || "telegram_bot");
+        const reason = _esc(alarm.reason || "Token Usage Limit Exceeded (14.200 > 10.000 tok/min)");
+        const ts = _esc(alarm.timestamp ? new Date(alarm.timestamp).toLocaleString("de-DE") : "28.8.2026, 08:38:27");
         const details = alarm.details || {};
-        const containerName = details.container || "hermes";
-        const taskName = details.task || "tk_test_sandbox";
-        const rate = details.measured_rate || "12.500 tok/min";
-        const status = details.status || "Gestoppt (0 Tok/s)";
-        const logExcerpt = details.log_excerpt || "> 2026-08-27 19:41:17.185563315 | Messaging platforms + cron scheduler |\n> 2026-08-27 19:41:17.185564107 | Press Ctrl+C to stop |\n> 2026-08-27 19:41:17.185565209 |\n> 2026-08-27 19:41:17.185565590";
+        const containerName = _esc(details.container || "hermes");
+        const taskName = _esc(details.task || "tk_test_sandbox");
+        const rate = _esc(details.measured_rate || "12.500 tok/min");
+        const status = _esc(details.status || "Gestoppt (0 Tok/s)");
+        const logExcerpt = _esc(details.log_excerpt || "> 2026-08-27 19:41:17.185563315 | Messaging platforms + cron scheduler |\n> 2026-08-27 19:41:17.185564107 | Press Ctrl+C to stop |\n> 2026-08-27 19:41:17.185565209 |\n> 2026-08-27 19:41:17.185565590");
         html += `
           <div class="p-4 rounded-xl border border-rose-500/30 bg-[#131b2e] space-y-3.5 shadow-sm">
             <div class="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
@@ -7122,7 +7108,7 @@ ${logExcerpt}
           selectNotebook(activeNotebookId);
         }
       } catch (e) {
-        container.innerHTML = `<div class="text-center py-4 text-rose-400 font-mono text-xs">Fehler: ${e.message}</div>`;
+        container.innerHTML = `<div class="text-center py-4 text-rose-400 font-mono text-xs">Fehler: ${escapeHtml(e.message || '')}</div>`;
       }
     }
     function renderNotebooksList() {
@@ -7133,19 +7119,20 @@ ${logExcerpt}
         const activeClass = isSelected 
           ? "border-blue-500/60 bg-blue-500/15 shadow-sm ring-1 ring-blue-400/40" 
           : "border-transparent bg-[var(--page-bg)] hover:border-neutral-700 hover:bg-neutral-800/40";
+        const safeNbId = escapeHtml(String(nb.id || ''));
         return `
-          <div onclick="selectNotebook('${nb.id}')" class="p-3 rounded-xl border ${activeClass} transition cursor-pointer flex items-center justify-between group">
+          <div onclick="selectNotebook('${safeNbId}')" class="p-3 rounded-xl border ${activeClass} transition cursor-pointer flex items-center justify-between group">
             <div class="space-y-1 overflow-hidden pr-2">
               <div class="font-bold text-xs ${isSelected ? 'text-blue-300' : 'text-primary-custom'} truncate flex items-center gap-1.5">
                 <i data-lucide="book" class="w-3.5 h-3.5 ${isSelected ? 'text-blue-400' : 'text-muted-custom'}"></i>
-                <span class="truncate">${nb.name}</span>
+                <span class="truncate">${escapeHtml(nb.name || '')}</span>
               </div>
               <div class="text-[10px] font-mono text-muted-custom flex items-center gap-2">
-                <span>📄 ${nb.sources_count} Quelle(n)</span>
-                <span>💬 ${nb.messages_count || 0} Chats</span>
+                <span>📄 ${Number(nb.sources_count) || 0} Quelle(n)</span>
+                <span>💬 ${Number(nb.messages_count) || 0} Chats</span>
               </div>
             </div>
-            <button onclick="event.stopPropagation(); handleDeleteNotebook('${nb.id}')" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-500/20 text-muted-custom hover:text-rose-400 rounded transition cursor-pointer" title="Notebook löschen">
+            <button onclick="event.stopPropagation(); handleDeleteNotebook('${safeNbId}')" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-500/20 text-muted-custom hover:text-rose-400 rounded transition cursor-pointer" title="Notebook löschen">
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             </button>
           </div>
@@ -7236,17 +7223,17 @@ ${logExcerpt}
                 <div class="space-y-0.5 overflow-hidden pr-2">
                   <div class="font-bold text-xs text-primary-custom truncate flex items-center gap-1.5">
                     <i data-lucide="file-text" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
-                    <span class="truncate" title="${s.title}">${s.title}</span>
+                    <span class="truncate" title="${escapeHtml(s.title || '')}">${escapeHtml(s.title || '')}</span>
                   </div>
                   <div class="text-[10px] font-mono text-muted-custom flex items-center gap-2">
-                    <span>${s.pages_count} S.</span>
+                    <span>${Number(s.pages_count) || 0} S.</span>
                     <span>•</span>
-                    <span>${s.chunks_count || 0} Chunks</span>
+                    <span>${Number(s.chunks_count) || 0} Chunks</span>
                     <span>•</span>
                     ${ocrBadge}
                   </div>
                 </div>
-                <button onclick="handleDeleteNotebookSource('${s.id}')" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-500/20 text-muted-custom hover:text-rose-400 rounded transition cursor-pointer" title="Quelle entfernen">
+                <button onclick="handleDeleteNotebookSource('${escapeHtml(String(s.id || ''))}')" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-500/20 text-muted-custom hover:text-rose-400 rounded transition cursor-pointer" title="Quelle entfernen">
                   <i data-lucide="x" class="w-3.5 h-3.5"></i>
                 </button>
               </div>
@@ -7379,7 +7366,7 @@ ${logExcerpt}
               return `
                 <div class="flex justify-end">
                   <div class="max-w-[85%] bg-blue-600 text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-xs shadow-md space-y-1">
-                    <div class="font-semibold">${msg.content}</div>
+                    <div class="font-semibold">${escapeHtml(msg.content || '')}</div>
                   </div>
                 </div>
               `;
@@ -7387,7 +7374,7 @@ ${logExcerpt}
               const citBlock = msg.sources 
                 ? `<div class="pt-2 mt-2 border-t border-slate-700/60 text-[10px] font-mono text-cyan-300 flex items-center gap-1.5">
                      <i data-lucide="pin" class="w-3 h-3 text-cyan-400 shrink-0"></i>
-                     <span>📌 Belege: ${msg.sources}</span>
+                     <span>📌 Belege: ${escapeHtml(String(msg.sources))}</span>
                    </div>`
                 : "";
               // Find previous user query for sync button
@@ -7395,7 +7382,7 @@ ${logExcerpt}
               return `
                 <div class="flex justify-start space-y-2">
                   <div class="max-w-[90%] bg-[var(--page-bg)] border theme-border rounded-2xl rounded-tl-none p-4 text-xs shadow-sm space-y-3">
-                    <div class="text-primary-custom leading-relaxed whitespace-pre-wrap">${msg.content}</div>
+                    <div class="text-primary-custom leading-relaxed whitespace-pre-wrap">${escapeHtml(msg.content || '')}</div>
                     ${citBlock}
                     <div class="pt-2 border-t theme-border flex items-center justify-end">
                       <button onclick="syncQueryToObsidian('${encodeURIComponent(prevUserQuery)}', '${encodeURIComponent(msg.content)}', '${encodeURIComponent(msg.sources || '')}')" class="px-2.5 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-[11px] font-mono flex items-center gap-1.5 transition cursor-pointer">
@@ -7429,7 +7416,7 @@ ${logExcerpt}
       userBubble.className = "flex justify-end";
       userBubble.innerHTML = `
         <div class="max-w-[85%] bg-blue-600 text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-xs shadow-md">
-          <div class="font-semibold">${query}</div>
+          <div class="font-semibold">${escapeHtml(query)}</div>
         </div>
       `;
       container.appendChild(userBubble);
@@ -7488,7 +7475,7 @@ ${logExcerpt}
           const data = await res.json();
           if (notif && notifText) {
             notif.classList.remove("hidden");
-            notifText.innerHTML = `✓ Notiz <b>${data.filename}</b> erfolgreich im Vault gespeichert & mit 3D-Galaxie synchronisiert!`;
+            notifText.innerHTML = `✓ Notiz <b>${escapeHtml(data.filename || '')}</b> erfolgreich im Vault gespeichert & mit 3D-Galaxie synchronisiert!`;
             setTimeout(() => { notif.classList.add("hidden"); }, 6000);
           }
         }
@@ -8330,30 +8317,7 @@ ${logExcerpt}
     const toggleProfilePaperclipDeployment = toggleProfileDeployment;
     window.toggleProfileDeployment = toggleProfileDeployment;
     window.toggleProfilePaperclipDeployment = toggleProfileDeployment;
-    async function deleteCurrentProfile() {
-      if (!currentSelectedProfileId) return;
-      if (!confirm(`Möchtest du das Profil '${currentSelectedProfileId}' wirklich löschen?`)) return;
-      try {
-        const res = await fetch(`/api/hermes/profiles/${currentSelectedProfileId}`, {
-          method: "DELETE"
-        });
-        if (!res.ok) {
-          alert("Fehler beim Löschen des Profils.");
-          return;
-        }
-        await loadHermesProfilesFromServer();
-        if (hermesProfilesData.length > 0) {
-          currentSelectedProfileId = hermesProfilesData[0].id;
-          selectProfileForEditor(currentSelectedProfileId);
-        } else {
-          createNewProfileDraft();
-        }
-        renderHermesProfilesList();
-      } catch (e) {
-        console.error("Delete profile error:", e);
-        alert(`Fehler: ${e.message}`);
-      }
-    }
+    /* deleteCurrentProfile() wird aus /static/js/agent_profiles.js bereitgestellt (mit encodeURIComponent & Gate-Support). */
       // SKILL_MARKT.JS EXTRACTED
 
       // PROMPT_STUDIO.JS EXTRACTED
@@ -10067,7 +10031,7 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- ARCHON OS NATIVE GATEWAY MANAGER MODAL (AGENTEN & PROFIL STEUERUNG)      -->
   <!-- ========================================================================= -->
-  <div id="gateway-manager-modal" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
+  <div id="gateway-manager-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
     <!-- Backdrop -->
     <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs" onclick="closeGatewayManagerModal()"></div>
     <!-- Dialog (Striktes Hell-Design) -->
@@ -10127,7 +10091,7 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- OPERATIONS: NEUE AUFGABE MODAL                                            -->
   <!-- ========================================================================= -->
-  <div id="ops-new-task-modal" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
+  <div id="ops-new-task-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeNewTaskModal()"></div>
     <div class="relative w-[940px] max-w-[95vw] max-h-[92vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal">
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]">
@@ -10296,7 +10260,7 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- OPERATIONS: TASK DETAIL & INTERACTION MODAL                               -->
   <!-- ========================================================================= -->
-  <div id="ops-detail-modal" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
+  <div id="ops-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeTaskDetailModal()"></div>
     <div class="relative w-[760px] max-w-[95vw] max-h-[90vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal">
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]">
@@ -10510,7 +10474,7 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- OPERATIONS: AGENT / NODE DETAIL & PROPERTIES MODAL                        -->
   <!-- ========================================================================= -->
-  <div id="ops-node-detail-modal" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
+  <div id="ops-node-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeOrgNodeDetailModal()"></div>
     <div class="relative w-[840px] max-w-[95vw] max-h-[90vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans">
       
@@ -10756,7 +10720,7 @@ ${logExcerpt}
       <!-- ========================================================================= -->
   <!-- MODAL: LADEBILDSCHIRM (VERSCHWOMMEN & VERDUNKELT, HELLE KARTE & MINIMALE ANIMATION) -->
   <!-- ========================================================================= -->
-  <div id="global-loading-overlay" class="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-md transition-opacity duration-150 opacity-0 pointer-events-none">
+  <div id="global-loading-overlay" role="status" aria-live="polite" class="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-md transition-opacity duration-150 opacity-0 pointer-events-none">
     <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-3.5 text-center max-w-[280px] w-full mx-auto">
       
       <!-- Schlichte, elegante Ladeanimation: Ball / Ring im Kreis -->
@@ -10776,7 +10740,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: ROLE MANAGER (CREATE, EDIT, LOAD, DELETE, RESET) -->
-  <div id="role-manager-modal" class="hidden fixed inset-0 bg-black/65 flex items-center justify-center p-4 z-50">
+  <div id="role-manager-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/65 flex items-center justify-center p-4 z-50">
     <div class="bg-[var(--card-bg)] text-[var(--text-primary)] border border-[var(--border)] rounded-lg p-6 w-full max-w-lg space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
         <h3 class="text-sm font-bold uppercase text-[var(--accent)] tracking-wider flex items-center gap-2">
@@ -10831,7 +10795,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: PROMPT-TEMPLATES & METHODEN-VORLAGEN (5-FELDER-STRUKTUR) -->
-  <div id="prompt-template-modal" onclick="if(event.target === this) closePromptTemplateModal()" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
+  <div id="prompt-template-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closePromptTemplateModal()" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
     <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl w-[72vw] max-w-6xl max-h-[88vh] min-w-[700px] flex flex-col overflow-hidden text-[var(--foreground)] font-sans">
       
       <!-- Modal Header -->
@@ -11075,7 +11039,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: ARCHON PROMPT STUDIO (824 ENTERPRISE TEMPLATES + 255 FABRIC SOPS = 1.079) -->
-  <div id="sureprompts-modal" onclick="if(event.target === this) closeSurePromptsModal()" class="fixed inset-0 z-[1000005] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
+  <div id="sureprompts-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeSurePromptsModal()" class="fixed inset-0 z-[1000005] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
     <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl w-[90vw] max-w-[1600px] h-[92vh] max-h-[92vh] min-w-[900px] flex flex-col overflow-hidden text-[var(--foreground)] font-sans">
       
       <!-- Modal Header -->
@@ -11489,7 +11453,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: WATCHDOG SICHERHEITS-AUDITOR -->
-  <div id="watchdog-auditor-modal" onclick="if(event.target === this) closeWatchdogAuditorModal()" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
+  <div id="watchdog-auditor-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeWatchdogAuditorModal()" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
     <div class="bg-[#111827] border border-rose-500/40 rounded-2xl shadow-2xl w-full max-w-[780px] max-h-[92vh] flex flex-col overflow-hidden text-slate-100 font-sans shadow-rose-950/40">
       
       <!-- Modal Header -->
@@ -11641,7 +11605,7 @@ ${logExcerpt}
   </div>
 
   <!-- DIALOG MODAL: ISOLIERTER AD-HOC SICHERHEITSKANAL MIT DR. HENDRIK SASSE -->
-  <div id="adhoc-security-chat-modal" onclick="if(event.target === this) closeAdhocSecurityChatModal()" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
+  <div id="adhoc-security-chat-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeAdhocSecurityChatModal()" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
     <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-[960px] h-[92vh] max-h-[92vh] flex flex-col overflow-hidden text-[var(--foreground)] font-sans">
       
       <!-- Header -->
@@ -11736,7 +11700,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: BRAIN THEME & PARAMETER STUDIO (3D GALAXY + QUARTZ OBSIDIAN) -->
-  <div id="brain-theme-studio-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+  <div id="brain-theme-studio-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
     <div class="bg-[var(--card-bg)] text-[var(--text-primary)] border border-cyan-500/40 rounded-2xl p-6 w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden space-y-4">
       
       <!-- Modal Header -->
@@ -12217,7 +12181,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: PLUGIN CONFIGURATION DIALOG -->
-  <div id="plugin-config-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150">
+  <div id="plugin-config-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150">
     <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
       <!-- Header -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]/40">
@@ -12257,7 +12221,7 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- ❓ CONTEXT HELP & SYSTEM-ASSISTENT MODAL -->
   <!-- ========================================================================= -->
-  <div id="context-help-modal" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-[999999] animate-in fade-in duration-150" onclick="if(event.target === this) closeContextHelp()">
+  <div id="context-help-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-[999999] animate-in fade-in duration-150" onclick="if(event.target === this) closeContextHelp()">
     <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
       <!-- Header -->
       <div class="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between bg-[var(--background)]/60">
@@ -12334,7 +12298,7 @@ ${logExcerpt}
 
 
 <!-- MODAL: ATTACH VAULT DOCUMENT TO NOTEBOOK -->
-<div id="modal-attach-vault-doc" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 z-[99999]" onclick="if(event.target === this) closeAttachVaultModal()">
+<div id="modal-attach-vault-doc" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 z-[99999]" onclick="if(event.target === this) closeAttachVaultModal()">
   <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh] overflow-hidden" onclick="event.stopPropagation()">
     <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--background)]/60">
       <h3 class="font-mono font-bold text-sm text-[var(--foreground)]" data-i18n="ui.vault.attach_doc_title">Dokument aus Wissensbibliothek verknüpfen</h3>
@@ -12370,7 +12334,7 @@ ${logExcerpt}
 .archon-filelink:hover { background:rgba(79,156,255,.22); color:#7fb8ff; }
 .archon-filelink::after { content:" ↗"; font-size:.85em; opacity:.75; }
 </style>
-<div id="archon-file-preview" class="hidden fixed inset-0 z-[95] items-center justify-center bg-black/60 p-6" role="dialog">
+<div id="archon-file-preview" class="hidden fixed inset-0 z-[95] items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true">
   <div class="w-full max-w-3xl max-h-[86vh] flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl" onclick="event.stopPropagation()">
     <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
       <span id="afp-title" class="text-[11px] font-mono font-bold text-primary-custom truncate">…</span>
@@ -13157,7 +13121,10 @@ ${logExcerpt}
     window.addEventListener("DOMContentLoaded", () => {
       fetchPrivacyStatus();
       if (!_privacyPollingInterval) {
-        _privacyPollingInterval = setInterval(fetchPrivacyStatus, 30000);
+        _privacyPollingInterval = setInterval(() => {
+          if (typeof document !== "undefined" && document.hidden) return;
+          fetchPrivacyStatus();
+        }, 30000);
       }
     });
 
@@ -13362,7 +13329,7 @@ ${logExcerpt}
 </script>
 
 <!-- PRIVACY & LOCAL LLM SETTINGS MODAL (t-c4489c) -->
-<div id="privacy-settings-modal" class="hidden fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+<div id="privacy-settings-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
   <div class="w-full max-w-xl bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
     <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between gap-3 bg-[var(--card)]">
       <div class="flex items-center gap-2.5">
@@ -13401,8 +13368,8 @@ ${logExcerpt}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="p-3 rounded-xl border border-rose-500/25 bg-[var(--background)] flex items-center justify-between gap-2">
           <div>
-            <div class="font-bold text-[var(--foreground)] text-[11px]">Hard-Block bei Offline-Lokalmodell</div>
-            <p class="text-[10px] text-[var(--muted-foreground)] mt-0.5">Erzwingt harten Stopp für Finanzen, Verträge &amp; CRM statt Cloud-Fallback.</p>
+            <div class="font-bold text-[var(--foreground)] text-[11px]" data-i18n="settings.privacy.hard_block_title">Hard-Block bei Offline-Lokalmodell</div>
+            <p class="text-[10px] text-[var(--muted-foreground)] mt-0.5" data-i18n="settings.privacy.hard_block_desc">Erzwingt harten Stopp für Finanzen, Verträge &amp; CRM statt Cloud-Fallback.</p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer shrink-0">
             <input type="checkbox" id="privacy-cfg-hard-block-offline" checked class="sr-only peer">
@@ -13411,8 +13378,8 @@ ${logExcerpt}
         </div>
         <div class="p-3 rounded-xl border border-amber-500/25 bg-[var(--background)] flex items-center justify-between gap-2">
           <div>
-            <div class="font-bold text-[var(--foreground)] text-[11px]">Strict Zero-Egress (Gesamtsystem)</div>
-            <p class="text-[10px] text-[var(--muted-foreground)] mt-0.5">Blockiert ausnahmslos alle Cloud-Modelle &amp; externe LLM-Endpunkte.</p>
+            <div class="font-bold text-[var(--foreground)] text-[11px]" data-i18n="settings.privacy.strict_ze_title">Strict Zero-Egress (Gesamtsystem)</div>
+            <p class="text-[10px] text-[var(--muted-foreground)] mt-0.5" data-i18n="settings.privacy.strict_ze_desc">Blockiert ausnahmslos alle Cloud-Modelle &amp; externe LLM-Endpunkte.</p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer shrink-0">
             <input type="checkbox" id="privacy-cfg-zero-egress-strict" class="sr-only peer">
@@ -13424,16 +13391,16 @@ ${logExcerpt}
       <!-- Sensible Kategorien & Prefetch-Sperre -->
       <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2.5">
         <div class="flex items-center justify-between gap-2">
-          <span class="font-bold text-[11px] text-[var(--foreground)]">Geschützte Kategorien (Hard-Block)</span>
+          <span class="font-bold text-[11px] text-[var(--foreground)]" data-i18n="settings.privacy.protected_categories">Geschützte Kategorien (Hard-Block)</span>
           <label class="flex items-center gap-1.5 cursor-pointer text-[10px]">
             <input type="checkbox" id="privacy-cfg-block-prefetch" checked class="rounded text-emerald-600">
-            <span>CRM/ERP-Prefetch in Cloud sperren</span>
+            <span data-i18n="settings.privacy.block_prefetch">CRM/ERP-Prefetch in Cloud sperren</span>
           </label>
         </div>
         <input type="text" id="privacy-cfg-sensitive-categories" value="finance, finanzen, receipts, buchhaltung, erp, invoices, contracts, verträge, crm, kunden, gdpr, dsgvo, personalakte, hr" class="w-full px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] text-[11px] text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-emerald-500">
         <div class="flex items-center justify-between text-[10px] text-[var(--muted-foreground)]">
-          <span>Worker-Docker-Netz: <code class="text-emerald-600 dark:text-emerald-400">archon-worker-zero-egress_net (Internal=true)</code></span>
-          <span>SHA-256 Dispatch-Kette: <strong class="text-teal-600 dark:text-teal-400">Pflicht-Aktiv</strong></span>
+          <span><span data-i18n="settings.privacy.worker_net_label">Worker-Docker-Netz:</span> <code class="text-emerald-600 dark:text-emerald-400" data-i18n="settings.privacy.worker_net_value">archon-worker-zero-egress_net (Internal=true)</code></span>
+          <span><span data-i18n="settings.privacy.sha256_chain_label">SHA-256 Dispatch-Kette:</span> <strong class="text-teal-600 dark:text-teal-400" data-i18n="settings.privacy.sha256_chain_mandatory">Pflicht-Aktiv</strong></span>
         </div>
       </div>
 
@@ -13513,7 +13480,7 @@ ${logExcerpt}
 </div>
 
   <!-- MODAL: HERMES AGENT CORE UPDATE (Dialog) -->
-  <div id="system-update-dialog-modal" class="hidden fixed inset-0 z-[99999] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150" onclick="if(event.target === this) closeSystemUpdateDialog()">
+  <div id="system-update-dialog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[99999] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150" onclick="if(event.target === this) closeSystemUpdateDialog()">
     <div class="w-full max-w-xl bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl p-5 text-sans text-[var(--foreground)] space-y-4 animate-in zoom-in-95 duration-150">
       
       <!-- Modal Header -->
@@ -13592,6 +13559,7 @@ ${logExcerpt}
   <script src="/static/js/operations_calendar.js" defer></script>
   <script src="/static/js/eu_ai_act_studio.js" defer></script>
   <script src="/static/js/archon_version_badge.js" defer></script>
+  <script src="/static/js/modal_a11y.js" defer></script>
   <style>.archon-nav-item{padding-top:1px!important;padding-bottom:1px!important} nav .space-y-\[2px\]>*+*{margin-top:1px!important}</style>
 </body>
 </html>

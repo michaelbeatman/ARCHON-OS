@@ -37,8 +37,9 @@ class EmailDraftEngine:
         self._seed_sample_drafts_if_empty()
 
     def _get_conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=15.0)
+        conn = sqlite3.connect(self.db_path, timeout=15.0, factory=_ArchonClosingConn)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 10000;")
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
         return conn
@@ -356,6 +357,27 @@ class EmailDraftEngine:
             conn.commit()
 
         return self.get_draft(draft_id)
+
+    def get_status_counts(self) -> Dict[str, int]:
+        """Liefert die Anzahl der Entwuerfe je Status für Filter-Badges und Listen-API."""
+        counts: Dict[str, int] = {
+            "pending": 0,
+            "approved": 0,
+            "sent": 0,
+            "snoozed": 0,
+            "rejected": 0,
+            "total": 0,
+        }
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT COALESCE(LOWER(status), 'pending') AS st, COUNT(*) AS cnt FROM email_drafts GROUP BY LOWER(status)"
+            ).fetchall()
+            for r in rows:
+                st = r["st"] or "pending"
+                cnt = int(r["cnt"] or 0)
+                counts[st] = cnt
+                counts["total"] += cnt
+        return counts
 
     def get_audit_trail(self, limit: int = 50) -> List[Dict[str, Any]]:
         with self._get_conn() as conn:

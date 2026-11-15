@@ -50,8 +50,8 @@ def api_finetuning_status():
             for f in os.listdir(out_dir):
                 if f.endswith(".jsonl"):
                     f_path = os.path.join(out_dir, f)
-                    with open(f_path, "r", encoding="utf-8") as fp:
-                        lines = len(fp.readlines())
+                    with open(f_path, "r", encoding="utf-8", errors="ignore") as fp:
+                        lines = sum(1 for _ in fp)
                     files_info.append({"filename": f, "lines": lines, "size_bytes": os.path.getsize(f_path)})
 
         return {

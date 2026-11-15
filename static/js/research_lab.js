@@ -287,11 +287,20 @@
           listEl.innerHTML = `<div class="text-[11px] text-muted-custom p-2 text-center italic">${resT('ui.research_lab.history_empty', 'Noch keine Dossiers archiviert.')}</div>`;
           return;
         }
+        if (!listEl.dataset.boundDossierClick) {
+          listEl.dataset.boundDossierClick = "1";
+          listEl.addEventListener("click", (evt) => {
+            const card = evt.target && evt.target.closest ? evt.target.closest("[data-dossier-filename]") : null;
+            if (card && typeof loadResearchDossier === "function") {
+              loadResearchDossier(card.dataset.dossierFilename || "");
+            }
+          });
+        }
         listEl.innerHTML = researchHistoryList.map(item => `
-          <div onclick="loadResearchDossier('${item.filename}')" class="p-2 rounded-lg border theme-border bg-[var(--page-bg)] hover:border-zinc-400 dark:hover:border-zinc-600 cursor-pointer transition flex items-center justify-between group">
+          <div data-dossier-filename="${escapeHtml(item.filename)}" class="p-2 rounded-lg border theme-border bg-[var(--page-bg)] hover:border-zinc-400 dark:hover:border-zinc-600 cursor-pointer transition flex items-center justify-between group">
             <div class="min-w-0 flex-1 pr-2">
-              <div class="text-xs font-semibold text-[var(--foreground)] truncate">${item.title}</div>
-              <div class="text-[10px] text-[var(--muted-foreground)] font-mono">${item.modified} · ${(item.size_bytes / 1024).toFixed(1)} KB</div>
+              <div class="text-xs font-semibold text-[var(--foreground)] truncate">${escapeHtml(item.title)}</div>
+              <div class="text-[10px] text-[var(--muted-foreground)] font-mono">${escapeHtml(item.modified)} · ${(item.size_bytes / 1024).toFixed(1)} KB</div>
             </div>
             <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-black dark:text-white shrink-0"></i>
           </div>
@@ -473,11 +482,20 @@
         listEl.innerHTML = `<div class="text-[11px] text-[var(--muted-foreground)] p-2 text-center italic">${resT('ui.research_lab.history_no_match', 'Keine passenden Dossiers gefunden.')}</div>`;
         return;
       }
+      if (!listEl.dataset.boundDossierClick) {
+        listEl.dataset.boundDossierClick = "1";
+        listEl.addEventListener("click", (evt) => {
+          const card = evt.target && evt.target.closest ? evt.target.closest("[data-dossier-filename]") : null;
+          if (card && typeof loadResearchDossier === "function") {
+            loadResearchDossier(card.dataset.dossierFilename || "");
+          }
+        });
+      }
       listEl.innerHTML = filtered.map(item => `
-        <div onclick="loadResearchDossier('${item.filename}')" class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] cursor-pointer transition flex items-center justify-between group shadow-2xs">
+        <div data-dossier-filename="${escapeHtml(item.filename)}" class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] cursor-pointer transition flex items-center justify-between group shadow-2xs">
           <div class="min-w-0 flex-1 pr-2">
-            <div class="text-xs font-semibold text-[var(--foreground)] truncate">${item.title}</div>
-            <div class="text-[10px] text-[var(--muted-foreground)] font-mono mt-0.5">${item.modified} · ${(item.size_bytes / 1024).toFixed(1)} KB</div>
+            <div class="text-xs font-semibold text-[var(--foreground)] truncate">${escapeHtml(item.title)}</div>
+            <div class="text-[10px] text-[var(--muted-foreground)] font-mono mt-0.5">${escapeHtml(item.modified)} · ${(item.size_bytes / 1024).toFixed(1)} KB</div>
           </div>
           <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-[var(--muted-foreground)] group-hover:text-red-500 shrink-0"></i>
         </div>

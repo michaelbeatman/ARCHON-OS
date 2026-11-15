@@ -473,7 +473,7 @@ async def api_save_single_hermes_skill(skill_id: str, request: Request):
         
     # Invalidate caches
     _HERMES_SKILLS_CACHE = None
-    build_skills_file_index(force=True)
+    await asyncio.to_thread(build_skills_file_index, force=True)
     
     return {
         "status": "ok", 

@@ -177,7 +177,7 @@ async def _execute_mission_control_task(
         )
 
         reply = res.get("content", "").strip()
-        if not reply or "Fehler" in reply[:25]:
+        if res.get("status") in ("error", "blocked") or not reply or reply.startswith(("Fehler:", "Fehler ", "[Fehler")):
             # Dispatcher meldet Fehler -> Task als failed markieren
             task["status"] = "failed"
             task["result_summary"] = f"Dispatcher-Fehler: {reply[:200] if reply else 'leere Antwort'}"
@@ -188,7 +188,8 @@ async def _execute_mission_control_task(
         task["status"] = "completed"
         task["result_summary"] = reply
         task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        obs_path = sync_obsidian(task)
+        from archon.core.runtime import run_io_bound
+        obs_path = await run_io_bound(sync_obsidian, task)
         task["artifact_path"] = obs_path
 
         ticker("Obsidian", f"Dokumentation {os.path.basename(obs_path)} für Task #{task_id} abgelegt")
@@ -225,7 +226,7 @@ async def _execute_mission_control_task(
                         # Passenden Namen und Profil suchen
                         sub_prof = next((p for p in profiles if p.get("id") == sub_agent_id), None)
                         sub_name = sub_prof.get("person_name", sub_agent_id) if sub_prof else sub_role
-                        sub_task_id = f"task-{int(time.time() * 1000) % 100000 + idx}"
+                        sub_task_id = f"task-{int(time.time() * 1000)}-{idx}"
                         sub_task_title = f"AP{idx+1}: {sub_role} - {proj_title}"
 
                         sub_task = {
@@ -512,7 +513,7 @@ Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, ful
                         continue
                     sub_prof = next((p for p in profiles if p.get("id") == sub_agent_id), None)
                     sub_name = sub_prof.get("person_name", sub_agent_id) if sub_prof else sub_role
-                    sub_task_id = f"task-{int(time.time() * 1000) % 100000 + idx}"
+                    sub_task_id = f"task-{int(time.time() * 1000)}-{idx}"
                     sub_task_title = f"AP{idx+1}: {sub_role} - {parent_title}"
 
                     sub_task = {

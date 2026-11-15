@@ -1818,3 +1818,76 @@ div#agent-pane-overview > div.prof-panel-card {
   user-select: none !important;
   -webkit-user-select: none !important;
 }
+
+/* Defensive CSS Studio Guard (keeps overlay strictly bounded even without Tailwind utility classes) */
+#archon-css-highlighter.hidden,
+#archon-css-gizmo.hidden,
+#archon-css-studio-minimized.hidden,
+#archon-css-studio.hidden {
+  display: none;
+}
+#archon-css-studio {
+  position: fixed;
+  top: 3.5rem;
+  right: 1.5rem;
+  width: min(580px, 95vw);
+  height: min(84vh, calc(100vh - 4.5rem));
+  max-height: calc(100vh - 4.5rem);
+  z-index: 9999999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tailwind v4 utility polyfills missing in Tailwind v3.4 offline build */
+.shadow-xs {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+.drop-shadow-xs {
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.05));
+}
+.backdrop-blur-xs {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.rounded-xs {
+  border-radius: 0.125rem;
+}
+.bg-\[var\(--card\)\]\/90 {
+  background-color: color-mix(in srgb, var(--card) 90%, transparent);
+}
+.bg-\[var\(--card\)\]\/95 {
+  background-color: color-mix(in srgb, var(--card) 95%, transparent);
+}
+.hover\:scale-130:hover {
+  transform: scale(1.3);
+}
+@keyframes archon-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes archon-zoom-in-95 {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes archon-slide-bottom-2 {
+  from { opacity: 0; transform: translateY(0.5rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes archon-slide-bottom-4 {
+  from { opacity: 0; transform: translateY(1rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in.fade-in {
+  animation: archon-fade-in 0.15s ease-out;
+}
+.animate-in.zoom-in-95,
+.animate-in.fade-in.zoom-in-95 {
+  animation: archon-zoom-in-95 0.15s ease-out;
+}
+.animate-in.slide-in-from-bottom-2 {
+  animation: archon-slide-bottom-2 0.2s ease-out;
+}
+.animate-in.slide-in-from-bottom-4 {
+  animation: archon-slide-bottom-4 0.15s ease-out;
+}

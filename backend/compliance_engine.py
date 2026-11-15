@@ -276,6 +276,18 @@ class ComplianceEngine:
                     "risk_tier": "HIGH_RISK",
                     "reason": "Aktivierung gesperrt: Anhang-III-Hochrisiko erfordert MANDATORY_HITL.",
                 }
+            literacy = self.list_literacy_entries()
+            has_operator = any(
+                e.get("status") == "ACTIVE" and "HIGH_RISK" in (e.get("scope_tiers") or [])
+                for e in literacy
+            )
+            if not has_operator:
+                return {
+                    "allowed": False,
+                    "agent_id": agent_id,
+                    "risk_tier": "HIGH_RISK",
+                    "reason": "Aktivierung gesperrt: Kein aktiver Bediener mit Art.-4-Kompetenznachweis für HIGH_RISK registriert.",
+                }
         return {
             "allowed": True,
             "agent_id": agent_id,

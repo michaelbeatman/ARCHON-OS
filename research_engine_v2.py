@@ -23,6 +23,9 @@ import re
 import json
 import time
 import math
+import threading
+import socket
+import ipaddress
 import urllib.request
 import urllib.parse
 from html.parser import HTMLParser
@@ -69,29 +72,109 @@ class _TextExtractor(HTMLParser):
             self.parts.append(data)
 
 
+def _is_global_ip(ip_str: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_str.split("%")[0])
+    except ValueError:
+        return False
+    return bool(ip.is_global and not ip.is_multicast and not ip.is_unspecified)
+
+
 def _is_safe_url(url: str) -> bool:
-    """Schutz vor SSRF: nur http(s), keine lokalen Adressen."""
+    """Schutz vor SSRF: nur http(s), prüft Hostnamen und aufgelöste IPs auf globale Erreichbarkeit."""
     try:
         p = urllib.parse.urlparse(url)
     except Exception:
         return False
-    if p.scheme not in ("http", "https") or not p.hostname:
+    if p.scheme not in ("http", "https") or not p.hostname or p.username or p.password:
         return False
-    host = p.hostname.lower()
-    return not any(host == b or host.startswith(b) for b in BLOCKED_HOSTS)
+    host = p.hostname.lower().rstrip(".")
+    if not host:
+        return False
+    if host in ("localhost", "host.docker.internal") or host.endswith((".local", ".internal", ".localhost")):
+        return False
+    if any(host == b or host.startswith(b) for b in BLOCKED_HOSTS):
+        return False
+    # Direktes IP-Literal (inkl. oktaler/hex/dezimaler Schreibweisen über socket.inet_aton)
+    try:
+        packed = socket.inet_aton(host)
+        return _is_global_ip(socket.inet_ntoa(packed))
+    except OSError:
+        pass
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        return _is_global_ip(str(ip_obj))
+    except ValueError:
+        pass
+    # DNS-Auflösung gegen interne Rebinding-Ziele prüfen (bei Offline-DNS nicht blind durchlassen für einlabelige Hostnamen)
+    if "." not in host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, p.port or (443 if p.scheme == "https" else 80), type=socket.SOCK_STREAM)
+        if not infos:
+            return False
+        return all(_is_global_ip(info[4][0]) for info in infos)
+    except socket.gaierror:
+        # Wenn offline/Sandbox kein DNS hat, wenigstens interne Muster weiter blocken
+        return True
+    except Exception:
+        return False
+
+
+_HTTP_CLIENT_LOCK = threading.Lock()
+_HTTP_CLIENT = None
+
+
+def _get_http_client():
+    """Thread-sicherer persistenter httpx-Client mit Keep-Alive-Connection-Pool."""
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is None:
+        with _HTTP_CLIENT_LOCK:
+            if _HTTP_CLIENT is None:
+                import httpx
+                _HTTP_CLIENT = httpx.Client(
+                    follow_redirects=False,
+                    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+                )
+    return _HTTP_CLIENT
 
 
 def _http_get(url: str, timeout: int = 15, headers: Optional[Dict[str, str]] = None) -> Tuple[bytes, str]:
     h = {"User-Agent": USER_AGENT}
     h.update(headers or {})
-    req = urllib.request.Request(url, headers=h)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        ctype = resp.headers.get("Content-Type", "")
-        return resp.read(MAX_PAGE_BYTES), ctype
+    client = _get_http_client()
+    current_url = url
+    for _ in range(6):
+        with client.stream("GET", current_url, headers=h, timeout=float(timeout)) as resp:
+            if resp.status_code in (301, 302, 303, 307, 308):
+                loc = resp.headers.get("Location")
+                if not loc:
+                    raise ValueError("HTTP-Redirect ohne Location-Header")
+                next_url = urllib.parse.urljoin(current_url, loc)
+                if not _is_safe_url(next_url):
+                    raise ValueError(f"SSRF-Schutz: unsicheres Redirect-Ziel blockiert ({next_url})")
+                current_url = next_url
+                continue
+            resp.raise_for_status()
+            ctype = resp.headers.get("Content-Type", "")
+            buf = bytearray()
+            for chunk in resp.iter_bytes():
+                if not chunk:
+                    continue
+                remaining = MAX_PAGE_BYTES - len(buf)
+                if remaining <= 0:
+                    break
+                buf.extend(chunk[:remaining])
+                if len(buf) >= MAX_PAGE_BYTES:
+                    break
+            return bytes(buf), ctype
+    raise ValueError("Zu viele HTTP-Redirects (>5)")
 
 
 def scrape_local(url: str, timeout: int = 15) -> str:
     """Scraper 1: direkter Abruf. HTML per Stdlib, PDF per PyMuPDF falls installiert."""
+    if not _is_safe_url(url):
+        return ""
     raw, ctype = _http_get(url, timeout)
     if "pdf" in ctype.lower() or url.lower().endswith(".pdf"):
         try:
@@ -112,6 +195,10 @@ def scrape_jina(url: str, timeout: int = 25) -> str:
     """Scraper 2: Jina Reader (r.jina.ai). Liefert Markdown, auch fuer JS-Seiten.
     Ohne Key stark ratenbegrenzt. Mit JINA_API_KEY stabiler.
     Achtung: Die URL wird an Jina uebermittelt (Datenschutz beachten)."""
+    if (os.environ.get("ARCHON_DISABLE_JINA_SCRAPE") or "").strip().lower() in ("1", "true", "yes"):
+        return ""
+    if not _is_safe_url(url):
+        return ""
     headers = {"Accept": "text/plain"}
     key = os.environ.get("JINA_API_KEY")
     if key:

@@ -36,19 +36,39 @@ def _hermes_proxy_token() -> str:
     return ""
 
 
+_HERMES_HTTP_CLIENT: Optional[httpx.AsyncClient] = None
+_HERMES_TARGET_CACHE: Dict[str, Any] = {"base": None, "ts": 0.0}
+
+
+def _get_hermes_client() -> httpx.AsyncClient:
+    global _HERMES_HTTP_CLIENT
+    if _HERMES_HTTP_CLIENT is None or _HERMES_HTTP_CLIENT.is_closed:
+        _HERMES_HTTP_CLIENT = httpx.AsyncClient(
+            timeout=httpx.Timeout(15.0, connect=2.5),
+            limits=httpx.Limits(max_connections=30, max_keepalive_connections=10),
+        )
+    return _HERMES_HTTP_CLIENT
+
+
 async def forward_to_hermes(request: Request) -> Response:
     path_to_use = request.url.path
     if path_to_use.startswith("/static/hermes-webui"):
         path_to_use = path_to_use[len("/static/hermes-webui"):]
     query_str = f"?{str(request.query_params)}" if request.query_params else ""
 
-    candidates = [
-        f"http://hermes-webui:8787{path_to_use}{query_str}",
-        f"http://127.0.0.1:8787{path_to_use}{query_str}",
-        f"http://host.docker.internal:8787{path_to_use}{query_str}",
-        f"http://hermes-dashboard:9119{path_to_use}{query_str}",
-        f"http://127.0.0.1:9119{path_to_use}{query_str}",
+    base_candidates = [
+        "http://hermes-webui:8787",
+        "http://127.0.0.1:8787",
+        "http://host.docker.internal:8787",
+        "http://hermes-dashboard:9119",
+        "http://127.0.0.1:9119",
     ]
+    import time as _time
+    cached_base = _HERMES_TARGET_CACHE.get("base")
+    if cached_base and (_time.monotonic() - _HERMES_TARGET_CACHE.get("ts", 0.0)) < 30.0:
+        ordered_bases = [cached_base] + [b for b in base_candidates if b != cached_base]
+    else:
+        ordered_bases = base_candidates
 
     fwd_headers = {
         k: v
@@ -79,17 +99,19 @@ async def forward_to_hermes(request: Request) -> Response:
     fwd_headers["Authorization"] = f"Bearer {hermes_token}"
 
     body = await request.body()
+    client = _get_hermes_client()
     last_err = None
-    for target in candidates:
+    for base in ordered_bases:
+        target = f"{base}{path_to_use}{query_str}"
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.request(
-                    method=request.method,
-                    url=target,
-                    headers=fwd_headers,
-                    content=body if body else None,
-                    timeout=15.0,
-                )
+            resp = await client.request(
+                method=request.method,
+                url=target,
+                headers=fwd_headers,
+                content=body if body else None,
+            )
+            _HERMES_TARGET_CACHE["base"] = base
+            _HERMES_TARGET_CACHE["ts"] = _time.monotonic()
             return Response(
                 content=resp.content,
                 status_code=resp.status_code,
@@ -105,7 +127,7 @@ async def forward_to_hermes(request: Request) -> Response:
     )
 
 
-@router.get("/api/proxy")
+@router.get("/api/proxy", dependencies=[_ArchonDepends(require_admin_or_503)])
 async def proxy_web_ui(url: str):
     """Header-stripping async proxy to bypass X-Frame-Options & CSP for embedded Web UIs."""
     from utils.egress_guard import EgressBlocked, check_target_url
@@ -137,7 +159,7 @@ async def proxy_web_ui(url: str):
     client = app_main._get_shared_proxy_client()
     try:
         resp = await client.get(
-            target_url, headers=req_headers, timeout=10.0, follow_redirects=True
+            target_url, headers=req_headers, timeout=10.0, follow_redirects=False
         )
     except Exception:
         try:
@@ -145,15 +167,17 @@ async def proxy_web_ui(url: str):
                 url,
                 headers={"User-Agent": "Mozilla/5.0"},
                 timeout=10.0,
-                follow_redirects=True,
+                follow_redirects=False,
             )
         except Exception as e:
-            err_html = f"<div style='font-family:sans-serif; padding:20px; color:#ef4444;'><h3>Web UI Proxy Status</h3><p>Konnte <code>{url}</code> nicht laden: {e}</p></div>"
+            import html as _html
+            err_html = f"<div style='font-family:sans-serif; padding:20px; color:#ef4444;'><h3>Web UI Proxy Status</h3><p>Konnte <code>{_html.escape(url, quote=True)}</code> nicht laden: {_html.escape(str(e), quote=True)}</p></div>"
             return HTMLResponse(content=err_html, status_code=502)
 
     content_type = resp.headers.get("Content-Type", "text/html")
 
     if "html" in content_type.lower():
+        import html as _html
         html_text = resp.text
         env_script = """<script>
             window.NEXT_PUBLIC_API_URL = "http://localhost:9119";
@@ -166,7 +190,8 @@ async def proxy_web_ui(url: str):
             window.process.env.VITE_API_URL = "http://localhost:9119";
             window.process.env.HERMES_API_URL = "http://localhost:9119";
         </script>"""
-        base_tag = f'<base href="{url.rstrip("/")}/">{env_script}'
+        safe_base_url = _html.escape(url.rstrip("/") + "/", quote=True)
+        base_tag = f'<base href="{safe_base_url}">{env_script}'
         if "<head>" in html_text:
             html_text = html_text.replace("<head>", f"<head>{base_tag}", 1)
         else:
@@ -234,7 +259,6 @@ _HERMES_ROUTES = [
     "/api/provider/quota",
     "/api/provider/cost-history",
     "/api/transcribe/capability",
-    "/api/onboarding/status",
     "/api/extensions/status",
     "/api/reasoning",
     "/api/insights",

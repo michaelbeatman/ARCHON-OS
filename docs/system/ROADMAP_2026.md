@@ -30,8 +30,8 @@
 | **25** | **Operativer Operations-Kalender (ERP, Kanban & Agenten)** | Hoch | Teilweise (Basis-API) | Aggregations-API (`/api/v1/calendar/events`) aktiv; **Enterprise-Kalender-UI (Monats-/Wochen-/Tagesraster, Drag & Drop, Serientermine, Erinnerungen)** für Ausbau (M55) offen |
 | **26** | **Autonomous Computer-Use & PbD (Demo-to-Skill)** | Kritisch | Abgeschlossen | Vormachen & Lernen per Bot-Screen, Ghost-Cursor Anti-Detection (Bézier-Pfade, Bounding-Box Jitter), SoM-Visual-Grounding und a11y Observation-Pruning |
 | **27** | **MCTS Action Trajectories & Deep Reasoning Gate** | Mittel | Abgeschlossen | Optionale Monte-Carlo-Baumsuche in Autonomie-Settings zur Voraus-Simulation heikler Handlungsstränge vor Ausführung |
-| **28** | **ERP-Modul zum vollwertigen Kernsystem ausbauen** | Kritisch | Geplant | Von der aktuellen Basis-Stammdatenverwaltung zur E-Rechnung (XRechnung/ZUGFeRD), FinTS/PSD2-Bankabgleich, DATEV-Export, Bestandsbuchung & Beleg-Workflow |
-| **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Geplant | WYSIWYG-/Block-Editor für Angebote, Rechnungen, Mahnungen & Verträge inkl. § 14 UStG-Pflichtfeld-Prüfung, Briefbogen-Layouter und Live-PDF-Vorschau |
+| **28** | **ERP-Modul zum vollwertigen Kernsystem ausbauen** | Kritisch | Abgeschlossen | EN 16931 / XRechnung-3.0-UBL-XML (`/xrechnung.xml`), ZUGFeRD-2.2 / Factur-X Hybrid-PDF (`/zugferd.pdf`), DATEV-EXTF-SKR03-CSV (`/export/datev.csv`), `leitweg_id`, atomare Lagerbestands-Abbuchung (`stock_deducted`) sowie Bank-Import (`CAMT.053` / `MT940` / `CSV`) & OPOS-Abgleich (`/api/erp/bank/*`) |
+| **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Abgeschlossen | WYSIWYG-/Block-Editor (`view_corporate.html`, `corporate_controller.js`) für 6 Belegtypen (Brief, Angebot, AB, Rechnung, Mahnung 1–3, NDA) inkl. Live-§ 14-UStG-Prüfung, Platzhaltern (`{{customer.*}}`/`{{doc.*}}`), DIN-5008-Falzmarken, Pure-Python EPC-QR GiroCode (`backend/qr_girocode.py`), Layout-Persistenz & direktem A4-PDF-Download (`/api/corporate/render-pdf`) |
 | **30** | **Interaktiver Setup-Wizard & Installationsprogramm** | Kritisch | Abgeschlossen | Geführter First-Run-Installer (GUI & CLI) mit Abfrage von Firmendaten, Mandantenstamm, API-Keys, lokalen LLM-Pfaden, IMAP/SMTP und Telegram-Bot-Setup |
 | **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Abgeschlossen | Durchgehende Übersetzung aller 70 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 55 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
 | **32** | **Telegram-Kommunikation & Gateway-Härtung** | Hoch | Geplant | Konfliktfreies Session-Handling, Inline-Freigabe-Buttons (HITL), Live-Status-Updates bei Langläufer-Tasks, zuverlässiges Agenten-Routing (`/robert`, `/anwalt`) |
@@ -59,6 +59,11 @@
 | **54** | **Voice-to-Workflow & 2-Stufen-KI-Spezifikations-Helfer (Editoren)** | Hoch | Geplant | Mikrofon-Diktat (Whisper STT) + 2-stufige KI-Auswertung mit gezielten Rückfragen bei Unklarheiten zur fehlerfreien Übersetzung gesprochener Sprache in deterministische Playbooks/Prozessabläufe |
 | **55** | **Enterprise-Kalender-Ausbau (M25 Full-UI)** | Hoch | Geplant | Vollwertiges Monats-/Wochen-/Tagesraster, Drag-&-Drop-Terminplanung, Serientermine, Erinnerungen/Benachrichtigungen & Ressourcen-/Agenten-Ansicht |
 | **56** | **Archon OS Versions- & GitHub-Update-Badge (Sidebar unten links)** | Hoch | Abgeschlossen | Analog zur Hermes-Versionsanzeige unten links: Anzeige der aktuellen Archon-OS-Version (`archon_version_badge.js`) mit sofortigem Update-Badge bei neuem GitHub-Release/Commit und 1-Klick-Sprung in *Settings → System-Update* |
+| **57** | **Frontend-Performance, Streaming-Bus & WCAG/i18n-Härtung** | Kritisch | Abgeschlossen | Lazy-Loading statt 20-View-Boot-Stau, lokales Tailwind-CSS (`tailwind.generated.css`), konsolidierter `archon:sse`-Bus, `lucide`-Scoping, `250ms` Search-Debounce + `AbortController`, XSS-Escaping, WCAG 2.2 AA (`modal_a11y.js` auf 39 Dialogen) & 11-Sprachen-Parität |
+| **58** | **Backend-Performance, Async-Event-Loop & SQLite-Tuning** | Kritisch | Abgeschlossen | `asyncio.to_thread` für Docker/SQLite/File-I/O (`gateway`, `operations_org`, `chat`, `skills`, `orchestration`, `inbox_watcher`), zentraler `httpx.AsyncClient`-Pool, `ClosingConnection` + `WAL`/`cache_size=-32000`/Indizes, Mtime-Config-Cache & SQL-`WHERE` statt 72-DB-Vollscan |
+| **59** | **Kern-Pipeline, Runtime-Crash-Fixes & Routing-Konsolidierung** | Kritisch | Abgeschlossen | Behebung aller `ImportError`/`AttributeError`/`NameError`-Crashes (`hr`, `operations_autonomy`, `operations_emails`, `operations_org`, `memory_consolidator`, `governance`), Auth-/Settings-Fix (`core_settings.py`, Auth-SSOT, 9x fail-open `_require_admin`), Delegations- & Status-Integrität, `agent_chat`-History, `AUTO_MODEL_MAP` & Entfernung von Fake-Telemetrie |
+| **60** | **Aktive Security-Middleware & Recht/Compliance 2026** | Kritisch | Abgeschlossen | Pre-/Post-Dispatch-Verdrahtung (`pii_scrubber`, `secret_masker`, `egress_firewall`), Backend-Audio-Proxy (`aiAudio.ts`), DSGVO/UWG Opt-in & § 147 AO-Trennung, GoBD-Hashketten-Integrität (`audit_log`, `execution_receipt_ledger`, `erp_manager`), § 288 BGB-Mahnwesen mit echtem Versand, EU-AI-Act-Gates, § 5 DDG / § 25 TDDDG & `THIRD_PARTY_LICENSES.md` |
+| **61** | **Legacy-Bereinigung: `evey-*`-Altlasten & CRM/PocketBase-Entkopplung** | Hoch | Abgeschlossen | Rückbau alter `evey-*`-Artefakte aus `guardian.py`, `index.html` & `~/.hermes/plugins/evey-*`, Deaktivierung/Optionalisierung von `crm:3005` & `pocketbase:8090` (`settings_state.py`, Health-Probes, `POCKETBASE_ENABLED=false`), Port-Abgleich (`hermes:8642/8644`) & `docker-compose.yml` Env-Passthrough |
 
 ---
 
@@ -224,16 +229,17 @@
 
 ---
 
-### Meilenstein 28: ERP-Modul zum vollwertigen Kernsystem ausbauen (Geplant – Kritisch)
-- **Vom Prototyp zum produktiven KMU-ERP:** Ausbau der aktuell noch rudimentären Stammdaten- und Belegtabellen zu einer durchgängigen kaufmännischen Prozesskette (*Lead → Angebot → Auftragsbestätigung → Lieferschein/Leistungsnachweis → Teil-/Schlussrechnung → Buchung → Zahlungsabgleich*).
-- **E-Rechnungspflicht (XRechnung & ZUGFeRD 2.2):** Valider XML-/PDF/A-3-Export und -Import nach EN 16931 für den B2B-Geschäftsverkehr ab 2025/2026.
-- **Bankkonten-Synchronisation (FinTS / HBCI / PSD2):** Automatischer Abruf von Bankumsätzen und KI-gestütztes Matching offener Posten (OPOS) gegen Ausgangs- und Eingangsrechnungen.
-- **Steuerberater- & DATEV-Brücke:** Export buchungsfertiger Stapel im DATEV-Format (EXTF/CSV + digitale Belegbilder) für den Monatsabschluss (`finance_lead`).
+### Meilenstein 28: ERP-Modul zum vollwertigen Kernsystem ausbauen (Abgeschlossen – Kritisch)
+- **EN 16931 / XRechnung 3.0 E-Rechnung (UBL 2.1 XML):** Standardkonformer XML-Export (`/api/erp/documents/{doc_id}/xrechnung.xml` + `XRechnung XML`-Button in Operations ERP) inkl. `leitweg_id` (`crm_entities`), Seller-/Buyer-Stammdaten, USt-Kategorien (`S`/`AE`/`K`/`E`/`Z`) & IBAN/BIC-Zahlungsdaten.
+- **ZUGFeRD 2.2 / Factur-X Hybrid-PDF (`backend/erp_zugferd_pdf.py`):** Abhängigkeitsfreier DIN-A4-PDF-Generator (`/api/erp/documents/{doc_id}/zugferd.pdf` + `ZUGFeRD PDF`-Button) mit eingebetteter `factur-x.xml` (`/EmbeddedFiles`, `/AF`, `/AFRelationship /Alternative`) und XMP `fx:ConformanceLevel EN 16931`-Metadaten.
+- **DATEV EXTF Buchungsstapel CSV (SKR03):** Semikolon-CSV-Export mit UTF-8-BOM (`/api/erp/export/datev.csv` + `DATEV EXTF`-Button) inkl. SKR03-Erlöskonten (`8400`/`8300`/`8125`/`8337`), BU-Schlüssel (`3`/`2`), `DDMM`-Belegdatum & CSV-Formel-Injection-Schutz.
+- **Atomare Lagerbestands-Führung (`stock_qty`):** Festschreiben einer Rechnung (`booked`/`paid`) bucht Lagerartikel (`track_inventory = 1`) einmalig ab (`stock_deducted = 1`); Storno (`cancelled`) bucht den Bestand atomar zurück.
+- **Bankkonten-Import & OPOS-Zahlungsabgleich (`erp_bank_transactions`):** Parser & APIs für ISO 20022 `CAMT.053` XML (mit `<!DOCTYPE`/`<!ENTITY`-XXE-Schutz), SWIFT `MT940` (`.sta`) und Bank-`CSV` (`/api/erp/bank/import`, `/api/erp/bank/transactions`, `/api/erp/bank/transactions/{tx_id}/match`) inkl. SHA-256-Deduplizierung, Konfidenz-Matching gegen offene Ausgangsrechnungen (`auto_mark_paid`) und modalem OPOS-Dialog (`Bank-Import & OPOS`). *(Hinweis: Echtzeit-HBCI/FinTS/PSD2-Online-Abruf bleibt als späteres Gateway-Plugin optional.)*
 
-### Meilenstein 29: Visueller Formular- & Beleg-Editor im ERP-Modul (Geplant – Hoch)
-- **Interaktiver Vorlagen-Baukasten:** Ausbau von Kapitel `13.2 Formulare & Vorlagen` zu einem visuellen Editor für Briefbögen, Angebote, Rechnungen, Mahnungen und Verträge.
-- **Dynamische Datenbindung & § 14 UStG-Check:** Platzhalter-System (`{{customer.name}}`, `{{invoice.items_table}}`, `{{company.vat_id}}`) mit automatischer Live-Prüfung aller umsatzsteuerlichen Pflichtangaben.
-- **Echtzeit-PDF-Vorschau:** Nebeneinander-Ansicht von Layout-Einstellungen (Schriften, Ränder, Logo, Fußzeilen-Spalten, QR-GiroCode für Sofortüberweisung) und gerendertem A4-PDF.
+### Meilenstein 29: Visueller Formular- & Beleg-Editor im ERP-Modul (Abgeschlossen – Hoch)
+- **Interaktiver Vorlagen-Baukasten (`corporate_manager.py`, `view_corporate.html`, `corporate_controller.js`):** Einheitlicher visueller Editor für Geschäftsbriefe (DIN 5008 mit optionalen Falzmarken 105/148,5/210 mm), Angebote, Auftragsbestätigungen, Ausgangsrechnungen, Mahnungen (Stufen 1–3 nach § 286/§ 288 BGB) und NDAs — inkl. 1-Klick-Absprung `Beleg-Editor` direkt aus ERP-Belegen (`erp_studio.js`).
+- **Dynamische Datenbindung, Platzhalter & § 14 UStG-Check:** Mandanten- und Beleg-Persistenz (`GET/POST /api/corporate/template-layout`), Live-ERP-Belegverknüpfung, sichere `{{company.*}}` / `{{customer.*}}` / `{{doc.*}}`-Platzhalter sowie automatische § 14 Abs. 4 UStG Live-Compliance-Prüfung (`validate_ustg_compliance()`).
+- **Pure-Python GiroCode EPC-QR & A4-PDF-Export:** Abhängigkeitsfreier ISO-18004-QR-Matrix-Generator (`backend/qr_girocode.py`) als gestochen scharfes Vektor-SVG in Rechnungen/Mahnungen sowie echter PDF-Download via `POST /api/corporate/render-pdf` (`build_corporate_template_pdf`).
 
 ### Meilenstein 30: Interaktiver Setup-Wizard & Installationsprogramm (Abgeschlossen)
 - **Geführter 4-Schritte-Web-Wizard (`/onboarding` & Setup-Modal):**
@@ -300,11 +306,11 @@
 - **Geschützte Showroom-Freigabe-Seiten:** Erzeugung zeitlich begrenzter, optional PIN-/Passwort-geschützter Links für Angebote, Projektberichte, Konzepte oder Entwürfe.
 - **Digitale Angebotsannahme & Direkt-Feedback:** Kunden können Positionen im Browser kommentieren oder das Angebot digital bestätigen; bei Annahme wechselt der Belegstatus im ERP automatisch von *Angebot* auf *Auftrag* und informiert den Nutzer per Telegram.
 
-### Meilenstein 43: Multi-Mandanten-Umschalter (Holding / Operative GmbH / SPV) (Geplant – Hoch)
-- **Mandantenfähigkeit in einer Instanz:** Auswahl-Dropdown in der Topbar zum nahtlosen Wechsel zwischen mehreren eigenen Gesellschaften (z. B. Holding, operative GmbH, Immobilien-SPV oder Privatvermögen).
-- **Strikte Kontext- & Nummernkreis-Trennung:** Jede Gesellschaft besitzt eigene ERP-Nummernkreise, Briefbögen, Steuernummern, Bankkonten, Kostenstellen und getrennte Buchhaltungs-Exporte bei gleichzeitigem Zugriff auf dieselbe 70-köpfige Spezialisten-Flotte.
+### Meilenstein 43: Multi-Mandanten-Umschalter (Holding / Operative GmbH / SPV) (Abgeschlossen)
+- **Mandantenfähigkeit in einer Instanz:** Auswahl-Dropdown in der Topbar (`tenant_switcher.js`) zum nahtlosen Wechsel zwischen mehreren eigenen Gesellschaften (z. B. Holding, operative GmbH, Immobilien-SPV oder Privatvermögen).
+- **Strikte Kontext- & Nummernkreis-Trennung:** Jede Gesellschaft besitzt eigene isolierte SQLite-Datenbanken, ERP-Nummernkreise, Briefbögen, Steuernummern, Bankkonten, Kostenstellen und getrennte Buchhaltungs-Exporte bei gleichzeitigem Zugriff auf dieselbe 70-köpfige Spezialisten-Flotte.
 
-### Meilenstein 44: Fertige „1-Click Business Playbooks“ – Workflow-Rezepte (Geplant – Hoch)
+### Meilenstein 44: Fertige „1-Click Business Playbooks“ – Workflow-Rezepte (Abgeschlossen)
 - **Sofort startbare Prozess-Vorlagen für Einsteiger:** Kuratierte Bibliothek mit 10 mehrstufigen Standard-Workflows, die mehrere Spezialisten automatisch nacheinander orchestrieren:
   1. *Neuen Kunden komplett onboarden* (CRM-Anlage → Bonitäts-/Web-Check → NDA-Entwurf → Willkommens-Mail → Projekt-Ordner im Vault).
   2. *Monatsabschluss & Steuerberater-Paket vorbereiten* (Beleg-Vollständigkeitscheck → OPOS-Abgleich → BWA-Kommentar → DATEV-Stapel).
@@ -329,7 +335,7 @@
 - **Harte Middleware-Schreib- & Exec-Sperre:** Blockiert auf ASGI-Ebene sämtliche schreibenden Mutationen, Container-/Sandbox-Ausführungen, Dateisystem-Schreibpfade und externen LLM-Egress; liefert für Interaktionen deterministische, vorab aufgezeichnete Referenz-Antworten aus.
 - **5-€-VPS-Deployment-Fähigkeit:** Ermöglicht den risikolosen Betrieb einer öffentlichen Live-Instanz (`demo.archon-os...`) ohne 0-Day-Angriffsfläche und ohne laufende API-/Token-Kosten.
 
-### Meilenstein 48: Archon OS als nativer MCP-Server (`/mcp` Gateway) (Geplant – Hoch)
+### Meilenstein 48: Archon OS als nativer MCP-Server (`/mcp` Gateway) (Abgeschlossen)
 - **Vom reinen MCP-Client zum zentralen Unternehmens-MCP-Hub:** Bereitstellung eines standardkonformen Model-Context-Protocol-Endpunkts (`/mcp` via Streamable HTTP / SSE), abgesichert über Scoped-API-Keys (M17) und die bestehenden Human-in-the-Loop-Freigabe-Gates.
 - **Externe IDE- & Desktop-Anbindung:** Externe Clients wie *Claude Desktop*, *Cursor*, *Windsurf*, *VS Code* oder *Hermes Desktop* können direkt Archon-Spezialisten delegieren (`delegate_specialist`), ein mehrstimmiges AI-Boardroom-Votum einholen (`convene_boardroom`) oder kontrolliert Wissen aus Obsidian-Vault und ERP/CRM abfragen.
 - **Granulare Tool-Freigabe pro API-Key:** Jeder verbundene MCP-Client sieht ausschließlich die ihm per Scope freigegebenen Fach-Agenten und Lese-/Schreib-Werkzeuge.
@@ -344,17 +350,17 @@
 - **A/B-Modell- & SOUL-Vergleich vor Live-Schaltung:** Lässt bei Modellwechseln (z. B. neues lokales Ollama-/Qwen-/Llama-Modell) oder `SOUL.md`-Umbauten alte gegen neue Konfiguration automatisiert gegeneinander antreten.
 - **Entscheidungs-Scorecard im Cockpit:** Direkter Vorher/Nachher-Ausweis von Qualitätsscore, Halluzinationsrate, Schema-Treue, Antwortlatenz und Kosten pro Aufgabe vor Produktivsetzung.
 
-### Meilenstein 51: Portabler „Squad-Blueprint“-Paketmanager (`.archonpack`) (Geplant – Hoch)
+### Meilenstein 51: Portabler „Squad-Blueprint“-Paketmanager (`.archonpack`) (Abgeschlossen)
 - **Komplette Fachabteilungen als Einzelpaket bündeln:** 1-Klick-Export und signierter Import ganzer Spezialisten-Squads als portables `.archonpack`-Archiv (Agenten-Definitionen, 3-Stufen-`SOUL.md`, zugehörige Fach-Skills, passende Boardroom-Frameworks und optionale n8n-Workflow-Vorlagen).
 - **Schlüsselfertige Branchen- & Domänen-Blueprints:** Ermöglicht sofort installierbare Fachpakete wie *„Pharma / GDP-Quality-Squad“*, *„Immobilien-Ankaufsprüfung & SPV-Analyse“*, *„Steuer- & Monatsabschluss-Vorbereitung“* oder *„E-Commerce Operations“*.
 - **Abhängigkeits- & Sicherheits-Prüfung beim Import:** Vorab-Inspektion aller enthaltenen Prompts, Tool-Berechtigungen und benötigten MCP-Connectoren in einer Quarantäne-Vorschau vor Aktivierung im Kader.
 
-### Meilenstein 52: Pre-Flight Cost-Estimator & „Shadow-Mode“ (Trockenlauf für Agenten) (Geplant – Mittel)
+### Meilenstein 52: Pre-Flight Cost-Estimator & „Shadow-Mode“ (Trockenlauf für Agenten) (Abgeschlossen)
 - **Pre-Flight-Kostenvoranschlag vor großen Ketten:** Transparente Vorab-Kalkulation vor Start mehrstufiger Delegationskaskaden oder 6-Phasen-Boardroom-Debatten (*„Geschätzt: ~48k Tokens ≈ 0,14 € · 4 lokale Zero-Cost-Agenten + 1 Cloud-Synthese“*) mit konfigurierbarer Kostenschwelle für Pflicht-Freigaben.
 - **Passiver „Shadow-Mode“ für neue Agenten & Prompts:** Neue oder umgebaute Spezialisten lesen reale Eingänge, Tickets und Aufgaben im Hintergrund parallel mit und erzeugen interne Entwürfe, ohne nach außen senden oder Status mutieren zu dürfen.
 - **Reifegrad-Freischaltung nach Trefferquote:** Das Cockpit legt den Shadow-Entwurf neben die reale menschliche Entscheidung und empfiehlt die Beförderung in den aktiven Betrieb erst ab einer gemessenen Übereinstimmungsquote (z. B. > 90 % über 20 Vorgänge).
 
-### Meilenstein 53: „Epistemic Hygiene“-Wächter für den Obsidian-Vault (Geplant – Mittel)
+### Meilenstein 53: „Epistemic Hygiene“-Wächter für den Obsidian-Vault (Abgeschlossen)
 - **Wöchentlicher Wissens-Konsistenz-Scan:** Lokaler Hintergrund-Job (Embeddings + regelbasierte Faktenextraktion) über `01_PROJEKTE` und `02_Wissensbibliothek`, der schleichende Widersprüche zwischen eigenen Notizen erkennt (z. B. abweichende Zinssätze, Stundensätze, Fristen oder Projektannahmen in verschiedenen Dokumenten).
 - **Verfallsdatum- & Rechtsstand-Radar:** Markiert Notizen, Kalkulationen und Vorlagen mit abgelaufenen Vertragsständen, überholten Steuersätzen/Gesetzesfassungen oder verwaisten Querverweisen.
 - **Saubere Bereinigungs-Tickets statt stiller Korrektur:** Legt erkannte Diskrepanzen mit exaktem Zitat-Paar (Dokument A vs. Dokument B) als prüfbares Klärungs-Ticket im Triage-/Kanban-Board an, ohne das Second Brain ungefragt umzuschreiben.
@@ -363,6 +369,35 @@
 - **Versions- & Update-Anzeige analog zu Hermes Agent:** Unten links in der Seitenleiste (direkt neben/über der Hermes-Agent-Versionsanzeige) wird die aktuell installierte Archon-OS-Version permanent angezeigt.
 - **Sofortiger GitHub-Update-Badge:** Liegt auf GitHub eine neuere Version bzw. ein neues Release vor, erscheint sofort ein gut sichtbarer Update-Badge an der Archon-Versionsanzeige.
 - **1-Klick-Sprung zum System-Update:** Ein Klick auf den Badge öffnet direkt *Settings → System-Update & Server-Sync*, sodass das Update unmittelbar gezogen werden kann.
+
+---
+
+### Meilenstein 57: Frontend-Performance, Streaming-Bus & WCAG/i18n-Härtung (Abgeschlossen)
+- **Umgesetzt (15.11.2026 — Performance, SSE & XSS):** `initArchonApp()` (`static/index.html`) entkoppelt sekundäre Views vom initialen Overlay-Boot und lädt versteckte `localhost:9119`-Iframes (`#agent-dash-iframe`, `#hermes-dashboard-iframe`) erst per `data-src` bei Aktivierung; `add_no_cache_for_avatars` (`main.py`) gilt nur noch für `/static/avatars/` und doppeltes `/assets`-Mounting wurde bereinigt. Toter `EventSource("/api/v1/telemetry/logs")` in `static/js/skill_markt.js` sowie doppelter SSE-Stream in `mission_control_cockpit.js` wurden auf den geteilten `archon:sse`-Bus umgestellt. Überflüssiger `selectionchange`-Icon-Scan in `agent_profiles.js` entfernt; Debounce + `AbortController` in `crm_studio.js`, `agent_profiles.js` und `erp_studio.js` (`static/views/view_items.html`) ergänzt; XSS-Escaping in `prompt_studio.js`, `erp_studio.js`, `skill_markt.js` (Boardroom SSE & Thread-Verlauf), `operations_kanban.js` (Comm-Feed) sowie `static/index.html` (NotebookLM) nachgezogen; verschachteltes `<main>` in `index.html` bereinigt, `user-scalable=no` in `mobile.html` entfernt, sichtbare Fokus-Ringe in `static/css/themes.css` ergänzt und Impressum-/Datenschutz-Links integriert.
+- **Umgesetzt (15.11.2026 — Build-CSS, WCAG-Dialoge & ERP-i18n Abschluss):**
+  - **Vorkompiliertes Tailwind-CSS:** Neues Offline-Build-Skript `scripts/build_tailwind_css.mjs` compiliert alle genutzten Klassen aus `static/` vorab in `static/css/tailwind.generated.css` und ersetzt sowohl `tailwind.cdn.js` in `static/index.html` als auch externe Tailwind-/Lucide-/Font-CDNs in `static/hermes-hud/index.html`.
+  - **WCAG 2.2 AA Dialog-Sweep:** Alle 39 aktiven Modals und Drawer (`22` in `static/index.html` + `17` in `static/views/*.html`) tragen `role="dialog" aria-modal="true"`; `static/js/modal_a11y.js` übernimmt per `MutationObserver` automatisches `aria-labelledby`-Binding, `Tab`/`Shift+Tab`-Focus-Trap, `Escape`-Schließen und Fokus-Rückführung auf das auslösende Element (`role="status" aria-live="polite"` am `global-loading-overlay`).
+  - **ERP-Studio i18n-Parität:** Alle 124 hardcodierten deutschen UI-Strings in `static/erp_studio.js` auf `erpT("ui.erp_studio.*", ...)` (`window.archonI18n`) inkl. Live-Getter-Funktionen (`getAddressTabMeta`, `getItemsTabMeta`, `getOpsErpTabMeta`) umgestellt und über alle 11 Sprachkataloge (`static/locales/{de,en,es,fr,it,ja,ko,nl,pt,ru,zh}.json`) vollständig synchronisiert.
+
+### Meilenstein 58: Backend-Performance, Async-Event-Loop & SQLite-Tuning (Abgeschlossen)
+- **Event-Loop entblockt:** Blockierende Docker-Exec-Schleifen (`archon/routers/gateway.py`), `stream_comm_feed` (`archon/routers/operations_org.py` inkl. `try/finally: conn.close()` + 1.5s-Poll) und Index-Scans (`archon/routers/skills.py`) via `asyncio.to_thread` ausgelagert.
+- **Persistente HTTP-Connection-Pools & Endpoint-Cache:** Langlebige `httpx.AsyncClient`-Instanzen in `core_dispatcher.py`, `archon/routers/hermes_proxy.py` (inkl. 30s Target-Cache) und `archon/routers/system.py`.
+- **SQLite-Standardisierung & Indizierung:** Deterministisches Connection-Closing in `backend/auth_service.py` (`_ClosingAuthConn`), aufgelöster DB-Pfad-Cache sowie einmalige `WAL`/`synchronous=NORMAL`/`cache_size=-32000`/`temp_store=MEMORY`-Initialisierung in `backend/db_paths.py`, `archon/core/state_db.py` und `archon/core/mission_control.py`; 3 fehlende Indizes plus 30s-Touch-Cooldown in `local_memory_bridge.py`; SQL-Datumsfilter in `archon/routers/guardian.py`; `collections.deque` + 5s-Config-Cache in `backend/async_write_batcher.py`.
+
+### Meilenstein 59: Kern-Pipeline, Runtime-Crash-Fixes & Routing-Konsolidierung (Abgeschlossen)
+- **Akute Runtime-Crashes geschlossen:** Repariert in `hr.py`, `governance.py`, `operations_autonomy.py`, `backend/email_draft_engine.py` (`get_status_counts`), `operations_org.py` und `backend/memory_consolidator.py` (inkl. Entfernen destruktiven Audit-Log-Prunings).
+- **Auth- & Settings-Widersprüche behoben:** Weiterleitungs-Trigger in `archon/routers/core_settings.py` (GET & POST) auf explizite `x-hermes-*`-Header begrenzt (`Authorization: Bearer` bleibt lokal); alle `9` fail-open `_require_admin`-Fallbacks auf fail-closed `_rbac.require_admin_or_503` gezogen; `archon/routers/auth.py` Toggle-Pfade & dynamisches HTTPS-`secure`-Cookie-Flag angeglichen.
+- **Chat-, Delegations-, Telemetry- & Playbook-Pipeline repariert:** `archon/routers/agent_chat.py` übergibt `history` an `core_dispatcher.py` inkl. Anthropic-Textblock-Extraktion, OmniRoute-Vorrang und lückenlosem `_log_dispatcher_usage`; `archon/core/delegation.py` erkennt `"failed"`/`"blocked"` terminal; `backend/operations_api.py` meldet echten `target_status`; `backend/agent_router.py` nutzt `db_paths`-Auflösung für `_daily_spend_usd`; `archon/routers/telemetry.py` liefert reale SQLite-/Skill-/Vault-Metriken; `backend/speculative_prefetcher.py` liest aktives Tenant-`erp.db`; `backend/playbooks_engine.py` + `archon/routers/playbooks.py` führen Schritte real über `core_dispatcher` aus; `apollo_voice_engine.py` bindet `sync_emails`/`create_task`/`chat_or_execute` an.
+
+### Meilenstein 60: Aktive Security-Middleware & Recht/Compliance 2026 (Abgeschlossen)
+- **DLP & Egress-Schutz technisch erzwungen:** `enforce_egress_firewall_for_url` und `sanitize_outbound_llm_payload` (`secret_masker` + `pii_scrubber`) aktiv in `core_dispatcher.py` und `backend/agent_router.py` vor Cloud-HTTP-Dispatches; `frontend/src/utils/aiAudio.ts` entfernt alle Browser-Groq-Keys und nutzt `POST /api/voice/transcribe` (`archon/routers/voice.py`).
+- **Showroom Path-Jail & Python-Sandbox (`views_core.py`):** `/showroom/file/delete`, `/restore` und `/purge` sowie `run_showroom_code` erzwingen `safe_path_within`; Python-Ausführung läuft isoliert im `TemporaryDirectory` mit `python -I`, bereinigter Environment-Liste (ohne Host-Secrets) und POSIX-`rlimit`.
+- **DSGVO, GoBD & § 288 BGB:** `execution_receipt_ledger.verify_chain_integrity()` prüft alle gespeicherten SHA-256-Hashes neu; `backend/erp_manager.py` sperrt `booked`/`paid -> draft`-Rückstufungen; `backend/dunning_engine.py` setzt Mahnstufe 1 auf `0,00 €`, berechnet tagesgenaue Verzugszinsen (§ 288 BGB) und koppelt `approve_and_send_dunning` an `email_draft_engine`/`erp_manager`; `backend/crm_service.py` & `backend/tenant_context.py` erzwingen Opt-In-Default `0`; `backend/gdpr_compliance_engine.py` liefert standardmäßig einen paginierten Voll-Export nach Art. 15 DSGVO (optional begrenzt via `max_messages` mit Truncation-Flag) und löscht nach Art. 17 case-insensitiv (`re.IGNORECASE`); `backend/privacy_router.py` vergibt `"DSGVO (100% On-Premise)"` nur bei streng lokalem Betrieb.
+- **EU AI Act, § 5 DDG & OSS-Lizenzen:** `compliance_engine.py` & `eu_ai_act_inventory.py` prüfen Art.-4-Kompetenz für `HIGH_RISK` dynamisch; `chat.py` gibt Art.-50-Tag nur bei erfolgreicher KI-Antwort aus; `/api/legal/impressum` & `/api/legal/datenschutz` in `archon/routers/system.py` bereitgestellt und verlinkt; `THIRD_PARTY_LICENSES.md` um Backend-Python- und Frontend-Vendor-Pakete vervollständigt.
+
+### Meilenstein 61: Legacy-Bereinigung: `evey-*`-Altlasten & CRM/PocketBase-Entkopplung (Abgeschlossen)
+- **Deaktivierung/Optionalisierung von `crm:3005` & `pocketbase:8090`:** Aus aktiven Standard-Checks in `archon/core/settings_state.py` und Default-Logansicht (`static/index.html`) entfernt; `backend/erp_manager.py` und `backend/gdpr_compliance_engine.py` über `POCKETBASE_ENABLED=false` lokal autark auf `erp.db` geschaltet; `docker-compose.yml` reicht `POCKETBASE_ENABLED=${POCKETBASE_ENABLED:-false}` sowie fehlende Provider-/Service-/Vault-Variablen an `archon-os` durch.
+- **Abbau aktiver `evey-*`-Altlasten:** Hardcodiertes `evey-telegram-ux`-Auto-Enable entfernt und nicht aktivierte `evey-*`-Legacy-Plugins in `archon/routers/guardian.py` ausgeblendet.
 
 
 

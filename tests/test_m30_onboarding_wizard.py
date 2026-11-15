@@ -567,8 +567,67 @@ def test_frontend_wizard_js_contains_required_hooks_and_theme_vars() -> None:
         "/api/onboarding/skip",
         "1. Company & Tenant",
         "1. Unternehmen & Mandant",
+        "aow-brand-hero",
+        "/static/archon_os_logo.png",
+        "data-brand-preset",
+        "aow-corner-preview-img",
+        "aow-logo-url",
+        "applyCustomizerSetting",
     ):
         assert required_token in content, f"Missing token in onboarding_wizard.js: {required_token}"
+
+    logo_asset = REPO_ROOT / "static" / "archon_os_logo.png"
+    assert logo_asset.exists() and logo_asset.stat().st_size > 1024
+
+
+def test_ci_brand_logo_url_validation_and_existing_data_detection(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    # Fresh instance reports existing_data_detected = False
+    fresh = client.get("/api/onboarding/status").json()
+    assert fresh["existing_data_detected"] is False
+    assert fresh["auto_open"] is True
+
+    # Reject unsafe logo_url schemes / traversal / inline SVG XSS
+    for bad_logo in (
+        "javascript:alert(1)",
+        "data:image/svg+xml;base64,PHN2Zz4=",
+        "/static/../etc/passwd",
+        "<img src=x onerror=alert(1)>",
+    ):
+        r_bad = client.post(
+            "/api/onboarding/complete",
+            json={"company_profile": {"company_name": "BadLogo GmbH", "logo_url": bad_logo}},
+        )
+        assert r_bad.status_code == 400, f"Expected 400 for {bad_logo}, got {r_bad.status_code}"
+
+    # Valid CI-Brand logo_url persists into company_profile.json & settings
+    r_ok = client.post(
+        "/api/onboarding/complete",
+        json={
+            "company_profile": {
+                "company_name": "Archon Brand GmbH",
+                "language": "de",
+                "logo_url": "/static/img/logo.png",
+            }
+        },
+    )
+    assert r_ok.status_code == 200
+    status_after = client.get("/api/onboarding/status").json()
+    assert status_after["company_profile"]["logo_url"] == "/static/img/logo.png"
+    assert status_after["existing_data_detected"] is True
+    assert "company_profile" in status_after["existing_data_reasons"]
+
+    # Clean DB inside isolated data dir triggers existing_data_detected even before onboarding completes
+    onboarding_wizard.atomic_write_json(onboarding_wizard.ROOT_SETTINGS_FILE, {})
+    onboarding_wizard.TENANT_PROFILE_FILE
+    db_marker = tmp_path / "data" / "kanban.db"
+    db_marker.parent.mkdir(parents=True, exist_ok=True)
+    db_marker.write_bytes(b"SQLite format 3\x00")
+    status_db = client.get("/api/onboarding/status").json()
+    assert status_db["existing_data_detected"] is True
+    assert "db:kanban.db" in status_db["existing_data_reasons"]
 
 
 def test_telegram_getme_verification_and_token_redaction(

@@ -51,8 +51,9 @@ class SkillSynthesizer:
 
     def propose_new_skill(self, agent_id: str, skill_name: str, trigger_intent: str, workflow_description: str, tools_used: List[str] = None) -> Dict[str, Any]:
         """Erstellt einen neuen Skill-Entwurf und trägt ihn in die Personalakte ein."""
+        import re as _re
         tools_used = tools_used or ["local_memory", "core_dispatcher"]
-        skill_slug = skill_name.lower().replace(" ", "-").replace("_", "-")
+        skill_slug = _re.sub(r"[^a-z0-9-]", "-", (skill_name or "").lower().strip()).strip("-") or "custom-skill"
         prop_id = f"skill-prop-{datetime.datetime.now().strftime('%m%d%H%M%S')}"
 
         skill_md = f"""---
@@ -103,7 +104,9 @@ Wird automatisch aktiviert bei: `{trigger_intent}`
         }
 
     def _record_in_personalakte(self, agent_id: str, skill_name: str, prop_id: str):
-        akte_path = os.path.join(PERSONALAKTEN_DIR, f"personalakte_{agent_id}.md")
+        import re as _re
+        safe_agent_id = _re.sub(r"[^a-zA-Z0-9_-]", "_", str(agent_id or "")).strip("_") or "agent"
+        akte_path = os.path.join(PERSONALAKTEN_DIR, f"personalakte_{safe_agent_id}.md")
         today = datetime.date.today().isoformat()
         entry = f"\n- 🌟 **Synthetisierter Skill-Entwurf:** [{skill_name}] (ID: {prop_id}, {today}) — Status: *Wartet auf Benutzerfreigabe*\n"
         try:
@@ -125,8 +128,10 @@ Wird automatisch aktiviert bei: `{trigger_intent}`
             if not row:
                 return {"status": "error", "message": f"Vorschlag {proposal_id} nicht gefunden."}
 
+            import re as _re
             item = dict(row)
-            active_skill_dir = os.path.join(WORKSPACE_DIR, ".agents", "skills", item["skill_name"].lower().replace(" ", "-"))
+            safe_skill_dir = _re.sub(r"[^a-z0-9-]", "-", str(item.get("skill_name") or "").lower().strip()).strip("-") or "custom-skill"
+            active_skill_dir = os.path.join(WORKSPACE_DIR, ".agents", "skills", safe_skill_dir)
             os.makedirs(active_skill_dir, exist_ok=True)
             active_file = os.path.join(active_skill_dir, "SKILL.md")
 

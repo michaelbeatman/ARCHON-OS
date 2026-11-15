@@ -59,31 +59,30 @@
       }
     }
 
-    // Realtime Push Client (Pillar 1 & 3: SSE)
+    // Realtime Push Client (nutzt gemeinsamen archon:sse Bus aus operations_kanban.js)
+    let _mcSseDebounceTimer = null;
     (function initMissionControlSSE() {
       if (window.__mc_sse_connected) return;
       window.__mc_sse_connected = true;
-      try {
-        const es = new EventSource("/api/v1/events/stream");
-        es.onmessage = function(event) {
-          try {
-            const ev = JSON.parse(event.data);
-            if (ev.type === "kanban_updated" || ev.type === "task_captured") {
+      if (typeof initOpsRealtimeStream === "function") {
+        initOpsRealtimeStream();
+      }
+      window.addEventListener("archon:sse", function(event) {
+        try {
+          const ev = event && event.detail;
+          if (!ev || ev.type === "heartbeat") return;
+          if (ev.type === "kanban_updated" || ev.type === "task_captured") {
+            clearTimeout(_mcSseDebounceTimer);
+            _mcSseDebounceTimer = setTimeout(() => {
               fetchMissionControlKanban();
               fetchMissionControlData(false);
-              if (typeof loadOperationsData === "function") loadOperationsData(false);
-            } else if (ev.type === "ticker_update" && ev.data) {
-              const d = ev.data;
-              if (typeof addTickerItemToDom === "function") addTickerItemToDom(d.agent, d.message, d.time);
-            }
-          } catch(err) {}
-        };
-        es.onerror = function() {
-          // Fallback bleibt durch das 15s-Intervall aktiv
-        };
-      } catch (e) {
-        console.warn("[SSE] EventSource nicht verfügbar:", e);
-      }
+            }, 350);
+          } else if (ev.type === "ticker_update" && ev.data) {
+            const d = ev.data;
+            if (typeof addTickerItemToDom === "function") addTickerItemToDom(d.agent, d.message, d.time);
+          }
+        } catch (err) {}
+      });
     })();
     function renderMissionControl(data) {
       if (!data) return;

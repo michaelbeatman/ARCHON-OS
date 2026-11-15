@@ -73,44 +73,91 @@ OBSIDIAN_VAULT_DIR = resolve_obsidian_vault_path()
 # In-Memory Ticker + SSE-Broadcast
 # --------------------------------------------------------------------------
 ticker_entries: List[str] = []
+_TICKER_LOCK = threading.Lock()
 _SSE_SUBSCRIBERS: List[asyncio.Queue] = []
 # F-08: broadcast_event laeuft aus mehreren Threads (main.py-Hintergrund,
 # operations_api); Appends/Removes auf der Liste brauchen eine Sperre.
 _SSE_SUB_LOCK = threading.Lock()
+_IO_EXECUTOR = None
+_IO_EXECUTOR_LOCK = threading.Lock()
+
+
+def _get_io_executor():
+    global _IO_EXECUTOR
+    if _IO_EXECUTOR is None:
+        with _IO_EXECUTOR_LOCK:
+            if _IO_EXECUTOR is None:
+                from concurrent.futures import ThreadPoolExecutor
+                _IO_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="archon_io")
+    return _IO_EXECUTOR
+
+
+async def run_io_bound(func, *args, **kwargs):
+    """Führt blockierende Sync-I/O in einem begrenzten 4-Worker-Threadpool aus (verhindert pids_limit-Exhaustion)."""
+    import functools
+    loop = asyncio.get_running_loop()
+    call = functools.partial(func, *args, **kwargs) if kwargs else (lambda: func(*args))
+    return await loop.run_in_executor(_get_io_executor(), call)
+
+
+def _put_sse_nowait_safe(q: asyncio.Queue, payload: str) -> None:
+    try:
+        q.put_nowait(payload)
+    except asyncio.QueueFull:
+        pass
+    except Exception:
+        with _SSE_SUB_LOCK:
+            try:
+                _SSE_SUBSCRIBERS.remove(q)
+            except ValueError:
+                pass
 
 
 def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None) -> None:
     """Typisiertes Server-Sent Event an alle verbundenen Web-Clients.
 
     F-08: Ein voller Client-Puffer (QueueFull) trennt den Client NICHT mehr ab.
-    Vorher wurde jeder put_nowait-Fehler als "toter Subscriber" gewertet und
-    der langsame Client dauerhaft entfernt — ohne Meldung auf beiden Seiten.
-    Volle Queues bekommen das Event einfach nicht (naechstes Event kommt an).
     """
     payload = json.dumps({"type": event_type, "timestamp": time.time(), "data": data or {}})
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+
     dead = []
     with _SSE_SUB_LOCK:
-        for q in list(_SSE_SUBSCRIBERS):
+        subscribers = list(_SSE_SUBSCRIBERS)
+
+    for q in subscribers:
+        q_loop = getattr(q, "_loop", None)
+        if q_loop is not None and q_loop.is_running() and q_loop is not running_loop:
             try:
-                q.put_nowait(payload)
-            except asyncio.QueueFull:
-                # Client haengt im Rueckstand — Event fuer DIESEN Client droppen,
-                # Verbindung bleibt bestehen.
-                continue
+                q_loop.call_soon_threadsafe(_put_sse_nowait_safe, q, payload)
             except Exception:
                 dead.append(q)
-        for dq in dead:
-            try:
-                _SSE_SUBSCRIBERS.remove(dq)
-            except ValueError:
-                pass
+            continue
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            continue
+        except Exception:
+            dead.append(q)
+
+    if dead:
+        with _SSE_SUB_LOCK:
+            for dq in dead:
+                try:
+                    _SSE_SUBSCRIBERS.remove(dq)
+                except ValueError:
+                    pass
 
 
 def add_ticker(agent_name: str, message: str) -> None:
     ts = datetime.datetime.now().strftime("%H:%M:%S")
-    ticker_entries.append(f"[{ts}] {agent_name}: {message}")
-    if len(ticker_entries) > 20:
-        ticker_entries.pop(0)
+    with _TICKER_LOCK:
+        ticker_entries.append(f"[{ts}] {agent_name}: {message}")
+        if len(ticker_entries) > 20:
+            ticker_entries.pop(0)
     broadcast_event("ticker_update", {"agent": agent_name, "message": message, "time": ts})
 
 

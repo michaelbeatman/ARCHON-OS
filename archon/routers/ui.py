@@ -24,7 +24,9 @@ def _require_admin(request: Request):
     import main as app_main
 
     if hasattr(app_main, "require_admin"):
-        app_main.require_admin(request)
+        return app_main.require_admin(request)
+    from archon.routers._rbac import require_admin_or_503
+    return require_admin_or_503(request)
 
 
 def _full_html_target_files() -> list:
@@ -146,7 +148,7 @@ def api_save_full_html(request: Request, req: FullHtmlSaveRequest):
     return {"status": "success", "written_to": written, "failed": failed}
 
 
-@router.post("/api/studio/upload-bg")
+@router.post("/api/studio/upload-bg", dependencies=[_ArchonDepends(_require_admin)])
 async def api_studio_upload_bg(file: UploadFile = File(...)):
     """Lädt ein Hintergrundbild (JPG/PNG/WebP) für das CSS Live Studio hoch.
     Speichert unter /static/uploads/ und liefert die URL zurück."""

@@ -66,22 +66,34 @@
 
       const mountEl = document.getElementById('view-operations-mount');
       if (mountEl && (subtab === 'kanban' || subtab === 'org' || subtab === 'comm')) {
-        fetch('/static/views/operations_view.html?v=' + Date.now()).then(r => r.text()).then(html => {
-          const el = document.getElementById('view-operations-mount');
-          if (el) el.outerHTML = html;
-          if (typeof lucide !== 'undefined') lucide.createIcons();
-          setOperationsTab(subtab);
-        });
+        if (window._opsViewMountInFlight) return;
+        window._opsViewMountInFlight = true;
+        fetch('/static/views/operations_view.html?v=' + Date.now())
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+          .then(html => {
+            const el = document.getElementById('view-operations-mount');
+            if (el) el.outerHTML = html;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (!document.getElementById('view-operations-mount')) setOperationsTab(subtab);
+          })
+          .catch(err => console.warn('[OpsMount] Laden fehlgeschlagen:', err))
+          .finally(() => { window._opsViewMountInFlight = false; });
         return;
       }
       const chatMountEl = document.getElementById('view-master-chat-mount');
       if (chatMountEl && subtab === 'chat') {
-        fetch('/static/views/master_chat_view.html?v=' + Date.now()).then(r => r.text()).then(html => {
-          const el = document.getElementById('view-master-chat-mount');
-          if (el) el.outerHTML = html;
-          if (typeof lucide !== 'undefined') lucide.createIcons();
-          setOperationsTab('chat');
-        });
+        if (window._masterChatMountInFlight) return;
+        window._masterChatMountInFlight = true;
+        fetch('/static/views/master_chat_view.html?v=' + Date.now())
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+          .then(html => {
+            const el = document.getElementById('view-master-chat-mount');
+            if (el) el.outerHTML = html;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (!document.getElementById('view-master-chat-mount')) setOperationsTab('chat');
+          })
+          .catch(err => console.warn('[ChatMount] Laden fehlgeschlagen:', err))
+          .finally(() => { window._masterChatMountInFlight = false; });
         return;
       }
 
@@ -316,6 +328,7 @@
           try {
             if (!event.data || event.data.startsWith(':')) return;
             const msg = JSON.parse(event.data);
+            window.dispatchEvent(new CustomEvent('archon:sse', { detail: msg }));
             const evType = msg.type || '';
             const evData = msg.data || {};
 
@@ -381,7 +394,7 @@
       const names = new Set();
       Object.values(data.columns || {}).forEach(arr => arr.forEach(t => { if (t.assignee) names.add(t.assignee); }));
       sel.innerHTML = ['<option value="">' + kanT('ui.operations_kanban.all_agents', 'Alle Agenten') + '</option>']
-        .concat([...names].sort().map(n => `<option value="${n}">${n}</option>`)).join('');
+        .concat([...names].sort().map(n => `<option value="${opsEscapeHtml(n)}">${opsEscapeHtml(n)}</option>`)).join('');
       sel.value = (current && names.has(current)) ? current : '';
       opsKanbanFilters.assignee = sel.value;
     }
@@ -696,45 +709,49 @@
 
         const tierBadge = n.tier === 1 ? '👑 Apex' : (n.tier === 2 ? '★ Lead' : 'Specialist');
 
+        const safeNodeId = opsEscapeHtml(n.id).replace(/'/g, '&#39;');
+        const safeTeamId = opsEscapeHtml(n.team_id || '').replace(/'/g, '&#39;');
+        const safeAvatar = opsEscapeHtml(n.avatar || '/static/avatars/avatar_001.jpg');
+
         return `
-          <div id="flow-node-${n.id}"
-               data-node-id="${n.id}"
+          <div id="flow-node-${safeNodeId}"
+               data-node-id="${safeNodeId}"
                class="ops-flow-node absolute w-44 rounded-2xl border-2 border-[var(--border)] bg-[var(--card)] shadow-md hover:shadow-xl hover:border-[#d42a2b] transition-all select-none group cursor-pointer"
-               style="left: ${n.x}px; top: ${n.y}px;"
-               onmousedown="startDragFlowNode(event, '${n.id}')"
-               onclick="handleFlowNodeCardClick(event, '${n.id}')">
+               style="left: ${Number(n.x) || 0}px; top: ${Number(n.y) || 0}px;"
+               onmousedown="startDragFlowNode(event, '${safeNodeId}')"
+               onclick="handleFlowNodeCardClick(event, '${safeNodeId}')">
             
             <!-- TOP CONNECTION PORT (Vorgesetzter / Reporting To) -->
             <div class="ops-flow-port ops-flow-port-top absolute -top-3.5 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[var(--card)] border-2 border-slate-400 dark:border-slate-500 hover:scale-125 hover:border-[#d42a2b] hover:bg-[#d42a2b] transition-all flex items-center justify-center cursor-pointer shadow-sm z-30"
-                 data-node-id="${n.id}"
+                 data-node-id="${safeNodeId}"
                  data-port="top"
                  title="${kanT('ui.operations_kanban.node_superior_hint', '▲ Vorgesetzter (Hierarchie-Eingang von oben)')}"
-                 onmouseup="onEndConnectPort(event, '${n.id}', 'top')">
+                 onmouseup="onEndConnectPort(event, '${safeNodeId}', 'top')">
               <span class="w-2 h-2 rounded-full bg-slate-500 dark:bg-slate-400 pointer-events-none group-hover:bg-[#d42a2b]"></span>
             </div>
 
             <!-- Card Header -->
             <div class="px-2.5 py-1.5 border-b border-[var(--border)] flex items-center justify-between text-[9px] font-mono">
               <span class="px-1.5 py-0.2 rounded font-bold ${teamColors}">${tierBadge}</span>
-              <span class="text-muted-custom font-semibold">${n.active_tasks || 0} Tasks</span>
+              <span class="text-muted-custom font-semibold">${Number(n.active_tasks) || 0} Tasks</span>
             </div>
 
             <!-- Card Content -->
             <div class="p-2.5 flex flex-col items-center text-center space-y-1.5">
-              <div class="relative cursor-pointer" onclick="event.stopPropagation(); openOrgNodeDetailModal('${n.id}')" title="${kanT('ui.operations_kanban.node_click_props', 'Klicke für Eigenschaften &amp; Ergebnisse')}">
-                <img src="${n.avatar || '/static/avatars/avatar_001.jpg'}" class="w-11 h-11 rounded-full object-cover border-2 border-[var(--border)] group-hover:border-[#d42a2b] transition-colors shadow-xs pointer-events-none" />
+              <div class="relative cursor-pointer" onclick="event.stopPropagation(); openOrgNodeDetailModal('${safeNodeId}')" title="${kanT('ui.operations_kanban.node_click_props', 'Klicke für Eigenschaften &amp; Ergebnisse')}">
+                <img src="${safeAvatar}" class="w-11 h-11 rounded-full object-cover border-2 border-[var(--border)] group-hover:border-[#d42a2b] transition-colors shadow-xs pointer-events-none" />
                 <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[var(--card)] pointer-events-none"></span>
               </div>
               <div class="w-full leading-tight px-1">
-                <div class="text-[11px] font-bold text-primary-custom truncate hover:text-[#d42a2b] transition-colors cursor-pointer" onclick="event.stopPropagation(); openOrgNodeDetailModal('${n.id}')" title="${opsEscapeHtml(n.person_name || n.name || n.id)}">${opsEscapeHtml(n.person_name || n.name || n.id)}</div>
+                <div class="text-[11px] font-bold text-primary-custom truncate hover:text-[#d42a2b] transition-colors cursor-pointer" onclick="event.stopPropagation(); openOrgNodeDetailModal('${safeNodeId}')" title="${opsEscapeHtml(n.person_name || n.name || n.id)}">${opsEscapeHtml(n.person_name || n.name || n.id)}</div>
                 <div class="text-[9px] text-muted-custom truncate font-mono mt-0.5" title="${opsEscapeHtml((n.person_name && n.name && n.person_name !== n.name) ? n.name : (n.role || 'Spezialist'))}">${opsEscapeHtml((n.person_name && n.name && n.person_name !== n.name) ? n.name : (n.role || 'Spezialist'))}</div>
               </div>
               <div class="w-full pt-1 flex items-center justify-center gap-1.5">
-                <button type="button" onclick="event.stopPropagation(); openOrgNodeDetailModal('${n.id}')" class="px-2 py-0.8 rounded text-[9.5px] bg-[var(--secondary)] hover:bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] font-medium transition cursor-pointer shadow-2xs flex items-center gap-1" title="${kanT('ui.operations_kanban.node_view_props', 'Eigenschaften, Profil &amp; Ergebnisse ansehen')}">
+                <button type="button" onclick="event.stopPropagation(); openOrgNodeDetailModal('${safeNodeId}')" class="px-2 py-0.8 rounded text-[9.5px] bg-[var(--secondary)] hover:bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] font-medium transition cursor-pointer shadow-2xs flex items-center gap-1" title="${kanT('ui.operations_kanban.node_view_props', 'Eigenschaften, Profil &amp; Ergebnisse ansehen')}">
                   <i data-lucide="eye" class="w-3 h-3 text-[#d42a2b]"></i>
                   <span>${kanT('ui.operations_kanban.open', 'Öffnen')}</span>
                 </button>
-                <button type="button" onclick="event.stopPropagation(); openNewTaskModal('todo', '${n.id}', '${n.team_id || ''}')" class="px-2 py-0.8 rounded text-[9.5px] bg-[#d42a2b] hover:bg-[#b82223] text-white font-medium transition cursor-pointer shadow-2xs flex items-center gap-1" title="${kanT('ui.operations_kanban.node_assign_new_task', 'Neue Aufgabe zuweisen')}">
+                <button type="button" onclick="event.stopPropagation(); openNewTaskModal('todo', '${safeNodeId}', '${safeTeamId}')" class="px-2 py-0.8 rounded text-[9.5px] bg-[#d42a2b] hover:bg-[#b82223] text-white font-medium transition cursor-pointer shadow-2xs flex items-center gap-1" title="${kanT('ui.operations_kanban.node_assign_new_task', 'Neue Aufgabe zuweisen')}">
                   <i data-lucide="plus" class="w-3 h-3"></i>
                   <span>${kanT('ui.operations_kanban.task', 'Aufgabe')}</span>
                 </button>
@@ -1938,11 +1955,12 @@
       } else {
         messagesContainer.innerHTML = items.map(item => {
           const isEvent = item.type === 'event_handoff';
-          const avatar = item.author_avatar || '/static/avatars/avatar_001.jpg';
-          const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString(kanLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
-          const taskBadge = item.task_id ? `
-            <button onclick="openTaskDetailModal('${item.task_id}')" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 hover:bg-indigo-500/20 transition cursor-pointer">
-              Task: ${item.task_id}
+          const avatar = opsEscapeHtml(item.author_avatar || '/static/avatars/avatar_001.jpg');
+          const safeTaskId = item.task_id ? opsEscapeHtml(String(item.task_id)) : '';
+          const timeStr = item.timestamp ? opsEscapeHtml(new Date(item.timestamp).toLocaleTimeString(kanLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })) : '';
+          const taskBadge = safeTaskId ? `
+            <button onclick="openTaskDetailModal('${safeTaskId}')" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 hover:bg-indigo-500/20 transition cursor-pointer">
+              Task: ${safeTaskId}
             </button>
           ` : '';
 
@@ -3586,17 +3604,17 @@
         const isBoardroom = (item.task_id && item.task_id.includes("boardroom")) || (item.kind && item.kind.includes("boardroom"));
         return `
           <div class="p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xs font-sans text-xs flex items-start gap-3">
-            <img src="${item.author_avatar || '/static/avatars/avatar_001.jpg'}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)] mt-0.5" />
+            <img src="${opsEscapeHtml(item.author_avatar || '/static/avatars/avatar_001.jpg')}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)] mt-0.5" />
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] mb-1.5 font-mono">
                 <div class="flex items-center gap-1.5 truncate">
-                  <span class="font-bold text-[var(--foreground)]">${escapeHtml(item.author_name || item.author_id)}</span>
+                  <span class="font-bold text-[var(--foreground)]">${opsEscapeHtml(item.author_name || item.author_id || '')}</span>
                   ${isBoardroom ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-500 font-bold uppercase">Boardroom</span>' : ''}
-                  ${item.task_id ? `<span class="text-[9px] px-1.5 py-0.2 rounded bg-zinc-200 dark:bg-zinc-800 text-[var(--muted-foreground)] font-mono truncate">#${escapeHtml(item.task_id)}</span>` : ''}
+                  ${item.task_id ? `<span class="text-[9px] px-1.5 py-0.2 rounded bg-zinc-200 dark:bg-zinc-800 text-[var(--muted-foreground)] font-mono truncate">#${opsEscapeHtml(item.task_id)}</span>` : ''}
                 </div>
-                <span class="text-[10px] text-[var(--muted-foreground)] shrink-0">${item.timestamp || 'jetzt'}</span>
+                <span class="text-[10px] text-[var(--muted-foreground)] shrink-0">${opsEscapeHtml(item.timestamp || 'jetzt')}</span>
               </div>
-              <div class="text-[11.5px] leading-relaxed text-[var(--foreground)] whitespace-pre-wrap select-text">${escapeHtml(item.message || '')}</div>
+              <div class="text-[11.5px] leading-relaxed text-[var(--foreground)] whitespace-pre-wrap select-text">${opsEscapeHtml(item.message || '')}</div>
             </div>
           </div>
         `;

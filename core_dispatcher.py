@@ -6,6 +6,7 @@ import json
 import httpx
 import asyncio
 import sqlite3
+from typing import Optional
 
 # --- External Agent URLs ---
 # Defaulting to docker network hostnames, but can be overridden by env vars
@@ -286,7 +287,16 @@ def parse_omniroute_response(resp_text: str) -> str:
 # Globaler Concurrency Throttle (Pillar 2 / Prozessmodell)
 # Drosselt gleichzeitige rechenintensive LLM-Tasks zum Schutz vor 99% CPU-Spitzen / Buffer Overflows
 MAX_CONCURRENT_AGENT_TASKS = int(os.getenv("MAX_CONCURRENT_AGENT_TASKS", "5"))
-_TASK_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_AGENT_TASKS)
+_TASK_SEMAPHORES: dict = {}
+
+
+def _get_task_semaphore() -> asyncio.Semaphore:
+    loop_id = id(asyncio.get_running_loop())
+    sem = _TASK_SEMAPHORES.get(loop_id)
+    if sem is None:
+        sem = asyncio.Semaphore(MAX_CONCURRENT_AGENT_TASKS)
+        _TASK_SEMAPHORES[loop_id] = sem
+    return sem
 
 _DISPATCHER_HTTP_CLIENTS = {}
 
@@ -394,7 +404,8 @@ async def dispatch_to_omniroute_or_container(
     provider: str = "",
     timeout: int = 15,
     reasoning_level: str = "medium",
-    task_id: str = ""
+    task_id: str = "",
+    history: Optional[list] = None,
 ) -> dict:
     """
     Zentraler Dispatcher: Nutzt dynamisch den im Profil konfigurierten Provider & das Sprachmodell.
@@ -413,9 +424,9 @@ async def dispatch_to_omniroute_or_container(
         has_throttle_slot = False
 
     try:
-        async with _TASK_SEMAPHORE:
+        async with _get_task_semaphore():
             res = await _dispatch_to_omniroute_or_container_exec(
-                agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id
+                agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id, history=history
             )
             duration_ms = (time.time() - t_start) * 1000.0
             try:
@@ -465,7 +476,8 @@ async def _dispatch_to_omniroute_or_container_exec(
     provider: str = "",
     timeout: int = 15,
     reasoning_level: str = "medium",
-    task_id: str = ""
+    task_id: str = "",
+    history: Optional[list] = None,
 ) -> dict:
     # Pillar 4 & Punkt 4: Aktive Memory-Injection (Erkenntnisse aus agentic_memory.db)
     memory_context_addon = ""
@@ -513,10 +525,38 @@ async def _dispatch_to_omniroute_or_container_exec(
     except Exception:
         pass
 
-    full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{memory_context_addon}{prefetch_addon}".strip()
+    # Core Working Memory Blocks (letzte 2-3 gepinnte Blöcke)
+    core_mem_addon = ""
+    try:
+        from backend.core_memory_manager import core_memory_manager
+        cm_xml = core_memory_manager.compile_system_prompt_injection()
+        if cm_xml:
+            core_mem_addon = f"\n\n{cm_xml}"
+    except Exception:
+        pass
 
-    messages = [
-        {"role": "system", "content": full_system_prompt},
+    # Bandit Model Router (opt-in über auto/bandit)
+    if model in ("auto/bandit", "auto/best-bandit"):
+        try:
+            from backend.bandit_model_router import bandit_model_router
+            b_res = bandit_model_router.select_best_model()
+            if b_res.get("enabled") and b_res.get("selected_model"):
+                model = b_res["selected_model"]
+        except Exception:
+            pass
+
+    full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{core_mem_addon}{memory_context_addon}{prefetch_addon}".strip()
+
+    chat_history_turns = []
+    if history:
+        for h in history[-8:]:
+            if isinstance(h, dict):
+                r = str(h.get("role", "")).strip().lower()
+                c = str(h.get("content", "") or "").strip()
+                if r in ("user", "assistant") and c:
+                    chat_history_turns.append({"role": r, "content": c})
+
+    messages = [{"role": "system", "content": full_system_prompt}] + chat_history_turns + [
         {"role": "user", "content": prompt}
     ]
 
@@ -585,6 +625,7 @@ async def _dispatch_to_omniroute_or_container_exec(
             pass
 
     async def _audited_post(http_client: httpx.AsyncClient, url: str, *, provider_id: str, model_id: str, headers: dict | None = None, json_body: dict | None = None):
+        from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
         hop_gate = evaluate_and_gate_llm_dispatch(
             agent_id=agent_id,
             provider=provider_id,
@@ -593,7 +634,20 @@ async def _dispatch_to_omniroute_or_container_exec(
             role=role,
             intended_url=url,
         )
-        r = await http_client.post(url, headers=headers, json=json_body)
+        enforce_egress_firewall_for_url(url, agent_id=agent_id)
+        _, _, ep_zone = sanitize_llm_endpoint(url)
+        is_local_hop = (
+            bool(hop_gate.get("routed_to_local"))
+            or ep_zone == "LOCAL_ON_PREM"
+            or (provider_id or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
+        )
+        safe_body = sanitize_outbound_llm_payload(
+            json_body,
+            agent_id=agent_id,
+            session_id=task_id or agent_id,
+            is_local=is_local_hop,
+        )
+        r = await http_client.post(url, headers=headers, json=safe_body)
         log_completed_llm_dispatch(
             agent_id=agent_id,
             provider=provider_id,
@@ -735,17 +789,21 @@ async def _dispatch_to_omniroute_or_container_exec(
                         "system": [
                             {
                                 "type": "text",
-                                "text": f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip(),
+                                "text": f"Du bist {agent_name} (Rolle: {role}). {full_system_prompt}".strip(),
                                 "cache_control": {"type": "ephemeral"}
                             }
                         ],
-                        "messages": [{"role": "user", "content": prompt}],
+                        "messages": chat_history_turns + [{"role": "user", "content": prompt}],
                         "max_tokens": 1500
                     },
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    content = "".join([c.get("text", "") for c in data.get("content", [])])
+                    content = "".join(
+                        c.get("text", "")
+                        for c in data.get("content", [])
+                        if isinstance(c, dict) and c.get("type") == "text"
+                    )
                     if content:
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
                         _log_dispatcher_usage(agent_id, a_model, i_tok, o_tok, task_id)
@@ -756,7 +814,7 @@ async def _dispatch_to_omniroute_or_container_exec(
             print(f"[DISPATCHER] Anthropic direct call failed: {e}")
 
     # 4. OpenRouter Gateway (Universal für DeepSeek, Claude, Llama, Qwen, Gemini etc.)
-    if openrouter_api_key:
+    if openrouter_api_key and prov_lower != "omniroute":
         try:
             or_payload = {
                 "model": selected_model,
@@ -800,31 +858,32 @@ async def _dispatch_to_omniroute_or_container_exec(
     # 5. Fallback: Groq Ultra-Fast API
     if groq_api_key:
         groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"]
+        client = _get_dispatcher_http_client()
         for g_model in groq_models:
             try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    resp = await _audited_post(
-                        client,
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        provider_id="groq",
-                        model_id=g_model,
-                        headers={
-                            "Authorization": f"Bearer {groq_api_key}",
-                            "Content-Type": "application/json"
-                        },
-                        json_body={
-                            "model": g_model,
-                            "messages": messages,
-                            "max_tokens": 1200,
-                            "temperature": 0.5
-                        },
-                    )
-                    if resp.status_code == 200:
-                        content = parse_omniroute_response(resp.text)
-                        if content and len(content.strip()) > 5:
-                            i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                            _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
-                            return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": g_model}
+                resp = await _audited_post(
+                    client,
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    provider_id="groq",
+                    model_id=g_model,
+                    headers={
+                        "Authorization": f"Bearer {groq_api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json_body={
+                        "model": g_model,
+                        "messages": messages,
+                        "max_tokens": 1200,
+                        "temperature": 0.5
+                    },
+                    timeout=timeout,
+                )
+                if resp.status_code == 200:
+                    content = parse_omniroute_response(resp.text)
+                    if content and len(content.strip()) > 5:
+                        i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                        _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
+                        return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": g_model}
             except ZeroEgressBlockedError as ze_err:
                 return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
             except Exception as e:
@@ -841,26 +900,30 @@ async def _dispatch_to_omniroute_or_container_exec(
         "messages": messages
     }
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        for omni_url in omni_urls:
-            try:
-                resp = await _audited_post(
-                    client,
-                    omni_url,
-                    provider_id="omniroute",
-                    model_id=omni_model,
-                    json_body=omni_payload,
-                )
-                if resp.status_code == 200:
-                    content = parse_omniroute_response(resp.text)
-                    return {"status": "success", "content": content}
-            except ZeroEgressBlockedError as ze_err:
-                return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
-            except Exception as e:
-                continue
+    client = _get_dispatcher_http_client()
+    for omni_url in omni_urls:
+        try:
+            resp = await _audited_post(
+                client,
+                omni_url,
+                provider_id="omniroute",
+                model_id=omni_model,
+                json_body=omni_payload,
+                timeout=timeout,
+            )
+            if resp.status_code == 200:
+                content = parse_omniroute_response(resp.text)
+                if content:
+                    i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                    _log_dispatcher_usage(agent_id, omni_model, i_tok, o_tok, task_id)
+                    return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": omni_model}
+        except ZeroEgressBlockedError as ze_err:
+            return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
+        except Exception as e:
+            continue
 
     # 3b. Direkter OpenRouter-Fallback bei OmniRoute-Ausfall / Rate-Limit
-    or_key = os.environ.get("OPENROUTER_API_KEY", "")
+    or_key = openrouter_api_key or os.environ.get("OPENROUTER_API_KEY", "")
     if or_key:
         try:
             or_model = model
@@ -874,20 +937,22 @@ async def _dispatch_to_omniroute_or_container_exec(
             or_model = auto_map.get(or_model, or_model)
             if or_model.startswith("auto/") or or_model in ("", "free-forever"):
                 or_model = "deepseek/deepseek-chat"
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await _audited_post(
-                    client,
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    provider_id="openrouter",
-                    model_id=or_model,
-                    headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
-                    json_body={"model": or_model, "messages": messages, "max_tokens": 4096},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
-                    if content:
-                        return {"status": "success", "content": content}
+            resp = await _audited_post(
+                client,
+                "https://openrouter.ai/api/v1/chat/completions",
+                provider_id="openrouter",
+                model_id=or_model,
+                headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
+                json_body={"model": or_model, "messages": messages, "max_tokens": 4096},
+                timeout=timeout,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+                if content:
+                    i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
+                    _log_dispatcher_usage(agent_id, or_model, i_tok, o_tok, task_id)
+                    return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": or_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception:
@@ -899,24 +964,26 @@ async def _dispatch_to_omniroute_or_container_exec(
         f"http://{agent_id}:8000/api/run",
         f"http://{agent_id}:8080/v1/chat/completions"
     ]
-    async with httpx.AsyncClient(timeout=5) as client:
-        for url in direct_urls:
-            try:
-                resp = await _audited_post(
-                    client,
-                    url,
-                    provider_id="container",
-                    model_id=selected_model,
-                    json_body={"prompt": prompt, "messages": messages},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = data.get("content") or data.get("output") or data.get("result") or str(data)
-                    return {"status": "success", "content": content}
-            except ZeroEgressBlockedError as ze_err:
-                return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
-            except Exception:
-                continue
+    for url in direct_urls:
+        try:
+            resp = await _audited_post(
+                client,
+                url,
+                provider_id="container",
+                model_id=selected_model,
+                json_body={"prompt": prompt, "messages": messages},
+                timeout=5.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data.get("content") or data.get("output") or data.get("result") or str(data)
+                i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, str(content))
+                _log_dispatcher_usage(agent_id, selected_model, i_tok, o_tok, task_id)
+                return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": selected_model}
+        except ZeroEgressBlockedError as ze_err:
+            return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
+        except Exception:
+            continue
 
         # 5. Robuste Fehlerbehandlung (Keine Dummy-Bereitschaftsmeldung vortaeuschen)
     err_msg = f"[FEHLER: Kein Sprachmodell-Provider erreichbar fuer @{agent_id} ({agent_name}) mit Modell '{selected_model}']"
@@ -943,15 +1010,15 @@ async def dispatch_to_external_agent(
     """
     if agent_id == "hermes":
         res = await dispatch_to_hermes(agent_name, prompt, timeout)
-        if res["status"] == "success":
+        if res.get("status") in ("success", "blocked"):
             return res
     elif agent_id == "odysseus":
         res = await dispatch_to_odysseus(agent_name, prompt, timeout)
-        if res["status"] == "success":
+        if res.get("status") in ("success", "blocked"):
             return res
     elif agent_id == "openclaw" or agent_id == "openclaw-docker":
         res = await dispatch_to_openclaw(agent_name, prompt, timeout)
-        if res["status"] == "success":
+        if res.get("status") in ("success", "blocked"):
             return res
             
     # Falls der spezifische Container-Endpoint fehlschlägt oder ein anderer Agent gewählt wurde, OmniRoute Gateway nutzen!
@@ -1530,19 +1597,19 @@ async def stream_boardroom_debate(
             f"### 3. Final Actionable Decision (Finale Entscheidung & konkreter Aktionsplan)"
         )
     
-    res_synth = await dispatch_to_external_agent(
-        agent_id=chairman["id"],
-        agent_name=chairman["name"],
-        prompt=synthesis_prompt,
-        role=chairman.get("role", "Orchestrator"),
-        system_prompt=chairman_sys_prompt,
-        model=chairman.get("model", "deepseek/deepseek-chat"),
-        timeout=timeout,
-        provider=chairman.get("provider", ""),
-        reasoning_level=chairman.get("reasoning_level", "medium")
-    )
-    
-    synthesis_text = res_synth.get("content", "Synthese konnte nicht erstellt werden.")
+        res_synth = await dispatch_to_external_agent(
+            agent_id=chairman["id"],
+            agent_name=chairman["name"],
+            prompt=synthesis_prompt,
+            role=chairman.get("role", "Orchestrator"),
+            system_prompt=chairman_sys_prompt,
+            model=chairman.get("model", "deepseek/deepseek-chat"),
+            timeout=timeout,
+            provider=chairman.get("provider", ""),
+            reasoning_level=chairman.get("reasoning_level", "medium")
+        )
+
+        synthesis_text = res_synth.get("content", "Synthese konnte nicht erstellt werden.")
     
     yield {
         "type": "final_synthesis",

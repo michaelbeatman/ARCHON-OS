@@ -26,13 +26,28 @@ class ClosingConnection(sqlite3.Connection):
 from archon.core.paths import STATE_DB_PATH as _PATHS_STATE_DB_PATH
 
 STATE_DB_PATH = _PATHS_STATE_DB_PATH if os.path.exists(_PATHS_STATE_DB_PATH) else os.path.expanduser("~/.hermes/state.db")
+_STATE_WAL_INIT: set[str] = set()
+
+
+def _configure_state_conn(conn: sqlite3.Connection, db_path: str) -> sqlite3.Connection:
+    conn.execute("PRAGMA busy_timeout=15000;")
+    conn.execute("PRAGMA cache_size=-32000;")
+    conn.execute("PRAGMA temp_store=MEMORY;")
+    abs_path = os.path.abspath(db_path)
+    if abs_path not in _STATE_WAL_INIT:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+            _STATE_WAL_INIT.add(abs_path)
+        except Exception:
+            pass
+    return conn
 
 
 def _get_state_db():
     os.makedirs(os.path.dirname(STATE_DB_PATH), exist_ok=True)
     conn = sqlite3.connect(STATE_DB_PATH, timeout=15.0, factory=ClosingConnection)
-    conn.execute("PRAGMA busy_timeout=15000;")
-    return conn
+    return _configure_state_conn(conn, STATE_DB_PATH)
 
 
 def _get_profile_state_db(profile_name: str = "telegram_bot"):
@@ -41,8 +56,7 @@ def _get_profile_state_db(profile_name: str = "telegram_bot"):
     prof_path = os.path.join(base_dir, "profiles", profile_name, "state.db")
     if os.path.exists(prof_path):
         conn = sqlite3.connect(prof_path, timeout=15.0, factory=ClosingConnection)
-        conn.execute("PRAGMA busy_timeout=15000;")
-        return conn
+        return _configure_state_conn(conn, prof_path)
     return None
 
 

@@ -392,7 +392,7 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
                 return
 
             pending = kc.execute(
-                "SELECT COUNT(*) FROM tasks WHERE project_id = ? AND status NOT IN ('done', 'review')",
+                "SELECT COUNT(*) FROM tasks WHERE project_id = ? AND status NOT IN ('done', 'review', 'failed', 'blocked')",
                 (parent_project_id,)
             ).fetchone()[0]
 
@@ -567,23 +567,25 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         now_iso = datetime.datetime.now().isoformat()
         prio_num = 2 if prioritaet in ("hoch", "high", "sofort", "critical", "urgent") else (1 if prioritaet in ("mittel", "normal", "medium") else 0)
         kconn = _get_kanban_connection()
-        parent_pid = str(payload.get("parent_project_id") or "").strip()
-        kconn.execute(
-            "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, started_at, model_override, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
-             f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid)
-        )
+        try:
+            parent_pid = str(payload.get("parent_project_id") or "").strip()
+            kconn.execute(
+                "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, started_at, model_override, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
+                 f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid)
+            )
+            kconn.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
+                (task_id, "created", json.dumps({"title": auftrag[:80], "assignee": ziel, "via": "delegation_engine_v2", "delegator": delegator_id, "reasoning_level": reasoning_lvl}), now_iso)
+            )
+            kconn.commit()
+        finally:
+            kconn.close()
         try:
             from backend.operations_api import _execute_kanban_task_async
             _spawn_background(_execute_kanban_task_async(task_id), name=f"kanban_{task_id}")
         except Exception as exe_err:
             logger.warning(f"[Delegation] Sofortige Ausfuehrung fehlgeschlagen: {exe_err}")
-        kconn.execute(
-            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
-            (task_id, "created", json.dumps({"title": auftrag[:80], "assignee": ziel, "via": "delegation_engine_v2", "delegator": delegator_id, "reasoning_level": reasoning_lvl}), now_iso)
-        )
-        kconn.commit()
-        kconn.close()
     except Exception as e:
         logger.warning(f"[Delegation] Kanban-Insert fehlgeschlagen: {e}")
 
@@ -601,7 +603,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     kc = _kgc()
                     row = kc.execute("SELECT status, result, title FROM tasks WHERE id = ?", (task_id,)).fetchone()
                     kc.close()
-                    if row and row[0] in ("done", "blocked", "review"):
+                    if row and row[0] in ("done", "blocked", "review", "failed"):
                         final = row
                         break
                 except Exception:

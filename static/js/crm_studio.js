@@ -166,13 +166,21 @@ window.crmStudio = (function() {
   // -------------------------------------------------------------------------
   // 1. KONTAKTE TABELLEN-LOGIK (Screenshot 1)
   // -------------------------------------------------------------------------
+  let _crmContactsAbort = null;
+  let _crmSearchDebounceTimer = null;
+
   async function loadContacts(roleFilter = 'all') {
     const listContainer = document.getElementById('crm-kontakte-table-body');
     const countBadge = document.getElementById('crm-kontakte-hits-badge');
     const headerCountBadge = document.getElementById('erp-addr-count-badge');
 
+    if (_crmContactsAbort) {
+      try { _crmContactsAbort.abort(); } catch (_) {}
+    }
+    _crmContactsAbort = new AbortController();
+
     if (listContainer) {
-      listContainer.innerHTML = `<tr><td colspan="11" class="text-center py-8 text-xs font-mono text-[var(--muted-foreground)]">${crmT('ui.crm_studio.contacts_loading', 'Lade Kontakte aus PocketBase...')}</td></tr>`;
+      listContainer.innerHTML = `<tr><td colspan="11" class="text-center py-8 text-xs font-mono text-[var(--muted-foreground)]">${crmT('ui.crm_studio.contacts_loading', 'Lade Kontakte...')}</td></tr>`;
     }
 
     try {
@@ -187,7 +195,7 @@ window.crmStudio = (function() {
         limit: pageSize.toString()
       });
 
-      const resp = await fetch(`/api/crm/contacts?${params.toString()}`);
+      const resp = await fetch(`/api/crm/contacts?${params.toString()}`, { signal: _crmContactsAbort.signal });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
 
@@ -207,6 +215,7 @@ window.crmStudio = (function() {
         loadContacts(roleFilter);
       });
     } catch (err) {
+      if (err && err.name === 'AbortError') return;
       console.error('[CRM Studio] Error loading contacts:', err);
       if (listContainer) {
         listContainer.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-xs font-mono text-red-500">${crmT('ui.crm_studio.contacts_error', 'Fehler beim Laden der Kontakte: {message}', { message: err.message })}</td></tr>`;
@@ -329,7 +338,10 @@ window.crmStudio = (function() {
   function onSearchInput(val) {
     currentSearch = val;
     currentPage = 1;
-    loadContacts(activeSubTab === 'kunden' ? 'customers' : (activeSubTab === 'lieferanten' ? 'suppliers' : 'all'));
+    clearTimeout(_crmSearchDebounceTimer);
+    _crmSearchDebounceTimer = setTimeout(() => {
+      loadContacts(activeSubTab === 'kunden' ? 'customers' : (activeSubTab === 'lieferanten' ? 'suppliers' : 'all'));
+    }, 250);
   }
 
   function onStatusChange(val) {

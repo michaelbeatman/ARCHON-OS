@@ -386,25 +386,29 @@
     // --- LOG POLING ---
     // --- LOG POLING ---
     let logEventSource = null;
+    let _logSseBound = false;
+
     function startLogPolling() {
       if (logEventSource) {
         logEventSource.close();
+        logEventSource = null;
       }
-      
       const logDiv = document.getElementById("system-log-body");
       if (!logDiv) return;
       const connectingMsg = smT("ui.skill_markt.telemetry_connecting", "Verbinde mit Live-Telemetrie-Logs...");
       logDiv.innerHTML = "<div class='text-muted-custom italic text-center py-6'>" + connectingMsg + "</div>";
-      logEventSource = new EventSource("/api/v1/telemetry/logs");
-      
+      logEventSource = { close: () => {} };
       logEventSource.onmessage = (event) => {
         try {
           const logData = JSON.parse(event.data);
-          const time = new Date(logData.timestamp).toLocaleTimeString();
-          const msg = logData.message;
+          const targetDiv = document.getElementById("system-log-body");
+          if (!targetDiv || !logData) return;
+          const ts = logData.timestamp || Date.now();
+          const time = typeof ts === "string" && ts.includes(":") && ts.length <= 12 ? ts : new Date(ts).toLocaleTimeString();
+          const msg = String(logData.message || "");
+          if (!msg) return;
           let msgColorClass = "text-muted-custom";
           let nameColorClass = "text-green-500";
-          
           if (msg.includes("🔧") || msg.includes("Tool") || msg.includes("mcp__")) {
             msgColorClass = "text-yellow-500 font-medium";
             nameColorClass = "text-yellow-600 font-semibold";
@@ -418,48 +422,53 @@
             msgColorClass = "text-slate-500 text-[10px]";
             nameColorClass = "text-slate-600";
           }
-          // S-04: Die Agenten-/Tool-Ausgabe wird NICHT als HTML interpretiert —
-          // der Text geht ueber textContent in ein eigenes Element. Damit kann
-          // kein Agent mehr Markup im Cockpit ausfuehren.
-          // F-18: kein `innerHTML +=` (quadratisches Neuparsen des kompletten
-          // Logs) und unbegrenztes DOM-Wachstum — alte Zeilen werden entfernt.
           const row = document.createElement("div");
           row.className = "flex gap-3";
-
           const timeEl = document.createElement("span");
           timeEl.className = "text-label-custom flex-shrink-0 font-mono";
           timeEl.textContent = time;
-
           const nameEl = document.createElement("span");
           nameEl.className = `${nameColorClass} font-mono flex-shrink-0 w-24 truncate`;
-          nameEl.textContent = "System";
-
+          nameEl.textContent = String(logData.agent || "System");
           const msgEl = document.createElement("span");
           msgEl.className = `${msgColorClass} flex-1 leading-relaxed`;
           msgEl.textContent = msg;
-
           row.appendChild(timeEl);
           row.appendChild(nameEl);
           row.appendChild(msgEl);
-
-          if (logDiv.innerHTML.includes(connectingMsg) || logDiv.innerHTML.includes("Heartbeat OK")) {
-            logDiv.innerHTML = "";
+          const cText = typeof smT === "function" ? smT("ui.skill_markt.telemetry_connecting", "Verbinde mit Live-Telemetrie-Logs...") : "Verbinde mit Live-Telemetrie-Logs...";
+          if (targetDiv.innerHTML.includes(cText) || targetDiv.innerHTML.includes("Heartbeat OK")) {
+            targetDiv.innerHTML = "";
           }
-          logDiv.appendChild(row);
-
-          // F-18: Log-Decke (200 Zeilen) — kein unbegrenztes DOM-Wachstum.
+          targetDiv.appendChild(row);
           const MAX_LOG_ROWS = 200;
-          while (logDiv.childElementCount > MAX_LOG_ROWS) {
-            logDiv.removeChild(logDiv.firstElementChild);
+          while (targetDiv.childElementCount > MAX_LOG_ROWS) {
+            targetDiv.removeChild(targetDiv.firstElementChild);
           }
-          logDiv.scrollTop = logDiv.scrollHeight;
-        } catch (e) {
-          console.error("Error parsing log event:", e);
-        }
+          targetDiv.scrollTop = targetDiv.scrollHeight;
+        } catch (e) {}
       };
-      logEventSource.onerror = (e) => {
-        console.error("EventSource failed:", e);
-      };
+      if (!_logSseBound) {
+        _logSseBound = true;
+        window.addEventListener("archon:sse", (event) => {
+          const msg = event && event.detail;
+          if (!msg || !logEventSource || typeof logEventSource.onmessage !== "function") return;
+          if (msg.type === "ticker_update" && msg.data) {
+            logEventSource.onmessage({
+              data: JSON.stringify({
+                agent: msg.data.agent || "System",
+                message: msg.data.message || "",
+                timestamp: msg.data.time || Date.now(),
+              }),
+            });
+          } else if (msg.type === "log" && msg.data) {
+            logEventSource.onmessage({ data: JSON.stringify(msg.data) });
+          }
+        });
+      }
+      if (typeof initOpsRealtimeStream === "function") {
+        initOpsRealtimeStream();
+      }
     }
     async function clearLogs() {
       const logDiv = document.getElementById("system-log-body");
@@ -2552,11 +2561,11 @@
                   headerBanner.className = "rounded-lg p-3 bg-[var(--card)] border border-[var(--border)] text-xs space-y-1 mb-3 font-mono text-[var(--foreground)] shadow-xs";
                   headerBanner.innerHTML = `
                     <div class="flex items-center justify-between text-[var(--foreground)] font-bold uppercase tracking-wider">
-                      <span>${smT("ui.skill_markt.boardroom_header", "📋 AI-BOARDROOM-DEBATTE: {task}", { task: ev.task })}</span>
-                      <span>${smT("ui.skill_markt.chairman_label", "CHAIRMAN: {name}", { name: ev.chairman ? ev.chairman.name : smT("ui.skill_markt.chairman_default", "Moderator") })}</span>
+                      <span>${escapeHtml(smT("ui.skill_markt.boardroom_header", "📋 AI-BOARDROOM-DEBATTE: {task}", { task: ev.task }))}</span>
+                      <span>${escapeHtml(smT("ui.skill_markt.chairman_label", "CHAIRMAN: {name}", { name: ev.chairman ? ev.chairman.name : smT("ui.skill_markt.chairman_default", "Moderator") }))}</span>
                     </div>
                     <div class="text-[10px] text-[var(--muted-foreground)]">
-                      ${smT("ui.skill_markt.meta_max_rounds", "Max Runden: {rounds} | Framework: {framework} | Live Streaming aktiv", { rounds: ev.max_rounds, framework: ev.framework || 'Steffi Kieffer Boardroom' })}
+                      ${escapeHtml(smT("ui.skill_markt.meta_max_rounds", "Max Runden: {rounds} | Framework: {framework} | Live Streaming aktiv", { rounds: ev.max_rounds, framework: ev.framework || 'Steffi Kieffer Boardroom' }))}
                     </div>
                   `;
                   return headerBanner;
@@ -2574,7 +2583,7 @@
                     divider.innerHTML = `
                       <div class="flex-1 h-[1px] bg-[var(--border)]"></div>
                       <span class="text-[10px] font-mono font-bold tracking-widest uppercase px-3 py-1 rounded bg-[var(--secondary)] border border-[var(--border)] text-indigo-500">
-                        ${smT("ui.skill_markt.round_of", "⚡ DEBATTE RUNDE {round} VON {total}", { round: currentRound, total: boardMeta.max_rounds })}
+                        ${escapeHtml(smT("ui.skill_markt.round_of", "⚡ DEBATTE RUNDE {round} VON {total}", { round: currentRound, total: boardMeta.max_rounds }))}
                       </span>
                       <div class="flex-1 h-[1px] bg-[var(--border)]"></div>
                     `;
@@ -2585,7 +2594,7 @@
                 appendBothBoardroomThreads(() => {
                   const alertBox = document.createElement("div");
                   alertBox.className = "rounded-xl p-3 bg-[var(--secondary)] border border-emerald-500/30 text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-2 my-2 animate-fade-in";
-                  alertBox.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i> <span>${ev.content}</span>`;
+                  alertBox.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i> <span>${escapeHtml(ev.content || '')}</span>`;
                   return alertBox;
                 });
               } else if (ev.type === "final_synthesis") {
@@ -2599,12 +2608,12 @@
                   synthCard.innerHTML = `
                     <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
                       <h3 class="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-2">
-                        <i data-lucide="award" class="w-4 h-4"></i> ${smT("ui.skill_markt.final_synthesis_action", "FINALE SYNTHESE &amp; AKTIONSPLAN")}
+                        <i data-lucide="award" class="w-4 h-4"></i> ${escapeHtml(smT("ui.skill_markt.final_synthesis_action", "FINALE SYNTHESE & AKTIONSPLAN"))}
                       </h3>
-                      <span class="text-[10px] font-mono px-2.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 font-bold">${ev.agent_name} (${ev.role})</span>
+                      <span class="text-[10px] font-mono px-2.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 font-bold">${escapeHtml(ev.agent_name || '')} (${escapeHtml(ev.role || '')})</span>
                     </div>
                     <div class="text-xs leading-relaxed text-[var(--foreground)] whitespace-pre-wrap font-sans font-medium">
-                      ${ev.content}
+                      ${escapeHtml(ev.content || '')}
                     </div>
                   `;
                   return synthCard;
@@ -2626,20 +2635,20 @@
                   card.innerHTML = `
                     <div class="flex items-center justify-between border-b border-[var(--border)] pb-1.5">
                       <div class="flex items-center gap-2.5">
-                        <img src="${msgAvatarUrl}" alt="${ev.agent_name || 'Agent'}" class="w-8 h-8 rounded-full object-cover border border-[var(--border)] shadow-xs shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
+                        <img src="${escapeHtml(msgAvatarUrl)}" alt="${escapeHtml(ev.agent_name || 'Agent')}" class="w-8 h-8 rounded-full object-cover border border-[var(--border)] shadow-xs shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
                         <div>
                           <div class="flex items-center gap-2">
-                            <span class="text-xs font-bold text-[var(--foreground)]">${ev.agent_name}</span>
-                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)] font-medium">${ev.role}</span>
-                            ${isChairman ? '<span class="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">' + smT("ui.skill_markt.moderator_badge", "MODERATOR") + '</span>' : ''}
+                            <span class="text-xs font-bold text-[var(--foreground)]">${escapeHtml(ev.agent_name || '')}</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)] font-medium">${escapeHtml(ev.role || '')}</span>
+                            ${isChairman ? '<span class="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">' + escapeHtml(smT("ui.skill_markt.moderator_badge", "MODERATOR")) + '</span>' : ''}
                           </div>
-                          <div class="text-[9.5px] text-[var(--muted-foreground)] font-mono mt-0.5">${smT("ui.skill_markt.model_prefix", "Modell:")} ${ev.model || 'Standard'}</div>
+                          <div class="text-[9.5px] text-[var(--muted-foreground)] font-mono mt-0.5">${escapeHtml(smT("ui.skill_markt.model_prefix", "Modell:"))} ${escapeHtml(ev.model || 'Standard')}</div>
                         </div>
                       </div>
                       <span class="text-[10px] font-mono text-[var(--muted-foreground)]">${new Date().toLocaleTimeString()}</span>
                     </div>
                     <div class="text-xs leading-relaxed text-[var(--foreground)] whitespace-pre-wrap font-sans font-normal pt-1">
-                      ${ev.content}
+                      ${escapeHtml(ev.content || '')}
                     </div>
                   `;
                   return card;
@@ -2697,11 +2706,11 @@
       headerBanner.className = "rounded-lg p-4 bg-[var(--card)] border border-[var(--border)] text-xs space-y-1 mb-4 font-mono text-[var(--foreground)]";
       headerBanner.innerHTML = `
         <div class="flex items-center justify-between text-[var(--foreground)] font-bold uppercase tracking-wider">
-          <span>${smT("ui.skill_markt.boardroom_header", "📋 AI-BOARDROOM-DEBATTE: {task}", { task: data.task })}</span>
-          <span>${smT("ui.skill_markt.chairman_label", "CHAIRMAN: {name}", { name: data.chairman ? data.chairman.name : smT("ui.skill_markt.chairman_default", "Moderator") })}</span>
+          <span>${smT("ui.skill_markt.boardroom_header", "📋 AI-BOARDROOM-DEBATTE: {task}", { task: escapeHtml(data.task || "") })}</span>
+          <span>${smT("ui.skill_markt.chairman_label", "CHAIRMAN: {name}", { name: escapeHtml(data.chairman ? data.chairman.name : smT("ui.skill_markt.chairman_default", "Moderator")) })}</span>
         </div>
         <div class="text-[10px] text-muted-custom">
-          ${smT("ui.skill_markt.meta_max_rounds_gateway", "Max Runden: {rounds} | Framework: {framework} | OmniRoute Gateway Active", { rounds: data.max_rounds, framework: data.framework || 'Steffi Kieffer Boardroom' })}
+          ${smT("ui.skill_markt.meta_max_rounds_gateway", "Max Runden: {rounds} | Framework: {framework} | OmniRoute Gateway Active", { rounds: escapeHtml(String(data.max_rounds ?? "")), framework: escapeHtml(data.framework || 'Steffi Kieffer Boardroom') })}
         </div>
       `;
       threadDiv.appendChild(headerBanner);
@@ -2714,7 +2723,7 @@
           divider.innerHTML = `
             <div class="flex-1 h-[1px] bg-neutral-800"></div>
             <span class="text-[10px] font-mono font-bold tracking-widest uppercase px-3 py-1 rounded bg-neutral-900 border theme-border accent-color">
-              ${smT("ui.skill_markt.round_of", "⚡ DEBATTE RUNDE {round} VON {total}", { round: currentRound, total: data.max_rounds })}
+              ${smT("ui.skill_markt.round_of", "⚡ DEBATTE RUNDE {round} VON {total}", { round: escapeHtml(String(currentRound)), total: escapeHtml(String(data.max_rounds ?? "")) })}
             </span>
             <div class="flex-1 h-[1px] bg-neutral-800"></div>
           `;
@@ -2723,7 +2732,7 @@
         if (ev.type === "consensus_reached") {
           const alertBox = document.createElement("div");
           alertBox.className = "rounded-md p-3 bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] font-mono text-xs font-semibold flex items-center gap-2 my-2";
-          alertBox.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> <span>${ev.content}</span>`;
+          alertBox.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> <span>${escapeHtml(ev.content || "")}</span>`;
           threadDiv.appendChild(alertBox);
           return;
         }
@@ -2736,10 +2745,10 @@
               <h3 class="text-sm font-bold uppercase tracking-wider accent-color flex items-center gap-2">
                 <i data-lucide="award" class="w-4 h-4 text-black dark:text-white"></i> ${smT("ui.skill_markt.final_synthesis_action_plain", "FINALE SYNTHESE & AKTIONSPLAN")}
               </h3>
-              <span class="text-[10px] font-mono px-2.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 accent-color font-bold">${ev.agent_name} (${ev.role})</span>
+              <span class="text-[10px] font-mono px-2.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 accent-color font-bold">${escapeHtml(ev.agent_name || "")} (${escapeHtml(ev.role || "")})</span>
             </div>
             <div class="text-xs leading-relaxed text-primary-custom whitespace-pre-wrap font-sans font-medium">
-              ${ev.content}
+              ${escapeHtml(ev.content || "")}
             </div>
           `;
           threadDiv.appendChild(synthCard);
@@ -2758,19 +2767,19 @@
         card.innerHTML = `
           <div class="flex items-center justify-between border-b border-slate-100 dark:border-neutral-800 pb-2">
             <div class="flex items-center gap-2.5">
-              <img src="${msgAvatarUrl}" alt="${ev.agent_name || 'Agent'}" class="w-8 h-8 rounded-full object-cover border border-slate-300 dark:border-neutral-700 shadow-xs shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
+              <img src="${escapeHtml(msgAvatarUrl)}" alt="${escapeHtml(ev.agent_name || 'Agent')}" class="w-8 h-8 rounded-full object-cover border border-slate-300 dark:border-neutral-700 shadow-xs shrink-0" onerror="this.src='/static/avatars/avatar_001.jpg'">
               <div>
                 <div class="flex items-center gap-2">
-                  <span class="text-xs font-bold text-slate-800 dark:text-slate-200">${ev.agent_name}</span>
-                  <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700 font-medium">${ev.role}</span>
+                  <span class="text-xs font-bold text-slate-800 dark:text-slate-200">${escapeHtml(ev.agent_name || "")}</span>
+                  <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700 font-medium">${escapeHtml(ev.role || "")}</span>
                   ${isChairman ? '<span class="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">' + smT("ui.skill_markt.moderator_badge", "MODERATOR") + '</span>' : ''}
                 </div>
-                <div class="text-[9.5px] text-slate-400 dark:text-neutral-500 font-mono mt-0.5">${smT("ui.skill_markt.model_prefix", "Modell:")} ${ev.model || 'free-forever'}</div>
+                <div class="text-[9.5px] text-slate-400 dark:text-neutral-500 font-mono mt-0.5">${smT("ui.skill_markt.model_prefix", "Modell:")} ${escapeHtml(ev.model || 'free-forever')}</div>
               </div>
             </div>
           </div>
           <div class="text-xs leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap pt-1 font-sans font-medium">
-            ${ev.content}
+            ${escapeHtml(ev.content || "")}
           </div>
         `;
         threadDiv.appendChild(card);

@@ -8,6 +8,7 @@ Implementiert Betroffenenrechte nach:
 """
 
 import os
+import re
 import sys
 import json
 import time
@@ -87,7 +88,7 @@ class GDPRComplianceEngine:
             except Exception as e:
                 print(f"[GDPR] Audit-Tabellen-Initialisierung fehlgeschlagen: {e}", file=sys.stderr)
 
-    def export_subject_data(self, identifier: str) -> Dict[str, Any]:
+    def export_subject_data(self, identifier: str, max_messages: Optional[int] = None) -> Dict[str, Any]:
         """Art. 15 DSGVO: Erstellt einen vollständigen Datenauszug für eine Person (E-Mail, Name, Telefon)."""
         term = identifier.strip()
         if not term or len(term) < 3:
@@ -98,6 +99,7 @@ class GDPRComplianceEngine:
             "requested_identifier": term,
             "export_timestamp": now_iso,
             "legal_basis": "Art. 15 DSGVO (Auskunftsrecht)",
+            "is_truncated": False,
             "sources": {
                 "kanban_tasks": [],
                 "chat_messages": [],
@@ -125,30 +127,50 @@ class GDPRComplianceEngine:
             except Exception as e:
                 export["sources"]["kanban_tasks_error"] = str(e)
 
-        # 2. Chat-Nachrichten (state.db)
+        # 2. Chat-Nachrichten (state.db) — standardmäßig paginierter Voll-Export (Art. 15 DSGVO)
         if os.path.exists(self.state_db):
             try:
                 with self._get_conn(self.state_db, readonly=True) as conn:
                     conn.row_factory = sqlite3.Row
                     cur = conn.cursor()
-                    cur.execute("""
-                        SELECT COUNT(*) FROM messages WHERE content LIKE ?
-                    """, (f"%{term}%",))
-                    total_msg_count = cur.fetchone()[0]
-
-                    cur.execute("""
-                        SELECT id, session_id, role, content, timestamp
-                        FROM messages
-                        WHERE content LIKE ?
-                        LIMIT 100
-                    """, (f"%{term}%",))
-                    msgs = [dict(r) for r in cur.fetchall()]
+                    msgs: List[Dict[str, Any]] = []
+                    truncated = False
+                    if max_messages is not None and max_messages > 0:
+                        cur.execute("SELECT COUNT(*) FROM messages WHERE content LIKE ?", (f"%{term}%",))
+                        total_count = int(cur.fetchone()[0])
+                        cur.execute("""
+                            SELECT id, session_id, role, content, timestamp
+                            FROM messages
+                            WHERE content LIKE ?
+                            ORDER BY id ASC
+                            LIMIT ?
+                        """, (f"%{term}%", int(max_messages)))
+                        msgs = [dict(r) for r in cur.fetchall()]
+                        truncated = total_count > len(msgs)
+                    else:
+                        page_size = 500
+                        offset = 0
+                        while True:
+                            cur.execute("""
+                                SELECT id, session_id, role, content, timestamp
+                                FROM messages
+                                WHERE content LIKE ?
+                                ORDER BY id ASC
+                                LIMIT ? OFFSET ?
+                            """, (f"%{term}%", page_size, offset))
+                            chunk = [dict(r) for r in cur.fetchall()]
+                            if not chunk:
+                                break
+                            msgs.extend(chunk)
+                            if len(chunk) < page_size:
+                                break
+                            offset += page_size
+                        total_count = len(msgs)
                     export["sources"]["chat_messages"] = msgs
-                    if total_msg_count > len(msgs):
-                        export["sources"]["chat_messages_truncated"] = True
-                        export["sources"]["chat_messages_total_count"] = total_msg_count
+                    export["sources"]["chat_messages_truncated"] = truncated
+                    export["sources"]["chat_messages_total_count"] = total_count
+                    if truncated:
                         export["is_truncated"] = True
-                        export["truncation_notice"] = f"Auskunft unvollständig: {total_msg_count - len(msgs)} Chat-Nachrichten durch Limit 100 abgeschnitten."
             except Exception as e:
                 export["sources"]["chat_messages_error"] = str(e)
 
@@ -174,20 +196,21 @@ class GDPRComplianceEngine:
             except Exception as e:
                 export["sources"]["memory_error"] = str(e)
 
-        # 4. PocketBase CRM Kontakte
-        pb_urls = [os.getenv("POCKETBASE_URL", "http://pocketbase:8090"), "http://127.0.0.1:8090"]
-        for pb in pb_urls:
-            try:
-                filter_q = urllib.parse.quote(f'name ~ "{term}" || email ~ "{term}" || firma ~ "{term}"')
-                url = f"{pb.rstrip('/')}/api/collections/kontakte/records?filter={filter_q}"
-                req = urllib.request.Request(url, headers={"User-Agent": "ArchonGDPR/1.0"})
-                with urllib.request.urlopen(req, timeout=1.0) as resp:
-                    if resp.status == 200:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        export["sources"]["crm_contacts"] = data.get("items", [])
-                        break
-            except Exception:
-                continue
+        # 4. PocketBase CRM Kontakte (nur aktiv, wenn explizit POCKETBASE_ENABLED=true)
+        if os.getenv("POCKETBASE_ENABLED", "false").strip().lower() in ("1", "true", "yes"):
+            pb_urls = [os.getenv("POCKETBASE_URL", "http://pocketbase:8090"), "http://127.0.0.1:8090"]
+            for pb in pb_urls:
+                try:
+                    filter_q = urllib.parse.quote(f'name ~ "{term}" || email ~ "{term}" || firma ~ "{term}"')
+                    url = f"{pb.rstrip('/')}/api/collections/kontakte/records?filter={filter_q}"
+                    req = urllib.request.Request(url, headers={"User-Agent": "ArchonGDPR/1.0"})
+                    with urllib.request.urlopen(req, timeout=1.0) as resp:
+                        if resp.status == 200:
+                            data = json.loads(resp.read().decode("utf-8"))
+                            export["sources"]["crm_contacts"] = data.get("items", [])
+                            break
+                except Exception:
+                    continue
 
         # 5. Obsidian Vault Notizen
         if os.path.exists(self.obsidian_dir):
@@ -255,11 +278,17 @@ class GDPRComplianceEngine:
                 "chat_messages": 0,
                 "memory_learnings": 0,
                 "feedback_entries": 0,
-                "crm_contacts": 0
+                "crm_contacts": 0,
+                "tenant_records": 0,
             },
             "total_affected": 0,
             "receipt": None
         }
+
+        term_re = re.compile(re.escape(term), re.IGNORECASE)
+
+        def _redact_ci(val: Optional[str]) -> str:
+            return term_re.sub(replacement, val or "")
 
         # 1. Kanban Tasks
         if os.path.exists(self.kanban_db):
@@ -275,13 +304,10 @@ class GDPRComplianceEngine:
 
                     if not dry_run and rows:
                         for tid, t_title, t_body, t_res in rows:
-                            new_title = (t_title or "").replace(term, replacement)
-                            new_body = (t_body or "").replace(term, replacement)
-                            new_res = (t_res or "").replace(term, replacement)
                             cur.execute("""
                                 UPDATE tasks SET title = ?, body = ?, result = ?
                                 WHERE id = ?
-                            """, (new_title, new_body, new_res, tid))
+                            """, (_redact_ci(t_title), _redact_ci(t_body), _redact_ci(t_res), tid))
                         conn.commit()
             except Exception as e:
                 print(f"[GDPR] Fehler bei Kanban-Löschung: {e}", file=sys.stderr)
@@ -298,8 +324,7 @@ class GDPRComplianceEngine:
 
                     if not dry_run and rows:
                         for mid, cont in rows:
-                            new_cont = (cont or "").replace(term, replacement)
-                            cur.execute("UPDATE messages SET content = ? WHERE id = ?", (new_cont, mid))
+                            cur.execute("UPDATE messages SET content = ? WHERE id = ?", (_redact_ci(cont), mid))
                         conn.commit()
             except Exception as e:
                 print(f"[GDPR] Fehler bei Chat-Löschung: {e}", file=sys.stderr)
@@ -318,7 +343,7 @@ class GDPRComplianceEngine:
                         if not dry_run and l_rows:
                             for lid, s in l_rows:
                                 cur.execute("UPDATE learnings SET summary = ? WHERE id = ?",
-                                            ((s or "").replace(term, replacement), lid))
+                                            (_redact_ci(s), lid))
 
                     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='human_feedback'")
                     if cur.fetchone():
@@ -328,12 +353,54 @@ class GDPRComplianceEngine:
                         if not dry_run and f_rows:
                             for fid, c, cr in f_rows:
                                 cur.execute("UPDATE human_feedback SET comment = ?, corrected_text = ? WHERE id = ?",
-                                            ((c or "").replace(term, replacement), (cr or "").replace(term, replacement), fid))
+                                            (_redact_ci(c), _redact_ci(cr), fid))
                     if not dry_run:
                         conn.commit()
             except Exception as e:
                 print(f"[GDPR] Fehler bei Memory-Löschung: {e}", file=sys.stderr)
                 errors.append(f"Memory: {e}")
+
+        # 3b. Multi-Tenant-DBs (ERP, Contracts, Deals, CRM unter data/tenants/*)
+        import glob
+        tenants_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "tenants")
+        tenant_db_files = sorted(glob.glob(os.path.join(tenants_root, "*", "*.db")))
+        tenant_targets = {
+            "crm_contacts": ["full_name", "email", "phone", "mobile", "notes"],
+            "crm_entities": ["display_name", "billing_email", "phone", "notes"],
+            "crm_interactions": ["subject", "summary", "author"],
+            "contracts": ["title", "partner_name", "notes"],
+            "deals": ["title", "partner", "notes"],
+        }
+        like_pat = f"%{term}%"
+        for tdb in tenant_db_files:
+            try:
+                with self._get_conn(tdb, readonly=dry_run) as conn:
+                    cur = conn.cursor()
+                    for tbl, cols in tenant_targets.items():
+                        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,))
+                        if not cur.fetchone():
+                            continue
+                        cur.execute(f"PRAGMA table_info({tbl})")
+                        avail = {r[1] for r in cur.fetchall()}
+                        use_cols = [c for c in cols if c in avail]
+                        if not use_cols or "id" not in avail:
+                            continue
+                        where_sql = " OR ".join(f"{c} LIKE ?" for c in use_cols)
+                        sel_sql = f"SELECT id, {', '.join(use_cols)} FROM {tbl} WHERE {where_sql}"
+                        t_rows = cur.execute(sel_sql, [like_pat] * len(use_cols)).fetchall()
+                        results["affected"]["tenant_records"] += len(t_rows)
+                        if not dry_run and t_rows:
+                            set_sql = ", ".join(f"{c} = ?" for c in use_cols)
+                            upd_sql = f"UPDATE {tbl} SET {set_sql} WHERE id = ?"
+                            for row in t_rows:
+                                rid = row[0]
+                                vals = [_redact_ci(row[idx + 1]) for idx in range(len(use_cols))]
+                                cur.execute(upd_sql, vals + [rid])
+                    if not dry_run:
+                        conn.commit()
+            except Exception as e:
+                print(f"[GDPR] Fehler bei Tenant-DB {os.path.basename(tdb)}: {e}", file=sys.stderr)
+                errors.append(f"Tenant({os.path.basename(tdb)}): {e}")
 
         if errors:
             results["errors"] = errors
@@ -373,7 +440,6 @@ class GDPRComplianceEngine:
 
     def _write_audit_receipt(self, term: str, count: int, breakdown: Dict[str, int], mode: str) -> Dict[str, Any]:
         """Schreibt eine kryptografische Löschquittung (ohne das gelöschte PII selbst zu speichern!)."""
-        receipt_id = f"gdpr-rcpt-{uuid.uuid4().hex[:8]}" if "uuid" in globals() else f"gdpr-rcpt-{int(time.time())}"
         import uuid
         receipt_id = f"gdpr-rcpt-{uuid.uuid4().hex[:8]}"
         id_hash = hashlib.sha256(term.lower().encode("utf-8")).hexdigest()

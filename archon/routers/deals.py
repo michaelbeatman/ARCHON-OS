@@ -8,6 +8,7 @@ fuer das CRM- und Vertriebs-Subsystem.
 
 from typing import Optional
 from fastapi import APIRouter, Body, HTTPException
+from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["deals"])
 
@@ -58,8 +59,8 @@ def api_move_deal_stage(deal_id: str, payload: dict = Body(...)):
     return {"status": "success", "deal": moved}
 
 
-@router.delete("/api/deals/{deal_id}")
-@router.delete("/api/v1/deals/{deal_id}")
+@router.delete("/api/deals/{deal_id}", dependencies=[_ArchonDepends(require_admin_or_503)])
+@router.delete("/api/v1/deals/{deal_id}", dependencies=[_ArchonDepends(require_admin_or_503)])
 def api_delete_deal(deal_id: str):
     from backend.deal_pipeline import DealPipelineManager
     deleted = DealPipelineManager.delete(deal_id)

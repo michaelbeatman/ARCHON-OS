@@ -34,6 +34,57 @@ def _resolve_db(name: str) -> str:
     return resolve_db(name)
 
 
+# Basiszinssatz-Tabelle nach § 247 BGB (Deutsche Bundesbank, halbjährliche Anpassung 01.01. / 01.07.)
+# Quelle: Bundesbank Bekanntmachung Basiszinssatz
+_BGB_BASE_RATE_PERIODS = [
+    (datetime.date(2023, 1, 1), 0.0162),
+    (datetime.date(2023, 7, 1), 0.0312),
+    (datetime.date(2024, 1, 1), 0.0362),
+    (datetime.date(2024, 7, 1), 0.0337),
+    (datetime.date(2025, 1, 1), 0.0227),
+    (datetime.date(2025, 7, 1), 0.0127),
+    (datetime.date(2026, 1, 1), 0.0127),
+]
+
+
+def _get_bgb_base_rate(day: datetime.date) -> float:
+    """Ermittelt den gültigen § 247 BGB Basiszinssatz für ein Datum (mit optionalem Env-Override)."""
+    env_override = os.environ.get("ARCHON_BGB_BASE_RATE")
+    if env_override:
+        try:
+            return float(env_override)
+        except ValueError:
+            pass
+    rate = _BGB_BASE_RATE_PERIODS[0][1]
+    for start_dt, period_rate in _BGB_BASE_RATE_PERIODS:
+        if day >= start_dt:
+            rate = period_rate
+    return rate
+
+
+def calculate_statutory_interest(
+    principal_eur: float,
+    due_date: datetime.date,
+    as_of_date: datetime.date,
+    is_b2b: bool = True,
+) -> float:
+    """Berechnet gesetzliche Verzugszinsen (§ 288 BGB) taggenau über Halbjahresgrenzen hinweg."""
+    if principal_eur <= 0 or as_of_date <= due_date:
+        return 0.0
+    margin = 0.09 if is_b2b else 0.05  # § 288 Abs. 2 (+9 Pp. B2B) / Abs. 1 (+5 Pp. B2C)
+    cur = due_date
+    total_interest = 0.0
+    boundaries = [d for d, _ in _BGB_BASE_RATE_PERIODS if due_date < d < as_of_date]
+    for next_bound in boundaries + [as_of_date]:
+        days_in_slice = (next_bound - cur).days
+        if days_in_slice > 0:
+            annual_rate = _get_bgb_base_rate(cur) + margin
+            year_days = 366.0 if (cur.year % 4 == 0 and (cur.year % 100 != 0 or cur.year % 400 == 0)) else 365.0
+            total_interest += principal_eur * annual_rate * (days_in_slice / year_days)
+        cur = next_bound
+    return round(total_interest, 2)
+
+
 class DunningEngine:
     """Verwaltet Ausgangsrechnungen und das dreistufige Mahnwesen."""
 
@@ -214,9 +265,16 @@ class DunningEngine:
         today = datetime.date.today()
         dunning_id = f"MAHN-{invoice_id}-{level}"
         
-        # Konfiguration je Stufe
+        # Konfiguration je Stufe inkl. § 288 BGB Verzugszins-Berechnung (taggenau über Bundesbank-Basiszinssätze)
+        due_dt = datetime.date.fromisoformat(inv["due_date"]) if inv.get("due_date") else today
+        overdue_days = max(0, (today - due_dt).days)
+        is_b2b = bool(inv.get("is_b2b", True))
+        statutory_interest = calculate_statutory_interest(
+            float(inv["amount_gross"]), due_dt, today, is_b2b=is_b2b
+        )
+
         if level == 1:
-            fee = 0.0
+            fee = 0.0  # Zahlungserinnerung gesetzlich gebührenfrei (kein Verzugseintritt vor Zugang)
             interest = 0.0
             deadline_days = 7
             deadline = (today + datetime.timedelta(days=deadline_days)).isoformat()
@@ -233,36 +291,38 @@ class DunningEngine:
             )
         elif level == 2:
             fee = 5.0
-            interest = 0.0
+            interest = statutory_interest
             deadline_days = 5
             deadline = (today + datetime.timedelta(days=deadline_days)).isoformat()
-            total_claim = inv["amount_gross"] + fee
+            total_claim = round(inv["amount_gross"] + fee + interest, 2)
             subject = f"1. Mahnung zur Rechnung {invoice_id}"
             body_text = (
                 f"Sehr geehrte Damen und Herren,\n\n"
                 f"trotz unserer vorherigen Zahlungserinnerung konnten wir für die Rechnung {invoice_id} vom {inv['invoice_date']} "
-                f"leider noch immer keinen Zahlungseingang feststellen. Die Forderung ist seit dem {inv['due_date']} fällig.\n\n"
+                f"leider noch immer keinen Zahlungseingang feststellen. Die Forderung ist seit dem {inv['due_date']} ({overdue_days} Tage) fällig.\n\n"
                 f"Forderungsaufstellung:\n"
                 f"- Rechnungsbetrag: {inv['amount_gross']:.2f} EUR\n"
-                f"- Mahngebühr: {fee:.2f} EUR\n"
+                f"- Mahnkostenpauschale: {fee:.2f} EUR\n"
+                f"- Verzugszinsen (§ 288 BGB, {overdue_days} Tage): {interest:.2f} EUR\n"
                 f"- GESAMTFORDERUNG: {total_claim:.2f} EUR\n\n"
                 f"Wir fordern Sie hiermit auf, den Gesamtbetrag von {total_claim:.2f} EUR bis spätestens {deadline} "
                 f"auf unser unten genanntes Konto auszugleichen.\n\n"
                 f"Mit freundlichen Grüßen,\nBuchhaltung Archon OS"
             )
-        else: # level >= 3
+        else:  # level >= 3
             fee = 10.0
-            interest = round(inv["amount_gross"] * 0.03, 2) # ca. 3% Verzugsschaden
+            interest = statutory_interest
             deadline_days = 3
             deadline = (today + datetime.timedelta(days=deadline_days)).isoformat()
-            total_claim = inv["amount_gross"] + fee + interest
+            total_claim = round(inv["amount_gross"] + fee + interest, 2)
             subject = f"LETZTE MAHNUNG vor Einleitung gerichtlicher Schritte (Rechnung {invoice_id})"
             body_text = (
                 f"Sehr geehrte Damen und Herren,\n\n"
                 f"auf unsere bisherigen Mahnungen zur Rechnung {invoice_id} vom {inv['invoice_date']} erfolgte bisher keine Zahlung.\n\n"
                 f"Forderungsaufstellung:\n"
                 f"- Hauptforderung: {inv['amount_gross']:.2f} EUR\n"
-                f"- Mahnkosten & Verzugsschaden: {(fee + interest):.2f} EUR\n"
+                f"- Mahnkosten: {fee:.2f} EUR\n"
+                f"- Verzugszinsen (§ 288 BGB, {overdue_days} Tage): {interest:.2f} EUR\n"
                 f"- GESAMTBETRAG: {total_claim:.2f} EUR\n\n"
                 f"Dies ist die LETZTE außergerichtliche Frist. Bitte überweisen Sie den Betrag von {total_claim:.2f} EUR "
                 f"bis zum {deadline}.\n\n"
@@ -272,7 +332,7 @@ class DunningEngine:
                 f"Mit freundlichen Grüßen,\nGeschäftsleitung / Rechtsabteilung Archon OS"
             )
 
-        total_claim = inv["amount_gross"] + fee + interest
+        total_claim = round(inv["amount_gross"] + fee + interest, 2)
 
         # Speichere Entwurf in DB
         with sqlite3.connect(self.memory_db, timeout=5.0, factory=_ArchonClosingConn) as conn:
@@ -318,6 +378,7 @@ class DunningEngine:
             "deadline": deadline,
             "total_claim": total_claim,
             "fee": fee,
+            "interest": interest,
             "status": "draft",
             "body_text": body_text
         }
@@ -376,12 +437,48 @@ class DunningEngine:
             """, (new_status, lvl, d_dict["fee"], now_iso, inv_id))
             conn.commit()
 
-        # 3. NotificationHub alarmieren
+        # 3. E-Mail-Versand-Queue anstoßen (HITL-freigegebener Entwurf -> email_draft_engine)
+        email_draft_id = None
+        try:
+            with sqlite3.connect(self.memory_db, timeout=5.0, factory=_ArchonClosingConn) as conn:
+                row_cust = conn.execute(
+                    "SELECT customer_name, customer_email FROM invoices WHERE invoice_id = ?", (inv_id,)
+                ).fetchone()
+            if row_cust and row_cust[1]:
+                from backend.email_draft_engine import email_draft_engine
+                draft_res = email_draft_engine.create_draft(
+                    to_email=row_cust[1],
+                    subject=f"Mahnung Stufe {lvl} zu Rechnung {inv_id}",
+                    body=d_dict.get("draft_text") or f"Sehr geehrte Damen und Herren,\n\nMahnung Stufe {lvl} zu Rechnung {inv_id} über {d_dict['total_claim']:.2f} EUR.",
+                    source_agent="finance_lead",
+                    metadata={"dunning_id": dunning_id, "invoice_id": inv_id, "level": lvl, "approved_hitl": True},
+                )
+                email_draft_id = draft_res.get("draft_id") if isinstance(draft_res, dict) else None
+        except Exception:
+            pass
+
+        # 4. ERP-Synchronisierung (Beleg-Mahnstatus im aktiven Mandanten nachführen, falls vorhanden)
+        try:
+            from backend.erp_manager import get_erp_manager
+            erp_mgr = get_erp_manager()
+            e_conn, _ = erp_mgr._get_conn()
+            try:
+                e_conn.execute(
+                    "UPDATE erp_documents SET updated_at = CURRENT_TIMESTAMP WHERE doc_number = ?",
+                    (inv_id,),
+                )
+                e_conn.commit()
+            finally:
+                e_conn.close()
+        except Exception:
+            pass
+
+        # 5. NotificationHub alarmieren
         try:
             from backend.notification_hub import get_notification_hub
             get_notification_hub().dispatch_notification(
                 title=f"Mahnung Stufe {lvl} versandt",
-                message=f"Mahnung '{dunning_id}' für Rechnung {inv_id} über {d_dict['total_claim']:.2f} EUR wurde freigegeben und versendet.",
+                message=f"Mahnung '{dunning_id}' für Rechnung {inv_id} über {d_dict['total_claim']:.2f} EUR wurde freigegeben und in die Versandqueue gelegt.",
                 severity="WARNING" if lvl >= 2 else "INFO",
                 category="finance_dunning"
             )
@@ -394,6 +491,7 @@ class DunningEngine:
             "invoice_id": inv_id,
             "level": lvl,
             "new_invoice_status": new_status,
+            "email_draft_id": email_draft_id,
             "dispatched_at": now_iso
         }
 

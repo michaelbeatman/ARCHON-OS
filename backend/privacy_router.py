@@ -362,10 +362,14 @@ def get_overall_privacy_status() -> Dict[str, Any]:
 
     mistral_configured = bool(cfg.get("mistral_api_key") or os.environ.get("MISTRAL_API_KEY"))
 
-    if zero_strict or active_provider in ("local", "ollama", "lmstudio") or (is_local_online and is_routing_enabled):
+    if zero_strict or active_provider in ("local", "ollama", "lmstudio"):
         dsgvo_indicator = "green"
         dsgvo_label = "DSGVO (100% Zero-Egress)" if zero_strict else "DSGVO (100% On-Premise)"
         dsgvo_tooltip = "Zero-Egress erzwungen: Keine Daten verlassen das lokale Hausnetz."
+    elif is_local_online and is_routing_enabled:
+        dsgvo_indicator = "green"
+        dsgvo_label = "DSGVO (Hybrid: Sensible Lokal)"
+        dsgvo_tooltip = "Sensible Kategorien laufen 100% lokal (On-Premise), allgemeine Tasks über Standard-Routing."
     elif active_provider == "mistral" or (mistral_configured and active_provider.startswith("mistral")):
         dsgvo_indicator = "green"
         dsgvo_label = "DSGVO (Mistral AI - Paris)"

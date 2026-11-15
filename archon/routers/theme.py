@@ -108,24 +108,33 @@ def api_get_themes():
     return {"themes": themes}
 
 
+def _safe_theme_path(theme_name: str) -> str:
+    """Validiert Theme-Dateinamen strikt gegen Path-Traversal."""
+    import re
+    clean = str(theme_name or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", clean):
+        raise HTTPException(status_code=400, detail="Ungültiger Theme-Name (erlaubt: A-Z, 0-9, _, -).")
+    return os.path.join(_get_themes_dir(), f"{clean}.json")
+
+
 @router.get("/api/themes/{theme_name}")
 def api_get_theme_by_name(theme_name: str):
-    path = os.path.join(_get_themes_dir(), f"{theme_name}.json")
+    path = _safe_theme_path(theme_name)
     if os.path.exists(path):
         return _load_json_delegate(path, {})
     return {}
 
 
-@router.post("/api/themes/{theme_name}")
+@router.post("/api/themes/{theme_name}", dependencies=[_ArchonDepends(_check_admin)])
 def api_save_theme_by_name(theme_name: str, theme_data: dict = Body(...)):
-    path = os.path.join(_get_themes_dir(), f"{theme_name}.json")
+    path = _safe_theme_path(theme_name)
     _save_json_delegate(path, theme_data)
     return {"status": "success", "theme_name": theme_name}
 
 
-@router.delete("/api/themes/{theme_name}")
+@router.delete("/api/themes/{theme_name}", dependencies=[_ArchonDepends(_check_admin)])
 def api_delete_theme_by_name(theme_name: str):
-    path = os.path.join(_get_themes_dir(), f"{theme_name}.json")
+    path = _safe_theme_path(theme_name)
     if os.path.exists(path):
         os.remove(path)
     return {"status": "success"}
@@ -149,7 +158,7 @@ def api_get_design_themes():
     return {"active_theme_id": "archon_current", "active_mode": "light", "themes": {}}
 
 
-@router.post("/api/design/themes")
+@router.post("/api/design/themes", dependencies=[_ArchonDepends(_check_admin)])
 def api_save_design_themes(payload: Dict = Body(...)):
     current = api_get_design_themes()
     if "active_theme_id" in payload:
@@ -184,7 +193,7 @@ def api_save_design_themes(payload: Dict = Body(...)):
     return {"status": "success", "data": current, "written_to": written, "failed": failed}
 
 
-@router.delete("/api/design/themes/{theme_id}")
+@router.delete("/api/design/themes/{theme_id}", dependencies=[_ArchonDepends(_check_admin)])
 def api_delete_design_theme(theme_id: str):
     current = api_get_design_themes()
     themes = current.get("themes", {})
@@ -213,7 +222,7 @@ def api_get_theme():
     return load_theme()
 
 
-@router.post("/api/theme")
+@router.post("/api/theme", dependencies=[_ArchonDepends(_check_admin)])
 def api_save_theme(theme_data: Dict = Body(...)):
     save_theme(theme_data)
     return {"status": "success"}
@@ -224,7 +233,7 @@ def api_get_theme_live_overrides():
     return _load_json_delegate(_get_theme_live_file(), {"rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {}})
 
 
-@router.post("/api/theme/live-overrides")
+@router.post("/api/theme/live-overrides", dependencies=[_ArchonDepends(_check_admin)])
 def api_save_theme_live_overrides(payload: Dict = Body(...)):
     target_file = _get_theme_live_file()
     existing = _load_json_delegate(target_file, {"rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {}})
@@ -252,11 +261,14 @@ def api_save_theme_live_overrides(payload: Dict = Body(...)):
     return {"status": "success"}
 
 
-@router.post("/api/theme/bake-into-main-design")
+@router.post("/api/theme/bake-into-main-design", dependencies=[_ArchonDepends(_check_admin)])
 def api_bake_theme_into_main_design(payload: Dict = Body(None)):
     """Kompiliert alle Live-Studio-Regeln direkt in static/custom_studio.css,
     leert die temporären Overrides auf Server und Client und setzt den Zähler auf 0 zurück.
     """
+    import re
+    import tempfile
+
     target_file = _get_theme_live_file()
     data = payload or _load_json_delegate(target_file, {})
     rules = data.get("rules", {})
@@ -274,14 +286,22 @@ def api_bake_theme_into_main_design(payload: Dict = Body(None)):
     for sel, props in rules.items():
         if not props or not isinstance(props, dict):
             continue
+        clean_sel = str(sel or "").strip()
+        # Keine Block-Ausbrüche oder HTML/Style-Injektion im Selektor erlauben
+        if not clean_sel or any(bad in clean_sel for bad in ("{", "}", ";", "</", "<script")):
+            continue
         clean_props = []
         for p, v in props.items():
+            clean_prop = str(p or "").strip()
+            if not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", clean_prop):
+                continue
             if v is not None and str(v).strip() != "":
-                clean_val = str(v).replace("!important", "").strip()
-                clean_props.append(f"  {p}: {clean_val} !important;")
-                prop_count += 1
+                clean_val = re.sub(r"[{};]", "", str(v).replace("!important", "")).strip()
+                if clean_val:
+                    clean_props.append(f"  {clean_prop}: {clean_val} !important;")
+                    prop_count += 1
         if clean_props:
-            css_lines.append(f"{sel} {{")
+            css_lines.append(f"{clean_sel} {{")
             css_lines.extend(clean_props)
             css_lines.append("}\n")
 
@@ -290,8 +310,16 @@ def api_bake_theme_into_main_design(payload: Dict = Body(None)):
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     studio_css_path = os.path.join(root_dir, "static", "custom_studio.css")
     try:
-        with open(studio_css_path, "w", encoding="utf-8") as f:
-            f.write(compiled_css)
+        os.makedirs(os.path.dirname(studio_css_path), exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(studio_css_path), prefix=".custom_studio_", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(compiled_css)
+            os.replace(tmp_path, studio_css_path)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
     except Exception as e:
         print(f"[ThemeBake] Fehler beim Schreiben in custom_studio.css: {e}")
 
@@ -315,7 +343,7 @@ def api_bake_theme_into_main_design(payload: Dict = Body(None)):
     }
 
 
-@router.delete("/api/theme/live-overrides")
+@router.delete("/api/theme/live-overrides", dependencies=[_ArchonDepends(_check_admin)])
 def api_delete_theme_live_overrides():
     _save_json_delegate(_get_theme_live_file(), {
         "rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {},

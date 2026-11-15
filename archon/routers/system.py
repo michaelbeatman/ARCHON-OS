@@ -124,6 +124,20 @@ async def _check_service_health(name: str, url_candidates: List[str], client: ht
     return {"status": "down", "latency_ms": 0.0}
 
 
+_SYSTEM_HTTP_CLIENT: Optional[httpx.AsyncClient] = None
+
+
+def _get_system_http_client() -> httpx.AsyncClient:
+    global _SYSTEM_HTTP_CLIENT
+    if _SYSTEM_HTTP_CLIENT is None or _SYSTEM_HTTP_CLIENT.is_closed:
+        _SYSTEM_HTTP_CLIENT = httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=httpx.Timeout(3.0, connect=1.5),
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=8),
+        )
+    return _SYSTEM_HTTP_CLIENT
+
+
 @router.get("/api/system/health")
 async def api_system_health():
     """
@@ -133,31 +147,31 @@ async def api_system_health():
     - hermes_dashboard
     - docker_proxy
     """
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        t_core = _check_service_health(
-            "hermes_core",
-            ["http://hermes-agent:8642", "http://hermes:8642", "http://hermes:8644",
-             "http://host.docker.internal:8644"],
-            client
-        )
-        t_omni = _check_service_health(
-            "omniroute",
-            ["http://omniroute:20128/v1/models", "http://omniroute:20128", "http://host.docker.internal:20128"],
-            client
-        )
-        t_dash = _check_service_health(
-            "hermes_dashboard",
-            ["http://hermes-dashboard:9119", "http://hermes-dashboard:9120", "http://host.docker.internal:9119"],
-            client
-        )
-        t_docker = _check_service_health(
-            "docker_proxy",
-            ["http://docker-socket-proxy:2375/_ping", "http://docker-socket-proxy:2375/version"],
-            client
-        )
-        core_res, omni_res, dash_res, docker_res = await asyncio.gather(
-            t_core, t_omni, t_dash, t_docker
-        )
+    client = _get_system_http_client()
+    t_core = _check_service_health(
+        "hermes_core",
+        ["http://hermes-agent:8642", "http://hermes:8642", "http://hermes:8644",
+         "http://host.docker.internal:8644"],
+        client
+    )
+    t_omni = _check_service_health(
+        "omniroute",
+        ["http://omniroute:20128/v1/models", "http://omniroute:20128", "http://host.docker.internal:20128"],
+        client
+    )
+    t_dash = _check_service_health(
+        "hermes_dashboard",
+        ["http://hermes-dashboard:9119", "http://hermes-dashboard:9120", "http://host.docker.internal:9119"],
+        client
+    )
+    t_docker = _check_service_health(
+        "docker_proxy",
+        ["http://docker-socket-proxy:2375/_ping", "http://docker-socket-proxy:2375/version"],
+        client
+    )
+    core_res, omni_res, dash_res, docker_res = await asyncio.gather(
+        t_core, t_omni, t_dash, t_docker
+    )
 
     all_up = (
         core_res["status"] == "up" and
@@ -508,3 +522,76 @@ def api_write_batcher_stats():
 def api_check_resource_backpressure(simulate_overload: bool = False):
     from backend.resource_backpressure import resource_backpressure_protector
     return resource_backpressure_protector.check_health_and_backpressure(simulate_overload=simulate_overload)
+
+
+def _load_legal_profile() -> Dict[str, str]:
+    loader = _DEPS.get("_load_json")
+    settings_data: Dict[str, Any] = {}
+    if callable(loader):
+        raw = loader(SETTINGS_FILE, {})
+        if isinstance(raw, dict):
+            settings_data = raw
+    elif os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as fh:
+                raw = json.load(fh)
+            if isinstance(raw, dict):
+                settings_data = raw
+        except Exception:
+            settings_data = {}
+    legal = settings_data.get("legal_profile", {}) if isinstance(settings_data, dict) else {}
+    if not isinstance(legal, dict):
+        legal = {}
+    return {
+        "company_name": str(legal.get("company_name") or settings_data.get("company_name") or "Archon OS Betreiber (in settings.json -> legal_profile konfigurieren)"),
+        "street": str(legal.get("street") or "Musterstraße 1"),
+        "postal_city": str(legal.get("postal_city") or "10115 Berlin, Deutschland"),
+        "represented_by": str(legal.get("represented_by") or "Geschäftsführung"),
+        "email": str(legal.get("email") or settings_data.get("admin_email") or "info@archon-local.invalid"),
+        "phone": str(legal.get("phone") or "-"),
+        "vat_id": str(legal.get("vat_id") or "-"),
+        "register_court": str(legal.get("register_court") or "-"),
+        "register_number": str(legal.get("register_number") or "-"),
+    }
+
+
+@router.get("/api/legal/impressum")
+def api_legal_impressum():
+    """Pflichtangaben gemäß § 5 DDG (Digitale-Dienste-Gesetz)."""
+    import html as _html
+    p = {k: _html.escape(v) for k, v in _load_legal_profile().items()}
+    html_body = f"""<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Impressum — Archon OS</title>
+<style>body{{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#111}}h1{{font-size:1.5rem}}code{{background:#f4f4f5;padding:.15rem .35rem;border-radius:4px}}</style>
+</head><body>
+<h1>Impressum (§ 5 DDG)</h1>
+<p><strong>Anbieter:</strong> {p['company_name']}<br>
+<strong>Vertreten durch:</strong> {p['represented_by']}<br>
+<strong>Anschrift:</strong> {p['street']}, {p['postal_city']}</p>
+<p><strong>Kontakt:</strong> E-Mail: {p['email']} · Telefon: {p['phone']}</p>
+<p><strong>Register / Steuer:</strong> Registergericht: {p['register_court']} ({p['register_number']}) · USt-IdNr.: {p['vat_id']}</p>
+<p><small>Hinweis: Betreiberdaten können unter <code>settings.json</code> im Objekt <code>legal_profile</code> gepflegt werden.</small></p>
+</body></html>"""
+    return HTMLResponse(content=html_body)
+
+
+@router.get("/api/legal/datenschutz")
+def api_legal_datenschutz():
+    """Datenschutzhinweise gemäß Art. 13 DSGVO."""
+    import html as _html
+    p = {k: _html.escape(v) for k, v in _load_legal_profile().items()}
+    html_body = f"""<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Datenschutz — Archon OS</title>
+<style>body{{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#111}}h1{{font-size:1.5rem}}h2{{font-size:1.1rem;margin-top:1.25rem}}</style>
+</head><body>
+<h1>Datenschutzhinweise (Art. 13 DSGVO)</h1>
+<p><strong>Verantwortlicher:</strong> {p['company_name']}, {p['street']}, {p['postal_city']} (E-Mail: {p['email']})</p>
+<h2>1. Zweck und Rechtsgrundlage der Verarbeitung</h2>
+<p>Die Verarbeitung von Nutzer-, Kontakt- und Vorgangsdaten erfolgt ausschließlich zur Bereitstellung der lokalen Workspace-, CRM/ERP- und KI-Assistenzfunktionen auf Grundlage von Art. 6 Abs. 1 lit. b, c und f DSGVO sowie bei Marketing-Kommunikation ausschließlich nach ausdrücklichem Opt-In gemäß Art. 6 Abs. 1 lit. a DSGVO.</p>
+<h2>2. KI-Egress &amp; Datenschutz-Routing</h2>
+<p>Sensible Datenkategorien werden durch das Privacy-Gateway (Zero-Egress-Guard, Secret-Masker und PII-Scrubber) vor externer Übermittlung geschützt oder auf lokale On-Premise-Modelle geroutet.</p>
+<h2>3. Aufbewahrung &amp; Betroffenenrechte</h2>
+<p>Sie haben gemäß Art. 15–21 DSGVO das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung sowie Datenübertragbarkeit; gesetzliche GoBD-Aufbewahrungsfristen (§ 147 AO / § 257 HGB) bleiben unberührt.</p>
+</body></html>"""
+    return HTMLResponse(content=html_body)
+

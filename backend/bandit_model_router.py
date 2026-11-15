@@ -120,7 +120,15 @@ class BanditModelRouter:
             })
 
         leaderboard.sort(key=lambda x: x["bandit_reward_score"], reverse=True)
-        selected = leaderboard[0]["model_id"] if (enabled and leaderboard) else "deepseek/deepseek-chat"
+        epsilon = max(0.0, min(1.0, float(cfg.get("exploration_epsilon", 0.15) or 0.0)))
+        if enabled and leaderboard:
+            import random
+            if len(leaderboard) > 1 and random.random() < epsilon:
+                selected = random.choice(leaderboard)["model_id"]
+            else:
+                selected = leaderboard[0]["model_id"]
+        else:
+            selected = "deepseek/deepseek-chat"
         return {
             "enabled": enabled,
             "selected_model": selected,

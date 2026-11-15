@@ -25,14 +25,15 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 
 def _require_admin(request: Request):
     import main as app_main
-
     if hasattr(app_main, "require_admin"):
-        app_main.require_admin(request)
+        return app_main.require_admin(request)
+    from archon.routers._rbac import require_admin_or_503
+    return require_admin_or_503(request)
 
 
 @router.get("/api/settings")
 async def get_settings(request: Request):
-    if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers or "authorization" in request.headers:
+    if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers:
         import main as app_main
         return await app_main.forward_to_hermes(request)
 
@@ -84,7 +85,7 @@ async def get_settings(request: Request):
 @router.post("/api/settings")
 async def api_save_settings(request: Request, settings: Dict = Body(None)):
     _require_admin(request)
-    if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers or "authorization" in request.headers:
+    if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers:
         import main as app_main
         return await app_main.forward_to_hermes(request)
 

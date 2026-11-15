@@ -18,6 +18,24 @@ from typing import Dict, Any, List, Optional
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
+_ALLOWED_INSTALL_BINS = frozenset({
+    "pip", "pip3", "uv", "npm", "npx", "yarn", "pnpm", "apt-get",
+    "python", "python3", os.path.basename(sys.executable).lower(), "git",
+})
+
+
+def _validate_install_command(cmd_args: Any) -> List[str]:
+    """Erlaubt ausschließlich definierte Paketmanager-/Build-Binaries ohne Inline-Code-Flags."""
+    if not isinstance(cmd_args, (list, tuple)) or not cmd_args:
+        raise ValueError("Ungültiger Installationsbefehl (leer)")
+    args = [str(a) for a in cmd_args]
+    binary = os.path.basename(args[0]).lower()
+    if binary not in _ALLOWED_INSTALL_BINS:
+        raise ValueError(f"Sicherheits-Block: Binary '{binary}' ist für autonome Installationen nicht freigegeben.")
+    if binary.startswith("python") and any(a in ("-c", "--command") for a in args[1:4]):
+        raise ValueError("Sicherheits-Block: Inline-Python-Ausführung (-c) ist über tool_permissions gesperrt.")
+    return args
+
 class ToolPermissionManager:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
@@ -107,7 +125,8 @@ class ToolPermissionManager:
             now_iso = datetime.datetime.now().isoformat()
             try:
                 import shlex
-                cmd_args = shlex.split(cmd) if isinstance(cmd, str) else cmd
+                raw_args = shlex.split(cmd) if isinstance(cmd, str) else cmd
+                cmd_args = _validate_install_command(raw_args)
                 proc = subprocess.run(cmd_args, shell=False, capture_output=True, text=True, timeout=120)
                 output = f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
                 final_status = "installed" if proc.returncode == 0 else "failed"

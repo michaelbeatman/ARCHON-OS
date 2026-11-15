@@ -23,7 +23,9 @@ def _require_admin(request: Request):
     import main as app_main
 
     if hasattr(app_main, "require_admin"):
-        app_main.require_admin(request)
+        return app_main.require_admin(request)
+    from archon.routers._rbac import require_admin_or_503
+    return require_admin_or_503(request)
 
 
 def send_prompt_to_agent(
@@ -97,27 +99,51 @@ def send_prompt_to_agent(
     if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != user_input:
         messages.append({"role": "user", "content": user_input})
 
+    from backend.llm_egress_guard import (
+        ZeroEgressBlockedError,
+        evaluate_and_gate_llm_dispatch,
+        log_completed_llm_dispatch,
+    )
+
+    try:
+        gate = evaluate_and_gate_llm_dispatch(
+            agent_id=agent_id,
+            provider="omniroute",
+            model=model_name,
+            messages=messages,
+            role=agent_role,
+        )
+    except ZeroEgressBlockedError as ze_err:
+        return f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}"
+
+    target_model = str(gate.get("model") or model_name)
     headers = {"Content-Type": "application/json", "Authorization": "Bearer omniroute-local-key"}
     payload = {
-        "model": model_name,
+        "model": target_model,
         "messages": messages,
         "stream": False,
     }
 
-    urls = [
-        "http://omniroute:20128/v1/chat/completions",
-        "http://localhost:20128/v1/chat/completions",
-        "http://127.0.0.1:20128/v1/chat/completions",
-        "http://host.docker.internal:20128/v1/chat/completions",
-    ]
+    if gate.get("routed_to_local"):
+        local_base = str(gate.get("local_url") or "http://localhost:11434/v1").rstrip("/")
+        urls = [f"{local_base}/chat/completions"]
+    else:
+        urls = [
+            "http://omniroute:20128/v1/chat/completions",
+            "http://localhost:20128/v1/chat/completions",
+            "http://127.0.0.1:20128/v1/chat/completions",
+            "http://host.docker.internal:20128/v1/chat/completions",
+        ]
 
     last_err = ""
     ai_resp = None
+    used_url = ""
     for url in urls:
         try:
             with httpx.Client(timeout=40.0) as client:
                 res = client.post(url, json=payload, headers=headers)
                 if res.status_code == 200:
+                    used_url = url
                     try:
                         data = res.json()
                         if isinstance(data, dict) and "choices" in data and len(data["choices"]) > 0:

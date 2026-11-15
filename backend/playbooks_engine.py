@@ -337,5 +337,70 @@ class PlaybooksEngine:
             self._write_json(self.runs_file, runs[:200])
         return run_record
 
+    def _update_run_record(self, run_id: str, updater) -> None:
+        with self._lock:
+            runs = self._read_json(self.runs_file, [])
+            for idx, r in enumerate(runs):
+                if r.get("run_id") == run_id:
+                    updater(r)
+                    runs[idx] = r
+                    self._write_json(self.runs_file, runs[:200])
+                    return
+
+    async def execute_run_async(self, run_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Führt alle gerenderten Playbook-Schritte nacheinander über core_dispatcher aus."""
+        run_id = run_record["run_id"]
+        self._update_run_record(run_id, lambda r: r.update({
+            "status": "running",
+            "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }))
+        import core_dispatcher
+        prior_outputs: List[str] = []
+        any_failed = False
+
+        for idx, step in enumerate(run_record.get("steps", [])):
+            agent_id = str(step.get("agent_id") or "executive_decision_architect")
+            prompt = str(step.get("rendered_prompt") or "")
+            if prior_outputs:
+                prompt = f"Vorherige Playbook-Ergebnisse:\n{chr(10).join(prior_outputs[-2:])}\n\nAktueller Schritt:\n{prompt}"
+
+            def _mark_running(r, i=idx):
+                r["steps"][i]["status"] = "running"
+
+            self._update_run_record(run_id, _mark_running)
+            try:
+                res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                    agent_id=agent_id,
+                    agent_name=agent_id,
+                    prompt=prompt,
+                    role=step.get("title") or "Playbook Worker",
+                    task_id=f"{run_id}_s{idx + 1}",
+                )
+                ok = res.get("status") == "success"
+                out_text = str(res.get("content") or res.get("error") or "")
+                if ok:
+                    prior_outputs.append(f"[{step.get('title')}]: {out_text[:800]}")
+                else:
+                    any_failed = True
+                step_status = "completed" if ok else "failed"
+            except Exception as exc:
+                any_failed = True
+                step_status = "failed"
+                out_text = str(exc)
+
+            def _mark_done(r, i=idx, st=step_status, out=out_text[:1500]):
+                r["steps"][i]["status"] = st
+                r["steps"][i]["output"] = out
+
+            self._update_run_record(run_id, _mark_done)
+
+        final_status = "failed" if any_failed else "completed"
+        self._update_run_record(run_id, lambda r: r.update({
+            "status": final_status,
+            "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }))
+        run_record["status"] = final_status
+        return run_record
+
 
 playbooks_engine = PlaybooksEngine()

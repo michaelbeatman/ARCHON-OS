@@ -57,8 +57,19 @@ class AgentRBACJail:
             return {"allowed": True, "bypassed": True, "role": role, "tool": tool_name}
 
         norm_role = (role or "researcher").lower().strip()
-        policy = ROLE_POLICIES.get(norm_role, ROLE_POLICIES["researcher"])
-        norm_path = (target_path or "").replace("\\", "/").strip().lstrip("./")
+        if norm_role not in ROLE_POLICIES:
+            return {
+                "allowed": False,
+                "blocked": True,
+                "role": norm_role,
+                "tool": tool_name,
+                "target_path": target_path,
+                "reason": f"Unbekannte Rolle '{norm_role}' durch Fail-Closed RBAC-Jail blockiert."
+            }
+        policy = ROLE_POLICIES[norm_role]
+        norm_path = (target_path or "").replace("\\", "/").strip()
+        while norm_path.startswith("./"):
+            norm_path = norm_path[2:]
         low_path = norm_path.lower()
 
         # 1. Sensible Dateien (.env / SSH-Keys) schützen

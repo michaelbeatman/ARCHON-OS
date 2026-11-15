@@ -482,14 +482,6 @@
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     }
-    function restoreCssStudio() {
-      const studio = document.getElementById("archon-css-studio");
-      const minPill = document.getElementById("archon-css-studio-minimized");
-      if (studio) studio.classList.remove("hidden");
-      if (minPill) minPill.classList.add("hidden");
-      isStudioMinimized = false;
-      lucide.createIcons();
-    }
     // Tab Switching
     function setStudioTab(tabName) {
       studioActiveTab = tabName;

@@ -148,9 +148,13 @@ class CoreMemoryManager:
             ).fetchall()
         if not rows:
             return ""
+        from xml.sax.saxutils import escape as _xml_escape
         lines = ["<CORE_WORKING_MEMORY>"]
         for key, title, content in rows:
-            lines.append(f"  <{key} title=\"{title}\">{content}</{key}>")
+            safe_key = "".join(c if (c.isalnum() or c in "_-") else "_" for c in str(key or "block")) or "block"
+            safe_title = _xml_escape(str(title or ""), {'"': "&quot;"})
+            safe_content = _xml_escape(str(content or ""))
+            lines.append(f'  <{safe_key} title="{safe_title}">{safe_content}</{safe_key}>')
         lines.append("</CORE_WORKING_MEMORY>")
         return "\n".join(lines)
 

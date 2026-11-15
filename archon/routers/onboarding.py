@@ -64,6 +64,7 @@ class CompanyProfileInput(BaseModel):
     bic: Optional[str] = ""
     currency: Optional[str] = "EUR"
     language: Optional[str] = "en"
+    logo_url: Optional[str] = ""
 
 
 class ChannelsInput(BaseModel):
@@ -92,6 +93,7 @@ class OnboardingCompleteRequest(BaseModel):
     bic: Optional[str] = ""
     currency: Optional[str] = "EUR"
     language: Optional[str] = "en"
+    logo_url: Optional[str] = ""
     providers: Optional[Dict[str, Any]] = None
     zero_egress: Optional[bool] = False
     channels: Optional[ChannelsInput] = None

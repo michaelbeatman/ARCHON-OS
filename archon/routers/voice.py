@@ -98,3 +98,29 @@ async def api_voice_synthesize(request: Request, payload: VoiceSynthesizePayload
         return FileResponse(mp3_path, media_type="audio/mpeg", filename="voice_output.mp3")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/voice/transcribe")
+async def api_voice_transcribe(
+    request: Request,
+    file: UploadFile = File(...),
+    language: str = Form("de"),
+):
+    """Serverseitiger Proxy für Audio-Transkription (kein API-Key im Browser erforderlich)."""
+    require_admin_or_503(request)  # RBAC: Admin-Sache (K-1)
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Leere Audiodatei übergeben")
+    if len(audio_bytes) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audiodatei überschreitet das 25-MB-Limit")
+
+    from backend.voice_pipeline import transcribe_audio_bytes
+    transcript = await transcribe_audio_bytes(
+        audio_bytes,
+        filename=os.path.basename(file.filename or "recording.webm"),
+        language=(language or "de").strip()[:10] or "de",
+    )
+    if transcript.startswith("[Sprachnachricht empfangen, aber kein Whisper-"):
+        raise HTTPException(status_code=503, detail=transcript)
+    return {"status": "ok", "text": transcript, "transcript": transcript}
+

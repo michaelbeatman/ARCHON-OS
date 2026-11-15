@@ -40,16 +40,13 @@ class TelegramSendPayload(BaseModel):
     parse_mode: Optional[str] = "Markdown"
 
 
-@router.post("/relay")
-async def api_telegram_relay(
-    ziel_agent: str = Form(""),
-    text: str = Form(""),
-    datei_name: str = Form(""),
-    datei_b64: str = Form(""),
+def _prepare_telegram_relay_payload(
+    ziel_agent: str,
+    text: str,
+    datei_name: str,
+    datei_b64: str,
 ):
-    """TELEGRAM-RELAY (12.10.2026, User-Vorgabe): Owner-Nachricht (Text +
-    optionale Datei als base64) 1:1 an einen Agenten weiterleiten und die
-    ANTWORT automatisch per Telegram zurueckschicken."""
+    """Synchrone Profilsuche und Anhang-Persistenz für ``asyncio.to_thread``."""
     import main as app_main
 
     ziel = (ziel_agent or "").strip() or "executive_decision_architect"
@@ -66,12 +63,13 @@ async def api_telegram_relay(
         raise HTTPException(status_code=400, detail="text darf nicht leer sein")
 
     anhang_hinweis = ""
-    if datei_b64:
+    if isinstance(datei_b64, str) and datei_b64:
         try:
             import base64 as _b64
 
+            raw_name = datei_name if isinstance(datei_name, str) and datei_name else "anhang.bin"
             safe_name = re.sub(
-                r"[^a-zA-Z0-9._-]+", "_", (datei_name or "anhang.bin")
+                r"[^a-zA-Z0-9._-]+", "_", raw_name
             )[-80:]
             rel_dir = os.path.join("static", "uploads", "telegram")
             os.makedirs(rel_dir, exist_ok=True)
@@ -92,6 +90,25 @@ async def api_telegram_relay(
                 f"[Relay] Anhang konnte nicht gespeichert werden: {anh_err}"
             )
             anhang_hinweis = f"\n\n(Anhang '{datei_name}' konnte nicht gespeichert werden: {anh_err})"
+
+    return ziel, prof, agent_name, msg, anhang_hinweis
+
+
+@router.post("/relay", dependencies=[_ArchonDepends(require_admin_or_503)])
+async def api_telegram_relay(
+    ziel_agent: str = Form(""),
+    text: str = Form(""),
+    datei_name: str = Form(""),
+    datei_b64: str = Form(""),
+):
+    """TELEGRAM-RELAY (12.10.2026, User-Vorgabe): Owner-Nachricht (Text +
+    optionale Datei als base64) 1:1 an einen Agenten weiterleiten und die
+    ANTWORT automatisch per Telegram zurueckschicken."""
+    import main as app_main
+
+    ziel, prof, agent_name, msg, anhang_hinweis = await asyncio.to_thread(
+        _prepare_telegram_relay_payload, ziel_agent, text, datei_name, datei_b64
+    )
 
     relay_prompt = (
         f"LEITUNG VOM OWNER PER TELEGRAM (1:1, unveraendert):\n\n"
@@ -215,7 +232,12 @@ async def api_telegram_voice_relay(
 
     # 3. An bestehenden Relay weiterleiten
     import main as app_main
-    relay_res = await app_main.api_telegram_relay(ziel_agent=target, text=clean_prompt)
+    relay_res = await app_main.api_telegram_relay(
+        ziel_agent=target,
+        text=clean_prompt,
+        datei_name="",
+        datei_b64="",
+    )
     answer_text = relay_res.get("antwort_kopf", "")
 
     # 4. Sprachantwort erzeugen & an Telegram senden
@@ -268,5 +290,6 @@ def api_telegram_send(payload: TelegramSendPayload):
         res = telegram_notify.send_telegram_message(payload.text)
         return {"status": "success" if res else "failed", "result": res}
     except Exception as e:
-        logger.warning(f"[TelegramSend] Fehler: {e}")
-        return {"status": "error", "message": str(e)}
+        redacted = _redact_telegram_secrets(e)
+        logger.warning(f"[TelegramSend] Fehler: {redacted}")
+        return {"status": "error", "message": redacted}

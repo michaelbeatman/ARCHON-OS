@@ -62,8 +62,21 @@ The 70 specialist agent profiles in Archon OS (including legal, tax, financial, 
 
 ## 6. Frontend & Backend Open-Source Libraries
 
-- **FastAPI & Uvicorn**: MIT License / BSD 3-Clause (`(c) Sebastián Ramírez / Encode OSS`)
+### Backend Python Packages
+- **FastAPI & Starlette**: MIT / BSD-3-Clause (`(c) Sebastián Ramírez / Encode OSS`)
+- **Uvicorn**: BSD-3-Clause (`(c) Encode OSS`)
 - **Pydantic**: MIT License (`(c) Samuel Colvin and contributors`)
-- **Lucide Icons**: ISC License (`(c) Lucide Contributors`)
-- **Tailwind CSS**: MIT License (`(c) Tailwind Labs, Inc.`)
-- **python-docx / pypdf / pdfplumber / Pillow**: MIT / BSD / HPND Licenses
+- **HTTPX & httpcore / requests**: BSD-3-Clause / Apache-2.0 (`(c) Encode OSS / PSF`)
+- **aiofiles / python-dotenv / python-multipart / watchfiles / watchdog**: Apache-2.0 / BSD-3-Clause / MIT
+- **PyYAML / websockets / orjson**: MIT / BSD-3-Clause / Apache-2.0
+- **Pillow / pypdf / pdfplumber / python-docx**: HPND / BSD-3-Clause / MIT
+- **openai / edge-tts**: Apache-2.0 / GPL-3.0 (edge-tts CLI/library interface invoked for local voice synthesis)
+- **pytest / pytest-xdist**: MIT License
+
+### Frontend Vendor Assets (`static/`)
+- **Lucide Icons (`static/vendor/lucide.min.js`)**: ISC License (`(c) Lucide Contributors`)
+- **Tailwind CSS (`static/js/tailwind.cdn.js`)**: MIT License (`(c) Tailwind Labs, Inc.`)
+- **Marked (`static/marked.min.js`)**: MIT License (`(c) Christopher Jeffrey`)
+- **DOMPurify (`static/vendor/dompurify.min.js`)**: Apache-2.0 OR MPL-2.0 (`(c) Cure53`)
+- **Chart.js (`static/vendor/chart.umd.min.js`)**: MIT License (`(c) Chart.js Contributors`)
+- **3d-force-graph / Three.js (optional interactive graph views)**: MIT License (`(c) Vasco Asturiano / Three.js Authors`)

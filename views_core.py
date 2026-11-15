@@ -607,16 +607,20 @@ async def delete_showroom_file(request: Request, payload: FileActionPayload):
     """Verschiebt eine Datei oder einen gesamten Projektordner in den Papierkorb (Projects/Papierkorb)."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     import shutil
-    source = Path(payload.filepath).resolve()
-    if not source.exists():
-        raise HTTPException(status_code=404, detail="Datei oder Ordner nicht gefunden.")
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
-    projects_dir = vault_dir / "Projects"
-    trash_dir = projects_dir / "Papierkorb"
+    projects_dir = (vault_dir / "Projects").resolve()
+    trash_dir = (projects_dir / "Papierkorb").resolve()
     trash_dir.mkdir(parents=True, exist_ok=True)
 
-    if source == projects_dir or source == trash_dir or source == (projects_dir / "Einzelberichte"):
+    try:
+        source = Path(safe_path_within(
+            payload.filepath, [str(projects_dir)], must_exist=True, allow_dirs=True,
+        ))
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Unzulässiger Pfad: {exc}")
+
+    if source == projects_dir or source == trash_dir or source == (projects_dir / "Einzelberichte").resolve():
         raise HTTPException(status_code=400, detail="System-Ordner können nicht gelöscht werden.")
 
     target = trash_dir / source.name
@@ -641,12 +645,21 @@ async def restore_showroom_file(request: Request, payload: FileActionPayload):
     """Stellt eine Datei oder einen Ordner aus dem Papierkorb wieder her."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     import shutil
-    source = Path(payload.filepath).resolve()
-    if not source.exists():
-        raise HTTPException(status_code=404, detail="Objekt im Papierkorb nicht gefunden.")
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
-    projects_dir = vault_dir / "Projects"
+    projects_dir = (vault_dir / "Projects").resolve()
+    trash_dir = (projects_dir / "Papierkorb").resolve()
+    trash_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        source = Path(safe_path_within(
+            payload.filepath, [str(trash_dir)], must_exist=True, allow_dirs=True,
+        ))
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Unzulässiger Pfad: {exc}")
+
+    if source == trash_dir:
+        raise HTTPException(status_code=400, detail="Der Papierkorb selbst kann nicht wiederhergestellt werden.")
 
     if source.is_dir():
         target = projects_dir / source.name
@@ -676,14 +689,18 @@ async def purge_showroom_file(request: Request, payload: FileActionPayload):
     """Löscht eine Datei oder einen Ordner endgültig aus dem Papierkorb."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     import shutil
-    source = Path(payload.filepath).resolve()
-    if not source.exists():
-        raise HTTPException(status_code=404, detail="Objekt nicht gefunden.")
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
-    trash_dir = vault_dir / "Projects" / "Papierkorb"
-    if not str(source).startswith(str(trash_dir)):
-        raise HTTPException(status_code=400, detail="Endgültiges Löschen ist nur für Objekte im Papierkorb zulässig.")
+    trash_dir = (vault_dir / "Projects" / "Papierkorb").resolve()
+    if not trash_dir.exists():
+        raise HTTPException(status_code=404, detail="Papierkorb nicht gefunden.")
+
+    try:
+        source = Path(safe_path_within(
+            payload.filepath, [str(trash_dir)], must_exist=True, allow_dirs=True,
+        ))
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Endgültiges Löschen ist nur für Objekte im Papierkorb zulässig: {exc}")
 
     if source == trash_dir:
         raise HTTPException(status_code=400, detail="Der Papierkorb selbst kann nicht gelöscht werden.")
@@ -933,7 +950,16 @@ async def run_showroom_code(request: Request, payload: CodeRunPayload):
     lang = (payload.language or "python").lower()
 
     if payload.filepath:
-        target_path = Path(payload.filepath)
+        allowed_roots = [
+            str(Path(resolve_obsidian_vault_dir()).resolve()),
+            str(Path(WORKSPACE_DIR).resolve()),
+        ]
+        try:
+            target_path = Path(safe_path_within(
+                payload.filepath, allowed_roots, must_exist=True, allow_dirs=False,
+            ))
+        except PathJailError as exc:
+            raise HTTPException(status_code=403, detail=f"Unzulässiger Ausführungspfad: {exc}")
         if not target_path.exists():
             raise HTTPException(status_code=404, detail="Datei fuer Ausfuehrung nicht gefunden.")
         if target_path.suffix.lower() == ".py":
@@ -952,45 +978,60 @@ async def run_showroom_code(request: Request, payload: CodeRunPayload):
         raise HTTPException(status_code=400, detail="Kein Quellcode zur Ausfuehrung uebergeben.")
 
     if lang == "python":
-        scratch_dir = Path("/tmp/archon_sandbox") if os.path.exists("/tmp") else Path(tempfile.gettempdir())
-        scratch_dir.mkdir(parents=True, exist_ok=True)
-
-        with tempfile.NamedTemporaryFile("w", suffix=".py", dir=str(scratch_dir), delete=False, encoding="utf-8") as f:
-            f.write(code_to_run)
-            tmp_path = f.name
-
         start_time = time.perf_counter()
 
-        def _run_python_sync():
-            """Synchroner Teil — laeuft im Thread (P-02), nicht im Event-Loop."""
+        def _apply_sandbox_limits():
             try:
-                res = subprocess.run(
-                    [sys.executable or "python", tmp_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=12,
-                    cwd=str(scratch_dir),
-                    input=payload.stdin or ""
-                )
-                elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
-                return {
-                    "status": "success" if res.returncode == 0 else "error",
-                    "exit_code": res.returncode,
-                    "stdout": res.stdout,
-                    "stderr": res.stderr,
-                    "duration_ms": elapsed_ms,
-                    "language": "python"
+                import resource
+                resource.setrlimit(resource.RLIMIT_CPU, (12, 12))
+                resource.setrlimit(resource.RLIMIT_FSIZE, (4 * 1024 * 1024, 4 * 1024 * 1024))
+                resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+            except Exception:
+                pass
+
+        def _run_python_sync():
+            """Synchroner Teil — läuft isoliert im TemporaryDirectory mit `-I`, ohne Host-Secrets und mit POSIX-rlimits."""
+            with tempfile.TemporaryDirectory(prefix="archon_showroom_sbx_") as sbx_dir:
+                sbx_script = os.path.join(sbx_dir, "snippet.py")
+                with open(sbx_script, "w", encoding="utf-8") as f:
+                    f.write(code_to_run)
+                safe_env = {
+                    "PATH": "/usr/local/bin:/usr/bin:/bin",
+                    "HOME": sbx_dir,
+                    "TMPDIR": sbx_dir,
+                    "PYTHONNOUSERSITE": "1",
+                    "PYTHONDONTWRITEBYTECODE": "1",
                 }
-            except subprocess.TimeoutExpired:
-                elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
-                return {
-                    "status": "timeout",
-                    "exit_code": 124,
-                    "stdout": "",
-                    "stderr": "Ausfuehrung nach 12 Sekunden abgebrochen (Timeout).",
-                    "duration_ms": elapsed_ms,
-                    "language": "python"
-                }
+                try:
+                    res = subprocess.run(
+                        [sys.executable or "python3", "-I", sbx_script],
+                        capture_output=True,
+                        text=True,
+                        timeout=12,
+                        cwd=sbx_dir,
+                        env=safe_env,
+                        preexec_fn=_apply_sandbox_limits if os.name == "posix" else None,
+                        input=payload.stdin or "",
+                    )
+                    elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
+                    return {
+                        "status": "success" if res.returncode == 0 else "error",
+                        "exit_code": res.returncode,
+                        "stdout": res.stdout,
+                        "stderr": res.stderr,
+                        "duration_ms": elapsed_ms,
+                        "language": "python"
+                    }
+                except subprocess.TimeoutExpired:
+                    elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
+                    return {
+                        "status": "timeout",
+                        "exit_code": 124,
+                        "stdout": "",
+                        "stderr": "Ausfuehrung nach 12 Sekunden abgebrochen (Timeout).",
+                        "duration_ms": elapsed_ms,
+                        "language": "python"
+                    }
 
         # P-02: Bis zu 12 s blockierender subprocess.run im async-Handler
         # friert den Event-Loop ein (SSE, laufende Chats). Der Lauf geht
@@ -1006,12 +1047,6 @@ async def run_showroom_code(request: Request, payload: CodeRunPayload):
                 "duration_ms": 0,
                 "language": "python"
             }
-        finally:
-            if os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
 
     return {
         "status": "error",

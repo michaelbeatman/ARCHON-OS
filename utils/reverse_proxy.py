@@ -80,8 +80,15 @@ class ReverseProxy:
 
     def _prepare_headers(self, request: Request) -> dict:
         headers = dict(request.headers)
-        headers.pop("host", None)
-        headers.pop("accept-encoding", None)
+        for h in (
+            "host",
+            "accept-encoding",
+            "authorization",
+            "proxy-authorization",
+            "x-archon-session",
+            "x-archon-service-token",
+        ):
+            headers.pop(h, None)
         # F14: Archon-Session-Cookie und Auth-Header nicht an Fremd-Upstreams durchreichen
         cookie_header = headers.get("cookie", "")
         if "archon_session=" in cookie_header:

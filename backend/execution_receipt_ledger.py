@@ -130,15 +130,26 @@ class ExecutionReceiptLedger:
 
         expected_prev = "GENESIS_BLOCK_00000000"
         broken_links = []
+        tampered_hashes = []
         for idx, r in enumerate(rows):
-            if idx > 0 and r["prev_hash"] != expected_prev:
-                broken_links.append(r["receipt_id"])
+            rid = r["receipt_id"]
+            if r["prev_hash"] != expected_prev:
+                broken_links.append(rid)
+            canonical_str = (
+                f"{rid}|{r['task_id']}|{r['agent_role']}|{r['model_used']}|"
+                f"{int(r['prompt_tokens'])}|{int(r['completion_tokens'])}|{float(r['cost_usd']):.6f}|"
+                f"{r['tools_invoked_json']}|{r['prev_hash']}|{r['created_at']}"
+            )
+            recomputed = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+            if r["receipt_hash"] != recomputed:
+                tampered_hashes.append(rid)
             expected_prev = r["receipt_hash"]
 
         return {
-            "chain_valid": len(broken_links) == 0,
+            "chain_valid": len(broken_links) == 0 and len(tampered_hashes) == 0,
             "total_receipts": len(rows),
             "broken_links": broken_links,
+            "tampered_hashes": tampered_hashes,
             "latest_hash": expected_prev if rows else None
         }
 

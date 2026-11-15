@@ -23,10 +23,25 @@ DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 logger = logging.getLogger("archon.auth")
 
 
+class _ClosingAuthConn(sqlite3.Connection):
+    """Auto-closes SQLite connections cleanly at end of `with _get_db() as conn:` blocks."""
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            return super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
+
 def _get_db() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10.0, factory=_ClosingAuthConn)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA busy_timeout=10000;")
+    except Exception:
+        pass
     return conn
 
 

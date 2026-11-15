@@ -212,6 +212,7 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
             system_prompt=system_prompt,
             model=model_to_use,
             provider=provider_to_use,
+            history=req.history,
         )
         reply_text = res.get("content", "Keine Antwort erhalten.")
     except Exception as e:

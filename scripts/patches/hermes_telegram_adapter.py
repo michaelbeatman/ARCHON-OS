@@ -7415,8 +7415,12 @@ class TelegramAdapter(BasePlatformAdapter):
                     async with _httpx.AsyncClient(timeout=4.0) as client:
                         r = await client.get(f"{_archon}/api/views/inbox/items")
                         if r.status_code == 200:
-                            items = (r.json() or {}).get("items", [])
-                            email_items = [it for it in items if it.get("channel") == "email" or it.get("type") == "email"]
+                            data = r.json() or {}
+                            items = data.get("items")
+                            if items is None:
+                                email_items = list(data.get("emails") or data.get("email") or [])
+                            else:
+                                email_items = [it for it in items if it.get("channel") == "email" or it.get("type") == "email"]
                             if email_items:
                                 for it in email_items[:5]:
                                     subj = _html.escape(it.get("title") or it.get("subject") or "Ohne Betreff")

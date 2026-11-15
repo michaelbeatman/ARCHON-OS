@@ -509,6 +509,97 @@ def _warn_price_lookup_once(exc: Exception) -> None:
     logger.warning(f"[Pricing] Preisliste nicht abrufbar — Kostenanzeige bleibt 0: {exc}")
 
 
+def _prepare_chat_stream_context(
+    agent_id: str,
+    user_msg: str,
+    req_provider: Optional[str],
+    req_model: Optional[str],
+    req_reasoning_level: Optional[str],
+    req_task_type: Optional[str],
+) -> Dict[str, Any]:
+    """Synchrone Profil-, Personalakten-, Key- und Routing-Auflösung für ``asyncio.to_thread``."""
+    profiles = api_get_hermes_profiles()
+    prof = next((p for p in profiles if p["id"] == agent_id), None)
+    if not prof and profiles:
+        prof = profiles[0]
+
+    agent_name = prof.get("person_name") or prof.get("name") or "Hermes Agent" if prof else "Hermes Agent"
+    system_prompt = (prof.get("prompt") if prof else None) or "You are Hermes Agent, an intelligent AI assistant created by Nous Research."
+    delegation_prompt_addon = _get_delegation_prompt_for(agent_id)
+    if delegation_prompt_addon:
+        system_prompt += delegation_prompt_addon
+
+    try:
+        safe_agent_id = os.path.basename(agent_id.replace("\\", "/"))
+        if not safe_agent_id or safe_agent_id != agent_id or ".." in agent_id:
+            raise ValueError(f"Ungültige agent_id: {agent_id!r}")
+        akte_candidates = [
+            os.path.join(OBSIDIAN_VAULT_DIR, "00_HR_Agenten", "Personalakten", f"{safe_agent_id}.md"),
+            os.path.join(PERSONALAKTEN_DIR, f"{safe_agent_id}.md"),
+            os.path.join(OBSIDIAN_VAULT, "00_HR_Agenten", "Personalakten", f"{safe_agent_id}.md"),
+        ]
+        akte_content = None
+        for cand in akte_candidates:
+            if os.path.exists(cand) and os.path.isfile(cand):
+                with open(cand, "r", encoding="utf-8", errors="ignore") as f_akte:
+                    akte_content = f_akte.read().strip()
+                break
+        if akte_content:
+            system_prompt += f"\n\n[OBSIDIAN PERSONALAKTE & STATUS]\n{akte_content}\n"
+    except Exception as akte_err:
+        logger.warning(f"[Chat Stream] Konnte Personalakte für {agent_id} nicht laden: {akte_err}")
+
+    all_keys = api_provider.collect_keys()
+    provider = (req_provider or "").strip().lower()
+    if not provider and prof:
+        provider = (prof.get("provider") or "").strip().lower()
+    if not provider and req_model:
+        provider = api_provider.infer_provider_from_model(req_model) or ""
+    if not provider:
+        active_cfg = api_provider.read_active_config()
+        provider = (active_cfg.get("provider") or "").strip().lower()
+    if not provider:
+        provider = "openrouter" if all_keys.get("OPENROUTER_API_KEY") else "omniroute"
+
+    reasoning_level = (req_reasoning_level or (prof.get("reasoning_level") if prof else None) or "medium").strip().lower()
+    model = (req_model or (prof.get("model") if prof else None) or "").strip()
+    if not model or model == "free-forever":
+        if provider == "google":
+            model = "gemini-2.5-flash"
+        elif provider == "openrouter":
+            model = "meta-llama/llama-3.3-70b-instruct"
+        elif provider == "groq":
+            model = "llama-3.3-70b-versatile"
+        elif provider == "omniroute":
+            # D-12: Validierte Alias-ID für OmniRoute statt historischem Plugin-Key
+            model = "auto/best-coding"
+        else:
+            model = "auto/best-coding"
+
+    try:
+        from backend.model_routing import is_enabled as _mr_enabled, resolve as _mr_resolve, classify_task as _mr_classify
+        if _mr_enabled():
+            _task_type = (req_task_type or "").strip()
+            if not _task_type:
+                _task_type = _mr_classify(user_msg)
+            _route = _mr_resolve(_task_type)
+            if _route:
+                provider, model = _route["provider"], _route["model"]
+                logger.info(f"[ModelRouting] Chat '{_task_type}' -> {provider}/{model}")
+    except Exception as _mr_err:
+        logger.warning(f"[ModelRouting] Chat-Fallback: {_mr_err}")
+
+    return {
+        "prof": prof or {},
+        "agent_name": agent_name,
+        "system_prompt": system_prompt,
+        "all_keys": all_keys,
+        "provider": provider,
+        "reasoning_level": reasoning_level,
+        "model": model,
+    }
+
+
 @router.post("/api/chat/stream")
 async def api_chat_stream(req: ChatStreamRequest):
     """
@@ -523,82 +614,22 @@ async def api_chat_stream(req: ChatStreamRequest):
     if not user_msg:
         raise HTTPException(status_code=400, detail={"code": "chat_message_empty", "params": {}})
 
-    # Profil laden
-    profiles = api_get_hermes_profiles()
-    prof = next((p for p in profiles if p["id"] == agent_id), None)
-    if not prof and profiles:
-        prof = profiles[0]
-    
-    agent_name = prof.get("person_name") or prof.get("name") or "Hermes Agent"
-    system_prompt = prof.get("prompt") or "You are Hermes Agent, an intelligent AI assistant created by Nous Research."
-    # Delegations-Protokoll für berechtigte Hierarchie-Ebenen (Tier 1/2) dynamisch injizieren
-    delegation_prompt_addon = _get_delegation_prompt_for(agent_id)
-    if delegation_prompt_addon:
-        system_prompt += delegation_prompt_addon
-
-    # Obsidian Personalakte als Identitäts- und Kompetenzkontext injizieren
-    try:
-        akte_candidates = [
-            os.path.join(OBSIDIAN_VAULT_DIR, "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
-            os.path.join(PERSONALAKTEN_DIR, f"{agent_id}.md"),
-            os.path.join(OBSIDIAN_VAULT, "00_HR_Agenten", "Personalakten", f"{agent_id}.md")
-        ]
-        akte_content = None
-        for cand in akte_candidates:
-            if os.path.exists(cand) and os.path.isfile(cand):
-                with open(cand, "r", encoding="utf-8", errors="ignore") as f_akte:
-                    akte_content = f_akte.read().strip()
-                break
-        if akte_content:
-            system_prompt += f"\n\n[OBSIDIAN PERSONALAKTE & STATUS]\n{akte_content}\n"
-    except Exception as akte_err:
-        logger.warning(f"[Chat Stream] Konnte Personalakte für {agent_id} nicht laden: {akte_err}")
-
-    all_keys = api_provider.collect_keys()
-
-    provider = (req.provider or "").strip().lower()
-    if not provider:
-        provider = (prof.get("provider") or "").strip().lower()
-    if not provider and req.model:
-        provider = api_provider.infer_provider_from_model(req.model) or ""
-    if not provider:
-        active_cfg = api_provider.read_active_config()
-        provider = (active_cfg.get("provider") or "").strip().lower()
-    if not provider:
-        provider = "openrouter" if all_keys.get("OPENROUTER_API_KEY") else "omniroute"
-
-    reasoning_level = (req.reasoning_level or prof.get("reasoning_level") or "medium").strip().lower()
-    model = (req.model or prof.get("model") or "").strip()
-    if not model or model == "free-forever":
-        if provider == "google":
-            model = "gemini-2.5-flash"
-        elif provider == "openrouter":
-            model = "meta-llama/llama-3.3-70b-instruct"
-        elif provider == "groq":
-            model = "llama-3.3-70b-versatile"
-        elif provider == "omniroute":
-            # D-12: "evey-session-guard:" war kein Modellname, sondern ein
-            # Plugin-Key mit angehaengtem Doppelpunkt — als Modell-ID war
-            # jeder Aufruf ein erwartbarer Upstream-400. Der Default ist jetzt
-            # ein Alias, den OmniRoute tatsaechlich kennt (vgl.
-            # api_provider._list_provider_models_uncached).
-            model = "auto/best-coding"
-        else:
-            model = "auto/best-coding"
-
-    # Modell-Routing (Eigentümer-Tabelle): überschreibt das Profilmodell, wenn aktiv.
-    try:
-        from backend.model_routing import is_enabled as _mr_enabled, resolve as _mr_resolve, classify_task as _mr_classify
-        if _mr_enabled():
-            _task_type = (getattr(req, "task_type", None) or "").strip()
-            if not _task_type:
-                _task_type = _mr_classify(user_msg)
-            _route = _mr_resolve(_task_type)
-            if _route:
-                provider, model = _route["provider"], _route["model"]
-                logger.info(f"[ModelRouting] Chat '{_task_type}' -> {provider}/{model}")
-    except Exception as _mr_err:
-        logger.warning(f"[ModelRouting] Chat-Fallback: {_mr_err}")
+    ctx = await asyncio.to_thread(
+        _prepare_chat_stream_context,
+        agent_id,
+        user_msg,
+        req.provider,
+        req.model,
+        req.reasoning_level,
+        getattr(req, "task_type", None),
+    )
+    prof = ctx["prof"]
+    agent_name = ctx["agent_name"]
+    system_prompt = ctx["system_prompt"]
+    all_keys = ctx["all_keys"]
+    provider = ctx["provider"]
+    reasoning_level = ctx["reasoning_level"]
+    model = ctx["model"]
 
     # 1. MISSIONS-MODUS: Task erzeugen & HITL Approval-Gate aktivieren
     if mode == "mission":
@@ -713,9 +744,25 @@ async def api_chat_stream(req: ChatStreamRequest):
                     
                     image_blocks = []
                     text_attachments = []
+                    from utils.path_jail import safe_path_within, PathJailError
+                    allowed_attach_roots = [
+                        r for r in (
+                            WORKSPACE_DIR,
+                            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "uploads"),
+                            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"),
+                            OBSIDIAN_VAULT_DIR,
+                        ) if r
+                    ]
                     for m in matches[:5]:
-                        f_path = m.group(1).strip()
-                        if os.path.exists(f_path):
+                        raw_path = m.group(1).strip()
+                        f_path = None
+                        for root in allowed_attach_roots:
+                            try:
+                                f_path = safe_path_within(raw_path, root, must_exist=True)
+                                break
+                            except PathJailError:
+                                continue
+                        if f_path and os.path.isfile(f_path):
                             lower_p = f_path.lower()
                             if lower_p.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
                                 try:
@@ -910,10 +957,11 @@ async def api_chat_stream(req: ChatStreamRequest):
             full_assistant_text += receipt_text
 
         # Antwort & Metriken in SQLite verbuchen
-        # Transparenz-Tag nach Delegationsquittungen ausgeben
-        payload_trans = json.dumps({"type": "delta", "delta": transparency_tag}, ensure_ascii=False)
-        yield f"data: {payload_trans}\n\n"
-        full_assistant_text += transparency_tag
+        # Transparenz-Tag nach Delegationsquittungen nur bei realer KI-Antwort ausgeben (Art. 50)
+        if not provider_failed:
+            payload_trans = json.dumps({"type": "delta", "delta": transparency_tag}, ensure_ascii=False)
+            yield f"data: {payload_trans}\n\n"
+            full_assistant_text += transparency_tag
 
         # F-05: Bei Provider-Fehler wird die Fehlermeldung NICHT als
         # Assistenten-Antwort gespeichert und es wird keine Nutzung gebucht.

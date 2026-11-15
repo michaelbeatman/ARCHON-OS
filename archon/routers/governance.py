@@ -388,8 +388,8 @@ async def test_agent_profile_governance(agent_id: str):
         })
         _DEPS["_save_mission_control_data"](mc_data)
     try:
-        from backend.audit_log import audit_logger
-        audit_logger.record_event("governance", "promptfoo_eval", agent_id, {"score": score_str, "passed": passed_count, "total": total_count})
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event("governance", "promptfoo_eval", agent_id, {"score": score_str, "passed": passed_count, "total": total_count})
     except Exception:
         pass
     add_ticker("Governance", f"Testsuite für {agent_name}: {score_str}")

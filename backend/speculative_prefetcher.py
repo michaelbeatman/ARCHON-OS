@@ -76,34 +76,49 @@ class SpeculativePrefetcher:
             return None
         return entry.get("data")
 
+    def _get_erp_conn(self) -> Optional[sqlite3.Connection]:
+        try:
+            from backend.tenant_context import get_active_company_id
+            cid = get_active_company_id() or "default"
+        except Exception:
+            cid = "default"
+        for candidate in (
+            os.path.join(WORKSPACE_DIR, "data", "tenants", cid, "erp.db"),
+            os.path.join(WORKSPACE_DIR, "data", "tenants", "primary", "erp.db"),
+            os.path.join(WORKSPACE_DIR, "data", "erp.db"),
+        ):
+            if os.path.exists(candidate):
+                conn = sqlite3.connect(candidate, timeout=5.0)
+                conn.row_factory = sqlite3.Row
+                return conn
+        return None
+
     def _lookup_crm_contact(self, email: str) -> Optional[Dict[str, Any]]:
-        # Suche in SQLite agent_os.db oder PocketBase Cache
-        db_path = os.path.join(WORKSPACE_DIR, "agent_os.db")
-        if not os.path.exists(db_path):
+        conn = self._get_erp_conn()
+        if not conn:
             return None
         try:
-            conn = sqlite3.connect(db_path, timeout=5.0)
-            conn.row_factory = sqlite3.Row
-            row = conn.execute("SELECT * FROM crm_contacts WHERE email = ? LIMIT 1", (email,)).fetchone()
-            conn.close()
+            row = conn.execute("SELECT * FROM crm_contacts WHERE LOWER(email) = LOWER(?) LIMIT 1", (email,)).fetchone()
             return dict(row) if row else None
         except Exception:
             return None
+        finally:
+            conn.close()
 
     def _lookup_erp_document(self, doc_nr: str) -> Optional[Dict[str, Any]]:
-        db_path = os.path.join(WORKSPACE_DIR, "data", "tenants", "primary", "erp.db")
-        if not os.path.exists(db_path):
-            db_path = os.path.join(WORKSPACE_DIR, "data", "erp.db")
-        if not os.path.exists(db_path):
+        conn = self._get_erp_conn()
+        if not conn:
             return None
         try:
-            conn = sqlite3.connect(db_path, timeout=5.0)
-            conn.row_factory = sqlite3.Row
-            row = conn.execute("SELECT * FROM erp_documents WHERE document_number = ? LIMIT 1", (doc_nr,)).fetchone()
-            conn.close()
+            row = conn.execute(
+                "SELECT *, doc_type AS type FROM erp_documents WHERE doc_number = ? LIMIT 1",
+                (doc_nr,),
+            ).fetchone()
             return dict(row) if row else None
         except Exception:
             return None
+        finally:
+            conn.close()
 
     def _lookup_learnings(self, keywords: List[str]) -> List[Dict[str, Any]]:
         if not os.path.exists(DB_PATH):

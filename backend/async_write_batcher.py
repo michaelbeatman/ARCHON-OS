@@ -21,24 +21,33 @@ class _ArchonClosingConn(sqlite3.Connection):
         finally:
             self.close()
 import threading
+from collections import deque
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Deque
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
+_CFG_CACHE: Dict[str, Any] = {"ts": 0.0, "cfg": None}
+
 
 def _get_cfg() -> Dict[str, Any]:
+    now = time.monotonic()
+    if _CFG_CACHE["cfg"] is not None and (now - _CFG_CACHE["ts"]) < 5.0:
+        return _CFG_CACHE["cfg"]
     try:
         from backend.autonomy_settings import get_module_config
-        return get_module_config("write_batcher")
+        cfg = get_module_config("write_batcher")
     except Exception:
-        return {
+        cfg = {
             "enabled": True,
             "batch_size": 25,
             "flush_interval_seconds": 2.0,
             "max_queue_size": 1000
         }
+    _CFG_CACHE["cfg"] = cfg
+    _CFG_CACHE["ts"] = now
+    return cfg
 
 
 def _init_db() -> None:
@@ -63,7 +72,7 @@ class AsyncWriteBatcher:
     def __init__(self):
         _init_db()
         self._lock = threading.Lock()
-        self._buffer: List[Dict[str, Any]] = []
+        self._buffer: Deque[Dict[str, Any]] = deque()
         self._total_enqueued = 0
         self._total_flushed_events = 0
         self._total_batch_commits = 0
@@ -87,7 +96,7 @@ class AsyncWriteBatcher:
         with self._lock:
             if len(self._buffer) >= max_queue:
                 # Ältesten Eintrag verwerfen bei Queue-Überlauf
-                self._buffer.pop(0)
+                self._buffer.popleft()
             self._buffer.append(entry)
             self._total_enqueued += 1
 
@@ -132,7 +141,7 @@ class AsyncWriteBatcher:
                 conn.commit()
         except Exception as e:
             with self._lock:
-                self._buffer = batch + self._buffer
+                self._buffer.extendleft(reversed(batch))
             raise e
 
         with self._lock:

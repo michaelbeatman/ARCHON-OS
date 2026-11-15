@@ -283,6 +283,67 @@ def api_get_agent_projects(agent_id: str):
     }
 
 
+def _collect_hud_telemetry_sync(app_main: Any):
+    import glob
+    import sqlite3
+
+    v_notes = 0
+    obs_path = os.path.join(app_main.WORKSPACE_DIR, "obsidian_vault")
+    if os.path.exists(obs_path):
+        try:
+            v_notes = len([f for f in os.listdir(obs_path) if f.endswith(".md")])
+        except Exception:
+            v_notes = 0
+    mem_records = 0
+    try:
+        mem_records = len(app_main.load_memory())
+    except Exception:
+        mem_records = 0
+
+    tot_inp, tot_out, tot_cache, tot_cost = 0, 0, 0, 0.0
+    from archon.core.profiles import get_hermes_profiles_base_dirs
+
+    state_db_candidates = [
+        db
+        for base_dir in get_hermes_profiles_base_dirs()
+        for db in glob.glob(os.path.join(base_dir, "*", "state.db"))
+    ]
+    if getattr(app_main, "STATE_DB_PATH", None):
+        state_db_candidates.append(app_main.STATE_DB_PATH)
+    state_dbs = sorted(set(state_db_candidates))
+    for db in state_dbs:
+        if not os.path.isfile(db):
+            continue
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=0.5)
+            try:
+                row = con.execute(
+                    "SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), "
+                    "COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(estimated_cost_usd),0) "
+                    "FROM session_model_usage"
+                ).fetchone()
+                if row:
+                    tot_inp += int(row[0] or 0)
+                    tot_out += int(row[1] or 0)
+                    tot_cache += int(row[2] or 0)
+                    tot_cost += float(row[3] or 0.0)
+            finally:
+                con.close()
+        except Exception:
+            continue
+
+    skills_active = []
+    try:
+        from archon.core.skills import _HERMES_SKILLS_CACHE, build_skills_file_index
+        idx = _HERMES_SKILLS_CACHE or build_skills_file_index()
+        if isinstance(idx, dict):
+            for s_name in list(idx.keys())[:12]:
+                skills_active.append({"name": s_name, "status": "active", "category": "skill"})
+    except Exception:
+        pass
+    return v_notes, mem_records, tot_inp, tot_out, tot_cache, tot_cost, skills_active
+
+
 @router.get("/api/v1/hud/telemetry")
 async def get_hud_telemetry():
     """Real-time Hermes HUD-UI consciousness and system telemetry stream."""
@@ -324,33 +385,13 @@ async def get_hud_telemetry():
         await asyncio.gather(*[_probe_service(s) for s in services])
     )
 
-    vault_notes = 0
-    obs_path = os.path.join(app_main.WORKSPACE_DIR, "obsidian_vault")
-    if os.path.exists(obs_path):
-        try:
-            _files = await asyncio.to_thread(os.listdir, obs_path)
-            vault_notes = len([f for f in _files if f.endswith(".md")])
-        except Exception:
-            vault_notes = 14
-
+    vault_notes, mem_count, tot_inp, tot_out, tot_cache, tot_cost, skills_list = await asyncio.to_thread(
+        _collect_hud_telemetry_sync, app_main
+    )
+    tot_tokens = tot_inp + tot_out
+    cache_denom = tot_inp + tot_cache
+    cache_pct = f"{(tot_cache / cache_denom * 100):.1f}%" if cache_denom > 0 else "0.0%"
     logs = list(app_main.ticker_entries)
-    if not logs:
-        now_str = datetime.datetime.now().strftime("%H:%M:%S")
-        logs = [
-            f"[{now_str}] Hermes-Engine: All 4 consciousness profiles online (Orchestrator, Researcher, Coder, Odysseus).",
-            f"[{now_str}] OmniRoute: High-throughput token routing active on Port 20128 (0ms local latency).",
-            f"[{now_str}] HUD-Monitor: Real-time telemetry connection established.",
-        ]
-
-    skills_list = [
-        {"name": "core-skills-engine", "status": "active", "category": "system"},
-        {"name": "obsidian-vault", "status": "active", "category": "memory"},
-        {"name": "rag-chroma", "status": "active", "category": "memory"},
-        {"name": "mcp-connect", "status": "active", "category": "tools"},
-        {"name": "docker-manager", "status": "active", "category": "infra"},
-        {"name": "git-workflow", "status": "active", "category": "dev"},
-        {"name": "web-researcher", "status": "active", "category": "search"},
-    ]
 
     return {
         "timestamp": datetime.datetime.now().isoformat(),
@@ -361,20 +402,20 @@ async def get_hud_telemetry():
             "profiles": agents,
         },
         "tokens": {
-            "total_tokens": 184250,
-            "prompt_tokens": 128400,
-            "completion_tokens": 55850,
-            "cache_hit_rate": "95.4%",
-            "cost_usd": "0.00",
-            "avg_latency_ms": 142,
+            "total_tokens": tot_tokens,
+            "prompt_tokens": tot_inp,
+            "completion_tokens": tot_out,
+            "cache_hit_rate": cache_pct,
+            "cost_usd": f"{tot_cost:.4f}",
+            "avg_latency_ms": 0,
         },
         "fleet": fleet_status,
         "skills": skills_list,
         "storage": {
-            "vault_notes": vault_notes or 14,
-            "memory_records": len(app_main.load_memory()),
+            "vault_notes": vault_notes,
+            "memory_records": mem_count,
             "sqlite_wal_mode": True,
-            "rag_vectors": 840,
+            "rag_vectors": mem_count,
         },
         "logs": logs,
     }

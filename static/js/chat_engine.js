@@ -104,8 +104,26 @@
     }
     // 1. Initialisierung
     let masterChatInitPromise = null;
-        let masterChatSSE = null;
+    let masterChatSSEBound = false;
+    let masterChatSSE = null;
     function initMasterChatLiveStream() {
+      if (!masterChatSSEBound) {
+        masterChatSSEBound = true;
+        window.addEventListener("archon:sse", function(ev) {
+          try {
+            const msg = ev && ev.detail;
+            if (msg && msg.type === "chat_message_received" && msg.data) {
+              if (msg.data.session_id && msg.data.session_id === currentMasterChatSessionId) {
+                selectMasterChatSession(currentMasterChatSessionId);
+              }
+            }
+          } catch(err) {}
+        });
+      }
+      if (typeof initOpsRealtimeStream === "function") {
+        initOpsRealtimeStream();
+        return;
+      }
       if (masterChatSSE) return;
       try {
         masterChatSSE = new EventSource("/api/v1/events/stream");
@@ -113,13 +131,11 @@
           try {
             if (!e.data || e.data.startsWith(":")) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === "chat_message_received" && msg.data) {
-              if (msg.data.session_id && msg.data.session_id === currentMasterChatSessionId) {
-                console.log("[MasterChat SSE] Neue Nachricht fuer aktive Session, aktualisiere Verlauf...");
-                selectMasterChatSession(currentMasterChatSessionId);
-              }
-            }
+            window.dispatchEvent(new CustomEvent("archon:sse", { detail: msg }));
           } catch(err) {}
+        };
+        masterChatSSE.onerror = function() {
+          if (masterChatSSE) { masterChatSSE.close(); masterChatSSE = null; }
         };
       } catch(err) {}
     }
@@ -819,12 +835,15 @@ async function initMasterChat() {
         const match = safeContent.match(updatedRoutingRegex);
         if (match) {
             safeContent = safeContent.replace(updatedRoutingRegex, '');
+            const m1 = escapeHtml(match[1].trim());
+            const m2 = escapeHtml(match[2].trim());
+            const m3 = escapeHtml(match[3].trim());
             // Move into the footer below the clock
             routingTagHtml = `<div class="flex items-center gap-1.5 border border-[var(--border)] bg-[var(--background)] px-2 py-0.5 rounded-md w-fit">
               <i data-lucide="cpu" class="w-3 h-3 text-indigo-400"></i>
-              <span class="truncate max-w-[200px]" title="${match[1].trim()}">${match[1].trim()}</span>
-              <span class="text-emerald-500 font-bold ml-1">${match[2].trim()}</span>
-              <span class="text-amber-500 font-bold ml-1">${match[3].trim()}</span>
+              <span class="truncate max-w-[200px]" title="${m1}">${m1}</span>
+              <span class="text-emerald-500 font-bold ml-1">${m2}</span>
+              <span class="text-amber-500 font-bold ml-1">${m3}</span>
             </div>`;
         }
         const formattedContent = (window.archonLinkifyHtml
@@ -845,11 +864,14 @@ async function initMasterChat() {
             </button>
           </div>
         ` : '';
-        const clickHandler = isGroup ? '' : `onclick="jumpToAgentProfile('${prof ? prof.id : currentMasterChatProfileId}')"`;
+        const safeTargetId = escapeHtml(String(prof ? prof.id : currentMasterChatProfileId || '')).replace(/'/g, '&#39;');
+        const safeInitials = escapeHtml(String(initials || '')).replace(/'/g, '&#39;');
+        const safeAvatarUrl = escapeHtml(String(avatarUrl || ''));
+        const clickHandler = isGroup ? '' : `onclick="jumpToAgentProfile('${safeTargetId}')"`;
         bubbleWrap.innerHTML = `
           <div class="flex gap-3 max-w-3xl">
             <div ${clickHandler} class="w-12 h-12 rounded-xl border border-[var(--border)] bg-[var(--secondary)] text-[var(--foreground)] flex items-center justify-center font-mono text-sm font-bold shrink-0 shadow-xs mt-0.5 overflow-hidden cursor-pointer hover:border-zinc-950 dark:hover:border-zinc-50 transition duration-150 group" title="${isGroup ? chatT('ui.chat_engine.group_session', 'Gruppen-Session') : chatT('ui.chat_engine.avatar_title', 'Profil &amp; Einstellungen im Agenten-Kader öffnen')}">
-              <img src="${avatarUrl}" class="w-full h-full object-cover group-hover:opacity-90 transition" onerror="this.outerHTML='${initials}'">
+              <img src="${safeAvatarUrl}" class="w-full h-full object-cover group-hover:opacity-90 transition" onerror="this.outerHTML='${safeInitials}'">
             </div>
             <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl rounded-tl-xs px-4 py-3 text-xs text-[var(--foreground)] space-y-2 shadow-xs leading-relaxed min-w-[260px]">
               <div class="flex items-center justify-between gap-2 mb-1 pb-1 border-b border-[var(--border)]">
@@ -1088,7 +1110,7 @@ async function initMasterChat() {
       if (typeof idx === "number") {
         currentMasterChatAttachments.splice(idx, 1);
       } else {
-        currentMasterChatAttachments = [];
+        currentMasterChatAttachments.length = 0;
       }
       const fileInput = document.getElementById("master-chat-file-input");
       if (fileInput) fileInput.value = "";

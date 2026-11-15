@@ -1103,7 +1103,8 @@ div.p-3 > div.flex > button.px-2 {
     }
     input:focus, select:focus, textarea:focus {
       border-color: var(--accent) !important;
-      outline: none !important;
+      outline: 2px solid transparent !important;
+      box-shadow: 0 0 0 2px var(--ring, var(--accent)) !important;
     }
     /* Map Tailwind text sizes relative to root font size! */
     .text-xs { font-size: 0.833rem !important; }
@@ -1248,7 +1249,7 @@ div.p-3 > div.flex > button.px-2 {
     }
     .daw-input:focus, .daw-select:focus {
       border-color: var(--accent) !important;
-      box-shadow: 0 0 3px rgba(99, 102, 241, 0.2);
+      box-shadow: 0 0 0 2px var(--ring, var(--accent)) !important;
     }
     .daw-input-name {
       background: transparent !important;

@@ -74,9 +74,12 @@ async def _archon_lifespan(_app_instance):
     for hook in list(_STARTUP_HOOKS):
         name = getattr(hook, "__name__", repr(hook))
         try:
-            result = hook()
-            if asyncio.iscoroutine(result):
-                await result
+            if asyncio.iscoroutinefunction(hook):
+                await hook()
+            else:
+                result = await asyncio.to_thread(hook)
+                if asyncio.iscoroutine(result):
+                    await result
         except Exception as e:  # ein defekter Hook darf den Start nicht kippen
             logger.warning(f"[Lifespan] Startup-Hook '{name}' fehlgeschlagen: {e}")
     try:
@@ -85,9 +88,12 @@ async def _archon_lifespan(_app_instance):
         for hook in reversed(list(_SHUTDOWN_HOOKS)):
             name = getattr(hook, "__name__", repr(hook))
             try:
-                result = hook()
-                if asyncio.iscoroutine(result):
-                    await result
+                if asyncio.iscoroutinefunction(hook):
+                    await hook()
+                else:
+                    result = await asyncio.to_thread(hook)
+                    if asyncio.iscoroutine(result):
+                        await result
             except Exception as e:
                 logger.warning(f"[Lifespan] Shutdown-Hook '{name}' fehlgeschlagen: {e}")
 
@@ -161,7 +167,7 @@ except Exception as _err_eh:
 async def add_no_cache_for_avatars(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path.startswith("/static/avatars/") or path.startswith("/static/js/") or path == "/" or path.endswith(".html"):
+    if path.startswith("/static/avatars/"):
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -1413,6 +1419,11 @@ async def _execute_mission_control_task(task_id: str):
     )
 
 
+from backend.post_task_pipeline import project_folder_name
+from dossier_builder import build_dossier_from_report
+from telegram_notify import send_telegram_document, send_telegram_message
+
+
 def _paperclip_hire_profile_by_id(profile_id: str, profiles: list, current_task_id: str = "") -> bool:
     """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
     return _orch_paperclip_hire_profile_by_id(
@@ -1422,9 +1433,9 @@ def _paperclip_hire_profile_by_id(profile_id: str, profiles: list, current_task_
     )
 
 
-def _set_agent_profile_status(profile_id: str, status: str, task_id: str = "") -> None:
+def _set_agent_profile_status(profile_id: str, status: str, task_id: str = "") -> bool:
     """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    _orch_set_agent_profile_status(
+    return _orch_set_agent_profile_status(
         profile_id, status, task_id,
         rolling_backup=create_rolling_backup,
         invalidate_profiles=invalidate_hermes_profiles_cache,
@@ -1558,9 +1569,6 @@ try:
     print("Operations API mounted successfully.")
 except Exception as e_ops:
     print(f"Error mounting operations_api: {e_ops}")
-
-if os.path.exists("assets"):
-    app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # Avatare: eigener Lesezugriff VOR dem /static-Mount (Registration Order = Match
 # Order). Die Laufzeit-Avatare liegen ausserhalb des Repos (avatars_dir, z. B.

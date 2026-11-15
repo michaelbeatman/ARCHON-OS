@@ -74,8 +74,16 @@ def db_candidates(filename: str) -> list[str]:
     return ordered
 
 
+_RESOLVED_DB_CACHE: dict[str, str] = {}
+_DB_PRAGMA_INITIALIZED: set[str] = set()
+
+
 def resolve_db(filename: str) -> str:
     """Liefert den Pfad zur richtigen DB-Datei. Erzeugt keine Datei."""
+    cached = _RESOLVED_DB_CACHE.get(filename)
+    if cached and os.path.isfile(cached):
+        return cached
+
     candidates = db_candidates(filename)
     preferred = candidates[0]
 
@@ -87,6 +95,7 @@ def resolve_db(filename: str) -> str:
                     "Bitte Datei prüfen/migrieren, um Split-Brain zu vermeiden.",
                     filename, candidate, preferred,
                 )
+            _RESOLVED_DB_CACHE[filename] = candidate
             return candidate
 
     for candidate in candidates:
@@ -118,18 +127,21 @@ class ClosingConnection(sqlite3.Connection):
 def get_db_connection(db_name_or_path: str, timeout: float = 15.0) -> sqlite3.Connection:
     """Erzeugt eine gehärtete ClosingConnection mit busy_timeout und WAL-Modus."""
     if os.path.isabs(db_name_or_path) or "/" in db_name_or_path or "\\" in db_name_or_path:
-        db_path = db_name_or_path
+        db_path = os.path.abspath(db_name_or_path)
     else:
-        db_path = resolve_db(db_name_or_path)
+        db_path = os.path.abspath(resolve_db(db_name_or_path))
 
-    os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=timeout, factory=ClosingConnection)
     conn.execute(f"PRAGMA busy_timeout = {int(timeout * 1000)};")
-    try:
-        # WAL-Modus fuer verbesserte Nebenlaeufigkeit (ausser auf Netzwerk-Mounts)
-        if not str(db_path).replace("\\", "/").startswith("/opt/data"):
-            conn.execute("PRAGMA journal_mode = WAL;")
-            conn.execute("PRAGMA synchronous = NORMAL;")
-    except Exception:
-        pass
+    conn.execute("PRAGMA cache_size = -32000;")
+    conn.execute("PRAGMA temp_store = MEMORY;")
+    if db_path not in _DB_PRAGMA_INITIALIZED:
+        try:
+            if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
+                conn.execute("PRAGMA journal_mode = WAL;")
+                conn.execute("PRAGMA synchronous = NORMAL;")
+            _DB_PRAGMA_INITIALIZED.add(db_path)
+        except Exception:
+            pass
     return conn

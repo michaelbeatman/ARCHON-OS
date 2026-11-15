@@ -8,9 +8,12 @@ bereinigt veraltete Logs und Traces anhand konfigurierbarer Retention-Settings i
 import os
 import sys
 import json
+import logging
 import sqlite3
 import datetime
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger("archon.memory_consolidator")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
@@ -80,14 +83,9 @@ def run_sleep_cycle_consolidation(force: bool = False) -> Dict[str, Any]:
             except Exception:
                 pass
 
-            # 2. Veraltete unkritische Audit-Ereignisse bereinigen
-            if cfg.get("auto_prune_temporary_logs", True):
-                try:
-                    cur = conn.cursor()
-                    cur.execute("DELETE FROM audit_log WHERE created_at < ? AND event_type LIKE '%HEARTBEAT%'", (cutoff_date,))
-                    pruned_audit = cur.rowcount
-                except Exception:
-                    pass
+            # 2. Veraltete unkritische Audit-Ereignisse bereinigen (Spalten: timestamp, action)
+            # GoBD-Integrität: audit_log ist unveränderlich (kein DELETE auf hash-verkettete Logs).
+            pruned_audit = 0
 
             conn.commit()
 

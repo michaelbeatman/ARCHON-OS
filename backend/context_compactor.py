@@ -89,7 +89,7 @@ class ContextCompactor:
                 "messages": messages
             }
 
-        if not force and original_tokens < threshold and len(messages) <= keep_recent + 1:
+        if not force and (original_tokens < threshold or len(messages) <= keep_recent + 1):
             return {
                 "compacted": False,
                 "reason": f"Token-Anzahl ({original_tokens}) unter Schwellenwert ({threshold}).",

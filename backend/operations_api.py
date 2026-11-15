@@ -571,6 +571,7 @@ async def _execute_kanban_task_async(task_id: str):
             from pathlib import Path as _P
             vault = _P(get_vault_dir()).resolve()
             p_rel = _resolve_task_obsidian_rel(task_id)
+            obs_status_label = "ABGESCHLOSSEN" if target_status == "done" else target_status.upper()
             if p_rel:
                 p_dir = vault / p_rel
                 end_dir = p_dir / "03_Endprodukte"
@@ -578,20 +579,20 @@ async def _execute_kanban_task_async(task_id: str):
                     matched = False
                     for f in end_dir.iterdir():
                         if task_id in f.name and f.suffix == ".md":
-                            f.write_text(f"# {title}\n\n**Task:** `{task_id}` | **Ziel-Agent:** `@{assignee}` | **Status:** REVIEW\n\n{reply}\n", encoding="utf-8")
+                            f.write_text(f"# {title}\n\n**Task:** `{task_id}` | **Ziel-Agent:** `@{assignee}` | **Status:** {obs_status_label}\n\n{reply}\n", encoding="utf-8")
                             matched = True
                             break
                     if not matched:
                         slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in title.lower())[:40].strip("-")
-                        (end_dir / f"{task_id}-{slug}.md").write_text(f"# {title}\n\n**Task:** `{task_id}` | **Ziel-Agent:** `@{assignee}` | **Status:** REVIEW\n\n{reply}\n", encoding="utf-8")
+                        (end_dir / f"{task_id}-{slug}.md").write_text(f"# {title}\n\n**Task:** `{task_id}` | **Ziel-Agent:** `@{assignee}` | **Status:** {obs_status_label}\n\n{reply}\n", encoding="utf-8")
         except Exception as e_upd:
             print(f"[OperationsAPI] Could not update obsidian markdown: {e_upd}", file=sys.stderr)
 
         try:
             import main
             if hasattr(main, "broadcast_event"):
-                main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": "review"})
-                main.broadcast_event("ticker_update", {"agent": agent_name, "message": f"Aufgabe '{title[:30]}...' fertiggestellt & zur Prüfung abgelegt.", "time": datetime.datetime.now().strftime("%H:%M:%S")})
+                main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": target_status})
+                main.broadcast_event("ticker_update", {"agent": agent_name, "message": f"Aufgabe '{title[:30]}...' ({target_status}).", "time": datetime.datetime.now().strftime("%H:%M:%S")})
         except Exception:
             pass
             

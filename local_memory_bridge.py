@@ -153,6 +153,9 @@ class LocalMemoryBridge:
                 if "last_accessed" not in learn_cols:
                     cur.execute("ALTER TABLE learnings ADD COLUMN last_accessed TIMESTAMP")
                     cur.execute("UPDATE learnings SET last_accessed = created_at WHERE last_accessed IS NULL")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_conversations_agent_session_id ON conversations(agent_id, session_id, id DESC)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at DESC)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_learnings_topic_id ON learnings(topic, id DESC)")
                 conn.commit()
             except Exception as e:
                 print(f"[MemoryBridge] Migration notice: {e}", file=sys.stderr)
@@ -261,14 +264,24 @@ tags: ["learning", "memory", "{agent_id}"]
             cur = conn.cursor()
             rows = []
             try:
-                cur.execute("""
-                    SELECT role, content, timestamp FROM (
-                        SELECT id, role, content, timestamp 
-                        FROM conversations 
-                        WHERE agent_id = ? OR session_id = ?
-                        ORDER BY id DESC LIMIT ?
-                    ) ORDER BY id ASC
-                """, (agent_id, sess_id, limit))
+                if session_id:
+                    cur.execute("""
+                        SELECT role, content, timestamp FROM (
+                            SELECT id, role, content, timestamp 
+                            FROM conversations 
+                            WHERE session_id = ?
+                            ORDER BY id DESC LIMIT ?
+                        ) ORDER BY id ASC
+                    """, (sess_id, limit))
+                else:
+                    cur.execute("""
+                        SELECT role, content, timestamp FROM (
+                            SELECT id, role, content, timestamp 
+                            FROM conversations 
+                            WHERE agent_id = ? OR session_id = ?
+                            ORDER BY id DESC LIMIT ?
+                        ) ORDER BY id ASC
+                    """, (agent_id, sess_id, limit))
                 rows = cur.fetchall()
             except sqlite3.OperationalError:
                 cur.execute("""
@@ -412,18 +425,26 @@ tags: ["learning", "memory", "{agent_id}"]
             # In chronologischer Reihenfolge fuer LLM zurueckgeben
             top_items.sort(key=lambda x: x["id"])
 
-            # Touch: Markiere die abgerufenen Items als genutzt
+            # Touch: Markiere die abgerufenen Items als genutzt (gedrosselt pro ID-Set auf 30s)
             if top_items:
-                ids = [item["id"] for item in top_items]
-                try:
-                    cur.execute(f"""
-                        UPDATE conversations 
-                        SET accesses = accesses + 1, last_accessed = CURRENT_TIMESTAMP
-                        WHERE id IN ({','.join(['?']*len(ids))})
-                    """, ids)
-                    conn.commit()
-                except Exception:
-                    pass
+                now_m = time.monotonic()
+                cooldown = getattr(self, "_touch_cooldown", None)
+                if cooldown is None:
+                    cooldown = {}
+                    self._touch_cooldown = cooldown
+                ids = [item["id"] for item in top_items if (now_m - cooldown.get(("conv", item["id"]), 0.0)) >= 30.0]
+                if ids:
+                    try:
+                        cur.execute(f"""
+                            UPDATE conversations 
+                            SET accesses = accesses + 1, last_accessed = CURRENT_TIMESTAMP
+                            WHERE id IN ({','.join(['?']*len(ids))})
+                        """, ids)
+                        conn.commit()
+                        for mid in ids:
+                            cooldown[("conv", mid)] = now_m
+                    except Exception:
+                        pass
 
             return top_items
 
@@ -456,6 +477,8 @@ tags: ["learning", "memory", "{agent_id}"]
         Pillar 4 LRU-K / Decay Eviction:
         Findet Eintraege unterhalb der Relevanz-Schwelle und entfernt sie aus der aktiven DB.
         """
+        if table not in ("learnings", "conversations"):
+            return {"status": "error", "message": "Invalid table name"}
         time_col = "timestamp" if table == "conversations" else "created_at"
         with self._get_conn() as conn:
             cur = conn.cursor()
@@ -474,7 +497,9 @@ tags: ["learning", "memory", "{agent_id}"]
                     stale_ids.append(r["id"])
 
             if not dry_run and stale_ids:
-                cur.execute(f"DELETE FROM {table} WHERE id IN ({','.join(['?']*len(stale_ids))})", stale_ids)
+                for i in range(0, len(stale_ids), 500):
+                    chunk = stale_ids[i:i + 500]
+                    cur.execute(f"DELETE FROM {table} WHERE id IN ({','.join(['?']*len(chunk))})", chunk)
                 conn.commit()
 
             return {
@@ -534,18 +559,26 @@ tags: ["learning", "memory", "{agent_id}"]
             scored.sort(key=lambda x: x["match_score"], reverse=True)
             top = scored[:limit]
 
-            # Touch: Markiere gefundene Learnings als aktiv abgerufen
+            # Touch: Markiere gefundene Learnings als aktiv abgerufen (gedrosselt auf 30s)
             if top:
-                top_ids = [t["id"] for t in top]
-                try:
-                    cur.execute(f"""
-                        UPDATE learnings 
-                        SET accesses = accesses + 1, last_accessed = CURRENT_TIMESTAMP
-                        WHERE id IN ({','.join(['?']*len(top_ids))})
-                    """, top_ids)
-                    conn.commit()
-                except Exception:
-                    pass
+                now_m = time.monotonic()
+                cooldown = getattr(self, "_touch_cooldown", None)
+                if cooldown is None:
+                    cooldown = {}
+                    self._touch_cooldown = cooldown
+                top_ids = [t["id"] for t in top if (now_m - cooldown.get(("learn", t["id"]), 0.0)) >= 30.0]
+                if top_ids:
+                    try:
+                        cur.execute(f"""
+                            UPDATE learnings 
+                            SET accesses = accesses + 1, last_accessed = CURRENT_TIMESTAMP
+                            WHERE id IN ({','.join(['?']*len(top_ids))})
+                        """, top_ids)
+                        conn.commit()
+                        for mid in top_ids:
+                            cooldown[("learn", mid)] = now_m
+                    except Exception:
+                        pass
 
             return top
 

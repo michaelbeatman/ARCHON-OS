@@ -80,31 +80,45 @@ if __name__ == "__main__":
         sys.exit(1)
 """
         import tempfile
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as tf:
-            tf.write(combined_script)
-            temp_path = tf.name
+        with tempfile.TemporaryDirectory(prefix="archon_voyager_sbx_") as sbx_dir:
+            temp_path = os.path.join(sbx_dir, "verify_tool.py")
+            with open(temp_path, "w", encoding="utf-8") as tf:
+                tf.write(combined_script)
 
-        try:
-            py_exe = sys.executable or "python3"
-            res = subprocess.run(
-                [py_exe, temp_path],
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                cwd=WORKSPACE_DIR
-            )
-            out = res.stdout + "\n" + res.stderr
-            passed = res.returncode == 0 and "__VOYAGER_TEST_PASSED__" in out
-            return passed, out.strip()
-        except subprocess.TimeoutExpired:
-            return False, f"Timeout nach {timeout_seconds}s in Sandbox-Ausführung."
-        except Exception as e:
-            return False, f"Sandbox-Fehler: {str(e)}"
-        finally:
+            def _apply_rlimits():
+                try:
+                    import resource
+                    resource.setrlimit(resource.RLIMIT_CPU, (timeout_seconds, timeout_seconds))
+                    resource.setrlimit(resource.RLIMIT_FSIZE, (4 * 1024 * 1024, 4 * 1024 * 1024))
+                    resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+                except Exception:
+                    pass
+
+            safe_env = {
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "HOME": sbx_dir,
+                "TMPDIR": sbx_dir,
+                "PYTHONNOUSERSITE": "1",
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
             try:
-                os.remove(temp_path)
-            except OSError:
-                pass
+                py_exe = sys.executable or "python3"
+                res = subprocess.run(
+                    [py_exe, "-I", temp_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_seconds,
+                    cwd=sbx_dir,
+                    env=safe_env,
+                    preexec_fn=_apply_rlimits if os.name == "posix" else None,
+                )
+                out = res.stdout + "\n" + res.stderr
+                passed = res.returncode == 0 and "__VOYAGER_TEST_PASSED__" in out
+                return passed, out.strip()
+            except subprocess.TimeoutExpired:
+                return False, f"Timeout nach {timeout_seconds}s in Sandbox-Ausführung."
+            except Exception as e:
+                return False, f"Sandbox-Fehler: {str(e)}"
 
     def synthesize_and_evolve_tool(
         self,
@@ -122,7 +136,8 @@ if __name__ == "__main__":
         3. Bei Erfolg: Registriert das Tool persistent in dynamic_tools und als SKILL.md.
         4. Vermerkt den Erkenntnisgewinn in agentic_memory.db.
         """
-        tool_slug = tool_name.lower().replace(" ", "_").replace("-", "_")
+        import re as _re
+        tool_slug = _re.sub(r"[^a-z0-9_]", "_", (tool_name or "").lower().strip()).strip("_") or "custom_tool"
         current_code = implementation_code
         iteration = 1
         passed = False

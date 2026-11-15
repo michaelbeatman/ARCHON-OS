@@ -20,7 +20,9 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 def _require_admin(request: Request):
     import main as app_main
     if hasattr(app_main, "require_admin"):
-        app_main.require_admin(request)
+        return app_main.require_admin(request)
+    from archon.routers._rbac import require_admin_or_503
+    return require_admin_or_503(request)
 
 
 class SavePersonalakteReq(BaseModel):
@@ -199,8 +201,8 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
     _require_admin(request)
     import main as app_main
     from archon.core.profiles import (
+        api_get_hermes_profiles,
         invalidate_hermes_profiles_cache,
-        load_all_agent_profiles,
         save_all_agent_profiles,
     )
 
@@ -226,7 +228,7 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
 
         # Synchronisiere prompt/system_prompt in agent_profiles.json und leere den 30s-Cache
         try:
-            profiles = load_all_agent_profiles()
+            profiles = api_get_hermes_profiles()
             changed = False
             for p in profiles:
                 if isinstance(p, dict) and p.get("id") == agent_id:
@@ -235,8 +237,8 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
                     changed = True
             if changed:
                 save_all_agent_profiles(profiles)
-        except Exception:
-            pass
+        except Exception as sync_err:
+            logger.warning(f"[HR SOUL] Cache/Profile Sync fehlgeschlagen: {sync_err}")
         invalidate_hermes_profiles_cache()
 
         return {"status": "success", "agent_id": agent_id, "file_path": target_path}

@@ -17,13 +17,18 @@ Kern-Architektur:
 
 import os
 import re
+import csv
+import io
 import json
 import uuid
+import hashlib
 import sqlite3
 import datetime
 import urllib.request
 import urllib.error
 import collections
+import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape as _xml_escape
 from typing import Dict, Any, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -153,6 +158,7 @@ class ERPManager:
                     phone_main TEXT DEFAULT '',
                     website TEXT DEFAULT '',
                     industry TEXT DEFAULT '',
+                    leitweg_id TEXT DEFAULT '',
                     rating INTEGER DEFAULT 0,
                     tags_json TEXT DEFAULT '[]',
                     notes TEXT DEFAULT '',
@@ -270,6 +276,7 @@ class ERPManager:
                     payment_terms_days INTEGER DEFAULT 14,
                     dunning_level INTEGER DEFAULT 0,
                     dunning_fee REAL DEFAULT 0.0,
+                    stock_deducted INTEGER DEFAULT 0,
                     notes TEXT DEFAULT '',
                     booked_at TEXT,
                     paid_at TEXT,
@@ -303,6 +310,37 @@ class ERPManager:
                     FOREIGN KEY (item_id) REFERENCES erp_items(id) ON DELETE SET NULL
                 )
             """)
+
+            # 9. Banktransaktionen & OPOS-Zahlungsabgleich (M28: CAMT.053 / MT940 / Bank-CSV)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS erp_bank_transactions (
+                    id TEXT PRIMARY KEY,
+                    booking_date TEXT NOT NULL,
+                    value_date TEXT DEFAULT '',
+                    amount REAL NOT NULL,
+                    currency TEXT DEFAULT 'EUR',
+                    counterparty_name TEXT DEFAULT '',
+                    counterparty_iban TEXT DEFAULT '',
+                    remittance_info TEXT DEFAULT '',
+                    end_to_end_id TEXT DEFAULT '',
+                    source_format TEXT DEFAULT 'csv',
+                    tx_hash TEXT UNIQUE NOT NULL,
+                    matched_doc_id TEXT DEFAULT '',
+                    matched_doc_number TEXT DEFAULT '',
+                    match_confidence REAL DEFAULT 0.0,
+                    match_status TEXT DEFAULT 'unmatched',
+                    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_tx_status ON erp_bank_transactions(match_status, booking_date);")
+
+            # Safe schema migrations for pre-existing tenant DBs (M28)
+            ent_cols = {r["name"] for r in conn.execute("PRAGMA table_info(crm_entities)").fetchall()}
+            if "leitweg_id" not in ent_cols:
+                conn.execute("ALTER TABLE crm_entities ADD COLUMN leitweg_id TEXT DEFAULT ''")
+            doc_cols = {r["name"] for r in conn.execute("PRAGMA table_info(erp_documents)").fetchall()}
+            if "stock_deducted" not in doc_cols:
+                conn.execute("ALTER TABLE erp_documents ADD COLUMN stock_deducted INTEGER DEFAULT 0")
 
         # Seed initial basis data ONLY for primary company if completely empty
         if cid == "archon-systems":
@@ -803,11 +841,11 @@ class ERPManager:
                         skonto_pct, skonto_days, currency, credit_limit, dunning_block,
                         bank_name, iban, bic, sepa_mandate_ref,
                         street, postal_code, city, country_code,
-                        billing_email, phone_main, website, industry,
+                        billing_email, phone_main, website, industry, leitweg_id,
                         rating, tags_json, notes, created_at, updated_at
                     ) VALUES (
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                     )
                     ON CONFLICT(id) DO UPDATE SET
                         entity_type=excluded.entity_type,
@@ -842,6 +880,7 @@ class ERPManager:
                         phone_main=excluded.phone_main,
                         website=excluded.website,
                         industry=excluded.industry,
+                        leitweg_id=excluded.leitweg_id,
                         rating=excluded.rating,
                         tags_json=excluded.tags_json,
                         notes=excluded.notes,
@@ -880,6 +919,7 @@ class ERPManager:
                     payload.get("phone_main", existing_dict.get("phone_main", "")),
                     payload.get("website", existing_dict.get("website", "")),
                     payload.get("industry", existing_dict.get("industry", "")),
+                    payload.get("leitweg_id", existing_dict.get("leitweg_id", "")),
                     int(payload.get("rating", existing_dict.get("rating", 0))),
                     tags_json,
                     payload.get("notes", existing_dict.get("notes", "")),
@@ -1233,6 +1273,29 @@ class ERPManager:
         finally:
             conn.close()
 
+    def _apply_inventory_stock_delta(self, conn: sqlite3.Connection, doc_id: str, sign: int) -> None:
+        """Passt Lagerbestände (`stock_qty`) für Artikel mit `track_inventory = 1` atomar an (-1 Abbuchung, +1 Storno)."""
+        lines = conn.execute(
+            "SELECT item_id, quantity FROM erp_document_lines WHERE document_id = ? AND item_id IS NOT NULL",
+            (doc_id,),
+        ).fetchall()
+        for row in lines:
+            qty = float(row["quantity"] or 0.0)
+            if qty <= 0:
+                continue
+            conn.execute(
+                """
+                UPDATE erp_items
+                SET stock_qty = stock_qty + ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND track_inventory = 1
+                """,
+                (round(sign * qty, 4), row["item_id"]),
+            )
+        conn.execute(
+            "UPDATE erp_documents SET stock_deducted = ? WHERE id = ?",
+            (1 if sign < 0 else 0, doc_id),
+        )
+
     def save_document(self, payload: Dict[str, Any], company_id: Optional[str] = None) -> Dict[str, Any]:
         conn, cid = self._get_conn(company_id)
         try:
@@ -1240,15 +1303,31 @@ class ERPManager:
             existing = conn.execute("SELECT * FROM erp_documents WHERE id = ?", (doc_id,)).fetchone()
             ex = dict(existing) if existing else {}
 
-            # GoBD-Unveränderbarkeitsschutz: Gebuchte Rechnungen dürfen nur im Status/Mahnlevel aktualisiert werden
-            if ex and ex.get("status") in ("booked", "paid") and not payload.get("_allow_status_update_only"):
-                new_status = payload.get("status", ex["status"])
+            # GoBD-Unveränderbarkeitsschutz: Gebuchte, versendete, bezahlte oder stornierte Belege dürfen nicht zurück
+            # in den Entwurf und ändern keine Positionen/Beträge/Stammdaten mehr in-place.
+            if ex and (ex.get("status") in ("booked", "sent", "paid", "cancelled") or ex.get("booked_at")) and not payload.get("_allow_status_update_only"):
+                cur_status = ex.get("status")
+                new_status = payload.get("status", cur_status)
+                if new_status == "draft":
+                    raise ValueError(f"GoBD-Verstoß: Ein festgeschriebener Beleg ('{cur_status}') darf nicht zurück in den Entwurf ('draft') gesetzt werden.")
+                if cur_status == "paid" and new_status != "paid":
+                    raise ValueError(f"GoBD-Verstoß: Ein bezahlter Beleg darf nicht auf '{new_status}' zurückgesetzt werden.")
+                if cur_status == "cancelled" and new_status != "cancelled":
+                    raise ValueError(f"GoBD-Verstoß: Ein stornierter Beleg darf nicht auf '{new_status}' reaktiviert werden.")
                 paid_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") if new_status == "paid" else ex.get("paid_at")
+                booked_at = ex.get("booked_at")
+                if new_status in ("booked", "sent") and not booked_at:
+                    booked_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 with conn:
                     conn.execute(
-                        "UPDATE erp_documents SET status = ?, paid_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                        (new_status, paid_at, doc_id)
+                        "UPDATE erp_documents SET status = ?, paid_at = ?, booked_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (new_status, paid_at, booked_at, doc_id)
                     )
+                    if ex.get("doc_type") == "invoice":
+                        if new_status == "cancelled" and int(ex.get("stock_deducted") or 0) == 1:
+                            self._apply_inventory_stock_delta(conn, doc_id, sign=1)
+                        elif new_status in ("booked", "paid") and int(ex.get("stock_deducted") or 0) == 0:
+                            self._apply_inventory_stock_delta(conn, doc_id, sign=-1)
                 return self.get_document(doc_id, company_id=cid)
 
             doc_type = payload.get("doc_type", ex.get("doc_type", "offer"))
@@ -1281,6 +1360,7 @@ class ERPManager:
                 "legal_form": ent.get("legal_form", ""),
                 "debtor_no": ent.get("debtor_no", ""),
                 "vat_id": ent.get("vat_id", ""),
+                "leitweg_id": ent.get("leitweg_id", ""),
                 "contact_name": cnt.get("full_name", "") if cnt else "",
                 "contact_email": (cnt.get("email") if cnt and cnt.get("email") else ent.get("billing_email", "")),
                 "street": ent.get("street", ""),
@@ -1464,6 +1544,11 @@ class ERPManager:
                         (deb_no, entity_id)
                     )
 
+                # M28: Automatische Lagerbestands-Abbuchung bei festgeschriebener Rechnung
+                already_deducted = int(ex.get("stock_deducted") or 0) == 1 if ex else False
+                if doc_type == "invoice" and status in ("booked", "paid") and not already_deducted:
+                    self._apply_inventory_stock_delta(conn, doc_id, sign=-1)
+
             return self.get_document(doc_id, company_id=cid)
         finally:
             conn.close()
@@ -1515,6 +1600,973 @@ class ERPManager:
         return created
 
     # =========================================================================
+    # 3b. E-RECHNUNG (XRECHNUNG 3.0 / EN 16931 UBL) & DATEV EXTF EXPORT (M28)
+    # =========================================================================
+
+    @staticmethod
+    def _map_ubl_unit_code(unit_label: str) -> str:
+        norm = str(unit_label or "").strip().lower().rstrip(".")
+        return {
+            "std": "HUR",
+            "h": "HUR",
+            "stunde": "HUR",
+            "stunden": "HUR",
+            "hour": "HUR",
+            "hours": "HUR",
+            "tag": "DAY",
+            "tage": "DAY",
+            "day": "DAY",
+            "monat": "MON",
+            "monate": "MON",
+            "month": "MON",
+            "pauschal": "LS",
+            "pauschale": "LS",
+            "jahr": "ANN",
+        }.get(norm, "C62")
+
+    @staticmethod
+    def _tax_category_for_doc(tax_regime: str, rate_pct: float) -> Tuple[str, Optional[str]]:
+        if rate_pct > 0:
+            return ("S", None)
+        if tax_regime == "reverse_charge":
+            return ("AE", "Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG)")
+        if tax_regime == "intra_eu":
+            return ("K", "Innergemeinschaftliche Lieferung / Leistung (§ 4 Nr. 1b UStG)")
+        if tax_regime == "small_business":
+            return ("E", "Kein Ausweis von Umsatzsteuer gem. § 19 UStG (Kleinunternehmer)")
+        return ("Z", "Steuerfreie Ausfuhrlieferung / Zero-Rated")
+
+    @staticmethod
+    def _csv_safe(val: Any) -> str:
+        s = str(val if val is not None else "").replace("\r", " ").replace("\n", " ").strip()
+        if s and s[0] in ("=", "+", "-", "@", "\t"):
+            s = "'" + s
+        return '"' + s.replace('"', '""') + '"'
+
+    def _prepare_einvoice_context(self, doc_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
+        """Bereitet alle normalisierten E-Rechnungs-Metadaten (UBL XRechnung & CII ZUGFeRD) zentral vor."""
+        doc = self.get_document(doc_id, company_id=company_id)
+        if not doc:
+            raise ValueError(f"Beleg {doc_id} nicht gefunden.")
+
+        cid = _sanitize_company_id(company_id)
+        seller: Dict[str, Any] = {}
+        try:
+            from backend.corporate_manager import corporate_manager, DEFAULT_PRIMARY_COMPANY
+            seller = corporate_manager.get_company(cid) or dict(DEFAULT_PRIMARY_COMPANY)
+        except Exception:
+            seller = {}
+
+        seller_addr = seller.get("address") if isinstance(seller.get("address"), dict) else {}
+        seller_contact = seller.get("contact") if isinstance(seller.get("contact"), dict) else {}
+        seller_tax = seller.get("tax") if isinstance(seller.get("tax"), dict) else {}
+        seller_bank = seller.get("bank") if isinstance(seller.get("bank"), dict) else {}
+
+        ent_detail = self.get_entity_detail(doc["entity_id"], company_id=cid) or {}
+        ent = ent_detail.get("entity") if isinstance(ent_detail.get("entity"), dict) else ent_detail
+        snap = doc.get("recipient_snapshot") if isinstance(doc.get("recipient_snapshot"), dict) else {}
+
+        doc_num = str(doc.get("doc_number") or doc_id)
+        currency = str(doc.get("currency") or "EUR").upper()
+        issue_date = str(doc.get("issue_date") or datetime.date.today().isoformat())[:10]
+        due_date = str(doc.get("due_date") or issue_date)[:10]
+        type_code = "381" if doc.get("doc_type") == "credit_note" else "380"
+
+        buyer_ref = str(ent.get("leitweg_id") or snap.get("leitweg_id") or ent.get("debtor_no") or doc_num).strip()
+        seller_country_raw = str(seller_addr.get("country") or "DE")
+        seller_country = "DE" if seller_country_raw.lower().startswith("de") else seller_country_raw[:2].upper()
+
+        tax_regime = str(doc.get("tax_regime") or "standard_19")
+        lines = doc.get("lines") or []
+        if not lines:
+            lines = [{
+                "pos_no": 1,
+                "title": f"Leistung gemäß Beleg {doc_num}",
+                "description": doc.get("notes") or "",
+                "quantity": 1.0,
+                "unit": "Pauschal",
+                "unit_price_net": float(doc.get("amount_net") or 0.0),
+                "tax_rate_pct": 19.0 if float(doc.get("tax_amount") or 0.0) > 0 else 0.0,
+                "line_net": float(doc.get("amount_net") or 0.0),
+                "line_tax": float(doc.get("tax_amount") or 0.0),
+            }]
+
+        tax_buckets: Dict[Tuple[str, float, Optional[str]], Dict[str, float]] = {}
+        for ln in lines:
+            rate = float(ln.get("tax_rate_pct") or 0.0)
+            cat_id, reason = self._tax_category_for_doc(tax_regime, rate)
+            key = (cat_id, round(rate, 2), reason)
+            bucket = tax_buckets.setdefault(key, {"taxable": 0.0, "tax": 0.0})
+            bucket["taxable"] += float(ln.get("line_net") or 0.0)
+            bucket["tax"] += float(ln.get("line_tax") or 0.0)
+
+        total_net = round(float(doc.get("amount_net") or sum(b["taxable"] for b in tax_buckets.values())), 2)
+        total_tax = round(float(doc.get("tax_amount") or sum(b["tax"] for b in tax_buckets.values())), 2)
+        total_gross = round(float(doc.get("amount_gross") or (total_net + total_tax)), 2)
+
+        return {
+            "cid": cid,
+            "doc": doc,
+            "seller": seller,
+            "buyer": {
+                "display_name": snap.get("display_name") or ent.get("display_name") or "Kunde",
+                "street": snap.get("street") or ent.get("street") or "-",
+                "postal_code": snap.get("postal_code") or ent.get("postal_code") or "00000",
+                "city": snap.get("city") or ent.get("city") or "-",
+                "country_code": str(snap.get("country_code") or ent.get("country_code") or "DE")[:2].upper(),
+                "vat_id": str(snap.get("vat_id") or ent.get("vat_id") or "").replace(" ", ""),
+                "email": str(snap.get("contact_email") or ent.get("billing_email") or "billing@example.invalid"),
+                "leitweg_id": ent.get("leitweg_id") or snap.get("leitweg_id") or "",
+                "debtor_no": ent.get("debtor_no") or snap.get("debtor_no") or "",
+            },
+            "doc_num": doc_num,
+            "currency": currency,
+            "issue_date": issue_date,
+            "due_date": due_date,
+            "type_code": type_code,
+            "buyer_ref": buyer_ref,
+            "seller_flat": {
+                "name": str(seller.get("name") or "Archon Systems GmbH"),
+                "street": str(seller_addr.get("street") or "Friedrichstraße 123"),
+                "zip": str(seller_addr.get("postal_code") or "10117"),
+                "city": str(seller_addr.get("city") or "Berlin"),
+                "country": seller_country,
+                "vat_id": str(seller_tax.get("vat_id") or "").replace(" ", ""),
+                "tax_no": str(seller_tax.get("tax_number") or ""),
+                "email": str(seller_contact.get("email") or "billing@archon.local"),
+                "phone": str(seller_contact.get("phone") or "+49 30 000000"),
+                "iban": str(seller_bank.get("iban") or "").replace(" ", ""),
+                "bic": str(seller_bank.get("bic") or "").replace(" ", ""),
+            },
+            "tax_regime": tax_regime,
+            "lines": lines,
+            "tax_buckets": tax_buckets,
+            "total_net": total_net,
+            "total_tax": total_tax,
+            "total_gross": total_gross,
+        }
+
+    def export_xrechnung_xml(self, doc_id: str, company_id: Optional[str] = None) -> Tuple[str, str]:
+        """Erzeugt eine EN-16931 / XRechnung-3.0-konforme UBL-2.1-XML-E-Rechnung (oder Gutschrift)."""
+        ctx = self._prepare_einvoice_context(doc_id, company_id=company_id)
+        doc = ctx["doc"]
+        doc_num = ctx["doc_num"]
+        currency = ctx["currency"]
+        issue_date = ctx["issue_date"]
+        due_date = ctx["due_date"]
+        type_code = ctx["type_code"]
+        buyer_ref = ctx["buyer_ref"]
+        sf = ctx["seller_flat"]
+        seller_name, seller_street, seller_zip = sf["name"], sf["street"], sf["zip"]
+        seller_city, seller_country, seller_vat = sf["city"], sf["country"], sf["vat_id"]
+        seller_tax_no, seller_email, seller_phone = sf["tax_no"], sf["email"], sf["phone"]
+        seller_iban, seller_bic = sf["iban"], sf["bic"]
+        bf = ctx["buyer"]
+        buyer_name, buyer_street, buyer_zip = str(bf["display_name"]), str(bf["street"]), str(bf["postal_code"])
+        buyer_city, buyer_country, buyer_vat, buyer_email = str(bf["city"]), str(bf["country_code"]), str(bf["vat_id"]), str(bf["email"])
+        tax_regime = ctx["tax_regime"]
+        lines = ctx["lines"]
+        tax_buckets = ctx["tax_buckets"]
+        total_net, total_tax, total_gross = ctx["total_net"], ctx["total_tax"], ctx["total_gross"]
+
+        subtotals_xml = []
+        for (cat_id, rate, reason), b in tax_buckets.items():
+            reason_xml = f"\n      <cac:TaxCategory><cbc:ID>{_xml_escape(cat_id)}</cbc:ID><cbc:Percent>{rate:.2f}</cbc:Percent><cbc:TaxExemptionReason>{_xml_escape(reason)}</cbc:TaxExemptionReason><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>" if reason else f"\n      <cac:TaxCategory><cbc:ID>{_xml_escape(cat_id)}</cbc:ID><cbc:Percent>{rate:.2f}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>"
+            subtotals_xml.append(
+                f"""    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="{_xml_escape(currency)}">{b['taxable']:.2f}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="{_xml_escape(currency)}">{b['tax']:.2f}</cbc:TaxAmount>{reason_xml}
+    </cac:TaxSubtotal>"""
+            )
+
+        invoice_lines_xml = []
+        for idx, ln in enumerate(lines, start=1):
+            pos = int(ln.get("pos_no") or idx)
+            qty = float(ln.get("quantity") or 1.0)
+            unit_code = self._map_ubl_unit_code(ln.get("unit") or "Stk.")
+            line_net = float(ln.get("line_net") or 0.0)
+            unit_price = float(ln.get("unit_price_net") or 0.0)
+            rate = float(ln.get("tax_rate_pct") or 0.0)
+            cat_id, _ = self._tax_category_for_doc(tax_regime, rate)
+            title = _xml_escape(str(ln.get("title") or f"Position {pos}"))
+            desc = _xml_escape(str(ln.get("description") or ""))
+            desc_tag = f"\n      <cbc:Description>{desc}</cbc:Description>" if desc else ""
+            invoice_lines_xml.append(
+                f"""  <cac:InvoiceLine>
+    <cbc:ID>{pos}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="{_xml_escape(unit_code)}">{qty:.2f}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="{_xml_escape(currency)}">{line_net:.2f}</cbc:LineExtensionAmount>
+    <cac:Item>{desc_tag}
+      <cbc:Name>{title}</cbc:Name>
+      <cac:ClassifiedTaxCategory>
+        <cbc:ID>{_xml_escape(cat_id)}</cbc:ID>
+        <cbc:Percent>{rate:.2f}</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:ClassifiedTaxCategory>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="{_xml_escape(currency)}">{unit_price:.2f}</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>"""
+            )
+
+        seller_tax_scheme_xml = ""
+        if seller_vat:
+            seller_tax_scheme_xml += f"""
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>{_xml_escape(seller_vat)}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>"""
+        if seller_tax_no:
+            seller_tax_scheme_xml += f"""
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>{_xml_escape(seller_tax_no)}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>FC</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>"""
+
+        buyer_vat_xml = ""
+        if buyer_vat:
+            buyer_vat_xml = f"""
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>{_xml_escape(buyer_vat)}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>"""
+
+        payment_xml = ""
+        if seller_iban:
+            bic_xml = f"\n        <cac:FinancialInstitutionBranch><cbc:ID>{_xml_escape(seller_bic)}</cbc:ID></cac:FinancialInstitutionBranch>" if seller_bic else ""
+            payment_xml = f"""
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>58</cbc:PaymentMeansCode>
+    <cbc:PaymentID>{_xml_escape(doc_num)}</cbc:PaymentID>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>{_xml_escape(seller_iban)}</cbc:ID>{bic_xml}
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>"""
+
+        xml_doc = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>
+  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
+  <cbc:ID>{_xml_escape(doc_num)}</cbc:ID>
+  <cbc:IssueDate>{_xml_escape(issue_date)}</cbc:IssueDate>
+  <cbc:DueDate>{_xml_escape(due_date)}</cbc:DueDate>
+  <cbc:InvoiceTypeCode>{type_code}</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>{_xml_escape(currency)}</cbc:DocumentCurrencyCode>
+  <cbc:BuyerReference>{_xml_escape(buyer_ref)}</cbc:BuyerReference>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cbc:EndpointID schemeID="EM">{_xml_escape(seller_email)}</cbc:EndpointID>
+      <cac:PartyName><cbc:Name>{_xml_escape(seller_name)}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>{_xml_escape(seller_street)}</cbc:StreetName>
+        <cbc:CityName>{_xml_escape(seller_city)}</cbc:CityName>
+        <cbc:PostalZone>{_xml_escape(seller_zip)}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>{_xml_escape(seller_country)}</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>{seller_tax_scheme_xml}
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>{_xml_escape(seller_name)}</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+      <cac:Contact>
+        <cbc:Name>{_xml_escape(seller_name)}</cbc:Name>
+        <cbc:Telephone>{_xml_escape(seller_phone)}</cbc:Telephone>
+        <cbc:ElectronicMail>{_xml_escape(seller_email)}</cbc:ElectronicMail>
+      </cac:Contact>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cbc:EndpointID schemeID="EM">{_xml_escape(buyer_email)}</cbc:EndpointID>
+      <cac:PartyName><cbc:Name>{_xml_escape(buyer_name)}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>{_xml_escape(buyer_street)}</cbc:StreetName>
+        <cbc:CityName>{_xml_escape(buyer_city)}</cbc:CityName>
+        <cbc:PostalZone>{_xml_escape(buyer_zip)}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>{_xml_escape(buyer_country)}</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>{buyer_vat_xml}
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>{_xml_escape(buyer_name)}</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingCustomerParty>{payment_xml}
+  <cac:PaymentTerms>
+    <cbc:Note>{_xml_escape(f"Zahlbar innerhalb von {int(doc.get('payment_terms_days') or 14)} Tagen ohne Abzug.")}</cbc:Note>
+  </cac:PaymentTerms>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="{_xml_escape(currency)}">{total_tax:.2f}</cbc:TaxAmount>
+{chr(10).join(subtotals_xml)}
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="{_xml_escape(currency)}">{total_net:.2f}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="{_xml_escape(currency)}">{total_net:.2f}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="{_xml_escape(currency)}">{total_gross:.2f}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="{_xml_escape(currency)}">{total_gross:.2f}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+{chr(10).join(invoice_lines_xml)}
+</Invoice>
+"""
+        return doc_num, xml_doc
+
+    def export_zugferd_cii_xml(self, doc_id: str, company_id: Optional[str] = None) -> Tuple[str, str]:
+        """Erzeugt ZUGFeRD-2.2-/Factur-X-EN-16931-konformes UN/CEFACT Cross Industry Invoice XML (CII D16B)."""
+        ctx = self._prepare_einvoice_context(doc_id, company_id=company_id)
+        doc = ctx["doc"]
+        doc_num = ctx["doc_num"]
+        currency = ctx["currency"]
+        issue_cii = ctx["issue_date"].replace("-", "")
+        due_cii = ctx["due_date"].replace("-", "")
+        type_code = ctx["type_code"]
+        buyer_ref = ctx["buyer_ref"]
+        sf = ctx["seller_flat"]
+        bf = ctx["buyer"]
+        tax_regime = ctx["tax_regime"]
+        lines = ctx["lines"]
+        tax_buckets = ctx["tax_buckets"]
+        total_net, total_tax, total_gross = ctx["total_net"], ctx["total_tax"], ctx["total_gross"]
+
+        line_items_xml = []
+        for idx, ln in enumerate(lines, start=1):
+            pos = int(ln.get("pos_no") or idx)
+            qty = float(ln.get("quantity") or 1.0)
+            unit_code = self._map_ubl_unit_code(ln.get("unit") or "Stk.")
+            line_net = float(ln.get("line_net") or 0.0)
+            unit_price = float(ln.get("unit_price_net") or 0.0)
+            rate = float(ln.get("tax_rate_pct") or 0.0)
+            cat_id, _ = self._tax_category_for_doc(tax_regime, rate)
+            title = _xml_escape(str(ln.get("title") or f"Position {pos}"))
+            desc = _xml_escape(str(ln.get("description") or ""))
+            desc_el = f"\n      <ram:Description>{desc}</ram:Description>" if desc else ""
+            line_items_xml.append(
+                f"""    <ram:IncludedSupplyChainTradeLineItem>
+      <ram:AssociatedDocumentLineDocument><ram:LineID>{pos}</ram:LineID></ram:AssociatedDocumentLineDocument>
+      <ram:SpecifiedTradeProduct>
+        <ram:Name>{title}</ram:Name>{desc_el}
+      </ram:SpecifiedTradeProduct>
+      <ram:SpecifiedLineTradeAgreement>
+        <ram:NetPriceProductTradePrice><ram:ChargeAmount>{unit_price:.2f}</ram:ChargeAmount></ram:NetPriceProductTradePrice>
+      </ram:SpecifiedLineTradeAgreement>
+      <ram:SpecifiedLineTradeDelivery>
+        <ram:BilledQuantity unitCode="{_xml_escape(unit_code)}">{qty:.2f}</ram:BilledQuantity>
+      </ram:SpecifiedLineTradeDelivery>
+      <ram:SpecifiedLineTradeSettlement>
+        <ram:ApplicableTradeTax>
+          <ram:TypeCode>VAT</ram:TypeCode>
+          <ram:CategoryCode>{_xml_escape(cat_id)}</ram:CategoryCode>
+          <ram:RateApplicablePercent>{rate:.2f}</ram:RateApplicablePercent>
+        </ram:ApplicableTradeTax>
+        <ram:SpecifiedTradeSettlementLineMonetarySummation>
+          <ram:LineTotalAmount>{line_net:.2f}</ram:LineTotalAmount>
+        </ram:SpecifiedTradeSettlementLineMonetarySummation>
+      </ram:SpecifiedLineTradeSettlement>
+    </ram:IncludedSupplyChainTradeLineItem>"""
+            )
+
+        tax_xml = []
+        for (cat_id, rate, reason), b in tax_buckets.items():
+            reason_el = f"\n        <ram:ExemptionReason>{_xml_escape(reason)}</ram:ExemptionReason>" if reason else ""
+            tax_xml.append(
+                f"""      <ram:ApplicableTradeTax>
+        <ram:CalculatedAmount>{b['tax']:.2f}</ram:CalculatedAmount>
+        <ram:TypeCode>VAT</ram:TypeCode>{reason_el}
+        <ram:BasisAmount>{b['taxable']:.2f}</ram:BasisAmount>
+        <ram:CategoryCode>{_xml_escape(cat_id)}</ram:CategoryCode>
+        <ram:RateApplicablePercent>{rate:.2f}</ram:RateApplicablePercent>
+      </ram:ApplicableTradeTax>"""
+            )
+
+        seller_tax_regs = ""
+        if sf["vat_id"]:
+            seller_tax_regs += f'\n        <ram:SpecifiedTaxRegistration><ram:ID schemeID="VA">{_xml_escape(sf["vat_id"])}</ram:ID></ram:SpecifiedTaxRegistration>'
+        if sf["tax_no"]:
+            seller_tax_regs += f'\n        <ram:SpecifiedTaxRegistration><ram:ID schemeID="FC">{_xml_escape(sf["tax_no"])}</ram:ID></ram:SpecifiedTaxRegistration>'
+
+        buyer_vat_reg = ""
+        if bf["vat_id"]:
+            buyer_vat_reg = f'\n        <ram:SpecifiedTaxRegistration><ram:ID schemeID="VA">{_xml_escape(bf["vat_id"])}</ram:ID></ram:SpecifiedTaxRegistration>'
+
+        payment_means_xml = ""
+        if sf["iban"]:
+            bic_el = f"\n        <ram:PayeeSpecifiedCreditorFinancialInstitution><ram:BICID>{_xml_escape(sf['bic'])}</ram:BICID></ram:PayeeSpecifiedCreditorFinancialInstitution>" if sf["bic"] else ""
+            payment_means_xml = f"""
+      <ram:SpecifiedTradeSettlementPaymentMeans>
+        <ram:TypeCode>58</ram:TypeCode>
+        <ram:PayeePartyCreditorFinancialAccount><ram:IBANID>{_xml_escape(sf['iban'])}</ram:IBANID></ram:PayeePartyCreditorFinancialAccount>{bic_el}
+      </ram:SpecifiedTradeSettlementPaymentMeans>"""
+
+        cii_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
+                          xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100"
+                          xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
+                          xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
+  <rsm:ExchangedDocumentContext>
+    <ram:BusinessProcessSpecifiedDocumentContextParameter>
+      <ram:ID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</ram:ID>
+    </ram:BusinessProcessSpecifiedDocumentContextParameter>
+    <ram:GuidelineSpecifiedDocumentContextParameter>
+      <ram:ID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</ram:ID>
+    </ram:GuidelineSpecifiedDocumentContextParameter>
+  </rsm:ExchangedDocumentContext>
+  <rsm:ExchangedDocument>
+    <ram:ID>{_xml_escape(doc_num)}</ram:ID>
+    <ram:TypeCode>{type_code}</ram:TypeCode>
+    <ram:IssueDateTime><udt:DateTimeString format="102">{_xml_escape(issue_cii)}</udt:DateTimeString></ram:IssueDateTime>
+  </rsm:ExchangedDocument>
+  <rsm:SupplyChainTradeTransaction>
+{chr(10).join(line_items_xml)}
+    <ram:ApplicableHeaderTradeAgreement>
+      <ram:BuyerReference>{_xml_escape(buyer_ref)}</ram:BuyerReference>
+      <ram:SellerTradeParty>
+        <ram:Name>{_xml_escape(sf['name'])}</ram:Name>
+        <ram:DefinedTradeContact>
+          <ram:PersonName>{_xml_escape(sf['name'])}</ram:PersonName>
+          <ram:TelephoneUniversalCommunication><ram:CompleteNumber>{_xml_escape(sf['phone'])}</ram:CompleteNumber></ram:TelephoneUniversalCommunication>
+          <ram:EmailURIUniversalCommunication><ram:URIID>{_xml_escape(sf['email'])}</ram:URIID></ram:EmailURIUniversalCommunication>
+        </ram:DefinedTradeContact>
+        <ram:PostalTradeAddress>
+          <ram:PostcodeCode>{_xml_escape(sf['zip'])}</ram:PostcodeCode>
+          <ram:LineOne>{_xml_escape(sf['street'])}</ram:LineOne>
+          <ram:CityName>{_xml_escape(sf['city'])}</ram:CityName>
+          <ram:CountryID>{_xml_escape(sf['country'])}</ram:CountryID>
+        </ram:PostalTradeAddress>{seller_tax_regs}
+      </ram:SellerTradeParty>
+      <ram:BuyerTradeParty>
+        <ram:Name>{_xml_escape(str(bf['display_name']))}</ram:Name>
+        <ram:PostalTradeAddress>
+          <ram:PostcodeCode>{_xml_escape(str(bf['postal_code']))}</ram:PostcodeCode>
+          <ram:LineOne>{_xml_escape(str(bf['street']))}</ram:LineOne>
+          <ram:CityName>{_xml_escape(str(bf['city']))}</ram:CityName>
+          <ram:CountryID>{_xml_escape(str(bf['country_code']))}</ram:CountryID>
+        </ram:PostalTradeAddress>{buyer_vat_reg}
+      </ram:BuyerTradeParty>
+    </ram:ApplicableHeaderTradeAgreement>
+    <ram:ApplicableHeaderTradeDelivery/>
+    <ram:ApplicableHeaderTradeSettlement>
+      <ram:PaymentReference>{_xml_escape(doc_num)}</ram:PaymentReference>
+      <ram:InvoiceCurrencyCode>{_xml_escape(currency)}</ram:InvoiceCurrencyCode>{payment_means_xml}
+{chr(10).join(tax_xml)}
+      <ram:SpecifiedTradePaymentTerms>
+        <ram:Description>{_xml_escape(f"Zahlbar innerhalb von {int(doc.get('payment_terms_days') or 14)} Tagen ohne Abzug.")}</ram:Description>
+        <ram:DueDateDateTime><udt:DateTimeString format="102">{_xml_escape(due_cii)}</udt:DateTimeString></ram:DueDateDateTime>
+      </ram:SpecifiedTradePaymentTerms>
+      <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
+        <ram:LineTotalAmount>{total_net:.2f}</ram:LineTotalAmount>
+        <ram:TaxBasisTotalAmount>{total_net:.2f}</ram:TaxBasisTotalAmount>
+        <ram:TaxTotalAmount currencyID="{_xml_escape(currency)}">{total_tax:.2f}</ram:TaxTotalAmount>
+        <ram:GrandTotalAmount>{total_gross:.2f}</ram:GrandTotalAmount>
+        <ram:DuePayableAmount>{total_gross:.2f}</ram:DuePayableAmount>
+      </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
+    </ram:ApplicableHeaderTradeSettlement>
+  </rsm:SupplyChainTradeTransaction>
+</rsm:CrossIndustryInvoice>
+"""
+        return doc_num, cii_xml
+
+    def export_datev_extf_csv(
+        self,
+        company_id: Optional[str] = None,
+        include_drafts: bool = False,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> str:
+        """Erzeugt einen DATEV-EXTF-kompatiblen Buchungsstapel (SKR03, Semikolon-CSV)."""
+        conn, cid = self._get_conn(company_id)
+        try:
+            clauses = ["d.doc_type IN ('invoice', 'credit_note')"]
+            params: List[Any] = []
+            if not include_drafts:
+                clauses.append("d.status IN ('booked', 'paid')")
+            else:
+                clauses.append("d.status != 'cancelled'")
+            if date_from:
+                clauses.append("d.issue_date >= ?")
+                params.append(str(date_from)[:10])
+            if date_to:
+                clauses.append("d.issue_date <= ?")
+                params.append(str(date_to)[:10])
+
+            sql = f"""
+                SELECT d.*, e.display_name AS entity_name, e.debtor_no, e.creditor_no
+                FROM erp_documents d
+                LEFT JOIN crm_entities e ON d.entity_id = e.id
+                WHERE {' AND '.join(clauses)}
+                ORDER BY d.issue_date ASC, d.doc_number ASC
+            """
+            docs = [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+            now_stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S000")
+            year_start = f"{datetime.date.today().year}0101"
+            extf_meta = (
+                f'"EXTF";700;21;"Buchungsstapel";13;{now_stamp};;"RE";"ArchonOS";'
+                f'"{cid}";1;1;{year_start};4;;;"Archon Buchungsstapel";;;0;"EUR";;;;;;;;'
+            )
+            col_header = (
+                "Umsatz (ohne Soll/Haben-Kz);Soll/Haben-Kennzeichen;WKZ Umsatz;Kurs;Basis-Umsatz;"
+                "WKZ Basis-Umsatz;Konto;Gegenkonto (ohne BU-Schlüssel);BU-Schlüssel;Belegdatum;"
+                "Belegfeld 1;Belegfeld 2;Skonto;Buchungstext"
+            )
+            rows = [extf_meta, col_header]
+
+            for d in docs:
+                lines = conn.execute(
+                    "SELECT tax_rate_pct, line_gross FROM erp_document_lines WHERE document_id = ?",
+                    (d["id"],),
+                ).fetchall()
+                rate_totals: Dict[float, float] = collections.defaultdict(float)
+                for ln in lines:
+                    rate_totals[round(float(ln["tax_rate_pct"] or 0.0), 2)] += float(ln["line_gross"] or 0.0)
+                if not rate_totals:
+                    inferred_rate = 19.0 if float(d.get("tax_amount") or 0.0) > 0 else 0.0
+                    rate_totals[inferred_rate] = float(d.get("amount_gross") or 0.0)
+
+                issue_raw = str(d.get("issue_date") or datetime.date.today().isoformat())
+                try:
+                    dt = datetime.date.fromisoformat(issue_raw[:10])
+                    belegdatum = dt.strftime("%d%m")
+                except ValueError:
+                    belegdatum = datetime.date.today().strftime("%d%m")
+
+                sh_flag = "H" if d.get("doc_type") == "credit_note" else "S"
+                deb_acct = str(d.get("debtor_no") or "10000")
+                doc_num = str(d.get("doc_number") or d["id"])[:36]
+                partner_name = str(d.get("entity_name") or "Kunde")[:40]
+                currency = str(d.get("currency") or "EUR").upper()
+                regime = str(d.get("tax_regime") or "standard_19")
+
+                for rate, gross_sum in rate_totals.items():
+                    amt_val = round(abs(gross_sum), 2)
+                    if amt_val <= 0:
+                        continue
+                    amt_de = f"{amt_val:.2f}".replace(".", ",")
+                    if abs(rate - 19.0) < 0.01:
+                        rev_acct, bu_key = "8400", "3"
+                    elif abs(rate - 7.0) < 0.01:
+                        rev_acct, bu_key = "8300", "2"
+                    elif regime == "intra_eu":
+                        rev_acct, bu_key = "8125", ""
+                    elif regime == "reverse_charge":
+                        rev_acct, bu_key = "8337", ""
+                    else:
+                        rev_acct, bu_key = "8120", ""
+
+                    buchungstext = f"{doc_num} {partner_name}"[:60]
+                    rows.append(";".join([
+                        amt_de,
+                        sh_flag,
+                        self._csv_safe(currency),
+                        "",
+                        "",
+                        "",
+                        deb_acct,
+                        rev_acct,
+                        bu_key,
+                        belegdatum,
+                        self._csv_safe(doc_num),
+                        "",
+                        "",
+                        self._csv_safe(buchungstext),
+                    ]))
+
+            return "\r\n".join(rows) + "\r\n"
+        finally:
+            conn.close()
+
+    def export_zugferd_pdf(self, doc_id: str, company_id: Optional[str] = None) -> Tuple[str, bytes]:
+        """Erzeugt ein ZUGFeRD-2.2-/Factur-X-Hybrid-PDF (A4-Beleg + eingebettetes EN-16931-CII-XML `factur-x.xml`)."""
+        from backend.erp_zugferd_pdf import build_zugferd_invoice_pdf
+
+        ctx = self._prepare_einvoice_context(doc_id, company_id=company_id)
+        doc_num, cii_xml_str = self.export_zugferd_cii_xml(doc_id=doc_id, company_id=company_id)
+        pdf_bytes = build_zugferd_invoice_pdf(
+            doc=ctx["doc"],
+            seller=ctx["seller"],
+            buyer=ctx["buyer"],
+            embedded_xml=cii_xml_str,
+        )
+        return doc_num, pdf_bytes
+
+    # =========================================================================
+    # 3c. BANKKONTEN-IMPORT (CAMT.053 XML / MT940 / CSV) & OPOS-ABGLEICH (M28)
+    # =========================================================================
+
+    @staticmethod
+    def _parse_de_amount(raw: Any) -> float:
+        s = str(raw or "0").strip().replace("EUR", "").replace("€", "").replace(" ", "")
+        if not s:
+            return 0.0
+        if "," in s and "." in s:
+            if s.rfind(",") > s.rfind("."):
+                s = s.replace(".", "").replace(",", ".")
+            else:
+                s = s.replace(",", "")
+        elif "," in s:
+            s = s.replace(",", ".")
+        return round(float(s), 2)
+
+    @staticmethod
+    def _xml_local(tag: str) -> str:
+        return tag.split("}", 1)[1] if "}" in tag else tag
+
+    @classmethod
+    def _xml_first_text(cls, elem: ET.Element, path_names: Tuple[str, ...]) -> str:
+        cur: Optional[ET.Element] = elem
+        for name in path_names:
+            if cur is None:
+                return ""
+            nxt = None
+            for child in list(cur):
+                if cls._xml_local(child.tag) == name:
+                    nxt = child
+                    break
+            cur = nxt
+        return (cur.text or "").strip() if cur is not None and cur.text else ""
+
+    @classmethod
+    def parse_bank_statement(cls, raw_content: str, fmt: str = "auto") -> List[Dict[str, Any]]:
+        """Parst ISO 20022 CAMT.053 XML, SWIFT MT940 (.sta) oder Bank-CSV in normierte Umsatz-Dicts."""
+        text = str(raw_content or "").lstrip("\ufeff").strip()
+        if not text:
+            return []
+
+        detected = (fmt or "auto").strip().lower()
+        if detected == "auto":
+            if text.startswith("<") and ("BkToCstmrStmt" in text or "Ntry" in text or "camt.053" in text.lower()):
+                detected = "camt053"
+            elif ":61:" in text and (":20:" in text or ":86:" in text):
+                detected = "mt940"
+            else:
+                detected = "csv"
+
+        if detected == "camt053":
+            upper_head = text[:4096].upper()
+            if "<!DOCTYPE" in upper_head or "<!ENTITY" in upper_head:
+                raise ValueError("XXE-/DTD-Deklarationen sind im CAMT.053-Import nicht zulässig.")
+            root = ET.fromstring(text)
+            txs: List[Dict[str, Any]] = []
+            for ntry in root.iter():
+                if cls._xml_local(ntry.tag) != "Ntry":
+                    continue
+                amt_el = next((c for c in list(ntry) if cls._xml_local(c.tag) == "Amt"), None)
+                if amt_el is None or not (amt_el.text or "").strip():
+                    continue
+                raw_amt = cls._parse_de_amount(amt_el.text)
+                ccy = (amt_el.attrib.get("Ccy") or "EUR").upper()
+                ind = cls._xml_first_text(ntry, ("CdtDbtInd",)).upper()
+                signed_amt = -abs(raw_amt) if ind == "DBIT" else abs(raw_amt)
+                book_dt = cls._xml_first_text(ntry, ("BookgDt", "Dt")) or cls._xml_first_text(ntry, ("BookgDt", "DtTm"))[:10]
+                val_dt = cls._xml_first_text(ntry, ("ValDt", "Dt")) or book_dt
+
+                # Extrahiere Detail-Transaktionen (falls mehrere TxDtls unter NtryDtls, sonst 1 Summenbuchung)
+                tx_details = [e for e in ntry.iter() if cls._xml_local(e.tag) == "TxDtls"]
+                targets = tx_details or [ntry]
+                for td in targets:
+                    e2e = cls._xml_first_text(td, ("Refs", "EndToEndId"))
+                    dbtr_name = (
+                        cls._xml_first_text(td, ("RltdPties", "Dbtr", "Nm"))
+                        or cls._xml_first_text(td, ("RltdPties", "Cdtr", "Nm"))
+                    )
+                    dbtr_iban = (
+                        cls._xml_first_text(td, ("RltdPties", "DbtrAcct", "Id", "IBAN"))
+                        or cls._xml_first_text(td, ("RltdPties", "CdtrAcct", "Id", "IBAN"))
+                    )
+                    ustrd_parts = [
+                        (u.text or "").strip()
+                        for u in td.iter()
+                        if cls._xml_local(u.tag) == "Ustrd" and (u.text or "").strip()
+                    ]
+                    remittance = " ".join(ustrd_parts).strip() or cls._xml_first_text(ntry, ("AddtlNtryInf",))
+                    td_amt_el = next((c for c in td.iter() if cls._xml_local(c.tag) == "Amt" and c is not amt_el), None)
+                    tx_amt = signed_amt
+                    if td_amt_el is not None and (td_amt_el.text or "").strip():
+                        v = cls._parse_de_amount(td_amt_el.text)
+                        tx_amt = -abs(v) if ind == "DBIT" else abs(v)
+                    txs.append({
+                        "booking_date": book_dt or datetime.date.today().isoformat(),
+                        "value_date": val_dt or book_dt or "",
+                        "amount": round(tx_amt, 2),
+                        "currency": ccy,
+                        "counterparty_name": dbtr_name,
+                        "counterparty_iban": dbtr_iban.replace(" ", "").upper(),
+                        "remittance_info": remittance,
+                        "end_to_end_id": e2e,
+                        "source_format": "camt053",
+                    })
+            return txs
+
+        if detected == "mt940":
+            txs = []
+            current: Optional[Dict[str, Any]] = None
+            stmt_re = re.compile(r"^:61:(\d{6})(?:\d{4})?(C|D|RC|RD)([A-Z]?)([\d,\.]+)")
+            for raw_line in text.splitlines():
+                line = raw_line.strip()
+                m = stmt_re.match(line)
+                if m:
+                    if current:
+                        txs.append(current)
+                    yymmdd, cd, _, amt_str = m.groups()
+                    bdate = f"20{yymmdd[:2]}-{yymmdd[2:4]}-{yymmdd[4:6]}"
+                    val = cls._parse_de_amount(amt_str)
+                    signed = -abs(val) if "D" in cd else abs(val)
+                    current = {
+                        "booking_date": bdate,
+                        "value_date": bdate,
+                        "amount": round(signed, 2),
+                        "currency": "EUR",
+                        "counterparty_name": "",
+                        "counterparty_iban": "",
+                        "remittance_info": "",
+                        "end_to_end_id": "",
+                        "source_format": "mt940",
+                    }
+                elif line.startswith(":86:") and current is not None:
+                    info = line[4:].strip()
+                    current["remittance_info"] = (current["remittance_info"] + " " + info).strip()
+                    name_m = re.search(r"\?32([^?]+)", info)
+                    iban_m = re.search(r"\?31([A-Z]{2}\d{2}[A-Z0-9]{10,30})", info.replace(" ", ""))
+                    if name_m and not current["counterparty_name"]:
+                        current["counterparty_name"] = name_m.group(1).strip()
+                    if iban_m and not current["counterparty_iban"]:
+                        current["counterparty_iban"] = iban_m.group(1).strip()
+                elif current is not None and line and not line.startswith(":"):
+                    current["remittance_info"] = (current["remittance_info"] + " " + line).strip()
+            if current:
+                txs.append(current)
+            return txs
+
+        # Bank-CSV (Semikolon oder Komma, Standard-Spaltennamen DE/EN)
+        delim = ";" if text.splitlines()[0].count(";") >= text.splitlines()[0].count(",") else ","
+        reader = csv.DictReader(io.StringIO(text), delimiter=delim)
+        txs = []
+        for row in reader:
+            norm = {str(k or "").strip().lower(): str(v or "").strip() for k, v in row.items()}
+            amt_raw = norm.get("betrag") or norm.get("amount") or norm.get("umsatz") or ""
+            if not amt_raw:
+                continue
+            bdate = (
+                norm.get("buchungstag")
+                or norm.get("booking_date")
+                or norm.get("datum")
+                or norm.get("date")
+                or datetime.date.today().isoformat()
+            )
+            if re.match(r"^\d{2}\.\d{2}\.\d{4}$", bdate):
+                dd, mm, yyyy = bdate.split(".")
+                bdate = f"{yyyy}-{mm}-{dd}"
+            vdate = norm.get("valutadatum") or norm.get("value_date") or bdate
+            if re.match(r"^\d{2}\.\d{2}\.\d{4}$", vdate):
+                dd, mm, yyyy = vdate.split(".")
+                vdate = f"{yyyy}-{mm}-{dd}"
+            txs.append({
+                "booking_date": bdate,
+                "value_date": vdate,
+                "amount": cls._parse_de_amount(amt_raw),
+                "currency": (norm.get("waehrung") or norm.get("währung") or norm.get("currency") or "EUR").upper(),
+                "counterparty_name": norm.get("auftraggeber") or norm.get("empfaenger") or norm.get("empfänger") or norm.get("name") or norm.get("counterparty") or "",
+                "counterparty_iban": (norm.get("iban") or norm.get("konto/iban") or "").replace(" ", "").upper(),
+                "remittance_info": norm.get("verwendungszweck") or norm.get("buchungstext") or norm.get("purpose") or norm.get("reference") or "",
+                "end_to_end_id": norm.get("ende-zu-ende-referenz") or norm.get("end_to_end_id") or "",
+                "source_format": "csv",
+            })
+        return txs
+
+    def import_and_reconcile_bank_statement(
+        self,
+        raw_content: str,
+        fmt: str = "auto",
+        auto_mark_paid: bool = False,
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Importiert Bankumsätze (CAMT.053/MT940/CSV), dedupliziert via SHA-256 und gleicht sie gegen offene Rechnungen (OPOS) ab."""
+        parsed = self.parse_bank_statement(raw_content, fmt=fmt)
+        conn, cid = self._get_conn(company_id)
+        imported = 0
+        duplicates = 0
+        matched = 0
+        auto_paid = 0
+        items_out: List[Dict[str, Any]] = []
+        docs_to_mark_paid: List[str] = []
+
+        try:
+            open_invoices = [
+                dict(r)
+                for r in conn.execute("""
+                    SELECT d.id, d.doc_number, d.amount_gross, d.currency, d.status,
+                           e.display_name, e.iban AS entity_iban
+                    FROM erp_documents d
+                    LEFT JOIN crm_entities e ON d.entity_id = e.id
+                    WHERE d.doc_type = 'invoice' AND d.status = 'booked'
+                """).fetchall()
+            ]
+            already_assigned_docs: set[str] = set()
+
+            with conn:
+                for idx, tx in enumerate(parsed):
+                    raw_sig = "|".join([
+                        str(tx.get("booking_date") or ""),
+                        f"{float(tx.get('amount') or 0.0):.2f}",
+                        str(tx.get("currency") or "EUR"),
+                        str(tx.get("counterparty_iban") or ""),
+                        str(tx.get("end_to_end_id") or ""),
+                        str(tx.get("remittance_info") or ""),
+                    ])
+                    tx_hash = hashlib.sha256(raw_sig.encode("utf-8")).hexdigest()
+                    if conn.execute("SELECT 1 FROM erp_bank_transactions WHERE tx_hash = ?", (tx_hash,)).fetchone():
+                        duplicates += 1
+                        continue
+
+                    best_doc: Optional[Dict[str, Any]] = None
+                    best_score = 0.0
+                    tx_amt = float(tx.get("amount") or 0.0)
+                    remit_upper = f"{tx.get('remittance_info', '')} {tx.get('end_to_end_id', '')}".upper()
+                    tx_iban = str(tx.get("counterparty_iban") or "").replace(" ", "").upper()
+                    tx_name = str(tx.get("counterparty_name") or "").lower()
+
+                    if tx_amt > 0:
+                        for inv in open_invoices:
+                            if inv["id"] in already_assigned_docs:
+                                continue
+                            score = 0.0
+                            inv_no = str(inv.get("doc_number") or "").upper()
+                            if inv_no and inv_no in remit_upper:
+                                score += 0.65
+                            if abs(tx_amt - float(inv.get("amount_gross") or 0.0)) <= 0.02:
+                                score += 0.30
+                            ent_iban = str(inv.get("entity_iban") or "").replace(" ", "").upper()
+                            if tx_iban and ent_iban and tx_iban == ent_iban:
+                                score += 0.45 if inv_no not in remit_upper else 0.15
+                            ent_name = str(inv.get("display_name") or "").lower()
+                            if ent_name and tx_name and (ent_name[:8] in tx_name or tx_name[:8] in ent_name):
+                                score += 0.10
+                            score = min(1.0, round(score, 2))
+                            if score > best_score:
+                                best_score = score
+                                best_doc = inv
+
+                    m_doc_id = ""
+                    m_doc_num = ""
+                    m_status = "unmatched"
+                    if best_doc and best_score >= 0.65:
+                        m_doc_id = best_doc["id"]
+                        m_doc_num = best_doc["doc_number"]
+                        already_assigned_docs.add(m_doc_id)
+                        matched += 1
+                        if auto_mark_paid and best_score >= 0.90:
+                            m_status = "paid_applied"
+                            docs_to_mark_paid.append(m_doc_id)
+                            auto_paid += 1
+                        else:
+                            m_status = "matched"
+                    else:
+                        best_score = 0.0
+
+                    tx_id = f"btx-{uuid.uuid4().hex[:10]}"
+                    conn.execute("""
+                        INSERT INTO erp_bank_transactions (
+                            id, booking_date, value_date, amount, currency,
+                            counterparty_name, counterparty_iban, remittance_info, end_to_end_id,
+                            source_format, tx_hash, matched_doc_id, matched_doc_number,
+                            match_confidence, match_status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        tx_id,
+                        tx["booking_date"],
+                        tx["value_date"],
+                        tx_amt,
+                        tx["currency"],
+                        tx["counterparty_name"],
+                        tx["counterparty_iban"],
+                        tx["remittance_info"],
+                        tx["end_to_end_id"],
+                        tx["source_format"],
+                        tx_hash,
+                        m_doc_id,
+                        m_doc_num,
+                        best_score,
+                        m_status,
+                    ))
+                    imported += 1
+                    items_out.append({
+                        "id": tx_id,
+                        "booking_date": tx["booking_date"],
+                        "amount": tx_amt,
+                        "currency": tx["currency"],
+                        "counterparty_name": tx["counterparty_name"],
+                        "remittance_info": tx["remittance_info"],
+                        "matched_doc_id": m_doc_id,
+                        "matched_doc_number": m_doc_num,
+                        "match_confidence": best_score,
+                        "match_status": m_status,
+                    })
+        finally:
+            conn.close()
+
+        for doc_id in docs_to_mark_paid:
+            self.save_document({"id": doc_id, "status": "paid"}, company_id=cid)
+
+        return {
+            "company_id": cid,
+            "parsed": len(parsed),
+            "imported": imported,
+            "duplicates_skipped": duplicates,
+            "matched": matched,
+            "auto_paid": auto_paid,
+            "transactions": items_out,
+        }
+
+    def list_bank_transactions(
+        self,
+        company_id: Optional[str] = None,
+        match_status: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        conn, cid = self._get_conn(company_id)
+        try:
+            sql = "SELECT * FROM erp_bank_transactions"
+            params: List[Any] = []
+            if match_status and match_status != "all":
+                sql += " WHERE match_status = ?"
+                params.append(match_status)
+            sql += " ORDER BY booking_date DESC, imported_at DESC LIMIT 200"
+            rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
+            return {"company_id": cid, "total": len(rows), "items": rows}
+        finally:
+            conn.close()
+
+    def match_bank_transaction(
+        self,
+        tx_id: str,
+        doc_id: str,
+        mark_paid: bool = True,
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Verknüpft eine Banktransaktion manuell mit einer Ausgangsrechnung und verbucht sie optional als 'paid'."""
+        doc = self.get_document(doc_id, company_id=company_id)
+        if not doc:
+            raise ValueError(f"Beleg {doc_id} nicht gefunden.")
+        conn, cid = self._get_conn(company_id)
+        try:
+            row = conn.execute("SELECT * FROM erp_bank_transactions WHERE id = ?", (tx_id,)).fetchone()
+            if not row:
+                raise ValueError(f"Banktransaktion {tx_id} nicht gefunden.")
+            new_m_status = "paid_applied" if mark_paid else "matched"
+            with conn:
+                conn.execute(
+                    """
+                    UPDATE erp_bank_transactions
+                    SET matched_doc_id = ?, matched_doc_number = ?, match_confidence = 1.0, match_status = ?
+                    WHERE id = ?
+                    """,
+                    (doc["id"], doc["doc_number"], new_m_status, tx_id),
+                )
+            updated_tx = dict(conn.execute("SELECT * FROM erp_bank_transactions WHERE id = ?", (tx_id,)).fetchone())
+        finally:
+            conn.close()
+
+        if mark_paid and doc.get("status") != "paid":
+            self.save_document({"id": doc_id, "status": "paid"}, company_id=cid)
+        return {"transaction": updated_tx, "document": self.get_document(doc_id, company_id=cid)}
+
+    # =========================================================================
     # 4. LAPTOP-POCKETBASE SYNC BRÜCKE (PRO MANDANT)
     # =========================================================================
 
@@ -1560,6 +2612,13 @@ class ERPManager:
             pb_records: List[Dict[str, Any]] = []
             if mock_records is not None:
                 pb_records = mock_records
+            elif os.getenv("POCKETBASE_ENABLED", "false").strip().lower() not in ("1", "true", "yes"):
+                return {
+                    "success": False,
+                    "status": "disabled",
+                    "company_id": cid,
+                    "message": "PocketBase-Sync deaktiviert (POCKETBASE_ENABLED=false) – Mandanten-DB arbeitet lokal autark."
+                }
             else:
                 pb_url = cfg["pocketbase_url"]
                 coll = cfg["collection_name"]

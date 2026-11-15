@@ -719,12 +719,14 @@ def deploy_keys(dry_run: bool = True) -> Dict[str, Any]:
 
     for ep in targets:
         # config.yaml spielt hier keine Rolle; nur .env-Dateien
-        for var, val in keys.items():
-            set_env_value(ep, var, val)
-        dedupe_env_file(ep)
-        report["writes"].append({"path": ep, "keys": list(keys)})
+        if not dry_run:
+            for var, val in keys.items():
+                set_env_value(ep, var, val)
+            dedupe_env_file(ep)
+        report["writes"].append({"path": ep, "keys": list(keys), "dry_run": dry_run})
 
-    report["text"] = f"{len(keys)} Keys → {len(targets)} .env-Dateien verteilt."
+    prefix = "[DRY-RUN] " if dry_run else ""
+    report["text"] = f"{prefix}{len(keys)} Keys → {len(targets)} .env-Dateien verteilt."
     return report
 
 
@@ -963,33 +965,33 @@ def _cli() -> int:
     if args.set_provider:
         r = set_provider_model(args.set_provider, args.model)
         print(json.dumps(r, ensure_ascii=False, indent=2))
-        return
+        return 0
 
     if args.models:
         ms = list_provider_models(args.models)
         print(f"{args.models}: {len(ms)} Modelle")
         print("\n".join(ms[:30]))
-        return
+        return 0
 
     if args.status:
         cfg = read_active_config()
         print(json.dumps({"config": cfg, "env_path": ENV_PATH, "config_path": CONFIG_PATH,
                           "cli": HERMES_CLI}, ensure_ascii=False, indent=2))
-        return
+        return 0
 
     if args.providers:
         for p in list_providers():
             print(f"  {p['id']:<24} {p['name']:<28} env={','.join(p['env'])}  models={p['model_count']}")
-        return
+        return 0
 
     if args.deploy:
         dry = not args.no_dry_run
         print(json.dumps(deploy_keys(dry_run=dry), ensure_ascii=False, indent=2))
-        return
+        return 0
 
     # default: status
     print(json.dumps({"config": read_active_config()}, ensure_ascii=False, indent=2))
-    return
+    return 0
 
 
 if __name__ == "__main__":

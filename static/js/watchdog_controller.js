@@ -291,7 +291,7 @@
 
           <div class="flex items-center justify-between pt-1 border-t border-[var(--border)]/60 text-[10.5px] font-mono">
             <span class="text-[var(--muted-foreground)]">${escapeHtml(f.detected_at || '')}</span>
-            ${f.link ? `
+            ${f.link && /^(https?:\/\/|\/)/i.test(String(f.link).trim()) ? `
               <a 
                 href="${escapeHtml(f.link)}" 
                 target="_blank" 
@@ -695,11 +695,16 @@
         alert(wdT('ui.watchdog_controller.dispatch_success', 'Bündel aus {count} Funden erfolgreich an Storyteller & Ghostwriter übergeben!\nTask-ID: {taskId}', { count: basket.length, taskId: data.task_id }));
         // Leere den Korb nach erfolgreichem Versand
         saveWatchdogConfig({ ...watchdogConfig, basket: [] });
+      } else {
+        alert(wdT('ui.watchdog_controller.dispatch_error', 'Fehler bei der Übergabe: {message}', { message: `HTTP ${res.status}` }));
       }
     } catch (e) {
       alert(wdT('ui.watchdog_controller.dispatch_error', 'Fehler bei der Übergabe: {message}', { message: e }));
     } finally {
-      if (btn) btn.textContent = wdT('ui.watchdog_controller.dispatch_start', 'Synthese starten');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = wdT('ui.watchdog_controller.dispatch_start', 'Synthese starten');
+      }
     }
   };
 

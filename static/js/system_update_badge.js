@@ -367,7 +367,10 @@
     setTimeout(() => checkUpdateStatus(true), 2000);
   }
 
-  // Regelmäßige Hintergrundprüfung alle 5 Minuten
-  setInterval(() => checkUpdateStatus(true), 5 * 60 * 1000);
+  // Regelmäßige Hintergrundprüfung alle 5 Minuten (pausiert bei verborgenem Tab)
+  setInterval(() => {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    checkUpdateStatus(true);
+  }, 5 * 60 * 1000);
 
 })();

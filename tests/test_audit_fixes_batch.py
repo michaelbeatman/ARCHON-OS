@@ -458,3 +458,21 @@ def test_hermes_config_uses_app_root_for_agent_profiles():
     src = inspect.getsource(hc)
     assert 'os.path.join(APP_ROOT, "agent_profiles.json")' in src
     assert 'os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")' not in src
+
+
+def test_org_hierarchy_matches_70_ssot_profiles_without_warnings():
+    import json
+    from pathlib import Path
+    from backend.config_validator import ConfigValidator
+
+    root = Path(__file__).resolve().parents[1]
+    profiles = json.loads((root / "agent_profiles.json").read_text(encoding="utf-8"))
+    hier = json.loads((root / "config" / "org_hierarchy.json").read_text(encoding="utf-8"))
+    profile_ids = {p["id"] for p in profiles}
+    node_ids = {n["id"] for n in hier.get("nodes", [])}
+
+    assert node_ids == profile_ids
+    validator = ConfigValidator(str(root))
+    errors, warnings, _stats = validator.validate_org_hierarchy(profile_ids)
+    assert errors == []
+    assert warnings == []

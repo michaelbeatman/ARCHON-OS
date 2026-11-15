@@ -106,14 +106,9 @@
 }
 
 /* --------------------------------------------------------------------------
-   2. SYSTEMLEITPLANKEN: ZERO SHADOWS & BORDER-FIRST RESET
+   2. SYSTEMLEITPLANKEN: SUBTLE DEPTH & ACCESSIBLE FOCUS RINGS
    -------------------------------------------------------------------------- */
-*,
-*::before,
-*::after {
-  box-shadow: none !important;
-  text-shadow: none !important;
-}
+/* Shadows and focus rings are preserved so Tailwind elevation and micro-effects stay crisp. */
 
 /* --------------------------------------------------------------------------
    3. GLOBALE APP & TYPOGRAFIE (INTER STANDARD)
@@ -189,16 +184,16 @@ div.stContainer {
   background-color: var(--bg-surface) !important;
   border: 1px solid var(--border-default) !important;
   border-radius: 8px !important;
-  box-shadow: none !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   padding: 16px !important;
-  transition: border-color 0.15s ease-in-out;
+  transition: border-color 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s cubic-bezier(0.22, 1, 0.36, 1), transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .card:hover,
 .inbox-card:hover,
 .showroom-card:hover {
   border-color: var(--border-strong) !important;
-  box-shadow: none !important;
+  box-shadow: 0 6px 18px -6px rgba(15, 23, 42, 0.10);
 }
 
 /* Modals & Dialogs */
@@ -207,7 +202,7 @@ div[role="dialog"] {
   background-color: var(--bg-surface) !important;
   border: 1px solid var(--border-strong) !important;
   border-radius: 8px !important;
-  box-shadow: none !important;
+  box-shadow: 0 20px 45px -12px rgba(15, 23, 42, 0.25);
 }
 
 /* --------------------------------------------------------------------------
@@ -1890,4 +1885,81 @@ div#agent-pane-overview > div.prof-panel-card {
 }
 .animate-in.slide-in-from-bottom-4 {
   animation: archon-slide-bottom-4 0.15s ease-out;
+}
+
+/* ==========================================================================
+   ARCHON OS - GPU-ACCELERATED INTERACTIVE EFFECTS LAYER (ZERO JS OVERHEAD)
+   ========================================================================== */
+.shadcn-card,
+.theme-card,
+.archon-card {
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.16s ease;
+}
+
+.shadcn-card:hover,
+.theme-card:hover,
+.archon-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(79, 70, 229, 0.12);
+}
+
+.dark .shadcn-card:hover,
+.dark .theme-card:hover,
+.dark .archon-card:hover,
+[data-theme="dark"] .shadcn-card:hover,
+[data-theme="dark"] .theme-card:hover,
+[data-theme="dark"] .archon-card:hover {
+  box-shadow: 0 10px 26px -8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(129, 140, 248, 0.22);
+}
+
+.archon-nav-item {
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 0.14s ease,
+              color 0.14s ease,
+              box-shadow 0.14s ease;
+}
+
+.archon-nav-item:hover:not(.nav-item-active) {
+  transform: translateX(2px);
+}
+
+.archon-nav-item.nav-item-active {
+  box-shadow: 0 2px 10px -2px rgba(79, 70, 229, 0.22), inset 2px 0 0 var(--primary, #4f46e5);
+}
+
+button,
+.shadcn-btn,
+[role="button"] {
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 0.14s ease,
+              border-color 0.14s ease,
+              box-shadow 0.14s ease,
+              opacity 0.14s ease;
+}
+
+button:active:not(:disabled),
+.shadcn-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+[role="dialog"]:not(.hidden) {
+  animation: archon-zoom-in-95 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shadcn-card,
+  .theme-card,
+  .archon-card,
+  .archon-nav-item,
+  button,
+  .shadcn-btn,
+  [role="button"],
+  [role="dialog"]:not(.hidden),
+  .animate-in {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
 }

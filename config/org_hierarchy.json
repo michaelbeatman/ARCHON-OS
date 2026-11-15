@@ -24,7 +24,7 @@
       "tier": 2,
       "team_id": "team_tech",
       "name": "Software- & Cloud-Architekt (IT-Infrastruktur)",
-      "role": "Software- & Cloud-Architekt (IT-Infrastruktur)",
+      "role": "7. Tech, Software & Data",
       "category": "7. Tech, Software & Data",
       "avatar": "/static/avatars/avatar_020.jpg?v=20260913_rev4",
       "model": "strict-free-tier-combo-Reasoning",
@@ -280,7 +280,7 @@
       "tier": 2,
       "team_id": "team_realestate",
       "name": "Bau-Projektleiter (HOAI / VOB)",
-      "role": "Bau-Projektleiter (HOAI / VOB)",
+      "role": "4. Immobilien & Objektentwicklung",
       "category": "4. Immobilien & Objektentwicklung",
       "avatar": "/static/avatars/custom_construction_project_manager.png",
       "model": "strict-free-tier-combo-Reasoning",
@@ -600,8 +600,8 @@
       "tier": 3,
       "team_id": "team_growth",
       "name": "Brand & UI/UX Director",
-      "role": "1. Strategie, Führung & Lebensplanung",
-      "category": "1. Strategie, Führung & Lebensplanung",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
       "avatar": "/static/avatars/custom_brand_uiux_director.png",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
@@ -776,93 +776,13 @@
       "tier": 1,
       "team_id": "team_strategy",
       "name": "Hermes Orchestrator (Root)",
-      "role": "Hermes Orchestrator (Root)",
+      "role": "1. Strategie, Führung & Lebensplanung",
       "category": "1. Strategie, Führung & Lebensplanung",
       "avatar": "/static/avatars/hermes_default_avatar.png",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
       "status": "active",
       "person_name": "Default",
-      "provider": "omniroute"
-    },
-    {
-      "id": "agility_story",
-      "x": 20,
-      "y": 1300,
-      "tier": 3,
-      "team_id": "team_strategy",
-      "name": "Agility Story Test",
-      "role": "1. Strategie, Führung & Lebensplanung",
-      "category": "1. Strategie, Führung & Lebensplanung",
-      "avatar": "/static/avatars/avatar_003.jpg",
-      "model": "auto/best-free",
-      "active_tasks": 0,
-      "status": "standby",
-      "person_name": "Agility Story Test",
-      "provider": "omniroute"
-    },
-    {
-      "id": "analyze_claims",
-      "x": 20,
-      "y": 1460,
-      "tier": 3,
-      "team_id": "team_strategy",
-      "name": "Claim Analyst",
-      "role": "1. Strategie, Führung & Lebensplanung",
-      "category": "1. Strategie, Führung & Lebensplanung",
-      "avatar": "/static/avatars/avatar_001.jpg",
-      "model": "auto/best-free",
-      "active_tasks": 0,
-      "status": "standby",
-      "person_name": "Claim Analyst",
-      "provider": "omniroute"
-    },
-    {
-      "id": "gpts_automation_specialist",
-      "x": 20,
-      "y": 1620,
-      "tier": 3,
-      "team_id": "team_strategy",
-      "name": "Gpts Automation Specialist",
-      "role": "1. Strategie, Führung & Lebensplanung",
-      "category": "1. Strategie, Führung & Lebensplanung",
-      "avatar": "/static/avatars/avatar_106.jpg",
-      "model": "auto/best-free",
-      "active_tasks": 0,
-      "status": "standby",
-      "person_name": "gpts_automation_specialist",
-      "provider": "omniroute"
-    },
-    {
-      "id": "gpts_critical_reviewer",
-      "x": 20,
-      "y": 1780,
-      "tier": 3,
-      "team_id": "team_strategy",
-      "name": "Gpts Critical Reviewer",
-      "role": "1. Strategie, Führung & Lebensplanung",
-      "category": "1. Strategie, Führung & Lebensplanung",
-      "avatar": "/static/avatars/avatar_150.jpg",
-      "model": "auto/best-free",
-      "active_tasks": 0,
-      "status": "standby",
-      "person_name": "gpts_critical_reviewer",
-      "provider": "omniroute"
-    },
-    {
-      "id": "gpts_primary_synthesizer",
-      "x": 20,
-      "y": 1940,
-      "tier": 3,
-      "team_id": "team_strategy",
-      "name": "Gpts Primary Synthesizer",
-      "role": "1. Strategie, Führung & Lebensplanung",
-      "category": "1. Strategie, Führung & Lebensplanung",
-      "avatar": "/static/avatars/avatar_104.jpg",
-      "model": "auto/best-free",
-      "active_tasks": 0,
-      "status": "standby",
-      "person_name": "gpts_primary_synthesizer",
       "provider": "omniroute"
     },
     {
@@ -888,7 +808,7 @@
       "tier": 1,
       "team_id": "team_growth",
       "name": "Telegram Assistant",
-      "role": "Telegram Assistant",
+      "role": "6. Vertrieb, CRM & Growth",
       "category": "6. Vertrieb, CRM & Growth",
       "avatar": "/static/avatars/custom_telegram_bot.png",
       "model": "strict-free-tier-combo-Reasoning",
@@ -898,108 +818,270 @@
       "provider": "omniroute"
     },
     {
-      "id": "qa_automation_lead",
+      "id": "aggregation_lisa",
+      "x": 20,
+      "y": 2260,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Ergebnis-Kuratorin - Aggregation & Synthese",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_006.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "hr_recruiter",
+      "x": 20,
+      "y": 2420,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "HR & Recruiting",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_104.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "knowledge_librarian",
+      "x": 20,
+      "y": 2580,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Knowledge Graph, RAG & Vault Archivar",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_005.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "research_scout",
+      "x": 20,
+      "y": 2740,
+      "tier": 3,
+      "team_id": "team_strategy",
+      "name": "Research & Marktaufklärung",
+      "role": "1. Strategie, Führung & Lebensplanung",
+      "category": "1. Strategie, Führung & Lebensplanung",
+      "avatar": "/static/avatars/avatar_103.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "bi_controller",
       "x": 220,
       "y": 1300,
       "tier": 3,
       "team_id": "team_tech",
-      "name": "QA & Test Automation Lead (Playwright/E2E)",
+      "name": "BI & Controlling",
       "role": "7. Tech, Software & Data",
       "category": "7. Tech, Software & Data",
-      "avatar": "/static/avatars/avatar_015.jpg",
-      "model": "omniroute/best-reasoning",
+      "avatar": "/static/avatars/avatar_106.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
-      "person_name": "Elena Rostova",
-      "provider": "omniroute"
+      "status": "active"
     },
     {
-      "id": "security_pentest_auditor",
+      "id": "qa_test_engineer",
       "x": 220,
       "y": 1460,
       "tier": 3,
       "team_id": "team_tech",
-      "name": "AppSec & Penetration Testing Auditor",
+      "name": "QA-, Test-Automation- & Release-Engineer",
       "role": "7. Tech, Software & Data",
       "category": "7. Tech, Software & Data",
-      "avatar": "/static/avatars/avatar_042.jpg",
-      "model": "omniroute/best-reasoning",
+      "avatar": "/static/avatars/avatar_017.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
-      "person_name": "Viktor Frank",
-      "provider": "omniroute"
+      "status": "active"
     },
     {
-      "id": "frontend_design_system_engineer",
-      "x": 220,
+      "id": "debt_financing_specialist",
+      "x": 420,
+      "y": 1460,
+      "tier": 3,
+      "team_id": "team_legal",
+      "name": "Fremdkapital-, Banken- & Fördermittel-Stratege",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_010.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "finance_lead",
+      "x": 420,
       "y": 1620,
       "tier": 3,
-      "team_id": "team_tech",
-      "name": "UI/UX & Frontend Design System Engineer",
-      "role": "7. Tech, Software & Data",
-      "category": "7. Tech, Software & Data",
-      "avatar": "/static/avatars/avatar_055.jpg",
-      "model": "auto/best-free",
+      "team_id": "team_legal",
+      "name": "Leitung Finanzen & Buchhaltung",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_101.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
-      "person_name": "Maya Lin",
-      "provider": "omniroute"
+      "status": "active"
     },
     {
-      "id": "api_contract_architect",
-      "x": 220,
+      "id": "insurance_claims_manager",
+      "x": 420,
       "y": 1780,
       "tier": 3,
-      "team_id": "team_tech",
-      "name": "API & Integration Contract Architect",
-      "role": "7. Tech, Software & Data",
-      "category": "7. Tech, Software & Data",
-      "avatar": "/static/avatars/avatar_068.jpg",
-      "model": "auto/best-free",
+      "team_id": "team_legal",
+      "name": "Versicherungs-, Underwriting- & Schadens-Manager",
+      "role": "3. Recht, Steuern & Compliance",
+      "category": "3. Recht, Steuern & Compliance",
+      "avatar": "/static/avatars/avatar_014.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
-      "person_name": "Julian Weimann",
-      "provider": "omniroute"
+      "status": "active"
     },
     {
-      "id": "sre_observability_engineer",
-      "x": 220,
+      "id": "legal_counsel",
+      "x": 420,
       "y": 1940,
       "tier": 3,
-      "team_id": "team_tech",
-      "name": "SRE & Observability Systems Engineer",
-      "role": "7. Tech, Software & Data",
-      "category": "7. Tech, Software & Data",
-      "avatar": "/static/avatars/avatar_080.jpg",
-      "model": "auto/best-free",
-      "active_tasks": 0,
-      "status": "standby",
-      "person_name": "Timo Berner",
-      "provider": "omniroute"
-    },
-    {
-      "id": "ai_governance_officer",
-      "name": "AI Governance & Compliance Officer",
-      "group": null,
+      "team_id": "team_legal",
+      "name": "Syndikusrechtsanwalt Streitbeilegung & Gesellschaftsrecht",
+      "role": "3. Recht, Steuern & Compliance",
       "category": "3. Recht, Steuern & Compliance",
-      "x": 20,
-      "y": 2420
+      "avatar": "/static/avatars/avatar_102.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
     },
     {
-      "id": "finops_cost_optimizer",
-      "name": "FinOps & LLM Cost Optimization Lead",
-      "group": null,
-      "category": "7. Tech, Software & Data",
-      "x": 20,
-      "y": 2580
+      "id": "customer_support_lead",
+      "x": 820,
+      "y": 2740,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Kundenservice & Support",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_105.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
     },
     {
-      "id": "n8n_process_architect",
-      "name": "Autonomous Process & n8n Automation Architect",
-      "group": null,
-      "category": "7. Tech, Software & Data",
-      "x": 20,
-      "y": 2260
+      "id": "paid_ads_manager",
+      "x": 820,
+      "y": 2900,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "Performance Media Buyer & Paid-Ads-Stratege",
+      "role": "6. Vertrieb, CRM & Growth",
+      "category": "6. Vertrieb, CRM & Growth",
+      "avatar": "/static/avatars/avatar_016.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "seo_geo_specialist",
+      "x": 820,
+      "y": 3060,
+      "tier": 3,
+      "team_id": "team_growth",
+      "name": "SEO & AI-Search (GEO/AEO) Architect",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
+      "avatar": "/static/avatars/avatar_015.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "scientific_literature_synthesizer",
+      "x": 1220,
+      "y": 420,
+      "tier": 2,
+      "team_id": "team_science",
+      "name": "Wissenschaftliche Methodik, Statistik & Peer-Review",
+      "role": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "category": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "avatar": "/static/avatars/avatar_031.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "chemistry_materials_specialist",
+      "x": 1220,
+      "y": 660,
+      "tier": 3,
+      "team_id": "team_science",
+      "name": "Chemie, Werkstofftechnik & Gefahrgut (REACH/CLP)",
+      "role": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "category": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "avatar": "/static/avatars/avatar_026.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "clinical_medical_advisor",
+      "x": 1220,
+      "y": 820,
+      "tier": 3,
+      "team_id": "team_science",
+      "name": "Klinische Medizin, Leitlinien & Evidenz-Diagnostik",
+      "role": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "category": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "avatar": "/static/avatars/avatar_022.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "industrial_process_engineer",
+      "x": 1220,
+      "y": 980,
+      "tier": 3,
+      "team_id": "team_science",
+      "name": "Maschinenbau, Verfahrenstechnik & Industrie-Normung (DIN/ISO/CE)",
+      "role": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "category": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "avatar": "/static/avatars/avatar_032.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "medtech_regulatory_lead",
+      "x": 1220,
+      "y": 1140,
+      "tier": 3,
+      "team_id": "team_science",
+      "name": "MedTech, EU-MDR, FDA & ISO-13485-Compliance",
+      "role": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "category": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "avatar": "/static/avatars/avatar_025.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
+    },
+    {
+      "id": "pharma_biotech_scientist",
+      "x": 1220,
+      "y": 1300,
+      "tier": 3,
+      "team_id": "team_science",
+      "name": "Pharmakologie, Wirkstoffforschung & Bioinformatik",
+      "role": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "category": "8. Medizin, Chemie, Wissenschaft & Ingenieurwesen",
+      "avatar": "/static/avatars/avatar_029.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "active"
     }
   ],
   "links": [
@@ -1180,26 +1262,6 @@
       "to": "system_architect_orchestrator"
     },
     {
-      "from": "executive_decision_architect",
-      "to": "agility_story"
-    },
-    {
-      "from": "executive_decision_architect",
-      "to": "analyze_claims"
-    },
-    {
-      "from": "executive_decision_architect",
-      "to": "gpts_automation_specialist"
-    },
-    {
-      "from": "executive_decision_architect",
-      "to": "gpts_critical_reviewer"
-    },
-    {
-      "from": "executive_decision_architect",
-      "to": "gpts_primary_synthesizer"
-    },
-    {
       "from": "gtm_launch_strategist",
       "to": "growth_hacker_lead"
     },
@@ -1216,44 +1278,84 @@
       "to": "default"
     },
     {
-      "from": "micha",
-      "to": "telegram_bot"
-    },
-    {
       "from": "executive_decision_architect",
       "to": "construction_project_manager"
     },
     {
-      "from": "system_architect_orchestrator",
-      "to": "qa_automation_lead"
-    },
-    {
-      "from": "system_architect_orchestrator",
-      "to": "security_pentest_auditor"
-    },
-    {
-      "from": "system_architect_orchestrator",
-      "to": "frontend_design_system_engineer"
-    },
-    {
-      "from": "system_architect_orchestrator",
-      "to": "api_contract_architect"
-    },
-    {
-      "from": "system_architect_orchestrator",
-      "to": "sre_observability_engineer"
+      "from": "executive_decision_architect",
+      "to": "aggregation_lisa"
     },
     {
       "from": "executive_decision_architect",
-      "to": "n8n_process_architect"
+      "to": "hr_recruiter"
     },
     {
       "from": "executive_decision_architect",
-      "to": "ai_governance_officer"
+      "to": "knowledge_librarian"
     },
     {
       "from": "executive_decision_architect",
-      "to": "finops_cost_optimizer"
+      "to": "research_scout"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "bi_controller"
+    },
+    {
+      "from": "system_architect_orchestrator",
+      "to": "qa_test_engineer"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "debt_financing_specialist"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "finance_lead"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "insurance_claims_manager"
+    },
+    {
+      "from": "commercial_jurist_contracts",
+      "to": "legal_counsel"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "customer_support_lead"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "paid_ads_manager"
+    },
+    {
+      "from": "gtm_launch_strategist",
+      "to": "seo_geo_specialist"
+    },
+    {
+      "from": "executive_decision_architect",
+      "to": "scientific_literature_synthesizer"
+    },
+    {
+      "from": "scientific_literature_synthesizer",
+      "to": "chemistry_materials_specialist"
+    },
+    {
+      "from": "scientific_literature_synthesizer",
+      "to": "clinical_medical_advisor"
+    },
+    {
+      "from": "scientific_literature_synthesizer",
+      "to": "industrial_process_engineer"
+    },
+    {
+      "from": "scientific_literature_synthesizer",
+      "to": "medtech_regulatory_lead"
+    },
+    {
+      "from": "scientific_literature_synthesizer",
+      "to": "pharma_biotech_scientist"
     }
   ],
   "canvas_width": 3200,

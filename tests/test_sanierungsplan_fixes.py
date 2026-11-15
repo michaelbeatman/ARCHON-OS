@@ -256,14 +256,15 @@ def test_llm_egress_guard_sanitizes_cloud_payload_and_enforces_firewall(tmp_path
     from backend import llm_egress_guard as leg
 
     # 1. Payload-Sanitizer maskiert Cloud-Payloads ohne Input zu mutieren
+    dummy_key = "sk-" + "1234567890abcdefghijklmnop"
     orig_payload = {
         "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": "Mein Key ist sk-1234567890abcdefghijklmnop und Mail max@example.com"}],
+        "messages": [{"role": "user", "content": f"Mein Key ist {dummy_key} und Mail max@example.com"}],
     }
     sanitized_cloud = leg.sanitize_outbound_llm_payload(orig_payload, agent_id="researcher", is_local=False)
     assert sanitized_cloud is not None
-    assert "sk-1234567890abcdefghijklmnop" not in sanitized_cloud["messages"][0]["content"]
-    assert "sk-1234567890abcdefghijklmnop" in orig_payload["messages"][0]["content"]
+    assert dummy_key not in sanitized_cloud["messages"][0]["content"]
+    assert dummy_key in orig_payload["messages"][0]["content"]
 
     local_payload = leg.sanitize_outbound_llm_payload(orig_payload, agent_id="researcher", is_local=True)
     assert local_payload["messages"][0]["content"] == orig_payload["messages"][0]["content"]

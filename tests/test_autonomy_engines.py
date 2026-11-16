@@ -48,6 +48,16 @@ assert res["tax"] == 19.0, f"Expected 19.0, got {res['tax']}"
     print("✓ Feature 6 erfolgreich validiert!\n")
 
 
+def test_self_evolving_tooling_initializes_fresh_db(tmp_path):
+    from backend.self_evolving_tooling import SelfEvolvingToolEngine
+
+    fresh_db = tmp_path / "fresh_data" / "agentic_memory.db"
+    eng = SelfEvolvingToolEngine(db_path=str(fresh_db))
+    with eng._get_conn() as conn:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {"evolved_tools", "learnings"} <= tables
+
+
 def test_mcts_engine():
     print("--- [TEST 2] Feature 8: MCTS Action Trajectories ---")
     engine = get_mcts_engine()

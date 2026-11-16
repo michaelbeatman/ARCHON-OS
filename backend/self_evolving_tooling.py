@@ -38,6 +38,10 @@ class SelfEvolvingToolEngine:
         return conn
 
     def _init_db(self):
+        if self.db_path and self.db_path != ":memory:":
+            parent = os.path.dirname(os.path.abspath(self.db_path))
+            if parent:
+                os.makedirs(parent, exist_ok=True)
         with self._get_conn() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS evolved_tools (
@@ -53,6 +57,16 @@ class SelfEvolvingToolEngine:
                     file_path TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_used_at TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS learnings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    agent_id TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    obsidian_link TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.commit()

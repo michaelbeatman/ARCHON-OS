@@ -317,14 +317,18 @@ async def auth_gate(request: Request, call_next):
         session_user = _auth.verify_session(token) if token else None
         if session_user:
             request.state.user = session_user
+            user_role = str(session_user.get("role", "")).strip().lower()
             if (
                 request.method in ("POST", "PUT", "DELETE", "PATCH")
-                and str(session_user.get("role", "")).lower() == "viewer"
-                and path not in ("/api/auth/logout", "/api/auth/login")
+                and user_role in ("viewer", "anonymous", "")
+                and not path.startswith("/api/auth/")
             ):
                 return JSONResponse(
                     status_code=403,
-                    content={"error": "forbidden", "detail": "Nur Administratoren oder Operatoren duerfen schreibende Aktionen ausfuehren (erkannte Rolle: viewer)."},
+                    content={
+                        "error": "forbidden",
+                        "detail": f"Nur Administratoren oder Operatoren duerfen schreibende Aktionen ausfuehren (erkannte Rolle: {user_role or 'anonymous'}).",
+                    },
                 )
             return await call_next(request)
     except Exception as err:  # noqa: BLE001 - Fail-closed auch beim Prüfen

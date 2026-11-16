@@ -57,13 +57,17 @@
 | **52** | **Pre-Flight Cost-Estimator & „Shadow-Mode“** | Mittel | Abgeschlossen | Vorab-Token-/Kostenschätzung für ganze Ketten (`estimate_chain_cost`) sowie passiver Parallel-Trockenlauf-Tracker bis > 90 % Trefferquote |
 | **53** | **„Epistemic Hygiene“-Wächter für den Obsidian-Vault** | Mittel | Abgeschlossen | Konsistenz-Scan über den Obsidian-Vault zur Erkennung widersprüchlicher Zahlen/Konditionen, veralteter Vertragsdaten & verwaister Notizen |
 | **54** | **Voice-to-Workflow & 2-Stufen-KI-Spezifikations-Helfer (Editoren)** | Hoch | Geplant | Mikrofon-Diktat (Whisper STT) + 2-stufige KI-Auswertung mit gezielten Rückfragen bei Unklarheiten zur fehlerfreien Übersetzung gesprochener Sprache in deterministische Playbooks/Prozessabläufe |
-| **55** | **Enterprise-Kalender-Ausbau (M25 Full-UI)** | Hoch | Geplant | Vollwertiges Monats-/Wochen-/Tagesraster, Drag-&-Drop-Terminplanung, Serientermine, Erinnerungen/Benachrichtigungen & Ressourcen-/Agenten-Ansicht |
+| **55** | **Enterprise-Kalender-Ausbau & Operations-Kalender UI-Überarbeitung (M25)** | Hoch | Geplant | Vollständige UI/UX-Überarbeitung in Operations: Monats-/Wochen-/Tagesraster, Drag-&-Drop-Terminplanung, Serientermine, Erinnerungen/Benachrichtigungen & Ressourcen-/Agenten-Ansicht |
 | **56** | **Archon OS Versions- & GitHub-Update-Badge (Sidebar unten links)** | Hoch | Abgeschlossen | Analog zur Hermes-Versionsanzeige unten links: Anzeige der aktuellen Archon-OS-Version (`archon_version_badge.js`) mit sofortigem Update-Badge bei neuem GitHub-Release/Commit und 1-Klick-Sprung in *Settings → System-Update* |
 | **57** | **Frontend-Performance, Streaming-Bus & WCAG/i18n-Härtung** | Kritisch | Abgeschlossen | Lazy-Loading statt 20-View-Boot-Stau, lokales Tailwind-CSS (`tailwind.generated.css`), konsolidierter `archon:sse`-Bus, `lucide`-Scoping, `250ms` Search-Debounce + `AbortController`, XSS-Escaping, WCAG 2.2 AA (`modal_a11y.js` auf 39 Dialogen) & 11-Sprachen-Parität |
 | **58** | **Backend-Performance, Async-Event-Loop & SQLite-Tuning** | Kritisch | Abgeschlossen | `asyncio.to_thread` für Docker/SQLite/File-I/O (`gateway`, `operations_org`, `chat`, `skills`, `orchestration`, `inbox_watcher`), zentraler `httpx.AsyncClient`-Pool, `ClosingConnection` + `WAL`/`cache_size=-32000`/Indizes, Mtime-Config-Cache & SQL-`WHERE` statt 72-DB-Vollscan |
 | **59** | **Kern-Pipeline, Runtime-Crash-Fixes & Routing-Konsolidierung** | Kritisch | Abgeschlossen | Behebung aller `ImportError`/`AttributeError`/`NameError`-Crashes (`hr`, `operations_autonomy`, `operations_emails`, `operations_org`, `memory_consolidator`, `governance`), Auth-/Settings-Fix (`core_settings.py`, Auth-SSOT, 9x fail-open `_require_admin`), Delegations- & Status-Integrität, `agent_chat`-History, `AUTO_MODEL_MAP` & Entfernung von Fake-Telemetrie |
 | **60** | **Aktive Security-Middleware & Recht/Compliance 2026** | Kritisch | Abgeschlossen | Pre-/Post-Dispatch-Verdrahtung (`pii_scrubber`, `secret_masker`, `egress_firewall`), Backend-Audio-Proxy (`aiAudio.ts`), DSGVO/UWG Opt-in & § 147 AO-Trennung, GoBD-Hashketten-Integrität (`audit_log`, `execution_receipt_ledger`, `erp_manager`), § 288 BGB-Mahnwesen mit echtem Versand, EU-AI-Act-Gates, § 5 DDG / § 25 TDDDG & `THIRD_PARTY_LICENSES.md` |
 | **61** | **Legacy-Bereinigung: `evey-*`-Altlasten & CRM/PocketBase-Entkopplung** | Hoch | Abgeschlossen | Rückbau alter `evey-*`-Artefakte aus `guardian.py`, `index.html` & `~/.hermes/plugins/evey-*`, Deaktivierung/Optionalisierung von `crm:3005` & `pocketbase:8090` (`settings_state.py`, Health-Probes, `POCKETBASE_ENABLED=false`), Port-Abgleich (`hermes:8642/8644`) & `docker-compose.yml` Env-Passthrough |
+| **62** | **Vorlagen in Operations überarbeiten** | Hoch | Geplant | UX-/UI-Überarbeitung der Vorlagen in Operations (Beleg-, Playbook- & Workflow-Vorlagen): klarere Navigation, bessere Vorschau/Bearbeitung und sauberere Einbindung in die Operations-Abläufe |
+| **63** | **Linkes Menü (Sidebar) & untere linke Ecke modernisieren** | Hoch | Geplant | Überarbeitung der linken Navigation (evtl. einklappbare Sektionen, klarere Hierarchie) sowie dringende Bereinigung/Neugestaltung der unteren linken Ecke (Status-Pills, Badges, User-/Footer-Bereich) |
+| **64** | **Onboarding-Dialog (First-Run) überarbeiten & in Settings einbinden** | Hoch | Geplant | UI/UX-Überarbeitung des First-Run-Onboarding-Wizards (`onboarding_wizard.js`) sowie klar auffindbarer Start-/Wiederaufruf-Button direkt in den Systemeinstellungen |
+| **65** | **Design & Struktur der Systemeinstellungen (Settings) überarbeiten** | Hoch | Geplant | Dringende Design- und Ergonomie-Überarbeitung des Settings-Modals (`system_settings_modal.html`, `system_settings.js`): aufgeräumte Tab-Navigation, einheitliche Abstände/Karten und klare Gliederung |
 
 ---
 
@@ -398,6 +402,23 @@
 ### Meilenstein 61: Legacy-Bereinigung: `evey-*`-Altlasten & CRM/PocketBase-Entkopplung (Abgeschlossen)
 - **Deaktivierung/Optionalisierung von `crm:3005` & `pocketbase:8090`:** Aus aktiven Standard-Checks in `archon/core/settings_state.py` und Default-Logansicht (`static/index.html`) entfernt; `backend/erp_manager.py` und `backend/gdpr_compliance_engine.py` über `POCKETBASE_ENABLED=false` lokal autark auf `erp.db` geschaltet; `docker-compose.yml` reicht `POCKETBASE_ENABLED=${POCKETBASE_ENABLED:-false}` sowie fehlende Provider-/Service-/Vault-Variablen an `archon-os` durch.
 - **Abbau aktiver `evey-*`-Altlasten:** Hardcodiertes `evey-telegram-ux`-Auto-Enable entfernt und nicht aktivierte `evey-*`-Legacy-Plugins in `archon/routers/guardian.py` ausgeblendet.
+
+### Meilenstein 55 (Ergänzung zu M25): Kalender in Operations überarbeiten (Geplant – Hoch)
+- **Operations-Kalender UI/UX:** Grundlegende Überarbeitung der Kalender-Ansicht innerhalb von *Operations* (`operations_calendar.js`) über das bestehende Kachel-/API-Fundament hinaus: vollständiges Monats-, Wochen- und Tagesraster, Drag-&-Drop-Terminplanung, Serientermine, Erinnerungen/Benachrichtigungen sowie Ressourcen- und Agenten-Ansicht.
+
+### Meilenstein 62: Vorlagen in Operations überarbeiten (Geplant – Hoch)
+- **Vorlagen-UX in Operations:** Überarbeitung des Vorlagen-Bereichs in Operations (Formular-, Beleg- und Workflow-Vorlagen unter *Operations* / `view_corporate.html` / `corporate_controller.js`): klarere Navigation, übersichtlichere Vorschau/Bearbeitung und nahtlosere Übergabe in den operativen Workflow.
+
+### Meilenstein 63: Linkes Menü (Sidebar) & untere linke Ecke modernisieren (Geplant – Hoch)
+- **Navigationsstruktur:** Überarbeitung und Modernisierung der linken Seitenleiste inkl. Prüfung/Umsetzung einklappbarer Sektionen für weniger visuelles Rauschen und bessere Übersicht bei vielen Modulen.
+- **Untere linke Ecke aufräumen/umbauen:** Komplette Entrümpelung und Neuordnung des unteren Sidebar-Bereichs (Status-Pills `LOKAL`/`DSGVO`, Versions-/Update-Badges für Hermes & Archon, Benutzer-Badge, Settings- & Recht-Links), sodass keine Überlagerung oder visuelle Überfrachtung mehr entsteht.
+
+### Meilenstein 64: Onboarding-Dialog (First-Run) überarbeiten & in Settings verankern (Geplant – Hoch)
+- **Wizard-Überarbeitung:** Visuelles, sprachliches und funktionales Polishing des First-Run-Onboarding-Dialogs (`onboarding_wizard.js`) inklusive klarerer Schrittführung und Validierungs-Feedback.
+- **Auffindbarkeit in den Settings:** Prominenter und leicht auffindbarer Einstiegspunkt („Setup-Assistent / Onboarding erneut starten“) direkt in den Systemeinstellungen (verzahnt mit M65).
+
+### Meilenstein 65: Design & Struktur der Systemeinstellungen (Settings) überarbeiten (Geplant – Hoch)
+- **Settings-Redesign:** Grundlegende Modernisierung des *System Control Center* (`static/views/system_settings_modal.html`, `static/js/system_settings.js`, verzahnt mit M6): ruhigere, konsistente Karten-/Formular-Layouts, aufgeräumte Tab-Führung ohne visuelles Gedränge, bessere Abstände/Typografie im Light- und Dark-Mode sowie saubere Einordnung von Bereichen wie Onboarding, Kernel, Routing und Design.
 
 
 

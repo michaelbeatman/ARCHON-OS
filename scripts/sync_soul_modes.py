@@ -603,7 +603,7 @@ def resolve_soul_language(lang: str | None = None) -> str:
                         break
                 except Exception:
                     pass
-    return "en" if raw.startswith("en") else "de"
+    return "de" if raw.startswith("de") else "en"
 
 
 def adapt_soul_language(markdown: str, lang: str) -> str:
@@ -1496,7 +1496,7 @@ def sync_single_agent_capabilities_to_soul(
     pro_md = build_pro_soul(prof, old_persona, lang=resolved_lang)
     full_md = build_full_soul(prof, old_map, profiles if profiles else [prof], lang=resolved_lang)
 
-    if resolved_lang != "en":
+    if resolved_lang == "en":
         compact_md = adapt_soul_language(compact_md, resolved_lang)
         pro_md = adapt_soul_language(pro_md, resolved_lang)
         full_md = adapt_soul_language(full_md, resolved_lang)
@@ -1571,15 +1571,16 @@ def apply_soul_mode(mode: str = "compact", target_agent_id: str | None = None, l
         pro_de = build_pro_soul(prof, old_persona_de, lang="de")
         full_de = build_full_soul(prof, old_map_de, profiles, lang="de")
 
-        compact_en = build_compact_soul(prof, old_persona_en, lang="en")
-        pro_en = build_pro_soul(prof, old_persona_en, lang="en")
-        full_en = build_full_soul(prof, old_map_en, profiles, lang="en")
+        compact_en = adapt_soul_language(build_compact_soul(prof, old_persona_en, lang="en"), "en")
+        pro_en = adapt_soul_language(build_pro_soul(prof, old_persona_en, lang="en"), "en")
+        full_en = adapt_soul_language(build_full_soul(prof, old_map_en, profiles, lang="en"), "en")
 
         active_de = full_de if mode == "full" else (pro_de if mode == "pro" else compact_de)
         active_en = full_en if mode == "full" else (pro_en if mode == "pro" else compact_en)
+        active_primary = active_en if resolved_lang == "en" else active_de
 
-        prof["prompt"] = active_de.strip()
-        prof["system_prompt"] = active_de.strip()
+        prof["prompt"] = active_primary.strip()
+        prof["system_prompt"] = active_primary.strip()
         prof["prompt_en"] = active_en.strip()
         prof["system_prompt_en"] = active_en.strip()
         prof["soul_mode"] = mode

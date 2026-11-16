@@ -79,14 +79,23 @@ class TestResearchEngine(unittest.TestCase):
             self.assertTrue(os.path.exists(res["obsidian_path"]))
 
     def test_history_listing(self):
-        # 1. Mission anlegen
-        research_engine.run_research_mission(
-            query="Test History Item",
-            profile="quick",
-            engines=[],
-            depth=1,
-            workspace_dir=self.workspace_dir
-        )
+        from unittest.mock import patch
+
+        mock_hit = [{"title": "Offline Test Source", "snippet": "Deterministic summary", "url": "https://example.org/test", "domain": "example.org", "source": "Wikipedia"}]
+        # 1. Mission deterministisch (ohne Live-Netzwerk-Flakes) anlegen
+        with patch.object(research_engine, "search_duckduckgo", return_value=[]), \
+             patch.object(research_engine, "search_grokipedia", return_value=[]), \
+             patch.object(research_engine, "search_arxiv", return_value=[]), \
+             patch.object(research_engine, "search_wikipedia", return_value=mock_hit), \
+             patch.object(research_engine, "query_omniroute_synthesis", return_value={"synthesis": "Offline summary", "model_used": "mock"}):
+            research_engine.run_research_mission(
+                query="Test History Item",
+                profile="quick",
+                engines=["wikipedia"],
+                depth=1,
+                export_obsidian=False,
+                workspace_dir=self.workspace_dir,
+            )
         history = research_engine.list_research_history(self.workspace_dir)
         self.assertGreaterEqual(len(history), 1)
         self.assertIn("Test History Item", history[0]["title"])

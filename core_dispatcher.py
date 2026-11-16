@@ -536,6 +536,35 @@ AUTO_MODEL_MAP = {
     "auto/best-creative": "anthropic/claude-3.5-sonnet",
 }
 
+_OMNIROUTE_OPENROUTER_FALLBACK_MAP = {
+    **AUTO_MODEL_MAP,
+    "omniroute/best-coding": "deepseek/deepseek-chat",
+    "omniroute/best-reasoning": "deepseek/deepseek-r1",
+    "omniroute/best-vision": "google/gemini-2.5-flash",
+    "omniroute/best-fast": "openai/gpt-4o-mini",
+    "omniroute/best-free": "google/gemini-2.5-flash",
+    "omniroute/free-forever": "google/gemini-2.5-flash",
+    "omniroute/deepseek-coder": "deepseek/deepseek-chat",
+}
+
+
+def _resolve_openrouter_fallback_model(model: str) -> str:
+    """Normalizes OmniRoute/auto model aliases to direct OpenRouter model IDs."""
+    raw = (model or "").strip()
+    low = raw.lower()
+    if low in _OMNIROUTE_OPENROUTER_FALLBACK_MAP:
+        return _OMNIROUTE_OPENROUTER_FALLBACK_MAP[low]
+    if low.startswith("omniroute/"):
+        stripped = raw.split("/", 1)[1].strip()
+        if f"auto/{stripped}" in _OMNIROUTE_OPENROUTER_FALLBACK_MAP:
+            return _OMNIROUTE_OPENROUTER_FALLBACK_MAP[f"auto/{stripped}"]
+        if "/" in stripped:
+            return stripped
+        return "deepseek/deepseek-chat"
+    if low.startswith("auto/") or raw in ("", "free-forever"):
+        return "deepseek/deepseek-chat"
+    return raw
+
 
 async def _dispatch_to_omniroute_or_container_exec(
     agent_id: str, 
@@ -1023,17 +1052,7 @@ async def _dispatch_to_omniroute_or_container_exec(
     or_key = openrouter_api_key or os.environ.get("OPENROUTER_API_KEY", "")
     if or_key:
         try:
-            or_model = model
-            auto_map = {
-                "auto/best-coding": "deepseek/deepseek-chat",
-                "auto/best-reasoning": "deepseek/deepseek-r1",
-                "auto/best-vision": "google/gemini-2.5-flash",
-                "auto/best-fast": "openai/gpt-4o-mini",
-                "auto/best-free": "google/gemini-2.5-flash"
-            }
-            or_model = auto_map.get(or_model, or_model)
-            if or_model.startswith("auto/") or or_model in ("", "free-forever"):
-                or_model = "deepseek/deepseek-chat"
+            or_model = _resolve_openrouter_fallback_model(model)
             resp = await _audited_post(
                 client,
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -1050,6 +1069,33 @@ async def _dispatch_to_omniroute_or_container_exec(
                     i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
                     _log_dispatcher_usage(agent_id, or_model, i_tok, o_tok, task_id)
                     return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": or_model}
+        except ZeroEgressBlockedError as ze_err:
+            return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
+        except Exception:
+            pass
+
+    # 3c. Lokaler Ollama-Fallback (falls OmniRoute offline & kein OpenRouter-Key konfiguriert)
+    if not (preflight_gate.get("routed_to_local") or prov_lower in ("local", "ollama", "lmstudio", "vllm")):
+        try:
+            p_cfg_fb = get_privacy_config()
+            fb_base = str(p_cfg_fb.get("local_llm_url") or "http://127.0.0.1:11434/v1").rstrip("/")
+            fb_ep = fb_base if fb_base.endswith("/chat/completions") else f"{fb_base}/chat/completions"
+            fb_model = str(p_cfg_fb.get("local_llm_model") or "llama3.2")
+            fb_resp = await _audited_post(
+                client,
+                fb_ep,
+                provider_id="ollama",
+                model_id=fb_model,
+                headers={"Content-Type": "application/json"},
+                json_body={"model": fb_model, "messages": messages, "max_tokens": 2048, "temperature": 0.3},
+                timeout=min(float(timeout or 15), 8.0),
+            )
+            if fb_resp.status_code == 200:
+                fb_content = parse_omniroute_response(fb_resp.text)
+                if fb_content:
+                    i_tok, o_tok = _extract_tokens_usage(fb_resp.text, prompt, fb_content)
+                    _log_dispatcher_usage(agent_id, fb_model, i_tok, o_tok, task_id)
+                    return {"status": "success", "content": fb_content, "input_tokens": i_tok, "output_tokens": o_tok, "model": fb_model, "provider": "ollama"}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception:

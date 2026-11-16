@@ -56,6 +56,7 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pyyaml requests psutil pytest
+          mkdir -p data inbox
 
       - name: Gesamte Pytest-Suite ausführen
         run: pytest tests/ -q

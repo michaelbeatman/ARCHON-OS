@@ -25,8 +25,24 @@ class DAGScheduler:
         self.workspace_dir = WORKSPACE_DIR
 
     def _get_kanban_conn(self):
+        parent = os.path.dirname(os.path.abspath(KANBAN_DB))
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         conn = sqlite3.connect(KANBAN_DB, timeout=10.0)
         conn.execute("PRAGMA busy_timeout=5000;")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                body TEXT,
+                assignee TEXT,
+                status TEXT DEFAULT 'ready',
+                priority INTEGER DEFAULT 2,
+                created_by TEXT DEFAULT 'system',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.row_factory = sqlite3.Row
         return conn
 

@@ -66,6 +66,7 @@ class Fakes:
 
     def __init__(self):
         self.docker_action = None
+        self.docker_services_action = None
         self.load_configs = None
         self.send_prompt = None
         self.apply_update = None
@@ -74,7 +75,8 @@ class Fakes:
         self.jev_enabled = None
 
     def all_mocks(self):
-        return [m for m in (self.docker_action, self.load_configs, self.send_prompt,
+        return [m for m in (self.docker_action, self.docker_services_action,
+                            self.load_configs, self.send_prompt,
                             self.apply_update, self.rollback_snapshot,
                             self.sandbox_execute, self.jev_enabled) if m is not None]
 
@@ -88,6 +90,7 @@ def client():
 @pytest.fixture
 def fakes():
     """Ersetzt jede Fachfunktion der sechs Routen durch eine Attrappe."""
+    import archon.routers.docker_services as docker_services
     import backend.system_updater as system_updater
     from backend.ephemeral_sandbox import ephemeral_sandbox
     import jev_router
@@ -96,6 +99,8 @@ def fakes():
     f = Fakes()
     with patch.object(m, "post_docker_container_action",
                       return_value={"status": "success"}) as f.docker_action, \
+            patch.object(docker_services, "post_docker_container_action",
+                         return_value={"status": "success"}) as f.docker_services_action, \
             patch.object(m, "load_agent_configs", return_value={}) as f.load_configs, \
             patch.object(m, "send_prompt_to_agent", return_value="ok") as f.send_prompt, \
             patch.object(system_updater, "apply_update",

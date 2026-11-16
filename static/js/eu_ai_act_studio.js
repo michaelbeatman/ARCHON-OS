@@ -364,36 +364,35 @@
   };
 
   function updateTileLabel() {
-    const btn = document.getElementById("ops-subtab-compliance");
+    const btn = document.getElementById("approvals-subtab-compliance");
     if (!btn) return;
     btn.title = _m49T("ui.eu_ai_act_studio.tile_title", "EU AI Act & GoBD Verfahrensdokumentation (M49)");
-    const lbl = btn.querySelector(".ops-tab-label");
+    const lbl = btn.querySelector(".approvals-tab-label");
     if (lbl) lbl.textContent = _m49T("ui.eu_ai_act_studio.tile_label", "AI Act / GoBD");
   }
 
   function injectComplianceTile() {
-    if (document.getElementById("ops-subtab-compliance")) {
+    if (document.getElementById("approvals-subtab-compliance")) {
       updateTileLabel();
       return true;
     }
     const anchor =
-      document.getElementById("ops-subtab-calendar") ||
-      document.getElementById("ops-subtab-playbooks") ||
-      document.getElementById("ops-subtab-org") ||
-      document.getElementById("ops-subtab-kanban");
+      document.getElementById("approvals-subtab-btn-system") ||
+      document.getElementById("approvals-subtab-btn-email") ||
+      document.getElementById("approvals-subtab-btn-finance");
     if (!anchor || !anchor.parentNode) return false;
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.id = "ops-subtab-compliance";
+    btn.id = "approvals-subtab-compliance";
     btn.title = _m49T("ui.eu_ai_act_studio.tile_title", "EU AI Act & GoBD Verfahrensdokumentation (M49)");
     btn.className =
-      "ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[66px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-85 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
+      "approvals-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[66px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-85 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
     btn.innerHTML = `
       <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
         ${SHIELD_SVG}
       </div>
-      <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">${esc(_m49T("ui.eu_ai_act_studio.tile_label", "AI Act / GoBD"))}</span>`;
+      <span class="approvals-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">${esc(_m49T("ui.eu_ai_act_studio.tile_label", "AI Act / GoBD"))}</span>`;
     btn.onclick = () => window.openComplianceStudio("inventory");
     anchor.parentNode.insertBefore(btn, anchor.nextSibling);
     return true;
@@ -411,7 +410,7 @@
       }
       return false;
     };
-    const rootTarget = document.getElementById("view-operations") || document.body;
+    const rootTarget = document.getElementById("view-approval-policies") || document.body;
     if (rootTarget && typeof MutationObserver !== "undefined") {
       obs = new MutationObserver(() => { tryMount(); });
       obs.observe(rootTarget, { childList: true, subtree: true });

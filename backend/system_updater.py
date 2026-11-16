@@ -14,6 +14,7 @@ Verbindet den Entwicklungsrechner und den Homeserver:
 import os
 import sys
 import json
+import signal
 import sqlite3
 import shutil
 import datetime
@@ -76,6 +77,7 @@ def _run_git(args: List[str], timeout: int = 60) -> Dict[str, Any]:
             "-c", "core.trustctime=false",
             "-c", "core.autocrlf=" + ("true" if sys.platform == "win32" else "input"),
             "-c", "core.fsmonitor=false",
+            "-c", "gc.auto=0",
             "-c", "credential.helper=",
             "-c", "user.name=ArchonOS",
             "-c", "user.email=archon@local.internal"
@@ -99,25 +101,36 @@ def _run_git(args: List[str], timeout: int = 60) -> Dict[str, Any]:
             auth_token = base64.b64encode(f"x-access-token:{gh_token}".encode()).decode()
             base_cmd.extend(["-c", f"http.extraHeader=AUTHORIZATION: basic {auth_token}"])
 
-        proc = subprocess.run(
+        is_posix = sys.platform != "win32"
+        proc = subprocess.Popen(
             base_cmd + args,
             cwd=WORKSPACE_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
-            env=env
+            env=env,
+            start_new_session=is_posix,
         )
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            if is_posix:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            else:
+                proc.kill()
+            proc.communicate()
+            return {"success": False, "stdout": "", "stderr": f"Git-Timeout nach {timeout}s.", "returncode": -2}
         return {
             "success": proc.returncode == 0,
-            "stdout": proc.stdout.strip(),
-            "stderr": proc.stderr.strip(),
+            "stdout": (stdout or "").strip(),
+            "stderr": (stderr or "").strip(),
             "returncode": proc.returncode
         }
     except FileNotFoundError:
         return {"success": False, "stdout": "", "stderr": "Git-Befehl nicht im PATH gefunden.", "returncode": -1}
-    except subprocess.TimeoutExpired:
-        return {"success": False, "stdout": "", "stderr": f"Git-Timeout nach {timeout}s.", "returncode": -2}
     except Exception as e:
         return {"success": False, "stdout": "", "stderr": str(e), "returncode": -3}
 

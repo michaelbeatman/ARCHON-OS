@@ -66,6 +66,7 @@ class Fakes:
 
     def __init__(self):
         self.docker_action = None
+        self.docker_services_action = None
         self.load_configs = None
         self.send_prompt = None
         self.apply_update = None
@@ -74,7 +75,8 @@ class Fakes:
         self.jev_enabled = None
 
     def all_mocks(self):
-        return [m for m in (self.docker_action, self.load_configs, self.send_prompt,
+        return [m for m in (self.docker_action, self.docker_services_action,
+                            self.load_configs, self.send_prompt,
                             self.apply_update, self.rollback_snapshot,
                             self.sandbox_execute, self.jev_enabled) if m is not None]
 

@@ -88,14 +88,14 @@ class AuthManager {
       : String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     const displayName = esc(this.currentUser.display_name || this.currentUser.username);
     badge.innerHTML = `
-      <div onclick="window.authManager.openProfileModal()" title="${esc(title)}" class="flex items-center gap-1.5 px-2 py-[2px] rounded-lg bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 border border-[var(--border)] transition cursor-pointer select-none shadow-2xs">
-        <div class="w-4 h-4 rounded-full bg-zinc-800 text-white flex items-center justify-center font-mono font-bold text-[9px] shrink-0">
+      <div onclick="window.authManager.openProfileModal()" title="${esc(title)}" class="flex items-center gap-1.5 px-1 py-0.5 rounded hover:bg-[var(--secondary)]/60 transition cursor-pointer select-none">
+        <div class="w-3.5 h-3.5 rounded-full bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 flex items-center justify-center font-mono font-bold text-[8px] shrink-0">
           ${esc(initial)}
         </div>
-        <span class="text-[11px] font-bold font-sans text-[var(--foreground)] truncate flex-1 leading-tight">
+        <span class="text-[11px] font-medium font-sans text-[var(--foreground)] truncate flex-1 leading-tight">
           ${displayName}
         </span>
-        <span class="text-[9px] font-mono px-1 py-0.2 rounded border ${roleBadgeClass} uppercase font-bold tracking-wider shrink-0 leading-tight">
+        <span class="text-[9.5px] font-mono text-[var(--muted-foreground)] shrink-0 leading-tight">
           ${esc(roleLabel)}
         </span>
       </div>

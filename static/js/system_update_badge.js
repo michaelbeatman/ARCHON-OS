@@ -48,26 +48,24 @@
       lastUpdateData = data;
 
       if (dot) {
+        const label = document.getElementById('label-update-text');
         if (data.update_available) {
-          dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0 transition-colors';
-          const updateLabel = data.latest_release_tag || updT('ui.system_update_badge.release_new', 'Neu');
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0 transition-colors';
           if (badgeBtn) {
             badgeBtn.title = updT('ui.system_update_badge.badge_title_available', 'Hermes Core Update verfügbar: {tag} ({count} neue Commits)', { tag: data.latest_release_tag || updT('ui.system_update_badge.release_new_fallback', 'Neues Release'), count: data.incoming_commits?.length || 0 });
           }
-          const label = document.getElementById('label-update-text');
           if (label) {
-            label.innerText = updT('ui.system_update_badge.label_update', 'Update ({version})', { version: updateLabel });
-            label.className = 'text-amber-500 font-bold';
+            label.innerText = 'Core';
+            label.className = 'text-rose-600 dark:text-rose-400 font-semibold';
           }
         } else {
           dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors';
           if (badgeBtn) {
             badgeBtn.title = updT('ui.system_update_badge.badge_title_current', 'Hermes Agent Core ist auf dem neuesten Stand ({version})', { version: data.installed_version || '' });
           }
-          const label = document.getElementById('label-update-text');
           if (label) {
-            label.innerText = updT('ui.system_update_badge.label_update', 'Update ({version})', { version: data.installed_version || 'v0.22.6' });
-            label.className = 'text-emerald-500 font-medium';
+            label.innerText = 'Core';
+            label.className = '';
           }
         }
       }

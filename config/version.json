@@ -1,7 +1,7 @@
 {
-  "version": "v0.5.4",
+  "version": "v0.5.4.1",
   "codename": "Archon Global Hardened",
-  "released_at": "2026-11-16 22:30",
+  "released_at": "2026-11-16 22:46",
   "previous_version": "v0.5.4",
   "commit": "e06f8183",
   "features": [

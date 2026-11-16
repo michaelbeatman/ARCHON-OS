@@ -35,30 +35,24 @@
 
   function ensureSidebarRow() {
     let row = document.getElementById(ROW_ID);
-    if (row) return row;
+    if (!row) {
+      const ledsRow = document.getElementById("sidebar-update-leds-row");
+      const hermesUpdateBtn = document.getElementById("status-badge-update");
+      const parent = ledsRow || (hermesUpdateBtn ? hermesUpdateBtn.parentElement : null);
+      if (!parent) return null;
 
-    const hermesUpdateBtn = document.getElementById("status-badge-update");
-    const statusStrip = hermesUpdateBtn ? hermesUpdateBtn.parentElement : null;
-    if (!statusStrip || !statusStrip.parentElement) return null;
+      row = document.createElement("button");
+      row.type = "button";
+      row.id = ROW_ID;
+      row.className =
+        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5";
+      row.title = "Archon OS Update-Status wird geprüft...";
+      row.innerHTML =
+        '<span id="dot-archon-update" class="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors"></span><span>Archon</span>';
+      parent.insertBefore(row, hermesUpdateBtn || parent.firstChild);
+    }
 
-    row = document.createElement("button");
-    row.type = "button";
-    row.id = ROW_ID;
-    row.className =
-      "w-full flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg border border-[var(--border)]/70 hover:border-amber-500/50 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-amber-500/5 transition cursor-pointer select-none text-[10px] font-mono";
-    row.title = "Archon OS Version & GitHub-Update prüfen (öffnet Settings -> System-Update)";
-    row.innerHTML = `
-      <span class="flex items-center gap-1.5 min-w-0">
-        ${ARCHON_ICON_SVG}
-        <span class="text-[var(--muted-foreground)]">Archon</span>
-        <strong id="sidebar-archon-version-text" class="text-[var(--foreground)] font-bold truncate">...</strong>
-      </span>
-      <span id="sidebar-archon-update-pill" class="px-1.5 py-0.5 rounded text-[9.5px] font-semibold border border-[var(--border)] text-[var(--muted-foreground)] shrink-0">
-        Prüfe...
-      </span>`;
     row.onclick = openArchonUpdateSettings;
-
-    statusStrip.parentElement.insertBefore(row, statusStrip);
 
     const syncBtn = document.getElementById("btn-sidebar-sync");
     if (syncBtn && !syncBtn.dataset.archonSyncBound) {
@@ -73,24 +67,21 @@
     const row = ensureSidebarRow();
     if (!row || !data) return;
 
-    const verEl = document.getElementById("sidebar-archon-version-text");
-    const pillEl = document.getElementById("sidebar-archon-update-pill");
-    if (!verEl || !pillEl) return;
+    const dotEl = document.getElementById("dot-archon-update");
+    if (!dotEl) return;
 
     const curVer = data.version || "v0.5.2.1";
-    verEl.textContent = curVer;
 
     if (isLocalOnly) {
-      pillEl.className =
-        "px-1.5 py-0.5 rounded text-[9.5px] font-medium border border-[var(--border)] text-[var(--muted-foreground)] shrink-0";
-      pillEl.textContent = "GitHub...";
+      dotEl.className = "w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0 transition-colors";
+      row.title = `Archon OS ${curVer} — prüfe GitHub-Status...`;
       return;
     }
 
     if (data.status === "offline_or_error" || data.status === "error") {
-      pillEl.className =
-        "px-1.5 py-0.5 rounded text-[9.5px] font-medium border border-zinc-500/30 text-zinc-400 shrink-0";
-      pillEl.textContent = "Lokal";
+      dotEl.className = "w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors";
+      row.className =
+        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5";
       row.title = `Archon OS ${curVer} (${data.message || "GitHub offline"}) — Klick öffnet System-Update`;
       return;
     }
@@ -98,21 +89,15 @@
     if (data.update_available) {
       const remoteVer = data.remote_version && data.remote_version !== curVer ? data.remote_version : null;
       const behind = Number(data.commits_behind || 0);
-      const badgeLabel = remoteVer ? `Update ${esc(remoteVer)}` : `Update +${behind || 1}`;
-
-      pillEl.className =
-        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-gradient-to-r from-red-600 to-amber-500 text-white shadow-xs animate-pulse shrink-0";
-      pillEl.innerHTML = `${ARROW_UP_SVG}<span>${badgeLabel}</span>`;
+      dotEl.className = "w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0 transition-colors";
       row.className =
-        "w-full flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition cursor-pointer select-none text-[10px] font-mono";
-      row.title = `Neue Archon-Version auf GitHub verfügbar (${remoteVer || behind + " Commits"}) — Klick öffnet Settings -> System-Update`;
+        "flex items-center gap-1 text-rose-600 dark:text-rose-400 font-semibold transition cursor-pointer select-none py-0.5";
+      row.title = `Archon OS Update verfügbar (${remoteVer || "+" + (behind || 1) + " Commits"}, aktuell ${curVer}) — Klick öffnet Settings -> System-Update`;
     } else {
-      pillEl.className =
-        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/25 shrink-0";
-      pillEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span>Aktuell</span>`;
+      dotEl.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors";
       row.className =
-        "w-full flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg border border-[var(--border)]/70 hover:border-amber-500/40 bg-black/[0.02] dark:bg-white/[0.02] transition cursor-pointer select-none text-[10px] font-mono";
-      row.title = `Archon OS ${curVer} ist auf dem neuesten GitHub-Stand — Klick öffnet Settings -> System-Update`;
+        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5";
+      row.title = `Archon OS ${curVer} ist aktuell — Klick öffnet Settings -> System-Update`;
     }
   }
 

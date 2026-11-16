@@ -102,6 +102,7 @@ def test_core_dispatcher_omniroute_alias_and_ollama_fallback(monkeypatch):
 def test_auth_gate_blocks_viewer_writes_and_allows_reads_and_auth(monkeypatch):
     import main as app_main
 
+    monkeypatch.setattr("utils.rate_limit._enabled", lambda: False)
     monkeypatch.setattr(app_main.auth_service, "is_auth_enabled", lambda: True)
     monkeypatch.setattr(
         app_main.auth_service,

@@ -32,7 +32,7 @@ def _validate_install_command(cmd_args: Any) -> List[str]:
     binary = os.path.basename(args[0]).lower()
     if binary not in _ALLOWED_INSTALL_BINS:
         raise ValueError(f"Sicherheits-Block: Binary '{binary}' ist für autonome Installationen nicht freigegeben.")
-    if binary.startswith("python") and any(a in ("-c", "--command") for a in args[1:4]):
+    if binary.startswith("python") and any(a in ("-c", "--command") or a.startswith("-c") for a in args[1:]):
         raise ValueError("Sicherheits-Block: Inline-Python-Ausführung (-c) ist über tool_permissions gesperrt.")
     return args
 
@@ -111,6 +111,12 @@ class ToolPermissionManager:
                 return {"status": "error", "message": f"Antrag {permission_id} nicht gefunden."}
 
             item = dict(row)
+            if item.get("status") != "pending_permission":
+                return {
+                    "status": "error",
+                    "permission_id": permission_id,
+                    "message": f"Antrag {permission_id} ist bereits abgeschlossen (Status: {item.get('status')}).",
+                }
             if action.lower() != "grant":
                 conn.execute("""
                     UPDATE tool_permissions

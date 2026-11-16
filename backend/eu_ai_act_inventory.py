@@ -28,8 +28,20 @@ HIGH_RISK_AGENT_IDS = frozenset({
     "labor_law_hr_governance",
     "candidate_screener",
     "talent_acquisition",
-    "credit_risk_scorer",
 })
+
+CREDIT_RISK_AGENT_IDS = frozenset({
+    "credit_risk_scorer",
+    "loan_underwriter",
+    "bonitaetspruefung",
+})
+
+_PROHIBITED_MARKERS = (
+    "social_scoring",
+    "workplace_emotion_recognition",
+    "emotion_recognition_workplace",
+    "subliminal_manipulation",
+)
 
 TRANSPARENCY_AGENT_IDS = frozenset({
     "affiliate_partner_manager",
@@ -153,7 +165,9 @@ class EUAIActInventoryManager:
         soul_sha256 = _compute_soul_sha256(agent)
         zero_egress = _is_zero_egress_category(category, aid)
 
-        is_high_risk = (
+        is_prohibited = any(m in f"{aid} {desc}".lower() for m in _PROHIBITED_MARKERS)
+        is_credit_risk = (not is_prohibited) and (aid in CREDIT_RISK_AGENT_IDS)
+        is_hr_high_risk = (not is_prohibited) and (not is_credit_risk) and (
             aid in HIGH_RISK_AGENT_IDS
             or bool(_HIGH_RISK_ID_NAME_RE.search(id_and_name))
             or (
@@ -163,9 +177,11 @@ class EUAIActInventoryManager:
             )
             or ("bewerbung" in desc.lower() or "leistungsbewertung" in desc.lower())
         )
+        is_high_risk = is_credit_risk or is_hr_high_risk
 
         is_transparency = (
-            not is_high_risk
+            not is_prohibited
+            and not is_high_risk
             and (
                 aid in TRANSPARENCY_AGENT_IDS
                 or bool(_TRANSPARENCY_ID_NAME_RE.search(id_and_name))
@@ -173,14 +189,30 @@ class EUAIActInventoryManager:
             )
         )
 
-        if is_high_risk:
+        if is_prohibited:
+            risk_tier = "PROHIBITED"
+            legal_basis = "Art. 5 VO (EU) 2024/1689 (Verbotene KI-Praktik — zwingende Sperrung seit 02.02.2025)"
+            human_oversight = "PROHIBITED_BLOCKED"
+            data_protection = "Betrieb untersagt (Art. 5 EU AI Act)"
+            compliance_status = "BLOCKED_PROHIBITED"
+            audit_interval_months = 1
+            required_guardrails = ["HARD_BLOCK_ART5"]
+        elif is_credit_risk:
             risk_tier = "HIGH_RISK"
-            legal_basis = "Art. 6 Abs. 2 i.V.m. Anhang III Nr. 4 EU AI Act (Beschäftigung, Personalmanagement & Recruiting)"
+            legal_basis = "Art. 6 Abs. 2 i.V.m. Anhang III Nr. 5 lit. b EU AI Act (Kreditwürdigkeitsprüfung & Finanzscoring — FRIA Art. 27 erforderlich)"
+            human_oversight = "MANDATORY_HITL (4-Augen-Freigabe & FRIA vor Kredit-/Bonitätsentscheidungen)"
+            data_protection = "PII-Maskierung aktiv, lokale Datenhaltung, revisionssicheres GoBD-Audit-Log, FRIA Art. 27"
+            compliance_status = "COMPLIANT_WITH_OVERSIGHT"
+            audit_interval_months = 6
+            required_guardrails = ["MANDATORY_4_EYES_HITL", "FRIA_ART27", "PII_MASKING", "GOBD_MERKLE_AUDIT", "SOUL_HASH_PINNING"]
+        elif is_hr_high_risk:
+            risk_tier = "HIGH_RISK"
+            legal_basis = "Art. 6 Abs. 2 i.V.m. Anhang III Nr. 4 EU AI Act (Beschäftigung, Personalmanagement & Recruiting — Art. 26 Abs. 7 BetrVG)"
             human_oversight = "MANDATORY_HITL (4-Augen-Freigabe vor Übernahme von Personalentscheidungen)"
             data_protection = "PII-Maskierung aktiv, lokale Datenhaltung, revisionssicheres GoBD-Audit-Log"
             compliance_status = "COMPLIANT_WITH_OVERSIGHT"
             audit_interval_months = 6
-            required_guardrails = ["MANDATORY_4_EYES_HITL", "PII_MASKING", "GOBD_MERKLE_AUDIT", "SOUL_HASH_PINNING"]
+            required_guardrails = ["MANDATORY_4_EYES_HITL", "WORKS_COUNCIL_NOTICE_ART26_7", "PII_MASKING", "GOBD_MERKLE_AUDIT", "SOUL_HASH_PINNING"]
         elif is_transparency:
             risk_tier = "SPECIFIC_TRANSPARENCY"
             legal_basis = "Art. 50 EU AI Act (Transparenzpflicht für KI-Interaktion & synthetische Inhalte)"
@@ -275,29 +307,40 @@ class EUAIActInventoryManager:
         """Liefert Kennzahlen zur EU AI Act Compliance für Dashboards und Audits."""
         inventory = self.get_inventory()
         total = len(inventory)
-        counts = {"HIGH_RISK": 0, "SPECIFIC_TRANSPARENCY": 0, "MINIMAL_RISK": 0}
+        counts = {"PROHIBITED": 0, "HIGH_RISK": 0, "SPECIFIC_TRANSPARENCY": 0, "MINIMAL_RISK": 0}
 
+        compliant_count = 0
+        oversight_count = 0
         for item in inventory:
             tier = item.get("risk_tier", "MINIMAL_RISK")
             counts[tier] = counts.get(tier, 0) + 1
+            c_stat = str(item.get("compliance_status") or "")
+            oversight = str(item.get("human_oversight_measure") or "")
+            if tier != "PROHIBITED" and c_stat not in ("NON_COMPLIANT", "BLOCKED_PROHIBITED"):
+                compliant_count += 1
+            if tier != "PROHIBITED" and oversight and oversight not in ("NONE", "PROHIBITED_BLOCKED"):
+                oversight_count += 1
 
         soul_pinned = sum(1 for item in inventory if item.get("soul_sha256"))
         zero_egress_count = sum(1 for item in inventory if item.get("zero_egress_protected"))
+        oversight_pct = round((oversight_count / total) * 100.0, 1) if total > 0 else 0.0
+        readiness_pct = round((compliant_count / total) * 100.0, 1) if total > 0 else 0.0
 
         return {
             "total_agents": total,
             "risk_distribution": counts,
+            "prohibited_count": counts.get("PROHIBITED", 0),
             "high_risk_count": counts.get("HIGH_RISK", 0),
             "transparency_risk_count": counts.get("SPECIFIC_TRANSPARENCY", 0),
             "minimal_risk_count": counts.get("MINIMAL_RISK", 0),
             "soul_hashes_pinned": soul_pinned,
             "zero_egress_agents": zero_egress_count,
-            "human_oversight_rate_pct": 100.0 if total > 0 else 0.0,
-            "compliance_readiness_score": 100.0,
+            "human_oversight_rate_pct": oversight_pct,
+            "compliance_readiness_score": readiness_pct,
             "applicable_regulations": [
-                "Verordnung (EU) 2024/1689 (EU AI Act — Art. 4, 6, Anhang III, Art. 50, Art. 95)",
-                "DSGVO (Verordnung (EU) 2016/679 — Art. 25, 30, 32)",
-                "GoBD (BMF-Schreiben 28.11.2019 / 11.03.2024 — Rz. 151 ff.)",
+                "Verordnung (EU) 2024/1689 (EU AI Act — Art. 4, 5, 6, 26, 27, Anhang III, Art. 50, Art. 95)",
+                "DSGVO (Verordnung (EU) 2016/679 — Art. 13, 15, 17, 18, 25, 30, 32)",
+                "GoBD (BMF-Schreiben 28.11.2019 / 11.03.2024 — Rz. 151 ff.) & BEG IV",
             ],
         }
 

@@ -34,20 +34,33 @@
     // montiert wird. Dieser Guard holt das Modal nach, wo immer es fehlt.
     async function ensureSettingsModalMounted() {
       if (document.getElementById("system-settings-modal")) return true;
-      try {
-        const res = await fetch("/static/views/system_settings_modal.html?v=202610241330");
-        if (!res.ok) { return false; }
-        const html = await res.text();
-        let target = document.getElementById("system-settings-mount");
-        if (target) { target.outerHTML = html; } else {
-          const div = document.createElement("div");
-          div.innerHTML = html;
-          document.body.appendChild(div);
-        }
-        return !!document.getElementById("system-settings-modal");
-      } catch (e) {
-        return false;
+      if (window._v2MountPromises && window._v2MountPromises["system-settings-mount"]) {
+        try { await window._v2MountPromises["system-settings-mount"]; } catch (e) {}
+        if (document.getElementById("system-settings-modal")) return true;
       }
+      if (window._settingsModalMountInFlight) {
+        return await window._settingsModalMountInFlight;
+      }
+      window._settingsModalMountInFlight = (async () => {
+        try {
+          const res = await fetch("/static/views/system_settings_modal.html?v=2026111601");
+          if (!res.ok) { return false; }
+          const html = await res.text();
+          if (document.getElementById("system-settings-modal")) return true;
+          let target = document.getElementById("system-settings-mount");
+          if (target) { target.outerHTML = html; } else {
+            const div = document.createElement("div");
+            div.innerHTML = html;
+            document.body.appendChild(div);
+          }
+          return !!document.getElementById("system-settings-modal");
+        } catch (e) {
+          return false;
+        } finally {
+          window._settingsModalMountInFlight = null;
+        }
+      })();
+      return await window._settingsModalMountInFlight;
     }
     window.ensureSettingsModalMounted = ensureSettingsModalMounted;
     async function openSystemSettingsModal(defaultTab = "kernel") {

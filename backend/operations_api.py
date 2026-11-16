@@ -201,7 +201,134 @@ def _save_kanban_meta(meta: Dict) -> None:
     update_kanban_meta(lambda _current: meta)
 
 
-def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
+def _build_kanban_obsidian_map(conn: sqlite3.Connection, rows: list, meta: Dict) -> Dict[str, Optional[str]]:
+    """Loest alle Obsidian-Projektordner fuer ein Kanban-Board einmalig im Batch auf (statt O(N) DB/FS-Scans)."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+
+    result: Dict[str, Optional[str]] = {}
+    meta_tasks = meta.get("tasks") or {}
+    vault = _P(get_vault_dir()).resolve()
+    proj_root = vault / "01_PROJEKTE"
+
+    # Einmalig alle Projektordner & bekannte Artefakt-Dateinamen einlesen
+    proj_dirs: list = []
+    if proj_root.is_dir():
+        try:
+            for d in proj_root.iterdir():
+                if d.is_dir():
+                    proj_dirs.append(d)
+        except Exception:
+            proj_dirs = []
+    valid_proj_names = {d.name for d in proj_dirs}
+
+    # Einmalig Parent-Child-Verknuepfungen laden
+    parent_by_child: Dict[str, str] = {}
+    try:
+        for child_id, parent_id in conn.execute("SELECT child_id, parent_id FROM task_links").fetchall():
+            if child_id and parent_id and child_id != parent_id and child_id not in parent_by_child:
+                parent_by_child[child_id] = parent_id
+    except Exception:
+        pass
+
+    # Einmalig Endprodukte/Zwischenberichte nach Task-IDs durchsuchen, falls noetig
+    file_hits: Dict[str, str] = {}
+    for p_dir in proj_dirs:
+        rel_p = f"01_PROJEKTE/{p_dir.name}"
+        for sub in ("03_Endprodukte", "01_Zwischenberichte"):
+            s_dir = p_dir / sub
+            if s_dir.is_dir():
+                try:
+                    for f in s_dir.iterdir():
+                        fname = f.name
+                        file_hits[fname] = rel_p
+                except Exception:
+                    pass
+
+    proj_slug_parts = []
+    for p_dir in proj_dirs:
+        parts = [pt for pt in p_dir.name.lower().split("-") if len(pt) >= 4 and pt not in ("projekt", "delegationsprojekt", "2026")]
+        proj_slug_parts.append((f"01_PROJEKTE/{p_dir.name}", p_dir.name, parts))
+
+    row_by_id: Dict[str, Dict] = {}
+    for r in rows:
+        rd = dict(r)
+        tid = rd.get("id")
+        if tid:
+            row_by_id[tid] = rd
+
+    def _resolve_one(tid: str, depth: int = 0) -> Optional[str]:
+        if tid in result:
+            return result[tid]
+        if depth > 4:
+            return None
+        t_entry = meta_tasks.get(tid) or {}
+        rel = t_entry.get("obsidian")
+        if rel and str(rel).strip():
+            rel_s = str(rel).strip()
+            # Schneller Check ohne teure Symlink-Auflösung fuer bekannte 01_PROJEKTE-Ordner
+            if rel_s.startswith("01_PROJEKTE/") and rel_s.split("/", 2)[1] in valid_proj_names:
+                result[tid] = rel_s
+                return rel_s
+            cand = (vault / rel_s).resolve()
+            if str(cand).startswith(str(vault)) and cand.is_dir():
+                result[tid] = rel_s
+                return rel_s
+
+        dossier = (t_entry.get("decision") or {}).get("dossier") or ""
+        if "01_PROJEKTE/" in dossier:
+            sub = dossier.split("01_PROJEKTE/")[1].split("/")[0]
+            if sub in valid_proj_names:
+                rel_s = f"01_PROJEKTE/{sub}"
+                result[tid] = rel_s
+                return rel_s
+
+        pid_parent = parent_by_child.get(tid)
+        if pid_parent:
+            p_rel = _resolve_one(pid_parent, depth + 1)
+            if p_rel:
+                result[tid] = p_rel
+                return p_rel
+
+        rd = row_by_id.get(tid) or {}
+        proj_id = rd.get("project_id")
+        if proj_id:
+            for rel_p, dname, _ in proj_slug_parts:
+                if proj_id in dname:
+                    result[tid] = rel_p
+                    return rel_p
+
+        for rel_p, dname, _ in proj_slug_parts:
+            if tid in dname:
+                result[tid] = rel_p
+                return rel_p
+
+        for fname, rel_p in file_hits.items():
+            if tid in fname:
+                result[tid] = rel_p
+                return rel_p
+
+        combined = ((rd.get("title") or "") + " " + (rd.get("body") or "")).lower()
+        if combined.strip():
+            for rel_p, _dname, parts in proj_slug_parts:
+                if any(pt in combined for pt in parts):
+                    result[tid] = rel_p
+                    return rel_p
+
+        result[tid] = None
+        return None
+
+    for tid in list(row_by_id.keys()):
+        _resolve_one(tid)
+    return result
+
+
+def _enrich_task(
+    task_dict: Dict,
+    profiles: Dict,
+    meta: Dict,
+    obsidian_map: Optional[Dict[str, Optional[str]]] = None,
+) -> Dict:
     assignee_id = task_dict.get("assignee")
     prof = profiles.get(assignee_id, {})
     task_dict["assignee_name"] = prof.get("name") or assignee_id or "Nicht zugewiesen"
@@ -210,10 +337,11 @@ def _enrich_task(task_dict: Dict, profiles: Dict, meta: Dict) -> Dict:
     tmeta = (meta.get("tasks") or {}).get(task_dict.get("id")) or {}
     task_dict["due_date"] = tmeta.get("due") or None
     task_dict["tags"] = tmeta.get("tags") or []
-    # 2d (12.10.2026): Projektordner + Entscheidungs-Kontext auch LISTEN-seitig,
-    # damit die Card das Entscheidungs-Banner und die Projektzeile zeigen kann
-    # (der Detail-Dialog liefert weiterhin den vollen Block).
-    task_dict["obsidian"] = _resolve_task_obsidian_rel(task_dict.get("id"), meta)
+    tid = task_dict.get("id")
+    if obsidian_map is not None:
+        task_dict["obsidian"] = obsidian_map.get(tid)
+    else:
+        task_dict["obsidian"] = _resolve_task_obsidian_rel(tid, meta)
     task_dict["tokens"] = tmeta.get("tokens") or None
     task_dict["cost"] = tmeta.get("cost") or None
     task_dict["quality_review"] = tmeta.get("quality_review") or None
@@ -278,11 +406,14 @@ def get_kanban_tasks(archived: bool = Query(False)):
         cursor = conn.cursor()
         if archived:
             cursor.execute(base_select + " WHERE status = 'archived' ORDER BY completed_at DESC")
-            tasks = [_enrich_task(dict(r), profiles, meta) for r in cursor.fetchall()]
+            arch_rows = cursor.fetchall()
+            obs_map = _build_kanban_obsidian_map(conn, arch_rows, meta)
+            tasks = [_enrich_task(dict(r), profiles, meta, obsidian_map=obs_map) for r in arch_rows]
             return {"status": "success", "archived": True, "tasks": tasks, "total": len(tasks)}
 
         cursor.execute(base_select + " ORDER BY priority DESC, created_at DESC")
         rows = cursor.fetchall()
+        obs_map = _build_kanban_obsidian_map(conn, rows, meta)
 
         columns = {
             "triage": [],
@@ -308,7 +439,7 @@ def get_kanban_tasks(archived: bool = Query(False)):
             # Schreiber (Hermes-Kanban-Worker teilt dieselbe DB) am Status aendert.
             if (task_dict.get("block_kind") or "").lower() == "approval":
                 st = "blocked"
-            _enrich_task(task_dict, profiles, meta)
+            _enrich_task(task_dict, profiles, meta, obsidian_map=obs_map)
             if st in columns:
                 columns[st].append(task_dict)
             else:

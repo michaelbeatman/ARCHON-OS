@@ -8,8 +8,21 @@
   const MODAL_ID = "archon-playbooks-modal";
   let currentTab = "active";
 
+  function _escPb(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   async function api(url, opts) {
     const res = await fetch(url, opts);
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "");
+      throw new Error(msg || `HTTP ${res.status}`);
+    }
     return await res.json();
   }
 
@@ -18,6 +31,8 @@
     if (modal) return modal;
     modal = document.createElement("div");
     modal.id = MODAL_ID;
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
     modal.className = "fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4";
     modal.innerHTML = `
       <div class="w-full max-w-4xl rounded-xl border theme-border bg-white dark:bg-zinc-900 p-5 shadow-2xl max-h-[88vh] flex flex-col gap-3">
@@ -90,18 +105,18 @@
         (pb) => `
       <div class="p-3 rounded border theme-border flex items-center justify-between gap-3">
         <div>
-          <div class="font-semibold">${pb.title} <span class="opacity-60">[${pb.category}]</span></div>
-          <div class="opacity-75">${pb.description || ""}</div>
+          <div class="font-semibold">${_escPb(pb.title)} <span class="opacity-60">[${_escPb(pb.category)}]</span></div>
+          <div class="opacity-75">${_escPb(pb.description || "")}</div>
         </div>
         <div class="flex gap-1.5 shrink-0">
           ${
             activeOnly
-              ? `<button data-run="${pb.id}" class="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold">Ausführen</button>`
-              : `<button data-toggle="${pb.id}" data-next="true" class="px-2.5 py-1 rounded bg-indigo-600 text-white font-semibold">Aktivieren</button>`
+              ? `<button data-run="${_escPb(pb.id)}" data-title="${_escPb(pb.title)}" class="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold">Ausführen</button>`
+              : `<button data-toggle="${_escPb(pb.id)}" data-next="true" class="px-2.5 py-1 rounded bg-indigo-600 text-white font-semibold">Aktivieren</button>`
           }
           ${
             activeOnly
-              ? `<button data-toggle="${pb.id}" data-next="false" class="px-2 py-1 rounded border theme-border">Ausblenden</button>`
+              ? `<button data-toggle="${_escPb(pb.id)}" data-next="false" class="px-2 py-1 rounded border theme-border">Ausblenden</button>`
               : ""
           }
         </div>
@@ -111,7 +126,7 @@
 
     body.querySelectorAll("[data-toggle]").forEach((b) => {
       b.onclick = async () => {
-        await api(`/api/v1/playbooks/${b.dataset.toggle}/toggle`, {
+        await api(`/api/v1/playbooks/${encodeURIComponent(b.dataset.toggle)}/toggle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ active: b.dataset.next === "true" }),
@@ -121,7 +136,8 @@
     });
     body.querySelectorAll("[data-run]").forEach((b) => {
       b.onclick = async () => {
-        const res = await api(`/api/v1/playbooks/${b.dataset.run}/run`, {
+        if (!confirm(`Playbook '${b.dataset.title || b.dataset.run}' jetzt mit Standardvariablen ausführen?`)) return;
+        const res = await api(`/api/v1/playbooks/${encodeURIComponent(b.dataset.run)}/run`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ variables: {} }),

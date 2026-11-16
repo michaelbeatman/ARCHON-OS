@@ -29,12 +29,21 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SNAPSHOT_DIR = os.path.join(WORKSPACE_DIR, "data", "snapshots")
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
-# Zu sichernde Datenbanken (Relativ zum Workspace oder Home)
+# Zu sichernde Datenbanken (Relativ zum Workspace oder Home via SSOT)
+def _resolve_updater_db(filename: str, legacy_subpath: str) -> str:
+    try:
+        from backend.db_paths import resolve_db
+        return resolve_db(filename)
+    except Exception:
+        ws_path = os.path.join(WORKSPACE_DIR, "data", filename)
+        return ws_path if os.path.exists(ws_path) else os.path.expanduser(legacy_subpath)
+
+
 DB_TARGETS = [
     os.path.join(WORKSPACE_DIR, "agent_os.db"),
-    os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db"),
-    os.path.join(WORKSPACE_DIR, "data", "kanban.db") if os.path.exists(os.path.join(WORKSPACE_DIR, "data", "kanban.db")) else os.path.expanduser("~/.hermes/kanban.db"),
-    os.path.join(WORKSPACE_DIR, "data", "state.db") if os.path.exists(os.path.join(WORKSPACE_DIR, "data", "state.db")) else os.path.expanduser("~/.hermes/state.db"),
+    _resolve_updater_db("agentic_memory.db", "~/.hermes/agentic_memory.db"),
+    _resolve_updater_db("kanban.db", "~/.hermes/kanban.db"),
+    _resolve_updater_db("state.db", "~/.hermes/state.db"),
 ]
 
 # Zu sichernde Konfigurationsdateien
@@ -797,9 +806,12 @@ def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
         if not os.path.isfile(src):
             continue
 
-        # Prüfe ob Datei im Root oder unter data/ liegt
+        # Prüfe Zielpfad über zentrale DB-SSOT (inkl. /opt/data, ~/.hermes, data/)
         if fname.endswith(".db"):
-            target_path = os.path.join(WORKSPACE_DIR, "data", fname) if not os.path.exists(os.path.join(WORKSPACE_DIR, fname)) else os.path.join(WORKSPACE_DIR, fname)
+            if fname == "agent_os.db" or os.path.exists(os.path.join(WORKSPACE_DIR, fname)):
+                target_path = os.path.join(WORKSPACE_DIR, fname)
+            else:
+                target_path = _resolve_updater_db(fname, f"~/.hermes/{fname}")
         else:
             target_path = os.path.join(WORKSPACE_DIR, fname)
 

@@ -276,6 +276,7 @@ class GDPRComplianceEngine:
             "affected": {
                 "kanban_tasks": 0,
                 "chat_messages": 0,
+                "memory_conversations": 0,
                 "memory_learnings": 0,
                 "feedback_entries": 0,
                 "crm_contacts": 0,
@@ -345,6 +346,15 @@ class GDPRComplianceEngine:
                                 cur.execute("UPDATE learnings SET summary = ? WHERE id = ?",
                                             (_redact_ci(s), lid))
 
+                    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='conversations'")
+                    if cur.fetchone():
+                        cur.execute("SELECT id, content FROM conversations WHERE content LIKE ?", (f"%{term}%",))
+                        c_rows = cur.fetchall()
+                        results["affected"]["memory_conversations"] = len(c_rows)
+                        if not dry_run and c_rows:
+                            for cid, cont in c_rows:
+                                cur.execute("UPDATE conversations SET content = ? WHERE id = ?", (_redact_ci(cont), cid))
+
                     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='human_feedback'")
                     if cur.fetchone():
                         cur.execute("SELECT id, comment, corrected_text FROM human_feedback WHERE comment LIKE ? OR corrected_text LIKE ?", (f"%{term}%", f"%{term}%"))
@@ -354,13 +364,23 @@ class GDPRComplianceEngine:
                             for fid, c, cr in f_rows:
                                 cur.execute("UPDATE human_feedback SET comment = ?, corrected_text = ? WHERE id = ?",
                                             (_redact_ci(c), _redact_ci(cr), fid))
+                    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='email_drafts'")
+                    if cur.fetchone():
+                        cur.execute("SELECT draft_id, subject, recipient, body_text FROM email_drafts WHERE recipient LIKE ? OR subject LIKE ? OR body_text LIKE ?", (f"%{term}%", f"%{term}%", f"%{term}%"))
+                        ed_rows = cur.fetchall()
+                        results["affected"]["email_drafts"] = len(ed_rows)
+                        if not dry_run and ed_rows:
+                            for did, subj, recp, btxt in ed_rows:
+                                cur.execute("UPDATE email_drafts SET subject = ?, recipient = ?, body_text = ? WHERE draft_id = ?",
+                                            (_redact_ci(subj), _redact_ci(recp), _redact_ci(btxt), did))
+
                     if not dry_run:
                         conn.commit()
             except Exception as e:
                 print(f"[GDPR] Fehler bei Memory-Löschung: {e}", file=sys.stderr)
                 errors.append(f"Memory: {e}")
 
-        # 3b. Multi-Tenant-DBs (ERP, Contracts, Deals, CRM unter data/tenants/*)
+        # 3b. Multi-Tenant-DBs (ERP, Contracts, Deals, CRM unter data/tenants/*) mit GoBD-Sperrprüfung (Art. 18 DSGVO / § 147 AO)
         import glob
         tenants_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "tenants")
         tenant_db_files = sorted(glob.glob(os.path.join(tenants_root, "*", "*.db")))
@@ -376,6 +396,15 @@ class GDPRComplianceEngine:
             try:
                 with self._get_conn(tdb, readonly=dry_run) as conn:
                     cur = conn.cursor()
+                    protected_entity_ids = set()
+                    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='erp_documents'")
+                    if cur.fetchone():
+                        for erp_row in cur.execute(
+                            "SELECT DISTINCT entity_id FROM erp_documents WHERE status IN ('booked', 'paid') AND entity_id IS NOT NULL"
+                        ).fetchall():
+                            if erp_row[0]:
+                                protected_entity_ids.add(str(erp_row[0]))
+
                     for tbl, cols in tenant_targets.items():
                         cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,))
                         if not cur.fetchone():
@@ -388,12 +417,21 @@ class GDPRComplianceEngine:
                         where_sql = " OR ".join(f"{c} LIKE ?" for c in use_cols)
                         sel_sql = f"SELECT id, {', '.join(use_cols)} FROM {tbl} WHERE {where_sql}"
                         t_rows = cur.execute(sel_sql, [like_pat] * len(use_cols)).fetchall()
-                        results["affected"]["tenant_records"] += len(t_rows)
-                        if not dry_run and t_rows:
-                            set_sql = ", ".join(f"{c} = ?" for c in use_cols)
-                            upd_sql = f"UPDATE {tbl} SET {set_sql} WHERE id = ?"
-                            for row in t_rows:
-                                rid = row[0]
+                        for row in t_rows:
+                            rid = str(row[0])
+                            # Art. 17 Abs. 3 lit. b i.V.m. Art. 18 DSGVO: Geschäftspartner mit festgeschriebenen Buchungsbelegen (§ 147 AO / 8J) sperren statt vernichten
+                            if tbl == "crm_entities" and rid in protected_entity_ids:
+                                results["affected"]["legal_hold_restricted"] = results["affected"].get("legal_hold_restricted", 0) + 1
+                                if not dry_run and "notes" in avail:
+                                    cur.execute(
+                                        "UPDATE crm_entities SET notes = ? WHERE id = ?",
+                                        ("[DSGVO Art. 18 Sperre: Aufbewahrungspflicht gem. § 147 AO / § 257 HGB (8 Jahre)]", rid),
+                                    )
+                                continue
+                            results["affected"]["tenant_records"] += 1
+                            if not dry_run:
+                                set_sql = ", ".join(f"{c} = ?" for c in use_cols)
+                                upd_sql = f"UPDATE {tbl} SET {set_sql} WHERE id = ?"
                                 vals = [_redact_ci(row[idx + 1]) for idx in range(len(use_cols))]
                                 cur.execute(upd_sql, vals + [rid])
                     if not dry_run:
@@ -454,7 +492,7 @@ class GDPRComplianceEngine:
             if row:
                 prev_hash = row[0]
 
-            record_payload = f"{receipt_id}|{now_iso}|{id_hash}|{count}|{prev_hash}"
+            record_payload = f"{receipt_id}|ERASE_ART17|{now_iso}|{id_hash}|{count}|{details_str}|{prev_hash}"
             record_hash = hashlib.sha256(record_payload.encode("utf-8")).hexdigest()
 
             cur.execute("""

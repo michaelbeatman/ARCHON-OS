@@ -294,6 +294,12 @@ def save_llm_provider_key(request: Request, req: LLMProviderSaveKeyRequest):
     # das HTTPException(400) sonst in HTTP 200 mit {"status": "error"}.
     if not env_key or not val:
         raise HTTPException(status_code=400, detail="Missing key name or value")
+    import re as _re
+    if (
+        not _re.fullmatch(r"[A-Z][A-Z0-9_]*_(?:API_KEY|TOKEN|KEY)", env_key)
+        or env_key in {"PATH", "PYTHONPATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "HOME", "SHELL", "USER"}
+    ):
+        raise HTTPException(status_code=400, detail=f"Invalid or disallowed provider env key: {env_key}")
     try:
         import api_provider
         os.environ[env_key] = val

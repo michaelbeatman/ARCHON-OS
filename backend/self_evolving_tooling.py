@@ -59,8 +59,9 @@ class SelfEvolvingToolEngine:
 
     def test_in_sandbox(self, tool_code: str, test_code: str, timeout_seconds: int = 15) -> Tuple[bool, str]:
         """
-        Führt das generierte Tool mit Testcode in einem isolierten Python-Subprozess aus.
-        Gibt (Erfolg: bool, Output/Traceback: str) zurück.
+        Führt das generierte Tool mit Testcode primär in der isolierten Docker-Micro-Container-Sandbox
+        (`ephemeral_sandbox`) aus. Nur wenn kein Docker-Daemon verfügbar ist und
+        `ARCHON_REQUIRE_DOCKER_SANDBOX` nicht aktiviert wurde, greift ein isolierter Python `-I`-Fallback.
         """
         combined_script = f"""# -*- coding: utf-8 -*-
 import sys
@@ -79,6 +80,25 @@ if __name__ == "__main__":
         traceback.print_exc()
         sys.exit(1)
 """
+        # 1. Primär: Gehärtete Ephemeral Docker Sandbox (--network=none, --cap-drop=ALL, --read-only)
+        try:
+            from backend.ephemeral_sandbox import ephemeral_sandbox
+            sbx_res = ephemeral_sandbox.execute_in_sandbox(
+                combined_script,
+                language="python",
+                timeout_seconds=timeout_seconds,
+                network_enabled=False,
+            )
+            if sbx_res.get("engine") == "docker_micro_container":
+                out = f"{sbx_res.get('stdout', '')}\n{sbx_res.get('stderr', '')}".strip()
+                passed = sbx_res.get("status") == "success" and "__VOYAGER_TEST_PASSED__" in out
+                return passed, out
+            if os.environ.get("ARCHON_REQUIRE_DOCKER_SANDBOX", "").strip().lower() in ("1", "true", "yes"):
+                return False, str(sbx_res.get("error") or "Docker-Sandbox erforderlich, aber nicht verfügbar.")
+        except Exception as sbx_err:
+            if os.environ.get("ARCHON_REQUIRE_DOCKER_SANDBOX", "").strip().lower() in ("1", "true", "yes"):
+                return False, f"Docker-Sandbox fehlgeschlagen: {sbx_err}"
+
         import tempfile
         with tempfile.TemporaryDirectory(prefix="archon_voyager_sbx_") as sbx_dir:
             temp_path = os.path.join(sbx_dir, "verify_tool.py")

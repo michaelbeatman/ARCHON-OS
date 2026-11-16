@@ -294,6 +294,10 @@ async def auth_gate(request: Request, call_next):
     # behandelt: sie reichen an fremde Admin-Oberflaechen durch und dürfen
     # nicht ungeprüft bleiben.
     is_forced_api = path.startswith(_AUTH_API_PREFIXES)
+    # /mcp* (ausser /mcp/info) authentifiziert sich direkt per archon_live_-API-Key
+    # in mcp_gateway._authenticate_mcp_request — auth_gate darf es nicht auf /login umleiten.
+    if path == "/mcp" or (path.startswith("/mcp/") and path != "/mcp/info"):
+        return await call_next(request)
     if not is_forced_api and (path in _AUTH_PUBLIC_EXACT or path.startswith(_AUTH_PUBLIC_PREFIXES)):
         return await call_next(request)
 
@@ -335,7 +339,7 @@ async def auth_gate(request: Request, call_next):
     if path.startswith(_AUTH_PROTECTED_PREFIXES):
         # Eingebettete Admin-UIs: zur Login-Seite umleiten statt JSON zu liefern
         return RedirectResponse(url=f"/login?next={path}", status_code=307)
-    return await call_next(request)
+    return RedirectResponse(url=f"/login?next={path}", status_code=307)
 
 @app.get("/health")
 async def health_check():

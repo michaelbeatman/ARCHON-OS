@@ -285,6 +285,31 @@ def api_erp_export_datev_csv(
     )
 
 
+@router.get("/api/erp/export/gobd-z3.zip")
+def api_erp_export_gobd_z3_zip(
+    request: Request,
+    company_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Exportiert eine GoBD-Z3-Datenträgerüberlassung (index.xml + CSV-Tabellen + SHA-256-Manifest)."""
+    require_admin_or_503(request)
+    from backend.gobd_z3_export import build_gobd_z3_archive
+    filename, zip_bytes, zip_sha256 = build_gobd_z3_archive(
+        company_id=company_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Archive-SHA256": zip_sha256,
+        },
+    )
+
+
 @router.get("/api/erp/documents/{doc_id}/zugferd.pdf")
 def api_erp_document_zugferd_pdf(doc_id: str, company_id: Optional[str] = None):
     """Exportiert eine Hybrid-E-Rechnung im ZUGFeRD-2.2-/Factur-X-Format (PDF + `factur-x.xml`)."""

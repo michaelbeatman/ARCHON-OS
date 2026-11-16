@@ -1917,6 +1917,7 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
     }
     async function controlContainerAction(action) {
       if (!currentSelectedAgentId) return;
+      if ((action === "stop" || action === "restart") && !confirm(`Container '${currentSelectedAgentId}' wirklich ${action === "stop" ? "stoppen" : "neu starten"}?`)) return;
       
       try {
         const res = await fetch("/api/v1/container/action", {

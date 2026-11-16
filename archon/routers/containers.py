@@ -203,7 +203,11 @@ def get_all_container_logs_api(tail: int = 40):
 
 
 @router.get("/api/v1/hermes/profile-logs")
-def get_hermes_profile_logs_api(profile_id: str, tail: int = 150):
+def get_hermes_profile_logs_api(request: Request, profile_id: str, tail: int = 150):
+    require_admin_or_503(request)
+    import re as _re
+    if not _re.fullmatch(r"[A-Za-z0-9._\-]{1,128}", profile_id or "") or ".." in profile_id:
+        raise HTTPException(status_code=400, detail="Invalid profile_id")
     lines = []
     hermes_home = config.hermes_home
     profile_dir = os.path.join(hermes_home, "profiles", profile_id)
@@ -324,7 +328,8 @@ def get_container_metrics_api(container_name: str):
 
 
 @router.get("/api/v1/container/files")
-def get_container_files_api(container_name: str):
+def get_container_files_api(request: Request, container_name: str):
+    require_admin_or_503(request)
     inspect_raw = _dsr("GET", f"/containers/{container_name}/json")
     if not inspect_raw:
         return {"files": []}
@@ -372,7 +377,8 @@ def get_container_files_api(container_name: str):
 
 
 @router.get("/api/v1/container/file/content")
-def get_container_file_content(container_name: str, filepath: str):
+def get_container_file_content(request: Request, container_name: str, filepath: str):
+    require_admin_or_503(request)
     inspect_raw = _dsr("GET", f"/containers/{container_name}/json")
     if not inspect_raw:
         raise HTTPException(status_code=404, detail={"code": "containers_not_found", "params": {}})

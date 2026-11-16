@@ -485,10 +485,10 @@ def api_library_book_content(rel_path: str = Query(...)):
     try:
         from utils.batch_library_importer import resolve_vault_path
         vault_dir = resolve_vault_path()
-        bib_dir = os.path.join(vault_dir, "03_Bibliothek_Wissen")
-        
-        target = os.path.abspath(os.path.join(bib_dir, rel_path.lstrip("/\\")))
-        if not target.startswith(os.path.abspath(bib_dir)):
+        bib_dir = os.path.realpath(os.path.join(vault_dir, "03_Bibliothek_Wissen"))
+
+        target = os.path.realpath(os.path.join(bib_dir, rel_path.lstrip("/\\")))
+        if target != bib_dir and not target.startswith(bib_dir + os.sep):
             raise HTTPException(status_code=400, detail={"code": "brain_invalid_path_outside_library", "params": {}})
             
         if not os.path.exists(target) or not os.path.isfile(target):

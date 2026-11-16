@@ -386,15 +386,25 @@ async def _followup_synthesis(pid: str, dossier: str, dec: dict) -> str:
     if vorher is not None and vorher.get("synthesis_finalized"):
         return _folge_nicht(aktion, "bereits finalisiert (synthesis_finalized=true)")
     try:
+        full_synth = ""
+        if dossier and os.path.isfile(dossier):
+            try:
+                with open(dossier, "r", encoding="utf-8") as df:
+                    full_synth = df.read()
+            except Exception:
+                full_synth = ""
+        if not full_synth:
+            full_synth = dec.get("kurzfassung") or ""
+
         fn_finalize = getattr(app_main, "_finalize_synthesis_after_approval", None)
         if fn_finalize:
             await fn_finalize(
-                pid, dossier, dec.get("kurzfassung") or "", "Owner-Freigabe über den Entscheidungs-Service"
+                pid, dossier, full_synth, "Owner-Freigabe über den Entscheidungs-Service"
             )
         else:
             from archon.core.orchestration import _finalize_synthesis_after_approval as _def_fin
 
-            await _def_fin(pid, dossier, dec.get("kurzfassung") or "", "Owner-Freigabe über den Entscheidungs-Service")
+            await _def_fin(pid, dossier, full_synth, "Owner-Freigabe über den Entscheidungs-Service")
     except Exception as e:
         return _folge_nicht(aktion, f"Aufruf fehlgeschlagen: {e}")
     lesbar, nachher = await _synthese_parent(pid)

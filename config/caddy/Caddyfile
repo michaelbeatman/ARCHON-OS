@@ -38,9 +38,9 @@
     }
 
     # Geschützte Sub-Dienste (mit Forward-Auth Hook bei Bedarf)
-    # 1. Hermes Agenten-Gateway
+    # 1. Hermes Agenten-Gateway (Container-Port 8642, Host-Mapping ist 8644)
     handle_path /hermes* {
-        reverse_proxy hermes:8644
+        reverse_proxy hermes:8642
     }
 
     # 2. n8n Workflow-Mesh

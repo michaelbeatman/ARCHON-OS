@@ -18,10 +18,13 @@ Aufgaben:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import time
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from backend.audit_log import chained_audit_log, sanitize_llm_endpoint
 from backend.privacy_router import (
@@ -100,7 +103,7 @@ def _is_local_model_name(model: str) -> bool:
     # Cloud-Präfixe ausschließen
     if any(m.startswith(pfx) for pfx in ("openai/", "anthropic/", "google/", "deepseek/", "openrouter/", "mistralai/", "meta-llama/", "auto/", "strict-free-tier")):
         return False
-    return m in ("llama3.2", "llama3.1", "llama3", "qwen2.5", "qwen3", "mistral", "phi3", "gemma2")
+    return m in ("llama3.2", "llama3.1", "llama3", "qwen2.5", "qwen3", "phi3", "gemma2")
 
 
 def evaluate_and_gate_llm_dispatch(
@@ -392,6 +395,31 @@ def enforce_egress_firewall_for_url(
 
     clean_ep, host, zone = sanitize_llm_endpoint(url)
     host_low = (host or "").strip().lower()
+    # Cloud-Metadata / Link-Local (169.254.0.0/16, fe80::/10, AWS/Azure/GCP IMDS) niemals als lokal vertrauen
+    host_ip_raw = host_low.split(":")[0].strip("[]")
+    try:
+        import ipaddress as _ipaddr
+        _ip_obj = _ipaddr.ip_address(host_ip_raw)
+        if _ip_obj.is_link_local or str(_ip_obj) == "fd00:ec2::254":
+            alog = audit_logger or chained_audit_log
+            ev = alog.record_llm_dispatch(
+                agent_id=agent_id or "system",
+                provider=host_low or "external",
+                model="egress-firewall",
+                target_endpoint=clean_ep,
+                action="llm_dispatch_blocked_metadata_ip",
+                data_category="egress_firewall",
+                http_status=0,
+                zero_egress_active=True,
+                extra={"reason": f"Link-Local / Cloud-Metadata IP blockiert: {host_ip_raw}", "url": clean_ep},
+            )
+            raise ZeroEgressBlockedError(
+                f"Link-Local / Cloud-Metadata-Adresse blockiert: '{clean_ep}'",
+                audit_event=ev,
+                error_code="EGRESS_METADATA_BLOCKED",
+            )
+    except ValueError:
+        pass
     if zone == "LOCAL_ON_PREM" or host_low in _INTERNAL_EGRESS_HOSTS or (zone == "INTERNAL_GATEWAY" and "." not in host_low):
         return {"allowed": True, "blocked": False, "zone": zone, "reason": "local_or_internal_gateway"}
 
@@ -400,7 +428,10 @@ def enforce_egress_firewall_for_url(
         fw_res = egress_firewall.check_url(url, agent_id=agent_id or "agent-worker")
     except Exception as exc:
         logger.warning("[EgressGuard] Firewall-Check fehlgeschlagen (%s): %s", clean_ep, exc)
-        return {"allowed": True, "blocked": False, "zone": zone, "reason": "firewall_check_error"}
+        raise ZeroEgressBlockedError(
+            f"Egress-Firewall-Prüfung fehlgeschlagen (Fail-Closed) für '{clean_ep}': {exc}",
+            error_code="EGRESS_FIREWALL_ERROR",
+        )
 
     if fw_res.get("blocked") or not fw_res.get("allowed", True):
         reason = str(fw_res.get("reason") or f"Egress-Firewall blockiert '{clean_ep}'")
@@ -426,7 +457,7 @@ def enforce_egress_firewall_for_url(
 
 
 def _sanitize_text_for_egress(text: str, session_id: str = "") -> Tuple[str, bool]:
-    """Wendet Secret-Masking und PII-Scrubbing nacheinander auf einen Textblock an."""
+    """Wendet Secret-Masking und PII-Scrubbing nacheinander auf einen Textblock an (Fail-Closed)."""
     if not isinstance(text, str) or not text:
         return text, False
     current = text
@@ -437,17 +468,26 @@ def _sanitize_text_for_egress(text: str, session_id: str = "") -> Tuple[str, boo
         if count:
             current = masked
             changed = True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("[EgressGuard] Secret-Masking fehlgeschlagen (Fail-Closed): %s", exc)
+        raise ZeroEgressBlockedError(
+            f"Secret-Masking für ausgehenden Cloud-Call fehlgeschlagen (Fail-Closed): {exc}",
+            error_code="EGRESS_SANITIZATION_ERROR",
+        )
     try:
         from backend.pii_scrubber import pii_scrubber
         scrub_res = pii_scrubber.scrub_text(current, session_id=session_id or "")
-        if isinstance(scrub_res, dict) and scrub_res.get("text"):
-            if scrub_res.get("scrubbed") or scrub_res["text"] != current:
-                current = scrub_res["text"]
+        if isinstance(scrub_res, dict):
+            scrubbed = scrub_res.get("scrubbed_text") or scrub_res.get("text")
+            if scrubbed and (scrub_res.get("scrubbed") or scrub_res.get("redactions_count", 0) > 0 or scrubbed != current):
+                current = scrubbed
                 changed = True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("[EgressGuard] PII-Scrubbing fehlgeschlagen (Fail-Closed): %s", exc)
+        raise ZeroEgressBlockedError(
+            f"PII-Scrubbing für ausgehenden Cloud-Call fehlgeschlagen (Fail-Closed): {exc}",
+            error_code="EGRESS_SANITIZATION_ERROR",
+        )
     return current, changed
 
 

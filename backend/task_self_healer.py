@@ -177,7 +177,7 @@ Antworte strukturiert mit der korrigierten Fassung."""
                 model=model
             )
             repaired_code = res.get("content", "")
-            repaired_ok = bool(repaired_code and len(repaired_code) > 50)
+            repaired_ok = (res.get("status") == "success") and bool(repaired_code and len(repaired_code.strip()) > 10)
         except Exception as err:
             repaired_code = f"Reparatur-Versuch fehlgeschlagen: {err}"
 

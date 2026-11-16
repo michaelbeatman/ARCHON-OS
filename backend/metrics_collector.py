@@ -47,7 +47,7 @@ class MetricsCollector:
 
     def _get_kanban_metrics(self) -> Dict[str, Any]:
         """Liest Task-Status-Zähler und Queue-Tiefe aus kanban.db."""
-        counts = {"ready": 0, "in_progress": 0, "review": 0, "done": 0, "blocked": 0, "archived": 0}
+        counts = {"todo": 0, "ready": 0, "in_progress": 0, "review": 0, "done": 0, "blocked": 0, "archived": 0}
         total = 0
         kdb = get_kanban_db()
         if os.path.exists(kdb):
@@ -62,7 +62,11 @@ class MetricsCollector:
                 conn.close()
             except Exception as e:
                 print(f"[MetricsCollector] Fehler beim Lesen von kanban.db ({kdb}): {e}", file=sys.stderr)
-        return {"status_counts": counts, "total_tasks": total, "queue_depth": counts.get("ready", 0)}
+        return {
+            "status_counts": counts,
+            "total_tasks": total,
+            "queue_depth": counts.get("todo", 0) + counts.get("ready", 0),
+        }
 
     def _get_execution_and_telemetry(self) -> Dict[str, Any]:
         """Liest Dispatches, Fehler und Token-Nutzung aus agentic_memory.db."""
@@ -86,8 +90,8 @@ class MetricsCollector:
                     cur.execute("""
                         SELECT 
                             COUNT(*),
-                            SUM(CASE WHEN status = 'success' OR status = 'OK' THEN 1 ELSE 0 END),
-                            SUM(CASE WHEN status = 'error' OR status = 'failed' THEN 1 ELSE 0 END),
+                            SUM(CASE WHEN LOWER(status) IN ('success', 'ok') THEN 1 ELSE 0 END),
+                            SUM(CASE WHEN LOWER(status) IN ('error', 'failed') THEN 1 ELSE 0 END),
                             SUM(total_tokens),
                             AVG(duration_ms),
                             SUM(cost_usd)

@@ -1267,109 +1267,109 @@
   },
   "api": {
     "research": {
-      "research_dossier_nicht_gefunden": "Dossier nicht gefunden."
+      "research_dossier_nicht_gefunden": "調査レポートが見つかりません。"
     },
     "operations.approvals": {
-      "approvals_policykey_und_newvalue_sind_erforderlich": "policy_key und new_value sind erforderlich.",
-      "approvals_title_ist_erforderlich": "title ist erforderlich.",
-      "approvals_begrndung_reason_ist_erforderlich": "Begründung (reason) ist erforderlich."
+      "approvals_policykey_und_newvalue_sind_erforderlich": "policy_key と new_value は必須です。",
+      "approvals_title_ist_erforderlich": "title は必須です。",
+      "approvals_begrndung_reason_ist_erforderlich": "理由（reason）は必須です。"
     },
     "operations.dunning": {
-      "dunning_customername_und_ein_positiver_amountnet_s": "customer_name und ein positiver amount_net sind erforderlich.",
-      "dunning_invoiceid_ist_erforderlich_5": "invoice_id ist erforderlich.",
-      "dunning_dunningid_ist_erforderlich": "dunning_id ist erforderlich.",
-      "dunning_rechnung_nicht_gefunden_oder_update_fehlge": "Rechnung nicht gefunden oder Update fehlgeschlagen."
+      "dunning_customername_und_ein_positiver_amountnet_s": "customer_name と正の amount_net が必要です。",
+      "dunning_invoiceid_ist_erforderlich_5": "invoice_id は必須です。",
+      "dunning_dunningid_ist_erforderlich": "dunning_id は必須です。",
+      "dunning_rechnung_nicht_gefunden_oder_update_fehlge": "請求書が見つからないか、更新に失敗しました。"
     },
     "oracle": {
-      "oracle_oraclefeed_nicht_verfuegbar": "Oracle-Feed nicht verfuegbar: {e}",
-      "oracle_oraclelauf_fehlgeschlagen": "Oracle-Lauf fehlgeschlagen: {e}",
-      "oracle_signalid_fehlt_im_payload": "Signal-ID fehlt im Payload",
-      "oracle_oracletriage_fehlgeschlagen": "Oracle-Triage fehlgeschlagen: {e}",
-      "oracle_thema_topic_ist_erforderlich": "Thema (topic) ist erforderlich"
+      "oracle_oraclefeed_nicht_verfuegbar": "Oracle フィードを利用できません: {e}",
+      "oracle_oraclelauf_fehlgeschlagen": "Oracle 実行に失敗しました: {e}",
+      "oracle_signalid_fehlt_im_payload": "ペイロードにシグナル ID がありません。",
+      "oracle_oracletriage_fehlgeschlagen": "Oracle トリアージに失敗しました: {e}",
+      "oracle_thema_topic_ist_erforderlich": "トピック（topic）は必須です。"
     },
     "templates": {
-      "templates_fabricpattern_nicht_gefunden": "Fabric-Pattern nicht gefunden.",
-      "templates_template_nicht_gefunden_15": "Template nicht gefunden.",
-      "templates_vorlagen_konnten_nicht_gespeichert_werde": "Vorlagen konnten nicht gespeichert werden: {serr}"
+      "templates_fabricpattern_nicht_gefunden": "Fabric パターンが見つかりません。",
+      "templates_template_nicht_gefunden_15": "テンプレートが見つかりません。",
+      "templates_vorlagen_konnten_nicht_gespeichert_werde": "テンプレートを保存できませんでした: {serr}"
     },
     "deals": {
-      "deals_deal_nicht_gefunden": "Deal nicht gefunden.",
-      "deals_stage_erforderlich": "'stage' erforderlich.",
-      "deals_deal_oder_phase_ungltig": "Deal oder Phase ungültig."
+      "deals_deal_nicht_gefunden": "案件が見つかりません。",
+      "deals_stage_erforderlich": "'stage' は必須です。",
+      "deals_deal_oder_phase_ungltig": "無効な案件またはステージです。"
     },
     "hermes.config": {
-      "config_configpfad_nicht_erlaubt": "Config-Pfad nicht erlaubt: {e}",
-      "config_kein_pfad_fr_hermeskonfiguration_gefunden_22": "Kein Pfad für Hermes-Konfiguration gefunden.",
-      "config_ungltiger_konfigurationspfad_23": "Ungültiger Konfigurationspfad.",
-      "config_fehler_beim_speichern_der_konfiguration": "Fehler beim Speichern der Konfiguration: {str(e)}",
-      "config_yamlsyntaxfehler": "YAML-Syntaxfehler: {str(e)}",
-      "config_fehler_beim_schreiben_der_datei": "Fehler beim Schreiben der Datei: {str(e)}"
+      "config_configpfad_nicht_erlaubt": "設定パスが許可されていません: {e}",
+      "config_kein_pfad_fr_hermeskonfiguration_gefunden_22": "Hermes 設定のパスが見つかりません。",
+      "config_ungltiger_konfigurationspfad_23": "無効な設定パスです。",
+      "config_fehler_beim_speichern_der_konfiguration": "設定の保存エラー: {str(e)}",
+      "config_yamlsyntaxfehler": "YAML 構文エラー: {str(e)}",
+      "config_fehler_beim_schreiben_der_datei": "ファイル書き込みエラー: {str(e)}"
     },
     "erp": {
       "erp_entity_not_found": "Entity not found",
       "erp_document_not_found": "Document not found"
     },
     "chat": {
-      "chat_der_titel_darf_nicht_leer_sein": "Der Titel darf nicht leer sein.",
-      "chat_upload_fehlgeschlagen": "Upload fehlgeschlagen: {str(e)}",
-      "chat_nachricht_darf_nicht_leer_sein": "Nachricht darf nicht leer sein.",
-      "chat_prompt_darf_nicht_leer_sein": "Prompt darf nicht leer sein.",
-      "chat_openrouterapikey_fehlt_in_den_einstellungen": "OPENROUTER_API_KEY fehlt in den Einstellungen.",
-      "chat_openrouter_fehler": "OpenRouter Fehler: {resp.text[:300]}",
-      "chat_fehler_bei_bildgenerierung": "Fehler bei Bildgenerierung: {str(e)}",
-      "chat_provider_fr_bildgenerierung_aktuell_nicht_unt": "Provider '{provider}' für Bildgenerierung aktuell nicht unterstützt. Bitte 'openrouter' wählen."
+      "chat_der_titel_darf_nicht_leer_sein": "タイトルは空にできません。",
+      "chat_upload_fehlgeschlagen": "アップロードに失敗しました: {str(e)}",
+      "chat_nachricht_darf_nicht_leer_sein": "メッセージは空にできません。",
+      "chat_prompt_darf_nicht_leer_sein": "プロンプトは空にできません。",
+      "chat_openrouterapikey_fehlt_in_den_einstellungen": "設定に OPENROUTER_API_KEY がありません。",
+      "chat_openrouter_fehler": "OpenRouter エラー: {resp.text[:300]}",
+      "chat_fehler_bei_bildgenerierung": "画像生成エラー: {str(e)}",
+      "chat_provider_fr_bildgenerierung_aktuell_nicht_unt": "プロバイダー '{provider}' は現在画像生成に対応していません。'openrouter' を選択してください。"
     },
     "operations.sysops": {
-      "sysops_feld_name_ist_erforderlich": "Feld 'name' ist erforderlich.",
-      "sysops_feld_identifier_ist_erforderlich_40": "Feld 'identifier' ist erforderlich.",
-      "sysops_chaostestlauf_fehlgeschlagen": "Chaos-Testlauf fehlgeschlagen: {e}",
-      "sysops_noch_keine_chaostestergebnisse_vorhanden": "Noch keine Chaos-Testergebnisse vorhanden."
+      "sysops_feld_name_ist_erforderlich": "'name' フィールドは必須です。",
+      "sysops_feld_identifier_ist_erforderlich_40": "'identifier' フィールドは必須です。",
+      "sysops_chaostestlauf_fehlgeschlagen": "カオステスト実行に失敗しました: {e}",
+      "sysops_noch_keine_chaostestergebnisse_vorhanden": "カオステストの結果はまだありません。"
     },
     "plugins": {
-      "plugins_plugin_nicht_gefunden_44": "Plugin '{plugin_id}' nicht gefunden.",
-      "plugins_fehler_beim_neuladen_von_plugin": "Fehler beim Neuladen von Plugin '{plugin_id}'.",
-      "plugins_toolname_erforderlich": "tool_name erforderlich."
+      "plugins_plugin_nicht_gefunden_44": "プラグイン '{plugin_id}' が見つかりません。",
+      "plugins_fehler_beim_neuladen_von_plugin": "プラグイン '{plugin_id}' の再読み込みに失敗しました。",
+      "plugins_toolname_erforderlich": "tool_name は必須です。"
     },
     "containers": {
       "containers_container_not_found": "Container not found",
       "containers_failed_to_create_exec_instance": "Failed to create exec instance",
       "containers_failed_to_parse_exec_id": "Failed to parse exec ID",
       "containers_invalid_action": "Invalid action",
-      "containers_postdockercontaineraction_nicht_verfueg": "post_docker_container_action nicht verfuegbar"
+      "containers_postdockercontaineraction_nicht_verfueg": "post_docker_container_action は利用できません。"
     },
     "brain": {
-      "brain_obsidian_vault_verzeichnis_nicht_gefunden": "Obsidian Vault Verzeichnis nicht gefunden.",
-      "brain_ungltiger_dateipfad_55": "Ungültiger Dateipfad.",
-      "brain_keine_dateien_bermittelt": "Keine Dateien übermittelt.",
-      "brain_ungltiger_dateipfad_auerhalb_der_bibliothek": "Ungültiger Dateipfad außerhalb der Bibliothek.",
-      "brain_buchdokument_nicht_gefunden": "Buch-Dokument nicht gefunden.",
-      "brain_quartzkonfigurationsdatei_nicht_gefunden": "Quartz-Konfigurationsdatei nicht gefunden.",
-      "brain_keine_konfiguration_bergeben": "Keine Konfiguration übergeben.",
-      "brain_ungltiger_dateipfad": "Ungültiger Dateipfad: {e}"
+      "brain_obsidian_vault_verzeichnis_nicht_gefunden": "Obsidian Vault ディレクトリが見つかりません。",
+      "brain_ungltiger_dateipfad_55": "無効なファイルパスです。",
+      "brain_keine_dateien_bermittelt": "ファイルが送信されていません。",
+      "brain_ungltiger_dateipfad_auerhalb_der_bibliothek": "ライブラリ外の無効なファイルパスです。",
+      "brain_buchdokument_nicht_gefunden": "書籍ドキュメントが見つかりません。",
+      "brain_quartzkonfigurationsdatei_nicht_gefunden": "Quartz 設定ファイルが見つかりません。",
+      "brain_keine_konfiguration_bergeben": "設定が指定されていません。",
+      "brain_ungltiger_dateipfad": "無効なファイルパス: {e}"
     },
     "theme": {
-      "theme_bild_zu_gross_max_8_mb": "Bild zu gross (max. 8 MB)."
+      "theme_bild_zu_gross_max_8_mb": "画像が大きすぎます（最大 8 MB）。"
     },
     "operations.emails": {
-      "emails_betreff_empfnger_und_text_sind_erforderlich": "Betreff, Empfänger und Text sind erforderlich.",
-      "emails_entwurf_nicht_gefunden_64": "Entwurf nicht gefunden.",
-      "emails_betreff_empfnger_und_text_drfen_nicht": "Betreff, Empfänger und Text dürfen nicht leer sein.",
-      "emails_feedback_fr_den_agenten_ist_erforderlich": "Feedback für den Agenten ist erforderlich."
+      "emails_betreff_empfnger_und_text_sind_erforderlich": "件名、宛先、本文は必須です。",
+      "emails_entwurf_nicht_gefunden_64": "下書きが見つかりません。",
+      "emails_betreff_empfnger_und_text_drfen_nicht": "件名、宛先、本文は空にできません。",
+      "emails_feedback_fr_den_agenten_ist_erforderlich": "エージェントへのフィードバックが必要です。"
     },
     "operations.org": {
-      "org_fehler_beim_speichern": "Fehler beim Speichern: {str(e)}"
+      "org_fehler_beim_speichern": "保存エラー: {str(e)}"
     },
     "prompts": {
-      "prompts_fehler_beim_speichern": "Fehler beim Speichern: {e}",
-      "prompts_pdf_konnte_nicht_gelesen_werden": "PDF konnte nicht gelesen werden: {pe}",
-      "prompts_worddokument_konnte_nicht_gelesen_werden": "Word-Dokument konnte nicht gelesen werden: {de}",
-      "prompts_csv_konnte_nicht_gelesen_werden": "CSV konnte nicht gelesen werden: {ce}",
-      "prompts_textextraktion_fehlgeschlagen": "Text-Extraktion fehlgeschlagen: {ex}",
-      "prompts_prompt_darf_nicht_leer_sein": "Prompt darf nicht leer sein."
+      "prompts_fehler_beim_speichern": "保存エラー: {e}",
+      "prompts_pdf_konnte_nicht_gelesen_werden": "PDF を読み込めませんでした: {pe}",
+      "prompts_worddokument_konnte_nicht_gelesen_werden": "Word ドキュメントを読み込めませんでした: {de}",
+      "prompts_csv_konnte_nicht_gelesen_werden": "CSV を読み込めませんでした: {ce}",
+      "prompts_textextraktion_fehlgeschlagen": "テキスト抽出に失敗しました: {ex}",
+      "prompts_prompt_darf_nicht_leer_sein": "プロンプトは空にできません。"
     },
     "skills": {
-      "skills_ungueltige_skillid_pfadtraversal_unzulaessi": "Ungueltige skill_id (Pfad-Traversal unzulaessig).",
-      "skills_ungueltige_skillid": "Ungueltige skill_id: {e}",
+      "skills_ungueltige_skillid_pfadtraversal_unzulaessi": "無効な skill_id（パストラバーサルは禁止されています）。",
+      "skills_ungueltige_skillid": "無効な skill_id: {e}",
       "skills_skills_engine_not_initialized_77": "Skills engine not initialized",
       "skills_agentid_is_required_to_verify_permissions": "agent_id is required to verify permissions",
       "skills_agent_profile_not_found": "Agent profile not found",
@@ -1378,71 +1378,71 @@
       "skills_skills_engine_not_initialized_5": "Skills engine not initialized"
     },
     "notebooks": {
-      "notebooks_name_ist_erforderlich": "Name ist erforderlich.",
-      "notebooks_notebook_nicht_gefunden_94": "Notebook nicht gefunden.",
-      "notebooks_keine_datei_bermittelt": "Keine Datei übermittelt.",
-      "notebooks_dateiname_nicht_erlaubt": "Dateiname nicht erlaubt: {pe}",
-      "notebooks_relpath_ist_erforderlich": "rel_path ist erforderlich.",
-      "notebooks_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {pe}",
-      "notebooks_quelle_nicht_gefunden": "Quelle nicht gefunden.",
-      "notebooks_prompt_ist_erforderlich": "Prompt ist erforderlich.",
-      "notebooks_notebook_nicht_gefunden": "Notebook nicht gefunden."
+      "notebooks_name_ist_erforderlich": "名前は必須です。",
+      "notebooks_notebook_nicht_gefunden_94": "ノートブックが見つかりません。",
+      "notebooks_keine_datei_bermittelt": "ファイルが送信されていません。",
+      "notebooks_dateiname_nicht_erlaubt": "許可されていないファイル名: {pe}",
+      "notebooks_relpath_ist_erforderlich": "rel_path は必須です。",
+      "notebooks_pfad_nicht_erlaubt": "許可されていないパス: {pe}",
+      "notebooks_quelle_nicht_gefunden": "ソースが見つかりません。",
+      "notebooks_prompt_ist_erforderlich": "プロンプトは必須です。",
+      "notebooks_notebook_nicht_gefunden": "ノートブックが見つかりません。"
     },
     "system": {
-      "system_nicht_untersttzte_sprache": "Nicht unterstützte Sprache: {lang}",
-      "system_snapshotid_erforderlich": "Snapshot-ID erforderlich.",
-      "system_briefing_konnte_nicht_gelesen_werden": "Briefing konnte nicht gelesen werden: {e}"
+      "system_nicht_untersttzte_sprache": "サポートされていない言語: {lang}",
+      "system_snapshotid_erforderlich": "スナップショット ID が必要です。",
+      "system_briefing_konnte_nicht_gelesen_werden": "ブリーフィングを読み込めませんでした: {e}"
     },
     "mesh": {
-      "mesh_gltiger_filepath_erforderlich": "Gültiger 'file_path' erforderlich.",
-      "mesh_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {e}"
+      "mesh_gltiger_filepath_erforderlich": "有効な 'file_path' が必要です。",
+      "mesh_pfad_nicht_erlaubt": "許可されていないパス: {e}"
     },
     "operations.receipts": {
-      "receipts_ungltige_base64bilddaten": "Ungültige Base64-Bilddaten: {e}",
-      "receipts_konnte_bilddatei_nicht_lesen": "Konnte Bilddatei nicht lesen: {e}",
-      "receipts_entweder_imagebase64_oder_ein_existierend": "Entweder 'image_base64' oder ein existierender 'image_path' ist erforderlich.",
-      "receipts_belegverarbeitung_fehlgeschlagen": "Belegverarbeitung fehlgeschlagen: {e}",
-      "receipts_aktualisierung_fehlgeschlagen_oder_keine_": "Aktualisierung fehlgeschlagen oder keine gültigen Felder.",
-      "receipts_datei_ist_leer": "Datei ist leer.",
-      "receipts_uploadverarbeitung_fehlgeschlagen": "Upload-Verarbeitung fehlgeschlagen: {e}"
+      "receipts_ungltige_base64bilddaten": "無効な Base64 画像データ: {e}",
+      "receipts_konnte_bilddatei_nicht_lesen": "画像ファイルを読み込めませんでした: {e}",
+      "receipts_entweder_imagebase64_oder_ein_existierend": "'image_base64' または既存の 'image_path' が必要です。",
+      "receipts_belegverarbeitung_fehlgeschlagen": "領収書処理に失敗しました: {e}",
+      "receipts_aktualisierung_fehlgeschlagen_oder_keine_": "更新に失敗したか、有効なフィールドがありません。",
+      "receipts_datei_ist_leer": "ファイルが空です。",
+      "receipts_uploadverarbeitung_fehlgeschlagen": "アップロード処理に失敗しました: {e}"
     },
     "governance": {
-      "governance_agent_nicht_gefunden": "Agent '{agent_id}' nicht gefunden.",
-      "governance_itemid_erforderlich": "item_id erforderlich."
+      "governance_agent_nicht_gefunden": "エージェント '{agent_id}' が見つかりません。",
+      "governance_itemid_erforderlich": "item_id が必要です。"
     },
     "documents": {
-      "documents_gltiger_filepath_erforderlich": "Gültiger 'filepath' erforderlich.",
-      "documents_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {e}"
+      "documents_gltiger_filepath_erforderlich": "有効な 'filepath' が必要です。",
+      "documents_pfad_nicht_erlaubt": "許可されていないパス: {e}"
     },
     "telegram": {
-      "telegram_text_darf_nicht_leer_sein_118": "Text darf nicht leer sein.",
-      "telegram_text_darf_nicht_leer_sein_32": "Text darf nicht leer sein."
+      "telegram_text_darf_nicht_leer_sein_118": "テキストは空にできません。",
+      "telegram_text_darf_nicht_leer_sein_32": "テキストは空にできません。"
     },
     "hermes.profiles": {
-      "profiles_ungueltige_profileid_pfadtraversal_unzula_120": "Ungueltige profile_id (Pfad-Traversal unzulaessig).",
-      "profiles_ungueltige_profileid_121": "Ungueltige profile_id: {e}",
-      "profiles_ungltiges_bilddatenformat_muss_dataimage_": "Ungültiges Bilddaten-Format (muss data:image/... sein).",
-      "profiles_bild_konnte_nicht_gespeichert_werden_form": "Bild konnte nicht gespeichert werden (Format/Inhalt ungueltig).",
-      "profiles_profil_nicht_gefunden_oder_nicht_beschrei": "Profil {profile_id} nicht gefunden oder nicht beschreibbar.",
-      "profiles_ungueltige_profileid_pfadtraversal_unzula_34": "Ungueltige profile_id (Pfad-Traversal unzulaessig)."
+      "profiles_ungueltige_profileid_pfadtraversal_unzula_120": "無効な profile_id（パストラバーサルは禁止されています）。",
+      "profiles_ungueltige_profileid_121": "無効な profile_id: {e}",
+      "profiles_ungltiges_bilddatenformat_muss_dataimage_": "無効な画像データ形式です（data:image/... である必要があります）。",
+      "profiles_bild_konnte_nicht_gespeichert_werden_form": "画像を保存できませんでした（形式または内容が無効です）。",
+      "profiles_profil_nicht_gefunden_oder_nicht_beschrei": "プロフィール {profile_id} が見つからないか書き込みできません。",
+      "profiles_ungueltige_profileid_pfadtraversal_unzula_34": "無効な profile_id（パストラバーサルは禁止されています）。"
     },
     "ui": {
-      "ui_keine_staticindexhtml_datei_gefunden_127": "Keine static/index.html Datei gefunden.",
-      "ui_dateityp_nicht_erlaubt_jpg_jpeg_png": "Dateityp '{ext}' nicht erlaubt (jpg, jpeg, png, webp, gif).",
-      "ui_bild_zu_gro_max_8_mb": "Bild zu groß (max. 8 MB).",
-      "ui_keine_staticindexhtml_datei_gefunden_38": "Keine static/index.html Datei gefunden."
+      "ui_keine_staticindexhtml_datei_gefunden_127": "static/index.html ファイルが見つかりません。",
+      "ui_dateityp_nicht_erlaubt_jpg_jpeg_png": "ファイル形式 '{ext}' は許可されていません（jpg, jpeg, png, webp, gif）。",
+      "ui_bild_zu_gro_max_8_mb": "画像が大きすぎます（最大 8 MB）。",
+      "ui_keine_staticindexhtml_datei_gefunden_38": "static/index.html ファイルが見つかりません。"
     },
     "decisions": {
-      "decisions_decision_muss_approve_oder_reject_sein_131": "decision muss approve oder reject sein",
-      "decisions_gate_nicht_gefunden": "Gate {gate_id} nicht gefunden",
-      "decisions_taskid_fehlt": "task_id fehlt",
-      "decisions_sidecar_nicht_lesbar": "Sidecar nicht lesbar: {e}",
-      "decisions_kein_entscheidungsblock_fr": "Kein Entscheidungs-Block für {task_id}",
-      "decisions_decision_muss_approve_oder_reject_sein_41": "decision muss approve oder reject sein"
+      "decisions_decision_muss_approve_oder_reject_sein_131": "decision は approve または reject である必要があります。",
+      "decisions_gate_nicht_gefunden": "ゲート {gate_id} が見つかりません。",
+      "decisions_taskid_fehlt": "task_id がありません。",
+      "decisions_sidecar_nicht_lesbar": "Sidecar を読み取れません: {e}",
+      "decisions_kein_entscheidungsblock_fr": "{task_id} の決定ブロックがありません。",
+      "decisions_decision_muss_approve_oder_reject_sein_41": "decision は approve または reject である必要があります。"
     },
     "operations.security": {
-      "security_keine_sourceid_angegeben": "Keine source_id angegeben.",
-      "security_recoverykit_noch_nicht_generiert": "Recovery-Kit noch nicht generiert."
+      "security_keine_sourceid_angegeben": "source_id が指定されていません。",
+      "security_recoverykit_noch_nicht_generiert": "リカバリキットはまだ生成されていません。"
     }
   },
   "telemetry": {

@@ -48,9 +48,16 @@ def _init_db() -> None:
                 block_title TEXT,
                 content TEXT,
                 pinned INTEGER DEFAULT 1,
-                updated_at TEXT
+                updated_at TEXT,
+                agent_id TEXT DEFAULT 'global',
+                tenant_id TEXT DEFAULT 'default'
             )
         """)
+        for col, cdef in (("agent_id", "TEXT DEFAULT 'global'"), ("tenant_id", "TEXT DEFAULT 'default'")):
+            try:
+                conn.execute(f"ALTER TABLE core_memory_blocks ADD COLUMN {col} {cdef}")
+            except sqlite3.OperationalError:
+                pass
         # Standard-Blöcke anlegen, falls noch leer
         count = conn.execute("SELECT COUNT(*) FROM core_memory_blocks").fetchone()[0]
         if count == 0:
@@ -71,16 +78,23 @@ class CoreMemoryManager:
     def __init__(self):
         _init_db()
 
-    def list_blocks(self) -> Dict[str, Any]:
+    def list_blocks(self, agent_id: str = "global", tenant_id: str = "default") -> Dict[str, Any]:
         cfg = _get_cfg()
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT block_key, block_title, content, pinned, updated_at FROM core_memory_blocks ORDER BY block_key"
+                """
+                SELECT block_key, block_title, content, pinned, updated_at, agent_id, tenant_id
+                FROM core_memory_blocks
+                WHERE COALESCE(tenant_id, 'default') = ?
+                  AND (COALESCE(agent_id, 'global') = ? OR COALESCE(agent_id, 'global') = 'global')
+                ORDER BY block_key
+                """,
+                (tenant_id, agent_id),
             ).fetchall()
             blocks = [dict(r) for r in rows]
 
-        prompt_preview = self.compile_system_prompt_injection()
+        prompt_preview = self.compile_system_prompt_injection(agent_id=agent_id, tenant_id=tenant_id)
         return {
             "enabled": bool(cfg.get("enabled", True)),
             "max_pinned_blocks": int(cfg.get("max_pinned_blocks", 10)),
@@ -90,7 +104,15 @@ class CoreMemoryManager:
             "compiled_system_prompt_block": prompt_preview
         }
 
-    def upsert_block(self, block_key: str, content: str, block_title: str = "", mode: str = "replace") -> Dict[str, Any]:
+    def upsert_block(
+        self,
+        block_key: str,
+        content: str,
+        block_title: str = "",
+        mode: str = "replace",
+        agent_id: str = "global",
+        tenant_id: str = "default",
+    ) -> Dict[str, Any]:
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)):
             return {"updated": False, "bypassed": True}
@@ -98,18 +120,22 @@ class CoreMemoryManager:
         max_chars = int(cfg.get("max_chars_per_block", 800))
         max_blocks = int(cfg.get("max_pinned_blocks", 10))
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        scoped_key = block_key if (agent_id == "global" and tenant_id == "default") else f"{tenant_id}:{agent_id}:{block_key}"
 
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             existing = conn.execute(
                 "SELECT block_title, content FROM core_memory_blocks WHERE block_key = ?",
-                (block_key,)
+                (scoped_key,)
             ).fetchone()
 
             if existing:
                 title_final = block_title or existing[0]
                 new_content = f"{existing[1].rstrip()}\n{content.strip()}" if mode == "append" else content.strip()
             else:
-                total = conn.execute("SELECT COUNT(*) FROM core_memory_blocks").fetchone()[0]
+                total = conn.execute(
+                    "SELECT COUNT(*) FROM core_memory_blocks WHERE COALESCE(tenant_id, 'default') = ? AND COALESCE(agent_id, 'global') = ?",
+                    (tenant_id, agent_id),
+                ).fetchone()[0]
                 if total >= max_blocks:
                     return {"updated": False, "reason": f"Max pinned blocks ({max_blocks}) erreicht."}
                 title_final = block_title or block_key
@@ -121,30 +147,40 @@ class CoreMemoryManager:
                 truncated = True
 
             conn.execute("""
-                INSERT INTO core_memory_blocks (block_key, block_title, content, pinned, updated_at)
-                VALUES (?, ?, ?, 1, ?)
+                INSERT INTO core_memory_blocks (block_key, block_title, content, pinned, updated_at, agent_id, tenant_id)
+                VALUES (?, ?, ?, 1, ?, ?, ?)
                 ON CONFLICT(block_key) DO UPDATE SET
                     block_title = excluded.block_title,
                     content = excluded.content,
-                    updated_at = excluded.updated_at
-            """, (block_key, title_final, new_content, now_iso))
+                    updated_at = excluded.updated_at,
+                    agent_id = excluded.agent_id,
+                    tenant_id = excluded.tenant_id
+            """, (scoped_key, title_final, new_content, now_iso, agent_id, tenant_id))
             conn.commit()
 
         return {
             "updated": True,
-            "block_key": block_key,
+            "block_key": scoped_key,
             "mode": mode,
             "char_length": len(new_content),
             "truncated_to_quota": truncated
         }
 
-    def compile_system_prompt_injection(self) -> str:
+    def compile_system_prompt_injection(self, agent_id: str = "global", tenant_id: str = "default") -> str:
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)) or not bool(cfg.get("auto_inject_into_system_prompt", True)):
             return ""
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             rows = conn.execute(
-                "SELECT block_key, block_title, content FROM core_memory_blocks WHERE pinned = 1 ORDER BY block_key"
+                """
+                SELECT block_key, block_title, content
+                FROM core_memory_blocks
+                WHERE pinned = 1
+                  AND COALESCE(tenant_id, 'default') = ?
+                  AND (COALESCE(agent_id, 'global') = ? OR COALESCE(agent_id, 'global') = 'global')
+                ORDER BY block_key
+                """,
+                (tenant_id, agent_id),
             ).fetchall()
         if not rows:
             return ""

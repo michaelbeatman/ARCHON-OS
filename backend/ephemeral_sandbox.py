@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import uuid
+import shutil
 import subprocess
 import json
 import shlex
@@ -230,7 +231,10 @@ class EphemeralSandbox:
             zero_egress_worker_net = bool(zero_egress_worker_net)
 
         run_id = f"sandbox-{uuid.uuid4().hex[:8]}"
-        run_file = os.path.join(self.temp_dir, f"{run_id}.py" if language == "python" else f"{run_id}.sh")
+        run_dir = os.path.join(self.temp_dir, run_id)
+        os.makedirs(run_dir, exist_ok=True)
+        run_file = os.path.join(run_dir, f"{run_id}.py" if language == "python" else f"{run_id}.sh")
+        interpreter = "python" if language == "python" else "sh"
 
         try:
             with open(run_file, "w", encoding="utf-8") as f:
@@ -248,9 +252,9 @@ class EphemeralSandbox:
             else:
                 net_flag = ["--network", "none"]
 
-            # Host-Pfad für den Volume-Mount auflösen
-            host_temp_dir = _resolve_host_path(self.temp_dir)
-            if not host_temp_dir:
+            # Host-Pfad für isoliertes Per-Run-Verzeichnis auflösen
+            host_run_dir = _resolve_host_path(run_dir)
+            if not host_run_dir:
                 return {
                     "status": "error",
                     "run_id": run_id,
@@ -289,11 +293,11 @@ class EphemeralSandbox:
                 f"--user={SANDBOX_USER}",
                 "-m", f"{memory_limit_mb}m",
                 "--cpus", str(cpu_limit),
-                # Nur lesend: der Code liegt im Mount, die Sandbox schreibt nichts zurueck.
-                "-v", f"{host_temp_dir}:/sandbox:ro",
+                # Nur lesend & pro Run isoliert: kein paralleler Run sieht fremden Code.
+                "-v", f"{host_run_dir}:/sandbox:ro",
                 "-w", "/sandbox",
                 _sandbox_image(),
-                "python", f"/sandbox/{os.path.basename(run_file)}"
+                interpreter, f"/sandbox/{os.path.basename(run_file)}"
             ])
 
             # Prüfe, ob Docker verfügbar ist; andernfalls fail-closed
@@ -367,9 +371,9 @@ class EphemeralSandbox:
                 "destroyed": True
             }
         finally:
-            if os.path.exists(run_file):
+            if os.path.exists(run_dir):
                 try:
-                    os.remove(run_file)
+                    shutil.rmtree(run_dir, ignore_errors=True)
                 except Exception:
                     pass
 

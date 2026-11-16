@@ -21,7 +21,9 @@
   function buildOverlay() {
     const el = document.createElement('div');
     el.id = OVERLAY_ID;
-    el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.94);backdrop-filter:blur(6px);font-family:Outfit,sans-serif';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.style.cssText = 'position:fixed;inset:0;z-index:20000000;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.94);backdrop-filter:blur(6px);font-family:Outfit,sans-serif';
     el.innerHTML = `
       <form id="archon-auth-form" style="width:340px;max-width:92vw;background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
         <div style="font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#e2e8f0">Archon OS</div>

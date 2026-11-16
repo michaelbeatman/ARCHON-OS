@@ -26,7 +26,11 @@ import secrets
 import datetime
 from typing import Dict, Any, List, Optional
 
-DB_FILE = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db
+    DB_FILE = resolve_db("agentic_memory.db")
+except Exception:
+    DB_FILE = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
 class EmailDraftEngine:
@@ -256,7 +260,11 @@ class EmailDraftEngine:
             # Falls verknuepft mit Kanban-Task, Task auf done setzen
             if draft["source_task_id"]:
                 try:
-                    kanban_db = os.path.expanduser("~/.hermes/kanban.db")
+                    try:
+                        from backend.db_paths import resolve_db
+                        kanban_db = resolve_db("kanban.db")
+                    except Exception:
+                        kanban_db = os.path.expanduser("~/.hermes/kanban.db")
                     if os.path.exists(kanban_db):
                         with sqlite3.connect(kanban_db, timeout=5.0, factory=_ArchonClosingConn) as kconn:
                             kconn.execute("UPDATE tasks SET status = 'done' WHERE id = ?", (draft["source_task_id"],))

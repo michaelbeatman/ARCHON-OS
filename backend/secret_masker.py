@@ -9,17 +9,18 @@ import re
 from typing import Tuple
 
 SECRET_PATTERNS = [
-    # OpenAI / OpenRouter / Anthropic Keys
-    (r'sk-[a-zA-Z0-9_\-]{20,}', '[GESCHÜTZTER_API_KEY]'),
+    # Anthropic Keys vor generischem sk- prüfen, damit das spezifischere Label greift
     (r'sk-ant-[a-zA-Z0-9_\-]{20,}', '[GESCHÜTZTER_ANTHROPIC_KEY]'),
+    # OpenAI / OpenRouter Keys
+    (r'sk-[a-zA-Z0-9_\-]{20,}', '[GESCHÜTZTER_API_KEY]'),
     # Bearer Tokens
     (r'Bearer\s+[a-zA-Z0-9_\-\.\/]{24,}', 'Bearer [GESCHÜTZTES_BEARER_TOKEN]'),
     # JWT Tokens (3 Base64 Blöcke mit Punkten getrennt)
     (r'eyJ[a-zA-Z0-9_\-]{10,}\.eyJ[a-zA-Z0-9_\-]{10,}\.[a-zA-Z0-9_\-]{10,}', '[GESCHÜTZTES_JWT_TOKEN]'),
     # Private Keys
     (r'-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----', '[GESCHÜTZTER_PRIVATE_KEY]'),
-    # Passwörter in Verbindungsstrings (z.B. postgres://user:password@host)
-    (r'://([^:]+):([^@]+)@', r'://\1:[GESCHÜTZTES_PASSWORT]@'),
+    # Passwörter in Verbindungsstrings (z.B. postgres://user:password@host, kein Whitespace/Zeilenumbruch-Span)
+    (r'://([^\s:/@]+):([^\s/@]+)@', r'://\1:[GESCHÜTZTES_PASSWORT]@'),
     # Telegram Bot Tokens (z.B. 123456789:ABCdefGhI...)
     (r'\b\d{8,10}:[a-zA-Z0-9_-]{35}\b', '[GESCHÜTZTER_TELEGRAM_TOKEN]')
 ]

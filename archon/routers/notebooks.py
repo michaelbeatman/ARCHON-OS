@@ -28,7 +28,8 @@ def api_get_notebooks():
 
 
 @router.post("/api/v1/notebooks")
-def api_create_notebook(payload: dict = Body(...)):
+def api_create_notebook(request: Request, payload: dict = Body(...)):
+    require_admin_or_503(request)
     try:
         from utils.notebook_engine import create_notebook
         name = payload.get("name", "").strip()
@@ -44,7 +45,8 @@ def api_create_notebook(payload: dict = Body(...)):
 
 
 @router.delete("/api/v1/notebooks/{nb_id}")
-def api_delete_notebook(nb_id: str):
+def api_delete_notebook(request: Request, nb_id: str):
+    require_admin_or_503(request)
     try:
         from utils.notebook_engine import delete_notebook
         ok = delete_notebook(nb_id)
@@ -91,7 +93,8 @@ async def api_upload_notebook_source(nb_id: str, request: Request):
 
 
 @router.post("/api/v1/notebooks/{nb_id}/sources/attach-vault")
-def api_attach_vault_source(nb_id: str, payload: dict = Body(...)):
+def api_attach_vault_source(request: Request, nb_id: str, payload: dict = Body(...)):
+    require_admin_or_503(request)
     try:
         from utils.notebook_engine import add_source_from_vault
         rel_path = payload.get("rel_path")
@@ -110,7 +113,8 @@ def api_attach_vault_source(nb_id: str, payload: dict = Body(...)):
 
 
 @router.delete("/api/v1/notebooks/{nb_id}/sources/{src_id}")
-def api_delete_notebook_source(nb_id: str, src_id: str):
+def api_delete_notebook_source(request: Request, nb_id: str, src_id: str):
+    require_admin_or_503(request)
     try:
         from utils.notebook_engine import delete_source
         ok = delete_source(nb_id, src_id)
@@ -153,7 +157,8 @@ async def api_query_notebook(nb_id: str, payload: dict = Body(...)):
 
 
 @router.post("/api/v1/notebooks/{nb_id}/sync-obsidian")
-def api_sync_notebook_obsidian(nb_id: str, payload: dict = Body(...)):
+def api_sync_notebook_obsidian(request: Request, nb_id: str, payload: dict = Body(...)):
+    require_admin_or_503(request)
     try:
         from utils.notebook_engine import save_to_obsidian
         query = payload.get("query", "")

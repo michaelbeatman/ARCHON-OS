@@ -66,9 +66,15 @@
 
       const mountEl = document.getElementById('view-operations-mount');
       if (mountEl && (subtab === 'kanban' || subtab === 'org' || subtab === 'comm')) {
+        if (window._opsViewMountPromise) {
+          window._opsViewMountPromise.then(() => {
+            if (!document.getElementById('view-operations-mount')) setOperationsTab(subtab);
+          });
+          return;
+        }
         if (window._opsViewMountInFlight) return;
         window._opsViewMountInFlight = true;
-        fetch('/static/views/operations_view.html?v=' + Date.now())
+        window._opsViewMountPromise = fetch('/static/views/operations_view.html?v=' + Date.now())
           .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
           .then(html => {
             const el = document.getElementById('view-operations-mount');
@@ -77,7 +83,7 @@
             if (!document.getElementById('view-operations-mount')) setOperationsTab(subtab);
           })
           .catch(err => console.warn('[OpsMount] Laden fehlgeschlagen:', err))
-          .finally(() => { window._opsViewMountInFlight = false; });
+          .finally(() => { window._opsViewMountInFlight = false; window._opsViewMountPromise = null; });
         return;
       }
       const chatMountEl = document.getElementById('view-master-chat-mount');
@@ -208,6 +214,8 @@
         const colContainer = document.getElementById('ops-kanban-columns-container');
         if (opsKanbanData && typeof renderOperationsKanban === 'function' && colContainer && colContainer.children.length === 0) {
           renderOperationsKanban(opsKanbanData);
+        } else if (!opsKanbanData && colContainer && colContainer.children.length === 0) {
+          colContainer.innerHTML = '<div class="w-full flex items-center justify-center py-12 text-xs font-mono text-[var(--muted-foreground)]">Lade Kanban-Board…</div>';
         }
         if (typeof loadOperationsData === 'function') {
           loadOperationsData(false);
@@ -233,46 +241,67 @@
       if (window.lucide) lucide.createIcons();
     }
 
+    let _opsLoadInFlightPromise = null;
     async function loadOperationsData(showOverlay = true) {
+      if (_opsLoadInFlightPromise) {
+        return _opsLoadInFlightPromise;
+      }
       if (showOverlay) {
         showLoadingOverlay(kanT('ui.operations_kanban.loading_title', "Operations Center wird geladen..."), kanT('ui.operations_kanban.loading_subtitle', "Kanban-Board, Organigramm & Kommunikationskanäle werden synchronisiert"));
       }
-      try {
-        const [tasksRes, orgRes, commRes, hierRes] = await Promise.all([
-          fetch('/api/operations/kanban/tasks'),
-          fetch('/api/operations/org-chart'),
-          fetch('/api/operations/comm-feed'),
-          fetch('/api/operations/org-hierarchy')
-        ]);
-        if (tasksRes.ok) {
-          opsKanbanData = await tasksRes.json();
-          renderOperationsKanban(opsKanbanData);
-          loadOpsKanbanStats();
-        }
-        if (orgRes.ok) {
-          opsOrgData = await orgRes.json();
-          renderOperationsOrgChart(opsOrgData);
-          populateAssigneeDropdowns(opsOrgData);
-        }
-        if (commRes.ok) {
-          opsCommData = await commRes.json();
-          renderOperationsCommFeed(opsCommData, activeCommFilter);
-        }
-        if (hierRes.ok) {
-          const resp = await hierRes.json();
-          currentHierarchyData = resp.data || { nodes: [], links: [] };
-          if (opsOrgViewMode === 'flow') {
-            renderOpsOrgFlowchart();
+      _opsLoadInFlightPromise = (async () => {
+        try {
+          const kanbanPromise = fetch('/api/operations/kanban/tasks').then(async (tasksRes) => {
+            if (!tasksRes.ok) throw new Error('HTTP ' + tasksRes.status);
+            opsKanbanData = await tasksRes.json();
+            renderOperationsKanban(opsKanbanData);
+            loadOpsKanbanStats();
+          }).catch(err => {
+            console.error('[Kanban] Laden der Tasks fehlgeschlagen:', err);
+            const colContainer = document.getElementById('ops-kanban-columns-container');
+            if (!opsKanbanData && colContainer) {
+              colContainer.innerHTML = '<div class="w-full flex flex-col items-center justify-center gap-2 py-12 text-xs font-mono text-rose-500"><span>Kanban-Board konnte nicht geladen werden.</span><button type="button" onclick="loadOperationsData(false)" class="px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] cursor-pointer hover:bg-[var(--secondary)]">Erneut laden</button></div>';
+            }
+          });
+
+          const orgPromise = fetch('/api/operations/org-chart').then(async (orgRes) => {
+            if (orgRes.ok) {
+              opsOrgData = await orgRes.json();
+              renderOperationsOrgChart(opsOrgData);
+              populateAssigneeDropdowns(opsOrgData);
+              if (opsKanbanData) renderOperationsKanban(opsKanbanData);
+            }
+          }).catch(err => console.warn('[Ops] org-chart Fehler:', err));
+
+          const commPromise = fetch('/api/operations/comm-feed').then(async (commRes) => {
+            if (commRes.ok) {
+              opsCommData = await commRes.json();
+              renderOperationsCommFeed(opsCommData, activeCommFilter);
+            }
+          }).catch(err => console.warn('[Ops] comm-feed Fehler:', err));
+
+          const hierPromise = fetch('/api/operations/org-hierarchy').then(async (hierRes) => {
+            if (hierRes.ok) {
+              const resp = await hierRes.json();
+              currentHierarchyData = resp.data || { nodes: [], links: [] };
+              if (opsOrgViewMode === 'flow') {
+                renderOpsOrgFlowchart();
+              }
+            }
+          }).catch(err => console.warn('[Ops] org-hierarchy Fehler:', err));
+
+          await Promise.allSettled([kanbanPromise, orgPromise, commPromise, hierPromise]);
+        } catch (err) {
+          console.error("Fehler beim Laden der Operations-Daten:", err);
+        } finally {
+          _opsLoadInFlightPromise = null;
+          if (showOverlay) {
+            hideLoadingOverlay();
           }
+          initOpsRealtimeStream();
         }
-      } catch (err) {
-        console.error("Fehler beim Laden der Operations-Daten:", err);
-      } finally {
-        if (showOverlay) {
-          hideLoadingOverlay();
-        }
-        initOpsRealtimeStream();
-      }
+      })();
+      return _opsLoadInFlightPromise;
     }
 
     // =========================================================================
@@ -1630,7 +1659,7 @@
                   <span class="px-1.5 py-0.2 rounded border ${prioClass} text-[9px] shrink-0">${prioText}</span>
                 </div>` : ''}
                 <div class="p-3 space-y-2">
-                  <div class="flex items-center justify-between gap-1 text-[10px] font-mono">
+                  <div class="flex items-center justify-between flex-wrap gap-1 text-[10px] font-mono">
                     <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
                       ${checkboxHtml}
                       ${numBadge}

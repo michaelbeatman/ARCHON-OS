@@ -14,14 +14,22 @@ import json
 import sqlite3
 import hashlib
 import datetime
+import threading
 from typing import Dict, Any, List, Optional
 
-DB_FILE = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db
+    DB_FILE = resolve_db("agentic_memory.db")
+except Exception:
+    DB_FILE = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
 class ApprovalPolicyEngine:
+    _chain_lock = threading.RLock()
+
     def __init__(self, db_path: str = DB_FILE):
         self.db_path = db_path
+        self._chain_lock = threading.RLock()
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_db()
 
@@ -152,29 +160,33 @@ class ApprovalPolicyEngine:
     # --------------------------------------------------------------------------
     def _log_audit_change(self, user_id: str, action: str, domain: str, key: str, old_val: str, new_val: str, conn: Optional[sqlite3.Connection] = None):
         should_close = False
-        if conn is None:
-            conn = self._get_conn()
-            should_close = True
+    def _log_audit_change(self, user_id: str, action: str, domain: str, key: str, old_val: str, new_val: str, conn: sqlite3.Connection = None) -> str:
+        with self._chain_lock:
+            should_close = False
+            if conn is None:
+                conn = self._get_conn()
+                conn.execute("BEGIN IMMEDIATE")
+                should_close = True
 
-        cur = conn.cursor()
-        last_entry = cur.execute("SELECT current_hash FROM approval_policy_audit_chain ORDER BY id DESC LIMIT 1").fetchone()
-        prev_h = last_entry["current_hash"] if last_entry else GENESIS_HASH
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            cur = conn.cursor()
+            last_entry = cur.execute("SELECT current_hash FROM approval_policy_audit_chain ORDER BY id DESC LIMIT 1").fetchone()
+            prev_h = last_entry["current_hash"] if last_entry else GENESIS_HASH
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-        payload = f"{prev_h}|{now}|{user_id}|{action}|{domain}|{key}|{old_val}->{new_val}"
-        curr_h = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            payload = f"{prev_h}|{now}|{user_id}|{action}|{domain}|{key}|{old_val}->{new_val}"
+            curr_h = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-        cur.execute("""
-            INSERT INTO approval_policy_audit_chain 
-            (prev_hash, current_hash, timestamp, user_id, action, domain, policy_key, old_value, new_value)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (prev_h, curr_h, now, user_id, action, domain, key, old_val, new_val))
-        conn.commit()
+            cur.execute("""
+                INSERT INTO approval_policy_audit_chain 
+                (prev_hash, current_hash, timestamp, user_id, action, domain, policy_key, old_value, new_value)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (prev_h, curr_h, now, user_id, action, domain, key, old_val, new_val))
+            conn.commit()
 
-        if should_close:
-            conn.close()
+            if should_close:
+                conn.close()
 
-        return curr_h
+            return curr_h
 
     # --------------------------------------------------------------------------
     # Policies API
@@ -339,55 +351,69 @@ class ApprovalPolicyEngine:
             return [dict(r) for r in rows]
 
     def approve_request(self, request_id: str, approver_id: str = "admin") -> Dict[str, Any]:
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            req = cur.execute("SELECT * FROM approval_requests WHERE id = ?", (request_id,)).fetchone()
-            if not req:
-                raise ValueError("Freigabeanfrage nicht gefunden.")
+        with self._chain_lock:
+            with self._get_conn() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                cur = conn.cursor()
+                req = cur.execute("SELECT * FROM approval_requests WHERE id = ?", (request_id,)).fetchone()
+                if not req:
+                    raise ValueError("Freigabeanfrage nicht gefunden.")
 
-            if req["status"] in ("approved", "rejected"):
-                raise ValueError(f"Anfrage kann nicht abgelehnt werden (aktueller Status: {req['status']}).")
+                if req["status"] in ("approved", "rejected"):
+                    raise ValueError(f"Anfrage kann nicht genehmigt werden (aktueller Status: {req['status']}).")
 
-            if req["status"] in ("approved", "rejected"):
-                raise ValueError(f"Anfrage kann nicht genehmigt werden (aktueller Status: {req['status']}).")
+                now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                deleg_row = cur.execute("SELECT * FROM delegation_settings WHERE user_id = ?", (approver_id,)).fetchone()
+                is_deleg_active = bool(deleg_row["is_active"]) if deleg_row else False
+                sub_name = deleg_row["substitute_name"] if deleg_row else "Katharina Völk (QM)"
+                actual_approver = f"{approver_id} (i.V. {sub_name})" if is_deleg_active else approver_id
 
-            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            deleg_row = cur.execute("SELECT * FROM delegation_settings WHERE user_id = 'admin'").fetchone()
-            is_deleg_active = bool(deleg_row["is_active"]) if deleg_row else False
-            sub_name = deleg_row["substitute_name"] if deleg_row else "Katharina Völk (QM)"
-            actual_approver = f"{approver_id} (i.V. {sub_name})" if is_deleg_active and approver_id == "admin" else approver_id
+                if req["requires_four_eyes"]:
+                    if not req["first_approver"]:
+                        # 1st approval step
+                        cur.execute("""
+                            UPDATE approval_requests
+                            SET first_approver = ?, first_approved_at = ?, status = 'first_approved'
+                            WHERE id = ?
+                        """, (actual_approver, now, request_id))
+                        new_status = "first_approved"
+                    else:
+                        # 2nd approval step: Prüfen, dass zweite Genehmigung von einer anderen physischen Person stammt
+                        def _identity_tokens(actor_str: str) -> set:
+                            s = (actor_str or "").strip().lower()
+                            tokens = set()
+                            if " (i.v. " in s:
+                                main_p, sub_p = s.split(" (i.v. ", 1)
+                                tokens.add(main_p.strip())
+                                sub_clean = sub_p.rstrip(")").strip()
+                                if sub_clean:
+                                    tokens.add(sub_clean)
+                                    tokens.add(sub_clean.split(" ")[0])
+                            elif s:
+                                tokens.add(s)
+                                tokens.add(s.split(" ")[0])
+                            return {t for t in tokens if t}
 
-            if req["requires_four_eyes"]:
-                if not req["first_approver"]:
-                    # 1st approval step
-                    cur.execute("""
-                        UPDATE approval_requests
-                        SET first_approver = ?, first_approved_at = ?, status = 'first_approved'
-                        WHERE id = ?
-                    """, (actual_approver, now, request_id))
-                    new_status = "first_approved"
+                        first_ids = _identity_tokens(req["first_approver"])
+                        second_ids = _identity_tokens(actual_approver)
+                        if req["first_approver"] == actual_approver or bool(first_ids & second_ids):
+                            raise ValueError("Vier-Augen-Prinzip: Zweitgenehmigung muss durch eine andere Person erfolgen.")
+                        cur.execute("""
+                            UPDATE approval_requests
+                            SET second_approver = ?, second_approved_at = ?, status = 'approved'
+                            WHERE id = ?
+                        """, (actual_approver, now, request_id))
+                        new_status = "approved"
                 else:
-                    # 2nd approval step: Prüfen, dass zweite Genehmigung von einer anderen Person stammt
-                    first = (req["first_approver"] or "").split(" ")[0].lower()
-                    second = (actual_approver or "").split(" ")[0].lower()
-                    if req["first_approver"] == actual_approver or first == second:
-                        raise ValueError("Vier-Augen-Prinzip: Zweitgenehmigung muss durch eine andere Person erfolgen.")
                     cur.execute("""
                         UPDATE approval_requests
-                        SET second_approver = ?, second_approved_at = ?, status = 'approved'
+                        SET first_approver = ?, first_approved_at = ?, status = 'approved'
                         WHERE id = ?
                     """, (actual_approver, now, request_id))
                     new_status = "approved"
-            else:
-                cur.execute("""
-                    UPDATE approval_requests
-                    SET first_approver = ?, first_approved_at = ?, status = 'approved'
-                    WHERE id = ?
-                """, (actual_approver, now, request_id))
-                new_status = "approved"
 
-            audit_hash = self._log_audit_change(actual_approver, "APPROVE_REQUEST", req["domain"], request_id, req["status"], new_status, conn=conn)
-            conn.commit()
+                audit_hash = self._log_audit_change(actual_approver, "APPROVE_REQUEST", req["domain"], request_id, req["status"], new_status, conn=conn)
+                conn.commit()
 
             return {
                 "request_id": request_id,

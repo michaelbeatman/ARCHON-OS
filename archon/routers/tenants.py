@@ -100,9 +100,17 @@ async def switch_active_tenant(request: Request, payload: Dict[str, Any] = Body(
     return res
 
 
+def _validate_company_id(company_id: str) -> str:
+    import re as _re
+    if not company_id or ".." in company_id or not _re.fullmatch(r"[A-Za-z0-9._\-]{1,64}", company_id):
+        raise HTTPException(status_code=400, detail="Ungueltige company_id (Pfad-Traversal unzulaessig).")
+    return company_id
+
+
 @router.get("/{company_id}/number-ranges")
 def get_tenant_number_ranges(company_id: str):
     """Liefert die getrennten Beleg-Nummernkreise eines Mandanten."""
+    _validate_company_id(company_id)
     return {
         "status": "success",
         "tenant_id": company_id,
@@ -114,6 +122,7 @@ def get_tenant_number_ranges(company_id: str):
 def allocate_next_tenant_number(request: Request, company_id: str, payload: Dict[str, Any] = Body(...)):
     """Vergibt atomar die nächste Belegnummer (invoice, offer, order, credit_note, contract)."""
     require_admin_or_503(request)
+    _validate_company_id(company_id)
     doc_type = str(payload.get("doc_type") or "invoice").strip()
     try:
         number = tenant_context.next_document_number(doc_type, company_id)
@@ -125,4 +134,5 @@ def allocate_next_tenant_number(request: Request, company_id: str, payload: Dict
 @router.get("/{company_id}/isolation-status")
 def get_tenant_isolation_status(company_id: str):
     """Zeigt die physisch isolierten SQLite-Datenbanken des Mandanten."""
+    _validate_company_id(company_id)
     return {"status": "success", **tenant_context.get_isolation_status(company_id)}

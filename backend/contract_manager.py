@@ -636,7 +636,8 @@ class ContractManager:
         Verschickt Warnungen via Telegram und erstellt bei akuter Dringlichkeit (<= 14 Tage)
         einen Task im Kanban-Board.
         """
-        contracts = cls.list_contracts(status="active")
+        # Auch verlängerte Verträge weiter überwachen
+        contracts = cls.list_contracts(status="active") + cls.list_contracts(status="renewed")
         alerts_triggered = []
         today_str = datetime.date.today().strftime("%Y-%m-%d")
 
@@ -756,10 +757,14 @@ class ContractManager:
         )
 
         # Prüfe ob Task bereits existiert
-        kanban_paths = [
-            os.path.join(WORKSPACE_DIR, "data", "kanban.db"),
-            os.path.expanduser("~/.hermes/kanban.db")
-        ]
+        try:
+            from backend.db_paths import resolve_db
+            kanban_paths = [resolve_db("kanban.db")]
+        except Exception:
+            kanban_paths = [
+                os.path.join(WORKSPACE_DIR, "data", "kanban.db"),
+                os.path.expanduser("~/.hermes/kanban.db")
+            ]
         for kpath in kanban_paths:
             if os.path.exists(kpath):
                 try:
@@ -770,11 +775,18 @@ class ContractManager:
                             (task_title,)
                         ).fetchone()
                         if not existing:
+                            cols = {r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
                             tid = f"task-frist-{uuid.uuid4().hex[:6]}"
-                            conn.execute("""
-                                INSERT INTO tasks (id, title, description, priority, status, created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                            """, (tid, task_title, task_desc, "high", "todo"))
+                            if "body" in cols:
+                                conn.execute("""
+                                    INSERT INTO tasks (id, title, body, priority, status, assignee)
+                                    VALUES (?, ?, ?, ?, ?, ?)
+                                """, (tid, task_title, task_desc, 1, "todo", "legal_counsel"))
+                            else:
+                                conn.execute("""
+                                    INSERT INTO tasks (id, title, priority, status)
+                                    VALUES (?, ?, ?, ?)
+                                """, (tid, task_title, 1, "todo"))
                             print(f"[ContractManager] Kanban-Task '{tid}' für Frist erstellt.")
                     conn.close()
                     break

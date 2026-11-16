@@ -1267,109 +1267,109 @@
   },
   "api": {
     "research": {
-      "research_dossier_nicht_gefunden": "Dossier nicht gefunden."
+      "research_dossier_nicht_gefunden": "Dossier not found."
     },
     "operations.approvals": {
-      "approvals_policykey_und_newvalue_sind_erforderlich": "policy_key und new_value sind erforderlich.",
-      "approvals_title_ist_erforderlich": "title ist erforderlich.",
-      "approvals_begrndung_reason_ist_erforderlich": "Begründung (reason) ist erforderlich."
+      "approvals_policykey_und_newvalue_sind_erforderlich": "policy_key and new_value are required.",
+      "approvals_title_ist_erforderlich": "title is required.",
+      "approvals_begrndung_reason_ist_erforderlich": "Reason is required."
     },
     "operations.dunning": {
-      "dunning_customername_und_ein_positiver_amountnet_s": "customer_name und ein positiver amount_net sind erforderlich.",
-      "dunning_invoiceid_ist_erforderlich_5": "invoice_id ist erforderlich.",
-      "dunning_dunningid_ist_erforderlich": "dunning_id ist erforderlich.",
-      "dunning_rechnung_nicht_gefunden_oder_update_fehlge": "Rechnung nicht gefunden oder Update fehlgeschlagen."
+      "dunning_customername_und_ein_positiver_amountnet_s": "customer_name and a positive amount_net are required.",
+      "dunning_invoiceid_ist_erforderlich_5": "invoice_id is required.",
+      "dunning_dunningid_ist_erforderlich": "dunning_id is required.",
+      "dunning_rechnung_nicht_gefunden_oder_update_fehlge": "Invoice not found or update failed."
     },
     "oracle": {
-      "oracle_oraclefeed_nicht_verfuegbar": "Oracle-Feed nicht verfuegbar: {e}",
-      "oracle_oraclelauf_fehlgeschlagen": "Oracle-Lauf fehlgeschlagen: {e}",
-      "oracle_signalid_fehlt_im_payload": "Signal-ID fehlt im Payload",
-      "oracle_oracletriage_fehlgeschlagen": "Oracle-Triage fehlgeschlagen: {e}",
-      "oracle_thema_topic_ist_erforderlich": "Thema (topic) ist erforderlich"
+      "oracle_oraclefeed_nicht_verfuegbar": "Oracle feed unavailable: {e}",
+      "oracle_oraclelauf_fehlgeschlagen": "Oracle run failed: {e}",
+      "oracle_signalid_fehlt_im_payload": "Signal ID is missing in payload.",
+      "oracle_oracletriage_fehlgeschlagen": "Oracle triage failed: {e}",
+      "oracle_thema_topic_ist_erforderlich": "Topic is required."
     },
     "templates": {
-      "templates_fabricpattern_nicht_gefunden": "Fabric-Pattern nicht gefunden.",
-      "templates_template_nicht_gefunden_15": "Template nicht gefunden.",
-      "templates_vorlagen_konnten_nicht_gespeichert_werde": "Vorlagen konnten nicht gespeichert werden: {serr}"
+      "templates_fabricpattern_nicht_gefunden": "Fabric pattern not found.",
+      "templates_template_nicht_gefunden_15": "Template not found.",
+      "templates_vorlagen_konnten_nicht_gespeichert_werde": "Templates could not be saved: {serr}"
     },
     "deals": {
-      "deals_deal_nicht_gefunden": "Deal nicht gefunden.",
-      "deals_stage_erforderlich": "'stage' erforderlich.",
-      "deals_deal_oder_phase_ungltig": "Deal oder Phase ungültig."
+      "deals_deal_nicht_gefunden": "Deal not found.",
+      "deals_stage_erforderlich": "'stage' is required.",
+      "deals_deal_oder_phase_ungltig": "Invalid deal or stage."
     },
     "hermes.config": {
-      "config_configpfad_nicht_erlaubt": "Config-Pfad nicht erlaubt: {e}",
-      "config_kein_pfad_fr_hermeskonfiguration_gefunden_22": "Kein Pfad für Hermes-Konfiguration gefunden.",
-      "config_ungltiger_konfigurationspfad_23": "Ungültiger Konfigurationspfad.",
-      "config_fehler_beim_speichern_der_konfiguration": "Fehler beim Speichern der Konfiguration: {str(e)}",
-      "config_yamlsyntaxfehler": "YAML-Syntaxfehler: {str(e)}",
-      "config_fehler_beim_schreiben_der_datei": "Fehler beim Schreiben der Datei: {str(e)}"
+      "config_configpfad_nicht_erlaubt": "Config path not allowed: {e}",
+      "config_kein_pfad_fr_hermeskonfiguration_gefunden_22": "No path found for Hermes configuration.",
+      "config_ungltiger_konfigurationspfad_23": "Invalid configuration path.",
+      "config_fehler_beim_speichern_der_konfiguration": "Error saving configuration: {str(e)}",
+      "config_yamlsyntaxfehler": "YAML syntax error: {str(e)}",
+      "config_fehler_beim_schreiben_der_datei": "Error writing file: {str(e)}"
     },
     "erp": {
       "erp_entity_not_found": "Entity not found",
       "erp_document_not_found": "Document not found"
     },
     "chat": {
-      "chat_der_titel_darf_nicht_leer_sein": "Der Titel darf nicht leer sein.",
-      "chat_upload_fehlgeschlagen": "Upload fehlgeschlagen: {str(e)}",
-      "chat_nachricht_darf_nicht_leer_sein": "Nachricht darf nicht leer sein.",
-      "chat_prompt_darf_nicht_leer_sein": "Prompt darf nicht leer sein.",
-      "chat_openrouterapikey_fehlt_in_den_einstellungen": "OPENROUTER_API_KEY fehlt in den Einstellungen.",
-      "chat_openrouter_fehler": "OpenRouter Fehler: {resp.text[:300]}",
-      "chat_fehler_bei_bildgenerierung": "Fehler bei Bildgenerierung: {str(e)}",
-      "chat_provider_fr_bildgenerierung_aktuell_nicht_unt": "Provider '{provider}' für Bildgenerierung aktuell nicht unterstützt. Bitte 'openrouter' wählen."
+      "chat_der_titel_darf_nicht_leer_sein": "Title must not be empty.",
+      "chat_upload_fehlgeschlagen": "Upload failed: {str(e)}",
+      "chat_nachricht_darf_nicht_leer_sein": "Message must not be empty.",
+      "chat_prompt_darf_nicht_leer_sein": "Prompt must not be empty.",
+      "chat_openrouterapikey_fehlt_in_den_einstellungen": "OPENROUTER_API_KEY is missing in settings.",
+      "chat_openrouter_fehler": "OpenRouter error: {resp.text[:300]}",
+      "chat_fehler_bei_bildgenerierung": "Image generation error: {str(e)}",
+      "chat_provider_fr_bildgenerierung_aktuell_nicht_unt": "Provider '{provider}' is currently not supported for image generation. Please select 'openrouter'."
     },
     "operations.sysops": {
-      "sysops_feld_name_ist_erforderlich": "Feld 'name' ist erforderlich.",
-      "sysops_feld_identifier_ist_erforderlich_40": "Feld 'identifier' ist erforderlich.",
-      "sysops_chaostestlauf_fehlgeschlagen": "Chaos-Testlauf fehlgeschlagen: {e}",
-      "sysops_noch_keine_chaostestergebnisse_vorhanden": "Noch keine Chaos-Testergebnisse vorhanden."
+      "sysops_feld_name_ist_erforderlich": "Field 'name' is required.",
+      "sysops_feld_identifier_ist_erforderlich_40": "Field 'identifier' is required.",
+      "sysops_chaostestlauf_fehlgeschlagen": "Chaos test run failed: {e}",
+      "sysops_noch_keine_chaostestergebnisse_vorhanden": "No chaos test results available yet."
     },
     "plugins": {
-      "plugins_plugin_nicht_gefunden_44": "Plugin '{plugin_id}' nicht gefunden.",
-      "plugins_fehler_beim_neuladen_von_plugin": "Fehler beim Neuladen von Plugin '{plugin_id}'.",
-      "plugins_toolname_erforderlich": "tool_name erforderlich."
+      "plugins_plugin_nicht_gefunden_44": "Plugin '{plugin_id}' not found.",
+      "plugins_fehler_beim_neuladen_von_plugin": "Error reloading plugin '{plugin_id}'.",
+      "plugins_toolname_erforderlich": "tool_name is required."
     },
     "containers": {
       "containers_container_not_found": "Container not found",
       "containers_failed_to_create_exec_instance": "Failed to create exec instance",
       "containers_failed_to_parse_exec_id": "Failed to parse exec ID",
       "containers_invalid_action": "Invalid action",
-      "containers_postdockercontaineraction_nicht_verfueg": "post_docker_container_action nicht verfuegbar"
+      "containers_postdockercontaineraction_nicht_verfueg": "post_docker_container_action is unavailable."
     },
     "brain": {
-      "brain_obsidian_vault_verzeichnis_nicht_gefunden": "Obsidian Vault Verzeichnis nicht gefunden.",
-      "brain_ungltiger_dateipfad_55": "Ungültiger Dateipfad.",
-      "brain_keine_dateien_bermittelt": "Keine Dateien übermittelt.",
-      "brain_ungltiger_dateipfad_auerhalb_der_bibliothek": "Ungültiger Dateipfad außerhalb der Bibliothek.",
-      "brain_buchdokument_nicht_gefunden": "Buch-Dokument nicht gefunden.",
-      "brain_quartzkonfigurationsdatei_nicht_gefunden": "Quartz-Konfigurationsdatei nicht gefunden.",
-      "brain_keine_konfiguration_bergeben": "Keine Konfiguration übergeben.",
-      "brain_ungltiger_dateipfad": "Ungültiger Dateipfad: {e}"
+      "brain_obsidian_vault_verzeichnis_nicht_gefunden": "Obsidian Vault directory not found.",
+      "brain_ungltiger_dateipfad_55": "Invalid file path.",
+      "brain_keine_dateien_bermittelt": "No files submitted.",
+      "brain_ungltiger_dateipfad_auerhalb_der_bibliothek": "Invalid file path outside the library.",
+      "brain_buchdokument_nicht_gefunden": "Book document not found.",
+      "brain_quartzkonfigurationsdatei_nicht_gefunden": "Quartz configuration file not found.",
+      "brain_keine_konfiguration_bergeben": "No configuration provided.",
+      "brain_ungltiger_dateipfad": "Invalid file path: {e}"
     },
     "theme": {
-      "theme_bild_zu_gross_max_8_mb": "Bild zu gross (max. 8 MB)."
+      "theme_bild_zu_gross_max_8_mb": "Image too large (max 8 MB)."
     },
     "operations.emails": {
-      "emails_betreff_empfnger_und_text_sind_erforderlich": "Betreff, Empfänger und Text sind erforderlich.",
-      "emails_entwurf_nicht_gefunden_64": "Entwurf nicht gefunden.",
-      "emails_betreff_empfnger_und_text_drfen_nicht": "Betreff, Empfänger und Text dürfen nicht leer sein.",
-      "emails_feedback_fr_den_agenten_ist_erforderlich": "Feedback für den Agenten ist erforderlich."
+      "emails_betreff_empfnger_und_text_sind_erforderlich": "Subject, recipient, and body text are required.",
+      "emails_entwurf_nicht_gefunden_64": "Draft not found.",
+      "emails_betreff_empfnger_und_text_drfen_nicht": "Subject, recipient, and body text must not be empty.",
+      "emails_feedback_fr_den_agenten_ist_erforderlich": "Feedback for the agent is required."
     },
     "operations.org": {
-      "org_fehler_beim_speichern": "Fehler beim Speichern: {str(e)}"
+      "org_fehler_beim_speichern": "Error saving: {str(e)}"
     },
     "prompts": {
-      "prompts_fehler_beim_speichern": "Fehler beim Speichern: {e}",
-      "prompts_pdf_konnte_nicht_gelesen_werden": "PDF konnte nicht gelesen werden: {pe}",
-      "prompts_worddokument_konnte_nicht_gelesen_werden": "Word-Dokument konnte nicht gelesen werden: {de}",
-      "prompts_csv_konnte_nicht_gelesen_werden": "CSV konnte nicht gelesen werden: {ce}",
-      "prompts_textextraktion_fehlgeschlagen": "Text-Extraktion fehlgeschlagen: {ex}",
-      "prompts_prompt_darf_nicht_leer_sein": "Prompt darf nicht leer sein."
+      "prompts_fehler_beim_speichern": "Error saving: {e}",
+      "prompts_pdf_konnte_nicht_gelesen_werden": "PDF could not be read: {pe}",
+      "prompts_worddokument_konnte_nicht_gelesen_werden": "Word document could not be read: {de}",
+      "prompts_csv_konnte_nicht_gelesen_werden": "CSV could not be read: {ce}",
+      "prompts_textextraktion_fehlgeschlagen": "Text extraction failed: {ex}",
+      "prompts_prompt_darf_nicht_leer_sein": "Prompt must not be empty."
     },
     "skills": {
-      "skills_ungueltige_skillid_pfadtraversal_unzulaessi": "Ungueltige skill_id (Pfad-Traversal unzulaessig).",
-      "skills_ungueltige_skillid": "Ungueltige skill_id: {e}",
+      "skills_ungueltige_skillid_pfadtraversal_unzulaessi": "Invalid skill_id (path traversal not allowed).",
+      "skills_ungueltige_skillid": "Invalid skill_id: {e}",
       "skills_skills_engine_not_initialized_77": "Skills engine not initialized",
       "skills_agentid_is_required_to_verify_permissions": "agent_id is required to verify permissions",
       "skills_agent_profile_not_found": "Agent profile not found",
@@ -1378,71 +1378,71 @@
       "skills_skills_engine_not_initialized_5": "Skills engine not initialized"
     },
     "notebooks": {
-      "notebooks_name_ist_erforderlich": "Name ist erforderlich.",
-      "notebooks_notebook_nicht_gefunden_94": "Notebook nicht gefunden.",
-      "notebooks_keine_datei_bermittelt": "Keine Datei übermittelt.",
-      "notebooks_dateiname_nicht_erlaubt": "Dateiname nicht erlaubt: {pe}",
-      "notebooks_relpath_ist_erforderlich": "rel_path ist erforderlich.",
-      "notebooks_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {pe}",
-      "notebooks_quelle_nicht_gefunden": "Quelle nicht gefunden.",
-      "notebooks_prompt_ist_erforderlich": "Prompt ist erforderlich.",
-      "notebooks_notebook_nicht_gefunden": "Notebook nicht gefunden."
+      "notebooks_name_ist_erforderlich": "Name is required.",
+      "notebooks_notebook_nicht_gefunden_94": "Notebook not found.",
+      "notebooks_keine_datei_bermittelt": "No file submitted.",
+      "notebooks_dateiname_nicht_erlaubt": "Filename not allowed: {pe}",
+      "notebooks_relpath_ist_erforderlich": "rel_path is required.",
+      "notebooks_pfad_nicht_erlaubt": "Path not allowed: {pe}",
+      "notebooks_quelle_nicht_gefunden": "Source not found.",
+      "notebooks_prompt_ist_erforderlich": "Prompt is required.",
+      "notebooks_notebook_nicht_gefunden": "Notebook not found."
     },
     "system": {
-      "system_nicht_untersttzte_sprache": "Nicht unterstützte Sprache: {lang}",
-      "system_snapshotid_erforderlich": "Snapshot-ID erforderlich.",
-      "system_briefing_konnte_nicht_gelesen_werden": "Briefing konnte nicht gelesen werden: {e}"
+      "system_nicht_untersttzte_sprache": "Unsupported language: {lang}",
+      "system_snapshotid_erforderlich": "Snapshot ID is required.",
+      "system_briefing_konnte_nicht_gelesen_werden": "Briefing could not be read: {e}"
     },
     "mesh": {
-      "mesh_gltiger_filepath_erforderlich": "Gültiger 'file_path' erforderlich.",
-      "mesh_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {e}"
+      "mesh_gltiger_filepath_erforderlich": "Valid 'file_path' is required.",
+      "mesh_pfad_nicht_erlaubt": "Path not allowed: {e}"
     },
     "operations.receipts": {
-      "receipts_ungltige_base64bilddaten": "Ungültige Base64-Bilddaten: {e}",
-      "receipts_konnte_bilddatei_nicht_lesen": "Konnte Bilddatei nicht lesen: {e}",
-      "receipts_entweder_imagebase64_oder_ein_existierend": "Entweder 'image_base64' oder ein existierender 'image_path' ist erforderlich.",
-      "receipts_belegverarbeitung_fehlgeschlagen": "Belegverarbeitung fehlgeschlagen: {e}",
-      "receipts_aktualisierung_fehlgeschlagen_oder_keine_": "Aktualisierung fehlgeschlagen oder keine gültigen Felder.",
-      "receipts_datei_ist_leer": "Datei ist leer.",
-      "receipts_uploadverarbeitung_fehlgeschlagen": "Upload-Verarbeitung fehlgeschlagen: {e}"
+      "receipts_ungltige_base64bilddaten": "Invalid Base64 image data: {e}",
+      "receipts_konnte_bilddatei_nicht_lesen": "Could not read image file: {e}",
+      "receipts_entweder_imagebase64_oder_ein_existierend": "Either 'image_base64' or an existing 'image_path' is required.",
+      "receipts_belegverarbeitung_fehlgeschlagen": "Receipt processing failed: {e}",
+      "receipts_aktualisierung_fehlgeschlagen_oder_keine_": "Update failed or no valid fields.",
+      "receipts_datei_ist_leer": "File is empty.",
+      "receipts_uploadverarbeitung_fehlgeschlagen": "Upload processing failed: {e}"
     },
     "governance": {
-      "governance_agent_nicht_gefunden": "Agent '{agent_id}' nicht gefunden.",
-      "governance_itemid_erforderlich": "item_id erforderlich."
+      "governance_agent_nicht_gefunden": "Agent '{agent_id}' not found.",
+      "governance_itemid_erforderlich": "item_id is required."
     },
     "documents": {
-      "documents_gltiger_filepath_erforderlich": "Gültiger 'filepath' erforderlich.",
-      "documents_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {e}"
+      "documents_gltiger_filepath_erforderlich": "Valid 'filepath' is required.",
+      "documents_pfad_nicht_erlaubt": "Path not allowed: {e}"
     },
     "telegram": {
-      "telegram_text_darf_nicht_leer_sein_118": "Text darf nicht leer sein.",
-      "telegram_text_darf_nicht_leer_sein_32": "Text darf nicht leer sein."
+      "telegram_text_darf_nicht_leer_sein_118": "Text must not be empty.",
+      "telegram_text_darf_nicht_leer_sein_32": "Text must not be empty."
     },
     "hermes.profiles": {
-      "profiles_ungueltige_profileid_pfadtraversal_unzula_120": "Ungueltige profile_id (Pfad-Traversal unzulaessig).",
-      "profiles_ungueltige_profileid_121": "Ungueltige profile_id: {e}",
-      "profiles_ungltiges_bilddatenformat_muss_dataimage_": "Ungültiges Bilddaten-Format (muss data:image/... sein).",
-      "profiles_bild_konnte_nicht_gespeichert_werden_form": "Bild konnte nicht gespeichert werden (Format/Inhalt ungueltig).",
-      "profiles_profil_nicht_gefunden_oder_nicht_beschrei": "Profil {profile_id} nicht gefunden oder nicht beschreibbar.",
-      "profiles_ungueltige_profileid_pfadtraversal_unzula_34": "Ungueltige profile_id (Pfad-Traversal unzulaessig)."
+      "profiles_ungueltige_profileid_pfadtraversal_unzula_120": "Invalid profile_id (path traversal not allowed).",
+      "profiles_ungueltige_profileid_121": "Invalid profile_id: {e}",
+      "profiles_ungltiges_bilddatenformat_muss_dataimage_": "Invalid image data format (must be data:image/...).",
+      "profiles_bild_konnte_nicht_gespeichert_werden_form": "Image could not be saved (invalid format/content).",
+      "profiles_profil_nicht_gefunden_oder_nicht_beschrei": "Profile {profile_id} not found or not writable.",
+      "profiles_ungueltige_profileid_pfadtraversal_unzula_34": "Invalid profile_id (path traversal not allowed)."
     },
     "ui": {
-      "ui_keine_staticindexhtml_datei_gefunden_127": "Keine static/index.html Datei gefunden.",
-      "ui_dateityp_nicht_erlaubt_jpg_jpeg_png": "Dateityp '{ext}' nicht erlaubt (jpg, jpeg, png, webp, gif).",
-      "ui_bild_zu_gro_max_8_mb": "Bild zu groß (max. 8 MB).",
-      "ui_keine_staticindexhtml_datei_gefunden_38": "Keine static/index.html Datei gefunden."
+      "ui_keine_staticindexhtml_datei_gefunden_127": "No static/index.html file found.",
+      "ui_dateityp_nicht_erlaubt_jpg_jpeg_png": "File type '{ext}' not allowed (jpg, jpeg, png, webp, gif).",
+      "ui_bild_zu_gro_max_8_mb": "Image too large (max 8 MB).",
+      "ui_keine_staticindexhtml_datei_gefunden_38": "No static/index.html file found."
     },
     "decisions": {
-      "decisions_decision_muss_approve_oder_reject_sein_131": "decision muss approve oder reject sein",
-      "decisions_gate_nicht_gefunden": "Gate {gate_id} nicht gefunden",
-      "decisions_taskid_fehlt": "task_id fehlt",
-      "decisions_sidecar_nicht_lesbar": "Sidecar nicht lesbar: {e}",
-      "decisions_kein_entscheidungsblock_fr": "Kein Entscheidungs-Block für {task_id}",
-      "decisions_decision_muss_approve_oder_reject_sein_41": "decision muss approve oder reject sein"
+      "decisions_decision_muss_approve_oder_reject_sein_131": "decision must be 'approve' or 'reject'.",
+      "decisions_gate_nicht_gefunden": "Gate {gate_id} not found.",
+      "decisions_taskid_fehlt": "task_id is missing.",
+      "decisions_sidecar_nicht_lesbar": "Sidecar unreadable: {e}",
+      "decisions_kein_entscheidungsblock_fr": "No decision block for {task_id}.",
+      "decisions_decision_muss_approve_oder_reject_sein_41": "decision must be 'approve' or 'reject'."
     },
     "operations.security": {
-      "security_keine_sourceid_angegeben": "Keine source_id angegeben.",
-      "security_recoverykit_noch_nicht_generiert": "Recovery-Kit noch nicht generiert."
+      "security_keine_sourceid_angegeben": "No source_id specified.",
+      "security_recoverykit_noch_nicht_generiert": "Recovery kit has not been generated yet."
     }
   },
   "telemetry": {

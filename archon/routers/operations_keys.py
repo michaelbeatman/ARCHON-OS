@@ -8,7 +8,7 @@ Ausgelagert aus backend/operations_api.py.
 from typing import Any, Dict
 from fastapi import APIRouter, Body, HTTPException, Request
 
-from archon.routers._rbac import require_admin_or_503
+from archon.routers._rbac import require_admin_or_503, get_session_actor
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -32,7 +32,7 @@ def api_create_key(request: Request, req: Dict[str, Any] = Body(...)):
     scopes = req.get("scopes", ["read_only"])
     rate_limit_rpm = int(req.get("rate_limit_rpm", 60))
     rate_limit_rpd = int(req.get("rate_limit_rpd", 5000))
-    created_by = req.get("created_by", "admin").strip()
+    created_by = get_session_actor(request, fallback=req.get("created_by", "admin").strip() or "admin")
 
     if not name:
         raise HTTPException(status_code=400, detail="Name/Zweck des API-Keys ist erforderlich.")
@@ -55,7 +55,7 @@ def api_create_key(request: Request, req: Dict[str, Any] = Body(...)):
 def api_revoke_key(request: Request, key_id: str, req: Dict[str, Any] = Body(default={})):
     """Deaktiviert einen API-Key dauerhaft und revisionssicher."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    revoked_by = req.get("revoked_by", "admin").strip()
+    revoked_by = get_session_actor(request, fallback=req.get("revoked_by", "admin").strip() or "admin")
     try:
         from backend.api_key_manager import api_key_manager
         success = api_key_manager.revoke_key(key_id, revoked_by=revoked_by)
@@ -72,7 +72,7 @@ def api_revoke_key(request: Request, key_id: str, req: Dict[str, Any] = Body(def
 def api_delete_key(request: Request, key_id: str, req: Dict[str, Any] = Body(default={})):
     """Löscht einen Key vollständig aus der aktiven Liste."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    deleted_by = req.get("deleted_by", "admin").strip()
+    deleted_by = get_session_actor(request, fallback=req.get("deleted_by", "admin").strip() or "admin")
     try:
         from backend.api_key_manager import api_key_manager
         success = api_key_manager.delete_key(key_id, deleted_by=deleted_by)

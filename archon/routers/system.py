@@ -542,16 +542,29 @@ def _load_legal_profile() -> Dict[str, str]:
     legal = settings_data.get("legal_profile", {}) if isinstance(settings_data, dict) else {}
     if not isinstance(legal, dict):
         legal = {}
+    corp: Dict[str, Any] = {}
+    try:
+        from backend.corporate_manager import corporate_manager
+        corp = corporate_manager.get_company("primary") or {}
+    except Exception:
+        corp = {}
+    c_addr = corp.get("address") if isinstance(corp.get("address"), dict) else {}
+    c_cnt = corp.get("contact") if isinstance(corp.get("contact"), dict) else {}
+    c_reg = corp.get("registry") if isinstance(corp.get("registry"), dict) else {}
+    c_tax = corp.get("tax") if isinstance(corp.get("tax"), dict) else {}
+    c_city = " ".join(x for x in (str(c_addr.get("postal_code") or "").strip(), str(c_addr.get("city") or "").strip()) if x)
     return {
-        "company_name": str(legal.get("company_name") or settings_data.get("company_name") or "Archon OS Betreiber (in settings.json -> legal_profile konfigurieren)"),
-        "street": str(legal.get("street") or "Musterstraße 1"),
-        "postal_city": str(legal.get("postal_city") or "10115 Berlin, Deutschland"),
-        "represented_by": str(legal.get("represented_by") or "Geschäftsführung"),
-        "email": str(legal.get("email") or settings_data.get("admin_email") or "info@archon-local.invalid"),
-        "phone": str(legal.get("phone") or "-"),
-        "vat_id": str(legal.get("vat_id") or "-"),
-        "register_court": str(legal.get("register_court") or "-"),
-        "register_number": str(legal.get("register_number") or "-"),
+        "company_name": str(legal.get("company_name") or corp.get("name") or settings_data.get("company_name") or "Archon OS Betreiber (in settings.json -> legal_profile konfigurieren)"),
+        "legal_form": str(legal.get("legal_form") or corp.get("legal_form") or "-"),
+        "street": str(legal.get("street") or c_addr.get("street") or "Bitte in settings.json -> legal_profile pflegen"),
+        "postal_city": str(legal.get("postal_city") or c_city or "-"),
+        "represented_by": str(legal.get("represented_by") or c_reg.get("managing_directors") or "Geschäftsführung"),
+        "email": str(legal.get("email") or c_cnt.get("email") or settings_data.get("admin_email") or "-"),
+        "phone": str(legal.get("phone") or c_cnt.get("phone") or "-"),
+        "vat_id": str(legal.get("vat_id") or c_tax.get("vat_id") or "-"),
+        "w_idnr": str(legal.get("w_idnr") or c_tax.get("w_idnr") or "-"),
+        "register_court": str(legal.get("register_court") or c_reg.get("court") or "-"),
+        "register_number": str(legal.get("register_number") or c_reg.get("number") or "-"),
     }
 
 
@@ -565,33 +578,37 @@ def api_legal_impressum():
 <style>body{{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#111}}h1{{font-size:1.5rem}}code{{background:#f4f4f5;padding:.15rem .35rem;border-radius:4px}}</style>
 </head><body>
 <h1>Impressum (§ 5 DDG)</h1>
-<p><strong>Anbieter:</strong> {p['company_name']}<br>
+<p><strong>Anbieter:</strong> {p['company_name']} ({p['legal_form']})<br>
 <strong>Vertreten durch:</strong> {p['represented_by']}<br>
 <strong>Anschrift:</strong> {p['street']}, {p['postal_city']}</p>
 <p><strong>Kontakt:</strong> E-Mail: {p['email']} · Telefon: {p['phone']}</p>
-<p><strong>Register / Steuer:</strong> Registergericht: {p['register_court']} ({p['register_number']}) · USt-IdNr.: {p['vat_id']}</p>
-<p><small>Hinweis: Betreiberdaten können unter <code>settings.json</code> im Objekt <code>legal_profile</code> gepflegt werden.</small></p>
+<p><strong>Register / Steuer:</strong> Registergericht: {p['register_court']} ({p['register_number']}) · USt-IdNr.: {p['vat_id']} · W-IdNr.: {p['w_idnr']}</p>
+<p><small>Hinweis: Betreiberdaten können unter <code>settings.json</code> im Objekt <code>legal_profile</code> oder im Unternehmensstamm gepflegt werden.</small></p>
 </body></html>"""
     return HTMLResponse(content=html_body)
 
 
 @router.get("/api/legal/datenschutz")
 def api_legal_datenschutz():
-    """Datenschutzhinweise gemäß Art. 13 DSGVO."""
+    """Datenschutzhinweise gemäß Art. 13 DSGVO und § 25 TDDDG."""
     import html as _html
     p = {k: _html.escape(v) for k, v in _load_legal_profile().items()}
     html_body = f"""<!doctype html>
 <html lang="de"><head><meta charset="utf-8"><title>Datenschutz — Archon OS</title>
 <style>body{{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#111}}h1{{font-size:1.5rem}}h2{{font-size:1.1rem;margin-top:1.25rem}}</style>
 </head><body>
-<h1>Datenschutzhinweise (Art. 13 DSGVO)</h1>
-<p><strong>Verantwortlicher:</strong> {p['company_name']}, {p['street']}, {p['postal_city']} (E-Mail: {p['email']})</p>
-<h2>1. Zweck und Rechtsgrundlage der Verarbeitung</h2>
-<p>Die Verarbeitung von Nutzer-, Kontakt- und Vorgangsdaten erfolgt ausschließlich zur Bereitstellung der lokalen Workspace-, CRM/ERP- und KI-Assistenzfunktionen auf Grundlage von Art. 6 Abs. 1 lit. b, c und f DSGVO sowie bei Marketing-Kommunikation ausschließlich nach ausdrücklichem Opt-In gemäß Art. 6 Abs. 1 lit. a DSGVO.</p>
-<h2>2. KI-Egress &amp; Datenschutz-Routing</h2>
-<p>Sensible Datenkategorien werden durch das Privacy-Gateway (Zero-Egress-Guard, Secret-Masker und PII-Scrubber) vor externer Übermittlung geschützt oder auf lokale On-Premise-Modelle geroutet.</p>
-<h2>3. Aufbewahrung &amp; Betroffenenrechte</h2>
-<p>Sie haben gemäß Art. 15–21 DSGVO das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung sowie Datenübertragbarkeit; gesetzliche GoBD-Aufbewahrungsfristen (§ 147 AO / § 257 HGB) bleiben unberührt.</p>
+<h1>Datenschutzhinweise (Art. 13 DSGVO &amp; § 25 TDDDG)</h1>
+<p><strong>Verantwortlicher:</strong> {p['company_name']}, {p['street']}, {p['postal_city']} (E-Mail: {p['email']}, Tel.: {p['phone']})</p>
+<h2>1. Zwecke, Rechtsgrundlagen &amp; berechtigte Interessen (Art. 13 Abs. 1 lit. c, d DSGVO)</h2>
+<p>Die Verarbeitung erfolgt zur Vertragserfüllung und Mandantenverwaltung (Art. 6 Abs. 1 lit. b DSGVO), zur Erfüllung steuer- und handelsrechtlicher Pflichten (Art. 6 Abs. 1 lit. c DSGVO i.V.m. AO/HGB/UStG), auf Grundlage berechtigter Interessen an IT-Sicherheit, Audit-Integrität und Betriebssicherheit (Art. 6 Abs. 1 lit. f DSGVO) sowie bei ausdrücklicher Einwilligung gemäß Art. 6 Abs. 1 lit. a DSGVO.</p>
+<h2>2. Empfänger, KI-Egress &amp; Drittlandtransfer (Art. 13 Abs. 1 lit. e, f DSGVO)</h2>
+<p>Sensible Domänen (Finanzen, Verträge, CRM, HR, DSGVO) werden über das Privacy-Gateway auf lokale On-Premise-Modelle geleitet oder per Secret-Masker/PII-Scrubber anonymisiert. Bei explizit freigegebenen externen KI-APIs oder Messaging-Diensten (z. B. OpenRouter/Anthropic/OpenAI/Telegram) in Drittländern außerhalb des EWR greifen Garantien nach Art. 44–49 DSGVO (EU-Standardvertragsklauseln bzw. Angemessenheitsbeschluss).</p>
+<h2>3. Speicherdauer (Art. 13 Abs. 2 lit. a DSGVO &amp; BEG IV)</h2>
+<p>Buchungsbelege und Rechnungen unterliegen seit BEG IV einer gesetzlichen Aufbewahrungsfrist von <strong>8 Jahren</strong> (§ 147 Abs. 3 AO, § 257 Abs. 4 HGB, § 14b UStG), Handelsbriefe 6 Jahre. Sonstige Kontakt- und Sessiondaten werden nach Zweckerfüllung gelöscht bzw. bei gesetzlicher Pflicht nach Art. 18 DSGVO gesperrt.</p>
+<h2>4. Speicherzugriffe &amp; Cookies (§ 25 TDDDG)</h2>
+<p>Die Web-Oberfläche speichert Session-Token, Sprachauswahl (<code>archon_language</code>) und UI-Zustände technisch erforderlich nach § 25 Abs. 2 Nr. 2 TDDDG im Browser (Cookie / <code>localStorage</code>). Optionale Komfort-Präferenzen können im Browser gelöscht werden.</p>
+<h2>5. Betroffenenrechte, Widerruf &amp; Beschwerderecht (Art. 13 Abs. 2 lit. b–e DSGVO)</h2>
+<p>Sie haben das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20), Widerspruch (Art. 21) sowie jederzeitigen Widerruf erteilter Einwilligungen (Art. 7 Abs. 3) ohne Berührung der Rechtmäßigkeit bis zum Widerruf. Zudem besteht ein <strong>Beschwerderecht bei einer Datenschutz-Aufsichtsbehörde</strong> (Art. 77 DSGVO). Bereitstellung vertraglicher/steuerlicher Pflichtdaten ist gesetzlich oder vertraglich erforderlich; ohne sie ist eine Rechnungs- oder Vertragsabwicklung nicht möglich.</p>
 </body></html>"""
     return HTMLResponse(content=html_body)
 

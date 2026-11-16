@@ -40,6 +40,8 @@
 
     modal = document.createElement("div");
     modal.id = MODAL_ID;
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
     modal.className = "fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4";
     modal.innerHTML = `
       <div class="w-full max-w-5xl rounded-2xl border theme-border bg-white dark:bg-zinc-900 p-5 shadow-2xl max-h-[90vh] flex flex-col gap-3.5 text-xs">
@@ -244,6 +246,7 @@
 
     container.querySelectorAll("[data-litdel]").forEach((btn) => {
       btn.onclick = async () => {
+        if (!confirm("Diesen Art.-4-Kompetenznachweis wirklich löschen?")) return;
         await api(`/api/v1/governance/ai-act/literacy-register/${encodeURIComponent(btn.dataset.litdel)}`, {
           method: "DELETE",
         });

@@ -112,7 +112,7 @@ def sanitize_llm_endpoint(endpoint: str) -> Tuple[str, str, str]:
         zone = "EXTERNAL_CLOUD"
         try:
             ip_obj = ipaddress.ip_address(hostname)
-            if ip_obj.is_loopback or ip_obj.is_private:
+            if not ip_obj.is_link_local and (ip_obj.is_loopback or ip_obj.is_private):
                 zone = "LOCAL_ON_PREM"
         except ValueError:
             if hostname.endswith((".local", ".lan", ".internal", ".home.arpa")):
@@ -405,7 +405,7 @@ class ChainedAuditLog:
                             for col_key in ("provider", "model", "target_host", "target_endpoint", "egress_zone"):
                                 col_val = str(r[col_key] or "")
                                 pay_val = str(parsed_payload.get(col_key, "") or "")
-                                if col_val and col_val != pay_val:
+                                if col_val != pay_val:
                                     return {
                                         "valid": False,
                                         "corrupted_id": r["id"],

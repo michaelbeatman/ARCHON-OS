@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import uuid
 import logging
 import asyncio
 import json
@@ -407,11 +408,13 @@ class AgentRouter:
                         f"Freigabe: in cost-budget.json \"override\": true setzen oder "
                         f"\"daily_budget\" erhöhen."
                     )
-            elif ratio >= 0.8:
-                self._warn_budget_once(current_spend, daily_budget)
-                if reasoning_level in ("max", "deep", "high", "medium"):
-                    logger.info(f"[TokenGuard] Budget bei {ratio*100:.0f}%: Drossele Reasoning von '{reasoning_level}' auf 'low'.")
-                    reasoning_level = "low"
+            else:
+                downgrade_thresh = max(0.1, min(0.99, float(policy.get("budget_downgrade_threshold_pct", 80)) / 100.0))
+                if ratio >= downgrade_thresh:
+                    self._warn_budget_once(current_spend, daily_budget)
+                    if reasoning_level in ("max", "deep", "high", "medium"):
+                        logger.info(f"[TokenGuard] Budget bei {ratio*100:.0f}% (Schwelle {downgrade_thresh*100:.0f}%): Drossele Reasoning von '{reasoning_level}' auf 'low'.")
+                        reasoning_level = "low"
 
         return messages, model, reasoning_level
 
@@ -563,7 +566,7 @@ class AgentRouter:
                 "max_tokens": max_tokens
             }
             if sys_msg:
-                client_payload["system"] = sys_msg[0]
+                client_payload["system"] = "\n\n".join(str(s) for s in sys_msg if s)
             if lvl not in ("off", "none"):
                 ant_budget = max(1024, or_tokens)
                 client_payload["thinking"] = {"type": "enabled", "budget_tokens": ant_budget}
@@ -624,9 +627,6 @@ class AgentRouter:
         if True:
             for idx, m_try in enumerate(candidate_models):
                 try:
-                    target_url, request_headers, client_payload = self._build_request_payload(
-                        messages, provider, m_try, api_keys, stream=False, max_tokens=max_tokens, reasoning_level=reasoning_level
-                    )
                     from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
                     hop_gate = evaluate_and_gate_llm_dispatch(
                         agent_id=agent_id,
@@ -635,18 +635,24 @@ class AgentRouter:
                         messages=messages,
                         role=role,
                         explicit_category=category,
-                        intended_url=target_url,
+                    )
+                    eff_provider = "local" if hop_gate.get("routed_to_local") and prov_low not in ("local", "ollama", "lmstudio", "vllm") else provider
+                    eff_model = (hop_gate.get("model") or hop_gate.get("routed_model") or m_try) if hop_gate.get("routed_to_local") else m_try
+                    target_url, request_headers, client_payload = self._build_request_payload(
+                        messages, eff_provider, eff_model, api_keys, stream=False, max_tokens=max_tokens, reasoning_level=reasoning_level
                     )
                     enforce_egress_firewall_for_url(target_url, agent_id=agent_id)
                     _, _, ep_zone = sanitize_llm_endpoint(target_url)
                     is_local_hop = (
                         bool(hop_gate.get("routed_to_local"))
                         or ep_zone == "LOCAL_ON_PREM"
-                        or (provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
+                        or (eff_provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
                     )
+                    hop_sid = f"router-{agent_id}-{uuid.uuid4().hex[:8]}"
                     safe_payload = sanitize_outbound_llm_payload(
                         client_payload,
                         agent_id=agent_id,
+                        session_id=hop_sid,
                         is_local=is_local_hop,
                     )
                     resp = await client.post(target_url, headers=request_headers, json=safe_payload)
@@ -666,12 +672,29 @@ class AgentRouter:
                     data = resp.json()
                     if prov_low == "anthropic":
                         blocks = data.get("content") or []
-                        return "".join(
+                        raw_text = "".join(
                             b.get("text", "")
                             for b in blocks
                             if isinstance(b, dict) and b.get("type") == "text"
                         )
-                    return data["choices"][0]["message"]["content"]
+                    else:
+                        raw_text = data["choices"][0]["message"]["content"]
+                    if not is_local_hop:
+                        try:
+                            from backend.pii_scrubber import pii_scrubber
+                            rehyd = pii_scrubber.rehydrate_text(raw_text, session_id=hop_sid)
+                            if isinstance(rehyd, dict) and "text" in rehyd:
+                                raw_text = rehyd["text"]
+                        except Exception:
+                            pass
+                    try:
+                        from backend.output_policy_linter import output_policy_linter
+                        linted = output_policy_linter.lint_and_clean(raw_text)
+                        if isinstance(linted, dict) and linted.get("cleaned_text") is not None:
+                            raw_text = linted["cleaned_text"]
+                    except Exception:
+                        pass
+                    return raw_text
                 except ZeroEgressBlockedError:
                     raise
                 except Exception as e:
@@ -739,9 +762,6 @@ class AgentRouter:
 
         for idx, m_try in enumerate(candidate_models):
             try:
-                target_url, request_headers, client_payload = self._build_request_payload(
-                    messages, provider, m_try, api_keys, stream=True, reasoning_level=reasoning_level
-                )
                 from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
                 hop_gate = evaluate_and_gate_llm_dispatch(
                     agent_id=agent_id,
@@ -750,18 +770,24 @@ class AgentRouter:
                     messages=messages,
                     role=role,
                     explicit_category=category,
-                    intended_url=target_url,
+                )
+                eff_provider = "local" if hop_gate.get("routed_to_local") and prov_low not in ("local", "ollama", "lmstudio", "vllm") else provider
+                eff_model = (hop_gate.get("model") or hop_gate.get("routed_model") or m_try) if hop_gate.get("routed_to_local") else m_try
+                target_url, request_headers, client_payload = self._build_request_payload(
+                    messages, eff_provider, eff_model, api_keys, stream=True, reasoning_level=reasoning_level
                 )
                 enforce_egress_firewall_for_url(target_url, agent_id=agent_id)
                 _, _, ep_zone = sanitize_llm_endpoint(target_url)
                 is_local_hop = (
                     bool(hop_gate.get("routed_to_local"))
                     or ep_zone == "LOCAL_ON_PREM"
-                    or (provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
+                    or (eff_provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
                 )
+                hop_sid = f"router-stream-{agent_id}-{uuid.uuid4().hex[:8]}"
                 safe_payload = sanitize_outbound_llm_payload(
                     client_payload,
                     agent_id=agent_id,
+                    session_id=hop_sid,
                     is_local=is_local_hop,
                 )
             except ZeroEgressBlockedError as ze_err:

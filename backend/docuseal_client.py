@@ -179,6 +179,19 @@ class DocuSealClient:
         now_iso = datetime.datetime.now().isoformat()
         kanban_task_id = None
 
+        ev_low = str(event_type or "").strip().lower()
+        is_completed = ev_low in ("", "submission.completed", "form.completed")
+        if ev_low in ("submission.declined", "form.declined"):
+            target_status = "declined"
+        elif ev_low in ("submission.expired",):
+            target_status = "expired"
+        elif ev_low in ("form.viewed", "submission.viewed", "form.started"):
+            target_status = "viewed"
+        elif is_completed:
+            target_status = "completed"
+        else:
+            target_status = ev_low.split(".")[-1] or "updated"
+
         # 1. Update esign_contracts Status in DB
         if os.path.exists(self.memory_db):
             try:
@@ -190,15 +203,15 @@ class DocuSealClient:
                         kanban_task_id = row[0]
                     cur.execute("""
                         UPDATE esign_contracts
-                        SET status = 'completed', completed_at = ?
+                        SET status = ?, completed_at = CASE WHEN ? THEN ? ELSE completed_at END
                         WHERE submission_id = ?
-                    """, (now_iso, sub_id))
+                    """, (target_status, 1 if is_completed else 0, now_iso, sub_id))
                     conn.commit()
             except Exception as e:
                 print(f"[DocuSeal] Webhook DB error: {e}", file=sys.stderr)
 
-        # 2. Update Kanban-Task falls vorhanden
-        if kanban_task_id and os.path.exists(self.kanban_db):
+        # 2. Update Kanban-Task nur bei tatsächlich abgeschlossener Signatur
+        if is_completed and kanban_task_id and os.path.exists(self.kanban_db):
             try:
                 with sqlite3.connect(self.kanban_db, timeout=5.0, factory=_ArchonClosingConn) as conn:
                     conn.execute("""

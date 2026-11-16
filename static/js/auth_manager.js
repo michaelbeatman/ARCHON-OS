@@ -189,11 +189,11 @@ class AuthManager {
         <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-10 h-10 rounded-full bg-zinc-800 text-white font-bold flex items-center justify-center text-sm font-mono shadow-xs">
-              ${(u.display_name || u.username)[0].toUpperCase()}
+              ${this.escapeHtml((u.display_name || u.username || '?')[0].toUpperCase())}
             </div>
             <div>
-              <h4 class="text-sm font-black">${u.display_name}</h4>
-              <p class="text-xs text-[var(--muted-foreground)] font-mono">@${u.username} · ${u.email || authT('ui.auth_manager.email_local', 'Lokal')}</p>
+              <h4 class="text-sm font-black">${this.escapeHtml(u.display_name || u.username)}</h4>
+              <p class="text-xs text-[var(--muted-foreground)] font-mono">@${this.escapeHtml(u.username)} · ${u.email ? this.escapeHtml(u.email) : authT('ui.auth_manager.email_local', 'Lokal')}</p>
             </div>
           </div>
           <button onclick="document.getElementById('auth-profile-modal').classList.add('hidden')" class="w-7 h-7 rounded-lg hover:bg-[var(--secondary)] flex items-center justify-center text-[var(--muted-foreground)] cursor-pointer">✕</button>
@@ -210,7 +210,7 @@ class AuthManager {
           </div>
           <div class="flex justify-between">
             <span class="text-[var(--muted-foreground)]">${authT('ui.auth_manager.label_role', 'Rolle:')}</span>
-            <span class="font-bold uppercase text-sky-500">${u.role}</span>
+            <span class="font-bold uppercase text-sky-500">${this.escapeHtml(u.role)}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-[var(--muted-foreground)]">${authT('ui.auth_manager.label_rights', 'System-Rechte:')}</span>
@@ -295,11 +295,13 @@ class AuthManager {
     if (old) old.remove();
     const modal = document.createElement('div');
     modal.id = 'archon-pw-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
     modal.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.88);backdrop-filter:blur(4px)';
     modal.innerHTML = `
       <form id="archon-pw-form" style="width:340px;max-width:92vw;background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:10px">
         <div style="font-size:13px;font-weight:800;color:#e2e8f0">${authT('ui.auth_manager.pw_title', 'Passwort ändern')}</div>
-        <div style="font-size:11px;color:#94a3b8;font-family:monospace">@${username}</div>
+        <div style="font-size:11px;color:#94a3b8;font-family:monospace">@${this.escapeHtml(username)}</div>
         ${isSelf ? '<input id="archon-pw-current" type="password" placeholder="' + authT('ui.auth_manager.ph_pw_current', 'Aktuelles Passwort') + '" required style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:9px 11px;color:#e2e8f0;font-size:12px">' : ''}
         <input id="archon-pw-new" type="password" placeholder="${authT('ui.auth_manager.ph_pw_new', 'Neues Passwort (min. 8 Zeichen)')}" required style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:9px 11px;color:#e2e8f0;font-size:12px">
         <input id="archon-pw-new2" type="password" placeholder="${authT('ui.auth_manager.ph_pw_repeat', 'Neues Passwort wiederholen')}" required style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:9px 11px;color:#e2e8f0;font-size:12px">

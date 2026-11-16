@@ -129,15 +129,12 @@
           const badgeEl = document.getElementById("guard-plugin-total-badge");
           if (badgeEl) badgeEl.innerText = plugins.length;
           
-          // Fill form
-          const elMaxContext = document.getElementById("guard-set-max-context");
-          if (elMaxContext) elMaxContext.value = limits.max_context_tokens || 32000;
-          const elMaxHistory = document.getElementById("guard-set-max-history");
-          if (elMaxHistory) elMaxHistory.value = limits.max_history_messages || 20;
-          const elDaily = document.getElementById("guard-set-daily-budget");
-          if (elDaily) elDaily.value = budget.daily_budget || 2.0;
-          const elTask = document.getElementById("guard-set-task-budget");
-          if (elTask) elTask.value = budget.task_budget || 0.5;
+          // Fill form (Guardian-View & System-Settings synchron befüllen)
+          const _setVal = (ids, v) => ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = v; });
+          _setVal(["guard-set-max-context", "sysset-guard-max-context"], limits.max_context_tokens || 32000);
+          _setVal(["guard-set-max-history", "sysset-guard-max-history"], limits.max_history_messages || 20);
+          _setVal(["guard-set-daily-budget", "sysset-guard-daily-budget"], budget.daily_budget || 2.0);
+          _setVal(["guard-set-task-budget", "sysset-guard-task-budget"], budget.task_budget || 0.5);
           const elSteps = document.getElementById("guard-set-max-steps");
           if (elSteps) elSteps.value = limits.max_steps_per_task || 15;
           const elTimeout = document.getElementById("guard-set-timeout");
@@ -258,7 +255,7 @@
           <td class="py-2.5 px-4 font-bold text-slate-800">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full ${p.total_tokens > 10000000 ? 'bg-amber-500' : 'bg-emerald-500'}"></span>
-              <span class="truncate max-w-[180px]" title="${p.profile}">${p.profile}</span>
+              <span class="truncate max-w-[180px]" title="${gdEsc(p.profile)}">${gdEsc(p.profile)}</span>
             </div>
           </td>
           <td class="py-2.5 px-4 text-right text-slate-600">${(p.total_calls || 0).toLocaleString()}</td>
@@ -364,7 +361,7 @@
       tbody.innerHTML = models.map(m => `
         <tr class="hover:bg-slate-50 transition">
           <td class="py-2.5 px-4 font-bold text-slate-800">
-            <span class="truncate max-w-[200px] block" title="${m.model}">${m.model}</span>
+            <span class="truncate max-w-[200px] block" title="${gdEsc(m.model)}">${gdEsc(m.model)}</span>
           </td>
           <td class="py-2.5 px-4 text-right text-slate-600">${(m.calls || 0).toLocaleString()}</td>
           <td class="py-2.5 px-4 text-right font-bold text-slate-900">${(m.total_tokens || 0).toLocaleString()}</td>
@@ -481,14 +478,20 @@
       renderGuardianSessions(filtered);
     }
 
-    async function saveGuardianSettings(e) {
+    async function saveGuardianSettings(e, source = "guardian") {
       if (e) e.preventDefault();
       try {
+        const pfx = source === "sysset" ? "sysset-guard-" : "guard-set-";
+        const _readNum = (id, fb, parser) => {
+          const el = document.getElementById(id) || document.getElementById("guard-set-" + id.replace(/^sysset-guard-/, ""));
+          const v = el ? parser(el.value) : NaN;
+          return Number.isFinite(v) ? v : fb;
+        };
         const payload = {
-          max_context_tokens: parseInt(document.getElementById("guard-set-max-context")?.value) || 32000,
-          max_history_messages: parseInt(document.getElementById("guard-set-max-history")?.value) || 20,
-          daily_budget: parseFloat(document.getElementById("guard-set-daily-budget")?.value) || 2.0,
-          task_budget: parseFloat(document.getElementById("guard-set-task-budget")?.value) || 0.5,
+          max_context_tokens: _readNum(pfx + "max-context", 32000, parseInt),
+          max_history_messages: _readNum(pfx + "max-history", 20, parseInt),
+          daily_budget: _readNum(pfx + "daily-budget", 2.0, parseFloat),
+          task_budget: _readNum(pfx + "task-budget", 0.5, parseFloat),
           max_steps_per_task: parseInt(document.getElementById("guard-set-max-steps")?.value) || 15,
           session_timeout_seconds: parseInt(document.getElementById("guard-set-timeout")?.value) || 60,
           cache_ttl_hours: parseInt(document.getElementById("guard-set-cache-ttl")?.value) || 24,
@@ -499,6 +502,7 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(payload)
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data.status === "success") {
           const feedback = document.getElementById("guard-save-feedback");

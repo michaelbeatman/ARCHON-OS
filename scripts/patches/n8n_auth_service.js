@@ -95,7 +95,8 @@ let AuthService = class AuthService {
             }
             const isPreviewMode = process.env.N8N_PREVIEW_MODE === 'true';
             const shouldSkipAuth = (allowSkipPreviewAuth && isPreviewMode) || allowUnauthenticated;
-            if (!req.user && !allowUnauthenticated) {
+            const autoOwnerEnabled = process.env.N8N_ARCHON_AUTO_OWNER === 'true';
+            if (autoOwnerEnabled && !req.user && !allowUnauthenticated) {
                 try {
                     const users = await this.userRepository.find({ relations: ['role'] });
                     const owner = (users && users.find(u => u.role?.slug === 'global:owner')) || (users && users[0]);

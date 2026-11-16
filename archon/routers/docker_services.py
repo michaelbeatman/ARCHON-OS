@@ -268,6 +268,7 @@ async def api_get_models(request: Request):
         or "x-hermes-csrf-token" in request.headers
         or "authorization" in request.headers
     ):
+        _require_admin(request)
         import main as app_main
 
         return await app_main.forward_to_hermes(request)

@@ -6,7 +6,8 @@ Ausgelagert aus backend/operations_api.py.
 """
 
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Request
+from archon.routers._rbac import get_session_actor
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -71,9 +72,9 @@ def api_get_email_draft(draft_id: str):
 
 
 @router.post("/email-drafts/{draft_id}/approve")
-def api_approve_email_draft(draft_id: str, req: Dict[str, Any] = Body(default={})):
+def api_approve_email_draft(request: Request, draft_id: str, req: Dict[str, Any] = Body(default={})):
     """Aktion 1: Freigeben & Senden via SMTP."""
-    approver_id = req.get("approver_id", "admin").strip()
+    approver_id = get_session_actor(request, fallback=req.get("approver_id", "admin").strip() or "admin")
     try:
         from backend.email_draft_engine import email_draft_engine
         draft = email_draft_engine.approve_and_send(draft_id, approver_id=approver_id)

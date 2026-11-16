@@ -224,6 +224,12 @@ def api_fire_hermes_profile_paperclip(request: Request, profile_id: str):
 @router.post("/api/hermes/profiles/{profile_id}/model")
 def api_set_hermes_profile_model(request: Request, profile_id: str, req: SetProfileModelRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    if ".." in profile_id or "/" in profile_id or "\\" in profile_id:
+        raise HTTPException(status_code=400, detail="Ungueltige profile_id (Pfad-Traversal unzulaessig).")
+    try:
+        profile_id = safe_filename(profile_id)
+    except (PathJailError, ValueError) as e:
+        raise HTTPException(status_code=400, detail={"code": "profiles_invalid_profile_id", "params": {"error": str(e)}})
     try:
         import api_provider
         prov = req.provider.strip().lower()
@@ -292,6 +298,12 @@ def api_delete_hermes_profile(request: Request, profile_id: str, gate_approved_i
     ``archon.services.profiles_service``.
     """
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    if ".." in profile_id or "/" in profile_id or "\\" in profile_id:
+        raise HTTPException(status_code=400, detail="Ungueltige profile_id (Pfad-Traversal unzulaessig).")
+    try:
+        profile_id = safe_filename(profile_id)
+    except (PathJailError, ValueError) as e:
+        raise HTTPException(status_code=400, detail={"code": "profiles_invalid_profile_id", "params": {"error": str(e)}})
     try:
         return profiles_service.delete_profile(profile_id, approved_gate_id=gate_approved_id)
     except ProfileProtectedError as prot_err:

@@ -44,6 +44,7 @@ _BGB_BASE_RATE_PERIODS = [
     (datetime.date(2025, 1, 1), 0.0227),
     (datetime.date(2025, 7, 1), 0.0127),
     (datetime.date(2026, 1, 1), 0.0127),
+    (datetime.date(2026, 7, 1), 0.0152),
 ]
 
 
@@ -112,6 +113,7 @@ class DunningEngine:
                             amount_gross REAL NOT NULL,
                             currency TEXT DEFAULT 'EUR',
                             status TEXT DEFAULT 'open',
+                            is_b2b INTEGER DEFAULT 1,
                             last_reminder_date TEXT,
                             dunning_level INTEGER DEFAULT 0,
                             dunning_fee REAL DEFAULT 0.0,
@@ -119,6 +121,10 @@ class DunningEngine:
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     """)
+                    try:
+                        conn.execute("ALTER TABLE invoices ADD COLUMN is_b2b INTEGER DEFAULT 1")
+                    except sqlite3.OperationalError:
+                        pass
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS dunning_history (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -248,7 +254,7 @@ class DunningEngine:
 
         return candidates
 
-    def generate_dunning_draft(self, invoice_id: str, level: int) -> Dict[str, Any]:
+    def generate_dunning_draft(self, invoice_id: str, level: int, include_b2b_pauschale: bool = False) -> Dict[str, Any]:
         """Generiert einen rechtssicheren 3-Stufen Mahnentwurf zur Freigabe (HITL)."""
         if not os.path.exists(self.memory_db):
             raise ValueError("Datenbank nicht erreichbar.")
@@ -290,7 +296,7 @@ class DunningEngine:
                 f"Mit freundlichen Grüßen,\nBuchhaltung Archon OS"
             )
         elif level == 2:
-            fee = 5.0
+            fee = 40.0 if (is_b2b and include_b2b_pauschale) else 5.0  # § 288 Abs. 5 BGB: 40 EUR B2B-Verzugspauschale optional aktivierbar
             interest = statutory_interest
             deadline_days = 5
             deadline = (today + datetime.timedelta(days=deadline_days)).isoformat()
@@ -302,7 +308,7 @@ class DunningEngine:
                 f"leider noch immer keinen Zahlungseingang feststellen. Die Forderung ist seit dem {inv['due_date']} ({overdue_days} Tage) fällig.\n\n"
                 f"Forderungsaufstellung:\n"
                 f"- Rechnungsbetrag: {inv['amount_gross']:.2f} EUR\n"
-                f"- Mahnkostenpauschale: {fee:.2f} EUR\n"
+                f"- {'Verzugskostenpauschale (§ 288 Abs. 5 BGB)' if (is_b2b and include_b2b_pauschale) else 'Mahnkostenpauschale'}: {fee:.2f} EUR\n"
                 f"- Verzugszinsen (§ 288 BGB, {overdue_days} Tage): {interest:.2f} EUR\n"
                 f"- GESAMTFORDERUNG: {total_claim:.2f} EUR\n\n"
                 f"Wir fordern Sie hiermit auf, den Gesamtbetrag von {total_claim:.2f} EUR bis spätestens {deadline} "
@@ -310,7 +316,7 @@ class DunningEngine:
                 f"Mit freundlichen Grüßen,\nBuchhaltung Archon OS"
             )
         else:  # level >= 3
-            fee = 10.0
+            fee = 40.0 if (is_b2b and include_b2b_pauschale) else 10.0
             interest = statutory_interest
             deadline_days = 3
             deadline = (today + datetime.timedelta(days=deadline_days)).isoformat()
@@ -447,11 +453,11 @@ class DunningEngine:
             if row_cust and row_cust[1]:
                 from backend.email_draft_engine import email_draft_engine
                 draft_res = email_draft_engine.create_draft(
-                    to_email=row_cust[1],
                     subject=f"Mahnung Stufe {lvl} zu Rechnung {inv_id}",
-                    body=d_dict.get("draft_text") or f"Sehr geehrte Damen und Herren,\n\nMahnung Stufe {lvl} zu Rechnung {inv_id} über {d_dict['total_claim']:.2f} EUR.",
-                    source_agent="finance_lead",
-                    metadata={"dunning_id": dunning_id, "invoice_id": inv_id, "level": lvl, "approved_hitl": True},
+                    recipient=row_cust[1],
+                    body_text=d_dict.get("draft_text") or f"Sehr geehrte Damen und Herren,\n\nMahnung Stufe {lvl} zu Rechnung {inv_id} über {d_dict['total_claim']:.2f} EUR.",
+                    agent_id="finance_lead",
+                    agent_name="Finance Lead",
                 )
                 email_draft_id = draft_res.get("draft_id") if isinstance(draft_res, dict) else None
         except Exception:

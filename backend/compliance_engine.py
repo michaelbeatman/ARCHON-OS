@@ -195,13 +195,24 @@ class ComplianceEngine:
     # Pflicht-Guardrail-Prüfung (Anhang III / Art. 50)
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _is_valid_literacy_entry(entry: Dict[str, Any], today_iso: str) -> bool:
+        if entry.get("status") != "ACTIVE":
+            return False
+        valid_until = str(entry.get("valid_until") or "").strip()[:10]
+        if valid_until and valid_until < today_iso:
+            return False
+        return True
+
     def evaluate_guardrails(self) -> Dict[str, Any]:
         inv_mgr = self._get_inventory_mgr()
         inventory = inv_mgr.get_inventory()
         audit_status = self._safe_verify_audit_chain()
         literacy = self.list_literacy_entries()
+        today_iso = datetime.date.today().isoformat()
         active_high_risk_operators = [
-            e for e in literacy if e.get("status") == "ACTIVE" and "HIGH_RISK" in (e.get("scope_tiers") or [])
+            e for e in literacy
+            if self._is_valid_literacy_entry(e, today_iso) and "HIGH_RISK" in (e.get("scope_tiers") or [])
         ]
 
         violations: List[Dict[str, Any]] = []
@@ -210,6 +221,14 @@ class ComplianceEngine:
             tier = item.get("risk_tier")
             oversight = str(item.get("human_oversight_measure") or "")
             c_status = str(item.get("compliance_status") or "")
+
+            if tier == "PROHIBITED" or c_status == "BLOCKED_PROHIBITED":
+                violations.append({
+                    "agent_id": aid,
+                    "risk_tier": "PROHIBITED",
+                    "reason": "Art. 5 EU AI Act: Verbotene KI-Praktik darf nicht betrieben werden.",
+                })
+                continue
 
             if tier == "HIGH_RISK":
                 if "HITL" not in oversight and "4-Augen" not in oversight:
@@ -260,6 +279,13 @@ class ComplianceEngine:
         if not item:
             return {"allowed": True, "agent_id": agent_id, "risk_tier": "UNCLASSIFIED"}
 
+        if item.get("risk_tier") == "PROHIBITED" or item.get("compliance_status") == "BLOCKED_PROHIBITED":
+            return {
+                "allowed": False,
+                "agent_id": agent_id,
+                "risk_tier": "PROHIBITED",
+                "reason": "Aktivierung gesperrt: Verbotene KI-Praktik nach Art. 5 EU AI Act.",
+            }
         if item.get("compliance_status") == "NON_COMPLIANT":
             return {
                 "allowed": False,
@@ -277,8 +303,9 @@ class ComplianceEngine:
                     "reason": "Aktivierung gesperrt: Anhang-III-Hochrisiko erfordert MANDATORY_HITL.",
                 }
             literacy = self.list_literacy_entries()
+            today_iso = datetime.date.today().isoformat()
             has_operator = any(
-                e.get("status") == "ACTIVE" and "HIGH_RISK" in (e.get("scope_tiers") or [])
+                self._is_valid_literacy_entry(e, today_iso) and "HIGH_RISK" in (e.get("scope_tiers") or [])
                 for e in literacy
             )
             if not has_operator:

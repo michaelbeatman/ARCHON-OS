@@ -272,7 +272,8 @@ def trigger_test_watchdog_alarm_endpoint(request: Request):
 
 
 @router.post("/acknowledge")
-def acknowledge_watchdog_alarm_endpoint(payload: dict = None):
+def acknowledge_watchdog_alarm_endpoint(request: Request, payload: dict = None):
+    _require_admin(request)
     import main as app_main
 
     runner = getattr(app_main, "watchdog_runner", None)

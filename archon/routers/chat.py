@@ -5,7 +5,7 @@ für Archon OS. Ausgelagert aus main.py zur modularen Entschlackung.
 
 from __future__ import annotations
 from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
 
 import asyncio
 import base64
@@ -22,7 +22,7 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -453,8 +453,9 @@ class RenameSessionRequest(BaseModel):
 
 @router.post("/api/chat/sessions/{session_id}/rename")
 @router.patch("/api/chat/sessions/{session_id}")
-def api_rename_chat_session(session_id: str, req: RenameSessionRequest):
+def api_rename_chat_session(request: Request, session_id: str, req: RenameSessionRequest):
     """Ermöglicht das freie Umbenennen jeder Chat-Session."""
+    require_admin_or_503(request)
     new_title = req.title.strip()
     if not new_title:
         raise HTTPException(status_code=400, detail={"code": "chat_title_empty", "params": {}})
@@ -468,8 +469,9 @@ def api_rename_chat_session(session_id: str, req: RenameSessionRequest):
 
 
 @router.post("/api/chat/upload")
-def api_chat_upload(file: UploadFile = File(...)):
+def api_chat_upload(request: Request, file: UploadFile = File(...)):
     """Empfängt Datei-Uploads und legt sie im Agent-Workspace (/projects/ bzw. ./agent_workspace) ab."""
+    require_admin_or_503(request)
     try:
         target_dir = "/projects" if os.path.exists("/projects") else os.path.join(WORKSPACE_DIR, "uploads")
         os.makedirs(target_dir, exist_ok=True)

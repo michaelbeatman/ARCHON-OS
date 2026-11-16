@@ -28,7 +28,7 @@ def _get_cfg() -> Dict[str, Any]:
 
 
 EMAIL_REGEX = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
-IBAN_REGEX = re.compile(r"\b[A-Z]{2}\d{2}(?:\s?\d{4}){3,5}(?:\s?\d{1,2})?\b")
+IBAN_REGEX = re.compile(r"\b[A-Z]{2}\d{2}(?:[\s\-]?[A-Z0-9]{4}){2,7}(?:[\s\-]?[A-Z0-9]{1,4})?\b")
 PHONE_REGEX = re.compile(r"(?:\+\d{1,3}[\s\-]?|0\d{2,4}[\s\-/]?)\d{3,4}[\s\-]?\d{3,5}\b")
 
 
@@ -58,11 +58,15 @@ class BidirectionalPIIScrubber:
             }
 
         sid = session_id or f"pii-{uuid.uuid4().hex[:10]}"
-        vault: Dict[str, str] = {}
+        with self._lock:
+            existing_vault = dict(self._sessions.get(sid) or {})
+        vault: Dict[str, str] = existing_vault
         working = text or ""
 
         def _replace_matches(pattern: re.Pattern, prefix: str, current_text: str) -> str:
             counter = 1
+            while f"[{prefix}_{counter}]" in vault:
+                counter += 1
             for match in list(pattern.finditer(current_text)):
                 raw_val = match.group(0)
                 placeholder = f"[{prefix}_{counter}]"
@@ -79,13 +83,15 @@ class BidirectionalPIIScrubber:
             working = _replace_matches(PHONE_REGEX, "PHONE", working)
 
         with self._lock:
-            while len(self._sessions) >= self.max_sessions:
-                self._sessions.popitem(last=False)
+            if sid not in self._sessions:
+                while len(self._sessions) >= self.max_sessions:
+                    self._sessions.popitem(last=False)
             self._sessions[sid] = vault
         return {
             "enabled": True,
             "session_id": sid,
             "scrubbed_text": working,
+            "text": working,
             "redactions_count": len(vault),
             "placeholders": list(vault.keys())
         }

@@ -273,9 +273,10 @@ async def api_telegram_voice_relay(
 
 
 @router.post("/send")
-def api_telegram_send(payload: TelegramSendPayload):
+def api_telegram_send(request: Request, payload: TelegramSendPayload):
     """Versendet eine Benachrichtigung, ein Briefing oder System-Statusnachricht
     direkt an Telegram (z. B. aufgerufen durch n8n Automatisierungs-Routinen)."""
+    require_admin_or_503(request)
     import telegram_notify
 
     if not payload.text:

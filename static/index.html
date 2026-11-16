@@ -1300,7 +1300,7 @@
             <div class="rounded-lg p-3 bg-green-500/10 border border-green-500/25 flex items-center justify-between text-xs text-green-500 font-mono mb-2">
               <div class="flex items-center gap-2">
                 <span class="inline-block w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_#22c55e]"></span>
-                <span><span data-i18n="ui.agent.router_label">LLM Router:</span> <a href="http://host.docker.internal:20128/v1" target="_blank" class="underline">http://host.docker.internal:20128/v1</a> <span data-i18n="ui.agent.router_connected">[VERBUNDEN]</span></span>
+                <span><span data-i18n="ui.agent.router_label">LLM Router:</span> <a href="http://host.docker.internal:20128/v1" target="_blank" rel="noopener noreferrer" class="underline">http://host.docker.internal:20128/v1</a> <span data-i18n="ui.agent.router_connected">[VERBUNDEN]</span></span>
               </div>
               <div>
                 <span><span data-i18n="ui.agent.active_role">Aktive Rolle:</span> <strong id="agent-logs-active-role">-</strong></span>
@@ -2138,7 +2138,7 @@ print('Ausführung erfolgreich!')</textarea>
   </script>
   <script src="/static/js/mission_control_cockpit.js?v=2026111113"></script>
   <script src="/static/js/research_lab.js?v=2026111113"></script>
-  <script src="/static/js/operations_kanban.js?v=2026111113"></script>
+  <script src="/static/js/operations_kanban.js?v=2026111601"></script>
   <script src="/static/js/operations_projects.js?v=2026111113"></script>
   <script src="/static/js/appshell_architect.js?v=2026111113"></script>
   <script src="/static/js/css_live_studio.js?v=2026111113"></script>
@@ -2671,12 +2671,22 @@ print('Ausführung erfolgreich!')</textarea>
       window.__archon_initialized = true;
       showLoadingOverlay("Archon OS wird initialisiert...", "Kernel-Dienste, Agenten-Flotte & Workspaces werden geladen");
       // --- V2 COMPONENT FETCHES (Core Active Views First, Secondary Views Non-Blocking) ---
-      const _v2Mount = (url, mountId, afterFn) =>
-        fetch(url).then(r => r.text()).then(html => {
+      window._v2MountPromises = window._v2MountPromises || {};
+      const _v2Mount = (url, mountId, afterFn) => {
+        const p = fetch(url).then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.text();
+        }).then(html => {
           const el = document.getElementById(mountId);
           if (el) el.outerHTML = html;
           if (afterFn) afterFn();
         });
+        if (mountId === 'view-operations-mount') {
+          window._opsViewMountPromise = p.finally(() => { window._opsViewMountPromise = null; });
+        }
+        window._v2MountPromises[mountId] = p.catch(() => null);
+        return p;
+      };
       const _coreViews = [
         _v2Mount('/static/views/view_app_frame_studio.html?v=2026111113', 'view-app-frame-studio-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); }),
         _v2Mount('/static/views/system_settings_modal.html?v=2026111113', 'system-settings-mount'),
@@ -2715,7 +2725,11 @@ print('Ausführung erfolgreich!')</textarea>
       } catch(err) {
         console.error("V2 Core Fetch Error: ", err);
       }
-      Promise.allSettled(_bgSpecs.map(spec => _v2Mount(spec[1], spec[2], spec[3]))).catch(err => {
+      Promise.allSettled(_bgSpecs.map(spec => {
+        const mp = _v2Mount(spec[1], spec[2], spec[3]);
+        window._v2MountPromises['tab:' + spec[0]] = mp.finally(() => { delete window._v2MountPromises['tab:' + spec[0]]; });
+        return mp;
+      })).catch(err => {
         console.error("V2 Deferred Fetch Error: ", err);
       });
       // -----------------------------
@@ -2860,7 +2874,10 @@ print('Ausführung erfolgreich!')</textarea>
             label.classList.toggle("font-medium", !isActive);
           }
         }
-        if (view) view.classList.toggle("hidden", !isActive);
+        if (view) {
+          view.classList.toggle("hidden", !isActive);
+          view.style.display = isActive ? "flex" : "none";
+        }
       });
       if (tab === "automation") {
         const iframe = document.getElementById("automation-n8n-iframe");
@@ -2888,6 +2905,10 @@ print('Ausführung erfolgreich!')</textarea>
       }
       if (tabId === "automation") {
         setTab("operations", "automation");
+        return;
+      }
+      if (!document.getElementById(`view-${tabId}`) && window._v2MountPromises && window._v2MountPromises['tab:' + tabId]) {
+        window._v2MountPromises['tab:' + tabId].finally(() => setTab(tabId, subtab));
         return;
       }
       currentTab = tabId;
@@ -2951,7 +2972,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (selectedView) {
         selectedView.classList.remove("hidden");
         selectedView.style.display = (tabId === "kanban" || tabId === "agent-profiles") ? "block" : "flex";
-        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream" || tabId === "finance" || tabId === "addresses" || tabId === "items" || tabId === "operations-erp" || tabId === "approval-policies" || tabId === "corporate" || tabId === "plugins") {
+        if (tabId === "master-chat" || tabId === "mission-control" || tabId === "inbox" || tabId === "operations" || tabId === "library" || tabId === "showroom" || tabId === "watchdog" || tabId === "ai-mastermind" || tabId === "research" || tabId === "guardian" || tabId === "log-stream" || tabId === "finance" || tabId === "addresses" || tabId === "items" || tabId === "operations-erp" || tabId === "approval-policies" || tabId === "corporate" || tabId === "plugins" || tabId === "brain") {
           selectedView.style.height = "100%";
           selectedView.style.flex = "1 1 0%";
           selectedView.style.minHeight = "0";

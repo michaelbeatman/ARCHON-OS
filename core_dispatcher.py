@@ -418,35 +418,68 @@ async def dispatch_to_omniroute_or_container(
     has_throttle_slot = False
     try:
         from backend.concurrency_throttle import concurrency_throttle
-        await concurrency_throttle.acquire_slot(agent_id, slot_id, priority=2)
+        acquired = await concurrency_throttle.acquire_slot(agent_id, slot_id, priority=2)
+        if not acquired:
+            return {
+                "status": "blocked",
+                "error": "concurrency_throttle_timeout",
+                "content": "🛑 [CONCURRENCY-THROTTLE]: Maximalzahl gleichzeitiger Agenten-Tasks erreicht (Timeout).",
+            }
         has_throttle_slot = True
     except Exception:
         has_throttle_slot = False
 
     try:
         async with _get_task_semaphore():
+            tr_id = None
+            try:
+                from backend.otel_tracer import tracer
+                tr_id = tracer.start_trace(f"exec.{agent_id}", task_id=task_id or None, agent_id=agent_id)
+            except Exception:
+                tr_id = None
+
             res = await _dispatch_to_omniroute_or_container_exec(
                 agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id, history=history
             )
             duration_ms = (time.time() - t_start) * 1000.0
-            try:
-                from backend.otel_tracer import tracer
-                tr_id = f"task-{task_id}" if task_id else tracer.start_trace(f"exec.{agent_id}", task_id=task_id, agent_id=agent_id)
-                tracer.record_span(
-                    trace_id=tr_id,
-                    name=f"llm.{agent_id}",
-                    span_type="llm",
-                    agent_id=agent_id,
-                    model=res.get("model") or model,
-                    input_data=prompt[:500],
-                    output_data=(res.get("content") or "")[:500],
-                    input_tokens=res.get("input_tokens", 0),
-                    output_tokens=res.get("output_tokens", 0),
-                    duration_ms=duration_ms,
-                    status="OK" if res.get("status") == "success" else "ERROR"
-                )
-            except Exception:
-                pass
+            in_tok = int(res.get("input_tokens", 0) or 0)
+            out_tok = int(res.get("output_tokens", 0) or 0)
+            est_cost = float(res["cost_usd"]) if res.get("cost_usd") is not None else round((in_tok * 0.00000015) + (out_tok * 0.00000030), 6)
+            used_model = res.get("model") or model
+            is_ok = res.get("status") == "success"
+
+            if tr_id:
+                try:
+                    from backend.otel_tracer import tracer
+                    tracer.record_span(
+                        trace_id=tr_id,
+                        name=f"llm.{agent_id}",
+                        span_type="llm",
+                        agent_id=agent_id,
+                        model=used_model,
+                        input_data=prompt[:500],
+                        output_data=(res.get("content") or "")[:500],
+                        input_tokens=in_tok,
+                        output_tokens=out_tok,
+                        cost_usd=est_cost,
+                        duration_ms=duration_ms,
+                        status="OK" if is_ok else "ERROR"
+                    )
+                    tracer.end_trace(tr_id, status="OK" if is_ok else "ERROR")
+                except Exception:
+                    pass
+
+            if res.get("status") in ("success", "error") and used_model:
+                try:
+                    from backend.bandit_model_router import bandit_model_router
+                    bandit_model_router.record_outcome(
+                        model_id=used_model,
+                        success=is_ok,
+                        latency_ms=duration_ms,
+                    )
+                except Exception:
+                    pass
+
             return res
     finally:
         if has_throttle_slot:
@@ -499,13 +532,14 @@ async def _dispatch_to_omniroute_or_container_exec(
     try:
         from backend.speculative_prefetcher import get_speculative_prefetcher
         prefetcher = get_speculative_prefetcher()
-        p_res = prefetcher.prefetch_for_task(prompt)
+        p_res = prefetcher.prefetch_for_task(prompt, agent_id=agent_id)
+        p_items = p_res.get("cached_items", {}) if isinstance(p_res, dict) else {}
         p_lines = []
-        if "crm_contact" in p_res:
-            c = p_res["crm_contact"]
+        if "crm_contact" in p_items:
+            c = p_items["crm_contact"]
             p_lines.append(f"- CRM-Kontakt: {c.get('first_name', '')} {c.get('last_name', '')} ({c.get('email', '')}) [Firma: {c.get('company', 'Unbekannt')}]")
-        if "erp_doc" in p_res:
-            d = p_res["erp_doc"]
+        if "erp_doc" in p_items:
+            d = p_items["erp_doc"]
             p_lines.append(f"- ERP-Dokument: {d.get('doc_number', '')} ({d.get('type', '')}) [Status: {d.get('status', '')}]")
         if p_lines:
             prefetch_addon = "\n\n### [SPEKULATIV VORGELADENE KONTEXT-DATEN]:\n" + "\n".join(p_lines)
@@ -529,7 +563,7 @@ async def _dispatch_to_omniroute_or_container_exec(
     core_mem_addon = ""
     try:
         from backend.core_memory_manager import core_memory_manager
-        cm_xml = core_memory_manager.compile_system_prompt_injection()
+        cm_xml = core_memory_manager.compile_system_prompt_injection(agent_id=agent_id)
         if cm_xml:
             core_mem_addon = f"\n\n{cm_xml}"
     except Exception:
@@ -616,15 +650,14 @@ async def _dispatch_to_omniroute_or_container_exec(
         try:
             p_cfg_chk = get_privacy_config()
             if bool(p_cfg_chk.get("block_crm_erp_prefetch_on_cloud", True)) and bool(p_cfg_chk.get("sensitive_local_routing", True)):
-                full_system_prompt_no_prefetch = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{memory_context_addon}".strip()
-                messages = [
-                    {"role": "system", "content": full_system_prompt_no_prefetch},
+                full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{core_mem_addon}{memory_context_addon}".strip()
+                messages = [{"role": "system", "content": full_system_prompt}] + chat_history_turns + [
                     {"role": "user", "content": prompt},
                 ]
         except Exception:
             pass
 
-    async def _audited_post(http_client: httpx.AsyncClient, url: str, *, provider_id: str, model_id: str, headers: dict | None = None, json_body: dict | None = None):
+    async def _audited_post(http_client: httpx.AsyncClient, url: str, *, provider_id: str, model_id: str, headers: dict | None = None, json_body: dict | None = None, timeout: float | None = None):
         from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
         hop_gate = evaluate_and_gate_llm_dispatch(
             agent_id=agent_id,
@@ -647,7 +680,10 @@ async def _dispatch_to_omniroute_or_container_exec(
             session_id=task_id or agent_id,
             is_local=is_local_hop,
         )
-        r = await http_client.post(url, headers=headers, json=safe_body)
+        post_kwargs: dict[str, Any] = {"headers": headers, "json": safe_body}
+        if timeout is not None:
+            post_kwargs["timeout"] = timeout
+        r = await http_client.post(url, **post_kwargs)
         log_completed_llm_dispatch(
             agent_id=agent_id,
             provider=provider_id,

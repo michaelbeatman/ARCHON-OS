@@ -149,14 +149,11 @@ class AgentScorecardEngine:
         try:
             with self._get_memory_conn() as mconn:
                 l_row = mconn.execute("""
-                    SELECT count(*) FROM learnings WHERE topic LIKE ? OR trigger LIKE ? OR rule LIKE ?
-                """, (f"%{agent_id}%", f"%{agent_id}%", f"%{agent_id}%")).fetchone()
+                    SELECT count(*) FROM learnings WHERE agent_id = ? OR category LIKE ? OR summary LIKE ?
+                """, (agent_id, f"%{agent_id}%", f"%{agent_id}%")).fetchone()
                 learnings_count = l_row[0] if l_row else 0
         except Exception:
             pass
-
-        if learnings_count == 0 and completed_count > 0:
-            learnings_count = min(12, max(1, completed_count * 2))
 
         # 6. Operator Notizen abrufen
         operator_notes = self.get_operator_notes(agent_id)

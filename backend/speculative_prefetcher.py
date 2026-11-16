@@ -17,46 +17,102 @@ import datetime
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db
+    DB_PATH = resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+
+
+def _get_cfg() -> Dict[str, Any]:
+    try:
+        from backend.autonomy_settings import get_module_config
+        return get_module_config("speculative_prefetcher")
+    except Exception:
+        return {
+            "enabled": True,
+            "ttl_seconds": 180,
+            "prefetch_crm": True,
+            "prefetch_erp": True,
+            "prefetch_learnings": True,
+        }
 
 
 class SpeculativePrefetcher:
-    def __init__(self, ttl_seconds: int = 180):
-        self.ttl_seconds = ttl_seconds
+    def __init__(self, ttl_seconds: Optional[int] = None):
+        self._ttl_override = ttl_seconds
+        self.ttl_seconds = ttl_seconds if ttl_seconds is not None else int(_get_cfg().get("ttl_seconds", 180))
         self._cache: Dict[str, Dict[str, Any]] = {}
 
-    def prefetch_for_task(self, prompt: str) -> Dict[str, Any]:
+    def _prune_expired(self, now: float) -> None:
+        expired = [k for k, v in self._cache.items() if now > v.get("expires", 0)]
+        for k in expired:
+            self._cache.pop(k, None)
+
+    def prefetch_for_task(
+        self,
+        prompt: str,
+        tenant_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        is_cloud_target: bool = False,
+    ) -> Dict[str, Any]:
         """
         Scannt den Task-Text nach Mustern und lädt relevante Ressourcen spekulativ vor.
         """
+        cfg = _get_cfg()
+        if not bool(cfg.get("enabled", True)):
+            return {
+                "status": "disabled",
+                "count": 0,
+                "keys": [],
+                "cached_items": {},
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+
+        if is_cloud_target:
+            return {
+                "status": "blocked_cloud_prefetch",
+                "count": 0,
+                "keys": [],
+                "cached_items": {},
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+
+        ttl = self._ttl_override if self._ttl_override is not None else int(cfg.get("ttl_seconds", 180))
+        self.ttl_seconds = ttl
         now = time.time()
+        self._prune_expired(now)
         prefetched = {}
+        scope = f"{tenant_id or 'active'}:{agent_id or 'global'}"
 
         # 1. CRM / E-Mail Erkennung
-        email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', prompt)
-        if email_match:
-            email = email_match.group(0)
-            contact = self._lookup_crm_contact(email)
-            if contact:
-                prefetched["crm_contact"] = contact
-                self._cache[f"crm:{email}"] = {"data": contact, "expires": now + self.ttl_seconds}
+        if bool(cfg.get("prefetch_crm", True)):
+            email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', prompt)
+            if email_match:
+                email = email_match.group(0)
+                contact = self._lookup_crm_contact(email, tenant_id=tenant_id)
+                if contact:
+                    prefetched["crm_contact"] = contact
+                    self._cache[f"{scope}:crm:{email}"] = {"data": contact, "expires": now + ttl}
 
         # 2. ERP Beleg-Erkennung (z. B. RE-2026, ANG-1001, ART-200)
-        doc_match = re.search(r'\b(RE|ANG|AB|AUF|ART)-\d+\b', prompt, re.I)
-        if doc_match:
-            doc_nr = doc_match.group(0).upper()
-            doc_data = self._lookup_erp_document(doc_nr)
-            if doc_data:
-                prefetched["erp_doc"] = doc_data
-                self._cache[f"erp:{doc_nr}"] = {"data": doc_data, "expires": now + self.ttl_seconds}
+        if bool(cfg.get("prefetch_erp", True)):
+            doc_match = re.search(r'\b(RE|ANG|AB|AUF|ART)-\d+\b', prompt, re.I)
+            if doc_match:
+                doc_nr = doc_match.group(0).upper()
+                doc_data = self._lookup_erp_document(doc_nr, tenant_id=tenant_id)
+                if doc_data:
+                    prefetched["erp_doc"] = doc_data
+                    self._cache[f"{scope}:erp:{doc_nr}"] = {"data": doc_data, "expires": now + ttl}
 
         # 3. Agenten-Learnings & Heuristiken zum Thema vorladen
-        keywords = [w for w in re.findall(r'\b[a-zA-ZäöüÄÖÜß]{4,}\b', prompt) if w.lower() not in {"bitte", "mache", "erstelle", "zeig", "haben"}]
-        if keywords:
-            learnings = self._lookup_learnings(keywords[:3])
-            if learnings:
-                prefetched["cached_learnings"] = learnings
-                self._cache[f"learnings:{keywords[0]}"] = {"data": learnings, "expires": now + self.ttl_seconds}
+        if bool(cfg.get("prefetch_learnings", True)):
+            keywords = [w for w in re.findall(r'\b[a-zA-ZäöüÄÖÜß]{4,}\b', prompt) if w.lower() not in {"bitte", "mache", "erstelle", "zeig", "haben"}]
+            if keywords:
+                learnings = self._lookup_learnings(keywords[:3], agent_id=agent_id)
+                if learnings:
+                    prefetched["cached_learnings"] = learnings
+                    self._cache[f"{scope}:learnings:{keywords[0]}"] = {"data": learnings, "expires": now + ttl}
 
         return {
             "status": "prefetched",
@@ -76,25 +132,27 @@ class SpeculativePrefetcher:
             return None
         return entry.get("data")
 
-    def _get_erp_conn(self) -> Optional[sqlite3.Connection]:
-        try:
-            from backend.tenant_context import get_active_company_id
-            cid = get_active_company_id() or "default"
-        except Exception:
-            cid = "default"
-        for candidate in (
-            os.path.join(WORKSPACE_DIR, "data", "tenants", cid, "erp.db"),
-            os.path.join(WORKSPACE_DIR, "data", "tenants", "primary", "erp.db"),
-            os.path.join(WORKSPACE_DIR, "data", "erp.db"),
-        ):
+    def _get_erp_conn(self, tenant_id: Optional[str] = None) -> Optional[sqlite3.Connection]:
+        if tenant_id:
+            cid = tenant_id
+        else:
+            try:
+                from backend.tenant_context import get_active_company_id
+                cid = get_active_company_id() or "default"
+            except Exception:
+                cid = "default"
+        candidates = [os.path.join(WORKSPACE_DIR, "data", "tenants", cid, "erp.db")]
+        if cid == "default":
+            candidates.append(os.path.join(WORKSPACE_DIR, "data", "erp.db"))
+        for candidate in candidates:
             if os.path.exists(candidate):
                 conn = sqlite3.connect(candidate, timeout=5.0)
                 conn.row_factory = sqlite3.Row
                 return conn
         return None
 
-    def _lookup_crm_contact(self, email: str) -> Optional[Dict[str, Any]]:
-        conn = self._get_erp_conn()
+    def _lookup_crm_contact(self, email: str, tenant_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        conn = self._get_erp_conn(tenant_id=tenant_id)
         if not conn:
             return None
         try:
@@ -105,8 +163,8 @@ class SpeculativePrefetcher:
         finally:
             conn.close()
 
-    def _lookup_erp_document(self, doc_nr: str) -> Optional[Dict[str, Any]]:
-        conn = self._get_erp_conn()
+    def _lookup_erp_document(self, doc_nr: str, tenant_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        conn = self._get_erp_conn(tenant_id=tenant_id)
         if not conn:
             return None
         try:
@@ -120,14 +178,19 @@ class SpeculativePrefetcher:
         finally:
             conn.close()
 
-    def _lookup_learnings(self, keywords: List[str]) -> List[Dict[str, Any]]:
+    def _lookup_learnings(self, keywords: List[str], agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if not os.path.exists(DB_PATH):
             return []
         try:
             conn = sqlite3.connect(DB_PATH, timeout=5.0)
             conn.row_factory = sqlite3.Row
-            query = "SELECT id, agent_id, category, summary, obsidian_link FROM learnings WHERE " + " OR ".join(["summary LIKE ? OR category LIKE ?" for _ in keywords]) + " LIMIT 5"
-            params = []
+            kw_clause = " OR ".join(["summary LIKE ? OR category LIKE ?" for _ in keywords])
+            params: List[Any] = []
+            if agent_id:
+                query = f"SELECT id, agent_id, category, summary, obsidian_link FROM learnings WHERE agent_id = ? AND ({kw_clause}) LIMIT 5"
+                params.append(agent_id)
+            else:
+                query = f"SELECT id, agent_id, category, summary, obsidian_link FROM learnings WHERE {kw_clause} LIMIT 5"
             for k in keywords:
                 params.extend([f"%{k}%", f"%{k}%"])
             rows = conn.execute(query, params).fetchall()

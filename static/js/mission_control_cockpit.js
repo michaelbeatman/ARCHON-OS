@@ -825,6 +825,7 @@
     window.openAgentChatFromMissionControl = openAgentChatFromMissionControl;
 
     async function resetStuckAgentTasks(assignee, taskId = '') {
+      if (!confirm(`Hängende Aufgaben für '${assignee || taskId || 'alle'}' wirklich zurücksetzen?`)) return;
       try {
         const res = await fetch('/api/operations/kanban/reset-zombies', {
           method: 'POST',

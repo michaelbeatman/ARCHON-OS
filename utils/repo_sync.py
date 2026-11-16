@@ -66,7 +66,13 @@ def get_marketplace_sources():
 def normalize_text(t: str) -> str:
     return re.sub(r'[\W_]+', ' ', t.lower()).strip()
 
+def _is_safe_segment(val: str) -> bool:
+    return bool(val and isinstance(val, str) and ".." not in val and re.fullmatch(r"[A-Za-z0-9._\-]{1,128}", val))
+
+
 def list_templates_for_source(source_id: str, search: str = None, category: str = None):
+    if not _is_safe_segment(source_id):
+        return []
     source_dir = os.path.join(TEMPLATES_DIR, source_id)
     if not os.path.exists(source_dir):
         source_dir = os.path.join("/app/templates", source_id)
@@ -156,6 +162,8 @@ def list_templates_for_source(source_id: str, search: str = None, category: str 
     return results
 
 def get_template_detail(source_id: str, template_id: str):
+    if not _is_safe_segment(source_id) or not _is_safe_segment(template_id):
+        return None
     source_dir = os.path.join(TEMPLATES_DIR, source_id, template_id)
     if not os.path.exists(source_dir):
         source_dir = os.path.join("/app/templates", source_id, template_id)

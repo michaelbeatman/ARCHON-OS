@@ -32,7 +32,10 @@ def _to_dt(value) -> Optional[datetime.datetime]:
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
     try:
-        return datetime.datetime.fromisoformat(s)
+        dt = datetime.datetime.fromisoformat(s)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone().replace(tzinfo=None)
+        return dt
     except ValueError:
         return None
 
@@ -76,6 +79,8 @@ class DeadlockSupervisor:
                 # Spalte optional ermitteln.
                 cols = [r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()]
                 has_heartbeat = "last_heartbeat_at" in cols
+                has_claim_lock = "claim_lock" in cols
+                has_worker_pid = "worker_pid" in cols
                 sel = "id, title, assignee, status, created_at, body" + (", last_heartbeat_at" if has_heartbeat else "")
                 cur.execute(
                     f"SELECT {sel} FROM tasks WHERE status IN ('in_progress', 'blocked')"
@@ -102,17 +107,31 @@ class DeadlockSupervisor:
 
                     age_sec = (now - c_at).total_seconds()
                     if age_sec > stagnation_threshold_seconds:
-                        new_body = (t["body"] or "") + f"\n\n[STAGNATION-RESOLVED: Task nach {int(age_sec)}s Blockade vom Supervisor reaktiviert.]"
-                        conn.execute("""
-                            UPDATE tasks
-                            SET status = 'todo', body = ?
-                            WHERE id = ?
-                        """, (new_body, t_id))
+                        body_txt = t["body"] or ""
+                        prior_resets = body_txt.count("[STAGNATION-RESOLVED:")
+                        if prior_resets >= 3:
+                            new_status = "failed"
+                            new_body = body_txt + f"\n\n[DEADLOCK-ESCALATED: Maximale Reaktivierungen ({prior_resets}) nach {int(age_sec)}s Blockade erreicht.]"
+                        else:
+                            new_status = "todo"
+                            new_body = body_txt + f"\n\n[STAGNATION-RESOLVED: Task nach {int(age_sec)}s Blockade vom Supervisor reaktiviert.]"
+                        set_parts = ["status = ?", "body = ?"]
+                        params = [new_status, new_body]
+                        if has_claim_lock:
+                            set_parts.append("claim_lock = NULL")
+                        if has_worker_pid:
+                            set_parts.append("worker_pid = NULL")
+                        params.append(t_id)
+                        conn.execute(
+                            f"UPDATE tasks SET {', '.join(set_parts)} WHERE id = ?",
+                            params,
+                        )
                         resolved.append({
                             "task_id": t_id,
                             "title": t["title"],
                             "assignee": t["assignee"],
-                            "stagnant_seconds": int(age_sec)
+                            "stagnant_seconds": int(age_sec),
+                            "new_status": new_status,
                         })
                 conn.commit()
 

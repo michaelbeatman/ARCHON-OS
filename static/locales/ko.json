@@ -1267,109 +1267,109 @@
   },
   "api": {
     "research": {
-      "research_dossier_nicht_gefunden": "Dossier nicht gefunden."
+      "research_dossier_nicht_gefunden": "조사 보고서를 찾을 수 없습니다."
     },
     "operations.approvals": {
-      "approvals_policykey_und_newvalue_sind_erforderlich": "policy_key und new_value sind erforderlich.",
-      "approvals_title_ist_erforderlich": "title ist erforderlich.",
-      "approvals_begrndung_reason_ist_erforderlich": "Begründung (reason) ist erforderlich."
+      "approvals_policykey_und_newvalue_sind_erforderlich": "policy_key와 new_value가 필요합니다.",
+      "approvals_title_ist_erforderlich": "title이 필요합니다.",
+      "approvals_begrndung_reason_ist_erforderlich": "사유(reason)가 필요합니다."
     },
     "operations.dunning": {
-      "dunning_customername_und_ein_positiver_amountnet_s": "customer_name und ein positiver amount_net sind erforderlich.",
-      "dunning_invoiceid_ist_erforderlich_5": "invoice_id ist erforderlich.",
-      "dunning_dunningid_ist_erforderlich": "dunning_id ist erforderlich.",
-      "dunning_rechnung_nicht_gefunden_oder_update_fehlge": "Rechnung nicht gefunden oder Update fehlgeschlagen."
+      "dunning_customername_und_ein_positiver_amountnet_s": "customer_name과 양수의 amount_net이 필요합니다.",
+      "dunning_invoiceid_ist_erforderlich_5": "invoice_id가 필요합니다.",
+      "dunning_dunningid_ist_erforderlich": "dunning_id가 필요합니다.",
+      "dunning_rechnung_nicht_gefunden_oder_update_fehlge": "송장을 찾을 수 없거나 업데이트에 실패했습니다."
     },
     "oracle": {
-      "oracle_oraclefeed_nicht_verfuegbar": "Oracle-Feed nicht verfuegbar: {e}",
-      "oracle_oraclelauf_fehlgeschlagen": "Oracle-Lauf fehlgeschlagen: {e}",
-      "oracle_signalid_fehlt_im_payload": "Signal-ID fehlt im Payload",
-      "oracle_oracletriage_fehlgeschlagen": "Oracle-Triage fehlgeschlagen: {e}",
-      "oracle_thema_topic_ist_erforderlich": "Thema (topic) ist erforderlich"
+      "oracle_oraclefeed_nicht_verfuegbar": "Oracle 피드를 사용할 수 없습니다: {e}",
+      "oracle_oraclelauf_fehlgeschlagen": "Oracle 실행 실패: {e}",
+      "oracle_signalid_fehlt_im_payload": "페이로드에 신호 ID가 누락되었습니다.",
+      "oracle_oracletriage_fehlgeschlagen": "Oracle 분류 실패: {e}",
+      "oracle_thema_topic_ist_erforderlich": "주제(topic)가 필요합니다."
     },
     "templates": {
-      "templates_fabricpattern_nicht_gefunden": "Fabric-Pattern nicht gefunden.",
-      "templates_template_nicht_gefunden_15": "Template nicht gefunden.",
-      "templates_vorlagen_konnten_nicht_gespeichert_werde": "Vorlagen konnten nicht gespeichert werden: {serr}"
+      "templates_fabricpattern_nicht_gefunden": "Fabric 패턴을 찾을 수 없습니다.",
+      "templates_template_nicht_gefunden_15": "템플릿을 찾을 수 없습니다.",
+      "templates_vorlagen_konnten_nicht_gespeichert_werde": "템플릿을 저장할 수 없습니다: {serr}"
     },
     "deals": {
-      "deals_deal_nicht_gefunden": "Deal nicht gefunden.",
-      "deals_stage_erforderlich": "'stage' erforderlich.",
-      "deals_deal_oder_phase_ungltig": "Deal oder Phase ungültig."
+      "deals_deal_nicht_gefunden": "거래를 찾을 수 없습니다.",
+      "deals_stage_erforderlich": "'stage'가 필요합니다.",
+      "deals_deal_oder_phase_ungltig": "잘못된 거래 또는 단계입니다."
     },
     "hermes.config": {
-      "config_configpfad_nicht_erlaubt": "Config-Pfad nicht erlaubt: {e}",
-      "config_kein_pfad_fr_hermeskonfiguration_gefunden_22": "Kein Pfad für Hermes-Konfiguration gefunden.",
-      "config_ungltiger_konfigurationspfad_23": "Ungültiger Konfigurationspfad.",
-      "config_fehler_beim_speichern_der_konfiguration": "Fehler beim Speichern der Konfiguration: {str(e)}",
-      "config_yamlsyntaxfehler": "YAML-Syntaxfehler: {str(e)}",
-      "config_fehler_beim_schreiben_der_datei": "Fehler beim Schreiben der Datei: {str(e)}"
+      "config_configpfad_nicht_erlaubt": "구성 경로가 허용되지 않습니다: {e}",
+      "config_kein_pfad_fr_hermeskonfiguration_gefunden_22": "Hermes 구성 경로를 찾을 수 없습니다.",
+      "config_ungltiger_konfigurationspfad_23": "잘못된 구성 경로입니다.",
+      "config_fehler_beim_speichern_der_konfiguration": "구성 저장 오류: {str(e)}",
+      "config_yamlsyntaxfehler": "YAML 구문 오류: {str(e)}",
+      "config_fehler_beim_schreiben_der_datei": "파일 쓰기 오류: {str(e)}"
     },
     "erp": {
       "erp_entity_not_found": "Entity not found",
       "erp_document_not_found": "Document not found"
     },
     "chat": {
-      "chat_der_titel_darf_nicht_leer_sein": "Der Titel darf nicht leer sein.",
-      "chat_upload_fehlgeschlagen": "Upload fehlgeschlagen: {str(e)}",
-      "chat_nachricht_darf_nicht_leer_sein": "Nachricht darf nicht leer sein.",
-      "chat_prompt_darf_nicht_leer_sein": "Prompt darf nicht leer sein.",
-      "chat_openrouterapikey_fehlt_in_den_einstellungen": "OPENROUTER_API_KEY fehlt in den Einstellungen.",
-      "chat_openrouter_fehler": "OpenRouter Fehler: {resp.text[:300]}",
-      "chat_fehler_bei_bildgenerierung": "Fehler bei Bildgenerierung: {str(e)}",
-      "chat_provider_fr_bildgenerierung_aktuell_nicht_unt": "Provider '{provider}' für Bildgenerierung aktuell nicht unterstützt. Bitte 'openrouter' wählen."
+      "chat_der_titel_darf_nicht_leer_sein": "제목은 비워 둘 수 없습니다.",
+      "chat_upload_fehlgeschlagen": "업로드 실패: {str(e)}",
+      "chat_nachricht_darf_nicht_leer_sein": "메시지는 비워 둘 수 없습니다.",
+      "chat_prompt_darf_nicht_leer_sein": "프롬프트는 비워 둘 수 없습니다.",
+      "chat_openrouterapikey_fehlt_in_den_einstellungen": "설정에 OPENROUTER_API_KEY가 누락되었습니다.",
+      "chat_openrouter_fehler": "OpenRouter 오류: {resp.text[:300]}",
+      "chat_fehler_bei_bildgenerierung": "이미지 생성 오류: {str(e)}",
+      "chat_provider_fr_bildgenerierung_aktuell_nicht_unt": "'{provider}' 공급자는 현재 이미지 생성을 지원하지 않습니다. 'openrouter'를 선택하세요."
     },
     "operations.sysops": {
-      "sysops_feld_name_ist_erforderlich": "Feld 'name' ist erforderlich.",
-      "sysops_feld_identifier_ist_erforderlich_40": "Feld 'identifier' ist erforderlich.",
-      "sysops_chaostestlauf_fehlgeschlagen": "Chaos-Testlauf fehlgeschlagen: {e}",
-      "sysops_noch_keine_chaostestergebnisse_vorhanden": "Noch keine Chaos-Testergebnisse vorhanden."
+      "sysops_feld_name_ist_erforderlich": "'name' 필드가 필요합니다.",
+      "sysops_feld_identifier_ist_erforderlich_40": "'identifier' 필드가 필요합니다.",
+      "sysops_chaostestlauf_fehlgeschlagen": "카오스 테스트 실행 실패: {e}",
+      "sysops_noch_keine_chaostestergebnisse_vorhanden": "아직 카오스 테스트 결과가 없습니다."
     },
     "plugins": {
-      "plugins_plugin_nicht_gefunden_44": "Plugin '{plugin_id}' nicht gefunden.",
-      "plugins_fehler_beim_neuladen_von_plugin": "Fehler beim Neuladen von Plugin '{plugin_id}'.",
-      "plugins_toolname_erforderlich": "tool_name erforderlich."
+      "plugins_plugin_nicht_gefunden_44": "플러그인 '{plugin_id}'를 찾을 수 없습니다.",
+      "plugins_fehler_beim_neuladen_von_plugin": "플러그인 '{plugin_id}' 다시 로드 오류.",
+      "plugins_toolname_erforderlich": "tool_name이 필요합니다."
     },
     "containers": {
       "containers_container_not_found": "Container not found",
       "containers_failed_to_create_exec_instance": "Failed to create exec instance",
       "containers_failed_to_parse_exec_id": "Failed to parse exec ID",
       "containers_invalid_action": "Invalid action",
-      "containers_postdockercontaineraction_nicht_verfueg": "post_docker_container_action nicht verfuegbar"
+      "containers_postdockercontaineraction_nicht_verfueg": "post_docker_container_action을 사용할 수 없습니다."
     },
     "brain": {
-      "brain_obsidian_vault_verzeichnis_nicht_gefunden": "Obsidian Vault Verzeichnis nicht gefunden.",
-      "brain_ungltiger_dateipfad_55": "Ungültiger Dateipfad.",
-      "brain_keine_dateien_bermittelt": "Keine Dateien übermittelt.",
-      "brain_ungltiger_dateipfad_auerhalb_der_bibliothek": "Ungültiger Dateipfad außerhalb der Bibliothek.",
-      "brain_buchdokument_nicht_gefunden": "Buch-Dokument nicht gefunden.",
-      "brain_quartzkonfigurationsdatei_nicht_gefunden": "Quartz-Konfigurationsdatei nicht gefunden.",
-      "brain_keine_konfiguration_bergeben": "Keine Konfiguration übergeben.",
-      "brain_ungltiger_dateipfad": "Ungültiger Dateipfad: {e}"
+      "brain_obsidian_vault_verzeichnis_nicht_gefunden": "Obsidian Vault 디렉터리를 찾을 수 없습니다.",
+      "brain_ungltiger_dateipfad_55": "잘못된 파일 경로입니다.",
+      "brain_keine_dateien_bermittelt": "전송된 파일이 없습니다.",
+      "brain_ungltiger_dateipfad_auerhalb_der_bibliothek": "라이브러리 외부의 잘못된 파일 경로입니다.",
+      "brain_buchdokument_nicht_gefunden": "도서 문서를 찾을 수 없습니다.",
+      "brain_quartzkonfigurationsdatei_nicht_gefunden": "Quartz 구성 파일을 찾을 수 없습니다.",
+      "brain_keine_konfiguration_bergeben": "설정이 전달되지 않았습니다.",
+      "brain_ungltiger_dateipfad": "잘못된 파일 경로: {e}"
     },
     "theme": {
-      "theme_bild_zu_gross_max_8_mb": "Bild zu gross (max. 8 MB)."
+      "theme_bild_zu_gross_max_8_mb": "이미지가 너무 큽니다(최대 8MB)."
     },
     "operations.emails": {
-      "emails_betreff_empfnger_und_text_sind_erforderlich": "Betreff, Empfänger und Text sind erforderlich.",
-      "emails_entwurf_nicht_gefunden_64": "Entwurf nicht gefunden.",
-      "emails_betreff_empfnger_und_text_drfen_nicht": "Betreff, Empfänger und Text dürfen nicht leer sein.",
-      "emails_feedback_fr_den_agenten_ist_erforderlich": "Feedback für den Agenten ist erforderlich."
+      "emails_betreff_empfnger_und_text_sind_erforderlich": "제목, 수신자 및 본문이 필요합니다.",
+      "emails_entwurf_nicht_gefunden_64": "초안을 찾을 수 없습니다.",
+      "emails_betreff_empfnger_und_text_drfen_nicht": "제목, 수신자 및 본문은 비워 둘 수 없습니다.",
+      "emails_feedback_fr_den_agenten_ist_erforderlich": "에이전트에 대한 피드백이 필요합니다."
     },
     "operations.org": {
-      "org_fehler_beim_speichern": "Fehler beim Speichern: {str(e)}"
+      "org_fehler_beim_speichern": "저장 오류: {str(e)}"
     },
     "prompts": {
-      "prompts_fehler_beim_speichern": "Fehler beim Speichern: {e}",
-      "prompts_pdf_konnte_nicht_gelesen_werden": "PDF konnte nicht gelesen werden: {pe}",
-      "prompts_worddokument_konnte_nicht_gelesen_werden": "Word-Dokument konnte nicht gelesen werden: {de}",
-      "prompts_csv_konnte_nicht_gelesen_werden": "CSV konnte nicht gelesen werden: {ce}",
-      "prompts_textextraktion_fehlgeschlagen": "Text-Extraktion fehlgeschlagen: {ex}",
-      "prompts_prompt_darf_nicht_leer_sein": "Prompt darf nicht leer sein."
+      "prompts_fehler_beim_speichern": "저장 오류: {e}",
+      "prompts_pdf_konnte_nicht_gelesen_werden": "PDF를 읽을 수 없습니다: {pe}",
+      "prompts_worddokument_konnte_nicht_gelesen_werden": "Word 문서를 읽을 수 없습니다: {de}",
+      "prompts_csv_konnte_nicht_gelesen_werden": "CSV를 읽을 수 없습니다: {ce}",
+      "prompts_textextraktion_fehlgeschlagen": "텍스트 추출 실패: {ex}",
+      "prompts_prompt_darf_nicht_leer_sein": "프롬프트는 비워 둘 수 없습니다."
     },
     "skills": {
-      "skills_ungueltige_skillid_pfadtraversal_unzulaessi": "Ungueltige skill_id (Pfad-Traversal unzulaessig).",
-      "skills_ungueltige_skillid": "Ungueltige skill_id: {e}",
+      "skills_ungueltige_skillid_pfadtraversal_unzulaessi": "잘못된 skill_id(경로 탐색 불가).",
+      "skills_ungueltige_skillid": "잘못된 skill_id: {e}",
       "skills_skills_engine_not_initialized_77": "Skills engine not initialized",
       "skills_agentid_is_required_to_verify_permissions": "agent_id is required to verify permissions",
       "skills_agent_profile_not_found": "Agent profile not found",
@@ -1378,71 +1378,71 @@
       "skills_skills_engine_not_initialized_5": "Skills engine not initialized"
     },
     "notebooks": {
-      "notebooks_name_ist_erforderlich": "Name ist erforderlich.",
-      "notebooks_notebook_nicht_gefunden_94": "Notebook nicht gefunden.",
-      "notebooks_keine_datei_bermittelt": "Keine Datei übermittelt.",
-      "notebooks_dateiname_nicht_erlaubt": "Dateiname nicht erlaubt: {pe}",
-      "notebooks_relpath_ist_erforderlich": "rel_path ist erforderlich.",
-      "notebooks_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {pe}",
-      "notebooks_quelle_nicht_gefunden": "Quelle nicht gefunden.",
-      "notebooks_prompt_ist_erforderlich": "Prompt ist erforderlich.",
-      "notebooks_notebook_nicht_gefunden": "Notebook nicht gefunden."
+      "notebooks_name_ist_erforderlich": "이름이 필요합니다.",
+      "notebooks_notebook_nicht_gefunden_94": "노트북을 찾을 수 없습니다.",
+      "notebooks_keine_datei_bermittelt": "전송된 파일이 없습니다.",
+      "notebooks_dateiname_nicht_erlaubt": "허용되지 않는 파일 이름: {pe}",
+      "notebooks_relpath_ist_erforderlich": "rel_path가 필요합니다.",
+      "notebooks_pfad_nicht_erlaubt": "허용되지 않는 경로: {pe}",
+      "notebooks_quelle_nicht_gefunden": "소스를 찾을 수 없습니다.",
+      "notebooks_prompt_ist_erforderlich": "프롬프트가 필요합니다.",
+      "notebooks_notebook_nicht_gefunden": "노트북을 찾을 수 없습니다."
     },
     "system": {
-      "system_nicht_untersttzte_sprache": "Nicht unterstützte Sprache: {lang}",
-      "system_snapshotid_erforderlich": "Snapshot-ID erforderlich.",
-      "system_briefing_konnte_nicht_gelesen_werden": "Briefing konnte nicht gelesen werden: {e}"
+      "system_nicht_untersttzte_sprache": "지원되지 않는 언어: {lang}",
+      "system_snapshotid_erforderlich": "스냅샷 ID가 필요합니다.",
+      "system_briefing_konnte_nicht_gelesen_werden": "브리핑을 읽을 수 없습니다: {e}"
     },
     "mesh": {
-      "mesh_gltiger_filepath_erforderlich": "Gültiger 'file_path' erforderlich.",
-      "mesh_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {e}"
+      "mesh_gltiger_filepath_erforderlich": "유효한 'file_path'가 필요합니다.",
+      "mesh_pfad_nicht_erlaubt": "허용되지 않는 경로: {e}"
     },
     "operations.receipts": {
-      "receipts_ungltige_base64bilddaten": "Ungültige Base64-Bilddaten: {e}",
-      "receipts_konnte_bilddatei_nicht_lesen": "Konnte Bilddatei nicht lesen: {e}",
-      "receipts_entweder_imagebase64_oder_ein_existierend": "Entweder 'image_base64' oder ein existierender 'image_path' ist erforderlich.",
-      "receipts_belegverarbeitung_fehlgeschlagen": "Belegverarbeitung fehlgeschlagen: {e}",
-      "receipts_aktualisierung_fehlgeschlagen_oder_keine_": "Aktualisierung fehlgeschlagen oder keine gültigen Felder.",
-      "receipts_datei_ist_leer": "Datei ist leer.",
-      "receipts_uploadverarbeitung_fehlgeschlagen": "Upload-Verarbeitung fehlgeschlagen: {e}"
+      "receipts_ungltige_base64bilddaten": "잘못된 Base64 이미지 데이터: {e}",
+      "receipts_konnte_bilddatei_nicht_lesen": "이미지 파일을 읽을 수 없습니다: {e}",
+      "receipts_entweder_imagebase64_oder_ein_existierend": "'image_base64' 또는 기존 'image_path'가 필요합니다.",
+      "receipts_belegverarbeitung_fehlgeschlagen": "영수증 처리 실패: {e}",
+      "receipts_aktualisierung_fehlgeschlagen_oder_keine_": "업데이트 실패 또는 유효한 필드가 없습니다.",
+      "receipts_datei_ist_leer": "파일이 비어 있습니다.",
+      "receipts_uploadverarbeitung_fehlgeschlagen": "업로드 처리 실패: {e}"
     },
     "governance": {
-      "governance_agent_nicht_gefunden": "Agent '{agent_id}' nicht gefunden.",
-      "governance_itemid_erforderlich": "item_id erforderlich."
+      "governance_agent_nicht_gefunden": "에이전트 '{agent_id}'를 찾을 수 없습니다.",
+      "governance_itemid_erforderlich": "item_id가 필요합니다."
     },
     "documents": {
-      "documents_gltiger_filepath_erforderlich": "Gültiger 'filepath' erforderlich.",
-      "documents_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {e}"
+      "documents_gltiger_filepath_erforderlich": "유효한 'filepath'가 필요합니다.",
+      "documents_pfad_nicht_erlaubt": "허용되지 않는 경로: {e}"
     },
     "telegram": {
-      "telegram_text_darf_nicht_leer_sein_118": "Text darf nicht leer sein.",
-      "telegram_text_darf_nicht_leer_sein_32": "Text darf nicht leer sein."
+      "telegram_text_darf_nicht_leer_sein_118": "텍스트는 비워 둘 수 없습니다.",
+      "telegram_text_darf_nicht_leer_sein_32": "텍스트는 비워 둘 수 없습니다."
     },
     "hermes.profiles": {
-      "profiles_ungueltige_profileid_pfadtraversal_unzula_120": "Ungueltige profile_id (Pfad-Traversal unzulaessig).",
-      "profiles_ungueltige_profileid_121": "Ungueltige profile_id: {e}",
-      "profiles_ungltiges_bilddatenformat_muss_dataimage_": "Ungültiges Bilddaten-Format (muss data:image/... sein).",
-      "profiles_bild_konnte_nicht_gespeichert_werden_form": "Bild konnte nicht gespeichert werden (Format/Inhalt ungueltig).",
-      "profiles_profil_nicht_gefunden_oder_nicht_beschrei": "Profil {profile_id} nicht gefunden oder nicht beschreibbar.",
-      "profiles_ungueltige_profileid_pfadtraversal_unzula_34": "Ungueltige profile_id (Pfad-Traversal unzulaessig)."
+      "profiles_ungueltige_profileid_pfadtraversal_unzula_120": "잘못된 profile_id(경로 탐색 불가).",
+      "profiles_ungueltige_profileid_121": "잘못된 profile_id: {e}",
+      "profiles_ungltiges_bilddatenformat_muss_dataimage_": "잘못된 이미지 데이터 형식입니다(data:image/...여야 함).",
+      "profiles_bild_konnte_nicht_gespeichert_werden_form": "이미지를 저장할 수 없습니다(형식 또는 내용 잘못됨).",
+      "profiles_profil_nicht_gefunden_oder_nicht_beschrei": "프로필 {profile_id}를 찾을 수 없거나 쓸 수 없습니다.",
+      "profiles_ungueltige_profileid_pfadtraversal_unzula_34": "잘못된 profile_id(경로 탐색 불가)."
     },
     "ui": {
-      "ui_keine_staticindexhtml_datei_gefunden_127": "Keine static/index.html Datei gefunden.",
-      "ui_dateityp_nicht_erlaubt_jpg_jpeg_png": "Dateityp '{ext}' nicht erlaubt (jpg, jpeg, png, webp, gif).",
-      "ui_bild_zu_gro_max_8_mb": "Bild zu groß (max. 8 MB).",
-      "ui_keine_staticindexhtml_datei_gefunden_38": "Keine static/index.html Datei gefunden."
+      "ui_keine_staticindexhtml_datei_gefunden_127": "static/index.html 파일을 찾을 수 없습니다.",
+      "ui_dateityp_nicht_erlaubt_jpg_jpeg_png": "'{ext}' 파일 형식은 허용되지 않습니다(jpg, jpeg, png, webp, gif).",
+      "ui_bild_zu_gro_max_8_mb": "이미지가 너무 큽니다(최대 8MB).",
+      "ui_keine_staticindexhtml_datei_gefunden_38": "static/index.html 파일을 찾을 수 없습니다."
     },
     "decisions": {
-      "decisions_decision_muss_approve_oder_reject_sein_131": "decision muss approve oder reject sein",
-      "decisions_gate_nicht_gefunden": "Gate {gate_id} nicht gefunden",
-      "decisions_taskid_fehlt": "task_id fehlt",
-      "decisions_sidecar_nicht_lesbar": "Sidecar nicht lesbar: {e}",
-      "decisions_kein_entscheidungsblock_fr": "Kein Entscheidungs-Block für {task_id}",
-      "decisions_decision_muss_approve_oder_reject_sein_41": "decision muss approve oder reject sein"
+      "decisions_decision_muss_approve_oder_reject_sein_131": "decision은 approve 또는 reject여야 합니다.",
+      "decisions_gate_nicht_gefunden": "게이트 {gate_id}를 찾을 수 없습니다.",
+      "decisions_taskid_fehlt": "task_id가 누락되었습니다.",
+      "decisions_sidecar_nicht_lesbar": "사이드카를 읽을 수 없습니다: {e}",
+      "decisions_kein_entscheidungsblock_fr": "{task_id}에 대한 결정 블록이 없습니다.",
+      "decisions_decision_muss_approve_oder_reject_sein_41": "decision은 approve 또는 reject여야 합니다."
     },
     "operations.security": {
-      "security_keine_sourceid_angegeben": "Keine source_id angegeben.",
-      "security_recoverykit_noch_nicht_generiert": "Recovery-Kit noch nicht generiert."
+      "security_keine_sourceid_angegeben": "source_id가 지정되지 않았습니다.",
+      "security_recoverykit_noch_nicht_generiert": "복구 키트가 아직 생성되지 않았습니다."
     }
   },
   "telemetry": {

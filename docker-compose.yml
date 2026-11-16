@@ -204,6 +204,7 @@ services:
       - ALLOW_IMAGE_TAG=${ARCHON_PROXY_ALLOW_UPDATER:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./deploy/docker-socket-proxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:2375/version >/dev/null 2>&1 || exit 1"]
       interval: 30s

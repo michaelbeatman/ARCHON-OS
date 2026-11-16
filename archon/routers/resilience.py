@@ -86,7 +86,8 @@ def api_fleet_health_check():
 
 
 @router.post("/api/notifications/dispatch")
-def api_dispatch_notification(payload: Dict = Body(...)):
+def api_dispatch_notification(request: Request, payload: Dict = Body(...)):
+    _require_admin_or_503(request)
     from backend.notification_hub import notification_hub
 
     return notification_hub.dispatch_notification(
@@ -119,7 +120,8 @@ def api_get_task_trace(task_id: str):
 
 
 @router.post("/api/traces/{task_id}/fork")
-def api_fork_task_trace(task_id: str, payload: Dict = Body(...)):
+def api_fork_task_trace(request: Request, task_id: str, payload: Dict = Body(...)):
+    _require_admin_or_503(request)
     from backend.time_travel_debugger import time_travel_debugger
 
     return time_travel_debugger.fork_execution(
@@ -131,7 +133,8 @@ def api_fork_task_trace(task_id: str, payload: Dict = Body(...)):
 
 
 @router.post("/api/traces/{task_id}/rollback")
-def api_rollback_task_trace(task_id: str, payload: Dict = Body(...)):
+def api_rollback_task_trace(request: Request, task_id: str, payload: Dict = Body(...)):
+    _require_admin_or_503(request)
     from backend.time_travel_debugger import time_travel_debugger
 
     return time_travel_debugger.rollback_to_step(

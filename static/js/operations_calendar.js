@@ -8,8 +8,21 @@
   const MODAL_ID = "archon-calendar-modal";
   let activeSource = "all";
 
+  function _escCal(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   async function api(url, opts) {
     const res = await fetch(url, opts);
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "");
+      throw new Error(msg || `HTTP ${res.status}`);
+    }
     return await res.json();
   }
 
@@ -18,6 +31,8 @@
     if (modal) return modal;
     modal = document.createElement("div");
     modal.id = MODAL_ID;
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
     modal.className = "fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4";
     modal.innerHTML = `
       <div class="w-full max-w-3xl rounded-xl border theme-border bg-white dark:bg-zinc-900 p-5 shadow-2xl max-h-[88vh] flex flex-col gap-3">
@@ -82,13 +97,13 @@
         (ev) => `
       <div class="p-2.5 rounded border theme-border flex items-center justify-between gap-2">
         <div>
-          <span class="font-mono font-semibold">${ev.date}${ev.time ? " " + ev.time : ""}</span>
-          <span class="ml-2 font-medium">${ev.title}</span>
-          <span class="ml-2 opacity-60">[${ev.source}]</span>
+          <span class="font-mono font-semibold">${_escCal(ev.date)}${ev.time ? " " + _escCal(ev.time) : ""}</span>
+          <span class="ml-2 font-medium">${_escCal(ev.title)}</span>
+          <span class="ml-2 opacity-60">[${_escCal(ev.source)}]</span>
         </div>
         ${
           ev.source === "custom"
-            ? `<button data-caldel="${ev.id}" class="px-2 py-0.5 rounded border theme-border text-[11px]">Löschen</button>`
+            ? `<button data-caldel="${_escCal(ev.id)}" class="px-2 py-0.5 rounded border theme-border text-[11px]">Löschen</button>`
             : ""
         }
       </div>`
@@ -96,7 +111,8 @@
       .join("");
     listEl.querySelectorAll("[data-caldel]").forEach((b) => {
       b.onclick = async () => {
-        await api(`/api/v1/calendar/events/${b.dataset.caldel}`, { method: "DELETE" });
+        if (!confirm("Diesen Termin wirklich löschen?")) return;
+        await api(`/api/v1/calendar/events/${encodeURIComponent(b.dataset.caldel)}`, { method: "DELETE" });
         loadEvents();
       };
     });

@@ -17,6 +17,9 @@ import datetime
 import json
 import logging
 import os
+import sqlite3
+import threading
+import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -57,27 +60,52 @@ def _scope_allows(granted_scopes: List[str], required_scope: str) -> bool:
 
 
 class McpSessionStore:
-    """In-Memory Verwaltung aktiver MCP-Sessions (Mcp-Session-Id)."""
+    """Thread-sichere In-Memory Verwaltung aktiver MCP-Sessions (Mcp-Session-Id) mit TTL."""
 
-    def __init__(self) -> None:
+    def __init__(self, ttl_seconds: int = 3600, max_sessions: int = 1000) -> None:
         self._sessions: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.RLock()
+        self.ttl_seconds = ttl_seconds
+        self.max_sessions = max_sessions
+
+    def _prune_locked(self, now: float) -> None:
+        expired = [k for k, v in self._sessions.items() if now - v.get("last_used_ts", now) > self.ttl_seconds]
+        for k in expired:
+            self._sessions.pop(k, None)
+        while len(self._sessions) >= self.max_sessions:
+            oldest_key = min(self._sessions, key=lambda k: self._sessions[k].get("last_used_ts", 0.0))
+            self._sessions.pop(oldest_key, None)
 
     def create(self, client_info: Optional[Dict[str, Any]] = None, protocol_version: str = DEFAULT_PROTOCOL_VERSION) -> str:
         sid = f"mcp_{uuid.uuid4().hex}"
-        self._sessions[sid] = {
-            "session_id": sid,
-            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "client_info": client_info or {},
-            "protocol_version": protocol_version,
-            "initialized": True,
-        }
+        now = time.monotonic()
+        with self._lock:
+            self._prune_locked(now)
+            self._sessions[sid] = {
+                "session_id": sid,
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "last_used_ts": now,
+                "client_info": client_info or {},
+                "protocol_version": protocol_version,
+                "initialized": True,
+            }
         return sid
 
     def get(self, sid: str) -> Optional[Dict[str, Any]]:
-        return self._sessions.get(sid)
+        now = time.monotonic()
+        with self._lock:
+            sess = self._sessions.get(sid)
+            if not sess:
+                return None
+            if now - sess.get("last_used_ts", now) > self.ttl_seconds:
+                self._sessions.pop(sid, None)
+                return None
+            sess["last_used_ts"] = now
+            return sess
 
     def delete(self, sid: str) -> bool:
-        return self._sessions.pop(sid, None) is not None
+        with self._lock:
+            return self._sessions.pop(sid, None) is not None
 
 
 class ArchonMcpGateway:
@@ -87,6 +115,66 @@ class ArchonMcpGateway:
         self.sessions = McpSessionStore()
         self.server_name = "archon-agentic-os"
         self.server_version = "0.5.2.2"
+        self._hitl_lock = threading.RLock()
+        self._consumed_hitl_ids: set[str] = set()
+
+    @staticmethod
+    def _hitl_db_path(approval_engine: Any = None) -> str:
+        dbp = getattr(approval_engine, "db_path", None)
+        if dbp:
+            return dbp
+        try:
+            from backend.db_paths import resolve_db
+            return resolve_db("agentic_memory.db")
+        except Exception:
+            return os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+
+    def _is_hitl_consumed(self, approval_id: str, approval_engine: Any = None) -> bool:
+        with self._hitl_lock:
+            if approval_id in self._consumed_hitl_ids:
+                return True
+            dbp = self._hitl_db_path(approval_engine)
+            if not os.path.exists(dbp):
+                return False
+            try:
+                conn = sqlite3.connect(dbp, timeout=10.0)
+                try:
+                    conn.execute(
+                        "CREATE TABLE IF NOT EXISTS mcp_consumed_hitl_ids (approval_id TEXT PRIMARY KEY, consumed_at TEXT NOT NULL)"
+                    )
+                    row = conn.execute(
+                        "SELECT 1 FROM mcp_consumed_hitl_ids WHERE approval_id = ?",
+                        (approval_id,),
+                    ).fetchone()
+                    if row:
+                        self._consumed_hitl_ids.add(approval_id)
+                        return True
+                finally:
+                    conn.close()
+            except Exception:
+                pass
+            return False
+
+    def _mark_hitl_consumed(self, approval_id: str, approval_engine: Any = None) -> None:
+        with self._hitl_lock:
+            self._consumed_hitl_ids.add(approval_id)
+            dbp = self._hitl_db_path(approval_engine)
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(dbp)), exist_ok=True)
+                conn = sqlite3.connect(dbp, timeout=10.0)
+                try:
+                    conn.execute(
+                        "CREATE TABLE IF NOT EXISTS mcp_consumed_hitl_ids (approval_id TEXT PRIMARY KEY, consumed_at TEXT NOT NULL)"
+                    )
+                    conn.execute(
+                        "INSERT OR IGNORE INTO mcp_consumed_hitl_ids (approval_id, consumed_at) VALUES (?, ?)",
+                        (approval_id, datetime.datetime.now(datetime.timezone.utc).isoformat()),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Authentifizierung & Scope-Prüfung
@@ -298,12 +386,35 @@ class ArchonMcpGateway:
 
         from backend.approval_policy_engine import approval_engine
 
+        clean_args = {k: v for k, v in arguments.items() if k != "hitl_approval_id"}
+        expected_ref = f"mcp:{key_info.get('key_id', 'unknown')}"
         approval_id = str(arguments.get("hitl_approval_id") or "").strip()
         if approval_id:
+            if self._is_hitl_consumed(approval_id, approval_engine):
+                return False, {
+                    "status": "pending_hitl_approval",
+                    "request_id": approval_id,
+                    "message": f"HITL-Freigabe '{approval_id}' wurde bereits verwendet (Replay blockiert).",
+                }
             reqs = approval_engine.get_requests()
             for r in reqs:
                 if (r.get("id") or r.get("request_id")) == approval_id:
                     if r.get("status") == "approved":
+                        p_raw = r.get("payload") if r.get("payload") is not None else r.get("payload_json")
+                        if isinstance(p_raw, str):
+                            try:
+                                p_raw = json.loads(p_raw)
+                            except Exception:
+                                p_raw = {}
+                        p_dict = p_raw if isinstance(p_raw, dict) else {}
+                        stored_args = {k: v for k, v in (p_dict.get("arguments") or {}).items() if k != "hitl_approval_id"}
+                        if p_dict.get("tool") != tool_name or stored_args != clean_args or r.get("reference_id") != expected_ref:
+                            return False, {
+                                "status": "pending_hitl_approval",
+                                "request_id": approval_id,
+                                "message": f"HITL-Freigabe '{approval_id}' passt nicht zu Tool/Argumenten/API-Key.",
+                            }
+                        self._mark_hitl_consumed(approval_id, approval_engine)
                         return True, None
                     return False, {
                         "status": "pending_hitl_approval",
@@ -316,8 +427,8 @@ class ArchonMcpGateway:
         eval_res = approval_engine.evaluate_and_enqueue(
             domain=domain,
             title=f"MCP Tool-Aufruf: {tool_name}",
-            reference_id=f"mcp:{key_info.get('key_id', 'unknown')}",
-            payload={"tool": tool_name, "arguments": arguments, "key_name": key_info.get("name")},
+            reference_id=expected_ref,
+            payload={"tool": tool_name, "arguments": clean_args, "key_name": key_info.get("name")},
         )
         if eval_res.get("status") == "auto_approved":
             return True, None

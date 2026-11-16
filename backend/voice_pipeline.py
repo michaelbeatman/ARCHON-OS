@@ -89,6 +89,9 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
 
     # 3. Google Gemini Audio-Inferenz — nur wenn ausdrücklich freigeschaltet.
     # Standard aus, weil jeder Aufruf das Google-Kontingent des Eigentümers belastet.
+    def _google_voice_allowed() -> bool:
+        return os.environ.get("ARCHON_GOOGLE_VOICE_ENABLED", "").strip().lower() in ("1", "true", "yes")
+
     if GOOGLE_API_KEY and _google_voice_allowed():
         try:
             import httpx

@@ -173,6 +173,32 @@ def api_export_verfahrensdokumentation_pdf(company_id: Optional[str] = None):
     )
 
 
+@router.get("/api/governance/compliance/gobd-z3.zip")
+@router.get("/api/v1/governance/compliance/gobd-z3.zip")
+def api_export_gobd_z3_zip(
+    request: Request,
+    company_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Exportiert das prüferfertige GoBD-Z3-Archiv (index.xml + CSV-Tabellen + SHA-256-Manifest)."""
+    require_admin_or_503(request)
+    from backend.gobd_z3_export import build_gobd_z3_archive
+    filename, zip_bytes, zip_sha256 = build_gobd_z3_archive(
+        company_id=company_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Archive-SHA256": zip_sha256,
+        },
+    )
+
+
 @router.post("/api/governance/data-classification/classify")
 @router.post("/api/v1/governance/data-classification/classify")
 def api_classify_content(payload: dict = Body(...)):

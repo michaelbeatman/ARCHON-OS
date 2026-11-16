@@ -88,7 +88,8 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
         try:
             from backend.audit_log import chained_audit_log
             chained_audit_log.record_event(
-                event_type="FLEET_SELF_HEALING_RESTART",
+                category="resilience",
+                action="FLEET_SELF_HEALING_RESTART",
                 agent_id="Watchdog-Daemon",
                 payload={"service": service_name, "container": container_target, "success": success, "log": output[:200]}
             )

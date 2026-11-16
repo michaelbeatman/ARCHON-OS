@@ -365,6 +365,12 @@ def api_get_hermes_skills(force: bool = False):
 
 @router.get("/api/hermes/skills/{skill_id}")
 def api_get_single_hermes_skill(skill_id: str):
+    if ".." in skill_id or "/" in skill_id or "\\" in skill_id:
+        raise HTTPException(status_code=400, detail="Ungueltige skill_id (Pfad-Traversal unzulaessig).")
+    try:
+        skill_id = safe_filename(skill_id)
+    except (PathJailError, ValueError) as e:
+        raise HTTPException(status_code=400, detail={"code": "skills_invalid_skill_id", "params": {"error": str(e)}})
     file_path = find_skill_file(skill_id)
     if file_path and os.path.exists(file_path):
         try:

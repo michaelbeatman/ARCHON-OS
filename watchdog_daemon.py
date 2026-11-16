@@ -144,7 +144,6 @@ class WatchdogDaemon:
         abort_endpoints = [
             f"{CONFIG['HERMES_API_BASE']}/api/threads/abort",
             f"{CONFIG['HERMES_DASHBOARD_BASE']}/api/threads/abort",
-            f"{CONFIG['LOCAL_ARCHON_API']}/api/v1/agent/abort",
             f"{CONFIG['HERMES_API_BASE']}/api/profiles/{profile_handle}/abort"
         ]
         

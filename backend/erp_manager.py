@@ -1305,7 +1305,7 @@ class ERPManager:
 
             # GoBD-Unveränderbarkeitsschutz: Gebuchte, versendete, bezahlte oder stornierte Belege dürfen nicht zurück
             # in den Entwurf und ändern keine Positionen/Beträge/Stammdaten mehr in-place.
-            if ex and (ex.get("status") in ("booked", "sent", "paid", "cancelled") or ex.get("booked_at")) and not payload.get("_allow_status_update_only"):
+            if ex and (ex.get("status") in ("booked", "sent", "paid", "cancelled") or ex.get("booked_at")):
                 cur_status = ex.get("status")
                 new_status = payload.get("status", cur_status)
                 if new_status == "draft":
@@ -1460,6 +1460,17 @@ class ERPManager:
                     due_date = issue_date
 
             status = payload.get("status", ex.get("status", "draft"))
+            if doc_type in ("invoice", "credit_note") and status in ("booked", "sent", "paid"):
+                service_dt = str(payload.get("service_date") or ex.get("service_date") or issue_date or "").strip()
+                if not str(issue_date or "").strip() or not service_dt:
+                    raise ValueError("§ 14 Abs. 4 UStG: Rechnungsdatum und Leistungs-/Lieferdatum sind Pflichtangaben.")
+                has_lines = bool(computed_lines)
+                if not has_lines and ex:
+                    has_lines = conn.execute(
+                        "SELECT 1 FROM erp_document_lines WHERE document_id = ? LIMIT 1", (doc_id,)
+                    ).fetchone() is not None
+                if not has_lines:
+                    raise ValueError("§ 14 Abs. 4 UStG: Mindestens eine Leistungsposition ist erforderlich.")
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             booked_at = ex.get("booked_at")
             if status in ("booked", "sent") and not booked_at:
@@ -1722,6 +1733,7 @@ class ERPManager:
             "doc_num": doc_num,
             "currency": currency,
             "issue_date": issue_date,
+            "service_date": str(doc.get("service_date") or issue_date)[:10],
             "due_date": due_date,
             "type_code": type_code,
             "buyer_ref": buyer_ref,
@@ -1786,6 +1798,20 @@ class ERPManager:
             unit_code = self._map_ubl_unit_code(ln.get("unit") or "Stk.")
             line_net = float(ln.get("line_net") or 0.0)
             unit_price = float(ln.get("unit_price_net") or 0.0)
+            disc_pct = float(ln.get("discount_pct") or 0.0)
+            eff_unit_price = round(line_net / qty, 2) if (qty > 0 and disc_pct > 0) else unit_price
+            price_allowance_xml = ""
+            if disc_pct > 0 and unit_price > eff_unit_price:
+                disc_per_unit = round(unit_price - eff_unit_price, 2)
+                price_allowance_xml = (
+                    f"\n      <cac:AllowanceCharge>"
+                    f"<cbc:ChargeIndicator>false</cbc:ChargeIndicator>"
+                    f"<cbc:AllowanceChargeReasonCode>95</cbc:AllowanceChargeReasonCode>"
+                    f"<cbc:AllowanceChargeReason>Positionsrabatt {disc_pct:.1f}%</cbc:AllowanceChargeReason>"
+                    f"<cbc:Amount currencyID=\"{_xml_escape(currency)}\">{disc_per_unit:.2f}</cbc:Amount>"
+                    f"<cbc:BaseAmount currencyID=\"{_xml_escape(currency)}\">{unit_price:.2f}</cbc:BaseAmount>"
+                    f"</cac:AllowanceCharge>"
+                )
             rate = float(ln.get("tax_rate_pct") or 0.0)
             cat_id, _ = self._tax_category_for_doc(tax_regime, rate)
             title = _xml_escape(str(ln.get("title") or f"Position {pos}"))
@@ -1805,7 +1831,7 @@ class ERPManager:
       </cac:ClassifiedTaxCategory>
     </cac:Item>
     <cac:Price>
-      <cbc:PriceAmount currencyID="{_xml_escape(currency)}">{unit_price:.2f}</cbc:PriceAmount>
+      <cbc:PriceAmount currencyID="{_xml_escape(currency)}">{eff_unit_price:.2f}</cbc:PriceAmount>{price_allowance_xml}
     </cac:Price>
   </cac:InvoiceLine>"""
             )
@@ -1890,7 +1916,10 @@ class ERPManager:
         <cbc:RegistrationName>{_xml_escape(buyer_name)}</cbc:RegistrationName>
       </cac:PartyLegalEntity>
     </cac:Party>
-  </cac:AccountingCustomerParty>{payment_xml}
+  </cac:AccountingCustomerParty>
+  <cac:Delivery>
+    <cbc:ActualDeliveryDate>{_xml_escape(ctx['service_date'])}</cbc:ActualDeliveryDate>
+  </cac:Delivery>{payment_xml}
   <cac:PaymentTerms>
     <cbc:Note>{_xml_escape(f"Zahlbar innerhalb von {int(doc.get('payment_terms_days') or 14)} Tagen ohne Abzug.")}</cbc:Note>
   </cac:PaymentTerms>
@@ -1933,11 +1962,20 @@ class ERPManager:
             unit_code = self._map_ubl_unit_code(ln.get("unit") or "Stk.")
             line_net = float(ln.get("line_net") or 0.0)
             unit_price = float(ln.get("unit_price_net") or 0.0)
+            disc_pct = float(ln.get("discount_pct") or 0.0)
+            eff_unit_price = round(line_net / qty, 2) if (qty > 0 and disc_pct > 0) else unit_price
             rate = float(ln.get("tax_rate_pct") or 0.0)
             cat_id, _ = self._tax_category_for_doc(tax_regime, rate)
             title = _xml_escape(str(ln.get("title") or f"Position {pos}"))
             desc = _xml_escape(str(ln.get("description") or ""))
             desc_el = f"\n      <ram:Description>{desc}</ram:Description>" if desc else ""
+            gross_price_el = (
+                f"<ram:GrossPriceProductTradePrice><ram:ChargeAmount>{unit_price:.2f}</ram:ChargeAmount>"
+                f"<ram:AppliedTradeAllowanceCharge><ram:ChargeIndicator><udt:Indicator>false</udt:Indicator></ram:ChargeIndicator>"
+                f"<ram:ActualAmount>{round(unit_price - eff_unit_price, 2):.2f}</ram:ActualAmount></ram:AppliedTradeAllowanceCharge>"
+                f"</ram:GrossPriceProductTradePrice>"
+                if (disc_pct > 0 and unit_price > eff_unit_price) else ""
+            )
             line_items_xml.append(
                 f"""    <ram:IncludedSupplyChainTradeLineItem>
       <ram:AssociatedDocumentLineDocument><ram:LineID>{pos}</ram:LineID></ram:AssociatedDocumentLineDocument>
@@ -1945,7 +1983,7 @@ class ERPManager:
         <ram:Name>{title}</ram:Name>{desc_el}
       </ram:SpecifiedTradeProduct>
       <ram:SpecifiedLineTradeAgreement>
-        <ram:NetPriceProductTradePrice><ram:ChargeAmount>{unit_price:.2f}</ram:ChargeAmount></ram:NetPriceProductTradePrice>
+        {gross_price_el}<ram:NetPriceProductTradePrice><ram:ChargeAmount>{eff_unit_price:.2f}</ram:ChargeAmount></ram:NetPriceProductTradePrice>
       </ram:SpecifiedLineTradeAgreement>
       <ram:SpecifiedLineTradeDelivery>
         <ram:BilledQuantity unitCode="{_xml_escape(unit_code)}">{qty:.2f}</ram:BilledQuantity>
@@ -2041,7 +2079,11 @@ class ERPManager:
         </ram:PostalTradeAddress>{buyer_vat_reg}
       </ram:BuyerTradeParty>
     </ram:ApplicableHeaderTradeAgreement>
-    <ram:ApplicableHeaderTradeDelivery/>
+    <ram:ApplicableHeaderTradeDelivery>
+      <ram:ActualDeliverySupplyChainEvent>
+        <ram:OccurrenceDateTime><udt:DateTimeString format="102">{_xml_escape(ctx['service_date'].replace('-', ''))}</udt:DateTimeString></ram:OccurrenceDateTime>
+      </ram:ActualDeliverySupplyChainEvent>
+    </ram:ApplicableHeaderTradeDelivery>
     <ram:ApplicableHeaderTradeSettlement>
       <ram:PaymentReference>{_xml_escape(doc_num)}</ram:PaymentReference>
       <ram:InvoiceCurrencyCode>{_xml_escape(currency)}</ram:InvoiceCurrencyCode>{payment_means_xml}
@@ -2096,7 +2138,8 @@ class ERPManager:
             docs = [dict(r) for r in conn.execute(sql, params).fetchall()]
 
             now_stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S000")
-            year_start = f"{datetime.date.today().year}0101"
+            first_doc_year = str((docs[0].get("issue_date") if docs else "") or "")[:4]
+            year_start = f"{first_doc_year}0101" if (len(first_doc_year) == 4 and first_doc_year.isdigit()) else f"{datetime.date.today().year}0101"
             extf_meta = (
                 f'"EXTF";700;21;"Buchungsstapel";13;{now_stamp};;"RE";"ArchonOS";'
                 f'"{cid}";1;1;{year_start};4;;;"Archon Buchungsstapel";;;0;"EUR";;;;;;;;'

@@ -4672,28 +4672,28 @@
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 <div class="space-y-1">
                   <label class="block font-mono font-bold text-xs text-[var(--foreground)]" data-i18n="settings.plugins.max_kontext_tokens_fenstergroesse">Max. Kontext-Tokens (Fenstergröße)</label>
-                  <input type="number" id="guard-set-max-context" value="32000" step="1000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-xs text-[var(--foreground)] focus:outline-none">
+                  <input type="number" id="sysset-guard-max-context" value="32000" step="1000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-xs text-[var(--foreground)] focus:outline-none">
                   <p class="text-[10.5px] text-[var(--muted-foreground)]" data-i18n="settings.plugins.uebersteigende_historie_wird_vor_dem_promp">Übersteigende Historie wird vor dem Prompting abgeschnitten.</p>
                 </div>
                 <div class="space-y-1">
                   <label class="block font-mono font-bold text-xs text-[var(--foreground)]" data-i18n="settings.plugins.max_historie_nachrichten_turns">Max. Historie Nachrichten (Turns)</label>
-                  <input type="number" id="guard-set-max-history" value="20" min="2" max="100" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-xs text-[var(--foreground)] focus:outline-none">
+                  <input type="number" id="sysset-guard-max-history" value="20" min="2" max="100" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-xs text-[var(--foreground)] focus:outline-none">
                   <p class="text-[10.5px] text-[var(--muted-foreground)]" data-i18n="settings.plugins.anzahl_chat_eintraege_im_promptfaehigen_sp">Anzahl Chat-Einträge im promptfähigen Speicher.</p>
                 </div>
                 <div class="space-y-1">
                   <label class="block font-mono font-bold text-xs text-[var(--foreground)]" data-i18n="settings.plugins.taegliches_ausgabenlimit_usd_tag">Tägliches Ausgabenlimit (USD / Tag)</label>
-                  <input type="number" id="guard-set-daily-budget" value="2.00" step="0.25" min="0.10" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-xs text-[var(--foreground)] focus:outline-none">
+                  <input type="number" id="sysset-guard-daily-budget" value="2.00" step="0.25" min="0.10" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-xs text-[var(--foreground)] focus:outline-none">
                   <p class="text-[10.5px] text-[var(--muted-foreground)]" data-i18n="settings.plugins.drosselt_llm_aufrufe_bei_ueberschreitung_d">Drosselt LLM-Aufrufe bei Überschreitung des Tagesbudgets.</p>
                 </div>
                 <div class="space-y-1">
                   <label class="block font-mono font-bold text-xs text-[var(--foreground)]" data-i18n="settings.plugins.max_budget_pro_einzelaufgabe_usd">Max. Budget pro Einzelaufgabe (USD)</label>
-                  <input type="number" id="guard-set-task-budget" value="0.50" step="0.05" min="0.05" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-xs text-[var(--foreground)] focus:outline-none">
+                  <input type="number" id="sysset-guard-task-budget" value="0.50" step="0.05" min="0.05" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-xs text-[var(--foreground)] focus:outline-none">
                   <p class="text-[10.5px] text-[var(--muted-foreground)]" data-i18n="settings.plugins.unterbricht_ausufernde_subagenten_loops_re">Unterbricht ausufernde Subagenten-Loops rechtzeitig.</p>
                 </div>
               </div>
               <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]">
                 <span class="text-[11px] text-[var(--muted-foreground)] font-mono" data-i18n="settings.plugins.synchronisiert_mit_guardian_daemon">Synchronisiert mit Guardian Daemon.</span>
-                <button type="button" onclick="saveGuardianSettings(event)" class="px-3.5 py-1.5 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm">
+                <button type="button" onclick="saveGuardianSettings(event, 'sysset')" class="px-3.5 py-1.5 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm">
                   <i data-lucide="check" class="w-3.5 h-3.5"></i> <span data-i18n="settings.plugins.budget_speichern">Budget Speichern</span>
                 </button>
               </div>

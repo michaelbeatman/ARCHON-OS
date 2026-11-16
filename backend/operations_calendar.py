@@ -131,12 +131,12 @@ class OperationsCalendarManager:
                 if "erp_documents" not in tables:
                     return []
                 rows = conn.execute(
-                    "SELECT id, doc_number, doc_type, due_date, total_gross, status FROM erp_documents WHERE due_date IS NOT NULL AND due_date != ''"
+                    "SELECT id, doc_number, doc_type, due_date, amount_gross, status FROM erp_documents WHERE due_date IS NOT NULL AND due_date != ''"
                 ).fetchall()
                 for r in rows:
                     out.append({
                         "id": f"erp_{r['id']}",
-                        "title": f"[ERP {r['doc_type']}] {r['doc_number']} ({r['total_gross']} EUR)",
+                        "title": f"[ERP {r['doc_type']}] {r['doc_number']} ({r['amount_gross']} EUR)",
                         "date": str(r["due_date"])[:10],
                         "time": "",
                         "category": "payment_due",

@@ -111,6 +111,8 @@ def build_zugferd_invoice_pdf(
     seller_tax = seller.get("tax") if isinstance(seller.get("tax"), dict) else {}
     seller_bank = seller.get("bank") if isinstance(seller.get("bank"), dict) else {}
     seller_contact = seller.get("contact") if isinstance(seller.get("contact"), dict) else {}
+    seller_reg = seller.get("registry") if isinstance(seller.get("registry"), dict) else {}
+    service_date = str(doc.get("service_date") or issue_date)[:10]
 
     seller_name = str(seller.get("name") or "Archon Systems GmbH")
     seller_line = (
@@ -148,13 +150,22 @@ def build_zugferd_invoice_pdf(
         y -= 13.5
 
     # Metadaten rechts
+    regime_raw = str(doc.get("tax_regime") or "standard_19")
+    regime_labels = {
+        "standard_19": "Regelbesteuerung (19%)",
+        "reduced_7": "Ermäßigt (7%)",
+        "small_business": "§ 19 UStG (Kleinunternehmer)",
+        "reverse_charge": "§ 13b UStG (Reverse Charge)",
+        "intra_eu": "§ 4 Nr. 1b UStG (Innergem.)",
+    }
     meta_y = PAGE_H - 108.0
     meta_x = PAGE_W - 210.0
     meta_rows = [
         ("Belegnummer:", doc_num),
         ("Belegdatum:", issue_date),
+        ("Leistungsdatum:", service_date),
         ("Fällig bis:", due_date),
-        ("USt-Regime:", str(doc.get("tax_regime") or "standard_19")),
+        ("USt-Regime:", regime_labels.get(regime_raw, regime_raw)),
     ]
     if buyer.get("leitweg_id"):
         meta_rows.append(("Leitweg-ID:", str(buyer["leitweg_id"])))
@@ -248,12 +259,18 @@ def build_zugferd_invoice_pdf(
     cmds.append(_txt_cmd("F2", 11.0, sum_x, y, "Gesamtbetrag:"))
     cmds.append(_right_txt_cmd("F2", 11.0, PAGE_W - MARGIN_R - 4, y, _format_money(doc.get("amount_gross"), currency)))
 
-    # Zahlungshinweis & Fußzeile (auf jeder Seite Fußleiste, Bank/USt auf Schlussseite)
+    # Zahlungshinweis & Fußzeile (§ 35a GmbHG / § 125a HGB Pflichtangaben)
     iban = str(seller_bank.get("iban") or "")
     bic = str(seller_bank.get("bic") or "")
+    reg_court = str(seller_reg.get("court") or "")
+    reg_num = str(seller_reg.get("number") or "")
+    reg_dirs = str(seller_reg.get("managing_directors") or "")
+    reg_line = "  |  ".join(x for x in (reg_court, reg_num, f"GF: {reg_dirs}" if reg_dirs else "") if x)
     cmds.append(b"0.32 0.36 0.44 rg")
     cmds.append(_txt_cmd("F1", 8.5, MARGIN_L, 78.0, f"Bankverbindung: IBAN {iban}  |  BIC {bic}  |  Verwendungszweck: {doc_num}"))
-    cmds.append(_txt_cmd("F1", 7.5, MARGIN_L, 58.0, f"USt-IdNr.: {seller_tax.get('vat_id', '')}  |  Steuernr.: {seller_tax.get('tax_number', '')}  |  Kontakt: {seller_contact.get('email', '')}"))
+    cmds.append(_txt_cmd("F1", 7.5, MARGIN_L, 64.0, f"USt-IdNr.: {seller_tax.get('vat_id', '')}  |  Steuernr.: {seller_tax.get('tax_number', '')}  |  Kontakt: {seller_contact.get('email', '')}"))
+    if reg_line:
+        cmds.append(_txt_cmd("F1", 7.0, MARGIN_L, 52.0, reg_line))
     for p_cmds in pages_cmds:
         p_cmds.append(b"0.01 0.52 0.78 rg")
         p_cmds.append(_txt_cmd("F2", 7.5, MARGIN_L, 38.0, "Eingebettete EN-16931-/Factur-X-/ZUGFeRD-2.2-CII-XML-Strukturdaten: factur-x.xml"))

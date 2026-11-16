@@ -223,12 +223,32 @@ class GracefulShutdownCoordinator:
         self._active_tasks.clear()
         return checkpoints
 
+    @staticmethod
+    def _known_db_paths(filenames: List[str]) -> List[str]:
+        candidates: List[str] = []
+        try:
+            from backend.db_paths import resolve_db
+            for fname in filenames:
+                candidates.append(resolve_db(fname))
+        except Exception:
+            pass
+        for fname in filenames:
+            if fname == "agent_os.db":
+                candidates.append(os.path.join(WORKSPACE_DIR, fname))
+            else:
+                candidates.append(os.path.join(WORKSPACE_DIR, "data", fname))
+        seen = set()
+        ordered: List[str] = []
+        for p in candidates:
+            ap = os.path.abspath(p)
+            if ap not in seen:
+                seen.add(ap)
+                ordered.append(ap)
+        return ordered
+
     def _update_task_db_status(self, task_id: str, new_status: str, note: str = ""):
         """Setzt den Task-Status in den bekannten SQLite-Tasktabellen."""
-        db_paths = [
-            os.path.join(WORKSPACE_DIR, "data", "kanban.db"),
-            os.path.join(WORKSPACE_DIR, "agent_os.db"),
-        ]
+        db_paths = self._known_db_paths(["kanban.db", "state.db", "agent_os.db"])
         for dbp in db_paths:
             if os.path.exists(dbp):
                 try:
@@ -266,15 +286,15 @@ class GracefulShutdownCoordinator:
         except Exception as e:
             print(f"[GracefulShutdown] Batcher-Flush fehlgeschlagen: {e}", file=sys.stderr)
 
-        # 2. Alle SQLite-Datenbanken einsammeln
-        candidate_paths = [
-            os.path.join(WORKSPACE_DIR, "agent_os.db"),
-            os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db"),
-            os.path.join(WORKSPACE_DIR, "data", "contracts.db"),
-            os.path.join(WORKSPACE_DIR, "data", "kanban.db"),
-            os.path.join(WORKSPACE_DIR, "data", "state.db"),
-            os.path.join(WORKSPACE_DIR, "data", "hybrid_search.db"),
-        ]
+        # 2. Alle SQLite-Datenbanken über zentrale DB-SSOT einsammeln
+        candidate_paths = self._known_db_paths([
+            "agent_os.db",
+            "agentic_memory.db",
+            "contracts.db",
+            "kanban.db",
+            "state.db",
+            "hybrid_search.db",
+        ])
 
         for db_file in candidate_paths:
             if os.path.isfile(db_file):
@@ -286,9 +306,6 @@ class GracefulShutdownCoordinator:
                         flushed_dbs.append(os.path.basename(db_file))
                 except Exception as e:
                     print(f"[GracefulShutdown] Fehler beim WAL-Flush für {db_file}: {e}", file=sys.stderr)
-
-        print(f"[GracefulShutdown] WAL-Flush abgeschlossen ({len(flushed_dbs)} Speicherpunkte konsolidiert).")
-        return {"status": "success", "flushed_databases": flushed_dbs}
 
         print(f"[GracefulShutdown] WAL-Flush abgeschlossen ({len(flushed_dbs)} Speicherpunkte konsolidiert).")
         return {"status": "success", "flushed_databases": flushed_dbs}
@@ -356,18 +373,21 @@ class GracefulShutdownCoordinator:
     def _heal_orphan_tasks(self) -> int:
         """Heilt Tasks, die durch unvorhergesehenes Beenden im 'in_progress'-Status hängengeblieben sind."""
         count = 0
-        db_paths = [
-            os.path.join(WORKSPACE_DIR, "data", "kanban.db"),
-            os.path.join(WORKSPACE_DIR, "agent_os.db")
-        ]
+        db_paths = self._known_db_paths(["kanban.db", "state.db", "agent_os.db"])
         for dbp in db_paths:
             if os.path.exists(dbp):
                 try:
                     with sqlite3.connect(dbp, timeout=5.0, factory=_ArchonClosingConn) as conn:
-                        # N-07: gleicher Fix wie in _update_task_db_status —
-                        # 'updated_at' existiert in tasks nicht.
+                        cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+                        if not cols:
+                            continue
+                        assignments = ["status = 'todo'"]
+                        if "claim_lock" in cols:
+                            assignments.append("claim_lock = NULL")
+                        if "worker_pid" in cols:
+                            assignments.append("worker_pid = NULL")
                         cur = conn.execute(
-                            "UPDATE tasks SET status = 'todo' WHERE status = 'in_progress'"
+                            f"UPDATE tasks SET {', '.join(assignments)} WHERE status = 'in_progress'"
                         )
                         count += cur.rowcount
                         conn.commit()

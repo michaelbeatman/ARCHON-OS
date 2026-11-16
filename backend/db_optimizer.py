@@ -11,10 +11,21 @@ import sqlite3
 from typing import Dict, Any, List
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _resolve_target(filename: str, legacy_subpath: str) -> str:
+    try:
+        from backend.db_paths import resolve_db
+        return resolve_db(filename)
+    except Exception:
+        ws_path = os.path.join(WORKSPACE_DIR, "data", filename)
+        return ws_path if os.path.exists(ws_path) else os.path.expanduser(legacy_subpath)
+
+
 DB_TARGETS = [
-    os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db"),
-    os.path.join(WORKSPACE_DIR, "data", "kanban.db") if os.path.exists(os.path.join(WORKSPACE_DIR, "data", "kanban.db")) else os.path.expanduser("~/.hermes/kanban.db"),
-    os.path.join(WORKSPACE_DIR, "data", "state.db") if os.path.exists(os.path.join(WORKSPACE_DIR, "data", "state.db")) else os.path.expanduser("~/.hermes/state.db")
+    _resolve_target("agentic_memory.db", "~/.hermes/agentic_memory.db"),
+    _resolve_target("kanban.db", "~/.hermes/kanban.db"),
+    _resolve_target("state.db", "~/.hermes/state.db"),
 ]
 
 def optimize_all_databases() -> Dict[str, Any]:
@@ -29,11 +40,13 @@ def optimize_all_databases() -> Dict[str, Any]:
         db_name = os.path.basename(db_path)
         size_before = os.path.getsize(db_path)
 
+        conn = None
         try:
             conn = sqlite3.connect(db_path, timeout=15.0)
             conn.execute("PRAGMA optimize;")
             conn.execute("VACUUM;")
             conn.close()
+            conn = None
             size_after = os.path.getsize(db_path)
             diff = max(0, size_before - size_after)
             total_freed_bytes += diff
@@ -50,6 +63,12 @@ def optimize_all_databases() -> Dict[str, Any]:
                 "status": "error",
                 "error": str(e)
             })
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     return {
         "status": "success",

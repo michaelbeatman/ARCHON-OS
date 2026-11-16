@@ -610,12 +610,17 @@
       }
     }
     async function restartAgent(name) {
-      await fetch("/api/operations/kanban/reset-zombies", {
+      if (!confirm(`Agent '${name}' wirklich zurücksetzen und neu starten?`)) return;
+      const res = await fetch("/api/operations/kanban/reset-zombies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agent_id: name })
-      }).catch(() => {});
-      alert(smT("ui.skill_markt.agent_restarted", "{name} wurde neu gestartet.", { name: name }));
+      }).catch(() => null);
+      if (res && res.ok) {
+        alert(smT("ui.skill_markt.agent_restarted", "{name} wurde neu gestartet.", { name: name }));
+      } else {
+        alert("Neustart konnte nicht ausgelöst werden.");
+      }
     }
     function updateAgentField(id, field, value) {
       const agent = agents.find(a => a.id === id);
@@ -3361,9 +3366,9 @@
           <div class="flex-1 min-w-0 flex flex-col p-1 space-y-2">
             <!-- Header Row -->
             <div class="flex items-center justify-between mb-1">
-              <input type="text" value="${agent.name}" onchange="updateAgentField('${agent.id}', 'name', this.value); event.stopPropagation();" onclick="event.stopPropagation();" class="daw-input-name focus:outline-none focus:bg-neutral-900/40 text-[13px] font-bold" placeholder="${smT("ui.skill_markt.agent_name_placeholder", "Agent Name")}">
+              <input type="text" value="${escapeHtml(agent.name)}" onchange="updateAgentField('${escapeHtml(agent.id)}', 'name', this.value); event.stopPropagation();" onclick="event.stopPropagation();" class="daw-input-name focus:outline-none focus:bg-neutral-900/40 text-[13px] font-bold" placeholder="${smT("ui.skill_markt.agent_name_placeholder", "Agent Name")}">
               <div class="flex items-center gap-1.5">
-                ${isHermesEngine ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${smT("ui.skill_markt.agent_active_via_hermes", "● Aktiv via Hermes")}</span>' : ''}
+                ${isHermesEngine ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${smT("ui.skill_markt.agent_active_via_hermes", "● Aktiv via Hermes")}</span>` : ''}
                 <div class="daw-led ${ledClass} relative w-2.5 h-2.5 rounded-full flex-shrink-0 ml-1" style="position:static;" title="${smT("ui.skill_markt.agent_status_title", "Status: {state}", { state: agent.active ? smT("ui.skill_markt.agent_active_running", "Active/Running") : smT("ui.skill_markt.agent_idle", "Idle") })}"></div>
               </div>
             </div>

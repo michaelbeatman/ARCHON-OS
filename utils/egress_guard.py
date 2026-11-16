@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import socket
 from typing import Iterable, Optional, Set, Tuple
 from urllib.parse import urlparse
 
@@ -125,6 +126,17 @@ def check_target_url(url: str, *, allowed: Optional[Iterable[str]] = None) -> st
 
     entries = set(_env_targets() if allowed is None else allowed)
     if _match_allowlist(host, port, entries):
+        # DNS-Rebinding / Metadaten-Alias-Schutz: aufgeloeste IPs gegen _NEVER_ALLOWED pruefen
+        try:
+            addr_info = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+            for _fam, _type, _proto, _canon, sockaddr in addr_info:
+                resolved_ip = ipaddress.ip_address(sockaddr[0])
+                if _is_never_allowed(resolved_ip):
+                    raise EgressBlocked(
+                        f"Host '{host}' loest auf verbotene IP {resolved_ip} auf", target
+                    )
+        except socket.gaierror:
+            pass
         return target
 
     raise EgressBlocked(

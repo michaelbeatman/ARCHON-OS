@@ -107,7 +107,8 @@ def api_get_boardroom_history_item(item_id: str):
 
 
 @router.delete("/api/boardroom/history/{item_id}")
-def api_delete_boardroom_history_item(item_id: str):
+def api_delete_boardroom_history_item(request: Request, item_id: str):
+    require_admin_or_503(request)
     hist = load_boardroom_history()
     hist = [h for h in hist if h.get("id") != item_id]
     _save_json(BOARDROOM_HISTORY_FILE, hist)
@@ -297,7 +298,9 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
 
 
 @router.post("/api/boardroom/run")
-async def api_run_boardroom(req: BoardroomRequest):
+async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
+    if request is not None:
+        require_admin_or_503(request)
     chairman_agent, all_debate_agents = _prepare_boardroom_agents(req)
     
     add_ticker("AI Boardroom", f"Debatte gestartet: '{req.task[:40]}...' ({req.framework}) mit {len(all_debate_agents)} Teilnehmern")
@@ -366,6 +369,7 @@ async def api_run_boardroom(req: BoardroomRequest):
 
 @router.post("/api/boardroom/stream")
 async def api_stream_boardroom(req: BoardroomRequest, request: Request):
+    require_admin_or_503(request)
     chairman_agent, all_debate_agents = _prepare_boardroom_agents(req)
     add_ticker("AI Boardroom", f"Live-Debatte gestartet: '{req.task[:40]}...' ({req.framework}) mit {len(all_debate_agents)} Teilnehmern")
 

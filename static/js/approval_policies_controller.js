@@ -79,16 +79,32 @@ async function loadApprovalPolicies() {
   }
 }
 
+function _activeApprovalActor() {
+  return (window.authManager && window.authManager.currentUser && window.authManager.currentUser.username)
+    || (window.archonCurrentUser && window.archonCurrentUser.username)
+    || "admin";
+}
+
 async function savePolicySetting(key) {
   const input = document.getElementById(`input-${key}`);
   if (!input) return;
 
   const newVal = input.value;
+  const valNorm = String(newVal || "").trim().toLowerCase();
+  if (
+    (key === "email_require_approval" && valNorm === "false") ||
+    (key === "system_require_approval_keys" && valNorm === "false") ||
+    (key === "system_emergency_bypass" && valNorm === "true")
+  ) {
+    if (!confirm(`Sicherheitswarnung: Kritische Leitplanke '${key}' wirklich auf '${newVal}' setzen?`)) {
+      return;
+    }
+  }
   try {
     const res = await fetch("/api/operations/approvals/policies", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ policy_key: key, new_value: newVal, user_id: "admin" })
+      body: JSON.stringify({ policy_key: key, new_value: newVal, user_id: _activeApprovalActor() })
     });
 
     if (!res.ok) throw new Error("Speichern fehlgeschlagen");
@@ -254,7 +270,7 @@ async function approveRequest(reqId) {
     const res = await fetch(`/api/operations/approvals/requests/${reqId}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approver_id: "admin" })
+      body: JSON.stringify({ approver_id: _activeApprovalActor() })
     });
     if (!res.ok) throw new Error("Freigabe fehlgeschlagen");
     await loadApprovalRequests();
@@ -299,7 +315,7 @@ async function confirmRejectRequest() {
     const res = await fetch(`/api/operations/approvals/requests/${reqId}/reject`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rejected_by: "admin", reason: reason })
+      body: JSON.stringify({ rejected_by: _activeApprovalActor(), reason: reason })
     });
     if (!res.ok) throw new Error("Ablehnung fehlgeschlagen");
     closeRejectDialog();
@@ -325,11 +341,11 @@ async function loadApprovalsAuditChain() {
 
     tbody.innerHTML = chain.map(c => `
       <tr class="hover:bg-[var(--secondary)]/50">
-        <td class="p-1 text-[var(--muted-foreground)]">${c.timestamp ? c.timestamp.substring(11, 19) : '-'}</td>
-        <td class="p-1 font-semibold text-[var(--foreground)]">${c.action}</td>
-        <td class="p-1 text-sky-500">${c.user_id}</td>
-        <td class="p-1 text-[var(--muted-foreground)] truncate max-w-[120px]" title="${c.current_hash}">
-          ${c.current_hash ? c.current_hash.substring(0, 10) + '...' : '-'}
+        <td class="p-1 text-[var(--muted-foreground)]">${c.timestamp ? escapeHtml(String(c.timestamp).substring(11, 19)) : '-'}</td>
+        <td class="p-1 font-semibold text-[var(--foreground)]">${escapeHtml(c.action)}</td>
+        <td class="p-1 text-sky-500">${escapeHtml(c.user_id)}</td>
+        <td class="p-1 text-[var(--muted-foreground)] truncate max-w-[120px]" title="${escapeHtml(c.current_hash)}">
+          ${c.current_hash ? escapeHtml(String(c.current_hash).substring(0, 10)) + '...' : '-'}
         </td>
       </tr>
     `).join("");

@@ -413,7 +413,7 @@ class CorporateManager:
 
         has_doc_num = bool(doc_num)
         has_items = len(items) > 0 and all(bool(str(i.get("desc") or "").strip()) and float(i.get("qty") or 0) > 0 for i in items)
-        has_supply_date = bool(str(custom.get("supply_date") or custom.get("issue_date") or datetime.now().strftime("%d.%m.%Y")).strip())
+        has_supply_date = bool(str(custom.get("supply_date") or custom.get("service_date") or custom.get("issue_date") or "").strip())
         iban_clean = re.sub(r"\s+", "", str(bank.get("iban") or ""))
         has_iban = len(iban_clean) >= 15
         is_small_amount = norm_type == "invoice" and 0.0 < gross_total <= 250.0
@@ -1200,7 +1200,7 @@ class CorporateManager:
         compliance = self.validate_ustg_compliance(
             company=company,
             template_type=norm_type,
-            custom=custom,
+            custom={**custom, "issue_date": custom.get("issue_date") or today_de},
             net_total=net_total,
             gross_total=gross_total,
             items=items,

@@ -206,12 +206,17 @@ async def api_stream_task_execution(task_id: str):
     Server-Sent Events (SSE) Stream für die Live-Beobachtung einer laufenden Task-Ausführung.
     Ermöglicht Token-Streaming in Echtzeit ohne Polling.
     """
-    q = asyncio.Queue(maxsize=50)
+    q = asyncio.Queue(maxsize=200)
 
     try:
         import main
         if hasattr(main, "_SSE_SUBSCRIBERS"):
-            main._SSE_SUBSCRIBERS.append(q)
+            lock = getattr(main, "_SSE_SUB_LOCK", None)
+            if lock is not None:
+                with lock:
+                    main._SSE_SUBSCRIBERS.append(q)
+            else:
+                main._SSE_SUBSCRIBERS.append(q)
     except Exception:
         pass
 
@@ -237,8 +242,14 @@ async def api_stream_task_execution(task_id: str):
         finally:
             try:
                 import main
-                if hasattr(main, "_SSE_SUBSCRIBERS") and q in main._SSE_SUBSCRIBERS:
-                    main._SSE_SUBSCRIBERS.remove(q)
+                if hasattr(main, "_SSE_SUBSCRIBERS"):
+                    lock = getattr(main, "_SSE_SUB_LOCK", None)
+                    if lock is not None:
+                        with lock:
+                            if q in main._SSE_SUBSCRIBERS:
+                                main._SSE_SUBSCRIBERS.remove(q)
+                    elif q in main._SSE_SUBSCRIBERS:
+                        main._SSE_SUBSCRIBERS.remove(q)
             except Exception:
                 pass
 

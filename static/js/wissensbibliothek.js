@@ -960,25 +960,29 @@
           const sel = service.model === m ? "selected" : "";
           modelOptions += `<option value="${m}" ${sel}>${m}</option>`;
         });
+        const _escSvc = typeof escapeHtml === "function"
+          ? escapeHtml
+          : (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+        const safeSvcId = _escSvc(service.id);
         card.innerHTML = `
           <div class="flex-1 space-y-1 text-xs">
             <div class="flex items-center gap-2">
               <span class="inline-block w-2 h-2 rounded-full ${ledColor}"></span>
-              <span class="font-bold text-xs uppercase text-[var(--foreground)]">${service.name}</span>
-              <span class="text-[9px] font-mono bg-[var(--secondary)] px-1.5 py-0.5 rounded text-[var(--muted-foreground)] border border-[var(--border)]">@${service.id}</span>
+              <span class="font-bold text-xs uppercase text-[var(--foreground)]">${_escSvc(service.name)}</span>
+              <span class="text-[9px] font-mono bg-[var(--secondary)] px-1.5 py-0.5 rounded text-[var(--muted-foreground)] border border-[var(--border)]">@${safeSvcId}</span>
             </div>
-            <p class="text-[10px] text-[var(--muted-foreground)] leading-tight">${service.description}</p>
+            <p class="text-[10px] text-[var(--muted-foreground)] leading-tight">${_escSvc(service.description)}</p>
             
             <div class="flex gap-2 mt-2 pt-2 border-t border-[var(--border)]">
               <div class="flex-1">
                 <label class="block text-[8px] uppercase font-bold text-[var(--muted-foreground)] mb-0.5">${wbT('ui.wissensbibliothek.service_model', 'Modell')}</label>
-                <select onchange="updateServiceField('${service.id}', 'model', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] rounded text-[10px] px-1.5 py-0.5 focus:outline-none cursor-pointer">
+                <select onchange="updateServiceField('${safeSvcId}', 'model', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] rounded text-[10px] px-1.5 py-0.5 focus:outline-none cursor-pointer">
                   ${modelOptions}
                 </select>
               </div>
               <div class="flex-1">
                 <label class="block text-[8px] uppercase font-bold text-[var(--muted-foreground)] mb-0.5">${wbT('ui.wissensbibliothek.service_role', 'Rolle')}</label>
-                <select onchange="updateServiceField('${service.id}', 'role', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] rounded text-[10px] px-1.5 py-0.5 focus:outline-none cursor-pointer">
+                <select onchange="updateServiceField('${safeSvcId}', 'role', this.value)" class="w-full bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] rounded text-[10px] px-1.5 py-0.5 focus:outline-none cursor-pointer">
                   ${roleOptions}
                 </select>
               </div>

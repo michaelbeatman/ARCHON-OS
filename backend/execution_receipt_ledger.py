@@ -10,6 +10,7 @@ import json
 import uuid
 import hashlib
 import sqlite3
+import threading
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -24,7 +25,12 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+_LEDGER_LOCK = threading.RLock()
+try:
+    from backend.db_paths import resolve_db
+    DB_PATH = resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 
 def _get_cfg() -> Dict[str, Any]:
@@ -66,6 +72,7 @@ def _init_db() -> None:
 
 class ExecutionReceiptLedger:
     def __init__(self):
+        self._lock = _LEDGER_LOCK
         _init_db()
 
     def issue_receipt(
@@ -85,30 +92,33 @@ class ExecutionReceiptLedger:
         receipt_id = f"rcpt-{uuid.uuid4().hex[:12]}"
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         tools_json = json.dumps(tools_invoked or [], ensure_ascii=False)
+        rounded_cost = round(float(cost_usd), 6)
 
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
-            row = conn.execute(
-                "SELECT receipt_hash FROM execution_receipts_ledger ORDER BY id DESC LIMIT 1"
-            ).fetchone()
-            prev_hash = row[0] if (row and bool(cfg.get("chain_receipts", True))) else "GENESIS_BLOCK_00000000"
+        with getattr(self, "_lock", _LEDGER_LOCK):
+            with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT receipt_hash FROM execution_receipts_ledger ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+                prev_hash = row[0] if (row and bool(cfg.get("chain_receipts", True))) else "GENESIS_BLOCK_00000000"
 
-            canonical_str = (
-                f"{receipt_id}|{task_id}|{agent_role}|{model_used}|"
-                f"{prompt_tokens}|{completion_tokens}|{cost_usd:.6f}|{tools_json}|{prev_hash}|{now_iso}"
-            )
-            receipt_hash = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+                canonical_str = (
+                    f"{receipt_id}|{task_id}|{agent_role}|{model_used}|"
+                    f"{prompt_tokens}|{completion_tokens}|{rounded_cost:.6f}|{tools_json}|{prev_hash}|{now_iso}"
+                )
+                receipt_hash = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
 
-            conn.execute("""
-                INSERT INTO execution_receipts_ledger
-                (receipt_id, task_id, agent_role, model_used, prompt_tokens, completion_tokens,
-                 cost_usd, tools_invoked_json, prev_hash, receipt_hash, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                receipt_id, task_id, agent_role, model_used,
-                prompt_tokens, completion_tokens, round(cost_usd, 6),
-                tools_json, prev_hash, receipt_hash, now_iso
-            ))
-            conn.commit()
+                conn.execute("""
+                    INSERT INTO execution_receipts_ledger
+                    (receipt_id, task_id, agent_role, model_used, prompt_tokens, completion_tokens,
+                     cost_usd, tools_invoked_json, prev_hash, receipt_hash, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    receipt_id, task_id, agent_role, model_used,
+                    prompt_tokens, completion_tokens, rounded_cost,
+                    tools_json, prev_hash, receipt_hash, now_iso
+                ))
+                conn.commit()
 
         return {
             "issued": True,
@@ -117,7 +127,7 @@ class ExecutionReceiptLedger:
             "agent_role": agent_role,
             "model_used": model_used,
             "total_tokens": prompt_tokens + completion_tokens,
-            "cost_usd": round(cost_usd, 6),
+            "cost_usd": rounded_cost,
             "prev_hash": prev_hash,
             "receipt_hash": receipt_hash,
             "created_at": now_iso

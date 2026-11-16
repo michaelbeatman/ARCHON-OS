@@ -7,6 +7,21 @@ let financeReceipts = [];
 let selectedReceipt = null;
 let currentFinanceTab = "receipts";
 
+function _finEsc(val) {
+  if (val === null || val === undefined) return "";
+  return String(val)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function _finSafeHttpUrl(url) {
+  const s = String(url || "").trim();
+  return /^https?:\/\//i.test(s) ? s : "";
+}
+
 async function initFinanceView() {
   await loadFinanceReceipts();
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -113,26 +128,27 @@ function renderFinanceReceipts() {
 
     const sourceIcon = r.source === "telegram" ? "send" : "upload";
 
+    const safeRid = _finEsc(r.receipt_id);
     return `
-      <tr class="${rowClass}" onclick="selectFinanceReceipt('${r.receipt_id}')">
+      <tr class="${rowClass}" onclick="selectFinanceReceipt('${safeRid}')">
         <td class="py-2.5 px-3 font-mono text-[11px] whitespace-nowrap text-[var(--muted-foreground)]">
-          ${r.receipt_date || "-"}
+          ${_finEsc(r.receipt_date) || "-"}
         </td>
         <td class="py-2.5 px-3 font-semibold text-[var(--foreground)] truncate max-w-[160px]">
-          ${r.merchant || "Unbekannter Händler"}
+          ${_finEsc(r.merchant) || "Unbekannter Händler"}
         </td>
         <td class="py-2.5 px-3">
           <span class="px-2 py-0.5 rounded bg-[var(--secondary)] text-[10px] font-medium text-[var(--foreground)]">
-            ${r.category || "Sonstiges"}
+            ${_finEsc(r.category) || "Sonstiges"}
           </span>
         </td>
         <td class="py-2.5 px-3 text-right font-mono font-bold text-[var(--foreground)] whitespace-nowrap">
-          ${(parseFloat(r.amount_gross) || 0).toFixed(2)} ${r.currency || "EUR"}
+          ${(parseFloat(r.amount_gross) || 0).toFixed(2)} ${_finEsc(r.currency) || "EUR"}
         </td>
         <td class="py-2.5 px-3 whitespace-nowrap">
           ${statusBadge}
         </td>
-        <td class="py-2.5 px-3 text-center text-[var(--muted-foreground)]" title="Quelle: ${r.source}">
+        <td class="py-2.5 px-3 text-center text-[var(--muted-foreground)]" title="Quelle: ${_finEsc(r.source)}">
           <i data-lucide="${sourceIcon}" class="w-3.5 h-3.5 mx-auto"></i>
         </td>
       </tr>
@@ -306,15 +322,16 @@ async function loadFinanceContracts() {
         statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Unterzeichnet</span>`;
       }
 
+      const safeSignUrl = _finSafeHttpUrl(c.sign_url);
       return `
         <tr class="hover:bg-[var(--secondary)]/40 transition">
-          <td class="py-2.5 px-3 font-semibold text-[var(--foreground)]">${c.title || "Vertrag"}</td>
-          <td class="py-2.5 px-3 text-[var(--foreground)]">${c.signer_name || "-"}</td>
-          <td class="py-2.5 px-3 font-mono text-[11px] text-[var(--muted-foreground)]">${c.signer_email || "-"}</td>
+          <td class="py-2.5 px-3 font-semibold text-[var(--foreground)]">${_finEsc(c.title) || "Vertrag"}</td>
+          <td class="py-2.5 px-3 text-[var(--foreground)]">${_finEsc(c.signer_name) || "-"}</td>
+          <td class="py-2.5 px-3 font-mono text-[11px] text-[var(--muted-foreground)]">${_finEsc(c.signer_email) || "-"}</td>
           <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge}</td>
-          <td class="py-2.5 px-3 font-mono text-[11px] text-[var(--muted-foreground)]">${c.created_at || "-"}</td>
+          <td class="py-2.5 px-3 font-mono text-[11px] text-[var(--muted-foreground)]">${_finEsc(c.created_at) || "-"}</td>
           <td class="py-2.5 px-3 text-right">
-            ${c.sign_url ? `<a href="${c.sign_url}" target="_blank" class="text-sky-500 hover:underline font-mono text-[11px]">Signieren &rarr;</a>` : "-"}
+            ${safeSignUrl ? `<a href="${_finEsc(safeSignUrl)}" target="_blank" rel="noopener noreferrer" class="text-sky-500 hover:underline font-mono text-[11px]">Signieren &rarr;</a>` : "-"}
           </td>
         </tr>
       `;
@@ -395,15 +412,16 @@ function renderDunningInvoices() {
       badge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-600 font-bold">${inv.overdue_days}d Überfällig</span>`;
     }
 
+    const safeInvId = _finEsc(inv.invoice_id);
     return `
-      <tr class="${rowClass}" onclick="selectDunningInvoice('${inv.invoice_id}')">
-        <td class="py-2.5 px-3 font-mono font-bold text-sky-500 whitespace-nowrap">${inv.invoice_id}</td>
-        <td class="py-2.5 px-3 font-semibold text-[var(--foreground)] truncate max-w-[140px]">${inv.customer_name}</td>
-        <td class="py-2.5 px-3 font-mono text-[11px] whitespace-nowrap text-[var(--muted-foreground)]">${inv.due_date}</td>
-        <td class="py-2.5 px-3 text-right font-mono font-bold text-[var(--foreground)] whitespace-nowrap">${parseFloat(inv.amount_gross).toFixed(2)} EUR</td>
+      <tr class="${rowClass}" onclick="selectDunningInvoice('${safeInvId}')">
+        <td class="py-2.5 px-3 font-mono font-bold text-sky-500 whitespace-nowrap">${safeInvId}</td>
+        <td class="py-2.5 px-3 font-semibold text-[var(--foreground)] truncate max-w-[140px]">${_finEsc(inv.customer_name)}</td>
+        <td class="py-2.5 px-3 font-mono text-[11px] whitespace-nowrap text-[var(--muted-foreground)]">${_finEsc(inv.due_date)}</td>
+        <td class="py-2.5 px-3 text-right font-mono font-bold text-[var(--foreground)] whitespace-nowrap">${(parseFloat(inv.amount_gross) || 0).toFixed(2)} EUR</td>
         <td class="py-2.5 px-3 whitespace-nowrap">${badge}</td>
         <td class="py-2.5 px-3 text-right">
-          <button onclick="event.stopPropagation(); selectDunningInvoice('${inv.invoice_id}');" class="px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] text-[10.5px] font-semibold text-[var(--foreground)]">
+          <button onclick="event.stopPropagation(); selectDunningInvoice('${safeInvId}');" class="px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] text-[10.5px] font-semibold text-[var(--foreground)]">
             Mahnung &rarr;
           </button>
         </td>

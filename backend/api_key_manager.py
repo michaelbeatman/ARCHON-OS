@@ -15,7 +15,11 @@ import datetime
 import threading
 from typing import Dict, Any, List, Optional, Tuple
 
-DB_FILE = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db
+    DB_FILE = resolve_db("agentic_memory.db")
+except Exception:
+    DB_FILE = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
 KEY_SALT = os.environ.get("ARCHON_API_KEY_PEPPER") or "ARCHON_OS_API_KEY_SALT_2026_SECURE"
 LEGACY_KEY_SALT = "ARCHON_OS_API_KEY_SALT_2026_SECURE"
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"

@@ -1,7 +1,7 @@
 """Router fuer Reverse Proxies: OmniRoute & n8n."""
 from __future__ import annotations
 from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
 
 import asyncio
 import json
@@ -60,6 +60,7 @@ async def forward_to_omniroute(request: Request, path: str):
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
 )
 async def omniroute_proxy(request: Request, path: str = ""):
+    require_admin_or_503(request)
     import main as app_main
 
     fn = getattr(app_main, "forward_to_omniroute", forward_to_omniroute)
@@ -157,6 +158,7 @@ async def forward_to_n8n(request: Request, path: str):
     "/n8n-proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"]
 )
 async def n8n_proxy(request: Request, path: str = ""):
+    require_admin_or_503(request)
     import main as app_main
 
     fn = getattr(app_main, "forward_to_n8n", forward_to_n8n)
@@ -196,6 +198,7 @@ async def n8n_assets_proxy(request: Request, path: str = ""):
 
 @router.api_route("/rest/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 async def n8n_rest_proxy(request: Request, path: str = ""):
+    require_admin_or_503(request)
     import main as app_main
 
     fn = getattr(app_main, "forward_to_n8n", forward_to_n8n)
@@ -295,4 +298,5 @@ async def forward_to_anythingllm(request: Request, path: str):
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
 )
 async def anythingllm_proxy(request: Request, path: str = ""):
+    require_admin_or_503(request)
     return await forward_to_anythingllm(request, path)

@@ -13,9 +13,12 @@ import json
 import re
 import time
 import logging
+import tempfile
+import threading
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("dual_llm_sanitizer")
+_TRUST_LOCK = threading.RLock()
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRUSTED_SOURCES_FILE = os.path.join(WORKSPACE_DIR, "data", "trusted_sources.json")
@@ -55,19 +58,32 @@ def is_trusted_source(source_id: str) -> bool:
 def toggle_trusted_source(source_id: str, operator: str = "operator") -> Dict[str, Any]:
     """Schaltet den Trust-Status für einen Absender um und loggt im GoBD Audit-Log."""
     sid = source_id.lower().strip()
-    trusted = load_trusted_sources()
-    is_now_trusted = False
-
-    if sid in trusted:
-        trusted.remove(sid)
+    with _TRUST_LOCK:
+        trusted = load_trusted_sources()
         is_now_trusted = False
-    else:
-        trusted.append(sid)
-        is_now_trusted = True
 
-    os.makedirs(os.path.dirname(TRUSTED_SOURCES_FILE), exist_ok=True)
-    with open(TRUSTED_SOURCES_FILE, "w", encoding="utf-8") as f:
-        json.dump(trusted, f, indent=2, ensure_ascii=False)
+        if sid in trusted:
+            trusted.remove(sid)
+            is_now_trusted = False
+        else:
+            trusted.append(sid)
+            is_now_trusted = True
+
+        target_dir = os.path.dirname(TRUSTED_SOURCES_FILE)
+        os.makedirs(target_dir, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(prefix=".trusted_", suffix=".json.tmp", dir=target_dir)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(trusted, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, TRUSTED_SOURCES_FILE)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            raise
 
     try:
         from backend.audit_log import chained_audit_log
@@ -143,6 +159,17 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
     threat_level = "critical" if any(t in ("INSTRUCTION_OVERRIDE", "JAILBREAK_ATTEMPT", "SYSTEM_PROMPT_TARGETING") for t in threats) else ("high" if threats else "none")
 
     clean_summary = "\n".join(clean_lines).strip()
+    # Mehrzeilige Injection-Spans (z. B. "ignore all\nprevious instructions") auch gesamt neutralisieren
+    if clean_summary:
+        for pattern, p_name in INJECTION_SIGNATURES:
+            if re.search(pattern, clean_summary):
+                if p_name not in threats:
+                    threats.append(p_name)
+                stripped_instructions.append(f"[MULTILINE:{p_name}]")
+                clean_summary = re.sub(pattern, "[INHALT WEGEN SICHERHEITSRISIKEN GEFILTERT]", clean_summary).strip()
+        threats = sorted(list(set(threats)))
+        is_safe = len(threats) == 0
+        threat_level = "critical" if any(t in ("INSTRUCTION_OVERRIDE", "JAILBREAK_ATTEMPT", "SYSTEM_PROMPT_TARGETING") for t in threats) else ("high" if threats else "none")
     if not clean_summary and stripped_instructions:
         clean_summary = "[INHALT WEGEN SICHERHEITSRISIKEN GEFILTERT]"
 

@@ -7,6 +7,8 @@ und sichere Session-Tokens mit Zero-Disruption für lokale Entwicklungs-Workflow
 
 import os
 import sys
+import time
+import threading
 import uuid
 import hmac
 import hashlib
@@ -18,7 +20,18 @@ import html
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db
+    DB_PATH = resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+
+_PBKDF2_ITERATIONS = 600000
+_LEGACY_PBKDF2_ITERATIONS = 100000
+_MAX_FAILED_LOGINS = 5
+_LOCKOUT_WINDOW_SEC = 900
+_AUTH_LOCK = threading.RLock()
+_FAILED_LOGINS: Dict[str, List[float]] = {}
 
 logger = logging.getLogger("archon.auth")
 
@@ -45,14 +58,39 @@ def _get_db() -> sqlite3.Connection:
     return conn
 
 
-def _hash_password(password: str, salt: str = None) -> tuple:
+def _hash_password(password: str, salt: str = None, iterations: int = _PBKDF2_ITERATIONS) -> tuple:
     if not salt:
         salt = uuid.uuid4().hex
-    # 100.000 Runden PBKDF2-HMAC-SHA256 (NIST / BSI konform)
     pwd_bytes = password.encode("utf-8")
     salt_bytes = salt.encode("utf-8")
-    pwd_hash = hashlib.pbkdf2_hmac("sha256", pwd_bytes, salt_bytes, 100000).hex()
-    return pwd_hash, salt
+    digest = hashlib.pbkdf2_hmac("sha256", pwd_bytes, salt_bytes, int(iterations)).hex()
+    return f"pbkdf2_sha256${int(iterations)}${digest}", salt
+
+
+def _verify_password_hash(password: str, stored_hash: str, salt: str) -> tuple[bool, bool]:
+    """Prüft moderne pbkdf2_sha256$600000$... sowie Legacy-100k-Hex-Hashes."""
+    if not stored_hash or not salt:
+        return False, False
+    if stored_hash.startswith("pbkdf2_sha256$"):
+        parts = stored_hash.split("$", 2)
+        if len(parts) != 3:
+            return False, False
+        try:
+            iters = int(parts[1])
+        except ValueError:
+            return False, False
+        expected = parts[2]
+        cand = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), iters).hex()
+        ok = hmac.compare_digest(cand, expected)
+        return ok, (ok and iters < _PBKDF2_ITERATIONS)
+
+    legacy = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), _LEGACY_PBKDF2_ITERATIONS).hex()
+    ok = hmac.compare_digest(legacy, stored_hash)
+    return ok, ok
+
+
+def _hash_session_token(token: str) -> str:
+    return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class AuthService:
@@ -123,11 +161,16 @@ class AuthService:
                     user_id TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP NOT NULL,
+                    last_seen_at TEXT DEFAULT '',
                     ip_address TEXT DEFAULT '',
                     user_agent TEXT DEFAULT '',
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             """)
+            try:
+                conn.execute("ALTER TABLE user_sessions ADD COLUMN last_seen_at TEXT DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
             conn.commit()
 
     def _seed_default_admin(self):
@@ -158,8 +201,8 @@ class AuthService:
             raise ValueError("Benutzername darf nicht leer sein.")
         if not re.match(r"^[a-zA-Z0-9._-]+$", username):
             raise ValueError("Ungueltiger Benutzername. Nur Buchstaben, Ziffern, Punkt, Unterstrich und Bindestrich erlaubt.")
-        if len(password or "") < 6:
-            raise ValueError("Das Passwort muss mindestens 6 Zeichen lang sein.")
+        if len(password or "") < 8:
+            raise ValueError("Das Passwort muss mindestens 8 Zeichen lang sein.")
 
         role = role.lower().strip()
         if role not in ("admin", "operator", "viewer"):
@@ -201,6 +244,17 @@ class AuthService:
         user_agent: str = ""
     ) -> Optional[Dict[str, Any]]:
         username = (username or "").strip().lower()
+        fail_key = f"{username}|{ip_address or ''}"
+        now_mono = time.monotonic()
+        with _AUTH_LOCK:
+            recent = [t for t in _FAILED_LOGINS.get(fail_key, []) if now_mono - t < _LOCKOUT_WINDOW_SEC]
+            if recent:
+                _FAILED_LOGINS[fail_key] = recent
+            else:
+                _FAILED_LOGINS.pop(fail_key, None)
+            if len(recent) >= _MAX_FAILED_LOGINS:
+                raise PermissionError("Konto temporär gesperrt: zu viele fehlgeschlagene Anmeldeversuche. Bitte 15 Minuten warten.")
+
         with _get_db() as conn:
             cur = conn.cursor()
             cur.execute("""
@@ -210,25 +264,41 @@ class AuthService:
             user = cur.fetchone()
 
             if not user:
+                with _AUTH_LOCK:
+                    _FAILED_LOGINS.setdefault(fail_key, []).append(now_mono)
                 return None
             if not user["is_active"]:
                 raise PermissionError("Dieses Benutzerkonto ist deaktiviert.")
 
-            check_hash, _ = _hash_password(password, user["salt"])
-            if not hmac.compare_digest(check_hash, user["password_hash"]):
+            ok_pw, needs_upgrade = _verify_password_hash(password, user["password_hash"], user["salt"])
+            if not ok_pw:
+                with _AUTH_LOCK:
+                    _FAILED_LOGINS.setdefault(fail_key, []).append(now_mono)
                 return None
 
-            # Login-Zeitstempel aktualisieren
-            now = datetime.datetime.now(datetime.timezone.utc)
-            cur.execute("UPDATE users SET last_login = ? WHERE id = ?", (now.isoformat(), user["id"]))
+            with _AUTH_LOCK:
+                _FAILED_LOGINS.pop(fail_key, None)
 
-            # Session anlegen (30 Tage Gültigkeit)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            now_iso = now.isoformat()
+            if needs_upgrade:
+                up_hash, up_salt = _hash_password(password)
+                cur.execute(
+                    "UPDATE users SET password_hash = ?, salt = ?, last_login = ? WHERE id = ?",
+                    (up_hash, up_salt, now_iso, user["id"]),
+                )
+            else:
+                cur.execute("UPDATE users SET last_login = ? WHERE id = ?", (now_iso, user["id"]))
+
+            # Session anlegen: Klartext-Token nur einmalig zurückgeben, in DB nur SHA-256-Hash speichern
             token = f"tok_{uuid.uuid4().hex}_{uuid.uuid4().hex[:12]}"
-            expires_at = now + datetime.timedelta(days=30)
+            token_hash = _hash_session_token(token)
+            max_days = max(1, int(os.environ.get("ARCHON_SESSION_MAX_DAYS", "30") or "30"))
+            expires_at = now + datetime.timedelta(days=max_days)
             cur.execute("""
-                INSERT INTO user_sessions (token, user_id, expires_at, ip_address, user_agent)
-                VALUES (?, ?, ?, ?, ?)
-            """, (token, user["id"], expires_at.isoformat(), ip_address, user_agent))
+                INSERT INTO user_sessions (token, user_id, expires_at, last_seen_at, ip_address, user_agent)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (token_hash, user["id"], expires_at.isoformat(), now_iso, ip_address, user_agent))
             conn.commit()
 
             return {
@@ -247,19 +317,40 @@ class AuthService:
         if not token:
             return None
         token = token.strip()
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        tok_hash = _hash_session_token(token)
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+        now = now_dt.isoformat()
 
         with _get_db() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT u.id, u.username, u.display_name, u.email, u.role, u.is_active, s.expires_at
+                SELECT s.token AS stored_token, s.last_seen_at, u.id, u.username, u.display_name, u.email, u.role, u.is_active, s.expires_at
                 FROM user_sessions s
                 JOIN users u ON s.user_id = u.id
-                WHERE s.token = ? AND s.expires_at > ?
-            """, (token, now))
+                WHERE s.token IN (?, ?) AND s.expires_at > ?
+            """, (tok_hash, token, now))
             row = cur.fetchone()
             if not row or not row["is_active"]:
                 return None
+
+            idle_hours = int(os.environ.get("ARCHON_SESSION_IDLE_HOURS", "72") or "0")
+            if idle_hours > 0 and row["last_seen_at"]:
+                try:
+                    last_dt = datetime.datetime.fromisoformat(str(row["last_seen_at"]))
+                    if last_dt.tzinfo is None:
+                        last_dt = last_dt.replace(tzinfo=datetime.timezone.utc)
+                    if (now_dt - last_dt).total_seconds() > idle_hours * 3600:
+                        cur.execute("DELETE FROM user_sessions WHERE token = ?", (row["stored_token"],))
+                        conn.commit()
+                        return None
+                except ValueError:
+                    pass
+
+            try:
+                cur.execute("UPDATE user_sessions SET last_seen_at = ? WHERE token = ?", (now, row["stored_token"]))
+                conn.commit()
+            except Exception:
+                pass
 
             return {
                 "id": row["id"],
@@ -299,9 +390,11 @@ class AuthService:
     def logout(self, token: str) -> bool:
         if not token:
             return False
+        tok = token.strip()
+        tok_hash = _hash_session_token(tok)
         with _get_db() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM user_sessions WHERE token = ?", (token.strip(),))
+            cur.execute("DELETE FROM user_sessions WHERE token IN (?, ?)", (tok_hash, tok))
             conn.commit()
             return cur.rowcount > 0
 
@@ -378,16 +471,20 @@ class AuthService:
             return False
         with _get_db() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT password_hash, salt, is_active FROM users WHERE username = ?", (username,))
+            cur.execute("SELECT id, password_hash, salt, is_active FROM users WHERE username = ?", (username,))
             user = cur.fetchone()
             if not user or not user["is_active"]:
                 return False
-            check_hash, _ = _hash_password(password, user["salt"])
-            return hmac.compare_digest(check_hash, user["password_hash"])
+            ok, needs_upgrade = _verify_password_hash(password, user["password_hash"], user["salt"])
+            if ok and needs_upgrade:
+                up_hash, up_salt = _hash_password(password)
+                cur.execute("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", (up_hash, up_salt, user["id"]))
+                conn.commit()
+            return ok
 
     def change_password(self, user_id: str, new_password: str) -> bool:
-        if len(new_password or "") < 6:
-            raise ValueError("Das neue Passwort muss mindestens 6 Zeichen lang sein.")
+        if len(new_password or "") < 8:
+            raise ValueError("Das neue Passwort muss mindestens 8 Zeichen lang sein.")
         pwd_hash, salt = _hash_password(new_password)
         with _get_db() as conn:
             cur = conn.cursor()

@@ -160,7 +160,8 @@ def api_crm_avatar(contact_id: str, filename: str):
 
 
 @router.get("/api/crm/contacts/{contact_id}/gdpr-export")
-def api_crm_gdpr_export(contact_id: str):
+def api_crm_gdpr_export(request: Request, contact_id: str):
+    require_admin_or_503(request)  # RBAC: Art.-15-PII-Export (inkl. IBAN/Steuernummer) nur für Admin
     from backend.crm_service import crm_service
     res = crm_service.export_gdpr(contact_id)
     if not res:

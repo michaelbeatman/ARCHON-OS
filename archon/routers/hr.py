@@ -46,8 +46,16 @@ class LogActivityReq(BaseModel):
     artifacts: Optional[str] = "Keine Artefakte"
 
 
+def _validate_agent_id(agent_id: str) -> str:
+    import re as _re
+    if not agent_id or ".." in agent_id or not _re.fullmatch(r"[A-Za-z0-9._\-]{1,128}", agent_id):
+        raise HTTPException(status_code=400, detail="Ungueltige agent_id (Pfad-Traversal unzulaessig).")
+    return agent_id
+
+
 @router.get("/api/v1/hr/personalakte/{agent_id}")
 def api_get_personalakte(agent_id: str):
+    _validate_agent_id(agent_id)
     import main as app_main
 
     vault_dir = app_main.OBSIDIAN_VAULT_DIR
@@ -84,7 +92,9 @@ def api_get_personalakte(agent_id: str):
 
 
 @router.post("/api/v1/hr/personalakte/{agent_id}")
-def api_save_personalakte(agent_id: str, req: SavePersonalakteReq):
+def api_save_personalakte(request: Request, agent_id: str, req: SavePersonalakteReq):
+    _require_admin(request)
+    _validate_agent_id(agent_id)
     import main as app_main
 
     vault_dir = app_main.OBSIDIAN_VAULT_DIR
@@ -118,8 +128,9 @@ def api_get_soul_mode():
 
 
 @router.post("/api/v1/hermes/soul-mode")
-def api_set_soul_mode(req: SetSoulModeReq):
+def api_set_soul_mode(request: Request, req: SetSoulModeReq):
     """Schaltet global oder pro Agent zwischen 'full' (Original/Voll-Experte) und 'compact' (Token-Spar) um."""
+    _require_admin(request)
     from scripts.sync_soul_modes import apply_soul_mode
     from archon.core.profiles import invalidate_hermes_profiles_cache
 
@@ -199,6 +210,7 @@ def api_get_hermes_soul(agent_id: str):
 def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
     """Speichert die SOUL.md Datei fuer ein Hermes-Profil und synchronisiert Cache + agent_profiles.json."""
     _require_admin(request)
+    _validate_agent_id(agent_id)
     import main as app_main
     from archon.core.profiles import (
         api_get_hermes_profiles,
@@ -247,7 +259,9 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
 
 
 @router.post("/api/v1/hr/personalakte/{agent_id}/log_activity")
-def api_log_personalakte_activity(agent_id: str, req: LogActivityReq):
+def api_log_personalakte_activity(request: Request, agent_id: str, req: LogActivityReq):
+    _require_admin(request)
+    _validate_agent_id(agent_id)
     import main as app_main
 
     vault_dir = app_main.OBSIDIAN_VAULT_DIR

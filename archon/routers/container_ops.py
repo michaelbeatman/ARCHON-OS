@@ -107,11 +107,11 @@ def send_prompt_to_agent(
 
     try:
         gate = evaluate_and_gate_llm_dispatch(
-            agent_id=agent_id,
+            agent_id=agent_name,
             provider="omniroute",
             model=model_name,
             messages=messages,
-            role=agent_role,
+            role=role_name,
         )
     except ZeroEgressBlockedError as ze_err:
         return f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}"

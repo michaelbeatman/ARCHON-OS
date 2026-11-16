@@ -387,33 +387,7 @@ def api_get_guardian_config():
     from backend.autonomy_settings import load_autonomy_settings
     aut_settings = load_autonomy_settings()
 
-    plugin_autonomy_bridge = {
-        "evey-cost-guard": ("budget_guard", "auto_downgrade_on_limit"),
-        "evey-session-guard": ("durable_execution", "enabled"),
-        "evey-email-guard": ("pii_scrubber", "enabled"),
-        "evey-watchdog": ("resource_backpressure", "enabled"),
-        "evey-cache": ("semantic_cache", "enabled"),
-        "evey-telemetry": ("time_travel", "enabled"),
-        "evey-status": ("execution_receipts", "enabled"),
-        "evey-delegation-score": ("model_benchmarker", "enabled"),
-        "evey-autonomy": ("ephemeral_teams", "enabled"),
-        "evey-council": ("consensus_gate", "enabled"),
-        "evey-reflect": ("self_healing", "enabled"),
-        "evey-learner": ("skill_synthesizer", "enabled"),
-        "evey-identity": ("core_memory", "enabled"),
-        "evey-proactive": ("inbox_watcher", "enabled"),
-        "evey-goals": ("map_reduce", "enabled"),
-        "evey-scheduler": ("dead_letter_queue", "enabled"),
-        "evey-research": ("corrective_rag", "enabled"),
-        "evey-digest": ("inbox_watcher", "standup_enabled"),
-        "evey-sandbox": ("ephemeral_sandbox", "enabled"),
-        "evey-rag": ("hybrid_search", "enabled"),
-        "evey-memory-adaptive": ("citation_pinner", "enabled"),
-        "evey-memory-consolidate": ("memory_consolidation", "enabled"),
-        "evey-validate": ("sla_enforcer", "enabled"),
-        "evey-verification": ("egress_firewall", "enabled"),
-        "evey-delegate-model": ("speculative_hedging", "enabled"),
-    }
+    plugin_autonomy_bridge = _PLUGIN_AUTONOMY_BRIDGE
 
     if os.path.exists(plugins_dir):
         for p_yaml in sorted(glob.glob(os.path.join(plugins_dir, "*/plugin.yaml"))):
@@ -597,42 +571,44 @@ def api_toggle_guardian_plugin(request: Request, payload: dict):
             print(f"[PluginToggle] Error updating plugin manager: {e}")
 
         # Synchronisiere Schalter direkt mit backend/autonomy_settings.py (settings.json)
-        plugin_autonomy_bridge = {
-            "evey-cost-guard": ("budget_guard", "auto_downgrade_on_limit"),
-            "evey-session-guard": ("durable_execution", "enabled"),
-            "evey-email-guard": ("pii_scrubber", "enabled"),
-            "evey-watchdog": ("resource_backpressure", "enabled"),
-            "evey-cache": ("semantic_cache", "enabled"),
-            "evey-telemetry": ("time_travel", "enabled"),
-            "evey-status": ("execution_receipts", "enabled"),
-            "evey-delegation-score": ("model_benchmarker", "enabled"),
-            "evey-autonomy": ("ephemeral_teams", "enabled"),
-            "evey-council": ("consensus_gate", "enabled"),
-            "evey-reflect": ("self_healing", "enabled"),
-            "evey-learner": ("skill_synthesizer", "enabled"),
-            "evey-identity": ("core_memory", "enabled"),
-            "evey-proactive": ("inbox_watcher", "enabled"),
-            "evey-goals": ("map_reduce", "enabled"),
-            "evey-scheduler": ("dead_letter_queue", "enabled"),
-            "evey-research": ("corrective_rag", "enabled"),
-            "evey-digest": ("inbox_watcher", "standup_enabled"),
-            "evey-sandbox": ("ephemeral_sandbox", "enabled"),
-            "evey-rag": ("hybrid_search", "enabled"),
-            "evey-memory-adaptive": ("citation_pinner", "enabled"),
-            "evey-memory-consolidate": ("memory_consolidation", "enabled"),
-            "evey-validate": ("sla_enforcer", "enabled"),
-            "evey-verification": ("egress_firewall", "enabled"),
-            "evey-delegate-model": ("speculative_hedging", "enabled"),
-        }
-        if plugin_id in plugin_autonomy_bridge:
+        if plugin_id in _PLUGIN_AUTONOMY_BRIDGE:
             from backend.autonomy_settings import save_autonomy_settings
-            grp, key = plugin_autonomy_bridge[plugin_id]
+            grp, key = _PLUGIN_AUTONOMY_BRIDGE[plugin_id]
             save_autonomy_settings({grp: {key: bool(enable)}})
 
         add_ticker("Guardian", f"Modul '{plugin_id}' {'aktiviert' if enable else 'deaktiviert'} (settings.json synchronisiert).")
         return {"status": "success", "plugin_id": plugin_id, "enabled": bool(enable)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+_PLUGIN_AUTONOMY_BRIDGE = {
+    "evey-cost-guard": ("circuit_breaker", "token_clipper_enabled"),
+    "evey-session-guard": ("durable_checkpointing", "enabled"),
+    "evey-email-guard": ("pii_scrubber", "enabled"),
+    "evey-watchdog": ("resource_backpressure", "enabled"),
+    "evey-cache": ("semantic_cache", "enabled"),
+    "evey-telemetry": ("time_travel_snapshots", "tracing_enabled"),
+    "evey-status": ("execution_receipts", "enabled"),
+    "evey-delegation-score": ("bandit_router", "enabled"),
+    "evey-autonomy": ("ephemeral_teams", "enabled"),
+    "evey-council": ("consensus_gate", "enabled"),
+    "evey-reflect": ("task_self_healer", "enabled"),
+    "evey-learner": ("self_evolving_tooling", "auto_register_skills"),
+    "evey-identity": ("core_memory_tier", "enabled"),
+    "evey-proactive": ("inbox_watcher", "enabled"),
+    "evey-goals": ("map_reduce", "enabled"),
+    "evey-scheduler": ("dead_letter_queue", "enabled"),
+    "evey-research": ("corrective_rag", "enabled"),
+    "evey-digest": ("inbox_watcher", "standup_enabled"),
+    "evey-sandbox": ("ephemeral_sandbox", "enabled"),
+    "evey-rag": ("hybrid_search", "enabled"),
+    "evey-memory-adaptive": ("citation_pinning", "enabled"),
+    "evey-memory-consolidate": ("memory_consolidation", "enabled"),
+    "evey-validate": ("sla_contracts", "enabled"),
+    "evey-verification": ("egress_firewall", "enabled"),
+    "evey-delegate-model": ("speculative_hedger", "enabled"),
+}
 
 DEFAULT_PLUGIN_CONFIGS = {
     "evey-cost-guard": {
@@ -815,9 +791,17 @@ DEFAULT_PLUGIN_CONFIGS = {
     }
 }
 
+def _validate_plugin_id(plugin_id: str) -> str:
+    import re as _re
+    if not plugin_id or ".." in plugin_id or not _re.fullmatch(r"[A-Za-z0-9._\-]{1,128}", plugin_id):
+        raise HTTPException(status_code=400, detail="Ungueltige plugin_id (Pfad-Traversal unzulaessig).")
+    return plugin_id
+
+
 @router.get("/api/guardian/plugins/{plugin_id}/config")
 def api_get_plugin_config(plugin_id: str):
     """Gibt die gespeicherten oder Standard-Einstellungen für jedes Plugin zurück."""
+    _validate_plugin_id(plugin_id)
     import yaml
     
     # 1. Basis-Konfiguration aus Defaults
@@ -949,9 +933,9 @@ def api_get_plugin_config(plugin_id: str):
         aut = load_autonomy_settings()
         if plugin_id == "evey-rag":
             data["top_k_results"] = aut.get("hybrid_search", {}).get("top_k", 5)
-            data["similarity_threshold"] = aut.get("corrective_rag", {}).get("min_relevance_score", 0.45)
+            data["similarity_threshold"] = aut.get("corrective_rag", {}).get("relevance_threshold", 0.45)
         elif plugin_id == "evey-cache":
-            data["cache_ttl_hours"] = max(1, int(aut.get("semantic_cache", {}).get("ttl_seconds", 86400) // 3600))
+            data["cache_ttl_hours"] = max(1, int(aut.get("semantic_cache", {}).get("ttl_hours", 24)))
             data["max_cache_entries"] = aut.get("semantic_cache", {}).get("max_entries", 500)
             data["semantic_match"] = aut.get("semantic_cache", {}).get("enabled", True)
         elif plugin_id == "evey-sandbox":
@@ -960,19 +944,29 @@ def api_get_plugin_config(plugin_id: str):
         elif plugin_id == "evey-council":
             data["debate_rounds"] = aut.get("consensus_gate", {}).get("council_size", 3)
         elif plugin_id == "evey-reflect":
-            data["reflect_frequency_tasks"] = aut.get("self_healing", {}).get("max_retries", 2)
+            data["reflect_frequency_tasks"] = aut.get("task_self_healer", {}).get("max_attempts", 3)
         elif plugin_id == "evey-learner":
-            data["min_quality_score"] = aut.get("sla_enforcer", {}).get("min_quality_score", 0.75)
-            data["auto_index_skills"] = aut.get("skill_synthesizer", {}).get("enabled", True)
+            data["min_quality_score"] = aut.get("sla_contracts", {}).get("min_quality_score", 0.75)
+            data["auto_index_skills"] = aut.get("self_evolving_tooling", {}).get("auto_register_skills", True)
         elif plugin_id == "evey-scheduler":
             data["worker_concurrency"] = aut.get("concurrency", {}).get("max_concurrent_agents", 4)
-            data["max_retry_attempts"] = aut.get("dead_letter_queue", {}).get("max_replay_attempts", 3)
+            data["max_retry_attempts"] = aut.get("dead_letter_queue", {}).get("max_replay_retries", 3)
         elif plugin_id == "evey-digest":
-            data["daily_digest_time"] = aut.get("inbox_watcher", {}).get("standup_hour", "07:30")
+            data["daily_digest_time"] = aut.get("inbox_watcher", {}).get("standup_time", "08:00")
         elif plugin_id == "evey-status":
-            data["cpu_threshold_percent"] = int(aut.get("resource_backpressure", {}).get("max_cpu_percent", 85))
+            data["cpu_threshold_percent"] = int(aut.get("resource_backpressure", {}).get("max_cpu_pct", 85))
     except Exception:
         pass
+
+    for _secret_key in ("github_pat", "api_bearer_token", "api_key", "bot_token"):
+        _sv = data.get(_secret_key)
+        if isinstance(_sv, str) and _sv.strip() and not _sv.startswith("•"):
+            try:
+                from utils.secret_files import mask_secret
+                data[_secret_key] = mask_secret(_sv)
+            except Exception:
+                data[_secret_key] = "••••••••"
+            data[f"{_secret_key}_set"] = True
 
     return {"status": "success", "plugin_id": plugin_id, "config": data}
 
@@ -980,6 +974,7 @@ def api_get_plugin_config(plugin_id: str):
 def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
     """Speichert Konfigurationsänderungen für ein Plugin und synchronisiert sie mit Systemdateien."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    _validate_plugin_id(plugin_id)
     import yaml
     cfg = payload.get("config", payload)
     if not isinstance(cfg, dict):
@@ -1131,12 +1126,12 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
             if plugin_id == "evey-rag":
                 save_autonomy_settings({
                     "hybrid_search": {"top_k": int(cfg.get("top_k_results", 5))},
-                    "corrective_rag": {"min_relevance_score": float(cfg.get("similarity_threshold", 0.45))}
+                    "corrective_rag": {"relevance_threshold": float(cfg.get("similarity_threshold", 0.45))}
                 })
             elif plugin_id == "evey-cache":
                 save_autonomy_settings({
                     "semantic_cache": {
-                        "ttl_seconds": int(cfg.get("cache_ttl_hours", 24)) * 3600,
+                        "ttl_hours": int(cfg.get("cache_ttl_hours", 24)),
                         "max_entries": int(cfg.get("max_cache_entries", 500)),
                         "enabled": bool(cfg.get("semantic_match", True))
                     }
@@ -1152,25 +1147,25 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
                 })
             elif plugin_id == "evey-reflect":
                 save_autonomy_settings({
-                    "self_healing": {"max_retries": int(cfg.get("reflect_frequency_tasks", 2))}
+                    "task_self_healer": {"max_attempts": int(cfg.get("reflect_frequency_tasks", 3))}
                 })
             elif plugin_id == "evey-learner":
                 save_autonomy_settings({
-                    "sla_enforcer": {"min_quality_score": float(cfg.get("min_quality_score", 0.75))},
-                    "skill_synthesizer": {"enabled": bool(cfg.get("auto_index_skills", True))}
+                    "sla_contracts": {"min_quality_score": float(cfg.get("min_quality_score", 0.75))},
+                    "self_evolving_tooling": {"auto_register_skills": bool(cfg.get("auto_index_skills", True))}
                 })
             elif plugin_id == "evey-scheduler":
                 save_autonomy_settings({
                     "concurrency": {"max_concurrent_agents": int(cfg.get("worker_concurrency", 4))},
-                    "dead_letter_queue": {"max_replay_attempts": int(cfg.get("max_retry_attempts", 3))}
+                    "dead_letter_queue": {"max_replay_retries": int(cfg.get("max_retry_attempts", 3))}
                 })
             elif plugin_id == "evey-digest":
                 save_autonomy_settings({
-                    "inbox_watcher": {"standup_hour": str(cfg.get("daily_digest_time", "07:30"))}
+                    "inbox_watcher": {"standup_time": str(cfg.get("daily_digest_time", "08:00"))}
                 })
             elif plugin_id == "evey-status":
                 save_autonomy_settings({
-                    "resource_backpressure": {"max_cpu_percent": float(cfg.get("cpu_threshold_percent", 85.0))}
+                    "resource_backpressure": {"max_cpu_pct": float(cfg.get("cpu_threshold_percent", 85.0))}
                 })
         except Exception as sync_err:
             print(f"Warnung bei Autonomy-Settings-Sync ({plugin_id}): {sync_err}")

@@ -23,28 +23,23 @@ class LocalMemoryBridge:
         self.vault_path = vault_path or os.environ.get("ARCHON_OBSIDIAN_DIR", "./obsidian_vault")
 
         if not db_path:
-            workspace_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agentic_memory.db")
-            user_hermes = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), ".hermes", "agentic_memory.db")
-            for cand in [
-                os.environ.get("AGENTIC_MEMORY_DB"),
-                workspace_db,
-                "/opt/data/agentic_memory.db",
-                user_hermes,
-                os.path.join(os.path.dirname(os.path.abspath(__file__)), "agentic_memory.db"),
-            ]:
-                if cand and os.path.exists(cand):
-                    try:
-                        test_conn = sqlite3.connect(cand, timeout=1.0)
-                        test_conn.execute("SELECT 1;")
-                        test_conn.close()
-                        db_path = cand
-                        break
-                    except Exception:
-                        continue
+            env_db = os.environ.get("AGENTIC_MEMORY_DB")
+            if env_db and os.path.exists(env_db):
+                try:
+                    test_conn = sqlite3.connect(env_db, timeout=1.0)
+                    test_conn.execute("SELECT 1;")
+                    test_conn.close()
+                    db_path = env_db
+                except Exception:
+                    db_path = None
             if not db_path:
-                base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-                os.makedirs(base_dir, exist_ok=True)
-                db_path = os.path.join(base_dir, "agentic_memory.db")
+                try:
+                    from backend.db_paths import resolve_db
+                    db_path = resolve_db("agentic_memory.db")
+                except Exception:
+                    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+                    os.makedirs(base_dir, exist_ok=True)
+                    db_path = os.path.join(base_dir, "agentic_memory.db")
         self.db_path = db_path
 
         self._init_db()
@@ -155,7 +150,7 @@ class LocalMemoryBridge:
                     cur.execute("UPDATE learnings SET last_accessed = created_at WHERE last_accessed IS NULL")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_conversations_agent_session_id ON conversations(agent_id, session_id, id DESC)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at DESC)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_learnings_topic_id ON learnings(topic, id DESC)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_learnings_agent_id ON learnings(agent_id, id DESC)")
                 conn.commit()
             except Exception as e:
                 print(f"[MemoryBridge] Migration notice: {e}", file=sys.stderr)
@@ -269,16 +264,16 @@ tags: ["learning", "memory", "{agent_id}"]
                         SELECT role, content, timestamp FROM (
                             SELECT id, role, content, timestamp 
                             FROM conversations 
-                            WHERE session_id = ?
+                            WHERE agent_id = ? AND session_id = ?
                             ORDER BY id DESC LIMIT ?
                         ) ORDER BY id ASC
-                    """, (sess_id, limit))
+                    """, (agent_id, sess_id, limit))
                 else:
                     cur.execute("""
                         SELECT role, content, timestamp FROM (
                             SELECT id, role, content, timestamp 
                             FROM conversations 
-                            WHERE agent_id = ? OR session_id = ?
+                            WHERE agent_id = ? AND session_id = ?
                             ORDER BY id DESC LIMIT ?
                         ) ORDER BY id ASC
                     """, (agent_id, sess_id, limit))
@@ -301,7 +296,7 @@ tags: ["learning", "memory", "{agent_id}"]
         sess_id = session_id or f"quickchat_{agent_id}"
         with self._get_conn() as conn:
             try:
-                conn.execute("DELETE FROM conversations WHERE agent_id = ? OR session_id = ?", (agent_id, sess_id))
+                conn.execute("DELETE FROM conversations WHERE agent_id = ? AND session_id = ?", (agent_id, sess_id))
             except sqlite3.OperationalError:
                 conn.execute("DELETE FROM conversations WHERE agent_id = ?", (agent_id,))
             conn.commit()
@@ -309,7 +304,7 @@ tags: ["learning", "memory", "{agent_id}"]
     def get_agent_context_injection(self, agent_id, limit=5):
         profile = self.get_user_profile()
         
-        recent_learnings = self.search_learnings("", limit=limit)
+        recent_learnings = self.search_learnings("", limit=limit, agent_id=agent_id)
 
         context_lines = [
             "### [SYSTEM MEMORY & USER CONTEXT]",
@@ -392,7 +387,7 @@ tags: ["learning", "memory", "{agent_id}"]
                 cur.execute("""
                     SELECT id, role, content, timestamp, importance, accesses, last_accessed
                     FROM conversations
-                    WHERE agent_id = ? OR session_id = ?
+                    WHERE agent_id = ? AND session_id = ?
                     ORDER BY id DESC LIMIT 50
                 """, (agent_id, sess_id))
             except sqlite3.OperationalError:
@@ -511,7 +506,7 @@ tags: ["learning", "memory", "{agent_id}"]
                 "dry_run": dry_run
             }
 
-    def search_learnings(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def search_learnings(self, query: str, limit: int = 5, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Durchsucht die learnings-Tabelle nach Stichworten und rankt nach Relevanz & Decay-Score.
         """
@@ -519,20 +514,38 @@ tags: ["learning", "memory", "{agent_id}"]
         with self._get_conn() as conn:
             cur = conn.cursor()
             try:
-                cur.execute("""
-                    SELECT id, agent_id, category, summary, obsidian_link, created_at,
-                           importance, accesses, last_accessed
-                    FROM learnings
-                    ORDER BY id DESC LIMIT 100
-                """)
+                if agent_id:
+                    cur.execute("""
+                        SELECT id, agent_id, category, summary, obsidian_link, created_at,
+                               importance, accesses, last_accessed
+                        FROM learnings
+                        WHERE agent_id = ?
+                        ORDER BY id DESC LIMIT 100
+                    """, (agent_id,))
+                else:
+                    cur.execute("""
+                        SELECT id, agent_id, category, summary, obsidian_link, created_at,
+                               importance, accesses, last_accessed
+                        FROM learnings
+                        ORDER BY id DESC LIMIT 100
+                    """)
                 rows = cur.fetchall()
             except sqlite3.OperationalError:
-                cur.execute("""
-                    SELECT id, agent_id, category, summary, obsidian_link, created_at,
-                           1.0 as importance, 1 as accesses, created_at as last_accessed
-                    FROM learnings
-                    ORDER BY id DESC LIMIT 100
-                """)
+                if agent_id:
+                    cur.execute("""
+                        SELECT id, agent_id, category, summary, obsidian_link, created_at,
+                               1.0 as importance, 1 as accesses, created_at as last_accessed
+                        FROM learnings
+                        WHERE agent_id = ?
+                        ORDER BY id DESC LIMIT 100
+                    """, (agent_id,))
+                else:
+                    cur.execute("""
+                        SELECT id, agent_id, category, summary, obsidian_link, created_at,
+                               1.0 as importance, 1 as accesses, created_at as last_accessed
+                        FROM learnings
+                        ORDER BY id DESC LIMIT 100
+                    """)
                 rows = cur.fetchall()
 
             scored = []

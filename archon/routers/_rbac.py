@@ -39,6 +39,20 @@ def is_configured() -> bool:
     return _checker is not None
 
 
+def get_session_actor(request: Optional[Request], fallback: str = "admin") -> str:
+    """Liest den verifizierten Benutzername aus der Session (nie ungeprüft aus JSON-Bodies)."""
+    if request is None:
+        return fallback
+    try:
+        from archon.routers.auth import get_current_user_from_request
+        user = get_current_user_from_request(request)
+        if isinstance(user, dict) and user.get("username"):
+            return str(user["username"]).strip()
+    except Exception:
+        pass
+    return fallback
+
+
 def require_admin_or_503(request: Request) -> None:
     """Rollenzaun; ohne Injektion bewusst laut sperren statt still durchlassen."""
     checker = _checker

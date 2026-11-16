@@ -54,7 +54,8 @@ def get_system_health_score() -> Dict[str, Any]:
             factors.append(f"Audit-Log Integritätsbruch erkannt! (-30 Punkte)")
             recommendations.append("Audit-Log auf Manipulation oder fehlerhafte Einträge prüfen.")
         else:
-            factors.append(f"Audit-Log: {audit_check.get('total_events', 0)} Einträge integer (+20 Punkte)")
+            count_val = audit_check.get("total_records", audit_check.get("total_events", 0))
+            factors.append(f"Audit-Log: {count_val} Einträge integer (+20 Punkte)")
     except Exception:
         pass
 

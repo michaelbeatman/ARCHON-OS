@@ -1,7 +1,7 @@
 """Router fuer Memory Operations (Stats, Consolidate, Evict, Chat-History & Learning)."""
 from __future__ import annotations
 from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
 
 import datetime
 import logging
@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Request
 
 from archon.core.paths import OBSIDIAN_VAULT, PERSONALAKTEN_DIR
 
@@ -183,12 +183,14 @@ source: "Archon OS Memory Bridge"
 
 
 @router.post("/api/v1/memory/consolidate")
-def api_consolidate_memory(payload: Optional[Dict] = Body(None)):
+def api_consolidate_memory(request: Request, payload: Optional[Dict] = Body(None)):
+    require_admin_or_503(request)
     return _consolidate_internal(payload)
 
 
 @router.post("/api/v1/memory/evict")
-def api_evict_stale_memory(payload: Optional[Dict] = Body(None)):
+def api_evict_stale_memory(request: Request, payload: Optional[Dict] = Body(None)):
+    require_admin_or_503(request)
     from local_memory_bridge import LocalMemoryBridge
 
     bridge = LocalMemoryBridge()
@@ -223,7 +225,8 @@ def get_chat_history_api(agent_id: str, limit: int = 30, session_id: Optional[st
 
 
 @router.delete("/api/v1/chat/history")
-def clear_chat_history_api(agent_id: str, session_id: Optional[str] = None):
+def clear_chat_history_api(request: Request, agent_id: str, session_id: Optional[str] = None):
+    require_admin_or_503(request)
     import main as app_main
 
     mb = getattr(app_main, "memory_bridge", None)
@@ -255,11 +258,13 @@ def api_memory_profile():
 
 @router.post("/api/v1/memory/learning")
 def api_memory_learning(
+    request: Request,
     agent_id: str = Body(...),
     category: str = Body(...),
     summary: str = Body(...),
     detailed_note: Optional[str] = Body(None),
 ):
+    require_admin_or_503(request)
     import main as app_main
 
     mb = getattr(app_main, "memory_bridge", None)

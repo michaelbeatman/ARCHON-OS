@@ -274,7 +274,7 @@ _HERMES_ROUTES = [
 
 async def proxy_hermes_api_endpoints(request: Request, path: str = ""):
     """Forward frontend API calls from embedded iFrame to active Hermes backend."""
-    if request.method in _PROXY_WRITE_METHODS:
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         require_admin_or_503(request)
     import main as app_main
     return await app_main.forward_to_hermes(request)

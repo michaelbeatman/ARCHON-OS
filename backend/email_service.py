@@ -72,8 +72,11 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
 
     user = cfg.get("username")
     pwd = cfg.get("password")
-    imap_host = "imap.gmail.com"
-    imap_port = 993
+    imap_host = str(cfg.get("imap_host") or os.environ.get("IMAP_HOST") or "imap.gmail.com").strip()
+    try:
+        imap_port = int(cfg.get("imap_port") or os.environ.get("IMAP_PORT") or 993)
+    except (TypeError, ValueError):
+        imap_port = 993
 
     if not user or not pwd:
         return {"status": "error", "message": "Keine Zugangsdaten hinterlegt.", "synced": 0}

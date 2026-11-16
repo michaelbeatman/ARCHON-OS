@@ -17,10 +17,21 @@ from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKUP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "backups", "db")
+
+
+def _resolve_target(filename: str, legacy_subpath: str) -> str:
+    try:
+        from backend.db_paths import resolve_db
+        return resolve_db(filename)
+    except Exception:
+        ws_path = os.path.join(WORKSPACE_DIR, "data", filename)
+        return ws_path if os.path.exists(ws_path) else os.path.expanduser(legacy_subpath)
+
+
 DB_TARGETS = [
-    os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db"),
-    os.path.join(WORKSPACE_DIR, "data", "kanban.db") if os.path.exists(os.path.join(WORKSPACE_DIR, "data", "kanban.db")) else os.path.expanduser("~/.hermes/kanban.db"),
-    os.path.join(WORKSPACE_DIR, "data", "state.db") if os.path.exists(os.path.join(WORKSPACE_DIR, "data", "state.db")) else os.path.expanduser("~/.hermes/state.db")
+    _resolve_target("agentic_memory.db", "~/.hermes/agentic_memory.db"),
+    _resolve_target("kanban.db", "~/.hermes/kanban.db"),
+    _resolve_target("state.db", "~/.hermes/state.db"),
 ]
 
 class DBBackupManager:

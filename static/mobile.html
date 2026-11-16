@@ -449,9 +449,9 @@
   <!-- TAB 2: KANBAN & FREIGABEN -->
   <div id="tab-kanban" class="tab-content">
     <div class="segment-control">
-      <button class="segment-btn active" onclick="setKanbanFilter('review')">⚡ Freigaben (<span id="count-review">0</span>)</button>
-      <button class="segment-btn" onclick="setKanbanFilter('in_progress')" data-i18n="ui.mobile.kanban_in_progress">In Arbeit</button>
-      <button class="segment-btn" onclick="setKanbanFilter('all')" data-i18n="ui.mobile.kanban_all">Alle Tasks</button>
+      <button class="segment-btn active" onclick="setKanbanFilter('review', this)">⚡ Freigaben (<span id="count-review">0</span>)</button>
+      <button class="segment-btn" onclick="setKanbanFilter('in_progress', this)" data-i18n="ui.mobile.kanban_in_progress">In Arbeit</button>
+      <button class="segment-btn" onclick="setKanbanFilter('all', this)" data-i18n="ui.mobile.kanban_all">Alle Tasks</button>
     </div>
 
     <div id="kanban-cards-container">
@@ -555,8 +555,9 @@
     let isLogPaused = false;
     let logPollTimer = null;
 
-    // Uhrzeit im Header
+    // Uhrzeit im Header (pausiert im Hintergrund)
     setInterval(() => {
+      if (document.hidden) return;
       const now = new Date();
       document.getElementById('header-time').innerText = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     }, 1000);
@@ -615,18 +616,18 @@
             const pill = document.createElement('div');
             pill.className = 'agent-pill' + (ag.id === currentAgentId ? ' active' : '');
             pill.innerText = (ag.emoji || '🤖') + ' ' + (ag.name || ag.id);
-            pill.onclick = () => selectAgent(ag.id, ag.name || ag.id);
+            pill.onclick = () => selectAgent(ag.id, ag.name || ag.id, pill);
             scroll.appendChild(pill);
           });
         }
       } catch (e) { console.debug('loadAgents error:', e); }
     }
 
-    function selectAgent(id, name) {
+    function selectAgent(id, name, el) {
       currentAgentId = id;
       currentAgentName = name;
       document.querySelectorAll('.agent-pill').forEach(p => p.classList.remove('active'));
-      event.target.classList.add('active');
+      if (el) el.classList.add('active');
       loadQuickchatSession(id);
     }
 
@@ -642,7 +643,7 @@
             appendChatMessage(m.role, m.content, m.timestamp);
           });
         } else {
-          container.innerHTML = `<div class="msg-bubble msg-assistant">Session mit <b>${currentAgentName}</b> gestartet. Wie kann ich dir helfen?</div>`;
+          container.innerHTML = `<div class="msg-bubble msg-assistant">Session mit <b>${escapeHtml(currentAgentName)}</b> gestartet. Wie kann ich dir helfen?</div>`;
         }
         window.scrollTo(0, document.body.scrollHeight);
       } catch (e) { console.debug('quickchat load error:', e); }
@@ -712,10 +713,10 @@
       }
     }
 
-    function setKanbanFilter(filter) {
+    function setKanbanFilter(filter, btn) {
       currentKanbanFilter = filter;
       document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
+      if (btn) btn.classList.add('active');
       renderKanban();
     }
 
@@ -749,11 +750,13 @@
 
       container.innerHTML = filtered.map(t => {
         const isReview = t.status === 'review';
+        const safeId = escapeHtml(t.id || '');
+        const shortId = escapeHtml(String(t.id || '').slice(-6));
         return `
-          <div class="approval-card" id="task-card-${t.id}">
+          <div class="approval-card" id="task-card-${safeId}">
             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-              <span class="approval-badge">${t.status}</span>
-              <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">#${t.id.slice(-6)}</span>
+              <span class="approval-badge">${escapeHtml(t.status)}</span>
+              <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">#${shortId}</span>
             </div>
             <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">${escapeHtml(t.title || 'Aufgabe')}</h3>
             <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">${escapeHtml(t.description || t.kurzfassung || 'Keine Beschreibung angegeben.')}</p>
@@ -761,16 +764,16 @@
             
             ${isReview ? `
               <div class="approval-actions">
-                <button class="btn btn-success" onclick="decideTask('${t.id}', 'approve')">
+                <button class="btn btn-success" onclick="decideTask('${safeId}', 'approve')">
                   ✅ Freigeben
                 </button>
-                <button class="btn btn-danger" onclick="decideTask('${t.id}', 'reject')">
+                <button class="btn btn-danger" onclick="decideTask('${safeId}', 'reject')">
                   ❌ Ablehnen
                 </button>
               </div>
             ` : `
               <div style="display: flex; gap: 8px; margin-top: 10px;">
-                <button class="btn btn-outline btn-sm" onclick="setTaskStatus('${t.id}', 'done')">Als erledigt markieren</button>
+                <button class="btn btn-outline btn-sm" onclick="setTaskStatus('${safeId}', 'done')">Als erledigt markieren</button>
               </div>
             `}
           </div>
@@ -792,9 +795,8 @@
           if (card) card.remove();
           loadKanbanTasks();
         } else {
-          // Fallback via Status Patch
-          const newStatus = decision === 'approve' ? 'done' : 'blocked';
-          await setTaskStatus(taskId, newStatus);
+          showToast(`Freigabe fehlgeschlagen (HTTP ${res.status})`);
+          if (card) card.style.opacity = '1';
         }
       } catch (e) {
         showToast('Fehler bei Entscheidung');
@@ -834,14 +836,17 @@
           return;
         }
         container.innerHTML = reports.map(r => `
-          <div class="report-item" onclick="openReport('${encodeURIComponent(r.path || r.filename)}', '${escapeHtml(r.title || r.name)}')">
+          <div class="report-item" data-report-path="${encodeURIComponent(r.path || r.filename || '')}" data-report-title="${escapeHtml(r.title || r.name || 'Bericht')}">
             <div style="flex: 1; min-width: 0;">
               <div style="font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(r.title || r.name)}</div>
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${r.date || r.modified || 'Aktuell'}</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${escapeHtml(r.date || r.modified || 'Aktuell')}</div>
             </div>
             <div style="color: var(--primary); font-size: 18px; margin-left: 8px;">›</div>
           </div>
         `).join('');
+        container.querySelectorAll('.report-item').forEach(item => {
+          item.addEventListener('click', () => openReport(item.dataset.reportPath, item.dataset.reportTitle));
+        });
       } catch (e) {
         container.innerHTML = '<div style="padding: 16px; color: var(--danger);">Fehler beim Abrufen der Berichte.</div>';
       }
@@ -957,18 +962,37 @@
 
     function escapeHtml(str) {
       if (!str) return '';
-      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    // Init beim Start
-    loadAgents();
-    loadQuickchatSession('default');
-    loadKanbanTasks();
+    // Init beim Start (inkl. Auth-Gate bei aktiviertem Multi-User)
+    (async function initMobile() {
+      try {
+        const authRes = await fetch('/api/auth/me');
+        if (authRes.status === 401) {
+          window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+          return;
+        }
+        if (authRes.ok) {
+          const authData = await authRes.json();
+          const authEnabled = typeof authData.auth_enabled !== 'undefined' ? !!authData.auth_enabled : !!(authData.user && authData.user.auth_enabled);
+          if (authEnabled && (!authData.user || !authData.user.username)) {
+            window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+            return;
+          }
+        }
+      } catch (e) {
+        console.debug('mobile auth check error:', e);
+      }
+      loadAgents();
+      loadQuickchatSession('default');
+      loadKanbanTasks();
+    })();
   </script>
-  <footer class="py-3 text-center text-[11px] text-[var(--muted-foreground)] flex items-center justify-center gap-3">
-    <a href="/api/legal/impressum" target="_blank" rel="noopener" data-i18n="ui.legal.impressum" class="hover:underline">Impressum</a>
+  <footer style="padding:12px 0;text-align:center;font-size:11px;color:var(--text-muted);display:flex;align-items:center;justify-content:center;gap:12px;">
+    <a href="/api/legal/impressum" target="_blank" rel="noopener" data-i18n="ui.legal.impressum" style="color:inherit;text-decoration:none;">Impressum</a>
     <span>·</span>
-    <a href="/api/legal/datenschutz" target="_blank" rel="noopener" data-i18n="ui.legal.datenschutz" class="hover:underline">Datenschutz</a>
+    <a href="/api/legal/datenschutz" target="_blank" rel="noopener" data-i18n="ui.legal.datenschutz" style="color:inherit;text-decoration:none;">Datenschutz</a>
   </footer>
   <script src="/static/js/archon_i18n.js"></script>
 </body>

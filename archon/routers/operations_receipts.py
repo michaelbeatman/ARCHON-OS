@@ -8,8 +8,11 @@ Ausgelagert aus backend/operations_api.py.
 import base64
 import os
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Body, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
+from archon.routers._rbac import require_admin_or_503
+from utils.path_jail import PathJailError, safe_path_within
+from archon.core.runtime import APP_ROOT
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -19,8 +22,9 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 # =========================================================================
 
 @router.post("/receipts/process")
-def api_receipts_process(req: Dict[str, Any] = Body(...)):
+def api_receipts_process(request: Request, req: Dict[str, Any] = Body(...)):
     """Verarbeitet einen Beleg: Extrahiert Buchhaltungs-Metadaten via Vision OCR und legt Task an."""
+    require_admin_or_503(request)
     b64_data = req.get("image_base64")
     image_path = req.get("image_path")
     filename = req.get("filename", "receipt.jpg")
@@ -36,11 +40,21 @@ def api_receipts_process(req: Dict[str, Any] = Body(...)):
             img_bytes = base64.b64decode(b64_data)
         except Exception as e:
             raise HTTPException(status_code=400, detail={"code": "receipts_invalid_base64", "params": {"error": str(e)}})
-    elif image_path and os.path.exists(image_path):
+    elif image_path:
+        allowed_roots = [os.path.join(APP_ROOT, "data"), os.path.join(APP_ROOT, "inbox")]
+        safe_img = None
+        for root in allowed_roots:
+            try:
+                safe_img = safe_path_within(root, image_path)
+                break
+            except (PathJailError, ValueError):
+                continue
+        if not safe_img or not os.path.exists(safe_img):
+            raise HTTPException(status_code=403, detail="image_path außerhalb der erlaubten Beleg-Verzeichnisse oder nicht gefunden.")
         try:
-            with open(image_path, "rb") as fh:
+            with open(safe_img, "rb") as fh:
                 img_bytes = fh.read()
-            filename = os.path.basename(image_path)
+            filename = os.path.basename(safe_img)
         except Exception as e:
             raise HTTPException(status_code=400, detail={"code": "receipts_image_read_failed", "params": {"error": str(e)}})
     else:

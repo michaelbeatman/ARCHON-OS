@@ -211,28 +211,93 @@ def mask_yaml_secrets(text: str) -> str:
     return "\n".join(out)
 
 
-def restore_masked_values(original_text: str, new_text: str) -> str:
-    """Ersetzt maskierte Werte im neuen YAML durch die echten aus dem Original.
-
-    Notwendig, weil der Live-Editor die maskierte Fassung zurueckschickt -
-    ohne diesen Schritt wuerde das Speichern die echten Keys ueberschreiben.
+def _extract_scoped_yaml_secrets(text: str):
+    """Extrahiert Secrets mit vollständigem Section-Pfad (und Vorkommensindex für Listen),
+    damit gleichnamige Schlüssel wie 'api_key:' in verschiedenen Provider-Abschnitten
+    sich beim Wiederherstellen niemals gegenseitig überschreiben.
     """
-    orig = {}
-    for line in (original_text or "").splitlines():
-        m = _match_secret_line(line)
-        if m:
-            orig[m.group("key").strip()] = m.group("value").strip()
+    section_stack = []  # Liste aus (indent_len, section_name)
+    scoped = {}         # (section_path_tuple, key, occ_idx) -> raw_val
+    path_counts = {}    # (section_path_tuple, key) -> count
+    flat_counts = {}    # key -> count
+    flat_last = {}      # key -> raw_val
 
-    out = []
-    for line in (new_text or "").splitlines():
+    _ANY_KV_RE = _re.compile(r'^(?P<indent>\s*)(?:-\s+)?(?P<key>[A-Za-z0-9_.-]+)\s*:\s*(?P<rest>.*)$')
+
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        m_sec = _ANY_KV_RE.match(line)
+        m_sec_ind = len(m_sec.group("indent")) if m_sec else None
+        if m_sec and m_sec_ind is not None:
+            while section_stack and section_stack[-1][0] >= m_sec_ind:
+                section_stack.pop()
+
         m = _match_secret_line(line)
         if m:
             key = m.group("key").strip()
             val = m.group("value").strip()
+            sec_path = tuple(name for _, name in section_stack)
+            occ = path_counts.get((sec_path, key), 0)
+            path_counts[(sec_path, key)] = occ + 1
+            scoped[(sec_path, key, occ)] = val
+            flat_counts[key] = flat_counts.get(key, 0) + 1
+            flat_last[key] = val
+            continue
+
+        if m_sec:
+            k_name = m_sec.group("key").strip()
+            rest = (m_sec.group("rest") or "").strip()
+            if not rest or rest.startswith("#") or rest in ("|", ">"):
+                section_stack.append((len(m_sec.group("indent")), k_name))
+
+    return scoped, flat_counts, flat_last
+
+
+def restore_masked_values(original_text: str, new_text: str) -> str:
+    """Ersetzt maskierte Werte im neuen YAML section-aware durch die echten aus dem Original.
+
+    Notwendig, weil der Live-Editor die maskierte Fassung zurueckschickt -
+    ohne diesen Schritt wuerde das Speichern die echten Keys ueberschreiben.
+    """
+    orig_scoped, flat_counts, flat_last = _extract_scoped_yaml_secrets(original_text or "")
+
+    section_stack = []
+    seen_counts = {}
+    _ANY_KV_RE = _re.compile(r'^(?P<indent>\s*)(?:-\s+)?(?P<key>[A-Za-z0-9_.-]+)\s*:\s*(?P<rest>.*)$')
+
+    out = []
+    for line in (new_text or "").splitlines():
+        stripped = line.strip()
+        m_sec = _ANY_KV_RE.match(line) if stripped and not stripped.startswith("#") else None
+        if m_sec:
+            ind_len = len(m_sec.group("indent"))
+            while section_stack and section_stack[-1][0] >= ind_len:
+                section_stack.pop()
+
+        m = _match_secret_line(line)
+        if m:
+            key = m.group("key").strip()
+            val = m.group("value").strip()
+            sec_path = tuple(name for _, name in section_stack)
+            occ = seen_counts.get((sec_path, key), 0)
+            seen_counts[(sec_path, key)] = occ + 1
             if "\u2022" in val or "•" in val:
-                real = orig.get(key)
+                real = orig_scoped.get((sec_path, key, occ))
+                if real is None and occ > 0:
+                    real = orig_scoped.get((sec_path, key, 0))
+                if real is None and flat_counts.get(key, 0) == 1:
+                    real = flat_last.get(key)
                 if real is not None:
                     out.append(f'{m.group("indent")}{m.group("key")}: {real}')
                     continue
+        elif m_sec:
+            k_name = m_sec.group("key").strip()
+            rest = (m_sec.group("rest") or "").strip()
+            if not rest or rest.startswith("#") or rest in ("|", ">"):
+                section_stack.append((len(m_sec.group("indent")), k_name))
+
         out.append(line)
     return "\n".join(out)

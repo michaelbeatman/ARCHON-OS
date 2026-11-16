@@ -34,6 +34,7 @@ def _require_admin(request: Request):
 @router.get("/api/settings")
 async def get_settings(request: Request):
     if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers:
+        _require_admin(request)
         import main as app_main
         return await app_main.forward_to_hermes(request)
 

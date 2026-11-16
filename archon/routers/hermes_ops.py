@@ -44,8 +44,28 @@ def _get_hermes_config_path() -> str:
     return os.path.join(memory_dir, "hermes_config.json")
 
 
+def _mask_config_secrets(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        masked = {}
+        for k, v in obj.items():
+            kl = str(k).lower()
+            if any(tok in kl for tok in ("api_key", "token", "secret", "password", "passwd", "pat")) and isinstance(v, str) and v.strip():
+                try:
+                    from utils.secret_files import mask_secret
+                    masked[k] = mask_secret(v)
+                except Exception:
+                    masked[k] = "••••••••"
+            else:
+                masked[k] = _mask_config_secrets(v)
+        return masked
+    if isinstance(obj, list):
+        return [_mask_config_secrets(x) for x in obj]
+    return obj
+
+
 @router.get("/api/hermes/config")
-def api_get_hermes_config():
+def api_get_hermes_config(request: Request):
+    _require_admin(request)
     import main as app_main
 
     cfg_file = _get_hermes_config_path()
@@ -58,10 +78,10 @@ def api_get_hermes_config():
 
                         data = yaml.safe_load(f) or {}
                     except Exception:
-                        data = {"raw": f.read()}
+                        data = {"raw": "[YAML-Parse-Fehler - Rohinhalt aus Sicherheitsgruenden ausgeblendet]"}
                 else:
                     data = json.load(f)
-            return {"status": "success", "file": cfg_file, "config": data}
+            return {"status": "success", "file": cfg_file, "config": _mask_config_secrets(data)}
     except Exception as e:
         logger.warning(f"[Hermes Config] Error reading {cfg_file}: {e}")
 

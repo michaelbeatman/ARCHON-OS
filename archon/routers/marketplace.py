@@ -85,10 +85,18 @@ def api_get_skill_detail(source: str = Query(...), id: str = Query(...)):
 @router.post("/api/marketplace/skills/assign")
 def api_assign_skill_to_profile(request: Request, data: Dict = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    import re as _re
     profile_id = data.get("profile_id")
     skill_name = data.get("skill_name") or data.get("skill_id")
     if not profile_id or not skill_name:
         raise HTTPException(status_code=400, detail="profile_id and skill_name are required")
+    if (
+        ".." in profile_id
+        or ".." in skill_name
+        or not _re.fullmatch(r"[A-Za-z0-9._\-]{1,128}", profile_id)
+        or not _re.fullmatch(r"[A-Za-z0-9._\-]{1,128}", skill_name)
+    ):
+        raise HTTPException(status_code=400, detail="Ungueltige profile_id oder skill_name.")
         
     # Invalidate cache to fetch fresh state
     invalidate_hermes_profiles_cache()
@@ -145,7 +153,10 @@ def api_marketplace_recruit(request: Request, data: Dict = Body(...)):
     if not tpl:
         raise HTTPException(status_code=404, detail="Template not found")
         
+    import re as _re
     profile_id = template_id.lower().replace("-", "_").replace(" ", "_")
+    if ".." in profile_id or not _re.fullmatch(r"[A-Za-z0-9._\-]{1,128}", profile_id):
+        raise HTTPException(status_code=400, detail="Ungueltige profile_id.")
     profile_name = custom_name or tpl.get("name") or profile_id.replace("_", " ").title()
     category = tpl.get("category", "1. Strategie, Führung & Lebensplanung")
     description = tpl.get("description") or f"Aus Marktplatz ({source}) rekrutiertes Profil."

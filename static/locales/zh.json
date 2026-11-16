@@ -1267,109 +1267,109 @@
   },
   "api": {
     "research": {
-      "research_dossier_nicht_gefunden": "Dossier nicht gefunden."
+      "research_dossier_nicht_gefunden": "未找到研究档案。"
     },
     "operations.approvals": {
-      "approvals_policykey_und_newvalue_sind_erforderlich": "policy_key und new_value sind erforderlich.",
-      "approvals_title_ist_erforderlich": "title ist erforderlich.",
-      "approvals_begrndung_reason_ist_erforderlich": "Begründung (reason) ist erforderlich."
+      "approvals_policykey_und_newvalue_sind_erforderlich": "需要 policy_key 和 new_value。",
+      "approvals_title_ist_erforderlich": "title 为必填项。",
+      "approvals_begrndung_reason_ist_erforderlich": "必须填写原因（reason）。"
     },
     "operations.dunning": {
-      "dunning_customername_und_ein_positiver_amountnet_s": "customer_name und ein positiver amount_net sind erforderlich.",
-      "dunning_invoiceid_ist_erforderlich_5": "invoice_id ist erforderlich.",
-      "dunning_dunningid_ist_erforderlich": "dunning_id ist erforderlich.",
-      "dunning_rechnung_nicht_gefunden_oder_update_fehlge": "Rechnung nicht gefunden oder Update fehlgeschlagen."
+      "dunning_customername_und_ein_positiver_amountnet_s": "需要 customer_name 和正数 amount_net。",
+      "dunning_invoiceid_ist_erforderlich_5": "需要 invoice_id。",
+      "dunning_dunningid_ist_erforderlich": "需要 dunning_id。",
+      "dunning_rechnung_nicht_gefunden_oder_update_fehlge": "未找到发票或更新失败。"
     },
     "oracle": {
-      "oracle_oraclefeed_nicht_verfuegbar": "Oracle-Feed nicht verfuegbar: {e}",
-      "oracle_oraclelauf_fehlgeschlagen": "Oracle-Lauf fehlgeschlagen: {e}",
-      "oracle_signalid_fehlt_im_payload": "Signal-ID fehlt im Payload",
-      "oracle_oracletriage_fehlgeschlagen": "Oracle-Triage fehlgeschlagen: {e}",
-      "oracle_thema_topic_ist_erforderlich": "Thema (topic) ist erforderlich"
+      "oracle_oraclefeed_nicht_verfuegbar": "Oracle 数据源不可用：{e}",
+      "oracle_oraclelauf_fehlgeschlagen": "Oracle 运行失败：{e}",
+      "oracle_signalid_fehlt_im_payload": "负载中缺少信号 ID。",
+      "oracle_oracletriage_fehlgeschlagen": "Oracle 分诊失败：{e}",
+      "oracle_thema_topic_ist_erforderlich": "主题（topic）为必填项。"
     },
     "templates": {
-      "templates_fabricpattern_nicht_gefunden": "Fabric-Pattern nicht gefunden.",
-      "templates_template_nicht_gefunden_15": "Template nicht gefunden.",
-      "templates_vorlagen_konnten_nicht_gespeichert_werde": "Vorlagen konnten nicht gespeichert werden: {serr}"
+      "templates_fabricpattern_nicht_gefunden": "未找到 Fabric 模式。",
+      "templates_template_nicht_gefunden_15": "未找到模板。",
+      "templates_vorlagen_konnten_nicht_gespeichert_werde": "无法保存模板：{serr}"
     },
     "deals": {
-      "deals_deal_nicht_gefunden": "Deal nicht gefunden.",
-      "deals_stage_erforderlich": "'stage' erforderlich.",
-      "deals_deal_oder_phase_ungltig": "Deal oder Phase ungültig."
+      "deals_deal_nicht_gefunden": "未找到商机。",
+      "deals_stage_erforderlich": "需要提供 'stage'。",
+      "deals_deal_oder_phase_ungltig": "商机或阶段无效。"
     },
     "hermes.config": {
-      "config_configpfad_nicht_erlaubt": "Config-Pfad nicht erlaubt: {e}",
-      "config_kein_pfad_fr_hermeskonfiguration_gefunden_22": "Kein Pfad für Hermes-Konfiguration gefunden.",
-      "config_ungltiger_konfigurationspfad_23": "Ungültiger Konfigurationspfad.",
-      "config_fehler_beim_speichern_der_konfiguration": "Fehler beim Speichern der Konfiguration: {str(e)}",
-      "config_yamlsyntaxfehler": "YAML-Syntaxfehler: {str(e)}",
-      "config_fehler_beim_schreiben_der_datei": "Fehler beim Schreiben der Datei: {str(e)}"
+      "config_configpfad_nicht_erlaubt": "不允许的配置路径：{e}",
+      "config_kein_pfad_fr_hermeskonfiguration_gefunden_22": "未找到 Hermes 配置路径。",
+      "config_ungltiger_konfigurationspfad_23": "无效的配置路径。",
+      "config_fehler_beim_speichern_der_konfiguration": "保存配置时出错：{str(e)}",
+      "config_yamlsyntaxfehler": "YAML 语法错误：{str(e)}",
+      "config_fehler_beim_schreiben_der_datei": "写入文件时出错：{str(e)}"
     },
     "erp": {
       "erp_entity_not_found": "Entity not found",
       "erp_document_not_found": "Document not found"
     },
     "chat": {
-      "chat_der_titel_darf_nicht_leer_sein": "Der Titel darf nicht leer sein.",
-      "chat_upload_fehlgeschlagen": "Upload fehlgeschlagen: {str(e)}",
-      "chat_nachricht_darf_nicht_leer_sein": "Nachricht darf nicht leer sein.",
-      "chat_prompt_darf_nicht_leer_sein": "Prompt darf nicht leer sein.",
-      "chat_openrouterapikey_fehlt_in_den_einstellungen": "OPENROUTER_API_KEY fehlt in den Einstellungen.",
-      "chat_openrouter_fehler": "OpenRouter Fehler: {resp.text[:300]}",
-      "chat_fehler_bei_bildgenerierung": "Fehler bei Bildgenerierung: {str(e)}",
-      "chat_provider_fr_bildgenerierung_aktuell_nicht_unt": "Provider '{provider}' für Bildgenerierung aktuell nicht unterstützt. Bitte 'openrouter' wählen."
+      "chat_der_titel_darf_nicht_leer_sein": "标题不能为空。",
+      "chat_upload_fehlgeschlagen": "上传失败：{str(e)}",
+      "chat_nachricht_darf_nicht_leer_sein": "消息不能为空。",
+      "chat_prompt_darf_nicht_leer_sein": "提示词不能为空。",
+      "chat_openrouterapikey_fehlt_in_den_einstellungen": "设置中缺少 OPENROUTER_API_KEY。",
+      "chat_openrouter_fehler": "OpenRouter 错误：{resp.text[:300]}",
+      "chat_fehler_bei_bildgenerierung": "图像生成错误：{str(e)}",
+      "chat_provider_fr_bildgenerierung_aktuell_nicht_unt": "当前不支持使用提供商 '{provider}' 生成图像。请选择 'openrouter'。"
     },
     "operations.sysops": {
-      "sysops_feld_name_ist_erforderlich": "Feld 'name' ist erforderlich.",
-      "sysops_feld_identifier_ist_erforderlich_40": "Feld 'identifier' ist erforderlich.",
-      "sysops_chaostestlauf_fehlgeschlagen": "Chaos-Testlauf fehlgeschlagen: {e}",
-      "sysops_noch_keine_chaostestergebnisse_vorhanden": "Noch keine Chaos-Testergebnisse vorhanden."
+      "sysops_feld_name_ist_erforderlich": "字段 'name' 为必填项。",
+      "sysops_feld_identifier_ist_erforderlich_40": "字段 'identifier' 为必填项。",
+      "sysops_chaostestlauf_fehlgeschlagen": "混沌测试运行失败：{e}",
+      "sysops_noch_keine_chaostestergebnisse_vorhanden": "暂无混沌测试结果。"
     },
     "plugins": {
-      "plugins_plugin_nicht_gefunden_44": "Plugin '{plugin_id}' nicht gefunden.",
-      "plugins_fehler_beim_neuladen_von_plugin": "Fehler beim Neuladen von Plugin '{plugin_id}'.",
-      "plugins_toolname_erforderlich": "tool_name erforderlich."
+      "plugins_plugin_nicht_gefunden_44": "未找到插件 '{plugin_id}'。",
+      "plugins_fehler_beim_neuladen_von_plugin": "重新加载插件 '{plugin_id}' 时出错。",
+      "plugins_toolname_erforderlich": "需要 tool_name。"
     },
     "containers": {
       "containers_container_not_found": "Container not found",
       "containers_failed_to_create_exec_instance": "Failed to create exec instance",
       "containers_failed_to_parse_exec_id": "Failed to parse exec ID",
       "containers_invalid_action": "Invalid action",
-      "containers_postdockercontaineraction_nicht_verfueg": "post_docker_container_action nicht verfuegbar"
+      "containers_postdockercontaineraction_nicht_verfueg": "post_docker_container_action 不可用。"
     },
     "brain": {
-      "brain_obsidian_vault_verzeichnis_nicht_gefunden": "Obsidian Vault Verzeichnis nicht gefunden.",
-      "brain_ungltiger_dateipfad_55": "Ungültiger Dateipfad.",
-      "brain_keine_dateien_bermittelt": "Keine Dateien übermittelt.",
-      "brain_ungltiger_dateipfad_auerhalb_der_bibliothek": "Ungültiger Dateipfad außerhalb der Bibliothek.",
-      "brain_buchdokument_nicht_gefunden": "Buch-Dokument nicht gefunden.",
-      "brain_quartzkonfigurationsdatei_nicht_gefunden": "Quartz-Konfigurationsdatei nicht gefunden.",
-      "brain_keine_konfiguration_bergeben": "Keine Konfiguration übergeben.",
-      "brain_ungltiger_dateipfad": "Ungültiger Dateipfad: {e}"
+      "brain_obsidian_vault_verzeichnis_nicht_gefunden": "未找到 Obsidian Vault 目录。",
+      "brain_ungltiger_dateipfad_55": "无效的文件路径。",
+      "brain_keine_dateien_bermittelt": "未提交任何文件。",
+      "brain_ungltiger_dateipfad_auerhalb_der_bibliothek": "库目录之外的无效文件路径。",
+      "brain_buchdokument_nicht_gefunden": "未找到书籍文档。",
+      "brain_quartzkonfigurationsdatei_nicht_gefunden": "未找到 Quartz 配置文件。",
+      "brain_keine_konfiguration_bergeben": "未提供配置。",
+      "brain_ungltiger_dateipfad": "无效的文件路径：{e}"
     },
     "theme": {
-      "theme_bild_zu_gross_max_8_mb": "Bild zu gross (max. 8 MB)."
+      "theme_bild_zu_gross_max_8_mb": "图像过大（最大 8 MB）。"
     },
     "operations.emails": {
-      "emails_betreff_empfnger_und_text_sind_erforderlich": "Betreff, Empfänger und Text sind erforderlich.",
-      "emails_entwurf_nicht_gefunden_64": "Entwurf nicht gefunden.",
-      "emails_betreff_empfnger_und_text_drfen_nicht": "Betreff, Empfänger und Text dürfen nicht leer sein.",
-      "emails_feedback_fr_den_agenten_ist_erforderlich": "Feedback für den Agenten ist erforderlich."
+      "emails_betreff_empfnger_und_text_sind_erforderlich": "主题、收件人和正文为必填项。",
+      "emails_entwurf_nicht_gefunden_64": "未找到草稿。",
+      "emails_betreff_empfnger_und_text_drfen_nicht": "主题、收件人和正文不能为空。",
+      "emails_feedback_fr_den_agenten_ist_erforderlich": "需要提供给智能体的反馈。"
     },
     "operations.org": {
-      "org_fehler_beim_speichern": "Fehler beim Speichern: {str(e)}"
+      "org_fehler_beim_speichern": "保存错误：{str(e)}"
     },
     "prompts": {
-      "prompts_fehler_beim_speichern": "Fehler beim Speichern: {e}",
-      "prompts_pdf_konnte_nicht_gelesen_werden": "PDF konnte nicht gelesen werden: {pe}",
-      "prompts_worddokument_konnte_nicht_gelesen_werden": "Word-Dokument konnte nicht gelesen werden: {de}",
-      "prompts_csv_konnte_nicht_gelesen_werden": "CSV konnte nicht gelesen werden: {ce}",
-      "prompts_textextraktion_fehlgeschlagen": "Text-Extraktion fehlgeschlagen: {ex}",
-      "prompts_prompt_darf_nicht_leer_sein": "Prompt darf nicht leer sein."
+      "prompts_fehler_beim_speichern": "保存错误：{e}",
+      "prompts_pdf_konnte_nicht_gelesen_werden": "无法读取 PDF：{pe}",
+      "prompts_worddokument_konnte_nicht_gelesen_werden": "无法读取 Word 文档：{de}",
+      "prompts_csv_konnte_nicht_gelesen_werden": "无法读取 CSV：{ce}",
+      "prompts_textextraktion_fehlgeschlagen": "文本提取失败：{ex}",
+      "prompts_prompt_darf_nicht_leer_sein": "提示词不能为空。"
     },
     "skills": {
-      "skills_ungueltige_skillid_pfadtraversal_unzulaessi": "Ungueltige skill_id (Pfad-Traversal unzulaessig).",
-      "skills_ungueltige_skillid": "Ungueltige skill_id: {e}",
+      "skills_ungueltige_skillid_pfadtraversal_unzulaessi": "无效的 skill_id（禁止路径遍历）。",
+      "skills_ungueltige_skillid": "无效的 skill_id：{e}",
       "skills_skills_engine_not_initialized_77": "Skills engine not initialized",
       "skills_agentid_is_required_to_verify_permissions": "agent_id is required to verify permissions",
       "skills_agent_profile_not_found": "Agent profile not found",
@@ -1378,71 +1378,71 @@
       "skills_skills_engine_not_initialized_5": "Skills engine not initialized"
     },
     "notebooks": {
-      "notebooks_name_ist_erforderlich": "Name ist erforderlich.",
-      "notebooks_notebook_nicht_gefunden_94": "Notebook nicht gefunden.",
-      "notebooks_keine_datei_bermittelt": "Keine Datei übermittelt.",
-      "notebooks_dateiname_nicht_erlaubt": "Dateiname nicht erlaubt: {pe}",
-      "notebooks_relpath_ist_erforderlich": "rel_path ist erforderlich.",
-      "notebooks_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {pe}",
-      "notebooks_quelle_nicht_gefunden": "Quelle nicht gefunden.",
-      "notebooks_prompt_ist_erforderlich": "Prompt ist erforderlich.",
-      "notebooks_notebook_nicht_gefunden": "Notebook nicht gefunden."
+      "notebooks_name_ist_erforderlich": "名称为必填项。",
+      "notebooks_notebook_nicht_gefunden_94": "未找到笔记本。",
+      "notebooks_keine_datei_bermittelt": "未提交文件。",
+      "notebooks_dateiname_nicht_erlaubt": "不允许的文件名：{pe}",
+      "notebooks_relpath_ist_erforderlich": "需要 rel_path。",
+      "notebooks_pfad_nicht_erlaubt": "不允许的路径：{pe}",
+      "notebooks_quelle_nicht_gefunden": "未找到来源。",
+      "notebooks_prompt_ist_erforderlich": "需要提供提示词。",
+      "notebooks_notebook_nicht_gefunden": "未找到笔记本。"
     },
     "system": {
-      "system_nicht_untersttzte_sprache": "Nicht unterstützte Sprache: {lang}",
-      "system_snapshotid_erforderlich": "Snapshot-ID erforderlich.",
-      "system_briefing_konnte_nicht_gelesen_werden": "Briefing konnte nicht gelesen werden: {e}"
+      "system_nicht_untersttzte_sprache": "不支持的语言：{lang}",
+      "system_snapshotid_erforderlich": "需要快照 ID。",
+      "system_briefing_konnte_nicht_gelesen_werden": "无法读取简报：{e}"
     },
     "mesh": {
-      "mesh_gltiger_filepath_erforderlich": "Gültiger 'file_path' erforderlich.",
-      "mesh_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {e}"
+      "mesh_gltiger_filepath_erforderlich": "需要有效的 'file_path'。",
+      "mesh_pfad_nicht_erlaubt": "不允许的路径：{e}"
     },
     "operations.receipts": {
-      "receipts_ungltige_base64bilddaten": "Ungültige Base64-Bilddaten: {e}",
-      "receipts_konnte_bilddatei_nicht_lesen": "Konnte Bilddatei nicht lesen: {e}",
-      "receipts_entweder_imagebase64_oder_ein_existierend": "Entweder 'image_base64' oder ein existierender 'image_path' ist erforderlich.",
-      "receipts_belegverarbeitung_fehlgeschlagen": "Belegverarbeitung fehlgeschlagen: {e}",
-      "receipts_aktualisierung_fehlgeschlagen_oder_keine_": "Aktualisierung fehlgeschlagen oder keine gültigen Felder.",
-      "receipts_datei_ist_leer": "Datei ist leer.",
-      "receipts_uploadverarbeitung_fehlgeschlagen": "Upload-Verarbeitung fehlgeschlagen: {e}"
+      "receipts_ungltige_base64bilddaten": "无效的 Base64 图像数据：{e}",
+      "receipts_konnte_bilddatei_nicht_lesen": "无法读取图像文件：{e}",
+      "receipts_entweder_imagebase64_oder_ein_existierend": "需要 'image_base64' 或现有的 'image_path'。",
+      "receipts_belegverarbeitung_fehlgeschlagen": "凭证处理失败：{e}",
+      "receipts_aktualisierung_fehlgeschlagen_oder_keine_": "更新失败或无有效字段。",
+      "receipts_datei_ist_leer": "文件为空。",
+      "receipts_uploadverarbeitung_fehlgeschlagen": "上传处理失败：{e}"
     },
     "governance": {
-      "governance_agent_nicht_gefunden": "Agent '{agent_id}' nicht gefunden.",
-      "governance_itemid_erforderlich": "item_id erforderlich."
+      "governance_agent_nicht_gefunden": "未找到智能体 '{agent_id}'。",
+      "governance_itemid_erforderlich": "需要 item_id。"
     },
     "documents": {
-      "documents_gltiger_filepath_erforderlich": "Gültiger 'filepath' erforderlich.",
-      "documents_pfad_nicht_erlaubt": "Pfad nicht erlaubt: {e}"
+      "documents_gltiger_filepath_erforderlich": "需要有效的 'filepath'。",
+      "documents_pfad_nicht_erlaubt": "不允许的路径：{e}"
     },
     "telegram": {
-      "telegram_text_darf_nicht_leer_sein_118": "Text darf nicht leer sein.",
-      "telegram_text_darf_nicht_leer_sein_32": "Text darf nicht leer sein."
+      "telegram_text_darf_nicht_leer_sein_118": "文本不能为空。",
+      "telegram_text_darf_nicht_leer_sein_32": "文本不能为空。"
     },
     "hermes.profiles": {
-      "profiles_ungueltige_profileid_pfadtraversal_unzula_120": "Ungueltige profile_id (Pfad-Traversal unzulaessig).",
-      "profiles_ungueltige_profileid_121": "Ungueltige profile_id: {e}",
-      "profiles_ungltiges_bilddatenformat_muss_dataimage_": "Ungültiges Bilddaten-Format (muss data:image/... sein).",
-      "profiles_bild_konnte_nicht_gespeichert_werden_form": "Bild konnte nicht gespeichert werden (Format/Inhalt ungueltig).",
-      "profiles_profil_nicht_gefunden_oder_nicht_beschrei": "Profil {profile_id} nicht gefunden oder nicht beschreibbar.",
-      "profiles_ungueltige_profileid_pfadtraversal_unzula_34": "Ungueltige profile_id (Pfad-Traversal unzulaessig)."
+      "profiles_ungueltige_profileid_pfadtraversal_unzula_120": "无效的 profile_id（禁止路径遍历）。",
+      "profiles_ungueltige_profileid_121": "无效的 profile_id：{e}",
+      "profiles_ungltiges_bilddatenformat_muss_dataimage_": "无效的图像数据格式（必须为 data:image/...）。",
+      "profiles_bild_konnte_nicht_gespeichert_werden_form": "无法保存图像（格式或内容无效）。",
+      "profiles_profil_nicht_gefunden_oder_nicht_beschrei": "未找到配置文件 {profile_id} 或不可写。",
+      "profiles_ungueltige_profileid_pfadtraversal_unzula_34": "无效的 profile_id（禁止路径遍历）。"
     },
     "ui": {
-      "ui_keine_staticindexhtml_datei_gefunden_127": "Keine static/index.html Datei gefunden.",
-      "ui_dateityp_nicht_erlaubt_jpg_jpeg_png": "Dateityp '{ext}' nicht erlaubt (jpg, jpeg, png, webp, gif).",
-      "ui_bild_zu_gro_max_8_mb": "Bild zu groß (max. 8 MB).",
-      "ui_keine_staticindexhtml_datei_gefunden_38": "Keine static/index.html Datei gefunden."
+      "ui_keine_staticindexhtml_datei_gefunden_127": "未找到 static/index.html 文件。",
+      "ui_dateityp_nicht_erlaubt_jpg_jpeg_png": "不允许文件类型 '{ext}'（仅支持 jpg、jpeg、png、webp、gif）。",
+      "ui_bild_zu_gro_max_8_mb": "图像过大（最大 8 MB）。",
+      "ui_keine_staticindexhtml_datei_gefunden_38": "未找到 static/index.html 文件。"
     },
     "decisions": {
-      "decisions_decision_muss_approve_oder_reject_sein_131": "decision muss approve oder reject sein",
-      "decisions_gate_nicht_gefunden": "Gate {gate_id} nicht gefunden",
-      "decisions_taskid_fehlt": "task_id fehlt",
-      "decisions_sidecar_nicht_lesbar": "Sidecar nicht lesbar: {e}",
-      "decisions_kein_entscheidungsblock_fr": "Kein Entscheidungs-Block für {task_id}",
-      "decisions_decision_muss_approve_oder_reject_sein_41": "decision muss approve oder reject sein"
+      "decisions_decision_muss_approve_oder_reject_sein_131": "decision 必须是 approve 或 reject。",
+      "decisions_gate_nicht_gefunden": "未找到审批门 {gate_id}。",
+      "decisions_taskid_fehlt": "缺少 task_id。",
+      "decisions_sidecar_nicht_lesbar": "Sidecar 不可读：{e}",
+      "decisions_kein_entscheidungsblock_fr": "未找到 {task_id} 的决策块。",
+      "decisions_decision_muss_approve_oder_reject_sein_41": "decision 必须是 approve 或 reject。"
     },
     "operations.security": {
-      "security_keine_sourceid_angegeben": "Keine source_id angegeben.",
-      "security_recoverykit_noch_nicht_generiert": "Recovery-Kit noch nicht generiert."
+      "security_keine_sourceid_angegeben": "未指定 source_id。",
+      "security_recoverykit_noch_nicht_generiert": "尚未生成恢复工具包。"
     }
   },
   "telemetry": {

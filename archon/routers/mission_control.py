@@ -305,11 +305,16 @@ async def move_mission_control_task(req: TaskMoveRequest):
             # FAN-IN (12.10.2026): Diese Task IST Lisas Entwurf-Freigabe
             # (synthesis_draft_path) -> beim Approved-Move finalisieren.
             if task.get("synthesis_draft_path") and not task.get("synthesis_finalized"):
-                task["synthesis_finalized"] = True
+                parent_pid_fin = task.get("parent_project_id") or req.task_id
+                # Nur vorab markieren, wenn Gate-Task != Parent-Projekt; bei Selbst-Referenz
+                # markiert Phase 2 nach _finalize_synthesis_after_approval, sonst Short-Circuit.
+                if parent_pid_fin != req.task_id:
+                    task["synthesis_finalized"] = True
                 plan["finalize"] = {
-                    "parent_pid": task.get("parent_project_id") or req.task_id,
+                    "parent_pid": parent_pid_fin,
                     "draft_path": task.get("synthesis_draft_path"),
                     "text": task.get("result_summary") or "",
+                    "self_ref": (parent_pid_fin == req.task_id),
                 }
 
             parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
@@ -361,6 +366,12 @@ async def move_mission_control_task(req: TaskMoveRequest):
             fin["text"],
             "Freigabe per Board-Move (Approval-Gate)",
         )
+        if fin.get("self_ref"):
+            def _mark_fin(d: dict):
+                t = next((x for x in d.get("tasks", []) if x.get("id") == task["id"]), None)
+                if t:
+                    t["synthesis_finalized"] = True
+            await asyncio.to_thread(update_mission_control_data, _mark_fin)
 
     if plan.get("execute"):
         asyncio.create_task(_DEPS["execute"](task["id"]))

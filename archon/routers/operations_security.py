@@ -112,8 +112,9 @@ def api_create_break_glass_vault(request: Request):
 
 
 @router.get("/security/break-glass/kit")
-def api_download_break_glass_kit():
+def api_download_break_glass_kit(request: Request):
     """Liefert das druckbare Notfall-Dokument (BREAK_GLASS_RECOVERY_KIT.md) als Download."""
+    require_admin_or_503(request)
     try:
         from scripts.break_glass_recovery import KIT_DOC_FILE
         if not os.path.exists(KIT_DOC_FILE):

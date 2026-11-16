@@ -229,7 +229,10 @@ def api_auth_login(request: Request, payload: dict = Body(...)):
     password = payload.get("password", "")
     client_ip = request.client.host if request.client else ""
     user_agent = request.headers.get("user-agent", "")
-    session = auth_service.authenticate(username, password, ip_address=client_ip, user_agent=user_agent)
+    try:
+        session = auth_service.authenticate(username, password, ip_address=client_ip, user_agent=user_agent)
+    except PermissionError as lock_err:
+        raise HTTPException(status_code=429, detail=str(lock_err)) from lock_err
     if not session:
         raise HTTPException(status_code=401, detail="Ungültiger Benutzername oder falsches Passwort.")
     res = JSONResponse(content={"status": "success", **session})

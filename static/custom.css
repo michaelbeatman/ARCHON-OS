@@ -196,9 +196,9 @@ div.stContainer {
   box-shadow: 0 6px 18px -6px rgba(15, 23, 42, 0.10);
 }
 
-/* Modals & Dialogs */
+/* Modals & Dialogs (Backdrop-Overlays mit .fixed/.inset-0 ausschließen) */
 [data-testid="stDialog"] > div,
-div[role="dialog"] {
+div[role="dialog"]:not(.fixed) {
   background-color: var(--bg-surface) !important;
   border: 1px solid var(--border-strong) !important;
   border-radius: 8px !important;

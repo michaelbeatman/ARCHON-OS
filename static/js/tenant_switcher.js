@@ -209,23 +209,29 @@
     if (!wrap) {
       wrap = document.createElement("div");
       wrap.id = CONTAINER_ID;
-      wrap.className = "flex items-center gap-1 px-1.5 py-0.5 rounded border theme-border text-[11px] mb-1";
+      wrap.className = "flex items-center justify-between gap-1 px-1 py-0.5 rounded hover:bg-[var(--secondary)]/60 transition text-[11px]";
       anchor.parentNode.insertBefore(wrap, anchor);
     }
 
     const activeId = ctx.active_company && ctx.active_company.id;
+    const activeCompany = ctx.companies.find((c) => c.id === activeId);
     const options = ctx.companies
       .map((c) => {
-        const label = c.entity_type ? `${c.name} (${c.entity_type})` : c.name || c.id;
+        const label = c.name || c.id;
         const sel = c.id === activeId ? "selected" : "";
         return `<option value="${esc(c.id)}" ${sel}>${esc(label)}</option>`;
       })
       .join("");
+    const selectTitle = activeCompany && activeCompany.entity_type
+      ? `${activeCompany.name || activeCompany.id} (${activeCompany.entity_type}) — ${_tenT("ui.tenant_switcher.select_title", "Mandant wechseln")}`
+      : _tenT("ui.tenant_switcher.select_title", "Mandant wechseln (Holding / GmbH / SPV)");
 
     wrap.innerHTML = `
-      ${BADGE_SVG}
-      <select id="archon-tenant-select" class="bg-transparent text-xs font-medium outline-none cursor-pointer" title="${esc(_tenT("ui.tenant_switcher.select_title", "Mandant wechseln (Holding / GmbH / SPV)"))}">${options}</select>
-      <button id="archon-tenant-manage-btn" type="button" class="opacity-70 hover:opacity-100 p-0.5 cursor-pointer" aria-label="${esc(_tenT("ui.tenant_switcher.manage_title", "Mandanten-DB-Isolation & Nummernkreise anzeigen"))}" title="${esc(_tenT("ui.tenant_switcher.manage_title", "Mandanten-DB-Isolation & Nummernkreise anzeigen"))}">${GEAR_SVG}</button>`;
+      <span class="flex items-center gap-1.5 min-w-0 flex-1">
+        <span class="shrink-0">${BADGE_SVG}</span>
+        <select id="archon-tenant-select" class="bg-transparent text-[11px] font-medium text-[var(--foreground)] outline-none cursor-pointer min-w-0 flex-1 truncate" title="${esc(selectTitle)}">${options}</select>
+      </span>
+      <button id="archon-tenant-manage-btn" type="button" class="opacity-50 hover:opacity-100 p-0.5 cursor-pointer shrink-0 transition" aria-label="${esc(_tenT("ui.tenant_switcher.manage_title", "Mandanten-DB-Isolation & Nummernkreise anzeigen"))}" title="${esc(_tenT("ui.tenant_switcher.manage_title", "Mandanten-DB-Isolation & Nummernkreise anzeigen"))}">${GEAR_SVG}</button>`;
 
     const selEl = document.getElementById("archon-tenant-select");
     if (selEl) {

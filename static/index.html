@@ -336,11 +336,11 @@
       </div>
     </nav>
     <!-- UNTERER BEREICH: DASHBOARD, CRM & SYSTEM-STATUSE -->
-    <!-- USER PROFILE BADGE (RBAC) -->
-    <div class="px-2 py-1">
+    <!-- USER PROFILE BADGE (RBAC) & MANDANT -->
+    <div class="px-2 pt-1 pb-0.5 space-y-0.5">
       <div id="topbar-user-badge"></div>
     </div>
-    <div class="px-2.5 py-1.5 border-t theme-border-strong mt-auto space-y-1.5">
+    <div class="px-2.5 py-1 border-t theme-border-strong mt-auto space-y-1">
       
       <!-- WATCHDOG KILL-SWITCH ALARM PILL (RED ALERT) -->
       <div id="sidebar-killswitch-alert" class="hidden p-2 rounded-xl border border-rose-500/50 bg-rose-950/40 text-rose-300 select-none shadow-sm">
@@ -357,8 +357,8 @@
           1 Vorfall: telegram_bot ge...
         </div>
       </div>
-      <!-- Mini-Statusleiste: Sync, Lokal, DSGVO, Update -->
-      <div class="pt-1 flex items-center justify-between px-1 text-[10px] font-mono text-[var(--muted-foreground)] border-t border-[var(--border)]/60">
+      <!-- Mini-Statusleiste: Sync, Lokal, DSGVO -->
+      <div class="flex items-center justify-between px-1 text-[10px] font-mono text-[var(--muted-foreground)]">
         <!-- Sync -->
         <button 
           type="button" 
@@ -370,7 +370,6 @@
           <span id="health-status-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
           <span data-i18n="telemetry.sync">Sync</span>
         </button>
-        <span class="text-zinc-400 dark:text-zinc-600 select-none">|</span>
         <!-- Lokal LLM -->
         <button 
           type="button" 
@@ -382,7 +381,6 @@
           <span id="dot-local-llm" class="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors"></span>
           <span data-i18n="telemetry.local_llm">Lokal</span>
         </button>
-        <span class="text-zinc-400 dark:text-zinc-600 select-none">|</span>
         <!-- DSGVO -->
         <button 
           type="button" 
@@ -394,28 +392,40 @@
           <span id="dot-dsgvo" class="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors"></span>
           <span data-i18n="telemetry.dsgvo">DSGVO</span>
         </button>
-        <span class="text-zinc-400 dark:text-zinc-600 select-none">|</span>
-        <!-- Update -->
+      </div>
+
+      <!-- Update-LEDs: Archon & Core (ohne Versionsnummern) -->
+      <div id="sidebar-update-leds-row" class="flex items-center gap-4 px-1 text-[10px] font-mono text-[var(--muted-foreground)]">
+        <button
+          type="button"
+          id="sidebar-archon-version-row"
+          onclick="window.openSystemSettingsModal && window.openSystemSettingsModal('update')"
+          class="flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5"
+          title="Archon OS Update-Status wird geprüft..."
+        >
+          <span id="dot-archon-update" class="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors"></span>
+          <span>Archon</span>
+        </button>
         <button 
           type="button" 
           id="status-badge-update" 
           onclick="window.openSystemUpdateDialog && window.openSystemUpdateDialog()" 
           class="flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5"
-          title="Hermes Core &amp; System-Update einsehen" data-i18n-title="telemetry.update_title"
+          title="Hermes Core-Update einsehen" data-i18n-title="telemetry.update_title"
         >
           <span id="dot-update" class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors"></span>
-          <span id="label-update-text" data-i18n="telemetry.update">Update</span>
+          <span id="label-update-text">Core</span>
         </button>
       </div>
 
-      <div class="px-2 pb-1 flex items-center justify-center gap-3 text-[10px] text-[var(--muted-foreground)]">
-        <a href="/api/legal/impressum" target="_blank" rel="noopener" data-i18n="ui.legal.impressum" class="hover:underline">Impressum</a>
+      <div class="px-1 flex items-center justify-center gap-2 text-[9.5px] leading-none text-[var(--muted-foreground)]">
+        <a href="/api/legal/impressum" target="_blank" rel="noopener" data-i18n="ui.legal.impressum" class="hover:text-[var(--foreground)] transition">Impressum</a>
         <span>·</span>
-        <a href="/api/legal/datenschutz" target="_blank" rel="noopener" data-i18n="ui.legal.datenschutz" class="hover:underline">Datenschutz</a>
+        <a href="/api/legal/datenschutz" target="_blank" rel="noopener" data-i18n="ui.legal.datenschutz" class="hover:text-[var(--foreground)] transition">Datenschutz</a>
       </div>
 
       <!-- Bottom Controls Row: Palette, Gateway, Settings, Hermes [H], Theme -->
-      <div class="pt-0.5 flex items-center justify-between gap-1 relative">
+      <div class="flex items-center justify-between gap-1 relative">
         <!-- Hidden/Standalone Telemetry Popover kept for scripts -->
         <div id="health-telemetry-popover" class="hidden absolute left-0 bottom-full mb-2 w-64 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-2xl z-50 text-xs font-mono space-y-2 text-[var(--foreground)]">
           <div class="flex items-center justify-between border-b border-[var(--border)] pb-1">

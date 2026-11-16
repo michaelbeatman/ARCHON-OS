@@ -3,11 +3,12 @@ from __future__ import annotations
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
+import asyncio
 import json
 import logging
 import os
 import urllib.parse
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -36,18 +37,23 @@ def _hermes_proxy_token() -> str:
     return ""
 
 
-_HERMES_HTTP_CLIENT: Optional[httpx.AsyncClient] = None
+_HERMES_CLIENTS_BY_LOOP: Dict[int, httpx.AsyncClient] = {}
 _HERMES_TARGET_CACHE: Dict[str, Any] = {"base": None, "ts": 0.0}
 
 
 def _get_hermes_client() -> httpx.AsyncClient:
-    global _HERMES_HTTP_CLIENT
-    if _HERMES_HTTP_CLIENT is None or _HERMES_HTTP_CLIENT.is_closed:
-        _HERMES_HTTP_CLIENT = httpx.AsyncClient(
+    try:
+        loop_key = id(asyncio.get_running_loop())
+    except RuntimeError:
+        loop_key = 0
+    client = _HERMES_CLIENTS_BY_LOOP.get(loop_key)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(
             timeout=httpx.Timeout(15.0, connect=2.5),
             limits=httpx.Limits(max_connections=30, max_keepalive_connections=10),
         )
-    return _HERMES_HTTP_CLIENT
+        _HERMES_CLIENTS_BY_LOOP[loop_key] = client
+    return client
 
 
 async def forward_to_hermes(request: Request) -> Response:
@@ -120,8 +126,9 @@ async def forward_to_hermes(request: Request) -> Response:
         except Exception as e:
             last_err = e
             continue
+    logger.warning("[Hermes-Proxy] Upstream nicht erreichbar (%s): %s", path_to_use, last_err)
     return Response(
-        content=json.dumps({"error": "proxy_unreachable", "detail": str(last_err)}),
+        content=json.dumps({"error": "proxy_unreachable", "detail": "Hermes-Backend nicht erreichbar."}),
         status_code=502,
         media_type="application/json",
     )
@@ -276,10 +283,29 @@ async def proxy_hermes_api_endpoints(request: Request, path: str = ""):
     """Forward frontend API calls from embedded iFrame to active Hermes backend."""
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         require_admin_or_503(request)
+    else:
+        try:
+            from archon.routers.auth import get_current_user_from_request
+            from backend.auth_service import auth_service
+
+            if auth_service.is_auth_enabled():
+                user = get_current_user_from_request(request)
+                if user.get("role") in ("viewer", "anonymous"):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Zugriff auf Hermes-Proxy fuer Viewer/Anonyme gesperrt.",
+                    )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Auth-Service fuer Hermes-Proxy nicht verfuegbar.",
+            ) from exc
     import main as app_main
     return await app_main.forward_to_hermes(request)
 
 
 for _route_path in _HERMES_ROUTES:
-    _methods = ["GET", "POST"] if _route_path == "/api/status" else ["GET", "POST", "OPTIONS", "PUT", "DELETE"]
+    _methods = ["GET", "POST"] if _route_path == "/api/status" else ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"]
     router.add_api_route(_route_path, proxy_hermes_api_endpoints, methods=_methods)

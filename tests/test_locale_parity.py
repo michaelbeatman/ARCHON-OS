@@ -1194,6 +1194,14 @@ INDEX_HTML_EXCEPTIONS = {
     'llama3.2': 'Beispiel-Modellkennung im Platzhalter (index.html:13393)',
     'mis_...': 'Beispiel-Keyformat im Platzhalter (index.html:13415)',
     'mistral-large-latest': 'Beispiel-Modellkennung im Platzhalter (index.html:13421)',
+    # MoA-Konfigurationsmodal: Marken-/Provider-/Modellnamen (unuebersetzt)
+    'NousResearch / Together-AI Architektur': 'Eigen-/Architekturname im MoA-Modal',
+    'openrouter': 'Provider-Slug im MoA-Modal',
+    'Claude 3.5 Sonnet': 'Modell-Eigenname im MoA-Modal',
+    'Claude 3.7 Sonnet': 'Modell-Eigenname im MoA-Modal',
+    'Llama 3.3 70B Instruct': 'Modell-Eigenname im MoA-Modal',
+    'Llama 3.3 70B': 'Modell-Eigenname im MoA-Modal',
+    'GPT-4o Mini': 'Modell-Eigenname im MoA-Modal',
 }
 
 

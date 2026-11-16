@@ -51,6 +51,30 @@
     });
   }
 
+  function ensureDialogAriaAttributes(dialog, visible) {
+    if (!dialog) return;
+    if (!dialog.hasAttribute("aria-modal")) {
+      dialog.setAttribute("aria-modal", "true");
+    }
+    dialog.setAttribute("aria-hidden", visible ? "false" : "true");
+    ensureHeadingLabel(dialog);
+    if (!dialog.hasAttribute("aria-label") && !dialog.hasAttribute("aria-labelledby")) {
+      const fallbackLabel = dialog.getAttribute("title") || dialog.dataset.title || dialog.id || "Dialog";
+      dialog.setAttribute("aria-label", fallbackLabel);
+    }
+    dialog.querySelectorAll("button, [role='button']").forEach((btn) => {
+      if (btn.hasAttribute("aria-label") || btn.hasAttribute("aria-labelledby")) return;
+      const text = (btn.textContent || "").trim();
+      if (text) return;
+      const title = (btn.getAttribute("title") || "").trim();
+      if (title) {
+        btn.setAttribute("aria-label", title);
+      } else if ((btn.getAttribute("onclick") || "").toLowerCase().includes("close")) {
+        btn.setAttribute("aria-label", "Close");
+      }
+    });
+  }
+
   function onDialogOpened(dialog) {
     if (!dialog || openStack.includes(dialog)) return;
     const active = document.activeElement;
@@ -60,7 +84,7 @@
     if (!dialog.hasAttribute("tabindex")) {
       dialog.setAttribute("tabindex", "-1");
     }
-    ensureHeadingLabel(dialog);
+    ensureDialogAriaAttributes(dialog, true);
     openStack.push(dialog);
 
     requestAnimationFrame(() => {
@@ -77,6 +101,9 @@
   function onDialogClosed(dialog) {
     const idx = openStack.indexOf(dialog);
     if (idx !== -1) openStack.splice(idx, 1);
+    if (dialog) {
+      dialog.setAttribute("aria-hidden", "true");
+    }
     const opener = openerMap.get(dialog);
     openerMap.delete(dialog);
     if (opener && opener.isConnected && typeof opener.focus === "function") {
@@ -94,6 +121,7 @@
     const dialogs = document.querySelectorAll('[role="dialog"]');
     dialogs.forEach((dlg) => {
       const visible = isDialogVisible(dlg);
+      ensureDialogAriaAttributes(dlg, visible);
       const tracked = openStack.includes(dlg);
       if (visible && !tracked) {
         onDialogOpened(dlg);
@@ -167,7 +195,19 @@
 
   function initObserver() {
     syncDialogs();
-    const obs = new MutationObserver(() => syncDialogs());
+    let syncTimer = null;
+    const scheduleSync = () => {
+      if (syncTimer !== null) return;
+      syncTimer = setTimeout(() => {
+        syncTimer = null;
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => syncDialogs());
+        } else {
+          syncDialogs();
+        }
+      }, 60);
+    };
+    const obs = new MutationObserver(scheduleSync);
     obs.observe(document.body || document.documentElement, {
       subtree: true,
       childList: true,

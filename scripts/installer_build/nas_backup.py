@@ -4,8 +4,8 @@ from datetime import datetime
 import shutil
 import sys
 
-SOURCE_DIR = r"."
-NAS_DIR = r"Y:\_ARCHON Backups"
+SOURCE_DIR = "."
+NAS_DIR = os.environ.get("ARCHON_NAS_BACKUP_DIR", "/mnt/raid/_ARCHON Backups")
 
 try:
     os.makedirs(NAS_DIR, exist_ok=True)

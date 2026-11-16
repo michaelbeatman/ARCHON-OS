@@ -318,12 +318,13 @@ def notify_task_status(task_id: str, status: str, title: str, result: str = "",
 
 def notify_mission_approval(task_id: str, title: str, agent_name: str) -> bool:
     """Mission-Modus-Ping: Task liegt im HITL-Approval-Gate (status=approval)."""
+    e = tg_escape
     lines = [
-        "🔐 *FREIGABE ERFORDERLICH*",
-        f"*Mission:* `{task_id}` — {title}",
-        f"*Agent:* {agent_name}",
+        "🔐 <b>FREIGABE ERFORDERLICH</b>",
+        f"<b>Mission:</b> <code>{e(task_id)}</code> — {e(title)}",
+        f"<b>Agent:</b> {e(agent_name)}",
         "",
-        "_Bitte Entscheidung treffen — oder als Text antworten:_",
-        f"`Details {task_id}` · `Erlauben {task_id}` · `Verbieten {task_id}`",
+        "<i>Bitte Entscheidung treffen — oder als Text antworten:</i>",
+        f"<code>Details {e(task_id)}</code> · <code>Erlauben {e(task_id)}</code> · <code>Verbieten {e(task_id)}</code>",
     ]
     return send_telegram_message("\n".join(lines), reply_markup=_hitl_keyboard(task_id))

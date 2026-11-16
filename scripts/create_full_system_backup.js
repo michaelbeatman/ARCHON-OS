@@ -8,7 +8,7 @@
  * 5. AgenticOS Codebase & Prompts & Kataloge (ohne .git, node_modules, alte Backups)
  * 6. Manifest & Wiederherstellungsanleitung (backup_manifest.json, README_RESTORE.txt)
  * 7. Multithreaded 7-Zip Kompression (.zip)
- * 8. Automatischer Sync auf NAS (Y:\_ARCHON Backups\)
+ * 8. Automatischer Sync auf NAS (/mnt/raid/_ARCHON Backups/)
  * 9. Bereinigung des temporären Staging-Ordners
  */
 
@@ -16,9 +16,9 @@ const fs = require('fs');
 const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 
-const SEVEN_ZIP = 'C:\\Program Files\\7-Zip\\7z.exe';
-const NAS_TARGET_DIR = 'Y:\\_ARCHON Backups';
-const LOCAL_BACKUP_DIR = '.\\backups';
+const SEVEN_ZIP = process.env.SEVEN_ZIP_BIN || '7z';
+const NAS_TARGET_DIR = process.env.ARCHON_NAS_BACKUP_DIR || '/mnt/raid/_ARCHON Backups';
+const LOCAL_BACKUP_DIR = path.join('.', 'backups');
 
 function pad(n) { return n.toString().padStart(2, '0'); }
 
@@ -205,7 +205,7 @@ KOMPONENTEN:
 4. [hermes_home]
    Alle Agenten-Profile, System-Prompts, API-Keys (.env),
    Konfigurationen (config.yaml) sowie SQLite-Datenbanken (state.db, kanban.db).
-   -> Auf neuem PC kopieren nach: %USERPROFILE%\\.hermes (z.B. C:\\Users\\<User>\\.hermes)
+   -> Auf neuem Host kopieren nach: ~/.hermes (bzw. $HOME/.hermes)
 
 5. [obsidian_vault]
    Kompletter Obsidian Knowledge Vault.

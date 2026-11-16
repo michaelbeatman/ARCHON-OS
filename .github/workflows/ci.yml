@@ -32,6 +32,12 @@ jobs:
       - name: Secrets- & Credential-Audit (Zero-Leak Gate)
         run: python scripts/audit_secrets.py --all
 
+      - name: JavaScript Syntax Check
+        run: |
+          for f in static/js/*.js static/hermes-webui/*.js; do
+            node --check "$f"
+          done
+
   test-suites:
     name: 2. Unit- & Security-Tests
     needs: validate-and-audit

@@ -33,6 +33,7 @@ views/view_inbox.py - Operatives Modul "Eingang (Triage & Streams)" für Archon 
      `render_inbox_streamlit()` (st.dialog/st.session_state für Streamlit-Umgebungen).
 """
 
+import html
 import os
 import json
 import datetime
@@ -819,12 +820,12 @@ def render_inbox_view() -> str:
     # 1. Spalte Intern Cards
     intern_cards_html = ""
     for idx, item in enumerate(intern_items):
-        badge_bg = item.get("badge_bg", "#F1F5F9")
-        badge_color = item.get("badge_color", "#475569")
-        badge = item.get("badge", "SYSTEM")
-        title = item.get("title", "Meldung")
-        preview = item.get("preview", "")
-        ts = item.get("timestamp", "")
+        badge_bg = html.escape(str(item.get("badge_bg", "#F1F5F9")), quote=True)
+        badge_color = html.escape(str(item.get("badge_color", "#475569")), quote=True)
+        badge = html.escape(str(item.get("badge", "SYSTEM")))
+        title = html.escape(str(item.get("title", "Meldung")))
+        preview = html.escape(str(item.get("preview", "")))
+        ts = html.escape(str(item.get("timestamp", "")))
         intern_cards_html += f"""
         <div onclick="openInboxModal('intern', {idx})" 
              class="inbox-card cursor-pointer transition-all hover:shadow-xs hover:border-slate-300"
@@ -851,10 +852,10 @@ def render_inbox_view() -> str:
         """
     else:
         for idx, item in enumerate(email_items):
-            sender = item.get("sender", "Absender")
-            subject = item.get("subject", "Kein Betreff")
-            preview = item.get("preview", "")
-            ts = item.get("timestamp", "")
+            sender = html.escape(str(item.get("sender", "Absender")))
+            subject = html.escape(str(item.get("subject", "Kein Betreff")))
+            preview = html.escape(str(item.get("preview", "")))
+            ts = html.escape(str(item.get("timestamp", "")))
             sec_status = item.get("security_status", "safe")
             
             border_style = "border: 1px solid #E2E8F0;"
@@ -892,12 +893,12 @@ def render_inbox_view() -> str:
         """
     else:
         for idx, item in enumerate(telegram_items):
-            badge = item.get("badge", "TEXT")
-            badge_bg = item.get("badge_bg", "#DBEAFE")
-            badge_color = item.get("badge_color", "#3B82F6")
-            sender = item.get("sender", "Telegram")
-            preview = item.get("preview", "")
-            ts = item.get("timestamp", "")
+            badge = html.escape(str(item.get("badge", "TEXT")))
+            badge_bg = html.escape(str(item.get("badge_bg", "#DBEAFE")), quote=True)
+            badge_color = html.escape(str(item.get("badge_color", "#3B82F6")), quote=True)
+            sender = html.escape(str(item.get("sender", "Telegram")))
+            preview = html.escape(str(item.get("preview", "")))
+            ts = html.escape(str(item.get("timestamp", "")))
             sec_status = item.get("security_status", "safe")
 
             border_style = "border: 1px solid #E2E8F0;"
@@ -934,7 +935,7 @@ def render_inbox_view() -> str:
         "email": email_items,
         "telegram": telegram_items
     }
-    serialized_payload = json.dumps(full_inbox_payload, ensure_ascii=False)
+    serialized_payload = json.dumps(full_inbox_payload, ensure_ascii=False).replace("</", "<\\/")
 
     return f"""
     <div id="view-inbox" class="flex-1 w-full min-h-screen flex flex-col p-6 select-none" 
@@ -1089,7 +1090,17 @@ def render_inbox_view() -> str:
 
         if (titleEl) titleEl.innerText = `${{type.toUpperCase()}}: ${{item.title || item.subject || 'Nachricht'}}`;
         if (metaEl) {{
-          metaEl.innerHTML = `<strong>Absender:</strong> ${{item.sender || 'Unbekannt'}} &nbsp;|&nbsp; <strong>Zeit:</strong> ${{item.timestamp || ''}} &nbsp;|&nbsp; <strong>Pfad:</strong> ${{item.path || 'In-Memory'}}`;
+          metaEl.replaceChildren();
+          const addMeta = (label, val, sep) => {{
+            const s = document.createElement('strong');
+            s.textContent = label + ':';
+            metaEl.appendChild(s);
+            metaEl.appendChild(document.createTextNode(' ' + String(val)));
+            if (sep) metaEl.appendChild(document.createTextNode('  |  '));
+          }};
+          addMeta('Absender', item.sender || 'Unbekannt', true);
+          addMeta('Zeit', item.timestamp || '', true);
+          addMeta('Pfad', item.path || 'In-Memory', false);
         }}
         if (bodyEl) {{
           bodyEl.innerText = item.content || item.preview || '(Kein Inhalt vorhanden)';
@@ -1207,10 +1218,10 @@ def render_inbox_streamlit():
             with st.container():
                 st.markdown(
                     f"<div class='inbox-card-st'>"
-                    f"<span style='color: {item.get('badge_color', '#3B82F6')}; font-weight: bold;'>[{item.get('badge', 'SYSTEM')}]</span> "
-                    f"<span style='color: #64748B; font-size: 11px;'>{item.get('timestamp')}</span><br>"
-                    f"<strong style='color: #0F172A;'>{item.get('title')}</strong><br>"
-                    f"<span style='color: #64748B; font-size: 12px;'>{item.get('preview')}</span>"
+                    f"<span style='color: {html.escape(str(item.get('badge_color', '#3B82F6')), quote=True)}; font-weight: bold;'>[{html.escape(str(item.get('badge', 'SYSTEM')))}]</span> "
+                    f"<span style='color: #64748B; font-size: 11px;'>{html.escape(str(item.get('timestamp', '')))}</span><br>"
+                    f"<strong style='color: #0F172A;'>{html.escape(str(item.get('title', '')))}</strong><br>"
+                    f"<span style='color: #64748B; font-size: 12px;'>{html.escape(str(item.get('preview', '')))}</span>"
                     f"</div>",
                     unsafe_allow_html=True
                 )
@@ -1231,10 +1242,10 @@ def render_inbox_streamlit():
                 with st.container():
                     st.markdown(
                         f"<div class='inbox-card-st'>"
-                        f"<strong style='color: #0F172A;'>{item.get('sender')}</strong> "
-                        f"<span style='color: #64748B; font-size: 11px;'>{item.get('timestamp')}</span><br>"
-                        f"<span style='color: #0F172A; font-weight: 500;'>{item.get('subject')}</span><br>"
-                        f"<span style='color: #64748B; font-size: 12px;'>{item.get('preview')}</span>"
+                        f"<strong style='color: #0F172A;'>{html.escape(str(item.get('sender', '')))}</strong> "
+                        f"<span style='color: #64748B; font-size: 11px;'>{html.escape(str(item.get('timestamp', '')))}</span><br>"
+                        f"<span style='color: #0F172A; font-weight: 500;'>{html.escape(str(item.get('subject', '')))}</span><br>"
+                        f"<span style='color: #64748B; font-size: 12px;'>{html.escape(str(item.get('preview', '')))}</span>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
@@ -1255,10 +1266,10 @@ def render_inbox_streamlit():
                 with st.container():
                     st.markdown(
                         f"<div class='inbox-card-st'>"
-                        f"<span style='color: {item.get('badge_color', '#3B82F6')}; font-weight: bold;'>[{item.get('badge', 'TEXT')}]</span> "
-                        f"<span style='color: #64748B; font-size: 11px;'>{item.get('timestamp')}</span><br>"
-                        f"<strong style='color: #0F172A;'>{item.get('sender')}</strong><br>"
-                        f"<span style='color: #64748B; font-size: 12px;'>{item.get('preview')}</span>"
+                        f"<span style='color: {html.escape(str(item.get('badge_color', '#3B82F6')), quote=True)}; font-weight: bold;'>[{html.escape(str(item.get('badge', 'TEXT')))}]</span> "
+                        f"<span style='color: #64748B; font-size: 11px;'>{html.escape(str(item.get('timestamp', '')))}</span><br>"
+                        f"<strong style='color: #0F172A;'>{html.escape(str(item.get('sender', '')))}</strong><br>"
+                        f"<span style='color: #64748B; font-size: 12px;'>{html.escape(str(item.get('preview', '')))}</span>"
                         f"</div>",
                         unsafe_allow_html=True
                     )

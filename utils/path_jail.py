@@ -15,12 +15,31 @@ Benutzung:
 from __future__ import annotations
 
 import os
+import re
 from typing import Iterable, Optional
 
 from archon.core.config import config
 from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
 
-__all__ = ["PathJailError", "safe_path", "safe_path_within", "allowed_roots", "is_allowed"]
+__all__ = [
+    "PathJailError",
+    "safe_path",
+    "safe_path_within",
+    "safe_filename",
+    "safe_identifier",
+    "allowed_roots",
+    "is_allowed",
+]
+
+_SAFE_IDENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+def safe_identifier(value: str, label: str = "ID") -> str:
+    """Validiert technische IDs (agent_id, skill_id, task_id) gegen Pfad-Traversal."""
+    raw = str(value or "").strip()
+    if not raw or ".." in raw or "/" in raw or "\\" in raw or "\x00" in raw or not _SAFE_IDENT_RE.fullmatch(raw):
+        raise PathJailError(f"Ungueltige {label}: {value!r}")
+    return raw
 
 
 class PathJailError(PermissionError):

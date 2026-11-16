@@ -1307,3 +1307,247 @@ def test_gobd_z3_export_archive_and_rbac(tmp_path, monkeypatch):
         assert r_adm.status_code == 200
         assert r_adm.headers.get("content-type", "").startswith("application/zip")
 
+
+def test_login_route_and_kanban_missing_comment_tables(tmp_path, monkeypatch):
+    import sqlite3
+    import backend.operations_api as ops_mod
+    import main as app_main
+
+    kdb = tmp_path / "kanban_only_tasks.db"
+    with sqlite3.connect(str(kdb)) as conn:
+        conn.execute(
+            "CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT, body TEXT, assignee TEXT, status TEXT, "
+            "priority INTEGER DEFAULT 0, created_by TEXT, created_at TEXT, started_at TEXT, completed_at TEXT, "
+            "result TEXT, model_override TEXT, provider_override TEXT, block_kind TEXT)"
+        )
+        conn.commit()
+
+    monkeypatch.setattr(ops_mod, "KANBAN_DB_PATH", str(kdb))
+    monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT_DBS", set())
+    res = ops_mod.get_kanban_tasks(archived=False)
+    assert res["status"] == "success"
+
+    with sqlite3.connect(str(kdb)) as conn:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    assert {"tasks", "task_comments", "task_links", "task_events"}.issubset(tables)
+
+    client = TestClient(app_main.app)
+    r_login = client.get("/login?next=/n8n-proxy/")
+    assert r_login.status_code == 200
+    assert "text/html" in r_login.headers.get("content-type", "")
+
+
+def test_reverse_proxy_preserves_multi_set_cookie_and_no_store_html():
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    import httpx
+    from starlette.requests import Request
+    from utils.reverse_proxy import ReverseProxy
+
+    proxy = ReverseProxy(name="n8n", target_host="n8n:5678", mount_prefix="/n8n-proxy")
+    upstream = httpx.Response(
+        status_code=200,
+        headers=[
+            ("content-type", "text/html; charset=utf-8"),
+            ("cache-control", "public, max-age=86400"),
+            ("etag", 'W/"abc"'),
+            ("set-cookie", "n8n-auth=abc; Path=/; HttpOnly"),
+            ("set-cookie", "n8n-extra=xyz; Path=/"),
+        ],
+        content=b"<html><head></head><body>ok</body></html>",
+    )
+    hdrs = proxy._rewrite_headers(upstream)
+    assert hdrs.get("Cache-Control") == "no-store, no-cache, must-revalidate"
+    assert "etag" not in {k.lower() for k in hdrs}
+
+    fake_client = MagicMock()
+    fake_client.request = AsyncMock(return_value=upstream)
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/n8n-proxy/",
+        "headers": [],
+        "query_string": b"",
+    }
+    async def _recv():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    req = Request(scope, receive=_recv)
+    import utils.reverse_proxy as rp_mod
+    orig_getter = rp_mod.get_shared_client
+    rp_mod.get_shared_client = lambda: fake_client
+    try:
+        resp = asyncio.run(proxy._do_request(req, "http://n8n:5678/", ""))
+    finally:
+        rp_mod.get_shared_client = orig_getter
+    cookies = resp.headers.getlist("set-cookie")
+    assert len(cookies) == 2 and "n8n-auth=abc" in cookies[0] and "n8n-extra=xyz" in cookies[1]
+
+
+# ==============================================================================
+# Audit #4 — Block 1 Regression Tests
+# ==============================================================================
+
+def test_block1_rate_limit_private_cidr_and_strict_v1():
+    from utils.rate_limit import _is_trusted_proxy_ip, STRICT_PREFIXES
+    assert _is_trusted_proxy_ip("172.200.1.1") is False
+    assert _is_trusted_proxy_ip("172.217.16.1") is False
+    assert _is_trusted_proxy_ip("172.16.0.1") is True
+    assert _is_trusted_proxy_ip("172.31.255.1") is True
+    assert _is_trusted_proxy_ip("127.0.0.1") is True
+    assert "/api/v1/hermes/update" in STRICT_PREFIXES
+    assert "/api/v1/documents/parse" in STRICT_PREFIXES
+
+
+def test_block1_egress_guard_fail_closed_on_gaierror(monkeypatch):
+    import socket
+    from utils.egress_guard import EgressBlocked, check_target_url
+
+    def _fail(*args, **kwargs):
+        raise socket.gaierror("NXDOMAIN")
+
+    monkeypatch.setattr(socket, "getaddrinfo", _fail)
+    with pytest.raises(EgressBlocked, match="DNS-Aufloesung"):
+        check_target_url("https://unknown.example.invalid/hook", allowed=["unknown.example.invalid"])
+
+
+def test_block1_safe_identifier_and_scripts_backup_import():
+    from utils.path_jail import safe_identifier, PathJailError
+    assert safe_identifier("research-1_core") == "research-1_core"
+    for bad in ("../etc", "a/b", r"a\b", "..", "", "foo..bar"):
+        with pytest.raises(PathJailError):
+            safe_identifier(bad)
+    import importlib
+    mod = importlib.import_module("scripts.archon_daily_backup")
+    assert hasattr(mod, "ROOT")
+
+
+def test_block1_hermes_ops_restores_masked_secrets(tmp_path, monkeypatch):
+    from archon.routers.hermes_ops import _restore_masked_dict_secrets
+    existing = {"api_key": "sk-real-secret-123", "nested": {"token": "tok-abc"}, "model": "a"}
+    updated = {"api_key": "••••123", "nested": {"token": "••••"}, "model": "b"}
+    merged = _restore_masked_dict_secrets(existing, updated)
+    assert merged["api_key"] == "sk-real-secret-123"
+    assert merged["nested"]["token"] == "tok-abc"
+    assert merged["model"] == "b"
+
+
+
+
+
+
+def test_block3_audit_log_company_id_and_wal(tmp_path):
+    import sqlite3
+    from backend.audit_log import ChainedAuditLog
+
+    db_file = str(tmp_path / "audit_test.db")
+    mgr = ChainedAuditLog(db_path=db_file)
+    mgr.record_event("ops", "task_done", "coder", {"company_id": "mandant-a", "note": "alpha"})
+    mgr.record_event("ops", "task_done", "coder", {"company_id": "mandant-b", "note": "beta"})
+
+    with sqlite3.connect(db_file) as conn:
+        mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
+    assert str(mode).lower() == "wal"
+
+    res_a = mgr.list_events(company_id="mandant-a")
+    notes_a = [e["payload_parsed"]["note"] for e in res_a["entries"]]
+    assert "alpha" in notes_a
+    assert "beta" not in notes_a
+    assert mgr.verify_integrity()["valid"] is True
+
+
+def test_block3_db_backup_manager_integrity_check(tmp_path, monkeypatch):
+    import sqlite3
+    from backend import db_backup_manager
+
+    src_db = tmp_path / "sample.db"
+    with sqlite3.connect(str(src_db)) as conn:
+        conn.execute("CREATE TABLE items (id INTEGER PRIMARY KEY, val TEXT)")
+        conn.execute("INSERT INTO items (val) VALUES ('ok')")
+        conn.commit()
+
+    monkeypatch.setattr(db_backup_manager, "WORKSPACE_DIR", str(tmp_path))
+    monkeypatch.setattr(db_backup_manager, "DB_TARGETS", [str(src_db)])
+    mgr = db_backup_manager.DBBackupManager(backup_dir=str(tmp_path / "bkp"))
+    out = mgr.checkpoint_and_backup(keep_days=1)
+    assert out["backed_up_count"] == 1
+    assert out["backups"][0]["integrity"] == "ok"
+
+
+def test_block3_docuseal_list_contracts_company_filter(tmp_path):
+    import sqlite3
+    from backend.docuseal_client import DocuSealClient
+
+    mem_db = str(tmp_path / "mem.db")
+    kanban_db = str(tmp_path / "kanban.db")
+    sqlite3.connect(mem_db).close()
+
+    client = DocuSealClient()
+    client.base_url = "http://127.0.0.1:1/dead"
+    client.internal_url = "http://127.0.0.1:1/dead"
+    client.memory_db = mem_db
+    client.kanban_db = kanban_db
+    client._init_esign_tables()
+    client.create_submission("Vertrag A", "a@example.com", "Alice", company_id="firm-a")
+    client.create_submission("Vertrag B", "b@example.com", "Bob", company_id="firm-b")
+
+    rows_a = client.list_contracts(company_id="firm-a")
+    assert [r["title"] for r in rows_a] == ["Vertrag A"]
+
+
+def test_block3_api_key_manager_no_lock_contention(tmp_path, caplog):
+    import logging
+    from backend.api_key_manager import ApiKeyManager
+
+    with caplog.at_level(logging.WARNING):
+        mgr = ApiKeyManager(db_path=str(tmp_path / "keys.db"))
+        created = mgr.create_key("ci-key", scopes=["read_only"])
+        assert created["key_id"]
+        revoked = mgr.revoke_key(created["key_id"])
+        assert revoked is True
+
+
+def test_block3_reverse_proxy_streams_non_html():
+    import asyncio
+    import httpx
+    from unittest.mock import AsyncMock, MagicMock
+    from utils.reverse_proxy import ReverseProxy
+    from fastapi.responses import StreamingResponse
+
+    async def _run():
+        proxy = ReverseProxy(name="test", target_host="127.0.0.1:9999", mount_prefix="/tp")
+        fake_upstream = MagicMock()
+        fake_upstream.status_code = 200
+        fake_upstream.headers = httpx.Headers({"content-type": "application/json"})
+
+        async def _aiter(_chunk_size=65536):
+            yield b'{"ok":'
+            yield b'true}'
+
+        fake_upstream.aiter_bytes = _aiter
+        fake_upstream.aclose = AsyncMock()
+
+        fake_client = MagicMock(spec=httpx.AsyncClient)
+        fake_client.build_request = MagicMock(return_value="REQ")
+        fake_client.send = AsyncMock(return_value=fake_upstream)
+
+        fake_req = MagicMock()
+        fake_req.method = "GET"
+        fake_req.headers = {}
+        fake_req.body = AsyncMock(return_value=b"")
+
+        import utils.reverse_proxy as rp_mod
+        orig = rp_mod.get_shared_client
+        rp_mod.get_shared_client = lambda: fake_client
+        try:
+            resp = await proxy._do_request(fake_req, "http://127.0.0.1:9999/api", "api")
+            assert isinstance(resp, StreamingResponse)
+            chunks = []
+            async for ch in resp.body_iterator:
+                chunks.append(ch)
+            assert b"".join(chunks) == b'{"ok":true}'
+            fake_upstream.aclose.assert_awaited()
+        finally:
+            rp_mod.get_shared_client = orig
+
+    asyncio.run(_run())

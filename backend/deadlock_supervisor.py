@@ -12,7 +12,11 @@ import datetime
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KANBAN_DB = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    KANBAN_DB = _resolve_db("kanban.db")
+except Exception:
+    KANBAN_DB = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
 
 def _to_dt(value) -> Optional[datetime.datetime]:
     """Wandelt einen Zeitstempel (Epoch-Float/Int oder ISO-String) in datetime um.

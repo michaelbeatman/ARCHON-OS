@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    DB_PATH = _resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 SKILLS_DRAFT_DIR = os.path.join(WORKSPACE_DIR, ".agents", "skills", "drafts")
 PERSONALAKTEN_DIR = os.path.join(WORKSPACE_DIR, "agent_workspace", "personalakten")
 

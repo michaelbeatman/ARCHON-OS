@@ -62,10 +62,20 @@ def api_get_memory_stats():
 def api_get_agent_real_stats(agent_id: str):
     """Liefert echte Leistungsdaten aus der Personalakte und den Datenbanken."""
     import main as app_main
+    from utils.path_jail import safe_identifier, safe_path_within, PathJailError
+
+    try:
+        clean_id = safe_identifier(agent_id, "agent_id")
+    except PathJailError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     obsidian_vault = getattr(app_main, "OBSIDIAN_VAULT", OBSIDIAN_VAULT)
     vault_dir = Path(OBSIDIAN_VAULT) if Path(OBSIDIAN_VAULT).exists() else Path(obsidian_vault)
-    akte = Path(PERSONALAKTEN_DIR) / f"{agent_id}.md" if Path(PERSONALAKTEN_DIR).exists() else (vault_dir / "00_HR_Agenten" / "Personalakten" / f"{agent_id}.md")
+    personalakten_root = Path(PERSONALAKTEN_DIR) if Path(PERSONALAKTEN_DIR).exists() else (vault_dir / "00_HR_Agenten" / "Personalakten")
+    try:
+        akte = Path(safe_path_within(str(personalakten_root / f"{clean_id}.md"), [str(personalakten_root)], allow_dirs=False))
+    except PathJailError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     tasks_completed = 0
     if akte.exists():
         try:
@@ -83,14 +93,14 @@ def api_get_agent_real_stats(agent_id: str):
         b = LocalMemoryBridge()
         with b._get_conn() as conn:
             c = conn.cursor()
-            c.execute("SELECT COUNT(*) FROM learnings WHERE agent_id = ?", (agent_id,))
+            c.execute("SELECT COUNT(*) FROM learnings WHERE agent_id = ?", (clean_id,))
             learnings_count = c.fetchone()[0]
     except Exception:
         pass
 
     return {
         "status": "ok",
-        "agent_id": agent_id,
+        "agent_id": clean_id,
         "tasks_completed": tasks_completed,
         "learnings_count": learnings_count,
         "performance_rating": "100% nominal" if tasks_completed > 0 else "Bereit im Standby",

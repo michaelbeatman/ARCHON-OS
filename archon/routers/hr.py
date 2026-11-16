@@ -147,11 +147,17 @@ def api_set_soul_mode(request: Request, req: SetSoulModeReq):
 def api_get_hermes_soul(agent_id: str):
     """Liest die echte SOUL.md Direktive des Hermes-Profils aus."""
     import main as app_main
+    from utils.path_jail import safe_identifier, PathJailError
+
+    try:
+        clean_id = safe_identifier(agent_id, "agent_id")
+    except PathJailError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     candidates = [
-        app_main.soul_path(agent_id),
-        f"/root/.hermes/profiles/{agent_id}/SOUL.md",
-        f"/home/streamlituser/.hermes/profiles/{agent_id}/SOUL.md",
+        app_main.soul_path(clean_id),
+        f"/root/.hermes/profiles/{clean_id}/SOUL.md",
+        f"/home/streamlituser/.hermes/profiles/{clean_id}/SOUL.md",
     ]
     found_path = None
     for p in candidates:
@@ -162,7 +168,7 @@ def api_get_hermes_soul(agent_id: str):
     if not found_path:
         return {
             "status": "not_found",
-            "agent_id": agent_id,
+            "agent_id": clean_id,
             "markdown": "",
             "file_path": candidates[0],
             "mode": "compact",

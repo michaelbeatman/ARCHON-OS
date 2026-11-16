@@ -362,6 +362,31 @@ def api_gdpr_audit_log(limit: int = Query(default=50)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/gdpr/vvt")
+def api_gdpr_export_vvt(request: Request, fmt: str = Query(default="json")):
+    """Art. 30 DSGVO: Exportiert das Verzeichnis von Verarbeitungstätigkeiten (VVT)."""
+    require_admin_or_503(request)
+    try:
+        from backend.gdpr_compliance_engine import gdpr_engine
+        return {"status": "success", **gdpr_engine.export_processing_register(fmt=fmt)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/gdpr/vvt")
+def api_gdpr_upsert_vvt(request: Request, req: Dict[str, Any] = Body(...)):
+    """Art. 30 DSGVO: Erstellt oder aktualisiert einen VVT-Eintrag."""
+    require_admin_or_503(request)
+    try:
+        from backend.gdpr_compliance_engine import gdpr_engine
+        act = gdpr_engine.upsert_processing_activity(req)
+        return {"status": "success", "activity": act}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # =========================================================================
 # CHAOS & RESILIENCE TESTING
 # =========================================================================

@@ -5,6 +5,7 @@ Prüft Datenbanken, führt VACUUM und PRAGMA optimize durch und gibt ungenutzten
 Speicherplatz auf der Festplatte wieder frei.
 """
 
+import glob
 import os
 import sys
 import sqlite3
@@ -26,14 +27,26 @@ DB_TARGETS = [
     _resolve_target("agentic_memory.db", "~/.hermes/agentic_memory.db"),
     _resolve_target("kanban.db", "~/.hermes/kanban.db"),
     _resolve_target("state.db", "~/.hermes/state.db"),
+    _resolve_target("contracts.db", "~/.hermes/contracts.db"),
+    _resolve_target("deals.db", "~/.hermes/deals.db"),
+    _resolve_target("corporate.db", "~/.hermes/corporate.db"),
 ]
 
 def optimize_all_databases() -> Dict[str, Any]:
-    """Führt VACUUM und PRAGMA optimize auf allen SQLite-Datenbanken aus."""
+    """Führt WAL-Checkpoint, VACUUM und PRAGMA optimize auf allen SQLite-Datenbanken (inkl. Mandanten) aus."""
     results = []
     total_freed_bytes = 0
 
-    for db_path in DB_TARGETS:
+    tenant_dbs = sorted(glob.glob(os.path.join(WORKSPACE_DIR, "data", "tenants", "*", "*.db")))
+    seen = set()
+    targets: List[str] = []
+    for p in list(DB_TARGETS) + tenant_dbs:
+        ap = os.path.abspath(p)
+        if ap not in seen and os.path.exists(ap):
+            seen.add(ap)
+            targets.append(ap)
+
+    for db_path in targets:
         if not os.path.exists(db_path):
             continue
 
@@ -43,6 +56,10 @@ def optimize_all_databases() -> Dict[str, Any]:
         conn = None
         try:
             conn = sqlite3.connect(db_path, timeout=15.0)
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            except Exception:
+                pass
             conn.execute("PRAGMA optimize;")
             conn.execute("VACUUM;")
             conn.close()

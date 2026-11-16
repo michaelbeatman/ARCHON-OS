@@ -15,16 +15,28 @@ import datetime
 import hashlib
 import io
 import os
+import re
 import sqlite3
 import zipfile
 from typing import Any, Dict, List, Optional, Tuple
 from xml.sax.saxutils import escape as _xml_escape
 
+_PURE_SIGNED_NUM_RE = re.compile(r"^[+-]\d+(?:[.,]\d+)?$")
+
 
 def _csv_cell(val: Any) -> str:
-    s = str(val if val is not None else "").replace("\r", " ").replace("\n", " ").strip()
-    if s and s[0] in ("=", "+", "-", "@", "\t"):
-        s = "'" + s
+    raw = str(val if val is not None else "")
+    # Normalize embedded line breaks so each CSV record stays on one CRLF line,
+    # while preserving leading \t / \r for formula-injection detection.
+    s = raw.replace("\r\n", " ").replace("\n", " ")
+    leading = s.lstrip(" ")
+    if leading:
+        first = leading[0]
+        if first in ("=", "@", "\t", "\r"):
+            s = "'" + s
+        elif first in ("+", "-") and not _PURE_SIGNED_NUM_RE.fullmatch(leading.strip()):
+            s = "'" + s
+    s = s.replace("\r", " ").strip(" ")
     return '"' + s.replace('"', '""') + '"'
 
 
@@ -43,87 +55,92 @@ def _rows_to_csv(headers: List[str], rows: List[List[str]]) -> bytes:
     return ("\r\n".join(lines) + "\r\n").encode("utf-8-sig")
 
 
-def _build_index_xml(company_name: str, company_id: str, created_date: str) -> bytes:
-    tables = [
-        (
-            "erp_documents.csv",
-            "ERP-Belege",
-            "Ausgangs- und Eingangsbelege inkl. Festschreibungszeitpunkt (GoBD)",
-            [
-                ("id", "AlphaNumeric", None),
-                ("doc_type", "AlphaNumeric", None),
-                ("doc_number", "AlphaNumeric", None),
-                ("status", "AlphaNumeric", None),
-                ("entity_id", "AlphaNumeric", None),
-                ("issue_date", "Date", "YYYY-MM-DD"),
-                ("service_date", "Date", "YYYY-MM-DD"),
-                ("due_date", "Date", "YYYY-MM-DD"),
-                ("currency", "AlphaNumeric", None),
-                ("tax_regime", "AlphaNumeric", None),
-                ("amount_net", "Numeric", "2"),
-                ("tax_amount", "Numeric", "2"),
-                ("amount_gross", "Numeric", "2"),
-                ("booked_at", "AlphaNumeric", None),
-                ("paid_at", "AlphaNumeric", None),
-            ],
-        ),
-        (
-            "erp_document_lines.csv",
-            "ERP-Belegpositionen",
-            "Einzelpositionen der Belege inkl. Steuersatz und Rabatt",
-            [
-                ("id", "AlphaNumeric", None),
-                ("document_id", "AlphaNumeric", None),
-                ("pos_no", "Numeric", "0"),
-                ("title", "AlphaNumeric", None),
-                ("quantity", "Numeric", "2"),
-                ("unit", "AlphaNumeric", None),
-                ("unit_price_net", "Numeric", "2"),
-                ("discount_pct", "Numeric", "2"),
-                ("tax_rate_pct", "Numeric", "2"),
-                ("line_net", "Numeric", "2"),
-                ("line_tax", "Numeric", "2"),
-                ("line_gross", "Numeric", "2"),
-            ],
-        ),
-        (
-            "crm_entities.csv",
-            "Geschäftspartner",
-            "Debitoren- und Kreditorenstammdaten",
-            [
-                ("id", "AlphaNumeric", None),
-                ("display_name", "AlphaNumeric", None),
-                ("debtor_no", "AlphaNumeric", None),
-                ("creditor_no", "AlphaNumeric", None),
-                ("vat_id", "AlphaNumeric", None),
-                ("tax_number", "AlphaNumeric", None),
-                ("street", "AlphaNumeric", None),
-                ("postal_code", "AlphaNumeric", None),
-                ("city", "AlphaNumeric", None),
-                ("country_code", "AlphaNumeric", None),
-                ("billing_email", "AlphaNumeric", None),
-            ],
-        ),
-        (
-            "audit_log.csv",
-            "GoBD-Audit-Hashkette",
-            "Unveränderliches SHA-256 Revisionsprotokoll",
-            [
-                ("id", "Numeric", "0"),
-                ("timestamp", "AlphaNumeric", None),
-                ("category", "AlphaNumeric", None),
-                ("action", "AlphaNumeric", None),
-                ("agent_id", "AlphaNumeric", None),
-                ("provider", "AlphaNumeric", None),
-                ("model", "AlphaNumeric", None),
-                ("prev_hash", "AlphaNumeric", None),
-                ("current_hash", "AlphaNumeric", None),
-            ],
-        ),
-    ]
+_GOBDU_TABLE_DEFS: List[Tuple[str, str, str, List[Tuple[str, str, Optional[str]]]]] = [
+    (
+        "erp_documents.csv",
+        "ERP-Belege",
+        "Ausgangs- und Eingangsbelege inkl. Festschreibungszeitpunkt (GoBD)",
+        [
+            ("id", "AlphaNumeric", None),
+            ("doc_type", "AlphaNumeric", None),
+            ("doc_number", "AlphaNumeric", None),
+            ("status", "AlphaNumeric", None),
+            ("entity_id", "AlphaNumeric", None),
+            ("source_doc_id", "AlphaNumeric", None),
+            ("issue_date", "Date", "YYYY-MM-DD"),
+            ("service_date", "Date", "YYYY-MM-DD"),
+            ("due_date", "Date", "YYYY-MM-DD"),
+            ("currency", "AlphaNumeric", None),
+            ("tax_regime", "AlphaNumeric", None),
+            ("amount_net", "Numeric", "2"),
+            ("tax_amount", "Numeric", "2"),
+            ("amount_gross", "Numeric", "2"),
+            ("booked_at", "AlphaNumeric", None),
+            ("paid_at", "AlphaNumeric", None),
+            ("recipient_snapshot_json", "AlphaNumeric", None),
+        ],
+    ),
+    (
+        "erp_document_lines.csv",
+        "ERP-Belegpositionen",
+        "Einzelpositionen der Belege inkl. Steuersatz und Rabatt",
+        [
+            ("id", "AlphaNumeric", None),
+            ("document_id", "AlphaNumeric", None),
+            ("pos_no", "Numeric", "0"),
+            ("title", "AlphaNumeric", None),
+            ("quantity", "Numeric", "2"),
+            ("unit", "AlphaNumeric", None),
+            ("unit_price_net", "Numeric", "2"),
+            ("discount_pct", "Numeric", "2"),
+            ("tax_rate_pct", "Numeric", "2"),
+            ("line_net", "Numeric", "2"),
+            ("line_tax", "Numeric", "2"),
+            ("line_gross", "Numeric", "2"),
+        ],
+    ),
+    (
+        "crm_entities.csv",
+        "Geschäftspartner",
+        "Debitoren- und Kreditorenstammdaten",
+        [
+            ("id", "AlphaNumeric", None),
+            ("display_name", "AlphaNumeric", None),
+            ("debtor_no", "AlphaNumeric", None),
+            ("creditor_no", "AlphaNumeric", None),
+            ("vat_id", "AlphaNumeric", None),
+            ("tax_number", "AlphaNumeric", None),
+            ("street", "AlphaNumeric", None),
+            ("postal_code", "AlphaNumeric", None),
+            ("city", "AlphaNumeric", None),
+            ("country_code", "AlphaNumeric", None),
+            ("billing_email", "AlphaNumeric", None),
+        ],
+    ),
+    (
+        "audit_log.csv",
+        "GoBD-Audit-Hashkette",
+        "Unveränderliches SHA-256 Revisionsprotokoll",
+        [
+            ("id", "Numeric", "0"),
+            ("timestamp", "AlphaNumeric", None),
+            ("company_id", "AlphaNumeric", None),
+            ("category", "AlphaNumeric", None),
+            ("action", "AlphaNumeric", None),
+            ("agent_id", "AlphaNumeric", None),
+            ("provider", "AlphaNumeric", None),
+            ("model", "AlphaNumeric", None),
+            ("payload_json", "AlphaNumeric", None),
+            ("prev_hash", "AlphaNumeric", None),
+            ("current_hash", "AlphaNumeric", None),
+        ],
+    ),
+]
 
+
+def _build_index_xml(company_name: str, company_id: str, created_date: str) -> bytes:
     table_xml_parts: List[str] = []
-    for url, t_name, desc, cols in tables:
+    for url, t_name, desc, cols in _GOBDU_TABLE_DEFS:
         col_parts: List[str] = []
         for cname, ctype, param in cols:
             if ctype == "Date":
@@ -205,8 +222,8 @@ def build_gobd_z3_archive(
             doc_params.append(str(date_to)[:10])
 
         docs = conn.execute(
-            f"SELECT id, doc_type, doc_number, status, entity_id, issue_date, service_date, due_date, "
-            f"currency, tax_regime, amount_net, tax_amount, amount_gross, booked_at, paid_at "
+            f"SELECT id, doc_type, doc_number, status, entity_id, source_doc_id, issue_date, service_date, due_date, "
+            f"currency, tax_regime, amount_net, tax_amount, amount_gross, booked_at, paid_at, recipient_snapshot_json "
             f"FROM erp_documents WHERE {' AND '.join(doc_clauses)} ORDER BY issue_date ASC, id ASC",
             doc_params,
         ).fetchall()
@@ -219,6 +236,7 @@ def build_gobd_z3_archive(
                 _csv_cell(r["doc_number"]),
                 _csv_cell(r["status"]),
                 _csv_cell(r["entity_id"]),
+                _csv_cell(r["source_doc_id"] or ""),
                 _csv_cell(str(r["issue_date"] or "")[:10]),
                 _csv_cell(str(r["service_date"] or "")[:10]),
                 _csv_cell(str(r["due_date"] or "")[:10]),
@@ -229,6 +247,7 @@ def build_gobd_z3_archive(
                 _num_de(r["amount_gross"], 2),
                 _csv_cell(r["booked_at"] or ""),
                 _csv_cell(r["paid_at"] or ""),
+                _csv_cell(r["recipient_snapshot_json"] or "{}"),
             ]
             for r in docs
         ]
@@ -285,18 +304,22 @@ def build_gobd_z3_archive(
         aconn = chained_audit_log._get_conn()
         try:
             arows = aconn.execute(
-                "SELECT id, timestamp, category, action, agent_id, provider, model, prev_hash, current_hash "
-                "FROM audit_log ORDER BY id ASC"
+                "SELECT id, timestamp, company_id, category, action, agent_id, provider, model, "
+                "payload_json, prev_hash, current_hash "
+                "FROM audit_log WHERE company_id = ? ORDER BY id ASC",
+                (cid,),
             ).fetchall()
             for r in arows:
                 audit_rows.append([
                     str(int(r["id"])),
                     _csv_cell(r["timestamp"]),
+                    _csv_cell(r["company_id"] or cid),
                     _csv_cell(r["category"]),
                     _csv_cell(r["action"]),
                     _csv_cell(r["agent_id"]),
                     _csv_cell(r["provider"] or ""),
                     _csv_cell(r["model"] or ""),
+                    _csv_cell(r["payload_json"] or "{}"),
                     _csv_cell(r["prev_hash"]),
                     _csv_cell(r["current_hash"]),
                 ])
@@ -305,28 +328,18 @@ def build_gobd_z3_archive(
     except Exception:
         pass
 
+    schema_headers = {
+        url: [col[0] for col in cols]
+        for url, _t_name, _desc, cols in _GOBDU_TABLE_DEFS
+    }
+
     today_iso = datetime.date.today().isoformat()
     files: Dict[str, bytes] = {
         "index.xml": _build_index_xml(company_name, cid, today_iso),
-        "erp_documents.csv": _rows_to_csv(
-            ["id", "doc_type", "doc_number", "status", "entity_id", "issue_date", "service_date",
-             "due_date", "currency", "tax_regime", "amount_net", "tax_amount", "amount_gross", "booked_at", "paid_at"],
-            doc_rows,
-        ),
-        "erp_document_lines.csv": _rows_to_csv(
-            ["id", "document_id", "pos_no", "title", "quantity", "unit", "unit_price_net",
-             "discount_pct", "tax_rate_pct", "line_net", "line_tax", "line_gross"],
-            line_rows,
-        ),
-        "crm_entities.csv": _rows_to_csv(
-            ["id", "display_name", "debtor_no", "creditor_no", "vat_id", "tax_number", "street",
-             "postal_code", "city", "country_code", "billing_email"],
-            entity_rows,
-        ),
-        "audit_log.csv": _rows_to_csv(
-            ["id", "timestamp", "category", "action", "agent_id", "provider", "model", "prev_hash", "current_hash"],
-            audit_rows,
-        ),
+        "erp_documents.csv": _rows_to_csv(schema_headers["erp_documents.csv"], doc_rows),
+        "erp_document_lines.csv": _rows_to_csv(schema_headers["erp_document_lines.csv"], line_rows),
+        "crm_entities.csv": _rows_to_csv(schema_headers["crm_entities.csv"], entity_rows),
+        "audit_log.csv": _rows_to_csv(schema_headers["audit_log.csv"], audit_rows),
     }
 
     manifest_lines = [f"# Archon OS GoBD Z3 Manifest ({cid}) - {today_iso}"]

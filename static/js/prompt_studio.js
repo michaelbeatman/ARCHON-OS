@@ -2156,23 +2156,6 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
       
       openRoleManagerModal();
     }
-    async function resetRolesToDefault() {
-      if (!confirm(psT('ui.prompt_studio.confirm_reset_roles', 'Möchten Sie alle Rollen auf die Standardwerte zurücksetzen? Eigene Rollen gehen verloren.'))) {
-        return;
-      }
-      
-      roles = [];
-      await saveRolesToServer();
-      await loadRolesFromServer();
-      await loadAgentsFromServer();
-      openRoleManagerModal();
-    }
-    async function loadRolesFromServer() {
-      try {
-        const res = await fetch("/api/roles");
-        roles = await res.json();
-      } catch (e) { console.error("Error loading roles:", e); }
-    }
     async function saveRolesToServer() {
       try {
         await fetch("/api/roles", {
@@ -2181,14 +2164,6 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
           body: JSON.stringify(roles)
         });
       } catch (e) { console.error("Error saving roles:", e); }
-    }
-    async function loadModelsFromServer() {
-      try {
-        const res = await fetch("/api/models");
-        modelsList = await res.json();
-      } catch (e) {
-        modelsList = ["free-forever", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "hermes-3", "gemini-1.5-pro"];
-      }
     }
     function renderAgentRegistryTable() {
       const tbody = document.getElementById("agent-registry-body");

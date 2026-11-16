@@ -3,15 +3,18 @@
  * Archon OS - GoBD/ISO 27001 Revisionssichere Approval Policy Engine
  */
 
-function escapeHtml(str) {
-  if (!str) return "";
+const _apEscapeHtml = (str) => {
+  if (typeof window !== "undefined" && typeof window.escapeHtml === "function") {
+    return window.escapeHtml(str);
+  }
+  if (str === null || str === undefined) return "";
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
+};
 
 let currentApprovalsTab = "finance";
 let activeApprovalPolicies = {};
@@ -229,11 +232,11 @@ async function loadApprovalRequests() {
       return `
         <tr class="hover:bg-[var(--secondary)]/40 transition">
           <td class="py-2 px-2">
-            <div class="font-bold text-[var(--foreground)] truncate max-w-[200px]" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</div>
-            <div class="text-[10px] font-mono text-[var(--muted-foreground)]">${escapeHtml(r.id)} ${r.reference_id ? '• Ref: ' + escapeHtml(r.reference_id) : ''}</div>
+            <div class="font-bold text-[var(--foreground)] truncate max-w-[200px]" title="${_apEscapeHtml(r.title)}">${_apEscapeHtml(r.title)}</div>
+            <div class="text-[10px] font-mono text-[var(--muted-foreground)]">${_apEscapeHtml(r.id)} ${r.reference_id ? '• Ref: ' + _apEscapeHtml(r.reference_id) : ''}</div>
           </td>
           <td class="py-2 px-2">
-            <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--secondary)]">${escapeHtml(r.domain)}</span>
+            <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--secondary)]">${_apEscapeHtml(r.domain)}</span>
           </td>
           <td class="py-2 px-2 text-right font-mono font-bold ${r.amount >= 500 ? 'text-amber-500' : 'text-[var(--foreground)]'}">
             ${r.amount > 0 ? r.amount.toFixed(2) + ' ' + (r.currency || 'EUR') : '-'}
@@ -244,10 +247,10 @@ async function loadApprovalRequests() {
           <td class="py-2 px-2 text-right">
             ${isPending ? `
               <div class="flex items-center justify-end gap-1">
-                <button type="button" data-id="${escapeHtml(r.id)}" onclick="approveRequest(this.dataset.id)" class="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10.5px] font-bold transition cursor-pointer" title="Freigeben">
+                <button type="button" data-id="${_apEscapeHtml(r.id)}" onclick="approveRequest(this.dataset.id)" class="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10.5px] font-bold transition cursor-pointer" title="Freigeben">
                   Freigeben
                 </button>
-                <button type="button" data-id="${escapeHtml(r.id)}" onclick="openRejectDialog(this.dataset.id)" class="px-2 py-1 rounded border border-rose-500/40 text-rose-500 hover:bg-rose-500/10 font-mono text-[10.5px] transition cursor-pointer" title="Ablehnen">
+                <button type="button" data-id="${_apEscapeHtml(r.id)}" onclick="openRejectDialog(this.dataset.id)" class="px-2 py-1 rounded border border-rose-500/40 text-rose-500 hover:bg-rose-500/10 font-mono text-[10.5px] transition cursor-pointer" title="Ablehnen">
                   Ablehnen
                 </button>
               </div>
@@ -341,11 +344,11 @@ async function loadApprovalsAuditChain() {
 
     tbody.innerHTML = chain.map(c => `
       <tr class="hover:bg-[var(--secondary)]/50">
-        <td class="p-1 text-[var(--muted-foreground)]">${c.timestamp ? escapeHtml(String(c.timestamp).substring(11, 19)) : '-'}</td>
-        <td class="p-1 font-semibold text-[var(--foreground)]">${escapeHtml(c.action)}</td>
-        <td class="p-1 text-sky-500">${escapeHtml(c.user_id)}</td>
-        <td class="p-1 text-[var(--muted-foreground)] truncate max-w-[120px]" title="${escapeHtml(c.current_hash)}">
-          ${c.current_hash ? escapeHtml(String(c.current_hash).substring(0, 10)) + '...' : '-'}
+        <td class="p-1 text-[var(--muted-foreground)]">${c.timestamp ? _apEscapeHtml(String(c.timestamp).substring(11, 19)) : '-'}</td>
+        <td class="p-1 font-semibold text-[var(--foreground)]">${_apEscapeHtml(c.action)}</td>
+        <td class="p-1 text-sky-500">${_apEscapeHtml(c.user_id)}</td>
+        <td class="p-1 text-[var(--muted-foreground)] truncate max-w-[120px]" title="${_apEscapeHtml(c.current_hash)}">
+          ${c.current_hash ? _apEscapeHtml(String(c.current_hash).substring(0, 10)) + '...' : '-'}
         </td>
       </tr>
     `).join("");

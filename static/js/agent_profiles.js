@@ -893,15 +893,6 @@
     }
     window.loadLlmModelsForProvider = loadLlmModelsForProvider;
     window.fetchProviderModelsList = loadLlmModelsForProvider;
-    window.openPriceCatalogForAgentTab = function() {
-      const modelSelect = document.getElementById('agent-tab-model-select');
-      if (typeof window.openPriceCatalogModal === 'function') {
-        window.openPriceCatalogModal(modelSelect, '');
-      } else {
-        const modal = document.getElementById('llm-price-catalog-modal');
-        if (modal) modal.classList.remove('hidden');
-      }
-    };
     function populateModelDropdown(selectEl, models, selectedModel) {
       if (!selectEl) return;
       const rawModels = (Array.isArray(models) && models.length > 0) 

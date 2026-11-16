@@ -18,6 +18,7 @@ import logging
 from typing import Any, Callable, Optional
 
 from fastapi import HTTPException, Request
+from starlette.requests import HTTPConnection
 
 logger = logging.getLogger("archon.rbac")
 
@@ -65,8 +66,10 @@ def require_admin_or_503(request: Request) -> None:
     checker(request)
 
 
-def forbid_viewer_writes(request: Request) -> None:
+def forbid_viewer_writes(request: HTTPConnection) -> None:
     """Router-Dependency: blockiert POST/PUT/DELETE/PATCH fuer Rolle 'viewer'."""
+    if not isinstance(request, Request):
+        return
     if request.method not in ("POST", "PUT", "DELETE", "PATCH"):
         return
     if request.url.path in ("/api/auth/login", "/api/auth/logout"):

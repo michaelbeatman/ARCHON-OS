@@ -44,9 +44,13 @@ def _sanitize_company_id(company_id: Optional[str]) -> str:
                 company_id = active["id"]
         except Exception:
             pass
-    cid = (company_id or "archon-systems").strip()
-    cid = re.sub(r"[^a-zA-Z0-9_-]", "-", cid)
-    return cid or "archon-systems"
+    try:
+        from backend.tenant_context import sanitize_tenant_id
+        return sanitize_tenant_id(company_id or "archon-systems")
+    except Exception:
+        cid = (company_id or "archon-systems").strip()
+        cid = re.sub(r"[^a-zA-Z0-9_-]", "_", cid).strip("_")
+        return cid or "archon-systems"
 
 
 def get_tenant_db_path(company_id: Optional[str] = None) -> str:
@@ -797,12 +801,35 @@ class ERPManager:
         finally:
             conn.close()
 
+    @staticmethod
+    def validate_vat_id(vat_id: Optional[str]) -> str:
+        """Validiert und normalisiert eine EU-/DE-USt-IdNr. (z. B. DE123456789, ATU12345678)."""
+        cleaned = re.sub(r"\s+", "", str(vat_id or "")).upper()
+        if not cleaned:
+            return ""
+        if cleaned.startswith("DE"):
+            if not re.fullmatch(r"DE\d{9}", cleaned):
+                raise ValueError(f"Ungültige deutsche USt-IdNr. '{vat_id}': Erwartet DE + 9 Ziffern (z. B. DE123456789).")
+            return cleaned
+        if cleaned.startswith("AT"):
+            if not re.fullmatch(r"ATU\d{8}", cleaned):
+                raise ValueError(f"Ungültige österreichische UID '{vat_id}': Erwartet ATU + 8 Ziffern.")
+            return cleaned
+        if not re.fullmatch(r"(?:[A-Z]{2}[A-Z0-9]{4,14}|CHE\d{9}(?:MWST|TVA|IVA)?)", cleaned):
+            raise ValueError(f"Ungültige USt-IdNr. '{vat_id}': Entspricht nicht dem EU-/CH-Format.")
+        return cleaned
+
     def save_entity(self, payload: Dict[str, Any], company_id: Optional[str] = None) -> Dict[str, Any]:
         conn, cid = self._get_conn(company_id)
         try:
             eid = payload.get("id") or f"ent-{uuid.uuid4().hex[:8]}"
             existing = conn.execute("SELECT * FROM crm_entities WHERE id = ?", (eid,)).fetchone()
             existing_dict = dict(existing) if existing else {}
+
+            if "vat_id" in payload:
+                validated_vat_id = self.validate_vat_id(payload.get("vat_id"))
+            else:
+                validated_vat_id = str(existing_dict.get("vat_id", "") or "")
 
             is_customer = 1 if payload.get("is_customer", existing_dict.get("is_customer", 0)) else 0
             is_supplier = 1 if payload.get("is_supplier", existing_dict.get("is_supplier", 0)) else 0
@@ -896,7 +923,7 @@ class ERPManager:
                     status,
                     debtor_no,
                     creditor_no,
-                    payload.get("vat_id", existing_dict.get("vat_id", "")),
+                    validated_vat_id,
                     payload.get("tax_number", existing_dict.get("tax_number", "")),
                     payload.get("tax_regime", existing_dict.get("tax_regime", "standard_19")),
                     payload.get("registry_court", existing_dict.get("registry_court", "")),
@@ -1269,9 +1296,116 @@ class ERPManager:
                 (doc_id,)
             ).fetchall()
             d["lines"] = [dict(l) for l in lines]
+            if "source_doc_id" in d:
+                storno_row = conn.execute(
+                    "SELECT id, doc_number FROM erp_documents WHERE doc_type = 'credit_note' AND source_doc_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (doc_id,),
+                ).fetchone()
+                if storno_row:
+                    d["cancellation_doc_id"] = storno_row["id"]
+                    d["cancellation_doc_number"] = storno_row["doc_number"]
             return d
         finally:
             conn.close()
+
+    def _create_storno_credit_note(
+        self,
+        conn: sqlite3.Connection,
+        src_doc: Dict[str, Any],
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        """Erzeugt einen GoBD-konformen Stornobeleg (credit_note / Typ 381) als Gegenbuchung."""
+        existing_storno = conn.execute(
+            "SELECT id, doc_number FROM erp_documents WHERE doc_type = 'credit_note' AND source_doc_id = ? LIMIT 1",
+            (src_doc["id"],),
+        ).fetchone()
+        if existing_storno:
+            return {"id": existing_storno["id"], "doc_number": existing_storno["doc_number"]}
+
+        src_lines = conn.execute(
+            "SELECT * FROM erp_document_lines WHERE document_id = ? ORDER BY pos_no ASC",
+            (src_doc["id"],),
+        ).fetchall()
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        today = datetime.date.today().isoformat()
+        storno_id = f"doc-{uuid.uuid4().hex[:8]}"
+        storno_num = self._format_doc_number(conn, "credit_note")
+        src_num = str(src_doc.get("doc_number") or src_doc["id"])
+        note_prefix = f"Stornobeleg (Gegenbuchung) zu {src_num}"
+        if reason:
+            note_prefix += f" — Grund: {reason}"
+
+        amt_net = -abs(float(src_doc.get("amount_net") or 0.0))
+        tax_amt = -abs(float(src_doc.get("tax_amount") or 0.0))
+        amt_gross = -abs(float(src_doc.get("amount_gross") or 0.0))
+
+        conn.execute(
+            """
+            INSERT INTO erp_documents (
+                id, doc_type, doc_number, status, entity_id, contact_id,
+                source_doc_id, deal_id, contract_id, recipient_snapshot_json,
+                issue_date, service_date, due_date,
+                amount_net, tax_amount, amount_gross, currency,
+                tax_regime, payment_terms_days, notes, booked_at, created_at, updated_at
+            ) VALUES (?, 'credit_note', ?, 'booked', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                storno_id,
+                storno_num,
+                src_doc["entity_id"],
+                src_doc.get("contact_id"),
+                src_doc["id"],
+                src_doc.get("deal_id"),
+                src_doc.get("contract_id"),
+                src_doc.get("recipient_snapshot_json") or "{}",
+                today,
+                src_doc.get("service_date") or today,
+                today,
+                round(amt_net, 2),
+                round(tax_amt, 2),
+                round(amt_gross, 2),
+                src_doc.get("currency") or "EUR",
+                src_doc.get("tax_regime") or "standard_19",
+                int(src_doc.get("payment_terms_days") or 14),
+                note_prefix,
+                now,
+                now,
+                now,
+            ),
+        )
+        for idx, r in enumerate(src_lines, start=1):
+            ln = dict(r)
+            qty = -abs(float(ln.get("quantity") or 1.0))
+            line_net = -abs(float(ln.get("line_net") or 0.0))
+            line_tax = -abs(float(ln.get("line_tax") or 0.0))
+            line_gross = -abs(float(ln.get("line_gross") or 0.0))
+            conn.execute(
+                """
+                INSERT INTO erp_document_lines (
+                    id, document_id, pos_no, item_id, item_no_snapshot,
+                    title, description, quantity, unit, unit_price_net,
+                    discount_pct, tax_rate_pct, line_net, line_tax, line_gross
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"dl-{uuid.uuid4().hex[:8]}",
+                    storno_id,
+                    int(ln.get("pos_no") or idx),
+                    ln.get("item_id"),
+                    ln.get("item_no_snapshot") or "",
+                    ln.get("title") or "Stornoposition",
+                    ln.get("description") or "",
+                    qty,
+                    ln.get("unit") or "Stk.",
+                    abs(float(ln.get("unit_price_net") or 0.0)),
+                    float(ln.get("discount_pct") or 0.0),
+                    float(ln.get("tax_rate_pct") or 0.0),
+                    round(line_net, 2),
+                    round(line_tax, 2),
+                    round(line_gross, 2),
+                ),
+            )
+        return {"id": storno_id, "doc_number": storno_num}
 
     def _apply_inventory_stock_delta(self, conn: sqlite3.Connection, doc_id: str, sign: int) -> None:
         """Passt Lagerbestände (`stock_qty`) für Artikel mit `track_inventory = 1` atomar an (-1 Abbuchung, +1 Storno)."""
@@ -1314,18 +1448,26 @@ class ERPManager:
                     raise ValueError(f"GoBD-Verstoß: Ein bezahlter Beleg darf nicht auf '{new_status}' zurückgesetzt werden.")
                 if cur_status == "cancelled" and new_status != "cancelled":
                     raise ValueError(f"GoBD-Verstoß: Ein stornierter Beleg darf nicht auf '{new_status}' reaktiviert werden.")
-                paid_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") if new_status == "paid" else ex.get("paid_at")
+                now_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                paid_at = ex.get("paid_at") or (now_ts if new_status == "paid" else None)
                 booked_at = ex.get("booked_at")
-                if new_status in ("booked", "sent") and not booked_at:
-                    booked_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if new_status in ("booked", "sent", "paid") and not booked_at:
+                    booked_at = now_ts
                 with conn:
                     conn.execute(
                         "UPDATE erp_documents SET status = ?, paid_at = ?, booked_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                         (new_status, paid_at, booked_at, doc_id)
                     )
                     if ex.get("doc_type") == "invoice":
-                        if new_status == "cancelled" and int(ex.get("stock_deducted") or 0) == 1:
-                            self._apply_inventory_stock_delta(conn, doc_id, sign=1)
+                        if new_status == "cancelled" and cur_status != "cancelled":
+                            if int(ex.get("stock_deducted") or 0) == 1:
+                                self._apply_inventory_stock_delta(conn, doc_id, sign=1)
+                            if ex.get("booked_at") or cur_status in ("booked", "sent"):
+                                self._create_storno_credit_note(
+                                    conn,
+                                    ex,
+                                    reason=str(payload.get("cancel_reason") or ""),
+                                )
                         elif new_status in ("booked", "paid") and int(ex.get("stock_deducted") or 0) == 0:
                             self._apply_inventory_stock_delta(conn, doc_id, sign=-1)
                 return self.get_document(doc_id, company_id=cid)
@@ -1359,8 +1501,11 @@ class ERPManager:
                 "display_name": ent.get("display_name", ""),
                 "legal_form": ent.get("legal_form", ""),
                 "debtor_no": ent.get("debtor_no", ""),
+                "creditor_no": ent.get("creditor_no", ""),
                 "vat_id": ent.get("vat_id", ""),
                 "leitweg_id": ent.get("leitweg_id", ""),
+                "skonto_pct": float(payload.get("skonto_pct", ent.get("skonto_pct") or 0.0)),
+                "skonto_days": int(payload.get("skonto_days", ent.get("skonto_days") or 0)),
                 "contact_name": cnt.get("full_name", "") if cnt else "",
                 "contact_email": (cnt.get("email") if cnt and cnt.get("email") else ent.get("billing_email", "")),
                 "street": ent.get("street", ""),
@@ -1369,7 +1514,19 @@ class ERPManager:
                 "country_code": ent.get("country_code", "DE"),
             }
 
-            tax_regime = payload.get("tax_regime") or ent.get("tax_regime") or "standard_19"
+            seller_is_small_business = False
+            try:
+                from backend.corporate_manager import corporate_manager
+                comp_cfg = corporate_manager.get_company(cid)
+                if isinstance(comp_cfg, dict):
+                    seller_is_small_business = bool((comp_cfg.get("tax") or {}).get("small_business"))
+            except Exception:
+                pass
+
+            if seller_is_small_business:
+                tax_regime = "small_business"
+            else:
+                tax_regime = payload.get("tax_regime") or ent.get("tax_regime") or "standard_19"
             zero_tax = tax_regime in ("reverse_charge", "intra_eu", "export_0", "small_business")
 
             if "lines" in payload:
@@ -1390,7 +1547,7 @@ class ERPManager:
 
             computed_lines = []
             total_net = 0.0
-            total_tax = 0.0
+            rate_net_buckets: Dict[float, float] = collections.defaultdict(float)
 
             for idx, ln in enumerate(raw_lines, start=1):
                 item_id = ln.get("item_id")
@@ -1421,7 +1578,7 @@ class ERPManager:
                 line_gross = round(line_net + line_tax, 2)
 
                 total_net += line_net
-                total_tax += line_tax
+                rate_net_buckets[round(tax_rate, 2)] += line_net
 
                 computed_lines.append({
                     "id": ln.get("id") or f"dl-{uuid.uuid4().hex[:8]}",
@@ -1445,8 +1602,12 @@ class ERPManager:
                 total_tax = float(ex.get("tax_amount", 0.0))
                 total_gross = float(ex.get("amount_gross", 0.0))
             else:
+                # EN 16931 BR-S-9 / BR-CO-13: Steuerrundung pro Steuersatz-Bucket
                 total_net = round(total_net, 2)
-                total_tax = round(total_tax, 2)
+                total_tax = round(
+                    sum(round(round(b_net, 2) * (r_pct / 100.0), 2) for r_pct, b_net in rate_net_buckets.items()),
+                    2,
+                )
                 total_gross = round(total_net + total_tax, 2)
 
             issue_date = payload.get("issue_date") or ex.get("issue_date") or datetime.date.today().isoformat()
@@ -1473,13 +1634,24 @@ class ERPManager:
                     raise ValueError("§ 14 Abs. 4 UStG: Mindestens eine Leistungsposition ist erforderlich.")
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             booked_at = ex.get("booked_at")
-            if status in ("booked", "sent") and not booked_at:
+            if status in ("booked", "sent", "paid") and not booked_at:
                 booked_at = now
+            paid_at = ex.get("paid_at")
+            if status == "paid" and not paid_at:
+                paid_at = now
 
             with conn:
-                doc_number = ex.get("doc_number") or payload.get("doc_number")
-                if not doc_number:
-                    doc_number = self._format_doc_number(conn, doc_type)
+                existing_num = str(ex.get("doc_number") or "")
+                if status == "draft":
+                    if existing_num.startswith("ENTWURF-"):
+                        doc_number = existing_num
+                    else:
+                        doc_number = f"ENTWURF-{uuid.uuid4().hex[:8].upper()}"
+                else:
+                    if existing_num and not existing_num.startswith("ENTWURF-"):
+                        doc_number = existing_num
+                    else:
+                        doc_number = payload.get("doc_number") or self._format_doc_number(conn, doc_type)
 
                 conn.execute("""
                     INSERT INTO erp_documents (
@@ -1487,9 +1659,10 @@ class ERPManager:
                         source_doc_id, deal_id, contract_id, recipient_snapshot_json,
                         issue_date, service_date, due_date,
                         amount_net, tax_amount, amount_gross, currency,
-                        tax_regime, payment_terms_days, notes, booked_at, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        tax_regime, payment_terms_days, notes, booked_at, paid_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
+                        doc_number=excluded.doc_number,
                         status=excluded.status,
                         entity_id=excluded.entity_id,
                         contact_id=excluded.contact_id,
@@ -1503,9 +1676,10 @@ class ERPManager:
                         tax_regime=excluded.tax_regime,
                         payment_terms_days=excluded.payment_terms_days,
                         notes=excluded.notes,
-                        booked_at=COALESCE(crm_entities_booked.booked_at, excluded.booked_at),
+                        booked_at=COALESCE(erp_documents.booked_at, excluded.booked_at),
+                        paid_at=COALESCE(erp_documents.paid_at, excluded.paid_at),
                         updated_at=excluded.updated_at
-                """.replace("COALESCE(crm_entities_booked.booked_at, excluded.booked_at)", "COALESCE(erp_documents.booked_at, excluded.booked_at)"), (
+                """, (
                     doc_id,
                     doc_type,
                     doc_number,
@@ -1527,6 +1701,7 @@ class ERPManager:
                     pay_days,
                     payload.get("notes", ex.get("notes", "")),
                     booked_at,
+                    paid_at,
                     ex.get("created_at", now),
                     now
                 ))
@@ -1563,6 +1738,54 @@ class ERPManager:
             return self.get_document(doc_id, company_id=cid)
         finally:
             conn.close()
+
+    def cancel_document(
+        self,
+        doc_id: str,
+        reason: str = "",
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Storniert einen Beleg GoBD-konform über eine Gegenbuchung (Storno-Gutschrift Typ 381)."""
+        conn, cid = self._get_conn(company_id)
+        storno_info: Optional[Dict[str, Any]] = None
+        try:
+            row = conn.execute("SELECT * FROM erp_documents WHERE id = ?", (doc_id,)).fetchone()
+            if not row:
+                raise ValueError(f"Beleg {doc_id} nicht gefunden.")
+            ex = dict(row)
+            cur_status = ex.get("status")
+            with conn:
+                if cur_status == "draft":
+                    conn.execute(
+                        "UPDATE erp_documents SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (doc_id,),
+                    )
+                elif cur_status == "cancelled":
+                    storno_row = conn.execute(
+                        "SELECT id, doc_number FROM erp_documents WHERE doc_type = 'credit_note' AND source_doc_id = ? LIMIT 1",
+                        (doc_id,),
+                    ).fetchone()
+                    if storno_row:
+                        storno_info = {"id": storno_row["id"], "doc_number": storno_row["doc_number"]}
+                else:
+                    if ex.get("doc_type") == "invoice" and int(ex.get("stock_deducted") or 0) == 1:
+                        self._apply_inventory_stock_delta(conn, doc_id, sign=1)
+                    conn.execute(
+                        "UPDATE erp_documents SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (doc_id,),
+                    )
+                    if ex.get("doc_type") in ("invoice", "credit_note") or ex.get("booked_at"):
+                        storno_info = self._create_storno_credit_note(conn, ex, reason=reason)
+        finally:
+            conn.close()
+
+        cancelled_doc = self.get_document(doc_id, company_id=cid)
+        storno_doc = self.get_document(storno_info["id"], company_id=cid) if storno_info else None
+        return {
+            "status": "cancelled",
+            "cancelled_document": cancelled_doc,
+            "storno_document": storno_doc,
+        }
 
     def convert_document(
         self,
@@ -1637,21 +1860,37 @@ class ERPManager:
 
     @staticmethod
     def _tax_category_for_doc(tax_regime: str, rate_pct: float) -> Tuple[str, Optional[str]]:
+        if tax_regime == "small_business":
+            return ("E", "Kein Ausweis von Umsatzsteuer gem. § 19 UStG (Kleinunternehmer)")
         if rate_pct > 0:
             return ("S", None)
         if tax_regime == "reverse_charge":
             return ("AE", "Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG)")
         if tax_regime == "intra_eu":
             return ("K", "Innergemeinschaftliche Lieferung / Leistung (§ 4 Nr. 1b UStG)")
-        if tax_regime == "small_business":
-            return ("E", "Kein Ausweis von Umsatzsteuer gem. § 19 UStG (Kleinunternehmer)")
         return ("Z", "Steuerfreie Ausfuhrlieferung / Zero-Rated")
 
     @staticmethod
+    def _tax_exemption_code_for_cat(cat_id: str) -> Optional[str]:
+        return {
+            "E": "VATEX-EU-AE",
+            "AE": "VATEX-EU-AE",
+            "K": "VATEX-EU-IC",
+            "Z": "VATEX-EU-G",
+        }.get(cat_id)
+
+    @staticmethod
     def _csv_safe(val: Any) -> str:
-        s = str(val if val is not None else "").replace("\r", " ").replace("\n", " ").strip()
-        if s and s[0] in ("=", "+", "-", "@", "\t"):
-            s = "'" + s
+        raw = str(val if val is not None else "")
+        s = raw.replace("\r\n", " ").replace("\n", " ")
+        leading = s.lstrip(" ")
+        if leading:
+            first = leading[0]
+            if first in ("=", "@", "\t", "\r"):
+                s = "'" + s
+            elif first in ("+", "-") and not re.fullmatch(r"^[+-]\d+(?:[.,]\d+)?$", leading.strip()):
+                s = "'" + s
+        s = s.replace("\r", " ").strip(" ")
         return '"' + s.replace('"', '""') + '"'
 
     def _prepare_einvoice_context(self, doc_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
@@ -1687,7 +1926,8 @@ class ERPManager:
         seller_country_raw = str(seller_addr.get("country") or "DE")
         seller_country = "DE" if seller_country_raw.lower().startswith("de") else seller_country_raw[:2].upper()
 
-        tax_regime = str(doc.get("tax_regime") or "standard_19")
+        seller_small_business = bool(seller_tax.get("small_business"))
+        tax_regime = "small_business" if seller_small_business else str(doc.get("tax_regime") or "standard_19")
         lines = doc.get("lines") or []
         if not lines:
             lines = [{
@@ -1697,23 +1937,44 @@ class ERPManager:
                 "quantity": 1.0,
                 "unit": "Pauschal",
                 "unit_price_net": float(doc.get("amount_net") or 0.0),
-                "tax_rate_pct": 19.0 if float(doc.get("tax_amount") or 0.0) > 0 else 0.0,
+                "tax_rate_pct": 0.0 if seller_small_business else (19.0 if float(doc.get("tax_amount") or 0.0) > 0 else 0.0),
                 "line_net": float(doc.get("amount_net") or 0.0),
-                "line_tax": float(doc.get("tax_amount") or 0.0),
+                "line_tax": 0.0 if seller_small_business else float(doc.get("tax_amount") or 0.0),
             }]
 
+        normalized_lines: List[Dict[str, Any]] = []
         tax_buckets: Dict[Tuple[str, float, Optional[str]], Dict[str, float]] = {}
         for ln in lines:
-            rate = float(ln.get("tax_rate_pct") or 0.0)
+            ln_copy = dict(ln)
+            rate = 0.0 if tax_regime in ("small_business", "reverse_charge", "intra_eu", "export_0") else float(ln_copy.get("tax_rate_pct") or 0.0)
+            ln_copy["tax_rate_pct"] = rate
             cat_id, reason = self._tax_category_for_doc(tax_regime, rate)
             key = (cat_id, round(rate, 2), reason)
             bucket = tax_buckets.setdefault(key, {"taxable": 0.0, "tax": 0.0})
-            bucket["taxable"] += float(ln.get("line_net") or 0.0)
-            bucket["tax"] += float(ln.get("line_tax") or 0.0)
+            bucket["taxable"] += float(ln_copy.get("line_net") or 0.0)
+            normalized_lines.append(ln_copy)
 
-        total_net = round(float(doc.get("amount_net") or sum(b["taxable"] for b in tax_buckets.values())), 2)
-        total_tax = round(float(doc.get("tax_amount") or sum(b["tax"] for b in tax_buckets.values())), 2)
-        total_gross = round(float(doc.get("amount_gross") or (total_net + total_tax)), 2)
+        # EN 16931 BR-S-9 & BR-CO-13: Steuerrundung je Steuersatz-Bucket und Summenkonsistenz
+        for (cat_id, rate, _reason), b in tax_buckets.items():
+            b["taxable"] = round(b["taxable"], 2)
+            b["tax"] = round(b["taxable"] * (rate / 100.0), 2) if cat_id == "S" else 0.0
+
+        total_net = round(sum(b["taxable"] for b in tax_buckets.values()), 2)
+        total_tax = round(sum(b["tax"] for b in tax_buckets.values()), 2)
+        total_gross = round(total_net + total_tax, 2)
+
+        skonto_pct = float(doc.get("skonto_pct") or snap.get("skonto_pct") or ent.get("skonto_pct") or 0.0)
+        skonto_days = int(doc.get("skonto_days") or snap.get("skonto_days") or ent.get("skonto_days") or 0)
+        pay_days = int(doc.get("payment_terms_days") or 14)
+        payment_terms_note = f"Zahlbar innerhalb von {pay_days} Tagen ohne Abzug."
+        if skonto_pct > 0 and skonto_days > 0:
+            payment_terms_note += f"\n#SKONTO#TAGE={skonto_days}#PROZENT={skonto_pct:.2f}#"
+
+        source_doc_number = ""
+        if doc.get("source_doc_id"):
+            src_doc = self.get_document(str(doc["source_doc_id"]), company_id=cid)
+            if src_doc:
+                source_doc_number = str(src_doc.get("doc_number") or src_doc["id"])
 
         return {
             "cid": cid,
@@ -1737,6 +1998,10 @@ class ERPManager:
             "due_date": due_date,
             "type_code": type_code,
             "buyer_ref": buyer_ref,
+            "source_doc_number": source_doc_number,
+            "skonto_pct": skonto_pct,
+            "skonto_days": skonto_days,
+            "payment_terms_note": payment_terms_note,
             "seller_flat": {
                 "name": str(seller.get("name") or "Archon Systems GmbH"),
                 "street": str(seller_addr.get("street") or "Friedrichstraße 123"),
@@ -1749,9 +2014,10 @@ class ERPManager:
                 "phone": str(seller_contact.get("phone") or "+49 30 000000"),
                 "iban": str(seller_bank.get("iban") or "").replace(" ", ""),
                 "bic": str(seller_bank.get("bic") or "").replace(" ", ""),
+                "small_business": seller_small_business,
             },
             "tax_regime": tax_regime,
-            "lines": lines,
+            "lines": normalized_lines,
             "tax_buckets": tax_buckets,
             "total_net": total_net,
             "total_tax": total_tax,
@@ -1781,9 +2047,26 @@ class ERPManager:
         tax_buckets = ctx["tax_buckets"]
         total_net, total_tax, total_gross = ctx["total_net"], ctx["total_tax"], ctx["total_gross"]
 
+        is_credit_note = (type_code == "381")
+        root_tag = "CreditNote" if is_credit_note else "Invoice"
+        root_ns = (
+            "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
+            if is_credit_note
+            else "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+        )
+        type_tag = "CreditNoteTypeCode" if is_credit_note else "InvoiceTypeCode"
+        line_tag = "CreditNoteLine" if is_credit_note else "InvoiceLine"
+        qty_tag = "CreditedQuantity" if is_credit_note else "InvoicedQuantity"
+
         subtotals_xml = []
         for (cat_id, rate, reason), b in tax_buckets.items():
-            reason_xml = f"\n      <cac:TaxCategory><cbc:ID>{_xml_escape(cat_id)}</cbc:ID><cbc:Percent>{rate:.2f}</cbc:Percent><cbc:TaxExemptionReason>{_xml_escape(reason)}</cbc:TaxExemptionReason><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>" if reason else f"\n      <cac:TaxCategory><cbc:ID>{_xml_escape(cat_id)}</cbc:ID><cbc:Percent>{rate:.2f}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>"
+            ex_code = self._tax_exemption_code_for_cat(cat_id) if reason else None
+            ex_code_tag = f"<cbc:TaxExemptionReasonCode>{_xml_escape(ex_code)}</cbc:TaxExemptionReasonCode>" if ex_code else ""
+            reason_xml = (
+                f"\n      <cac:TaxCategory><cbc:ID>{_xml_escape(cat_id)}</cbc:ID><cbc:Percent>{rate:.2f}</cbc:Percent>{ex_code_tag}<cbc:TaxExemptionReason>{_xml_escape(reason)}</cbc:TaxExemptionReason><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>"
+                if reason
+                else f"\n      <cac:TaxCategory><cbc:ID>{_xml_escape(cat_id)}</cbc:ID><cbc:Percent>{rate:.2f}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>"
+            )
             subtotals_xml.append(
                 f"""    <cac:TaxSubtotal>
       <cbc:TaxableAmount currencyID="{_xml_escape(currency)}">{b['taxable']:.2f}</cbc:TaxableAmount>
@@ -1797,9 +2080,9 @@ class ERPManager:
             qty = float(ln.get("quantity") or 1.0)
             unit_code = self._map_ubl_unit_code(ln.get("unit") or "Stk.")
             line_net = float(ln.get("line_net") or 0.0)
-            unit_price = float(ln.get("unit_price_net") or 0.0)
+            unit_price = abs(float(ln.get("unit_price_net") or 0.0))
             disc_pct = float(ln.get("discount_pct") or 0.0)
-            eff_unit_price = round(line_net / qty, 2) if (qty > 0 and disc_pct > 0) else unit_price
+            eff_unit_price = abs(round(line_net / qty, 2)) if (qty != 0 and disc_pct > 0) else unit_price
             price_allowance_xml = ""
             if disc_pct > 0 and unit_price > eff_unit_price:
                 disc_per_unit = round(unit_price - eff_unit_price, 2)
@@ -1818,9 +2101,9 @@ class ERPManager:
             desc = _xml_escape(str(ln.get("description") or ""))
             desc_tag = f"\n      <cbc:Description>{desc}</cbc:Description>" if desc else ""
             invoice_lines_xml.append(
-                f"""  <cac:InvoiceLine>
+                f"""  <cac:{line_tag}>
     <cbc:ID>{pos}</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="{_xml_escape(unit_code)}">{qty:.2f}</cbc:InvoicedQuantity>
+    <cbc:{qty_tag} unitCode="{_xml_escape(unit_code)}">{qty:.2f}</cbc:{qty_tag}>
     <cbc:LineExtensionAmount currencyID="{_xml_escape(currency)}">{line_net:.2f}</cbc:LineExtensionAmount>
     <cac:Item>{desc_tag}
       <cbc:Name>{title}</cbc:Name>
@@ -1833,7 +2116,7 @@ class ERPManager:
     <cac:Price>
       <cbc:PriceAmount currencyID="{_xml_escape(currency)}">{eff_unit_price:.2f}</cbc:PriceAmount>{price_allowance_xml}
     </cac:Price>
-  </cac:InvoiceLine>"""
+  </cac:{line_tag}>"""
             )
 
         seller_tax_scheme_xml = ""
@@ -1870,18 +2153,24 @@ class ERPManager:
     </cac:PayeeFinancialAccount>
   </cac:PaymentMeans>"""
 
+        due_date_xml = f"\n  <cbc:DueDate>{_xml_escape(due_date)}</cbc:DueDate>" if not is_credit_note else ""
+        billing_ref_xml = (
+            f"\n  <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>{_xml_escape(ctx['source_doc_number'])}</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>"
+            if ctx.get("source_doc_number")
+            else ""
+        )
+
         xml_doc = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+<{root_tag} xmlns="{root_ns}"
          xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>
   <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
   <cbc:ID>{_xml_escape(doc_num)}</cbc:ID>
-  <cbc:IssueDate>{_xml_escape(issue_date)}</cbc:IssueDate>
-  <cbc:DueDate>{_xml_escape(due_date)}</cbc:DueDate>
-  <cbc:InvoiceTypeCode>{type_code}</cbc:InvoiceTypeCode>
+  <cbc:IssueDate>{_xml_escape(issue_date)}</cbc:IssueDate>{due_date_xml}
+  <cbc:{type_tag}>{type_code}</cbc:{type_tag}>
   <cbc:DocumentCurrencyCode>{_xml_escape(currency)}</cbc:DocumentCurrencyCode>
-  <cbc:BuyerReference>{_xml_escape(buyer_ref)}</cbc:BuyerReference>
+  <cbc:BuyerReference>{_xml_escape(buyer_ref)}</cbc:BuyerReference>{billing_ref_xml}
   <cac:AccountingSupplierParty>
     <cac:Party>
       <cbc:EndpointID schemeID="EM">{_xml_escape(seller_email)}</cbc:EndpointID>
@@ -1921,7 +2210,7 @@ class ERPManager:
     <cbc:ActualDeliveryDate>{_xml_escape(ctx['service_date'])}</cbc:ActualDeliveryDate>
   </cac:Delivery>{payment_xml}
   <cac:PaymentTerms>
-    <cbc:Note>{_xml_escape(f"Zahlbar innerhalb von {int(doc.get('payment_terms_days') or 14)} Tagen ohne Abzug.")}</cbc:Note>
+    <cbc:Note>{_xml_escape(ctx['payment_terms_note'])}</cbc:Note>
   </cac:PaymentTerms>
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="{_xml_escape(currency)}">{total_tax:.2f}</cbc:TaxAmount>
@@ -1934,7 +2223,7 @@ class ERPManager:
     <cbc:PayableAmount currencyID="{_xml_escape(currency)}">{total_gross:.2f}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
 {chr(10).join(invoice_lines_xml)}
-</Invoice>
+</{root_tag}>
 """
         return doc_num, xml_doc
 
@@ -1961,9 +2250,9 @@ class ERPManager:
             qty = float(ln.get("quantity") or 1.0)
             unit_code = self._map_ubl_unit_code(ln.get("unit") or "Stk.")
             line_net = float(ln.get("line_net") or 0.0)
-            unit_price = float(ln.get("unit_price_net") or 0.0)
+            unit_price = abs(float(ln.get("unit_price_net") or 0.0))
             disc_pct = float(ln.get("discount_pct") or 0.0)
-            eff_unit_price = round(line_net / qty, 2) if (qty > 0 and disc_pct > 0) else unit_price
+            eff_unit_price = abs(round(line_net / qty, 2)) if (qty != 0 and disc_pct > 0) else unit_price
             rate = float(ln.get("tax_rate_pct") or 0.0)
             cat_id, _ = self._tax_category_for_doc(tax_regime, rate)
             title = _xml_escape(str(ln.get("title") or f"Position {pos}"))
@@ -2003,7 +2292,9 @@ class ERPManager:
 
         tax_xml = []
         for (cat_id, rate, reason), b in tax_buckets.items():
-            reason_el = f"\n        <ram:ExemptionReason>{_xml_escape(reason)}</ram:ExemptionReason>" if reason else ""
+            ex_code = self._tax_exemption_code_for_cat(cat_id) if reason else None
+            ex_code_el = f"\n        <ram:ExemptionReasonCode>{_xml_escape(ex_code)}</ram:ExemptionReasonCode>" if ex_code else ""
+            reason_el = f"\n        <ram:ExemptionReason>{_xml_escape(reason)}</ram:ExemptionReason>{ex_code_el}" if reason else ""
             tax_xml.append(
                 f"""      <ram:ApplicableTradeTax>
         <ram:CalculatedAmount>{b['tax']:.2f}</ram:CalculatedAmount>
@@ -2032,6 +2323,12 @@ class ERPManager:
         <ram:TypeCode>58</ram:TypeCode>
         <ram:PayeePartyCreditorFinancialAccount><ram:IBANID>{_xml_escape(sf['iban'])}</ram:IBANID></ram:PayeePartyCreditorFinancialAccount>{bic_el}
       </ram:SpecifiedTradeSettlementPaymentMeans>"""
+
+        inv_ref_xml = (
+            f"\n      <ram:InvoiceReferencedDocument><ram:IssuerAssignedID>{_xml_escape(ctx['source_doc_number'])}</ram:IssuerAssignedID></ram:InvoiceReferencedDocument>"
+            if ctx.get("source_doc_number")
+            else ""
+        )
 
         cii_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
@@ -2089,9 +2386,9 @@ class ERPManager:
       <ram:InvoiceCurrencyCode>{_xml_escape(currency)}</ram:InvoiceCurrencyCode>{payment_means_xml}
 {chr(10).join(tax_xml)}
       <ram:SpecifiedTradePaymentTerms>
-        <ram:Description>{_xml_escape(f"Zahlbar innerhalb von {int(doc.get('payment_terms_days') or 14)} Tagen ohne Abzug.")}</ram:Description>
+        <ram:Description>{_xml_escape(ctx['payment_terms_note'])}</ram:Description>
         <ram:DueDateDateTime><udt:DateTimeString format="102">{_xml_escape(due_cii)}</udt:DateTimeString></ram:DueDateDateTime>
-      </ram:SpecifiedTradePaymentTerms>
+      </ram:SpecifiedTradePaymentTerms>{inv_ref_xml}
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
         <ram:LineTotalAmount>{total_net:.2f}</ram:LineTotalAmount>
         <ram:TaxBasisTotalAmount>{total_net:.2f}</ram:TaxBasisTotalAmount>
@@ -2118,7 +2415,7 @@ class ERPManager:
             clauses = ["d.doc_type IN ('invoice', 'credit_note')"]
             params: List[Any] = []
             if not include_drafts:
-                clauses.append("d.status IN ('booked', 'paid')")
+                clauses.append("(d.status IN ('booked', 'paid') OR (d.status = 'cancelled' AND d.booked_at IS NOT NULL))")
             else:
                 clauses.append("d.status != 'cancelled'")
             if date_from:
@@ -2138,11 +2435,24 @@ class ERPManager:
             docs = [dict(r) for r in conn.execute(sql, params).fetchall()]
 
             now_stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S000")
-            first_doc_year = str((docs[0].get("issue_date") if docs else "") or "")[:4]
+            doc_dates = [str(d.get("issue_date") or "")[:10] for d in docs if d.get("issue_date")]
+            first_doc_year = str(doc_dates[0] if doc_dates else "")[:4]
             year_start = f"{first_doc_year}0101" if (len(first_doc_year) == 4 and first_doc_year.isdigit()) else f"{datetime.date.today().year}0101"
+            try:
+                from backend.corporate_manager import corporate_manager
+                comp_cfg = corporate_manager.get_company(cid) or {}
+                fy_cfg = re.sub(r"[^0-9]", "", str((comp_cfg.get("tax") or {}).get("fiscal_year_start") or ""))
+                if len(fy_cfg) == 8:
+                    year_start = fy_cfg
+            except Exception:
+                pass
+            datum_von = re.sub(r"[^0-9]", "", str(date_from or (doc_dates[0] if doc_dates else ""))[:10])
+            datum_bis = re.sub(r"[^0-9]", "", str(date_to or (doc_dates[-1] if doc_dates else ""))[:10])
+            header_currency = str((docs[0].get("currency") if docs else None) or "EUR").upper()
+            stapel_label = f"Archon {cid}"[:30]
             extf_meta = (
                 f'"EXTF";700;21;"Buchungsstapel";13;{now_stamp};;"RE";"ArchonOS";'
-                f'"{cid}";1;1;{year_start};4;;;"Archon Buchungsstapel";;;0;"EUR";;;;;;;;'
+                f'"";1001;1;{year_start};4;{datum_von};{datum_bis};"{stapel_label}";;1;0;0;"{header_currency}";;;;;;;;'
             )
             col_header = (
                 "Umsatz (ohne Soll/Haben-Kz);Soll/Haben-Kennzeichen;WKZ Umsatz;Kurs;Basis-Umsatz;"
@@ -2153,14 +2463,24 @@ class ERPManager:
 
             for d in docs:
                 lines = conn.execute(
-                    "SELECT tax_rate_pct, line_gross FROM erp_document_lines WHERE document_id = ?",
+                    "SELECT tax_rate_pct, line_net, line_gross FROM erp_document_lines WHERE document_id = ?",
                     (d["id"],),
                 ).fetchall()
-                rate_totals: Dict[float, float] = collections.defaultdict(float)
+                rate_nets: Dict[float, float] = collections.defaultdict(float)
+                rate_gross_fallback: Dict[float, float] = collections.defaultdict(float)
                 for ln in lines:
-                    rate_totals[round(float(ln["tax_rate_pct"] or 0.0), 2)] += float(ln["line_gross"] or 0.0)
+                    r_pct = round(float(ln["tax_rate_pct"] or 0.0), 2)
+                    rate_nets[r_pct] += float(ln["line_net"] or 0.0)
+                    rate_gross_fallback[r_pct] += float(ln["line_gross"] or 0.0)
+                rate_totals: Dict[float, float] = {}
+                for r_pct, net_sum in rate_nets.items():
+                    if abs(net_sum) > 0:
+                        bucket_tax = round(round(net_sum, 2) * (r_pct / 100.0), 2)
+                        rate_totals[r_pct] = round(round(net_sum, 2) + bucket_tax, 2)
+                    else:
+                        rate_totals[r_pct] = round(rate_gross_fallback[r_pct], 2)
                 if not rate_totals:
-                    inferred_rate = 19.0 if float(d.get("tax_amount") or 0.0) > 0 else 0.0
+                    inferred_rate = 19.0 if abs(float(d.get("tax_amount") or 0.0)) > 0 else 0.0
                     rate_totals[inferred_rate] = float(d.get("amount_gross") or 0.0)
 
                 issue_raw = str(d.get("issue_date") or datetime.date.today().isoformat())
@@ -2170,7 +2490,7 @@ class ERPManager:
                 except ValueError:
                     belegdatum = datetime.date.today().strftime("%d%m")
 
-                sh_flag = "H" if d.get("doc_type") == "credit_note" else "S"
+                is_credit = d.get("doc_type") == "credit_note"
                 deb_acct = str(d.get("debtor_no") or "10000")
                 doc_num = str(d.get("doc_number") or d["id"])[:36]
                 partner_name = str(d.get("entity_name") or "Kunde")[:40]
@@ -2181,8 +2501,11 @@ class ERPManager:
                     amt_val = round(abs(gross_sum), 2)
                     if amt_val <= 0:
                         continue
+                    sh_flag = "H" if (is_credit or gross_sum < 0) else "S"
                     amt_de = f"{amt_val:.2f}".replace(".", ",")
-                    if abs(rate - 19.0) < 0.01:
+                    if regime == "small_business":
+                        rev_acct, bu_key = "8195", ""
+                    elif abs(rate - 19.0) < 0.01:
                         rev_acct, bu_key = "8400", "3"
                     elif abs(rate - 7.0) < 0.01:
                         rev_acct, bu_key = "8300", "2"
@@ -2447,9 +2770,11 @@ class ERPManager:
                 for idx, tx in enumerate(parsed):
                     raw_sig = "|".join([
                         str(tx.get("booking_date") or ""),
+                        str(tx.get("value_date") or ""),
                         f"{float(tx.get('amount') or 0.0):.2f}",
                         str(tx.get("currency") or "EUR"),
                         str(tx.get("counterparty_iban") or ""),
+                        str(tx.get("counterparty_name") or "").strip().lower(),
                         str(tx.get("end_to_end_id") or ""),
                         str(tx.get("remittance_info") or ""),
                     ])
@@ -2494,16 +2819,16 @@ class ERPManager:
                         m_doc_num = best_doc["doc_number"]
                         already_assigned_docs.add(m_doc_id)
                         matched += 1
+                        m_status = "matched"
                         if auto_mark_paid and best_score >= 0.90:
-                            m_status = "paid_applied"
-                            docs_to_mark_paid.append(m_doc_id)
-                            auto_paid += 1
-                        else:
-                            m_status = "matched"
+                            docs_to_mark_paid.append((m_doc_id, f"btx_pending_{idx}"))
                     else:
                         best_score = 0.0
 
                     tx_id = f"btx-{uuid.uuid4().hex[:10]}"
+                    # Verknüpfe echte tx_id für nachfolgenden Atomar-Abgleich
+                    if docs_to_mark_paid and docs_to_mark_paid[-1][0] == m_doc_id:
+                        docs_to_mark_paid[-1] = (m_doc_id, tx_id)
                     conn.execute("""
                         INSERT INTO erp_bank_transactions (
                             id, booking_date, value_date, amount, currency,
@@ -2544,8 +2869,21 @@ class ERPManager:
         finally:
             conn.close()
 
-        for doc_id in docs_to_mark_paid:
+        for doc_id, tx_id in docs_to_mark_paid:
             self.save_document({"id": doc_id, "status": "paid"}, company_id=cid)
+            upd_conn, _ = self._get_conn(cid)
+            try:
+                with upd_conn:
+                    upd_conn.execute(
+                        "UPDATE erp_bank_transactions SET match_status = 'paid_applied' WHERE id = ?",
+                        (tx_id,),
+                    )
+                auto_paid += 1
+                for item in items_out:
+                    if item["id"] == tx_id:
+                        item["match_status"] = "paid_applied"
+            finally:
+                upd_conn.close()
 
         return {
             "company_id": cid,
@@ -2586,7 +2924,11 @@ class ERPManager:
         doc = self.get_document(doc_id, company_id=company_id)
         if not doc:
             raise ValueError(f"Beleg {doc_id} nicht gefunden.")
-        conn, cid = self._get_conn(company_id)
+        cid = _sanitize_company_id(company_id)
+        # Erst Rechnung als bezahlt verbuchen (damit Bank-TX nie inkonsistent vorauseilt)
+        if mark_paid and doc.get("status") != "paid":
+            self.save_document({"id": doc_id, "status": "paid"}, company_id=cid)
+        conn, cid = self._get_conn(cid)
         try:
             row = conn.execute("SELECT * FROM erp_bank_transactions WHERE id = ?", (tx_id,)).fetchone()
             if not row:
@@ -2605,8 +2947,6 @@ class ERPManager:
         finally:
             conn.close()
 
-        if mark_paid and doc.get("status") != "paid":
-            self.save_document({"id": doc_id, "status": "paid"}, company_id=cid)
         return {"transaction": updated_tx, "document": self.get_document(doc_id, company_id=cid)}
 
     # =========================================================================

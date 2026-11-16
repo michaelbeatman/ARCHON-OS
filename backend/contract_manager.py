@@ -262,8 +262,8 @@ class ContractParser:
         # 3. Kündigungsfrist
         # e.g. "Kündigungsfrist von 3 Monaten", "Frist von 30 Tagen", "3 Monate zum Monatsende"
         notice_patterns = [
-            (r'Kündigungsfrist\s*(?:von|beträgt)?\s*(\d+)\s*(Tagen?|Wochen?|Monaten?|Jahren?)', False),
             (r'(\d+)\s*Monate?\s*zum\s*(Monatsende|Quartalsende|Jahresende)', True),
+            (r'Kündigungsfrist\s*(?:von|beträgt)?\s*(\d+)\s*(Tagen?|Wochen?|Monaten?|Jahren?)', False),
             (r'spätestens\s*(\d+)\s*(Tage|Wochen|Monate)\s*vor\s*(?:Ablauf|Vertragsende|dem)', False),
             (r'notice\s*period\s*of\s*(\d+)\s*(days?|weeks?|months?|years?)', False),
         ]
@@ -272,7 +272,15 @@ class ContractParser:
             if m:
                 qty = int(m.group(1))
                 unit = m.group(2).lower()
-                if "tag" in unit or "day" in unit:
+                if special_end:
+                    data["notice_period_days"] = qty * 30
+                    if "quartal" in unit:
+                        data["notice_period_type"] = "end_of_quarter"
+                    elif "jahr" in unit:
+                        data["notice_period_type"] = "end_of_year"
+                    else:
+                        data["notice_period_type"] = "end_of_month"
+                elif "tag" in unit or "day" in unit:
                     data["notice_period_days"] = qty
                     data["notice_period_type"] = "days"
                 elif "woch" in unit or "week" in unit:
@@ -280,14 +288,7 @@ class ContractParser:
                     data["notice_period_type"] = "days"
                 elif "monat" in unit or "month" in unit:
                     data["notice_period_days"] = qty * 30
-                    if "quartal" in unit:
-                        data["notice_period_type"] = "end_of_quarter"
-                    elif "jahr" in unit:
-                        data["notice_period_type"] = "end_of_year"
-                    elif "monatsende" in unit:
-                        data["notice_period_type"] = "end_of_month"
-                    else:
-                        data["notice_period_type"] = "months"
+                    data["notice_period_type"] = "months"
                 elif "jahr" in unit or "year" in unit:
                     data["notice_period_days"] = qty * 365
                     data["notice_period_type"] = "years"
@@ -406,13 +407,62 @@ class ContractManager:
     """Verwaltung, Fristenberechnung und Alarmierung für Verträge."""
 
     @staticmethod
-    def calculate_deadline(end_date_str: str, notice_period_days: int) -> Optional[str]:
-        """Berechnet das Datum, an dem die Kündigung spätestens zugegangen sein muss."""
+    def _subtract_months_bgb(ref_date: datetime.date, months: int, snap_month_end: bool = False) -> datetime.date:
+        """Berechnet eine Monatsfrist rückwärts gemäß BGB §§ 187, 188 Abs. 2 & 3."""
+        import calendar
+
+        total_months = ref_date.year * 12 + (ref_date.month - 1) - max(0, int(months))
+        target_year = total_months // 12
+        target_month = (total_months % 12) + 1
+        max_day = calendar.monthrange(target_year, target_month)[1]
+        if snap_month_end:
+            target_day = max_day
+        else:
+            target_day = min(ref_date.day, max_day)
+        return datetime.date(target_year, target_month, target_day)
+
+    @classmethod
+    def calculate_deadline(
+        cls,
+        end_date_str: str,
+        notice_period_days: int,
+        notice_period_type: str = "days",
+    ) -> Optional[str]:
+        """Berechnet das Datum, an dem die Kündigung spätestens zugegangen sein muss (BGB §§ 187, 188)."""
         if not end_date_str:
             return None
         try:
+            import calendar
+
             end_dt = datetime.datetime.strptime(end_date_str, "%Y-%m-%d").date()
-            deadline_dt = end_dt - datetime.timedelta(days=notice_period_days)
+            ptype = str(notice_period_type or "days").strip().lower()
+            if ptype == "months":
+                months = max(1, round(int(notice_period_days) / 30))
+                deadline_dt = cls._subtract_months_bgb(end_dt, months, snap_month_end=False)
+            elif ptype == "end_of_month":
+                months = max(1, round(int(notice_period_days) / 30))
+                last_day = calendar.monthrange(end_dt.year, end_dt.month)[1]
+                base_dt = end_dt if end_dt.day == last_day else cls._subtract_months_bgb(end_dt, 1, snap_month_end=True)
+                deadline_dt = cls._subtract_months_bgb(base_dt, months, snap_month_end=True)
+            elif ptype == "end_of_quarter":
+                months = max(1, round(int(notice_period_days) / 30))
+                q_end_month = ((end_dt.month - 1) // 3 + 1) * 3
+                q_end_day = calendar.monthrange(end_dt.year, q_end_month)[1]
+                q_end = datetime.date(end_dt.year, q_end_month, q_end_day)
+                if end_dt < q_end:
+                    q_end = cls._subtract_months_bgb(q_end, 3, snap_month_end=True)
+                deadline_dt = cls._subtract_months_bgb(q_end, months, snap_month_end=True)
+            elif ptype == "end_of_year":
+                months = max(1, round(int(notice_period_days) / 30))
+                y_end = datetime.date(end_dt.year, 12, 31)
+                if end_dt < y_end:
+                    y_end = datetime.date(end_dt.year - 1, 12, 31)
+                deadline_dt = cls._subtract_months_bgb(y_end, months, snap_month_end=True)
+            elif ptype == "years":
+                years = max(1, round(int(notice_period_days) / 365))
+                deadline_dt = cls._subtract_months_bgb(end_dt, years * 12, snap_month_end=False)
+            else:
+                deadline_dt = end_dt - datetime.timedelta(days=int(notice_period_days))
             return deadline_dt.strftime("%Y-%m-%d")
         except Exception:
             return None
@@ -448,7 +498,7 @@ class ContractManager:
         # Nächste Deadline berechnen falls nicht explizit vorgegeben
         deadline = data.get("next_notice_deadline")
         if not deadline and end_date:
-            deadline = cls.calculate_deadline(end_date, notice_days)
+            deadline = cls.calculate_deadline(end_date, notice_days, notice_period_type=notice_type)
 
         renewal = int(data.get("auto_renewal_months", 12))
         payment_due = int(data.get("payment_due_days", 14))
@@ -617,7 +667,8 @@ class ContractManager:
 
         new_end_str = new_end_dt.strftime("%Y-%m-%d")
         notice_days = c.get("notice_period_days", 30)
-        new_deadline = cls.calculate_deadline(new_end_str, notice_days)
+        notice_type = c.get("notice_period_type", "days")
+        new_deadline = cls.calculate_deadline(new_end_str, notice_days, notice_period_type=notice_type)
 
         c["end_date"] = new_end_str
         c["next_notice_deadline"] = new_deadline
@@ -805,7 +856,7 @@ class ContractManager:
         expired_count = 0
 
         for c in contracts:
-            if c.get("status") == "active":
+            if c.get("status") in ("active", "renewed"):
                 active_count += 1
                 monthly_total_cost += c.get("monthly_equivalent_cost", 0.0)
 

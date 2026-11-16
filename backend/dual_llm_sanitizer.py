@@ -15,6 +15,7 @@ import time
 import logging
 import tempfile
 import threading
+import unicodedata
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("dual_llm_sanitizer")
@@ -32,7 +33,8 @@ INJECTION_SIGNATURES = [
     (r"(?i)(reveal|display|output|print|echo)\s+(your|the)\s+(initial|original|secret|hidden)\s+(instructions|system\s+prompt|api\s+key|token)", "SECRET_EXTRACTION"),
     (r"(?i)stop\s+being\s+(an?\s+ai|helpful|restricted)", "BEHAVIOR_RESET"),
     (r"(?i)base64:\s*[A-Za-z0-9+/=]{20,}", "ENCODED_PAYLOAD"),
-    (r"[\u200B-\u200D\uFEFF]", "ZERO_WIDTH_CHARACTER_INJECTION")
+    (r"[\u200B-\u200D\uFEFF]", "ZERO_WIDTH_CHARACTER_INJECTION"),
+    (r"(?im)(?:<\|im_start\|>\s*system|<\|system\|>|^\s*(?:###\s*)?SYSTEM\s*:|\[INST\]|</?system>)", "ROLE_DELIMITER_INJECTION"),
 ]
 
 def load_trusted_sources() -> List[str]:
@@ -106,27 +108,34 @@ def toggle_trusted_source(source_id: str, operator: str = "operator") -> Dict[st
     }
 
 def scan_heuristic_threats(text: str) -> List[str]:
-    """Scannt Text auf bekannte Injection-Signaturen."""
+    """Scannt Text (inkl. NFKC-Normalisierung gegen Homoglyphen) auf bekannte Injection-Signaturen."""
     found = []
     if not text:
         return found
-    for pattern, name in INJECTION_SIGNATURES:
-        if re.search(pattern, text):
-            found.append(name)
+    norm = unicodedata.normalize("NFKC", text)
+    for target in (text, norm):
+        for pattern, name in INJECTION_SIGNATURES:
+            if re.search(pattern, target) and name not in found:
+                found.append(name)
     return found
+
 
 def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_type: str = "email") -> Dict[str, Any]:
     """
     Stufe 1 Quarantäne-Filterung:
-    1. Falls Absender als Trusted [T] markiert ist -> Schneller Durchlauf mit Unbedenklichkeitsnachweis.
-    2. Heuristische Signaturprüfung auf Prompt Injection.
+    1. Trusted-Source-Status prüfen (kein blinder Quarantäne-Bypass bei erkannten Injection-Mustern!).
+    2. NFKC-Normalisierung + heuristische Signaturprüfung auf Prompt Injection & Delimiter-Spoofing.
     3. Strukturierte Extraktion von reinem Sachinhalt ohne ausführende Instruktionen.
     4. Bei Bedrohung: Blockierung & Eintragung ins revisionssichere GoBD Audit-Log.
     """
     sid = source_id.strip()
-    
-    # 1. Trusted Source Check
-    if is_trusted_source(sid):
+    trusted = is_trusted_source(sid)
+    normalized_raw = unicodedata.normalize("NFKC", raw_text or "")
+
+    # 1. Heuristische Analyse (auch fuer Trusted Sources gegen Header-Spoofing / Weiterleitungen)
+    threats = scan_heuristic_threats(raw_text or "")
+
+    if trusted and not threats:
         return {
             "is_safe": True,
             "threat_level": "none",
@@ -134,19 +143,16 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
             "detected_patterns": [],
             "source_id": sid,
             "source_type": source_type,
-            "clean_summary": raw_text.strip(),
+            "clean_summary": (raw_text or "").strip(),
             "extracted_facts": {"trust_status": "VERIFIED_SENDER"},
-            "message": "Quelle ist als vertrauenswürdig [T] verifiziert. Quarantäne-Bypass aktiv."
+            "message": "Quelle ist als vertrauenswürdig [T] verifiziert (ohne Bedrohungssignaturen)."
         }
 
-    # 2. Heuristische Analyse
-    threats = scan_heuristic_threats(raw_text)
-
-    # 3. Quarantäne-Bereinigung: Aggressives Entfernen von Instruktionsmustern
+    # 2. Quarantäne-Bereinigung: Aggressives Entfernen von Instruktionsmustern
     clean_lines = []
     stripped_instructions = []
 
-    for line in raw_text.splitlines():
+    for line in normalized_raw.splitlines():
         line_threats = scan_heuristic_threats(line)
         if line_threats:
             stripped_instructions.append(line.strip())

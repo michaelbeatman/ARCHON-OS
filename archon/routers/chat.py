@@ -699,7 +699,7 @@ async def api_chat_stream(req: ChatStreamRequest):
             logger.warning(f"[Telegram] Missions-Freigabe-Ping für {task_id} fehlgeschlagen: {tg_err}")
 
         # In DB persistieren
-        _db_init_session_and_message(session_id, agent_id, model, title, user_msg)
+        await asyncio.to_thread(_db_init_session_and_message, session_id, agent_id, model, title, user_msg)
         
         approval_confirmation = (
             f"🛡️ **Mission erfasst & HITL-Freigabe erforderlich!**\n\n"
@@ -709,7 +709,7 @@ async def api_chat_stream(req: ChatStreamRequest):
             f"- **Geschätzte Kosten:** ~{est_cost:.2f} € ({est_tokens:,} Tokens)\n"
             f"- **Status:** `🛑 STOP / Freigabe erforderlich` (Im Mission Control Approval Gate gesperrt)"
         )
-        _save_message_to_db(session_id, "assistant", approval_confirmation)
+        await asyncio.to_thread(_save_message_to_db, session_id, "assistant", approval_confirmation)
 
         async def mission_event_stream():
             yield f"data: {json.dumps({'type': 'mission_created', 'task_id': task_id, 'task': new_task, 'content': approval_confirmation}, ensure_ascii=False)}\n\n"
@@ -719,14 +719,14 @@ async def api_chat_stream(req: ChatStreamRequest):
 
     # 2. DIREKT-DIALOG: Streaming via ausgewählten Provider (Google, OpenRouter, Groq, OmniRoute etc.)
     try:
-        _db_init_session_and_message(session_id, agent_id, model, user_msg[:50], user_msg)
+        await asyncio.to_thread(_db_init_session_and_message, session_id, agent_id, model, user_msg[:50], user_msg)
     except Exception as db_err:
         logger.warning(f"[Chat Stream] Session/Message DB init warning: {db_err}")
 
     # Lade letzten Kontext aus DB (bis zu 50 Nachrichten fuer stabilen Sitzungsverlauf)
     recent_messages = []
     try:
-        raw_rows = _db_load_recent_chat_messages(session_id, 50)
+        raw_rows = await asyncio.to_thread(_db_load_recent_chat_messages, session_id, 50)
         for r in reversed(raw_rows):
             content_val = r["content"]
             role_val = r["role"]
@@ -1063,7 +1063,7 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
 
                 markdown = f"{text}\n\n![{prompt}]({img_url})" if img_url else text
                 if req.session_id and img_url:
-                    _save_message_to_db(req.session_id, "assistant", markdown)
+                    await asyncio.to_thread(_save_message_to_db, req.session_id, "assistant", markdown)
 
                 return {
                     "status": "ok",

@@ -463,7 +463,14 @@ async def inject_container_config(request: Request, container_name: str, config:
 
     if not url.startswith("http"):
         url = "http://" + url
-        
+
+    from utils.egress_guard import EgressBlocked, check_target_url
+    try:
+        # Container-Namen + lokale Hosts explizit zulassen, aber RFC1918/Metadaten-SSRF blockieren
+        check_target_url(url, allowed=[container_name, "odysseus", "hermes", "captain", "openhands"])
+    except EgressBlocked as exc:
+        raise HTTPException(status_code=403, detail=f"Ziel-URL nicht erlaubt: {exc.reason}")
+
     config_url = url.rstrip("/") + "/config"
     
     payload = {

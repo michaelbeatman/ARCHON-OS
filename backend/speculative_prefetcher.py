@@ -133,19 +133,31 @@ class SpeculativePrefetcher:
         return entry.get("data")
 
     def _get_erp_conn(self, tenant_id: Optional[str] = None) -> Optional[sqlite3.Connection]:
-        if tenant_id:
-            cid = tenant_id
-        else:
+        cid = tenant_id
+        if not cid:
             try:
                 from backend.tenant_context import get_active_company_id
                 cid = get_active_company_id() or "default"
             except Exception:
                 cid = "default"
-        candidates = [os.path.join(WORKSPACE_DIR, "data", "tenants", cid, "erp.db")]
-        if cid == "default":
-            candidates.append(os.path.join(WORKSPACE_DIR, "data", "erp.db"))
+        try:
+            from backend.tenant_context import PRIMARY_TENANT_IDS, sanitize_tenant_id
+            safe_cid = sanitize_tenant_id(cid)
+            primary_ids = set(PRIMARY_TENANT_IDS)
+        except Exception:
+            safe_cid = str(cid).strip() or "default"
+            primary_ids = {"default", "primary", "archon-systems"}
+
+        candidates = [os.path.join(WORKSPACE_DIR, "data", "tenants", safe_cid, "erp.db")]
+        if safe_cid in primary_ids:
+            candidates.append(os.path.join(WORKSPACE_DIR, "data", "tenants", "primary", "erp.db"))
+            try:
+                from backend.db_paths import resolve_db
+                candidates.append(resolve_db("erp.db"))
+            except Exception:
+                pass
         for candidate in candidates:
-            if os.path.exists(candidate):
+            if candidate and os.path.exists(candidate):
                 conn = sqlite3.connect(candidate, timeout=5.0)
                 conn.row_factory = sqlite3.Row
                 return conn

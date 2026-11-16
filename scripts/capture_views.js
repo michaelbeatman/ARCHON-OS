@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 
-const CHROME_PATH = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const CHROME_PATH = process.env.CHROME_PATH || ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => fs.existsSync(p)) || 'google-chrome';
 const OUTPUT_DIR = path.join(__dirname, '..', 'docs', 'system', 'screenshots');
 
 if (!fs.existsSync(OUTPUT_DIR)) {

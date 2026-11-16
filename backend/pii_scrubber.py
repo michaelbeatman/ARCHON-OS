@@ -61,19 +61,35 @@ class BidirectionalPIIScrubber:
         with self._lock:
             existing_vault = dict(self._sessions.get(sid) or {})
         vault: Dict[str, str] = existing_vault
+        reverse_vault: Dict[str, str] = {v: k for k, v in vault.items()}
         working = text or ""
 
         def _replace_matches(pattern: re.Pattern, prefix: str, current_text: str) -> str:
-            counter = 1
-            while f"[{prefix}_{counter}]" in vault:
-                counter += 1
-            for match in list(pattern.finditer(current_text)):
+            # Existierende wörtliche [PREFIX_N]-Tags im Input überspringen, damit kein Echo-Missbrauch entsteht
+            existing_nums = {
+                int(m.group(1))
+                for m in re.finditer(rf"\[{prefix}_(\d+)\]", current_text)
+            }
+            for k in vault:
+                km = re.fullmatch(rf"\[{prefix}_(\d+)\]", k)
+                if km:
+                    existing_nums.add(int(km.group(1)))
+            counter = (max(existing_nums) + 1) if existing_nums else 1
+
+            def _sub(match: re.Match) -> str:
+                nonlocal counter
                 raw_val = match.group(0)
+                if raw_val in reverse_vault:
+                    return reverse_vault[raw_val]
+                while f"[{prefix}_{counter}]" in vault or counter in existing_nums:
+                    counter += 1
                 placeholder = f"[{prefix}_{counter}]"
                 vault[placeholder] = raw_val
-                current_text = current_text.replace(raw_val, placeholder, 1)
+                reverse_vault[raw_val] = placeholder
                 counter += 1
-            return current_text
+                return placeholder
+
+            return pattern.sub(_sub, current_text)
 
         if bool(cfg.get("scrub_ibans", True)):
             working = _replace_matches(IBAN_REGEX, "IBAN", working)

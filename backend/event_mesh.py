@@ -50,7 +50,23 @@ class EventMesh:
     def ingest_inbound_event(self, channel: str, event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Nimmt ein externes Webhook-Ereignis (z. B. von n8n oder GitHub) entgegen."""
         now_iso = datetime.datetime.now().isoformat()
-        payload_str = json.dumps(payload, ensure_ascii=False)
+        safe_payload = dict(payload or {})
+        try:
+            from backend.dual_llm_sanitizer import sanitize_external_input
+            for txt_key in ("title", "message", "text", "body", "prompt", "description"):
+                if isinstance(safe_payload.get(txt_key), str) and safe_payload[txt_key].strip():
+                    san = sanitize_external_input(
+                        safe_payload[txt_key],
+                        source_id=f"{channel}:{safe_payload.get('sender') or 'webhook'}",
+                        source_type=f"webhook:{channel}",
+                    )
+                    if not san.get("is_safe", True):
+                        safe_payload[txt_key] = san.get("clean_summary", "[GEFILTERT]")
+                        safe_payload["_security_status"] = "blocked"
+                        safe_payload["_detected_patterns"] = san.get("detected_patterns", [])
+        except Exception:
+            pass
+        payload_str = json.dumps(safe_payload, ensure_ascii=False)
 
         # 1. Protokollieren
         conn = self._get_conn()
@@ -77,7 +93,7 @@ class EventMesh:
                 bridge = LocalMemoryBridge()
                 bridge.sync_task(
                     task_id=task_id,
-                    title=payload.get("title", f"Event aus {channel}: {event_type}"),
+                    title=safe_payload.get("title", f"Event aus {channel}: {event_type}"),
                     role="hermes-orchestrator",
                     status="todo"
                 )

@@ -5,7 +5,7 @@ import time
 sys.path.insert(0, os.path.abspath("."))
 from utils.batch_library_importer import process_document
 
-SOURCE_DIR = r"C:\Users\User\Downloads\extracted\PDF-Import 20260904"
+SOURCE_DIR = os.environ.get("ARCHON_IMPORT_SOURCE_DIR", os.path.join(".", "data", "imports", "pdf_tranche"))
 VAULT_DIR = r"./obsidian_vault"
 
 # Saubere thematische Zuordnung für Titel, die sonst unter 04_Allgemein landen würden

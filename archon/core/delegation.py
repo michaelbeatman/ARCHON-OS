@@ -512,6 +512,280 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
         logger.error(f"[AutoOrchestrator] Fehler bei autonomem Followup: {e}")
 
 
+_ACTIVE_WATCHERS: set[str] = set()
+
+
+async def _watch_delegated_task(
+    task_id: str,
+    s_id: str,
+    prof_id: str,
+    origin_sess_id: Optional[str] = None,
+    orig_delegator: Optional[str] = None,
+    parent_pid: Optional[str] = None,
+) -> None:
+    """Beobachtet den Kanban-Task, während der Hermes-Agent-Worker ihn abarbeitet,
+    und spiegelt das Endergebnis in die Sub-Session (Rücklauf ohne Doppel-Ausführung)."""
+    if not task_id or task_id in _ACTIVE_WATCHERS:
+        return
+    _ACTIVE_WATCHERS.add(task_id)
+    try:
+        from utils.path_jail import safe_filename, safe_identifier, safe_path_within
+
+        clean_tid = safe_identifier(task_id, "task_id")
+        deadline = time.time() + 1200  # max 20 Minuten beobachten
+        final = None
+        while time.time() < deadline:
+            try:
+                from backend.operations_api import _get_kanban_connection as _kgc
+                kc = _kgc()
+                row = kc.execute("SELECT status, result, title FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                kc.close()
+                if row and row[0] in ("done", "blocked", "review", "failed"):
+                    final = row
+                    break
+            except Exception:
+                pass
+            await asyncio.sleep(10)
+        if final is None:
+            _save_message_to_db(s_id, "assistant",
+                "⏱️ DELEGATION-TIMEOUT — Der Task läuft länger als 20 Minuten ohne Endstatus. "
+                "Aktueller Stand bitte im Kanban prüfen (Task-ID siehe Delegations-Quittung).")
+            return
+        status, result = final[0], (final[1] or "").strip()
+        final_title = (final[2] or "").strip()
+        if not result:
+            try:
+                from backend.operations_api import _get_kanban_connection as _kgc2
+                kc = _kgc2()
+                ev = kc.execute(
+                    "SELECT payload FROM task_events WHERE task_id = ? AND kind IN ('completed','blocked') ORDER BY rowid DESC LIMIT 1",
+                    (task_id,)).fetchone()
+                kc.close()
+                if ev and ev[0]:
+                    try:
+                        parsed_ev = json.loads(ev[0])
+                        result = parsed_ev.get("summary") or parsed_ev.get("reason") or ""
+                    except Exception:
+                        result = ev[0][:500]
+            except Exception:
+                pass
+        attach_note = ""
+        try:
+            attach_dir = os.path.join(OPT_DATA_DIR, "kanban", "attachments", clean_tid)
+            if os.path.isdir(attach_dir):
+                files = [safe_filename(f) for f in os.listdir(attach_dir) if os.path.isfile(os.path.join(attach_dir, f))]
+                if files:
+                    attach_note = "\n\n**Angehängte Artefakte:**\n" + "\n".join(f"- {f}" for f in files)
+        except Exception:
+            pass
+        obsidian_rel = None
+        try:
+            title = (final_title or "Delegation")[:80]
+            slug = re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")[:50] or "auftrag"
+            for cand in (PROJEKTE_DIR,
+                          os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE")):
+                try:
+                    os.makedirs(cand, exist_ok=True)
+                    obsidian_rel = cand
+                    break
+                except Exception:
+                    continue
+            if obsidian_rel:
+                fan_parent = None
+                fan_parent_title = None
+                try:
+                    fan_parent, fan_parent_title = await asyncio.to_thread(
+                        mc_get_parent_context_sqlite, task_id
+                    )
+                except Exception:
+                    pass
+                try:
+                    from backend.post_task_pipeline import project_folder_name
+                    proj_name = project_folder_name({
+                        "id": clean_tid, "title": final_title or "Delegation",
+                        "parent_project_id": fan_parent or "",
+                        "parent_project_title": fan_parent_title or "",
+                    })
+                except Exception:
+                    proj_name = f"{datetime.datetime.now().strftime('%Y%m%d')}-{clean_tid}-{slug}"
+                proj_folder = safe_path_within(os.path.join(obsidian_rel, proj_name), [obsidian_rel], allow_dirs=True)
+                target_sub = "01_Zwischenberichte" if parent_pid else "03_Endprodukte"
+                dest_dir = os.path.join(proj_folder, target_sub)
+                os.makedirs(dest_dir, exist_ok=True)
+                for sub in ("01_Zwischenberichte", "02_Medien", "03_Endprodukte"):
+                    os.makedirs(os.path.join(proj_folder, sub), exist_ok=True)
+                try:
+                    att_src = os.path.join(OPT_DATA_DIR, "kanban", "attachments", clean_tid)
+                    if os.path.isdir(att_src):
+                        medien_dir = os.path.join(proj_folder, "02_Medien")
+                        for f in os.listdir(att_src):
+                            src_f = os.path.join(att_src, f)
+                            if os.path.isfile(src_f):
+                                sf_name = safe_filename(f)
+                                dst_f = safe_path_within(os.path.join(medien_dir, sf_name), [medien_dir], allow_write=True, allow_dirs=False)
+                                shutil.copy2(src_f, dst_f)
+                except Exception:
+                    pass
+                result_fn = safe_filename(f"{clean_tid}-{slug}.md")
+                result_path = safe_path_within(os.path.join(dest_dir, result_fn), [dest_dir], allow_write=True, allow_dirs=False)
+                with open(result_path, "w", encoding="utf-8") as f:
+                    f.write(f"# {title}\n\n"
+                            f"**Task:** `{task_id}` | **Ziel-Agent:** `@{prof_id}` | **Status:** {status.upper()}\n\n"
+                            f"{result or '(Ergebnis siehe Kanban-Task-Events und Anhänge in 02_Medien/.)'}\n")
+                proj_title = fan_parent_title if (fan_parent and fan_parent_title) else title
+                p_herkunft = (f"Teilauftrag von Projekt `{fan_parent}`" if fan_parent
+                              else f"Delegation über Archon OS (Task `{task_id}`)")
+                p_parent_line = f'parent_project: "{fan_parent}"' if fan_parent else ""
+                try:
+                    with open(os.path.join(proj_folder, "PROJEKT.md"), "x", encoding="utf-8") as f:
+                        f.write("---\nproject_folder: \"" + os.path.basename(proj_folder) + "\"\ncreated_at: \""
+                                + str(datetime.datetime.now().timestamp()) + "\"\n"
+                                "title: \"" + proj_title + "\"\nstatus: \"" + str(status)
+                                + "\"\nsource_task: \"" + task_id + "\"\n"
+                                "source: \"delegation_engine_v2\"\n" + p_parent_line + "---\n\n"
+                                "# Projekt: " + str(proj_title) + "\n\n"
+                                "- **Herkunft:** " + p_herkunft + "\n"
+                                "- **Ziel-Agent:** `@" + str(prof_id) + "` | **Status:** " + str(status).upper() + "\n"
+                                "- **Hauptdokument:** [[" + clean_tid + "-" + slug + "]]\n\n"
+                                "### 📁 Projekt-Struktur:\n"
+                                "- `01_Zwischenberichte/`: Entwürfe und Arbeitsprotokolle\n"
+                                "- `02_Medien/`: Artefakte der Fachagenten\n"
+                                "- `03_Endprodukte/`: [[" + clean_tid + "-" + slug + "]]"
+                                + ("+ Lisa-Synthese + finale Beschlussvorlage" if fan_parent else "")
+                                + "\n\n---\n[[00_VAULT_KNOWLEDGE]] | [[Archiv-Hubs]]\n")
+                except FileExistsError:
+                    pass
+                obsidian_rel = os.path.basename(proj_folder)
+        except Exception as oe:
+            logger.warning(f"[Delegation] Obsidian-Export fehlgeschlagen: {oe}")
+            obsidian_rel = None
+        if status == "done":
+            msg = ("✅ DELEGATION ABGESCHLOSSEN — Der Sub-Agent hat die Aufgabe erledigt.\n\n"
+                   f"**Zusammenfassung/Ergebnis:**\n{result or '(siehe Kanban-Task und Anhänge)'}{attach_note}\n\n"
+                   f"Task-ID: {task_id} | Status im Kanban: done"
+                   + (f"\n📁 Obsidian-Projekt: `01_PROJEKTE/{obsidian_rel}` (auch im Showroom sichtbar)" if obsidian_rel else ""))
+        elif status == "review":
+            msg = ("🔍 DELEGATION IN REVIEW — Das Ergebnis liegt zur Prüfung bereit.\n\n"
+                   f"**Ergebnis:**\n{result or '(siehe Kanban-Task)'}{attach_note}\n\nTask-ID: {task_id}")
+        else:
+            msg = ("⛔ DELEGATION BLOCKIERT — Der Sub-Agent konnte die Aufgabe nicht abschließen.\n\n"
+                   f"**Grund/Eskalation:**\n{result or 'Siehe Task-Events im Kanban (Kommentare des Agenten).'}{attach_note}\n\n"
+                   f"Task-ID: {task_id} | Ggf. Kontextdaten nachliefern oder Aufgabe umformulieren."
+                   + (f"\n📁 Dokumentation: `01_PROJEKTE/{obsidian_rel}`" if obsidian_rel else ""))
+        _save_message_to_db(s_id, "assistant", msg)
+
+        if origin_sess_id and origin_sess_id != s_id:
+            try:
+                status_badge = "✅ ERLEDIGT" if status in ("done", "review") else "⛔ BLOCKIERT"
+                delegator_feedback = (
+                    f"{status_badge}: Der Sub-Agent `@{prof_id}` hat Task `{task_id}` ({final_title}) abgeschlossen.\n\n"
+                    f"**Ergebnis:**\n{result or '(Ergebnis liegt im Projektordner/Kanban)'}\n"
+                    f"{attach_note}\n\n"
+                    f"*(Status im Kanban: `{status}`)*"
+                )
+                _save_message_to_db(origin_sess_id, "user", delegator_feedback)
+                broadcast_event("chat_message_received", {
+                    "session_id": origin_sess_id,
+                    "agent_id": orig_delegator,
+                    "task_id": task_id,
+                    "status": status
+                })
+                if orig_delegator in ("executive_decision_architect", "hermes-orchestrator", "founder", "micha", "default"):
+                    _spawn_background(_trigger_autonomous_orchestrator_followup(
+                        orig_delegator, origin_sess_id, task_id, status, result, final_title, parent_pid
+                    ), name=f"followup_{task_id}")
+            except Exception as feed_err:
+                logger.warning(f"[Delegation] Feedback an Delegator-Session fehlgeschlagen: {feed_err}")
+
+        try:
+            _doss_dir = None
+            vault_dir = _get_obsidian_vault_dir()
+            if obsidian_rel:
+                try:
+                    _doss_dir = os.path.join(vault_dir, "01_PROJEKTE",
+                                             obsidian_rel, "01_Zwischenberichte")
+                except Exception:
+                    _doss_dir = None
+            if status in ("review", "blocked"):
+                _doss = None
+                if _doss_dir and (result or "").strip():
+                    try:
+                        from dossier_builder import build_dossier_from_report
+                        _doss = build_dossier_from_report(
+                            f"{'Review' if status == 'review' else 'Blockiert'}: {final_title}",
+                            result, _doss_dir, f"{clean_tid}_{status}",
+                            ref_id=task_id, quelle="Archon-Delegation")
+                    except Exception as _de:
+                        logger.warning(f"[Delegation] Dossier fehlgeschlagen: {_de}")
+                await asyncio.to_thread(
+                    _register_decision, task_id, "delegation_review",
+                    final_title, result, task_id, _doss, "", None,
+                    f"01_PROJEKTE/{obsidian_rel}" if obsidian_rel else None)
+            else:
+                from telegram_notify import notify_task_status
+                notify_task_status(task_id, status, final_title, result, obsidian_rel,
+                                   dossier_dir=_doss_dir)
+        except Exception as tg_err:
+            logger.warning(f"[Telegram] Delegations-Ping für Task {task_id} fehlgeschlagen: {tg_err}")
+
+        if status == "done":
+            try:
+                fan_parent, _ = await asyncio.to_thread(mc_get_parent_context_sqlite, task_id)
+                await asyncio.to_thread(
+                    mc_update_task_sqlite,
+                    task_id,
+                    {
+                        "status": "completed",
+                        "result_summary": (result or "")[:800],
+                        "completed_at": time.time(),
+                    },
+                )
+                if fan_parent:
+                    _spawn_background(_fan_in_maybe_start_synthesis(fan_parent), name=f"fan_in_{fan_parent}")
+            except Exception as fan_err:
+                logger.warning(f"[Delegation] Fan-in-Ruecklauf fehlgeschlagen: {fan_err}")
+    except Exception as e:
+        logger.error(f"[Delegation] Task-Watcher error: {e}")
+    finally:
+        _ACTIVE_WATCHERS.discard(task_id)
+
+
+async def resume_pending_delegation_watchers() -> int:
+    """Reaktiviert nach einem Neustart offene Delegations-Watcher aus kanban.db."""
+    restarted = 0
+    try:
+        from backend.operations_api import _get_kanban_connection as _kgc
+        kc = _kgc()
+        try:
+            rows = kc.execute(
+                "SELECT t.id, t.assignee, t.project_id, te.payload "
+                "FROM tasks t JOIN task_events te ON te.task_id = t.id "
+                "WHERE te.kind = 'created' AND te.payload LIKE '%delegation_engine_v2%' "
+                "AND t.status IN ('in_progress', 'todo')"
+            ).fetchall()
+        finally:
+            kc.close()
+        for tid, assignee, project_id, ev_payload in rows:
+            if not tid or tid in _ACTIVE_WATCHERS:
+                continue
+            try:
+                meta = json.loads(ev_payload or "{}")
+            except Exception:
+                meta = {}
+            delegator = meta.get("delegator") or "executive_decision_architect"
+            tgt_sess = f"sub_{delegator}_{assignee}_{tid}"
+            _spawn_background(
+                _watch_delegated_task(tid, tgt_sess, assignee or "default", None, delegator, project_id or None),
+                name=f"bg_watch_{tid}",
+            )
+            restarted += 1
+        if restarted:
+            logger.info(f"[Delegation] {restarted} offene(r) Delegations-Watcher nach Neustart fortgesetzt.")
+    except Exception as e:
+        logger.debug(f"[Delegation] Watcher-Recovery Hinweis: {e}")
+    return restarted
+
+
 def _execute_delegation(delegator_id, payload, provider, all_keys, origin_session_id=None):
     """Führt eine Delegation aus: Berechtigungsprüfung, Sub-Session, Kanban-Task,
     Hintergrund-Ausführung. Gibt eine Quittung als Text zurück (wird in die
@@ -589,231 +863,6 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     except Exception as e:
         logger.warning(f"[Delegation] Kanban-Insert fehlgeschlagen: {e}")
 
-    async def _bg_watch_task(task_id, s_id, prof_id, origin_sess_id=None, orig_delegator=None, parent_pid=None):
-        """Beobachtet den Kanban-Task, während der Hermes-Agent-Worker ihn abarbeitet,
-        und spiegelt das Endergebnis in die Sub-Session (Rücklauf ohne Doppel-Ausführung).
-        WICHTIG: Kein eigener Modell-Aufruf mehr — die Ausführung macht der hermes-Worker
-        (claim -> spawn -> heartbeats -> done/blocked). Kein vorzeitiges 'blocked' mehr."""
-        try:
-            deadline = time.time() + 1200  # max 20 Minuten beobachten
-            final = None
-            while time.time() < deadline:
-                try:
-                    from backend.operations_api import _get_kanban_connection as _kgc
-                    kc = _kgc()
-                    row = kc.execute("SELECT status, result, title FROM tasks WHERE id = ?", (task_id,)).fetchone()
-                    kc.close()
-                    if row and row[0] in ("done", "blocked", "review", "failed"):
-                        final = row
-                        break
-                except Exception:
-                    pass
-                await asyncio.sleep(10)
-            if final is None:
-                _save_message_to_db(s_id, "assistant",
-                    "⏱️ DELEGATION-TIMEOUT — Der Task läuft länger als 20 Minuten ohne Endstatus. "
-                    "Aktueller Stand bitte im Kanban prüfen (Task-ID siehe Delegations-Quittung).")
-                return
-            status, result = final[0], (final[1] or "").strip()
-            final_title = (final[2] or "").strip()
-            # Fallback: Zusammenfassung aus dem completed/blocked-Event ziehen, wenn das Result-Feld leer ist
-            if not result:
-                try:
-                    from backend.operations_api import _get_kanban_connection as _kgc2
-                    kc = _kgc2()
-                    ev = kc.execute(
-                        "SELECT payload FROM task_events WHERE task_id = ? AND kind IN ('completed','blocked') ORDER BY rowid DESC LIMIT 1",
-                        (task_id,)).fetchone()
-                    kc.close()
-                    if ev and ev[0]:
-                        try:
-                            result = json.loads(ev[0]).get("summary") or json.loads(ev[0]).get("reason") or ""
-                        except Exception:
-                            result = ev[0][:500]
-                except Exception:
-                    pass
-            # Ergebnis-Dateien des Hermes-Workers einsammeln (Attachments)
-            attach_note = ""
-            try:
-                attach_dir = os.path.join(OPT_DATA_DIR, "kanban", "attachments", task_id)
-                if os.path.isdir(attach_dir):
-                    files = [f for f in os.listdir(attach_dir) if os.path.isfile(os.path.join(attach_dir, f))]
-                    if files:
-                        attach_note = "\n\n**Angehängte Artefakte:**\n" + "\n".join(f"- {f}" for f in files)
-            except Exception:
-                pass
-            # --- Ergebnis nach Obsidian exportieren (01_PROJEKTE) -> Showroom-Rücklauf ---
-            obsidian_rel = None
-            try:
-                title = (final_title or "Delegation")[:80]
-                slug = re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")[:50] or "auftrag"
-                for cand in (PROJEKTE_DIR,
-                              os.path.join(WORKSPACE_DIR, "obsidian_vault", "01_PROJEKTE")):
-                    try:
-                        os.makedirs(cand, exist_ok=True)
-                        obsidian_rel = cand
-                        break
-                    except Exception:
-                        continue
-                if obsidian_rel:
-                    # EIN Ordner pro Projekt - hat der Subtask ein parent, TEILT er sich den Eltern-Ordner
-                    fan_parent = None
-                    fan_parent_title = None
-                    try:
-                        fan_parent, fan_parent_title = await asyncio.to_thread(
-                            mc_get_parent_context_sqlite, task_id
-                        )
-                    except Exception:
-                        pass
-                    try:
-                        from backend.post_task_pipeline import project_folder_name
-                        proj_name = project_folder_name({
-                            "id": task_id, "title": final_title or "Delegation",
-                            "parent_project_id": fan_parent or "",
-                            "parent_project_title": fan_parent_title or "",
-                        })
-                    except Exception:
-                        proj_name = f"{datetime.datetime.now().strftime('%Y%m%d')}-{task_id}-{slug}"
-                    proj_folder = os.path.join(obsidian_rel, proj_name)
-                    target_sub = "01_Zwischenberichte" if parent_pid else "03_Endprodukte"
-                    dest_dir = os.path.join(proj_folder, target_sub)
-                    os.makedirs(dest_dir, exist_ok=True)
-                    for sub in ("01_Zwischenberichte", "02_Medien", "03_Endprodukte"):
-                        os.makedirs(os.path.join(proj_folder, sub), exist_ok=True)
-                    try:
-                        att_src = os.path.join(OPT_DATA_DIR, "kanban", "attachments", task_id)
-                        if os.path.isdir(att_src):
-                            for f in os.listdir(att_src):
-                                src_f = os.path.join(att_src, f)
-                                if os.path.isfile(src_f):
-                                    shutil.copy2(src_f, os.path.join(proj_folder, "02_Medien", f))
-                    except Exception:
-                        pass
-                    result_fn = f"{task_id}-{slug}.md"
-                    with open(os.path.join(dest_dir, result_fn), "w", encoding="utf-8") as f:
-                        f.write(f"# {title}\n\n"
-                                f"**Task:** `{task_id}` | **Ziel-Agent:** `@{prof_id}` | **Status:** {status.upper()}\n\n"
-                                f"{result or '(Ergebnis siehe Kanban-Task-Events und Anhänge in 02_Medien/.)'}\n")
-                    # PROJEKT.md nur beim ERSTEN Schreiber
-                    proj_title = fan_parent_title if (fan_parent and fan_parent_title) else title
-                    p_herkunft = (f"Teilauftrag von Projekt `{fan_parent}`" if fan_parent
-                                  else f"Delegation über Archon OS (Task `{task_id}`)")
-                    p_parent_line = f'parent_project: "{fan_parent}"' if fan_parent else ""
-                    try:
-                        with open(os.path.join(proj_folder, "PROJEKT.md"), "x", encoding="utf-8") as f:
-                            f.write("---\nproject_folder: \"" + proj_name + "\"\ncreated_at: \""
-                                    + str(datetime.datetime.now().timestamp()) + "\"\n"
-                                    "title: \"" + proj_title + "\"\nstatus: \"" + str(status)
-                                    + "\"\nsource_task: \"" + task_id + "\"\n"
-                                    "source: \"delegation_engine_v2\"\n" + p_parent_line + "---\n\n"
-                                    "# Projekt: " + str(proj_title) + "\n\n"
-                                    "- **Herkunft:** " + p_herkunft + "\n"
-                                    "- **Ziel-Agent:** `@" + str(prof_id) + "` | **Status:** " + str(status).upper() + "\n"
-                                    "- **Hauptdokument:** [[" + task_id + "-" + slug + "]]\n\n"
-                                    "### 📁 Projekt-Struktur:\n"
-                                    "- `01_Zwischenberichte/`: Entwürfe und Arbeitsprotokolle\n"
-                                    "- `02_Medien/`: Artefakte der Fachagenten\n"
-                                    "- `03_Endprodukte/`: [[" + task_id + "-" + slug + "]]"
-                                    + ("+ Lisa-Synthese + finale Beschlussvorlage" if fan_parent else "")
-                                    + "\n\n---\n[[00_VAULT_KNOWLEDGE]] | [[Archiv-Hubs]]\n")
-                    except FileExistsError:
-                        pass
-                    obsidian_rel = proj_name
-            except Exception as oe:
-                logger.warning(f"[Delegation] Obsidian-Export fehlgeschlagen: {oe}")
-                obsidian_rel = None
-            if status == "done":
-                msg = ("✅ DELEGATION ABGESCHLOSSEN — Der Sub-Agent hat die Aufgabe erledigt.\n\n"
-                       f"**Zusammenfassung/Ergebnis:**\n{result or '(siehe Kanban-Task und Anhänge)'}{attach_note}\n\n"
-                       f"Task-ID: {task_id} | Status im Kanban: done"
-                       + (f"\n📁 Obsidian-Projekt: `01_PROJEKTE/{obsidian_rel}` (auch im Showroom sichtbar)" if obsidian_rel else ""))
-            elif status == "review":
-                msg = ("🔍 DELEGATION IN REVIEW — Das Ergebnis liegt zur Prüfung bereit.\n\n"
-                       f"**Ergebnis:**\n{result or '(siehe Kanban-Task)'}{attach_note}\n\nTask-ID: {task_id}")
-            else:
-                msg = ("⛔ DELEGATION BLOCKIERT — Der Sub-Agent konnte die Aufgabe nicht abschließen.\n\n"
-                       f"**Grund/Eskalation:**\n{result or 'Siehe Task-Events im Kanban (Kommentare des Agenten).'}{attach_note}\n\n"
-                       f"Task-ID: {task_id} | Ggf. Kontextdaten nachliefern oder Aufgabe umformulieren."
-                       + (f"\n📁 Dokumentation: `01_PROJEKTE/{obsidian_rel}`" if obsidian_rel else ""))
-            _save_message_to_db(s_id, "assistant", msg)
-
-            # --- Feedback an Delegator-Session (Robert / Orchestrator) & Autonomer Trigger ---
-            if origin_sess_id and origin_sess_id != s_id:
-                try:
-                    status_badge = "✅ ERLEDIGT" if status in ("done", "review") else "⛔ BLOCKIERT"
-                    delegator_feedback = (
-                        f"{status_badge}: Der Sub-Agent `@{prof_id}` hat Task `{task_id}` ({final_title}) abgeschlossen.\n\n"
-                        f"**Ergebnis:**\n{result or '(Ergebnis liegt im Projektordner/Kanban)'}\n"
-                        f"{attach_note}\n\n"
-                        f"*(Status im Kanban: `{status}`)*"
-                    )
-                    _save_message_to_db(origin_sess_id, "user", delegator_feedback)
-                    broadcast_event("chat_message_received", {
-                        "session_id": origin_sess_id,
-                        "agent_id": orig_delegator,
-                        "task_id": task_id,
-                        "status": status
-                    })
-                    # Autonomen Folge-Turn auslösen, falls Orchestrator aktiv
-                    if orig_delegator in ("executive_decision_architect", "hermes-orchestrator", "founder", "micha", "default"):
-                        _spawn_background(_trigger_autonomous_orchestrator_followup(
-                            orig_delegator, origin_sess_id, task_id, status, result, final_title, parent_pid
-                        ), name=f"followup_{task_id}")
-                except Exception as feed_err:
-                    logger.warning(f"[Delegation] Feedback an Delegator-Session fehlgeschlagen: {feed_err}")
-
-            # --- Telegram-Push (HITL-Kanal) ---
-            try:
-                _doss_dir = None
-                vault_dir = _get_obsidian_vault_dir()
-                if obsidian_rel:
-                    try:
-                        _doss_dir = os.path.join(vault_dir, "01_PROJEKTE",
-                                                 obsidian_rel, "01_Zwischenberichte")
-                    except Exception:
-                        _doss_dir = None
-                if status in ("review", "blocked"):
-                    _doss = None
-                    if _doss_dir and (result or "").strip():
-                        try:
-                            from dossier_builder import build_dossier_from_report
-                            _doss = build_dossier_from_report(
-                                f"{'Review' if status == 'review' else 'Blockiert'}: {final_title}",
-                                result, _doss_dir, f"{task_id}_{status}",
-                                ref_id=task_id, quelle="Archon-Delegation")
-                        except Exception as _de:
-                            logger.warning(f"[Delegation] Dossier fehlgeschlagen: {_de}")
-                    await asyncio.to_thread(
-                        _register_decision, task_id, "delegation_review",
-                        final_title, result, task_id, _doss, "", None,
-                        f"01_PROJEKTE/{obsidian_rel}" if obsidian_rel else None)
-                else:
-                    from telegram_notify import notify_task_status
-                    notify_task_status(task_id, status, final_title, result, obsidian_rel,
-                                       dossier_dir=_doss_dir)
-            except Exception as tg_err:
-                logger.warning(f"[Telegram] Delegations-Ping für Task {task_id} fehlgeschlagen: {tg_err}")
-
-            # --- FAN-IN RUECKLAUF ---
-            if status == "done":
-                try:
-                    fan_parent, _ = await asyncio.to_thread(mc_get_parent_context_sqlite, task_id)
-                    await asyncio.to_thread(
-                        mc_update_task_sqlite,
-                        task_id,
-                        {
-                            "status": "completed",
-                            "result_summary": (result or "")[:800],
-                            "completed_at": time.time(),
-                        },
-                    )
-                    if fan_parent:
-                        _spawn_background(_fan_in_maybe_start_synthesis(fan_parent), name=f"fan_in_{fan_parent}")
-                except Exception as fan_err:
-                    logger.warning(f"[Delegation] Fan-in-Ruecklauf fehlgeschlagen: {fan_err}")
-        except Exception as e:
-            logger.error(f"[Delegation] Task-Watcher error: {e}")
-
     # --- FAN-IN BRUECKE (nativ auf kanban.db + task_links) ---
     parent_pid = str(payload.get("parent_project_id") or payload.get("projekt") or "").strip()
     if parent_pid:
@@ -845,7 +894,8 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         except Exception as fan_err:
             logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 
-    _spawn_background(_bg_watch_task(task_id, tgt_sess, ziel, origin_session_id, delegator_id, parent_pid), name=f"bg_watch_{task_id}")
+    if task_id:
+        _spawn_background(_watch_delegated_task(task_id, tgt_sess, ziel, origin_session_id, delegator_id, parent_pid), name=f"bg_watch_{task_id}")
     resolve_str = f" [aufgelöst von '{ziel_raw}']" if ziel_raw and ziel_raw != ziel else ""
     return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}{resolve_str}) | Kanban-Task: {task_id or 'n/a'} | "
             f"Sub-Session: {tgt_sess} | Modell (Empfehlung): {t_model} | "

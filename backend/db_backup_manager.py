@@ -32,6 +32,9 @@ DB_TARGETS = [
     _resolve_target("agentic_memory.db", "~/.hermes/agentic_memory.db"),
     _resolve_target("kanban.db", "~/.hermes/kanban.db"),
     _resolve_target("state.db", "~/.hermes/state.db"),
+    _resolve_target("contracts.db", "~/.hermes/contracts.db"),
+    _resolve_target("deals.db", "~/.hermes/deals.db"),
+    _resolve_target("corporate.db", "~/.hermes/corporate.db"),
 ]
 
 class DBBackupManager:
@@ -85,6 +88,9 @@ class DBBackupManager:
                     dst_conn = sqlite3.connect(tmp_snapshot)
                     try:
                         src_conn.backup(dst_conn)
+                        chk_row = dst_conn.execute("PRAGMA integrity_check(1);").fetchone()
+                        if not chk_row or str(chk_row[0]).lower() != "ok":
+                            raise RuntimeError(f"Backup-Integritaetspruefung fehlgeschlagen: {chk_row}")
                     finally:
                         dst_conn.close()
                 finally:
@@ -96,7 +102,8 @@ class DBBackupManager:
                 backed_up.append({
                     "db_name": db_name,
                     "backup_file": backup_file,
-                    "size_bytes": os.path.getsize(backup_file)
+                    "size_bytes": os.path.getsize(backup_file),
+                    "integrity": "ok",
                 })
             except Exception as e:
                 print(f"[DBBackupManager] Backup error for {db_name}: {e}", file=sys.stderr)

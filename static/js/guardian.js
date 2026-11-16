@@ -492,10 +492,10 @@
           max_history_messages: _readNum(pfx + "max-history", 20, parseInt),
           daily_budget: _readNum(pfx + "daily-budget", 2.0, parseFloat),
           task_budget: _readNum(pfx + "task-budget", 0.5, parseFloat),
-          max_steps_per_task: parseInt(document.getElementById("guard-set-max-steps")?.value) || 15,
-          session_timeout_seconds: parseInt(document.getElementById("guard-set-timeout")?.value) || 60,
-          cache_ttl_hours: parseInt(document.getElementById("guard-set-cache-ttl")?.value) || 24,
-          watchdog_interval_seconds: parseInt(document.getElementById("guard-set-watchdog-interval")?.value) || 30
+          max_steps_per_task: _readNum(pfx + "max-steps", 15, parseInt),
+          session_timeout_seconds: _readNum(pfx + "timeout", 60, parseInt),
+          cache_ttl_hours: _readNum(pfx + "cache-ttl", 24, parseInt),
+          watchdog_interval_seconds: _readNum(pfx + "watchdog-interval", 30, parseInt)
         };
         const res = await fetch('/api/guardian/config', {
           method: 'POST',

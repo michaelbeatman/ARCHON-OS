@@ -13,8 +13,13 @@ from typing import Dict, Any, List, Optional
 
 from backend.platform_paths import PERSONALAKTEN_DIR
 
-KANBAN_DB_PATH = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
-MEMORY_DB_PATH = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    KANBAN_DB_PATH = _resolve_db("kanban.db")
+    MEMORY_DB_PATH = _resolve_db("agentic_memory.db")
+except Exception:
+    KANBAN_DB_PATH = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
+    MEMORY_DB_PATH = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
 OBSIDIAN_VAULT_DIRS = [
     "/opt/data/obsidian/00_HR_Agenten/Personalakten",
     os.path.expanduser("~/obsidian/00_HR_Agenten/Personalakten"),

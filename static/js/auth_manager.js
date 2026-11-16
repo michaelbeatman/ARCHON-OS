@@ -83,16 +83,20 @@ class AuthManager {
       ? authT('ui.auth_manager.title_single_user', 'Einzelplatz-Modus: Volle Admin-Rechte ohne Login-Zwang')
       : authT('ui.auth_manager.title_logged_in', 'Angemeldet als {role}', { role: this.currentUser.role });
 
+    const esc = (s) => (typeof window.escapeHtml === 'function')
+      ? window.escapeHtml(s)
+      : String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    const displayName = esc(this.currentUser.display_name || this.currentUser.username);
     badge.innerHTML = `
-      <div onclick="window.authManager.openProfileModal()" title="${title}" class="flex items-center gap-1.5 px-2 py-[2px] rounded-lg bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 border border-[var(--border)] transition cursor-pointer select-none shadow-2xs">
+      <div onclick="window.authManager.openProfileModal()" title="${esc(title)}" class="flex items-center gap-1.5 px-2 py-[2px] rounded-lg bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 border border-[var(--border)] transition cursor-pointer select-none shadow-2xs">
         <div class="w-4 h-4 rounded-full bg-zinc-800 text-white flex items-center justify-center font-mono font-bold text-[9px] shrink-0">
-          ${initial}
+          ${esc(initial)}
         </div>
         <span class="text-[11px] font-bold font-sans text-[var(--foreground)] truncate flex-1 leading-tight">
-          ${this.currentUser.display_name || this.currentUser.username}
+          ${displayName}
         </span>
         <span class="text-[9px] font-mono px-1 py-0.2 rounded border ${roleBadgeClass} uppercase font-bold tracking-wider shrink-0 leading-tight">
-          ${roleLabel}
+          ${esc(roleLabel)}
         </span>
       </div>
     `;

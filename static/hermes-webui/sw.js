@@ -7,11 +7,11 @@
 
 // Cache version is injected by the server at request time (routes.py /sw.js handler).
 // Bumps automatically whenever the git commit changes — no manual edits needed.
-const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
+const CACHE_NAME = 'hermes-shell-2026.11.16';
 
 // Static assets that form the app shell.
 //
-// Versioned assets (CSS + JS) include `?v=__WEBUI_VERSION__` to match the
+// Versioned assets (CSS + JS) include `?v=2026.11.16` to match the
 // query string the page sends — see index.html. Without the version query
 // here, every cache lookup against `?v=...` URLs would miss and fall through
 // to network, defeating the pre-cache.
@@ -20,30 +20,30 @@ const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
 // either the authenticated app shell or login code, and stale cached responses
 // can make valid password submits fail until the user clears browser cache.
 // Navigations populate './' only after a successful non-redirect network load.
-const VQ = '?v=__WEBUI_VERSION__';
+const VQ = '?v=2026.11.16';
 const SHELL_ASSETS = [
-  './static/style.css' + VQ,
-  './static/pwa-startup.js' + VQ,
-  './static/boot.js' + VQ,
-  './static/assistant_turn_anchors.js' + VQ,
-  './static/ui.js' + VQ,
-  './static/messages.js' + VQ,
-  './static/sessions.js' + VQ,
-  './static/panels.js' + VQ,
-  './static/commands.js' + VQ,
-  './static/icons.js' + VQ,
-  './static/i18n.js' + VQ,
-  './static/workspace.js' + VQ,
-  './static/terminal.js' + VQ,
-  './static/onboarding.js' + VQ,
+  './style.css' + VQ,
+  './pwa-startup.js' + VQ,
+  './boot.js' + VQ,
+  './assistant_turn_anchors.js' + VQ,
+  './ui.js' + VQ,
+  './messages.js' + VQ,
+  './sessions.js' + VQ,
+  './panels.js' + VQ,
+  './commands.js' + VQ,
+  './icons.js' + VQ,
+  './i18n.js' + VQ,
+  './workspace.js' + VQ,
+  './terminal.js' + VQ,
+  './onboarding.js' + VQ,
   './vendor/smd.min.js' + VQ,
   './vendor/katex/0.16.22/katex.min.css' + VQ,
   './vendor/katex/0.16.22/katex.min.js' + VQ,
   './vendor/xterm/5.3.0/xterm.css',
   './vendor/xterm/5.3.0/xterm.js',
   './vendor/prismjs/1.29.0/components/prism-core.min.js',
-  './static/favicon.svg',
-  './static/favicon-32.png',
+  './favicon.svg',
+  './favicon-512.svg',
   './manifest.json',
 ];
 
@@ -100,7 +100,7 @@ self.addEventListener('fetch', (event) => {
   // password can keep failing until the user manually clears browser cache.
   if (
     url.pathname.endsWith('/login') ||
-    url.pathname.endsWith('/static/login.js')
+    url.pathname.endsWith('/login.js')
   ) {
     return;
   }

@@ -1763,16 +1763,6 @@
         console.error("Failed to load kanban cards:", e);
       }
     }
-    async function loadVaultFiles() {
-      try {
-        const res = await fetch("/api/vault/files");
-        if (res.ok) {
-          vaultFiles = await res.json();
-        }
-      } catch (e) {
-        console.error("Failed to load vault files:", e);
-      }
-    }
     async function resetRolesToDefault() {
       if (confirm("Möchtest du die KI-Rollen wirklich auf alle 24 Basis-Standardrollen zurücksetzen?")) {
         try {

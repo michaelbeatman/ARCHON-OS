@@ -25,25 +25,28 @@ def list_calendar_events(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     source: str = Query("all"),
+    company_id: Optional[str] = Query(None),
 ):
-    events = operations_calendar.list_events(start_date=start_date, end_date=end_date, source=source)
+    events = operations_calendar.list_events(
+        start_date=start_date, end_date=end_date, source=source, company_id=company_id
+    )
     return {"status": "success", "count": len(events), "events": events}
 
 
 @router.post("/events")
-def create_calendar_event(request: Request, payload: Dict[str, Any] = Body(...)):
+def create_calendar_event(request: Request, payload: Dict[str, Any] = Body(...), company_id: Optional[str] = Query(None)):
     require_admin_or_503(request)
     try:
-        ev = operations_calendar.create_event(payload)
+        ev = operations_calendar.create_event(payload, company_id=company_id)
         return {"status": "success", "event": ev}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.delete("/events/{event_id}")
-def delete_calendar_event(request: Request, event_id: str):
+def delete_calendar_event(request: Request, event_id: str, company_id: Optional[str] = Query(None)):
     require_admin_or_503(request)
-    deleted = operations_calendar.delete_event(event_id)
+    deleted = operations_calendar.delete_event(event_id, company_id=company_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Kalendereintrag nicht gefunden.")
     return {"status": "success", "deleted_id": event_id}

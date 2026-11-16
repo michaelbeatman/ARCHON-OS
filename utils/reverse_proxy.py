@@ -19,7 +19,8 @@ from typing import Optional, Sequence
 
 import httpx
 from fastapi import Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from starlette.background import BackgroundTask
 
 __all__ = ["ReverseProxy", "get_shared_client"]
 
@@ -104,9 +105,12 @@ class ReverseProxy:
 
     def _rewrite_headers(self, upstream: httpx.Response) -> dict:
         out: dict[str, str] = {}
+        is_html = "text/html" in upstream.headers.get("content-type", "")
         for key, value in upstream.headers.items():
             lower = key.lower()
-            if lower in _DROP_HEADERS:
+            if lower in _DROP_HEADERS or lower == "set-cookie":
+                continue
+            if is_html and lower in ("cache-control", "etag", "last-modified", "pragma", "expires"):
                 continue
             if lower == "location":
                 if value.startswith("/") and not value.startswith(self.mount_prefix):
@@ -117,6 +121,8 @@ class ReverseProxy:
         # F14: Kein unbegrenztes Access-Control-Allow-Origin: * fuer Proxies
         out.pop("Access-Control-Allow-Origin", None)
         out["X-Frame-Options"] = "SAMEORIGIN"
+        if is_html:
+            out["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return out
 
     def _transform_content(self, upstream: httpx.Response, path: str) -> tuple[bytes, Optional[str]]:
@@ -139,20 +145,69 @@ class ReverseProxy:
     async def _do_request(self, request: Request, url: str, path: str) -> Response:
         client = get_shared_client()
         body = await request.body()
-        upstream = await client.request(
+        req_headers = self._prepare_headers(request)
+
+        if not isinstance(client, httpx.AsyncClient):
+            upstream = await client.request(
+                method=request.method,
+                url=url,
+                headers=req_headers,
+                content=body,
+            )
+            headers = self._rewrite_headers(upstream)
+            content, media_override = self._transform_content(upstream, path)
+            resp: Response = Response(
+                content=content,
+                status_code=upstream.status_code,
+                headers=headers,
+                media_type=media_override or upstream.headers.get("content-type"),
+            )
+            for cookie_val in upstream.headers.get_list("set-cookie"):
+                resp.headers.append("set-cookie", cookie_val)
+            return resp
+
+        req = client.build_request(
             method=request.method,
             url=url,
-            headers=self._prepare_headers(request),
+            headers=req_headers,
             content=body,
         )
+        upstream = await client.send(req, stream=True)
+        content_type = upstream.headers.get("content-type", "")
+        has_override = any(path.endswith(suffix) for suffix in self.static_overrides)
         headers = self._rewrite_headers(upstream)
-        content, media_override = self._transform_content(upstream, path)
-        return Response(
-            content=content,
-            status_code=upstream.status_code,
-            headers=headers,
-            media_type=media_override or upstream.headers.get("content-type"),
-        )
+
+        if "text/html" in content_type or has_override:
+            try:
+                await upstream.aread()
+            finally:
+                await upstream.aclose()
+            content, media_override = self._transform_content(upstream, path)
+            resp = Response(
+                content=content,
+                status_code=upstream.status_code,
+                headers=headers,
+                media_type=media_override or content_type,
+            )
+        else:
+            async def _stream_chunks():
+                try:
+                    async for chunk in upstream.aiter_bytes(65536):
+                        yield chunk
+                finally:
+                    await upstream.aclose()
+
+            resp = StreamingResponse(
+                _stream_chunks(),
+                status_code=upstream.status_code,
+                headers=headers,
+                media_type=content_type or None,
+                background=BackgroundTask(upstream.aclose),
+            )
+
+        for cookie_val in upstream.headers.get_list("set-cookie"):
+            resp.headers.append("set-cookie", cookie_val)
+        return resp
 
     # ---------------- oeffentlich ----------------
 

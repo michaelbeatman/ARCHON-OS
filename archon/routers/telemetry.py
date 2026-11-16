@@ -26,7 +26,11 @@ def _read_recent_turns(agent_id: str) -> list[str]:
     recent_turns = []
     conn = None
     try:
-        db_path = "/app/data/agentic_memory.db"
+        try:
+            from backend.db_paths import resolve_db as _resolve_db
+            db_path = _resolve_db("agentic_memory.db")
+        except Exception:
+            db_path = "/app/data/agentic_memory.db"
         if os.path.exists(db_path):
             import sqlite3
 
@@ -51,9 +55,16 @@ def _read_recent_turns(agent_id: str) -> list[str]:
 def api_get_agent_activity(agent_id: str):
     """Liefert Echtzeit-Aktivitaets- und Task-Logs fuer einen Agenten."""
     import main as app_main
+    from fastapi import HTTPException
+    from utils.path_jail import safe_identifier, PathJailError
+
+    try:
+        clean_id = safe_identifier(agent_id, "agent_id")
+    except PathJailError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     log_candidates = [
-        app_main.agent_log_path(agent_id),
+        app_main.agent_log_path(clean_id),
     ]
     log_lines = []
     for lp in log_candidates:
@@ -68,20 +79,20 @@ def api_get_agent_activity(agent_id: str):
             except Exception:
                 pass
 
-    recent_turns = _read_recent_turns(agent_id)
+    recent_turns = _read_recent_turns(clean_id)
 
 
     if not log_lines and not recent_turns:
         now_str = datetime.datetime.now().strftime("%H:%M:%S")
         log_lines = [
-            f"[{now_str}] Agent '{agent_id}' initialisiert im Standby-Modus.",
+            f"[{now_str}] Agent '{clean_id}' initialisiert im Standby-Modus.",
             f"[{now_str}] MCP Tools & Provider-Bindings aktiv.",
             f"[{now_str}] Bereit fuer Arbeitsauftraege und Autonom-Routing.",
         ]
 
     return {
         "status": "success",
-        "agent_id": agent_id,
+        "agent_id": clean_id,
         "logs": log_lines,
         "recent_turns": recent_turns,
     }

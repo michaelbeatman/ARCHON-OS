@@ -2269,7 +2269,7 @@
     if (docType) url += `&doc_type=${encodeURIComponent(docType)}`;
     if (entityName) url += `&entity_name=${encodeURIComponent(entityName)}`;
     if (amountNet) url += `&amount_net=${encodeURIComponent(amountNet)}`;
-    window.open(url, "_blank");
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   window.previewErpDocumentInStudio = function (docId) {
@@ -2279,19 +2279,19 @@
   window.downloadErpXRechnungXml = function (docId) {
     const cid = getActiveCompanyId();
     const url = `/api/erp/documents/${encodeURIComponent(docId)}/xrechnung.xml?company_id=${encodeURIComponent(cid)}`;
-    window.open(url, "_blank");
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   window.exportErpDatevCsv = function () {
     const cid = getActiveCompanyId();
     const url = `/api/erp/export/datev.csv?company_id=${encodeURIComponent(cid)}`;
-    window.open(url, "_blank");
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   window.downloadErpZugferdPdf = function (docId) {
     const cid = getActiveCompanyId();
     const url = `/api/erp/documents/${encodeURIComponent(docId)}/zugferd.pdf?company_id=${encodeURIComponent(cid)}`;
-    window.open(url, "_blank");
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   window.openErpBankImportModal = function () {

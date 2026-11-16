@@ -3121,7 +3121,12 @@
 
     function openPriceCatalogForAgentTab() {
       const modelSelect = document.getElementById("agent-tab-model-select");
-      openPriceCatalogModal(modelSelect, "");
+      if (typeof window.openPriceCatalogModal === "function") {
+        window.openPriceCatalogModal(modelSelect, "");
+      } else {
+        const modal = document.getElementById("llm-price-catalog-modal");
+        if (modal) modal.classList.remove("hidden");
+      }
     }
     window.openPriceCatalogForAgentTab = openPriceCatalogForAgentTab;
 

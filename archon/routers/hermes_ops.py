@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import sqlite3
-from typing import Dict
+from typing import Any, Dict
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
@@ -99,6 +99,21 @@ def api_get_hermes_config(request: Request):
     }
 
 
+def _restore_masked_dict_secrets(existing: Any, updated: Any) -> Any:
+    """Stellt maskierte Secret-Werte (z. B. '••••') rekursiv aus der bestehenden Config wieder her."""
+    if isinstance(updated, dict) and isinstance(existing, dict):
+        out: Dict[str, Any] = {}
+        for k, v in updated.items():
+            if isinstance(v, str) and ("\u2022" in v or "•" in v) and k in existing:
+                out[k] = existing[k]
+            elif isinstance(v, (dict, list)) and k in existing:
+                out[k] = _restore_masked_dict_secrets(existing[k], v)
+            else:
+                out[k] = v
+        return out
+    return updated
+
+
 @router.post("/api/hermes/config")
 def api_save_hermes_config(request: Request, payload: Dict = Body(...)):
     _require_admin(request)
@@ -110,6 +125,21 @@ def api_save_hermes_config(request: Request, payload: Dict = Body(...)):
         app_main.create_rolling_backup(cfg_file, max_backups=3)
 
     config_data = payload.get("config", payload)
+    # Vorhandene Secrets wiederherstellen, falls Client maskierte '••••'-Werte zuruecksendet
+    if os.path.exists(cfg_file) and isinstance(config_data, dict):
+        try:
+            with open(cfg_file, "r", encoding="utf-8") as rf:
+                if cfg_file.endswith(".yaml") or cfg_file.endswith(".yml"):
+                    try:
+                        import yaml
+                        existing_obj = yaml.safe_load(rf) or {}
+                    except Exception:
+                        existing_obj = {}
+                else:
+                    existing_obj = json.load(rf) or {}
+            config_data = _restore_masked_dict_secrets(existing_obj, config_data)
+        except Exception:
+            pass
     try:
         if cfg_file.endswith(".yaml") or cfg_file.endswith(".yml"):
             try:

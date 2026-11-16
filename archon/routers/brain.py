@@ -433,8 +433,12 @@ async def api_library_upload(request: Request):
                         if not os.path.exists(sync_script):
                             sync_script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "tools", "sync_vault_to_rag.py")
                         if os.path.exists(sync_script):
-                            cmd = [sys.executable, sync_script, "--api-key", _delegate_get_rag_api_key(), "--all"]
-                            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            cmd = [sys.executable, sync_script, "--all"]
+                            proc_env = os.environ.copy()
+                            rag_key = _delegate_get_rag_api_key()
+                            if rag_key:
+                                proc_env["ANYTHINGLLM_API_KEY"] = rag_key
+                            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=proc_env)
                             main_mod = sys.modules.get("main")
                             if main_mod:
                                 setattr(main_mod, "_RAG_SYNC_PROCESS", proc)

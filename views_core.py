@@ -11,6 +11,7 @@ import os
 
 from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
 import sys
+import html
 import re
 import shutil
 import glob
@@ -27,10 +28,10 @@ from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel
 
 try:
-    from utils.path_jail import safe_path_within, PathJailError
+    from utils.path_jail import safe_path_within, safe_filename, PathJailError
 except ImportError:  # pragma: no cover - direkter Aufruf ausserhalb des Repo-Roots
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from utils.path_jail import safe_path_within, PathJailError
+    from utils.path_jail import safe_path_within, safe_filename, PathJailError
 
 router = APIRouter(prefix="/api/views", tags=["views_core"])
 
@@ -53,6 +54,15 @@ def get_inbox_telegram_dir() -> str:
         if os.path.exists(c):
             return c
     path = os.path.join(MEMORY_DIR, "inbox", "telegram")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+def get_inbox_webhook_dir() -> str:
+    candidates = ["/opt/data/inbox/webhooks", os.path.join(MEMORY_DIR, "inbox", "webhooks"), "data/inbox/webhooks"]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    path = os.path.join(MEMORY_DIR, "inbox", "webhooks")
     os.makedirs(path, exist_ok=True)
     return path
 
@@ -161,7 +171,7 @@ async def get_inbox_file_content(request: Request, path: str = Query(...)):
     require_admin_or_503(request)  # RBAC: Rohdatei-Lesen ist Admin-Sache
     try:
         real_path = safe_path_within(
-            path, [get_inbox_email_dir(), get_inbox_telegram_dir()],
+            path, [get_inbox_email_dir(), get_inbox_telegram_dir(), get_inbox_webhook_dir()],
             must_exist=False, allow_dirs=False,
         )
     except PathJailError as exc:
@@ -337,16 +347,21 @@ async def get_vault_tree(force_refresh: bool = False):
 
 
 @router.get("/library/vault/file")
-async def get_vault_file(path: str = Query(...)):
+async def get_vault_file(request: Request, path: str = Query(...)):
     """Liest den Inhalt einer gewählten Datei im Vault."""
+    require_admin_or_503(request)
     vault_dir = resolve_obsidian_vault_dir()
-    # Normalize path and prevent directory traversal
     clean_rel = path.replace("\\", "/").lstrip("/")
-    safe_path = os.path.abspath(os.path.join(vault_dir, clean_rel))
     vault_abs = os.path.abspath(vault_dir)
-
-    if not safe_path.startswith(vault_abs):
-        raise HTTPException(status_code=403, detail="Unzulässiger Pfad außerhalb des Vaults.")
+    try:
+        safe_path = safe_path_within(
+            os.path.join(vault_abs, clean_rel),
+            [vault_abs],
+            must_exist=False,
+            allow_dirs=False,
+        )
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Unzulässiger Pfad außerhalb des Vaults: {exc}")
 
     if not os.path.exists(safe_path) or not os.path.isfile(safe_path):
         raise HTTPException(status_code=404, detail="Dokument im Vault nicht gefunden.")
@@ -602,23 +617,40 @@ class FileActionPayload(BaseModel):
     filepath: str
 
 
+def _resolve_showroom_projects_dir(vault_dir: Path, filepath: str = "") -> Path:
+    """Bestimmt den passenden Projekt-Root (01_PROJEKTE oder Legacy-Projects)."""
+    primary = (vault_dir / "01_PROJEKTE").resolve()
+    legacy = (vault_dir / "Projects").resolve()
+    norm = str(filepath or "").replace("\\", "/")
+    if "/Projects/" in norm or norm.endswith("/Projects"):
+        return legacy
+    if "/01_PROJEKTE/" in norm or norm.endswith("/01_PROJEKTE"):
+        return primary
+    if primary.exists():
+        return primary
+    if legacy.exists():
+        return legacy
+    return primary
+
+
 @router.post("/showroom/file/delete")
 async def delete_showroom_file(request: Request, payload: FileActionPayload):
-    """Verschiebt eine Datei oder einen gesamten Projektordner in den Papierkorb (Projects/Papierkorb)."""
+    """Verschiebt eine Datei oder einen gesamten Projektordner in den Papierkorb."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     import shutil
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
-    projects_dir = (vault_dir / "Projects").resolve()
-    trash_dir = (projects_dir / "Papierkorb").resolve()
-    trash_dir.mkdir(parents=True, exist_ok=True)
-
+    allowed_roots = [str((vault_dir / "01_PROJEKTE").resolve()), str((vault_dir / "Projects").resolve())]
     try:
         source = Path(safe_path_within(
-            payload.filepath, [str(projects_dir)], must_exist=True, allow_dirs=True,
+            payload.filepath, allowed_roots, must_exist=True, allow_dirs=True,
         ))
     except PathJailError as exc:
         raise HTTPException(status_code=403, detail=f"Unzulässiger Pfad: {exc}")
+
+    projects_dir = _resolve_showroom_projects_dir(vault_dir, str(source))
+    trash_dir = (projects_dir / "Papierkorb").resolve()
+    trash_dir.mkdir(parents=True, exist_ok=True)
 
     if source == projects_dir or source == trash_dir or source == (projects_dir / "Einzelberichte").resolve():
         raise HTTPException(status_code=400, detail="System-Ordner können nicht gelöscht werden.")
@@ -647,18 +679,22 @@ async def restore_showroom_file(request: Request, payload: FileActionPayload):
     import shutil
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
-    projects_dir = (vault_dir / "Projects").resolve()
+    projects_dir = _resolve_showroom_projects_dir(vault_dir, payload.filepath)
     trash_dir = (projects_dir / "Papierkorb").resolve()
     trash_dir.mkdir(parents=True, exist_ok=True)
 
+    allowed_trash = [
+        str((vault_dir / "01_PROJEKTE" / "Papierkorb").resolve()),
+        str((vault_dir / "Projects" / "Papierkorb").resolve()),
+    ]
     try:
         source = Path(safe_path_within(
-            payload.filepath, [str(trash_dir)], must_exist=True, allow_dirs=True,
+            payload.filepath, allowed_trash, must_exist=True, allow_dirs=True,
         ))
     except PathJailError as exc:
         raise HTTPException(status_code=403, detail=f"Unzulässiger Pfad: {exc}")
 
-    if source == trash_dir:
+    if source == trash_dir or source.name == "Papierkorb":
         raise HTTPException(status_code=400, detail="Der Papierkorb selbst kann nicht wiederhergestellt werden.")
 
     if source.is_dir():
@@ -691,18 +727,23 @@ async def purge_showroom_file(request: Request, payload: FileActionPayload):
     import shutil
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
-    trash_dir = (vault_dir / "Projects" / "Papierkorb").resolve()
-    if not trash_dir.exists():
+    projects_dir = _resolve_showroom_projects_dir(vault_dir, payload.filepath)
+    trash_dir = (projects_dir / "Papierkorb").resolve()
+    allowed_trash = [
+        str((vault_dir / "01_PROJEKTE" / "Papierkorb").resolve()),
+        str((vault_dir / "Projects" / "Papierkorb").resolve()),
+    ]
+    if not any(os.path.exists(t) for t in allowed_trash):
         raise HTTPException(status_code=404, detail="Papierkorb nicht gefunden.")
 
     try:
         source = Path(safe_path_within(
-            payload.filepath, [str(trash_dir)], must_exist=True, allow_dirs=True,
+            payload.filepath, allowed_trash, must_exist=True, allow_dirs=True,
         ))
     except PathJailError as exc:
         raise HTTPException(status_code=403, detail=f"Endgültiges Löschen ist nur für Objekte im Papierkorb zulässig: {exc}")
 
-    if source == trash_dir:
+    if source == trash_dir or source.name == "Papierkorb":
         raise HTTPException(status_code=400, detail="Der Papierkorb selbst kann nicht gelöscht werden.")
 
     try:
@@ -769,24 +810,29 @@ async def get_showroom_reports():
 @router.get("/showroom/report-content")
 async def get_showroom_report_content(filename: str = Query(...)):
     """Liest den Markdown-/Text-Inhalt eines gewählten Berichts (auch aus Projects)."""
+    try:
+        clean_name = safe_filename(filename)
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Unzulässiger Dateiname: {exc}")
+
     vault_dir = resolve_obsidian_vault_dir()
     projects_dir = Path(vault_dir) / "01_PROJEKTE"
     reports_dir = Path(get_reports_dir())
 
     # 1. Prüfe in Projects/*/03_Endprodukte
     if projects_dir.exists():
-        for cand in projects_dir.glob(f"*/03_Endprodukte/{filename}"):
+        for cand in projects_dir.glob(f"*/03_Endprodukte/{clean_name}"):
             if cand.exists() and cand.is_file():
                 try:
-                    return {"filename": filename, "content": cand.read_text(encoding="utf-8", errors="ignore")}
+                    return {"filename": clean_name, "content": cand.read_text(encoding="utf-8", errors="ignore")}
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=str(e))
 
     # 2. Prüfe in builds/reports
-    safe_path = reports_dir / os.path.basename(filename)
-    if safe_path.exists():
+    safe_path = reports_dir / clean_name
+    if safe_path.exists() and safe_path.is_file():
         try:
-            return {"filename": os.path.basename(safe_path), "content": safe_path.read_text(encoding="utf-8", errors="ignore")}
+            return {"filename": safe_path.name, "content": safe_path.read_text(encoding="utf-8", errors="ignore")}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -836,78 +882,77 @@ async def get_showroom_app_preview_frame(app_name: str):
     Liefert einen interaktiven Responsive-Preview-Frame mit Device-Switcher
     (Desktop, Tablet, Mobile) für die angegebene lokale Webanwendung.
     """
+    from urllib.parse import quote
     from fastapi.responses import HTMLResponse
+    try:
+        clean_app = safe_filename(app_name)
+    except PathJailError as exc:
+        raise HTTPException(status_code=403, detail=f"Unzulässiger App-Name: {exc}")
+
     apps_dir = get_apps_dir()
-    app_dir = os.path.join(apps_dir, app_name)
+    app_dir = os.path.join(apps_dir, clean_app)
     index_file = os.path.join(app_dir, "index.html")
-    single_file = os.path.join(apps_dir, f"{app_name}.html")
+    single_file = os.path.join(apps_dir, f"{clean_app}.html")
+    encoded_app = quote(clean_app, safe="")
 
     if os.path.exists(index_file):
-        app_url = f"/builds/apps/{app_name}/index.html"
+        app_url = f"/builds/apps/{encoded_app}/index.html"
     elif os.path.exists(single_file):
-        app_url = f"/builds/apps/{app_name}.html"
-    elif os.path.exists(app_dir) and app_name.endswith(".html"):
-        app_url = f"/builds/apps/{app_name}"
+        app_url = f"/builds/apps/{encoded_app}.html"
+    elif os.path.exists(app_dir) and clean_app.endswith(".html"):
+        app_url = f"/builds/apps/{encoded_app}"
     else:
-        raise HTTPException(status_code=404, detail=f"Web-App '{app_name}' besitzt keine index.html.")
+        raise HTTPException(status_code=404, detail=f"Web-App '{html.escape(clean_app)}' besitzt keine index.html.")
 
+    safe_app_label = html.escape(clean_app, quote=True)
+    safe_app_url = html.escape(app_url, quote=True)
     html_content = f"""<!DOCTYPE html>
-<html lang="de" class="h-full">
+<html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Showroom Preview: {app_name}</title>
+  <title>Showroom Preview: {safe_app_label}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body {{ background: #09090b; color: #f4f4f5; }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{ height: 100%; background: #09090b; color: #f4f4f5; font-family: ui-sans-serif, system-ui, sans-serif; overflow: hidden; display: flex; flex-direction: column; }}
+    header {{ height: 48px; border-bottom: 1px solid #27272a; background: #18181b; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }}
+    .title {{ font-size: 12px; font-weight: 700; font-family: ui-monospace, monospace; color: #e4e4e7; }}
+    .title span {{ color: #38bdf8; }}
+    .switcher {{ display: flex; gap: 4px; background: #27272a; padding: 3px; border-radius: 10px; }}
+    .btn {{ border: 0; padding: 5px 10px; border-radius: 7px; font-size: 11px; font-family: ui-monospace, monospace; cursor: pointer; background: transparent; color: #a1a1aa; text-decoration: none; display: inline-flex; align-items: center; }}
+    .btn.active {{ background: #3f3f46; color: #ffffff; font-weight: 700; }}
+    .btn-primary {{ background: #0284c7; color: #ffffff; font-weight: 700; }}
+    main {{ flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px; overflow: hidden; }}
+    iframe {{ background: #ffffff; border: 1px solid #27272a; transition: all 0.25s ease; }}
     .device-desktop {{ width: 100%; height: 100%; border-radius: 0; }}
-    .device-tablet {{ width: 768px; height: 92%; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }}
-    .device-mobile {{ width: 375px; height: 85%; border-radius: 36px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); border: 8px solid #27272a; }}
+    .device-tablet {{ width: 768px; height: 92%; border-radius: 20px; }}
+    .device-mobile {{ width: 375px; height: 85%; border-radius: 36px; border: 8px solid #27272a; }}
   </style>
 </head>
-<body class="h-full flex flex-col font-sans overflow-hidden">
-  <header class="h-12 border-b border-zinc-800 bg-zinc-900/90 px-4 flex items-center justify-between shrink-0">
-    <div class="flex items-center gap-3">
-      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-      <span class="font-bold text-xs tracking-tight font-mono text-zinc-200">Showroom Live Preview: <span class="text-sky-400">{app_name}</span></span>
+<body>
+  <header>
+    <div class="title">Showroom Live Preview: <span>{safe_app_label}</span></div>
+    <div class="switcher">
+      <button onclick="setDevice('desktop')" id="btn-desktop" class="btn active">Desktop</button>
+      <button onclick="setDevice('tablet')" id="btn-tablet" class="btn">Tablet</button>
+      <button onclick="setDevice('mobile')" id="btn-mobile" class="btn">Mobile</button>
     </div>
-    <div class="flex items-center bg-zinc-800 p-0.5 rounded-xl border border-zinc-700/60 text-xs">
-      <button onclick="setDevice('desktop')" id="btn-desktop" class="px-2.5 py-1 rounded-lg font-mono font-bold bg-zinc-700 text-white flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-desktop"></i> Desktop
-      </button>
-      <button onclick="setDevice('tablet')" id="btn-tablet" class="px-2.5 py-1 rounded-lg font-mono text-zinc-400 hover:text-white flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-tablet-screen-button"></i> Tablet
-      </button>
-      <button onclick="setDevice('mobile')" id="btn-mobile" class="px-2.5 py-1 rounded-lg font-mono text-zinc-400 hover:text-white flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-mobile-screen"></i> Mobile
-      </button>
-    </div>
-    <div class="flex items-center gap-2">
-      <button onclick="document.getElementById('preview-frame').contentWindow.location.reload()" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition" title="Neu laden">
-        <i class="fa-solid fa-rotate-right"></i>
-      </button>
-      <a href="{app_url}" target="_blank" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs font-bold transition flex items-center gap-1">
-        In neuem Tab <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-      </a>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button onclick="document.getElementById('preview-frame').contentWindow.location.reload()" class="btn" title="Neu laden">Reload</button>
+      <a href="{safe_app_url}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">In neuem Tab</a>
     </div>
   </header>
-  <main class="flex-1 bg-zinc-950 flex items-center justify-center p-2 overflow-hidden relative">
-    <iframe id="preview-frame" src="{app_url}" class="device-desktop bg-white border border-zinc-800 transition-all duration-300"></iframe>
+  <main>
+    <iframe id="preview-frame" src="{safe_app_url}" sandbox="allow-scripts allow-forms" class="device-desktop"></iframe>
   </main>
   <script>
     function setDevice(mode) {{
       const frame = document.getElementById('preview-frame');
-      const btns = ['desktop', 'tablet', 'mobile'];
-      btns.forEach(b => {{
+      ['desktop', 'tablet', 'mobile'].forEach(b => {{
         const btn = document.getElementById('btn-' + b);
-        if (b === mode) {{
-          btn.className = 'px-2.5 py-1 rounded-lg font-mono font-bold bg-zinc-700 text-white flex items-center gap-1.5 transition';
-        }} else {{
-          btn.className = 'px-2.5 py-1 rounded-lg font-mono text-zinc-400 hover:text-white flex items-center gap-1.5 transition';
-        }}
+        if (btn) btn.className = b === mode ? 'btn active' : 'btn';
       }});
-      frame.className = 'device-' + mode + ' bg-white border border-zinc-800 transition-all duration-300';
+      if (frame) frame.className = 'device-' + mode;
     }}
   </script>
 </body>
@@ -915,10 +960,10 @@ async def get_showroom_app_preview_frame(app_name: str):
     return HTMLResponse(content=html_content)
 
 
-
 @router.post("/showroom/archive-to-obsidian")
-async def archive_showroom_report(filename: str = Query(...)):
+async def archive_showroom_report(request: Request, filename: str = Query(...)):
     """Archiviert einen Bericht nach /opt/data/obsidian/00_Notebook_Synthesen/."""
+    require_admin_or_503(request)
     try:
         from views.view_showroom import archive_report_to_obsidian
         res = archive_report_to_obsidian(filename)
@@ -1080,8 +1125,9 @@ async def get_theme_live_overrides():
     return {"rules": {}, "textOverrides": {}}
 
 @router.post("/theme/live-overrides")
-async def save_theme_live_overrides(payload: ThemeOverridesPayload):
+async def save_theme_live_overrides(request: Request, payload: ThemeOverridesPayload):
     """Speichert CSS Live Studio Regeln & Text-Overrides persistent."""
+    require_admin_or_503(request)
     try:
         data = {
             "rules": payload.rules or {},
@@ -1099,8 +1145,9 @@ async def save_theme_live_overrides(payload: ThemeOverridesPayload):
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {str(e)}")
 
 @router.delete("/theme/live-overrides")
-async def delete_theme_live_overrides():
+async def delete_theme_live_overrides(request: Request):
     """Löscht alle gespeicherten CSS Live Studio Regeln & Text-Overrides."""
+    require_admin_or_503(request)
     try:
         data = {"rules": {}, "textOverrides": {}, "updated_at": datetime.datetime.now().isoformat()}
         os.makedirs(os.path.dirname(os.path.abspath(THEME_OVERRIDES_FILE)), exist_ok=True)

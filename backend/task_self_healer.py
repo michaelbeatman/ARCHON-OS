@@ -15,7 +15,11 @@ import datetime
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    DB_PATH = _resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 # F2 (Cluster 3): `git checkout -- <pfad>` nahm den Pfad aus dem Request-Body.
 # Erlaubt sind deshalb nur einfache Repo-relative Pfade; alles mit Shell-

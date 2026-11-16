@@ -49,9 +49,10 @@ def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:
 class PriorityConcurrencyThrottle:
     def __init__(self):
         self._active_slots = {}
-        self._wait_queue = [] # Heap von (-priority, arrival_time, task_id, agent_id)
+        self._wait_queue = []  # Heap von (-priority, seq, slot_key, task_id, agent_id)
         self._seq = 0
         self._lock = asyncio.Lock()
+        self._cond = asyncio.Condition(self._lock)
 
     async def acquire_slot(self, agent_id: str, task_id: str, priority: int = 2) -> bool:
         """
@@ -62,46 +63,55 @@ class PriorityConcurrencyThrottle:
         max_slots = max(1, int(cfg.get("max_concurrent_agents", 4)))
         timeout = float(cfg.get("queue_timeout_seconds", 60))
 
-        start_time = asyncio.get_event_loop().time()
-        
-        async with self._lock:
+        loop = asyncio.get_running_loop()
+        start_time = loop.time()
+
+        async with self._cond:
             self._seq += 1
-            # Negierte Priorität für Max-Heap-Verhalten (-3 kommt vor -1)
-            heapq.heappush(self._wait_queue, (-int(priority), self._seq, task_id, agent_id))
+            seq = self._seq
+            slot_key = task_id if (task_id not in self._active_slots and all(x[2] != task_id for x in self._wait_queue)) else f"{task_id}#{seq}"
+            heapq.heappush(self._wait_queue, (-int(priority), seq, slot_key, task_id, agent_id))
 
-        try:
-            while True:
-                async with self._lock:
-                    if len(self._active_slots) < max_slots:
-                        # Prüfe ob dieser Task an der Spitze der Schlange steht
-                        if self._wait_queue and self._wait_queue[0][2] == task_id:
-                            heapq.heappop(self._wait_queue)
-                            self._active_slots[task_id] = {
-                                "agent_id": agent_id,
-                                "priority": priority,
-                                "started_at": asyncio.get_event_loop().time()
-                            }
-                            return True
+            try:
+                while True:
+                    # Prune ggf. verwaiste Slots bei Laufzeit-Konfig-Aenderung
+                    cfg_now = get_concurrency_config()
+                    max_slots = max(1, int(cfg_now.get("max_concurrent_agents", max_slots)))
+                    if len(self._active_slots) < max_slots and self._wait_queue and self._wait_queue[0][2] == slot_key:
+                        heapq.heappop(self._wait_queue)
+                        self._active_slots[slot_key] = {
+                            "task_id": task_id,
+                            "agent_id": agent_id,
+                            "priority": priority,
+                            "started_at": loop.time(),
+                        }
+                        return True
 
-                elapsed = asyncio.get_event_loop().time() - start_time
-                if elapsed >= timeout:
-                    # Timeout: aus Schlange entfernen
-                    async with self._lock:
-                        self._wait_queue = [item for item in self._wait_queue if item[2] != task_id]
+                    remaining = timeout - (loop.time() - start_time)
+                    if remaining <= 0:
+                        self._wait_queue = [item for item in self._wait_queue if item[2] != slot_key]
                         heapq.heapify(self._wait_queue)
-                    return False
-                await asyncio.sleep(0.3)
-        except asyncio.CancelledError:
-            async with self._lock:
-                self._wait_queue = [item for item in self._wait_queue if item[2] != task_id]
+                        return False
+                    try:
+                        await asyncio.wait_for(self._cond.wait(), timeout=min(remaining, 1.0))
+                    except asyncio.TimeoutError:
+                        continue
+            except asyncio.CancelledError:
+                self._wait_queue = [item for item in self._wait_queue if item[2] != slot_key]
                 heapq.heapify(self._wait_queue)
-            raise
+                raise
 
     async def release_slot(self, task_id: str):
-        """Gibt den Slot nach Ausführung frei."""
-        async with self._lock:
+        """Gibt den Slot nach Ausführung frei und weckt wartende Tasks sofort."""
+        async with self._cond:
             if task_id in self._active_slots:
                 del self._active_slots[task_id]
+            else:
+                for key, info in list(self._active_slots.items()):
+                    if info.get("task_id") == task_id:
+                        del self._active_slots[key]
+                        break
+            self._cond.notify_all()
 
     def get_status(self) -> Dict[str, Any]:
         cfg = get_concurrency_config()
@@ -110,7 +120,7 @@ class PriorityConcurrencyThrottle:
         queued_count = len(self._wait_queue)
         
         queue_preview = []
-        for neg_p, seq, t_id, a_id in sorted(self._wait_queue):
+        for neg_p, _seq, _slot_key, t_id, a_id in sorted(self._wait_queue):
             queue_preview.append({"task_id": t_id, "agent_id": a_id, "priority": -neg_p})
 
         return {

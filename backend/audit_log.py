@@ -20,7 +20,11 @@ from typing import Dict, Any, List, Optional, Tuple
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    DB_PATH = _resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 GENESIS_HASH = "0" * 64
 
 _SENSITIVE_QUERY_KEYS = frozenset({
@@ -115,7 +119,15 @@ def sanitize_llm_endpoint(endpoint: str) -> Tuple[str, str, str]:
             if not ip_obj.is_link_local and (ip_obj.is_loopback or ip_obj.is_private):
                 zone = "LOCAL_ON_PREM"
         except ValueError:
-            if hostname.endswith((".local", ".lan", ".internal", ".home.arpa")):
+            # Nur explizit erlaubte interne Suffixe (.internal) und localhost.localdomain als LOCAL_ON_PREM;
+            # beliebige .local/.lan Hosts müssen explizit per Allowlist freigegeben werden.
+            allowed_local_suffixes = (".internal",)
+            extra_local = {
+                h.strip().lower()
+                for h in (os.environ.get("ARCHON_LOCAL_LLM_HOSTS", "")).split(",")
+                if h.strip()
+            }
+            if hostname in extra_local or hostname == "localhost.localdomain" or hostname.endswith(allowed_local_suffixes):
                 zone = "LOCAL_ON_PREM"
 
     return clean_endpoint, target_host, zone
@@ -137,6 +149,12 @@ class ChainedAuditLog:
     def _init_db(self):
         conn = self._get_conn()
         try:
+            if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
+                try:
+                    conn.execute("PRAGMA journal_mode=WAL;")
+                    conn.execute("PRAGMA synchronous=NORMAL;")
+                except Exception:
+                    pass
             with conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS audit_log (
@@ -146,6 +164,7 @@ class ChainedAuditLog:
                         action TEXT NOT NULL,
                         event_type TEXT,
                         agent_id TEXT NOT NULL,
+                        company_id TEXT DEFAULT 'default',
                         provider TEXT DEFAULT '',
                         model TEXT DEFAULT '',
                         target_host TEXT DEFAULT '',
@@ -178,6 +197,8 @@ class ChainedAuditLog:
                 if "payload_json" not in existing_cols and "payload" in existing_cols:
                     conn.execute("ALTER TABLE audit_log ADD COLUMN payload_json TEXT DEFAULT '{}'")
                     conn.execute("UPDATE audit_log SET payload_json = payload WHERE payload_json = '{}'")
+                if "company_id" not in existing_cols:
+                    conn.execute("ALTER TABLE audit_log ADD COLUMN company_id TEXT DEFAULT 'default'")
 
                 for dispatch_col in ("provider", "model", "target_host", "target_endpoint", "egress_zone"):
                     if dispatch_col not in existing_cols:
@@ -185,6 +206,7 @@ class ChainedAuditLog:
 
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_category ON audit_log(category)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_target_host ON audit_log(target_host)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_company_id ON audit_log(company_id)")
 
             conn.commit()
             cur = conn.cursor()
@@ -210,6 +232,19 @@ class ChainedAuditLog:
         target_host_val = str(safe_payload.get("target_host", "") or "")
         target_ep_val = str(safe_payload.get("target_endpoint", "") or "")
         egress_zone_val = str(safe_payload.get("egress_zone", "") or "")
+        company_id_val = str(safe_payload.get("company_id") or "").strip()
+        if not company_id_val:
+            try:
+                from backend.tenant_context import get_active_tenant_id
+                company_id_val = get_active_tenant_id() or "default"
+            except Exception:
+                company_id_val = "default"
+        else:
+            try:
+                from backend.tenant_context import sanitize_tenant_id
+                company_id_val = sanitize_tenant_id(company_id_val)
+            except Exception:
+                pass
 
         with self._lock:
             conn = self._get_conn()
@@ -229,6 +264,7 @@ class ChainedAuditLog:
                     "action": action,
                     "event_type": action,
                     "agent_id": agent_id,
+                    "company_id": company_id_val,
                     "provider": provider_val,
                     "model": model_val,
                     "target_host": target_host_val,
@@ -433,6 +469,7 @@ class ChainedAuditLog:
         offset: int = 0,
         provider: Optional[str] = None,
         target_host: Optional[str] = None,
+        company_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Liefert gefilterte Audit-Events mit Paginierung für UI und Dashboards."""
         conn = self._get_conn()
@@ -440,6 +477,15 @@ class ChainedAuditLog:
             cur = conn.cursor()
             query = "SELECT * FROM audit_log WHERE 1=1"
             params: List[Any] = []
+
+            if company_id and str(company_id).strip():
+                try:
+                    from backend.tenant_context import sanitize_tenant_id
+                    cid = sanitize_tenant_id(str(company_id).strip())
+                except Exception:
+                    cid = str(company_id).strip()
+                query += " AND (company_id = ? OR company_id IS NULL OR company_id = '')"
+                params.append(cid)
 
             if category and category.lower() not in ("all", "alle"):
                 query += " AND category = ?"

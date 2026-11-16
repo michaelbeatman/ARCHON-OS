@@ -175,15 +175,22 @@ def build_skills_file_index(force: bool = False):
 
 
 def find_skill_file(skill_id: str) -> Optional[str]:
+    from utils.path_jail import safe_identifier, safe_path_within, PathJailError
+
+    try:
+        clean_skill_id = safe_identifier(skill_id, "skill_id")
+    except PathJailError:
+        return None
+
     index = build_skills_file_index()
-    if skill_id in index and os.path.exists(index[skill_id]):
-        return index[skill_id]
+    if clean_skill_id in index and os.path.exists(index[clean_skill_id]):
+        return index[clean_skill_id]
     
-    variations = [skill_id]
-    if skill_id.startswith("skill-"):
-        variations.append(skill_id[6:])
+    variations = [clean_skill_id]
+    if clean_skill_id.startswith("skill-"):
+        variations.append(clean_skill_id[6:])
     else:
-        variations.append(f"skill-{skill_id}")
+        variations.append(f"skill-{clean_skill_id}")
         
     for var in variations:
         if var in index and os.path.exists(index[var]):
@@ -194,17 +201,23 @@ def find_skill_file(skill_id: str) -> Optional[str]:
             continue
         for var in variations:
             direct = os.path.join(root, var, "SKILL.md")
-            if os.path.exists(direct):
-                index[skill_id] = direct
-                return direct
+            try:
+                safe_direct = safe_path_within(direct, [root], must_exist=True, allow_dirs=False)
+                index[clean_skill_id] = safe_direct
+                return safe_direct
+            except PathJailError:
+                pass
             try:
                 for sub in os.listdir(root):
                     sub_path = os.path.join(root, sub)
                     if os.path.isdir(sub_path):
                         target = os.path.join(sub_path, var, "SKILL.md")
-                        if os.path.exists(target):
-                            index[skill_id] = target
-                            return target
+                        try:
+                            safe_target = safe_path_within(target, [root], must_exist=True, allow_dirs=False)
+                            index[clean_skill_id] = safe_target
+                            return safe_target
+                        except PathJailError:
+                            pass
             except Exception:
                 pass
     return None
@@ -440,25 +453,6 @@ async def api_save_single_hermes_skill(skill_id: str, request: Request):
         raise HTTPException(status_code=400, detail={"code": "skills_invalid_skill_id", "params": {"error": str(e)}})
     global _HERMES_SKILLS_CACHE
     data = await request.json()
-    file_path = find_skill_file(skill_id)
-    
-    if not file_path:
-        skills_dir = os.path.join(MEMORY_DIR, "hermes_skills", skill_id)
-        os.makedirs(skills_dir, exist_ok=True)
-        file_path = os.path.join(skills_dir, "SKILL.md")
-    else:
-        skills_dir = os.path.dirname(file_path)
-        
-    orig_path = os.path.join(skills_dir, ".SKILL.md.orig")
-    
-    # Create original snapshot backup if this is the first edit
-    if os.path.exists(file_path) and not os.path.exists(orig_path):
-        try:
-            shutil.copy2(file_path, orig_path)
-            print(f"[Skills API] Created original backup snapshot at {orig_path}")
-        except Exception as e:
-            print(f"[Skills API] Failed to create backup: {e}")
-            
     name = data.get("name", skill_id)
     category = data.get("category", "Allgemein")
     tags = data.get("tags", [])
@@ -466,13 +460,33 @@ async def api_save_single_hermes_skill(skill_id: str, request: Request):
         tags = [t.strip() for t in tags.split(",") if t.strip()]
     description = data.get("description", "")
     content = data.get("content", "")
-    
+
     composed_content = compose_skill_frontmatter(name, category, tags, description, content)
-    
-    try:
-        with open(file_path, "w", encoding="utf-8") as f:
+
+    def _persist_skill_sync() -> str:
+        resolved_path = find_skill_file(skill_id)
+        if not resolved_path:
+            skills_dir = os.path.join(MEMORY_DIR, "hermes_skills", skill_id)
+            os.makedirs(skills_dir, exist_ok=True)
+            resolved_path = os.path.join(skills_dir, "SKILL.md")
+        else:
+            skills_dir = os.path.dirname(resolved_path)
+
+        orig_path = os.path.join(skills_dir, ".SKILL.md.orig")
+        if os.path.exists(resolved_path) and not os.path.exists(orig_path):
+            try:
+                shutil.copy2(resolved_path, orig_path)
+                print(f"[Skills API] Created original backup snapshot at {orig_path}")
+            except Exception as e:
+                print(f"[Skills API] Failed to create backup: {e}")
+
+        with open(resolved_path, "w", encoding="utf-8") as f:
             f.write(composed_content)
-        print(f"[Skills API] Saved skill {skill_id} to {file_path}")
+        return resolved_path
+
+    try:
+        saved_path = await asyncio.to_thread(_persist_skill_sync)
+        print(f"[Skills API] Saved skill {skill_id} to {saved_path}")
     except Exception as e:
         print(f"[Skills API] Error writing skill {skill_id}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})

@@ -390,17 +390,46 @@ def enforce_egress_firewall_for_url(
     Interne Docker-Service-Namen und LOCAL_ON_PREM-Hosts bleiben zulässig;
     unautorisierte externe Cloud-Hosts lösen `ZeroEgressBlockedError` aus.
     """
-    if not url:
-        return {"allowed": True, "blocked": False, "zone": "UNKNOWN", "reason": "empty_url"}
+    if not url or not str(url).strip():
+        alog = audit_logger or chained_audit_log
+        ev = alog.record_llm_dispatch(
+            agent_id=agent_id or "system",
+            provider="unknown",
+            model="egress-firewall",
+            target_endpoint="unknown://empty",
+            action="llm_dispatch_blocked_empty_url",
+            data_category="egress_firewall",
+            http_status=0,
+            zero_egress_active=True,
+            extra={"reason": "Leere Ziel-URL durch Fail-Closed Egress-Guard blockiert."},
+        )
+        raise ZeroEgressBlockedError(
+            "Leere Ziel-URL für ausgehenden LLM-Aufruf blockiert (Fail-Closed).",
+            audit_event=ev,
+            error_code="EGRESS_EMPTY_URL_BLOCKED",
+        )
 
     clean_ep, host, zone = sanitize_llm_endpoint(url)
     host_low = (host or "").strip().lower()
-    # Cloud-Metadata / Link-Local (169.254.0.0/16, fe80::/10, AWS/Azure/GCP IMDS) niemals als lokal vertrauen
+    # Cloud-Metadata / Link-Local (169.254.0.0/16, fe80::/10, AWS/Azure/GCP IMDS) und obfuskierte IP-Literale prüfen
     host_ip_raw = host_low.split(":")[0].strip("[]")
+    if ":" in host_low and not host_low.startswith("["):
+        # IPv6 mit Port [fe80::1]:8080 vs reines [fe80::1] / fe80::1
+        pass
+    import ipaddress as _ipaddr
+    import socket as _socket
+    _ip_obj = None
     try:
-        import ipaddress as _ipaddr
         _ip_obj = _ipaddr.ip_address(host_ip_raw)
-        if _ip_obj.is_link_local or str(_ip_obj) == "fd00:ec2::254":
+    except ValueError:
+        try:
+            # Hex/Oktal/Integer-IPv4 wie 0xa9fea9fe oder 2852039166 abfangen
+            _packed = _socket.inet_aton(host_ip_raw)
+            _ip_obj = _ipaddr.ip_address(_socket.inet_ntoa(_packed))
+        except OSError:
+            _ip_obj = None
+    if _ip_obj is not None:
+        if _ip_obj.is_link_local or _ip_obj.is_multicast or _ip_obj.is_unspecified or str(_ip_obj) == "fd00:ec2::254":
             alog = audit_logger or chained_audit_log
             ev = alog.record_llm_dispatch(
                 agent_id=agent_id or "system",
@@ -411,16 +440,14 @@ def enforce_egress_firewall_for_url(
                 data_category="egress_firewall",
                 http_status=0,
                 zero_egress_active=True,
-                extra={"reason": f"Link-Local / Cloud-Metadata IP blockiert: {host_ip_raw}", "url": clean_ep},
+                extra={"reason": f"Link-Local / Cloud-Metadata IP blockiert: {_ip_obj}", "url": clean_ep},
             )
             raise ZeroEgressBlockedError(
                 f"Link-Local / Cloud-Metadata-Adresse blockiert: '{clean_ep}'",
                 audit_event=ev,
                 error_code="EGRESS_METADATA_BLOCKED",
             )
-    except ValueError:
-        pass
-    if zone == "LOCAL_ON_PREM" or host_low in _INTERNAL_EGRESS_HOSTS or (zone == "INTERNAL_GATEWAY" and "." not in host_low):
+    if zone == "LOCAL_ON_PREM" or host_low in _INTERNAL_EGRESS_HOSTS or (zone == "INTERNAL_GATEWAY" and "." not in host_low and not host_low.endswith(".local")):
         return {"allowed": True, "blocked": False, "zone": zone, "reason": "local_or_internal_gateway"}
 
     try:
@@ -535,6 +562,20 @@ def sanitize_outbound_llm_payload(
                     else:
                         clean_blocks.append(blk)
                 m_copy["content"] = clean_blocks
+            if isinstance(m_copy.get("tool_calls"), list):
+                clean_tcs: List[Any] = []
+                for tc in m_copy["tool_calls"]:
+                    if isinstance(tc, dict) and isinstance(tc.get("function"), dict):
+                        tc_copy = dict(tc)
+                        fn_copy = dict(tc_copy["function"])
+                        if isinstance(fn_copy.get("arguments"), str):
+                            sanitized_args, _ = _sanitize_text_for_egress(fn_copy["arguments"], session_id=sid)
+                            fn_copy["arguments"] = sanitized_args
+                        tc_copy["function"] = fn_copy
+                        clean_tcs.append(tc_copy)
+                    else:
+                        clean_tcs.append(tc)
+                m_copy["tool_calls"] = clean_tcs
             clean_msgs.append(m_copy)
         out["messages"] = clean_msgs
 

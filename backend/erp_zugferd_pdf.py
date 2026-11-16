@@ -11,8 +11,13 @@ nach ISO 19005-3 / Factur-X EN 16931), das den vollständigen EN-16931-XML-Daten
 from __future__ import annotations
 
 import datetime
+import functools
+import hashlib
+import os
+import struct
 import textwrap
-from typing import Any, Dict, List, Tuple
+import zlib
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.compliance_pdf import _winansi_bytes
 
@@ -21,6 +26,136 @@ PAGE_H = 841.89
 MARGIN_L = 44.0
 MARGIN_R = 44.0
 CONTENT_W = PAGE_W - MARGIN_L - MARGIN_R
+
+_TTF_CANDIDATES: Dict[str, Tuple[str, List[str]]] = {
+    "F1": (
+        "LiberationSans",
+        [
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ],
+    ),
+    "F2": (
+        "LiberationSans-Bold",
+        [
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ],
+    ),
+    "F3": (
+        "LiberationMono",
+        [
+            "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        ],
+    ),
+}
+
+
+@functools.lru_cache(maxsize=1)
+def _get_srgb_icc_bytes() -> bytes:
+    """Liefert ein gültiges sRGB-ICC-Profil für PDF/A-3b /OutputIntents."""
+    for icc_path in (
+        "/usr/share/ghostscript/10.06.0/iccprofiles/esrgb.icc",
+        "/usr/share/ghostscript/10.06.0/iccprofiles/default_rgb.icc",
+        "/usr/share/color/icc/colord/sRGB.icc",
+    ):
+        if os.path.exists(icc_path):
+            try:
+                with open(icc_path, "rb") as fh:
+                    raw = fh.read()
+                if len(raw) >= 128:
+                    return raw
+            except Exception:
+                pass
+    try:
+        from PIL import ImageCms
+        return ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    except Exception:
+        return b""
+
+
+@functools.lru_cache(maxsize=8)
+def _load_ttf_font_spec(slot: str) -> Optional[Dict[str, Any]]:
+    """Liest TrueType-Metriken und Rohdaten für PDF/A-3b Font-Einbettung."""
+    base_name, paths = _TTF_CANDIDATES.get(slot, ("", []))
+    font_path = next((p for p in paths if os.path.exists(p)), None)
+    if not font_path:
+        return None
+    try:
+        with open(font_path, "rb") as fh:
+            data = fh.read()
+        num_tables = struct.unpack(">H", data[4:6])[0]
+        tables: Dict[str, Tuple[int, int]] = {}
+        for i in range(num_tables):
+            off = 12 + i * 16
+            tag = data[off : off + 4].decode("latin1")
+            t_off, t_len = struct.unpack(">II", data[off + 8 : off + 16])
+            tables[tag] = (t_off, t_len)
+        head_off = tables["head"][0]
+        units_per_em = struct.unpack(">H", data[head_off + 18 : head_off + 20])[0] or 1000
+        xmin, ymin, xmax, ymax = struct.unpack(">hhhh", data[head_off + 36 : head_off + 44])
+        hhea_off = tables["hhea"][0]
+        ascent, descent = struct.unpack(">hh", data[hhea_off + 4 : hhea_off + 8])
+        num_hmetrics = struct.unpack(">H", data[hhea_off + 34 : hhea_off + 36])[0]
+        hmtx_off = tables["hmtx"][0]
+        advances = [
+            struct.unpack(">H", data[hmtx_off + i * 4 : hmtx_off + i * 4 + 2])[0]
+            for i in range(num_hmetrics)
+        ]
+        cmap_off = tables["cmap"][0]
+        num_sub = struct.unpack(">H", data[cmap_off + 2 : cmap_off + 4])[0]
+        sub_off = None
+        for i in range(num_sub):
+            pid, eid, rel = struct.unpack(">HHI", data[cmap_off + 4 + i * 8 : cmap_off + 12 + i * 8])
+            if (pid, eid) in ((3, 1), (0, 3), (3, 10)):
+                fmt = struct.unpack(">H", data[cmap_off + rel : cmap_off + rel + 2])[0]
+                if fmt == 4:
+                    sub_off = cmap_off + rel
+                    break
+        if sub_off is None:
+            return None
+        seg_cnt = struct.unpack(">H", data[sub_off + 6 : sub_off + 8])[0] // 2
+        end_codes = struct.unpack(f">{seg_cnt}H", data[sub_off + 14 : sub_off + 14 + seg_cnt * 2])
+        start_codes = struct.unpack(f">{seg_cnt}H", data[sub_off + 16 + seg_cnt * 2 : sub_off + 16 + seg_cnt * 4])
+        id_deltas = struct.unpack(f">{seg_cnt}h", data[sub_off + 16 + seg_cnt * 4 : sub_off + 16 + seg_cnt * 6])
+        ro_base = sub_off + 16 + seg_cnt * 6
+        id_ros = struct.unpack(f">{seg_cnt}H", data[ro_base : ro_base + seg_cnt * 2])
+
+        def _gid(cp: int) -> int:
+            for idx in range(seg_cnt):
+                if start_codes[idx] <= cp <= end_codes[idx]:
+                    if id_ros[idx] == 0:
+                        return (cp + id_deltas[idx]) & 0xFFFF
+                    g_off = ro_base + idx * 2 + id_ros[idx] + 2 * (cp - start_codes[idx])
+                    val = struct.unpack(">H", data[g_off : g_off + 2])[0]
+                    return (val + id_deltas[idx]) & 0xFFFF if val else 0
+            return 0
+
+        scale = 1000.0 / float(units_per_em)
+        widths = []
+        for code in range(32, 256):
+            ch = bytes([code]).decode("cp1252", errors="replace")
+            g = _gid(ord(ch))
+            aw = advances[min(g, len(advances) - 1)] if advances else int(units_per_em * 0.5)
+            widths.append(int(round(aw * scale)))
+
+        cap_height = int(round(ascent * scale * 0.8))
+        return {
+            "base_name": base_name,
+            "bbox": [int(round(v * scale)) for v in (xmin, ymin, xmax, ymax)],
+            "ascent": int(round(ascent * scale)),
+            "descent": int(round(descent * scale)),
+            "cap_height": cap_height,
+            "widths": widths,
+            "raw_len": len(data),
+            "compressed": zlib.compress(data, level=6),
+        }
+    except Exception:
+        return None
 
 
 def _txt_cmd(font: str, size: float, x: float, y: float, text: str) -> bytes:
@@ -47,7 +182,9 @@ def _format_money(val: Any, currency: str = "EUR") -> str:
     return f"{s} {currency}"
 
 
-def _build_xmp_facturx_metadata(doc_num: str, issue_iso: str) -> bytes:
+def _build_xmp_facturx_metadata(doc_num: str, issue_iso: str, doc_type: str = "invoice") -> bytes:
+    fx_doc_type = "INVOICE"
+    guideline_id = "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0"
     xmp = f"""<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -59,11 +196,62 @@ def _build_xmp_facturx_metadata(doc_num: str, issue_iso: str) -> bytes:
       <dc:title><rdf:Alt><rdf:li xml:lang="de">ZUGFeRD E-Rechnung {doc_num}</rdf:li></rdf:Alt></dc:title>
       <dc:date><rdf:Seq><rdf:li>{issue_iso}</rdf:li></rdf:Seq></dc:date>
     </rdf:Description>
+    <rdf:Description rdf:about=""
+        xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/"
+        xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"
+        xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#">
+      <pdfaExtension:schemas>
+        <rdf:Bag>
+          <rdf:li rdf:parseType="Resource">
+            <pdfaSchema:schema>Factur-X PDFA Extension Schema</pdfaSchema:schema>
+            <pdfaSchema:namespaceURI>urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#</pdfaSchema:namespaceURI>
+            <pdfaSchema:prefix>fx</pdfaSchema:prefix>
+            <pdfaSchema:property>
+              <rdf:Seq>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>DocumentFileName</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>name of the embedded XML invoice file</pdfaProperty:description>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>DocumentType</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>INVOICE</pdfaProperty:description>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>Version</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>The actual version of the Factur-X XML schema</pdfaProperty:description>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>ConformanceLevel</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>The conformance level of the embedded Factur-X data</pdfaProperty:description>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>GuidelineSpecifiedDocumentContextParameter</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>EN 16931 / XRechnung GuidelineID</pdfaProperty:description>
+                </rdf:li>
+              </rdf:Seq>
+            </pdfaSchema:property>
+          </rdf:li>
+        </rdf:Bag>
+      </pdfaExtension:schemas>
+    </rdf:Description>
     <rdf:Description rdf:about="" xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">
-      <fx:DocumentType>INVOICE</fx:DocumentType>
+      <fx:DocumentType>{fx_doc_type}</fx:DocumentType>
       <fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>
       <fx:Version>1.0</fx:Version>
       <fx:ConformanceLevel>EN 16931</fx:ConformanceLevel>
+      <fx:GuidelineSpecifiedDocumentContextParameter>
+        <fx:GuidelineID>{guideline_id}</fx:GuidelineID>
+      </fx:GuidelineSpecifiedDocumentContextParameter>
     </rdf:Description>
   </rdf:RDF>
 </x:xmpmeta>
@@ -71,8 +259,8 @@ def _build_xmp_facturx_metadata(doc_num: str, issue_iso: str) -> bytes:
     return xmp.encode("utf-8")
 
 
-def _serialize_pdf_objects(objects: List[bytes], info_obj_num: int) -> bytes:
-    """Serialisiert nummerierte PDF-Objekte (1..N) inklusive xref-Tabelle und Trailer."""
+def _serialize_pdf_objects(objects: List[bytes], info_obj_num: int, doc_id_seed: str = "archon-pdfa3") -> bytes:
+    """Serialisiert nummerierte PDF-Objekte (1..N) inklusive xref-Tabelle, Trailer und /ID."""
     buf = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
     offsets: List[int] = [0]
     for obj_num, body in enumerate(objects, start=1):
@@ -87,8 +275,9 @@ def _serialize_pdf_objects(objects: List[bytes], info_obj_num: int) -> bytes:
     for off in offsets[1:]:
         buf.extend(f"{off:010d} 00000 n \n".encode("ascii"))
 
+    fid = hashlib.md5(doc_id_seed.encode("utf-8")).hexdigest()
     buf.extend(
-        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R /Info {info_obj_num} 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii")
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R /Info {info_obj_num} 0 R /ID [<{fid}> <{fid}>] >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii")
     )
     return bytes(buf)
 
@@ -247,17 +436,23 @@ def build_zugferd_invoice_pdf(
         y = PAGE_H - 80.0
 
     # Summenblock
+    is_small_biz = (regime_raw == "small_business") or bool(seller_tax.get("small_business"))
     y -= 14.0
     sum_x = PAGE_W - 210.0
     cmds.append(b"0.08 0.10 0.14 rg")
     cmds.append(_txt_cmd("F1", 9.5, sum_x, y, "Summe Netto:"))
     cmds.append(_right_txt_cmd("F1", 9.5, PAGE_W - MARGIN_R - 4, y, _format_money(doc.get("amount_net"), currency)))
     y -= 14.0
-    cmds.append(_txt_cmd("F1", 9.5, sum_x, y, "Umsatzsteuer:"))
+    vat_label = "USt (§ 19 UStG):" if is_small_biz else "Umsatzsteuer:"
+    cmds.append(_txt_cmd("F1", 9.5, sum_x, y, vat_label))
     cmds.append(_right_txt_cmd("F1", 9.5, PAGE_W - MARGIN_R - 4, y, _format_money(doc.get("tax_amount"), currency)))
     y -= 16.0
     cmds.append(_txt_cmd("F2", 11.0, sum_x, y, "Gesamtbetrag:"))
     cmds.append(_right_txt_cmd("F2", 11.0, PAGE_W - MARGIN_R - 4, y, _format_money(doc.get("amount_gross"), currency)))
+    if is_small_biz:
+        y -= 15.0
+        cmds.append(b"0.32 0.36 0.44 rg")
+        cmds.append(_txt_cmd("F1", 8.0, MARGIN_L, y, "Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet (Kleinunternehmerregelung)."))
 
     # Zahlungshinweis & Fußzeile (§ 35a GmbHG / § 125a HGB Pflichtangaben)
     iban = str(seller_bank.get("iban") or "")
@@ -276,27 +471,89 @@ def build_zugferd_invoice_pdf(
         p_cmds.append(_txt_cmd("F2", 7.5, MARGIN_L, 38.0, "Eingebettete EN-16931-/Factur-X-/ZUGFeRD-2.2-CII-XML-Strukturdaten: factur-x.xml"))
 
     xml_bytes = embedded_xml.encode("utf-8")
-    xmp_bytes = _build_xmp_facturx_metadata(doc_num, issue_date)
+    xmp_bytes = _build_xmp_facturx_metadata(doc_num, issue_date, doc_type=doc_type)
 
-    # Feste Basis-Objekte (1..9), danach dynamisch (10..) je Seite Page-Objekt + Content-Stream:
-    # 1: Catalog, 2: Pages, 3..5: Fonts, 6: EmbeddedFile, 7: Filespec, 8: XMP, 9: Info
-    first_page_obj = 10
-    kids_refs = " ".join(f"{first_page_obj + (i * 2)} 0 R" for i in range(len(pages_cmds)))
-    objects: List[bytes] = [
-        b"<< /Type /Catalog /Pages 2 0 R /Metadata 8 0 R /Names << /EmbeddedFiles << /Names [(factur-x.xml) 7 0 R] >> >> /AF [7 0 R] >>",
-        f"<< /Type /Pages /Kids [{kids_refs}] /Count {len(pages_cmds)} >>".encode("ascii"),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
-        (
-            f"<< /Type /EmbeddedFile /Subtype /text#2Fxml /Params << /Size {len(xml_bytes)} >> /Length {len(xml_bytes)} >>\nstream\n".encode("ascii")
-            + xml_bytes
+    # Feste Basis-Objekte (1..9), optional FontDescriptor/FontFile2 + OutputIntent, danach Seiten:
+    # 1: Catalog, 2: Pages, 3..5: Fonts (F1, F2, F3), 6: EmbeddedFile, 7: Filespec, 8: XMP, 9: Info
+    objects: List[bytes] = [b"", b"", b"", b"", b"", b"", b"", b"", b""]
+    extra_objects: List[bytes] = []
+
+    def _alloc_obj(body: bytes) -> int:
+        extra_objects.append(body)
+        return 9 + len(extra_objects)
+
+    font_fallbacks = {
+        "F1": b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+        "F2": b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+        "F3": b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
+    }
+    for slot_idx, slot in enumerate(("F1", "F2", "F3"), start=2):
+        spec = _load_ttf_font_spec(slot)
+        if spec:
+            ff_stream = (
+                f"<< /Length {len(spec['compressed'])} /Length1 {spec['raw_len']} /Filter /FlateDecode >>\nstream\n".encode("ascii")
+                + spec["compressed"]
+                + b"\nendstream"
+            )
+            ff_num = _alloc_obj(ff_stream)
+            bx = spec["bbox"]
+            fd_num = _alloc_obj(
+                (
+                    f"<< /Type /FontDescriptor /FontName /{spec['base_name']} /Flags 32 "
+                    f"/FontBBox [{bx[0]} {bx[1]} {bx[2]} {bx[3]}] "
+                    f"/ItalicAngle 0 /Ascent {spec['ascent']} /Descent {spec['descent']} "
+                    f"/CapHeight {spec['cap_height']} /StemV 80 /FontFile2 {ff_num} 0 R >>"
+                ).encode("ascii")
+            )
+            widths_str = " ".join(str(w) for w in spec["widths"])
+            objects[slot_idx] = (
+                f"<< /Type /Font /Subtype /TrueType /BaseFont /{spec['base_name']} "
+                f"/FirstChar 32 /LastChar 255 /Widths [{widths_str}] "
+                f"/FontDescriptor {fd_num} 0 R /Encoding /WinAnsiEncoding >>"
+            ).encode("ascii")
+        else:
+            objects[slot_idx] = font_fallbacks[slot]
+
+    icc_raw = _get_srgb_icc_bytes()
+    output_intents_entry = ""
+    if icc_raw:
+        icc_comp = zlib.compress(icc_raw, level=6)
+        icc_num = _alloc_obj(
+            f"<< /N 3 /Alternate /DeviceRGB /Length {len(icc_comp)} /Filter /FlateDecode >>\nstream\n".encode("ascii")
+            + icc_comp
             + b"\nendstream"
-        ),
-        b"<< /Type /Filespec /F (factur-x.xml) /UF (factur-x.xml) /Desc (ZUGFeRD 2.2 / Factur-X EN 16931 XML Invoice) /AFRelationship /Alternative /EF << /F 6 0 R /UF 6 0 R >> >>",
-        f"<< /Type /Metadata /Subtype /XML /Length {len(xmp_bytes)} >>\nstream\n".encode("ascii") + xmp_bytes + b"\nendstream",
-        b"<< /Title (" + _winansi_bytes(f"ZUGFeRD Rechnung {doc_num}") + b") /Producer (Archon OS ERP M28) /Creator (Archon OS) >>",
-    ]
+        )
+        oi_num = _alloc_obj(
+            (
+                f"<< /Type /OutputIntent /S /GTS_PDFA1 /OutputConditionIdentifier (sRGB IEC61966-2.1) "
+                f"/RegistryName (http://www.color.org) /Info (sRGB IEC61966-2.1) /DestOutputProfile {icc_num} 0 R >>"
+            ).encode("ascii")
+        )
+        output_intents_entry = f" /OutputIntents [{oi_num} 0 R]"
+    else:
+        oi_num = _alloc_obj(
+            b"<< /Type /OutputIntent /S /GTS_PDFA1 /OutputConditionIdentifier (sRGB IEC61966-2.1) /RegistryName (http://www.color.org) /Info (sRGB IEC61966-2.1) >>"
+        )
+        output_intents_entry = f" /OutputIntents [{oi_num} 0 R]"
+
+    objects.extend(extra_objects)
+
+    first_page_obj = len(objects) + 1
+    kids_refs = " ".join(f"{first_page_obj + (i * 2)} 0 R" for i in range(len(pages_cmds)))
+    objects[0] = (
+        f"<< /Type /Catalog /Pages 2 0 R /Metadata 8 0 R /Lang (de-DE){output_intents_entry} "
+        f"/Names << /EmbeddedFiles << /Names [(factur-x.xml) 7 0 R] >> >> /AF [7 0 R] >>"
+    ).encode("ascii")
+    objects[1] = f"<< /Type /Pages /Kids [{kids_refs}] /Count {len(pages_cmds)} >>".encode("ascii")
+    objects[5] = (
+        f"<< /Type /EmbeddedFile /Subtype /text#2Fxml /Params << /Size {len(xml_bytes)} >> /Length {len(xml_bytes)} >>\nstream\n".encode("ascii")
+        + xml_bytes
+        + b"\nendstream"
+    )
+    objects[6] = b"<< /Type /Filespec /F (factur-x.xml) /UF (factur-x.xml) /Desc (ZUGFeRD 2.2 / Factur-X EN 16931 XML Invoice) /AFRelationship /Alternative /EF << /F 6 0 R /UF 6 0 R >> >>"
+    objects[7] = f"<< /Type /Metadata /Subtype /XML /Length {len(xmp_bytes)} >>\nstream\n".encode("ascii") + xmp_bytes + b"\nendstream"
+    objects[8] = b"<< /Title (" + _winansi_bytes(f"ZUGFeRD Rechnung {doc_num}") + b") /Producer (Archon OS ERP M28) /Creator (Archon OS) >>"
+
     for idx, p_cmds in enumerate(pages_cmds):
         stream_bytes = b"\n".join(p_cmds)
         content_obj_num = first_page_obj + (idx * 2) + 1
@@ -307,7 +564,7 @@ def build_zugferd_invoice_pdf(
             f"<< /Length {len(stream_bytes)} >>\nstream\n".encode("ascii") + stream_bytes + b"\nendstream"
         )
 
-    return _serialize_pdf_objects(objects, info_obj_num=9)
+    return _serialize_pdf_objects(objects, info_obj_num=9, doc_id_seed=f"{doc_num}:{issue_date}:{len(xml_bytes)}")
 
 
 def _draw_qr_pdf_cmds(matrix: List[List[int]], x: float, y: float, target_pt: float) -> List[bytes]:

@@ -71,8 +71,9 @@ def _init_db() -> None:
 
 
 class ExecutionReceiptLedger:
-    def __init__(self):
+    def __init__(self, db_path: str = None):
         self._lock = _LEDGER_LOCK
+        self.db_path = db_path or DB_PATH
         _init_db()
 
     def issue_receipt(
@@ -95,12 +96,13 @@ class ExecutionReceiptLedger:
         rounded_cost = round(float(cost_usd), 6)
 
         with getattr(self, "_lock", _LEDGER_LOCK):
-            with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+            with sqlite3.connect(self.db_path, timeout=15.0, factory=_ArchonClosingConn) as conn:
                 conn.execute("BEGIN IMMEDIATE")
                 row = conn.execute(
                     "SELECT receipt_hash FROM execution_receipts_ledger ORDER BY id DESC LIMIT 1"
                 ).fetchone()
-                prev_hash = row[0] if (row and bool(cfg.get("chain_receipts", True))) else "GENESIS_BLOCK_00000000"
+                # Immer kryptografisch verketten, damit verify_chain_integrity nie an Config-Wechseln bricht
+                prev_hash = row[0] if row else "GENESIS_BLOCK_00000000"
 
                 canonical_str = (
                     f"{receipt_id}|{task_id}|{agent_role}|{model_used}|"

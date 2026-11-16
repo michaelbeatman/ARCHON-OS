@@ -17,7 +17,11 @@ logger = logging.getLogger("archon.memory_consolidator")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    DB_PATH = _resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 DEFAULT_CONSOLIDATION_CONFIG = {
     "enabled": True,

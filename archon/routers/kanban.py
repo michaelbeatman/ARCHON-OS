@@ -12,7 +12,7 @@ import json
 import sqlite3
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Request
-from archon.core.runtime import atomic_write_json, logger
+from archon.core.runtime import atomic_write_json, logger, run_io_bound
 from archon.core.paths import KANBAN_CARDS_FILE, KANBAN_DB_PATH
 from backend.platform_paths import HERMES_HOME
 from backend.db_paths import get_db_connection
@@ -93,44 +93,48 @@ def api_get_kanban():
     return []
 
 
+def _persist_kanban_sync(cards: Any) -> None:
+    cards_file = _get_kanban_cards_file()
+    _atomic_write_json(cards_file, cards)
+    kanban_db = _resolve_active_kanban_db()
+    if os.path.exists(kanban_db) and isinstance(cards, list):
+        kconn = None
+        try:
+            kconn = get_db_connection(kanban_db, timeout=5.0)
+            for c in cards:
+                if not isinstance(c, dict) or not c.get("id"):
+                    continue
+                kconn.execute("""
+                    INSERT INTO tasks (id, title, body, assignee, status, priority, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+                    ON CONFLICT(id) DO UPDATE SET
+                        title=excluded.title,
+                        body=excluded.body,
+                        assignee=excluded.assignee,
+                        status=excluded.status,
+                        priority=excluded.priority
+                """, (
+                    c.get("id"),
+                    c.get("title", ""),
+                    c.get("description") or c.get("body", ""),
+                    c.get("assignee", "coder"),
+                    c.get("status", "todo"),
+                    c.get("priority", 1),
+                    c.get("created_at")
+                ))
+            kconn.commit()
+        except Exception as e:
+            logger.warning(f"[Kanban Router] Fehler beim Schreiben in {kanban_db}: {e}")
+        finally:
+            if kconn:
+                kconn.close()
+
+
 @router.post("/api/kanban")
 async def api_save_kanban(request: Request):
     try:
         cards = await request.json()
-        cards_file = _get_kanban_cards_file()
-        _atomic_write_json(cards_file, cards)
-        kanban_db = _resolve_active_kanban_db()
-        if os.path.exists(kanban_db) and isinstance(cards, list):
-            kconn = None
-            try:
-                kconn = get_db_connection(kanban_db, timeout=5.0)
-                for c in cards:
-                    if not isinstance(c, dict) or not c.get("id"):
-                        continue
-                    kconn.execute("""
-                        INSERT INTO tasks (id, title, body, assignee, status, priority, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
-                        ON CONFLICT(id) DO UPDATE SET
-                            title=excluded.title,
-                            body=excluded.body,
-                            assignee=excluded.assignee,
-                            status=excluded.status,
-                            priority=excluded.priority
-                    """, (
-                        c.get("id"),
-                        c.get("title", ""),
-                        c.get("description") or c.get("body", ""),
-                        c.get("assignee", "coder"),
-                        c.get("status", "todo"),
-                        c.get("priority", 1),
-                        c.get("created_at")
-                    ))
-                kconn.commit()
-            except Exception as e:
-                logger.warning(f"[Kanban Router] Fehler beim Schreiben in {kanban_db}: {e}")
-            finally:
-                if kconn:
-                    kconn.close()
+        await run_io_bound(_persist_kanban_sync, cards)
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}

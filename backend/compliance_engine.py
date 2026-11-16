@@ -272,12 +272,17 @@ class ComplianceEngine:
             "violations": violations,
         }
 
-    def check_activation_allowed(self, agent_id: str) -> Dict[str, Any]:
+    def check_activation_allowed(self, agent_id: str, system_prompt: str = "") -> Dict[str, Any]:
         """Prüft vor Aktivierung/Dispatch eines Spezialisten, ob alle EU-AI-Act-Pflicht-Guardrails erfüllt sind."""
         inv = self._get_inventory_mgr().get_inventory()
         item = next((x for x in inv if x.get("agent_id") == agent_id), None)
         if not item:
-            return {"allowed": True, "agent_id": agent_id, "risk_tier": "UNCLASSIFIED"}
+            return {
+                "allowed": True,
+                "agent_id": agent_id,
+                "risk_tier": "UNCLASSIFIED",
+                "disclosure_required": False,
+            }
 
         if item.get("risk_tier") == "PROHIBITED" or item.get("compliance_status") == "BLOCKED_PROHIBITED":
             return {
@@ -293,6 +298,22 @@ class ComplianceEngine:
                 "risk_tier": item.get("risk_tier"),
                 "reason": "Aktivierung gesperrt: Agent ist im EU-AI-Act-Register als NON_COMPLIANT markiert.",
             }
+
+        pinned_hash = str(item.get("soul_sha256") or "").strip()
+        if system_prompt and system_prompt.strip() and pinned_hash:
+            live_hash = hashlib.sha256(system_prompt.strip().encode("utf-8")).hexdigest()
+            if live_hash != pinned_hash and item.get("risk_tier") == "HIGH_RISK":
+                return {
+                    "allowed": False,
+                    "agent_id": agent_id,
+                    "risk_tier": item.get("risk_tier"),
+                    "error_code": "SOUL_SHA256_MISMATCH",
+                    "reason": (
+                        f"Aktivierung gesperrt: System-Prompt-Hash weicht vom gepinnten "
+                        f"SOUL-SHA-256 ({pinned_hash[:12]}) ab."
+                    ),
+                }
+
         if item.get("risk_tier") == "HIGH_RISK":
             oversight = str(item.get("human_oversight_measure") or "")
             if "HITL" not in oversight and "4-Augen" not in oversight:
@@ -315,11 +336,13 @@ class ComplianceEngine:
                     "risk_tier": "HIGH_RISK",
                     "reason": "Aktivierung gesperrt: Kein aktiver Bediener mit Art.-4-Kompetenznachweis für HIGH_RISK registriert.",
                 }
+        risk_tier = str(item.get("risk_tier") or "")
         return {
             "allowed": True,
             "agent_id": agent_id,
-            "risk_tier": item.get("risk_tier"),
-            "soul_sha256": item.get("soul_sha256"),
+            "risk_tier": risk_tier,
+            "soul_sha256": pinned_hash,
+            "disclosure_required": risk_tier in ("HIGH_RISK", "LIMITED_RISK", "SPECIFIC_TRANSPARENCY"),
         }
 
     # ------------------------------------------------------------------

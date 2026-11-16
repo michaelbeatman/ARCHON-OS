@@ -24,6 +24,20 @@ KEY_SALT = os.environ.get("ARCHON_API_KEY_PEPPER") or "ARCHON_OS_API_KEY_SALT_20
 LEGACY_KEY_SALT = "ARCHON_OS_API_KEY_SALT_2026_SECURE"
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
+_PEPPER_FALLBACK_WARNED = False
+
+
+def _warn_missing_pepper_once() -> None:
+    global _PEPPER_FALLBACK_WARNED
+    if _PEPPER_FALLBACK_WARNED:
+        return
+    _PEPPER_FALLBACK_WARNED = True
+    import logging
+    logging.getLogger(__name__).warning(
+        "ARCHON_API_KEY_PEPPER ist nicht gesetzt; verwende Legacy-Salt-SHA256-Fallback. "
+        "Fuer Produktivbetrieb ARCHON_API_KEY_PEPPER (oder Docker-Secret) konfigurieren."
+    )
+
 # Erlaubte Standard-Scopes
 VALID_SCOPES = {
     "read_only": "Nur lesender Zugriff (Status, Logs, Telemetrie, Profile)",
@@ -87,6 +101,7 @@ class ApiKeyManager:
         pepper = os.environ.get("ARCHON_API_KEY_PEPPER")
         if pepper:
             return hmac.new(pepper.encode("utf-8"), raw_token.encode("utf-8"), hashlib.sha256).hexdigest()
+        _warn_missing_pepper_once()
         salted = f"{KEY_SALT}:{raw_token}".encode("utf-8")
         return hashlib.sha256(salted).hexdigest()
 
@@ -95,7 +110,7 @@ class ApiKeyManager:
         salted = f"{LEGACY_KEY_SALT}:{raw_token}".encode("utf-8")
         return hashlib.sha256(salted).hexdigest()
 
-    def _log_audit(self, key_id: str, action: str, details: Dict[str, Any], created_by: str = "admin", conn: Optional[sqlite3.Connection] = None):
+    def _log_audit(self, key_id: str, action: str, details: Dict[str, Any], created_by: str = "admin", conn: Optional[sqlite3.Connection] = None, emit_global: bool = True):
         """Fuegt einen Eintrag in die SHA-256 Hash-Kette fuer API-Keys ein."""
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         details_json = json.dumps(details, sort_keys=True, ensure_ascii=False)
@@ -110,6 +125,14 @@ class ApiKeyManager:
                 INSERT INTO api_key_audit_log (key_id, action, details, prev_hash, block_hash, created_at, created_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (key_id, action, details_json, prev_hash, block_hash, now_iso, created_by))
+
+        if conn is not None:
+            _do_log(conn)
+        else:
+            with self._get_conn() as local_conn:
+                _do_log(local_conn)
+                local_conn.commit()
+        if emit_global and conn is None:
             try:
                 from backend.audit_log import chained_audit_log
                 chained_audit_log.record_event(
@@ -121,12 +144,18 @@ class ApiKeyManager:
             except Exception:
                 pass
 
-        if conn is not None:
-            _do_log(conn)
-        else:
-            with self._get_conn() as local_conn:
-                _do_log(local_conn)
-                local_conn.commit()
+    @staticmethod
+    def _emit_global_audit(key_id: str, action: str, details: Dict[str, Any], created_by: str) -> None:
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="api_keys",
+                action=f"api_{action.lower()}",
+                agent_id=created_by,
+                payload={"key_id": key_id, **details},
+            )
+        except Exception:
+            pass
 
     def create_key(
         self,
@@ -182,8 +211,9 @@ class ApiKeyManager:
                 "rate_limit_rpm": rate_limit_rpm,
                 "rate_limit_rpd": rate_limit_rpd
             }
-            self._log_audit(key_id, "KEY_CREATED", audit_details, created_by=created_by, conn=conn)
+            self._log_audit(key_id, "KEY_CREATED", audit_details, created_by=created_by, conn=conn, emit_global=False)
             conn.commit()
+        self._emit_global_audit(key_id, "KEY_CREATED", audit_details, created_by)
 
         return {
             "key_id": key_id,
@@ -244,9 +274,11 @@ class ApiKeyManager:
             if cur.rowcount == 0:
                 return False
 
-            self._log_audit(key_id, "KEY_REVOKED", {"revoked_at": now_iso, "revoked_by": revoked_by}, created_by=revoked_by, conn=conn)
+            rev_details = {"revoked_at": now_iso, "revoked_by": revoked_by}
+            self._log_audit(key_id, "KEY_REVOKED", rev_details, created_by=revoked_by, conn=conn, emit_global=False)
             conn.commit()
-            return True
+        self._emit_global_audit(key_id, "KEY_REVOKED", rev_details, revoked_by)
+        return True
 
     def delete_key(self, key_id: str, deleted_by: str = "admin") -> bool:
         """Loescht einen Key vollstaendig aus der aktiven Tabelle (Audit-Log bleibt unveraendert erhalten)."""
@@ -255,9 +287,11 @@ class ApiKeyManager:
             if cur.rowcount == 0:
                 return False
 
-            self._log_audit(key_id, "KEY_DELETED", {"deleted_by": deleted_by}, created_by=deleted_by, conn=conn)
+            del_details = {"deleted_by": deleted_by}
+            self._log_audit(key_id, "KEY_DELETED", del_details, created_by=deleted_by, conn=conn, emit_global=False)
             conn.commit()
-            return True
+        self._emit_global_audit(key_id, "KEY_DELETED", del_details, deleted_by)
+        return True
 
     def validate_and_consume(self, raw_token: str, required_scope: Optional[str] = None) -> Tuple[bool, Optional[Dict[str, Any]], str]:
         """

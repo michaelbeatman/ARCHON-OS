@@ -789,9 +789,44 @@ def _spawn_background(coro, name: str = ""):
     return task
 
 
+async def _deadlock_supervisor_loop():
+    """30-Sekunden Watchdog/Deadlock-Loop (Pillar 1): befreit stagnierende Kanban-Tasks."""
+    await asyncio.sleep(15)
+    while True:
+        try:
+            from backend.deadlock_supervisor import deadlock_supervisor
+            res = await asyncio.to_thread(deadlock_supervisor.detect_and_resolve_deadlocks)
+            if isinstance(res, dict) and res.get("resolved_count", 0) > 0:
+                logger.warning(f"[DeadlockSupervisor] {res['resolved_count']} blockierte(r) Task(s) reaktiviert.")
+        except Exception as e:
+            logger.debug(f"[DeadlockSupervisor] Loop-Hinweis: {e}")
+        await asyncio.sleep(30)
+
+
+async def _db_maintenance_loop():
+    """Periodische DB-Sicherung & Optimierung (WAL-Truncate, Backup, VACUUM alle 6h)."""
+    await asyncio.sleep(120)
+    while True:
+        try:
+            from backend.db_backup_manager import db_backup_manager
+            from backend.db_optimizer import optimize_all_databases
+            await asyncio.to_thread(db_backup_manager.checkpoint_and_backup)
+            await asyncio.to_thread(optimize_all_databases)
+        except Exception as e:
+            logger.debug(f"[DBMaintenance] Loop-Hinweis: {e}")
+        await asyncio.sleep(21600)
+
+
 async def _start_gateway_idle_loop():
     _spawn_background(_gateway_idle_stop_loop())
     _spawn_background(_email_imap_background_loop())
+    _spawn_background(_deadlock_supervisor_loop(), name="deadlock_supervisor_30s")
+    _spawn_background(_db_maintenance_loop(), name="db_maintenance_6h")
+    try:
+        from archon.core.delegation import resume_pending_delegation_watchers
+        _spawn_background(resume_pending_delegation_watchers(), name="delegation_watcher_recovery")
+    except Exception as e:
+        logger.debug(f"[Startup] Delegation-Watcher-Recovery Hinweis: {e}")
     try:
         from backend.inbox_watcher import inbox_watcher_background_loop
         _spawn_background(inbox_watcher_background_loop())
@@ -947,6 +982,7 @@ from archon.routers.decisions import (
     _sync_org_hierarchy_node,
 )
 app.include_router(_decisions_router)
+_set_decision_factory(create_decision)
 
 # Statik-Guard AST Wrapper fuer tests/test_decision_followup_beleg.py
 async def _followup_mission_start(ref: str) -> str:

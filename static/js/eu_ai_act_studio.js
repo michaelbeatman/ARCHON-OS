@@ -17,6 +17,13 @@
       <path d="m9 12 2 2 4-4" stroke="#ef4444" stroke-width="2.1"/>
     </svg>`;
 
+  function _m49T(key, fallback) {
+    if (window.archonI18n && typeof window.archonI18n.t === "function") {
+      return window.archonI18n.t(key, fallback);
+    }
+    return fallback;
+  }
+
   function esc(val) {
     return String(val == null ? "" : val)
       .replace(/&/g, "&amp;")
@@ -34,9 +41,33 @@
     return await res.json();
   }
 
+  function applyModalTranslations(modal) {
+    if (!modal) return;
+    const titleEl = modal.querySelector("#m49-modal-title");
+    if (titleEl) titleEl.textContent = _m49T("ui.eu_ai_act_studio.modal_title", "EU AI Act Compliance-Engine & GoBD-Verfahrensdokumentation (M49)");
+    const subEl = modal.querySelector("#m49-modal-subtitle");
+    if (subEl) subEl.textContent = _m49T("ui.eu_ai_act_studio.modal_subtitle", "Verordnung (EU) 2024/1689 (Art. 4, 6, Anhang III, Art. 50) · GoBD Rz. 151 ff. · SHA-256 Merkle-Beweis");
+    const pdfBtn = modal.querySelector("#m49-quick-pdf-btn");
+    if (pdfBtn) pdfBtn.textContent = _m49T("ui.eu_ai_act_studio.quick_pdf_btn", "GoBD + EU AI Act PDF herunterladen");
+    const closeBtn = modal.querySelector("#m49-close-btn");
+    if (closeBtn) closeBtn.textContent = _m49T("ui.eu_ai_act_studio.close_btn", "Schließen");
+    const tabMap = {
+      inventory: ["ui.eu_ai_act_studio.tab_inventory", "1. KI-Risikoregister & SOUL-Hashes"],
+      literacy: ["ui.eu_ai_act_studio.tab_literacy", "2. Art. 4 KI-Kompetenznachweis"],
+      pdf: ["ui.eu_ai_act_studio.tab_pdf", "3. Verfahrensdokumentation & GoBD-Prüfung"],
+    };
+    modal.querySelectorAll(".m49-tab-btn").forEach((b) => {
+      const spec = tabMap[b.dataset.m49tab];
+      if (spec) b.textContent = _m49T(spec[0], spec[1]);
+    });
+  }
+
   function ensureModal() {
     let modal = document.getElementById(MODAL_ID);
-    if (modal) return modal;
+    if (modal) {
+      applyModalTranslations(modal);
+      return modal;
+    }
 
     modal = document.createElement("div");
     modal.id = MODAL_ID;
@@ -49,28 +80,27 @@
           <div class="flex items-center gap-2.5">
             <div class="p-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10">${SHIELD_SVG}</div>
             <div>
-              <h2 class="text-sm font-bold tracking-wide">EU AI Act Compliance-Engine &amp; GoBD-Verfahrensdokumentation (M49)</h2>
-              <p class="text-[11px] opacity-70">Verordnung (EU) 2024/1689 (Art. 4, 6, Anhang III, Art. 50) &middot; GoBD Rz. 151 ff. &middot; SHA-256 Merkle-Beweis</p>
+              <h2 id="m49-modal-title" class="text-sm font-bold tracking-wide"></h2>
+              <p id="m49-modal-subtitle" class="text-[11px] opacity-70"></p>
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <a id="m49-quick-pdf-btn" href="/api/v1/governance/compliance/verfahrensdokumentation.pdf" target="_blank"
-               class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-600 to-amber-500 text-white font-semibold shadow hover:opacity-95 transition">
-              GoBD + EU AI Act PDF herunterladen
-            </a>
-            <button id="m49-close-btn" type="button" class="px-2.5 py-1.5 rounded-lg border theme-border hover:opacity-80">Schließen</button>
+            <a id="m49-quick-pdf-btn" href="/api/v1/governance/compliance/verfahrensdokumentation.pdf" target="_blank" rel="noopener noreferrer"
+               class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-600 to-amber-500 text-white font-semibold shadow hover:opacity-95 transition"></a>
+            <button id="m49-close-btn" type="button" class="px-2.5 py-1.5 rounded-lg border theme-border hover:opacity-80"></button>
           </div>
         </div>
 
         <div class="flex flex-wrap gap-2 border-b theme-border pb-2">
-          <button type="button" data-m49tab="inventory" class="m49-tab-btn px-3 py-1.5 rounded-lg border theme-border font-semibold">1. KI-Risikoregister &amp; SOUL-Hashes</button>
-          <button type="button" data-m49tab="literacy" class="m49-tab-btn px-3 py-1.5 rounded-lg border theme-border">2. Art. 4 KI-Kompetenznachweis</button>
-          <button type="button" data-m49tab="pdf" class="m49-tab-btn px-3 py-1.5 rounded-lg border theme-border">3. Verfahrensdokumentation &amp; GoBD-Prüfung</button>
+          <button type="button" data-m49tab="inventory" class="m49-tab-btn px-3 py-1.5 rounded-lg border theme-border font-semibold"></button>
+          <button type="button" data-m49tab="literacy" class="m49-tab-btn px-3 py-1.5 rounded-lg border theme-border"></button>
+          <button type="button" data-m49tab="pdf" class="m49-tab-btn px-3 py-1.5 rounded-lg border theme-border"></button>
         </div>
 
         <div id="m49-body" class="overflow-y-auto flex-1 pr-1 space-y-3"></div>
       </div>`;
     document.body.appendChild(modal);
+    applyModalTranslations(modal);
 
     modal.querySelector("#m49-close-btn").onclick = () => {
       modal.classList.add("hidden");
@@ -89,12 +119,12 @@
 
   function tierBadge(tier) {
     if (tier === "HIGH_RISK") {
-      return `<span class="px-2 py-0.5 rounded bg-red-500/15 text-red-500 border border-red-500/30 font-mono font-semibold text-[10px]">HIGH RISK (Anh. III)</span>`;
+      return `<span class="px-2 py-0.5 rounded bg-red-500/15 text-red-500 border border-red-500/30 font-mono font-semibold text-[10px]">${esc(_m49T("ui.eu_ai_act_studio.badge_high_risk", "HIGH RISK (Anh. III)"))}</span>`;
     }
     if (tier === "SPECIFIC_TRANSPARENCY") {
-      return `<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30 font-mono font-semibold text-[10px]">TRANSPARENZ (Art. 50)</span>`;
+      return `<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30 font-mono font-semibold text-[10px]">${esc(_m49T("ui.eu_ai_act_studio.badge_transparency", "TRANSPARENZ (Art. 50)"))}</span>`;
     }
-    return `<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-mono font-semibold text-[10px]">MINIMAL (Art. 95)</span>`;
+    return `<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-mono font-semibold text-[10px]">${esc(_m49T("ui.eu_ai_act_studio.badge_minimal", "MINIMAL (Art. 95)"))}</span>`;
   }
 
   async function renderInventoryTab(container) {
@@ -110,50 +140,53 @@
     const filtered = cachedInventory.filter((item) =>
       currentRiskFilter === "ALL" ? true : item.risk_tier === currentRiskFilter
     );
+    const guardStatus = gd.all_guardrails_passed
+      ? _m49T("ui.eu_ai_act_studio.guardrails_verified", "VERIFIZIERT")
+      : _m49T("ui.eu_ai_act_studio.guardrails_notices", "{count} Hinweise").replace("{count}", String((gd.violations || []).length));
 
     container.innerHTML = `
       <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
         <div class="p-2.5 rounded-lg border theme-border">
-          <div class="opacity-65 text-[10px] uppercase">Spezialisten gesamt</div>
+          <div class="opacity-65 text-[10px] uppercase">${esc(_m49T("ui.eu_ai_act_studio.kpi_total", "Spezialisten gesamt"))}</div>
           <div class="text-base font-bold font-mono">${esc(st.total_agents || 0)}</div>
         </div>
         <div class="p-2.5 rounded-lg border border-red-500/30 bg-red-500/5">
-          <div class="text-red-400 text-[10px] uppercase">Anhang III High-Risk</div>
+          <div class="text-red-400 text-[10px] uppercase">${esc(_m49T("ui.eu_ai_act_studio.kpi_high_risk", "Anhang III High-Risk"))}</div>
           <div class="text-base font-bold font-mono text-red-500">${esc(st.high_risk_count || 0)}</div>
         </div>
         <div class="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5">
-          <div class="text-amber-400 text-[10px] uppercase">Art. 50 Transparenz</div>
+          <div class="text-amber-400 text-[10px] uppercase">${esc(_m49T("ui.eu_ai_act_studio.kpi_transparency", "Art. 50 Transparenz"))}</div>
           <div class="text-base font-bold font-mono text-amber-500">${esc(st.transparency_risk_count || 0)}</div>
         </div>
         <div class="p-2.5 rounded-lg border theme-border">
-          <div class="opacity-65 text-[10px] uppercase">SOUL-SHA256 gepinnt</div>
+          <div class="opacity-65 text-[10px] uppercase">${esc(_m49T("ui.eu_ai_act_studio.kpi_soul_pinned", "SOUL-SHA256 gepinnt"))}</div>
           <div class="text-base font-bold font-mono">${esc(st.soul_hashes_pinned || 0)}</div>
         </div>
         <div class="p-2.5 rounded-lg border ${gd.all_guardrails_passed ? "border-emerald-500/30 bg-emerald-500/5" : "border-amber-500/30"}">
-          <div class="opacity-65 text-[10px] uppercase">Pflicht-Guardrails</div>
+          <div class="opacity-65 text-[10px] uppercase">${esc(_m49T("ui.eu_ai_act_studio.kpi_guardrails", "Pflicht-Guardrails"))}</div>
           <div class="text-xs font-bold font-mono ${gd.all_guardrails_passed ? "text-emerald-500" : "text-amber-500"}">
-            ${gd.all_guardrails_passed ? "VERIFIZIERT" : `${(gd.violations || []).length} Hinweise`}
+            ${esc(guardStatus)}
           </div>
         </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="opacity-70 mr-1">Filter:</span>
-        <button type="button" data-rfilter="ALL" class="m49-rfilter px-2.5 py-1 rounded border theme-border ${currentRiskFilter === "ALL" ? "font-bold border-amber-500" : ""}">Alle (${cachedInventory.length})</button>
-        <button type="button" data-rfilter="HIGH_RISK" class="m49-rfilter px-2.5 py-1 rounded border theme-border ${currentRiskFilter === "HIGH_RISK" ? "font-bold border-red-500" : ""}">Anhang III High-Risk</button>
-        <button type="button" data-rfilter="SPECIFIC_TRANSPARENCY" class="m49-rfilter px-2.5 py-1 rounded border theme-border ${currentRiskFilter === "SPECIFIC_TRANSPARENCY" ? "font-bold border-amber-500" : ""}">Art. 50 Transparenz</button>
-        <button type="button" data-rfilter="MINIMAL_RISK" class="m49-rfilter px-2.5 py-1 rounded border theme-border ${currentRiskFilter === "MINIMAL_RISK" ? "font-bold border-emerald-500" : ""}">Art. 95 Minimal</button>
+        <span class="opacity-70 mr-1">${esc(_m49T("ui.eu_ai_act_studio.filter_label", "Filter:"))}</span>
+        <button type="button" data-rfilter="ALL" class="m49-rfilter px-2.5 py-1 rounded border theme-border ${currentRiskFilter === "ALL" ? "font-bold border-amber-500" : ""}">${esc(_m49T("ui.eu_ai_act_studio.filter_all", "Alle ({count})").replace("{count}", String(cachedInventory.length)))}</button>
+        <button type="button" data-rfilter="HIGH_RISK" class="m49-rfilter px-2.5 py-1 rounded border theme-border ${currentRiskFilter === "HIGH_RISK" ? "font-bold border-red-500" : ""}">${esc(_m49T("ui.eu_ai_act_studio.filter_high", "Anhang III High-Risk"))}</button>
+        <button type="button" data-rfilter="SPECIFIC_TRANSPARENCY" class="m49-rfilter px-2.5 py-1 rounded border theme-border ${currentRiskFilter === "SPECIFIC_TRANSPARENCY" ? "font-bold border-amber-500" : ""}">${esc(_m49T("ui.eu_ai_act_studio.filter_transparency", "Art. 50 Transparenz"))}</button>
+        <button type="button" data-rfilter="MINIMAL_RISK" class="m49-rfilter px-2.5 py-1 rounded border theme-border ${currentRiskFilter === "MINIMAL_RISK" ? "font-bold border-emerald-500" : ""}">${esc(_m49T("ui.eu_ai_act_studio.filter_minimal", "Art. 95 Minimal"))}</button>
       </div>
 
       <div class="overflow-x-auto rounded-lg border theme-border">
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="border-b theme-border bg-black/5 dark:bg-white/5 text-[11px]">
-              <th class="p-2 font-semibold">Spezialist</th>
-              <th class="p-2 font-semibold">Domäne</th>
-              <th class="p-2 font-semibold">Risikoklasse</th>
-              <th class="p-2 font-semibold">Aufsichts-Gate</th>
-              <th class="p-2 font-semibold">SOUL-SHA256</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_specialist", "Spezialist"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_domain", "Domäne"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_risk_tier", "Risikoklasse"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_oversight", "Aufsichts-Gate"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_soul", "SOUL-SHA256"))}</th>
             </tr>
           </thead>
           <tbody>
@@ -187,15 +220,16 @@
   async function renderLiteracyTab(container) {
     const data = await api("/api/v1/governance/ai-act/literacy-register");
     const entries = data.entries || [];
+    const removeLbl = esc(_m49T("ui.eu_ai_act_studio.remove_btn", "Entfernen"));
 
     container.innerHTML = `
       <div class="p-3 rounded-lg border theme-border space-y-2">
-        <div class="font-semibold">Neuen KI-Kompetenznachweis nach Art. 4 EU AI Act protokollieren (revisionssicher via GoBD-Hashkette)</div>
+        <div class="font-semibold">${esc(_m49T("ui.eu_ai_act_studio.lit_form_title", "Neuen KI-Kompetenznachweis nach Art. 4 EU AI Act protokollieren (revisionssicher via GoBD-Hashkette)"))}</div>
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
-          <input id="m49-lit-person" class="p-1.5 rounded border theme-border bg-transparent" placeholder="Name / Funktionsträger" />
-          <input id="m49-lit-role" class="p-1.5 rounded border theme-border bg-transparent" placeholder="Rolle (z. B. GF / Operator)" />
-          <input id="m49-lit-module" class="p-1.5 rounded border theme-border bg-transparent" placeholder="Schulungs-/Einweisungsmodul" value="Art. 4 EU AI Act & HITL-Freigabe" />
-          <button id="m49-lit-add" type="button" class="px-3 py-1.5 rounded bg-amber-600 text-white font-semibold hover:bg-amber-500">Nachweis eintragen</button>
+          <input id="m49-lit-person" class="p-1.5 rounded border theme-border bg-transparent" placeholder="${esc(_m49T("ui.eu_ai_act_studio.ph_person", "Name / Funktionsträger"))}" />
+          <input id="m49-lit-role" class="p-1.5 rounded border theme-border bg-transparent" placeholder="${esc(_m49T("ui.eu_ai_act_studio.ph_role", "Rolle (z. B. GF / Operator)"))}" />
+          <input id="m49-lit-module" class="p-1.5 rounded border theme-border bg-transparent" placeholder="${esc(_m49T("ui.eu_ai_act_studio.ph_module", "Schulungs-/Einweisungsmodul"))}" value="${esc(_m49T("ui.eu_ai_act_studio.default_module", "Art. 4 EU AI Act & HITL-Freigabe"))}" />
+          <button id="m49-lit-add" type="button" class="px-3 py-1.5 rounded bg-amber-600 text-white font-semibold hover:bg-amber-500">${esc(_m49T("ui.eu_ai_act_studio.lit_add_btn", "Nachweis eintragen"))}</button>
         </div>
       </div>
 
@@ -203,12 +237,12 @@
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="border-b theme-border bg-black/5 dark:bg-white/5 text-[11px]">
-              <th class="p-2 font-semibold">Person / Funktion</th>
-              <th class="p-2 font-semibold">Rolle</th>
-              <th class="p-2 font-semibold">Kompetenzmodul</th>
-              <th class="p-2 font-semibold">Gültig bis</th>
-              <th class="p-2 font-semibold">Zertifikats-SHA256</th>
-              <th class="p-2 font-semibold">Aktion</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_person", "Person / Funktion"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_role", "Rolle"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_module", "Kompetenzmodul"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_valid_until", "Gültig bis"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_cert_hash", "Zertifikats-SHA256"))}</th>
+              <th class="p-2 font-semibold">${esc(_m49T("ui.eu_ai_act_studio.col_action", "Aktion"))}</th>
             </tr>
           </thead>
           <tbody>
@@ -222,7 +256,7 @@
                 <td class="p-2 font-mono">${esc(e.valid_until)}</td>
                 <td class="p-2 font-mono text-[10px]">${esc(String(e.certificate_sha256 || "").slice(0, 14))}</td>
                 <td class="p-2">
-                  <button type="button" data-litdel="${esc(e.id)}" class="px-2 py-0.5 rounded border theme-border text-[10px] hover:border-red-500">Entfernen</button>
+                  <button type="button" data-litdel="${esc(e.id)}" class="px-2 py-0.5 rounded border theme-border text-[10px] hover:border-red-500">${removeLbl}</button>
                 </td>
               </tr>`
               )
@@ -246,7 +280,7 @@
 
     container.querySelectorAll("[data-litdel]").forEach((btn) => {
       btn.onclick = async () => {
-        if (!confirm("Diesen Art.-4-Kompetenznachweis wirklich löschen?")) return;
+        if (!confirm(_m49T("ui.eu_ai_act_studio.confirm_remove", "Diesen Art.-4-Kompetenznachweis wirklich löschen?"))) return;
         await api(`/api/v1/governance/ai-act/literacy-register/${encodeURIComponent(btn.dataset.litdel)}`, {
           method: "DELETE",
         });
@@ -265,25 +299,25 @@
     container.innerHTML = `
       <div class="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div class="text-sm font-bold">Prüferfertige Verfahrensdokumentation (GoBD Rz. 151 ff. + EU AI Act)</div>
-          <div class="opacity-75 mt-0.5">Aktiver Mandant: <strong>${esc(comp.name || snap.tenant_id)}</strong> &middot; Dokument-ID: <span class="font-mono">${esc(snap.document_id)}</span></div>
+          <div class="text-sm font-bold">${esc(_m49T("ui.eu_ai_act_studio.pdf_title", "Prüferfertige Verfahrensdokumentation (GoBD Rz. 151 ff. + EU AI Act)"))}</div>
+          <div class="opacity-75 mt-0.5">${esc(_m49T("ui.eu_ai_act_studio.pdf_tenant", "Aktiver Mandant:"))} <strong>${esc(comp.name || snap.tenant_id)}</strong> &middot; ${esc(_m49T("ui.eu_ai_act_studio.pdf_doc_id", "Dokument-ID:"))} <span class="font-mono">${esc(snap.document_id)}</span></div>
         </div>
         <a href="/api/v1/governance/compliance/verfahrensdokumentation.pdf?company_id=${encodeURIComponent(snap.tenant_id || "")}"
-           target="_blank"
+           target="_blank" rel="noopener noreferrer"
            class="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-amber-500 text-white font-bold shadow">
-          1-Klick PDF-Export starten
+          ${esc(_m49T("ui.eu_ai_act_studio.pdf_export_btn", "1-Klick PDF-Export starten"))}
         </a>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="p-3 rounded-lg border theme-border space-y-1.5">
-          <div class="font-bold uppercase text-[10px] opacity-70">GoBD Merkle-Hashkette (M21)</div>
-          <div>Status: <strong class="${audit.valid ? "text-emerald-500" : "text-red-500"}">${audit.valid ? "MATHEMATISCH UNVERSEHRT" : "PRÜFUNG ERFORDERLICH"}</strong></div>
-          <div>Geprüfte Blöcke: <span class="font-mono">${esc(audit.checked_blocks ?? audit.total_entries ?? 0)}</span></div>
-          <div class="font-mono text-[10px] break-all opacity-75">Head-Hash: ${esc(audit.head_hash || "")}</div>
+          <div class="font-bold uppercase text-[10px] opacity-70">${esc(_m49T("ui.eu_ai_act_studio.merkle_title", "GoBD Merkle-Hashkette (M21)"))}</div>
+          <div>${esc(_m49T("ui.eu_ai_act_studio.status_label", "Status:"))} <strong class="${audit.valid ? "text-emerald-500" : "text-red-500"}">${esc(audit.valid ? _m49T("ui.eu_ai_act_studio.merkle_valid", "MATHEMATISCH UNVERSEHRT") : _m49T("ui.eu_ai_act_studio.merkle_check", "PRÜFUNG ERFORDERLICH"))}</strong></div>
+          <div>${esc(_m49T("ui.eu_ai_act_studio.checked_blocks", "Geprüfte Blöcke:"))} <span class="font-mono">${esc(audit.checked_blocks ?? audit.total_entries ?? 0)}</span></div>
+          <div class="font-mono text-[10px] break-all opacity-75">${esc(_m49T("ui.eu_ai_act_studio.head_hash", "Head-Hash:"))} ${esc(audit.head_hash || "")}</div>
         </div>
         <div class="p-3 rounded-lg border theme-border space-y-1.5">
-          <div class="font-bold uppercase text-[10px] opacity-70">Physische Mandanten-DB-Isolation (M43)</div>
+          <div class="font-bold uppercase text-[10px] opacity-70">${esc(_m49T("ui.eu_ai_act_studio.db_iso_title", "Physische Mandanten-DB-Isolation (M43)"))}</div>
           <table class="w-full text-left text-[11px]">
             <tbody>
               ${Object.entries(dbs)
@@ -311,13 +345,13 @@
     });
     const body = document.getElementById("m49-body");
     if (!body) return;
-    body.innerHTML = `<div class="p-4 opacity-60">Lade Live-Compliance-Daten...</div>`;
+    body.innerHTML = `<div class="p-4 opacity-60">${esc(_m49T("ui.eu_ai_act_studio.loading_msg", "Lade Live-Compliance-Daten..."))}</div>`;
     try {
       if (activeTab === "inventory") await renderInventoryTab(body);
       else if (activeTab === "literacy") await renderLiteracyTab(body);
       else await renderPdfTab(body);
     } catch (err) {
-      body.innerHTML = `<div class="p-3 rounded border border-red-500/40 text-red-400">Fehler: ${esc(err.message)}</div>`;
+      body.innerHTML = `<div class="p-3 rounded border border-red-500/40 text-red-400">${esc(_m49T("ui.eu_ai_act_studio.error_prefix", "Fehler:"))} ${esc(err.message)}</div>`;
     }
   }
 
@@ -329,28 +363,67 @@
     renderActiveTab();
   };
 
+  function updateTileLabel() {
+    const btn = document.getElementById("ops-subtab-compliance");
+    if (!btn) return;
+    btn.title = _m49T("ui.eu_ai_act_studio.tile_title", "EU AI Act & GoBD Verfahrensdokumentation (M49)");
+    const lbl = btn.querySelector(".ops-tab-label");
+    if (lbl) lbl.textContent = _m49T("ui.eu_ai_act_studio.tile_label", "AI Act / GoBD");
+  }
+
   function injectComplianceTile() {
-    if (document.getElementById("ops-subtab-compliance")) return;
+    if (document.getElementById("ops-subtab-compliance")) {
+      updateTileLabel();
+      return true;
+    }
     const anchor =
       document.getElementById("ops-subtab-calendar") ||
       document.getElementById("ops-subtab-playbooks") ||
       document.getElementById("ops-subtab-org") ||
       document.getElementById("ops-subtab-kanban");
-    if (!anchor || !anchor.parentNode) return;
+    if (!anchor || !anchor.parentNode) return false;
 
     const btn = document.createElement("button");
     btn.type = "button";
     btn.id = "ops-subtab-compliance";
-    btn.title = "EU AI Act & GoBD Verfahrensdokumentation (M49)";
+    btn.title = _m49T("ui.eu_ai_act_studio.tile_title", "EU AI Act & GoBD Verfahrensdokumentation (M49)");
     btn.className =
       "ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[66px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-85 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
     btn.innerHTML = `
       <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
         ${SHIELD_SVG}
       </div>
-      <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">AI Act / GoBD</span>`;
+      <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">${esc(_m49T("ui.eu_ai_act_studio.tile_label", "AI Act / GoBD"))}</span>`;
     btn.onclick = () => window.openComplianceStudio("inventory");
     anchor.parentNode.insertBefore(btn, anchor.nextSibling);
+    return true;
+  }
+
+  function mountTileWithObserver() {
+    if (injectComplianceTile()) return;
+    let retries = 0;
+    const maxRetries = 12;
+    let obs = null;
+    const tryMount = () => {
+      if (injectComplianceTile()) {
+        if (obs) obs.disconnect();
+        return true;
+      }
+      return false;
+    };
+    const rootTarget = document.getElementById("view-operations") || document.body;
+    if (rootTarget && typeof MutationObserver !== "undefined") {
+      obs = new MutationObserver(() => { tryMount(); });
+      obs.observe(rootTarget, { childList: true, subtree: true });
+    }
+    const tick = () => {
+      if (tryMount() || ++retries >= maxRetries) {
+        if (obs) obs.disconnect();
+        return;
+      }
+      setTimeout(tick, 250);
+    };
+    setTimeout(tick, 250);
   }
 
   window.addEventListener("archon:tenant-switched", () => {
@@ -360,9 +433,18 @@
     }
   });
 
+  window.addEventListener("archon:language-changed", () => {
+    updateTileLabel();
+    const modal = document.getElementById(MODAL_ID);
+    if (modal) {
+      applyModalTranslations(modal);
+      if (!modal.classList.contains("hidden")) renderActiveTab();
+    }
+  });
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", injectComplianceTile);
+    document.addEventListener("DOMContentLoaded", mountTileWithObserver);
   } else {
-    injectComplianceTile();
+    mountTileWithObserver();
   }
 })();

@@ -115,8 +115,8 @@ def _is_safe_url(url: str) -> bool:
             return False
         return all(_is_global_ip(info[4][0]) for info in infos)
     except socket.gaierror:
-        # Wenn offline/Sandbox kein DNS hat, wenigstens interne Muster weiter blocken
-        return True
+        # Fail-Closed: Nicht aufloesbare oder manipulierbare DNS-Ziele blockieren
+        return False
     except Exception:
         return False
 

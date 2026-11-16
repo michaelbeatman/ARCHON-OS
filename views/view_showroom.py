@@ -37,11 +37,13 @@ views/view_showroom.py - Operatives Modul "Showroom" für Archon OS
    - render_showroom_streamlit() für Streamlit-Umgebungen
 """
 
+import html
 import os
 import shutil
 import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from utils.path_jail import safe_filename, safe_path_within
 
 
 # =============================================================================
@@ -224,16 +226,18 @@ def archive_report_to_obsidian(filename: str) -> Dict[str, Any]:
     /opt/data/obsidian/00_Notebook_Synthesen/.
     """
     reports_path = get_reports_dir()
-    src_file = reports_path / filename
-
-    if not src_file.exists():
-        # Versuche Basename-Matching
-        src_file = reports_path / os.path.basename(filename)
-
-    if not src_file.exists():
+    safe_name = safe_filename(filename)
+    if not safe_name:
         return {
             "success": False,
-            "message": f"Quelldatei '{filename}' existiert nicht in {reports_path}."
+            "message": "Ungültiger Dateiname."
+        }
+    try:
+        src_file = Path(safe_path_within(safe_name, [str(reports_path)], must_exist=True, allow_dirs=False))
+    except Exception:
+        return {
+            "success": False,
+            "message": f"Quelldatei '{html.escape(safe_name)}' existiert nicht in {reports_path}."
         }
 
     dest_dir = get_obsidian_archive_dir()
@@ -281,9 +285,11 @@ def render_showroom_view() -> str:
     else:
         options = []
         for r in reports:
-            options.append(f'<option value="{r["filename"]}">{r["filename"]} ({r["date"]})</option>')
+            fn_esc = html.escape(str(r["filename"]), quote=True)
+            dt_esc = html.escape(str(r["date"]), quote=True)
+            options.append(f'<option value="{fn_esc}">{fn_esc} ({dt_esc})</option>')
         reports_options_html = "\n".join(options)
-        reports_content_initial = reports[0]["content"]
+        reports_content_initial = html.escape(str(reports[0]["content"]))
         left_actions_disabled = ""
 
     # Rechte Hälfte: Apps Dropdown & Initial-Zustand
@@ -299,12 +305,15 @@ def render_showroom_view() -> str:
     else:
         options = []
         for a in apps:
-            options.append(f'<option value="{a["url"]}">{a["name"]} ({a["entry_file"]})</option>')
+            u_esc = html.escape(str(a["url"]), quote=True)
+            n_esc = html.escape(str(a["name"]), quote=True)
+            e_esc = html.escape(str(a["entry_file"]), quote=True)
+            options.append(f'<option value="{u_esc}">{n_esc} ({e_esc})</option>')
         apps_options_html = "\n".join(options)
         right_placeholder_initial = ""
-        initial_iframe_src = apps[0]["url"]
+        initial_iframe_src = html.escape(str(apps[0]["url"]), quote=True)
         initial_iframe_hidden = ""
-        initial_code = apps[0]["code"]
+        initial_code = html.escape(str(apps[0]["code"]))
         right_actions_disabled = ""
 
     return f"""
@@ -424,7 +433,7 @@ def render_showroom_view() -> str:
             </div>
             <iframe id="showroom-app-iframe" 
                     src="{initial_iframe_src}" 
-                    sandbox="allow-scripts allow-forms allow-same-origin"
+                    sandbox="allow-scripts allow-forms"
                     class="w-full h-full border-none {initial_iframe_hidden}" 
                     style="border: 1px solid #E2E8F0; border-radius: 8px; width: 100%; height: 100%;" 
                     title="Live App Viewer">
@@ -554,7 +563,7 @@ def render_showroom_view() -> str:
       function openCurrentAppInNewTab() {{
         const select = document.getElementById('showroom-apps-select');
         if (select && select.value) {{
-          window.open(select.value, '_blank');
+          window.open(select.value, '_blank', 'noopener,noreferrer');
         }}
       }}
 

@@ -70,6 +70,7 @@ class AgentRouter:
 
         total = 0.0
         ok = False
+        db_errors = 0
         deadline = now + 2.0
         dbs = []
         try:
@@ -84,6 +85,7 @@ class AgentRouter:
         dbs = sorted({os.path.abspath(p) for p in dbs if p and os.path.exists(p)})
         for db in dbs:
             if time.time() > deadline:
+                db_errors += 1
                 break
             try:
                 con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=0.4)
@@ -99,7 +101,13 @@ class AgentRouter:
                 finally:
                     con.close()
             except Exception:
+                db_errors += 1
                 continue
+
+        if dbs and not ok and db_errors > 0 and not self._budget_override():
+            logger.error("[TokenGuard] Verbrauchsdatenbanken vorhanden, aber nicht lesbar (Fail-Closed).")
+            total = float("inf")
+            ok = True
 
         self._spend_cache = {"ts": now, "spend": total, "ok": ok}
         return total, ok
@@ -575,6 +583,74 @@ class AgentRouter:
                 
         return target_url, request_headers, client_payload
 
+    @staticmethod
+    def _run_compliance_and_classify(agent_id: str, messages: List[Dict], category: str) -> str:
+        """Single Execution Gate Teil 1: EU AI Act Aktivierung + DataClassifier-Eskalation."""
+        from backend.llm_egress_guard import ZeroEgressBlockedError
+        sys_prompt = next(
+            (str(m.get("content", "")) for m in (messages or []) if m.get("role") == "system"),
+            "",
+        )
+        try:
+            from backend.compliance_engine import compliance_engine
+            chk = compliance_engine.check_activation_allowed(agent_id, system_prompt=sys_prompt)
+            if not chk.get("allowed", True):
+                raise ZeroEgressBlockedError(
+                    chk.get("reason") or f"EU AI Act Guardrail blockiert '{agent_id}'.",
+                    error_code=chk.get("error_code") or "COMPLIANCE_BLOCKED",
+                )
+        except ZeroEgressBlockedError:
+            raise
+        except Exception:
+            pass
+
+        eff_cat = category
+        if not eff_cat:
+            try:
+                from backend.data_classifier import DataClassifier
+                user_text = "\n".join(
+                    str(m.get("content", ""))
+                    for m in (messages or [])[-3:]
+                    if m.get("role") in ("user", "tool")
+                )
+                if user_text.strip():
+                    cls_res = DataClassifier.classify(user_text)
+                    if not cls_res.get("cloud_llm_allowed", True):
+                        eff_cat = "confidential"
+            except Exception:
+                pass
+        return eff_cat
+
+    @staticmethod
+    def _finalize_output_guard(raw_text: str, session_id: str, is_local_hop: bool) -> str:
+        """Single Execution Gate Teil 2: PII Re-Hydration (Cloud) + Secret Masking + Output Policy Linter."""
+        text = raw_text or ""
+        if not text:
+            return text
+        if not is_local_hop:
+            try:
+                from backend.pii_scrubber import pii_scrubber
+                rehyd = pii_scrubber.rehydrate_text(text, session_id=session_id)
+                if isinstance(rehyd, dict) and "text" in rehyd:
+                    text = rehyd["text"]
+            except Exception:
+                pass
+        try:
+            from backend.secret_masker import mask_sensitive_text
+            masked, _ = mask_sensitive_text(text)
+            if isinstance(masked, str):
+                text = masked
+        except Exception:
+            pass
+        try:
+            from backend.output_policy_linter import output_policy_linter
+            linted = output_policy_linter.lint_and_clean(text)
+            if isinstance(linted, dict) and linted.get("cleaned_text") is not None:
+                text = linted["cleaned_text"]
+        except Exception:
+            pass
+        return text
+
     async def chat_completion(
         self,
         messages: List[Dict],
@@ -598,6 +674,7 @@ class AgentRouter:
         )
 
         messages, model, reasoning_level = self._enforce_token_guard(messages, provider, model, reasoning_level)
+        category = self._run_compliance_and_classify(agent_id, messages, category)
         gate = evaluate_and_gate_llm_dispatch(
             agent_id=agent_id,
             provider=provider,
@@ -679,19 +756,18 @@ class AgentRouter:
                         )
                     else:
                         raw_text = data["choices"][0]["message"]["content"]
-                    if not is_local_hop:
-                        try:
-                            from backend.pii_scrubber import pii_scrubber
-                            rehyd = pii_scrubber.rehydrate_text(raw_text, session_id=hop_sid)
-                            if isinstance(rehyd, dict) and "text" in rehyd:
-                                raw_text = rehyd["text"]
-                        except Exception:
-                            pass
+                    raw_text = self._finalize_output_guard(raw_text, hop_sid, is_local_hop)
                     try:
-                        from backend.output_policy_linter import output_policy_linter
-                        linted = output_policy_linter.lint_and_clean(raw_text)
-                        if isinstance(linted, dict) and linted.get("cleaned_text") is not None:
-                            raw_text = linted["cleaned_text"]
+                        from backend.execution_receipt_ledger import execution_receipt_ledger
+                        execution_receipt_ledger.issue_receipt(
+                            task_id=hop_sid,
+                            agent_role=agent_id or "router",
+                            model_used=m_try,
+                            prompt_tokens=max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4),
+                            completion_tokens=max(1, len(raw_text) // 4),
+                            cost_usd=0.0,
+                            tools_invoked=["agent_router.chat_completion"],
+                        )
                     except Exception:
                         pass
                     return raw_text
@@ -732,6 +808,7 @@ class AgentRouter:
             return
 
         try:
+            category = self._run_compliance_and_classify(agent_id, messages, category)
             gate = evaluate_and_gate_llm_dispatch(
                 agent_id=agent_id,
                 provider=provider,
@@ -818,6 +895,8 @@ class AgentRouter:
                             yield f"ERROR: {provider.capitalize()} Fehler (Status {response.status_code}): {err_body.decode('utf-8', errors='ignore')[:300]}"
                             return
                         else:
+                            stream_buf = ""
+                            total_chars = 0
                             async for line in response.aiter_lines():
                                 if not line:
                                     continue
@@ -827,19 +906,50 @@ class AgentRouter:
                                         break
                                     try:
                                         chunk = json.loads(data_str)
+                                        piece = ""
                                         if prov_low == "anthropic":
                                             if chunk.get("type") == "content_block_delta":
                                                 delta = chunk.get("delta", {})
                                                 if delta.get("type") == "text_delta":
-                                                    yield delta.get("text", "")
+                                                    piece = delta.get("text", "")
                                         else:
                                             choice = chunk.get("choices", [{}])[0]
                                             delta = choice.get("delta", {})
-                                            content_piece = delta.get("content", "")
-                                            if content_piece:
-                                                yield content_piece
+                                            piece = delta.get("content", "")
+                                        if piece:
+                                            stream_buf += piece
+                                            total_chars += len(piece)
+                                            # Unvollständigen [EMAIL_N] / [GESCHÜTZT...]-Tag am Pufferende zurückhalten
+                                            open_idx = stream_buf.rfind("[")
+                                            if open_idx != -1 and "]" not in stream_buf[open_idx:] and (len(stream_buf) - open_idx) < 32:
+                                                ready = stream_buf[:open_idx]
+                                                stream_buf = stream_buf[open_idx:]
+                                            else:
+                                                ready = stream_buf
+                                                stream_buf = ""
+                                            if ready:
+                                                cleaned = self._finalize_output_guard(ready, hop_sid, is_local_hop)
+                                                if cleaned:
+                                                    yield cleaned
                                     except json.JSONDecodeError:
                                         pass
+                            if stream_buf:
+                                cleaned_tail = self._finalize_output_guard(stream_buf, hop_sid, is_local_hop)
+                                if cleaned_tail:
+                                    yield cleaned_tail
+                            try:
+                                from backend.execution_receipt_ledger import execution_receipt_ledger
+                                execution_receipt_ledger.issue_receipt(
+                                    task_id=hop_sid,
+                                    agent_role=agent_id or "router",
+                                    model_used=m_try,
+                                    prompt_tokens=max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4),
+                                    completion_tokens=max(1, total_chars // 4),
+                                    cost_usd=0.0,
+                                    tools_invoked=["agent_router.stream_chat_completion"],
+                                )
+                            except Exception:
+                                pass
                             return
             except Exception as e:
                 if idx < len(candidate_models) - 1:

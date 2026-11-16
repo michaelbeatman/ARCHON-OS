@@ -18,8 +18,7 @@ if not os.path.exists(DEST_DIR):
     os.makedirs(DEST_DIR, exist_ok=True)
 
 def scrub_content(content):
-    content = content.replace(r"C:\Users\User", r"C:\Users\User")
-    content = content.replace(r"C:/Users/User", r"C:/Users/User")
+    content = content.replace("C:/Users/User", "/opt/archon")
     content = re.sub(r"\bmicha\b", "admin_orchestrator", content)
     content = re.sub(r"\bmichael\b", "admin", content, flags=re.IGNORECASE)
     content = content.replace("michael-keller-writing-style", "default-writing-style")

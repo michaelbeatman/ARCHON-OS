@@ -14,7 +14,11 @@ import sqlite3
 from typing import List, Dict, Optional, Any
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KANBAN_DB = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    KANBAN_DB = _resolve_db("kanban.db")
+except Exception:
+    KANBAN_DB = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
 
 class DAGScheduler:
     def __init__(self):

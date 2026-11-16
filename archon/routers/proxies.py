@@ -10,7 +10,7 @@ import os
 import time
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 import httpx
 
@@ -133,13 +133,14 @@ async def _ensure_n8n_running() -> bool:
             return False
 
         client = _get_shared_proxy_client()
-        for _ in range(24):
-            try:
-                resp = await client.get("http://n8n:5678/healthz", timeout=2.0)
-                if resp.status_code == 200:
-                    return True
-            except Exception:
-                pass
+        for _ in range(50):
+            for base_url in ("http://n8n:5678", "http://host.docker.internal:5678"):
+                try:
+                    resp = await client.get(f"{base_url}/", timeout=2.0)
+                    if resp.status_code == 200:
+                        return True
+                except Exception:
+                    pass
             await asyncio.sleep(0.5)
         return False
 
@@ -147,7 +148,7 @@ async def _ensure_n8n_running() -> bool:
 async def forward_to_n8n(request: Request, path: str):
     proxy = _get_n8n_proxy()
     res = await proxy.forward(request, path)
-    if res.status_code == 502:
+    if res.status_code == 502 or (path in ("", "/") and res.status_code == 404):
         if await _ensure_n8n_running():
             return await proxy.forward(request, path)
     return res
@@ -169,14 +170,14 @@ async def n8n_proxy(request: Request, path: str = ""):
 async def n8n_assets_proxy(request: Request, path: str = ""):
     if path:
         try:
-            from utils.path_jail import safe_path
+            from utils.path_jail import safe_path_within
 
             assets_root = os.path.abspath("assets")
             if os.path.exists(assets_root):
-                target = safe_path(
+                target = safe_path_within(
                     os.path.join(assets_root, path),
+                    [assets_root],
                     must_exist=True,
-                    extra_roots=[assets_root],
                     allow_dirs=False,
                 )
                 if target and os.path.isfile(target):
@@ -203,6 +204,125 @@ async def n8n_rest_proxy(request: Request, path: str = ""):
 
     fn = getattr(app_main, "forward_to_n8n", forward_to_n8n)
     return await fn(request, f"rest/{path}")
+
+
+@router.api_route("/types/{path:path}", methods=["GET", "HEAD"])
+async def n8n_types_proxy(request: Request, path: str = ""):
+    require_admin_or_503(request)
+    import main as app_main
+
+    fn = getattr(app_main, "forward_to_n8n", forward_to_n8n)
+    return await fn(request, f"types/{path}")
+
+
+async def _ws_forward_n8n_push(websocket: WebSocket) -> None:
+    """Authentifizierter bidirektionaler WebSocket-Relay fuer n8n `/rest/push`."""
+    from urllib.parse import urlparse
+    from archon.routers.auth import get_current_user_from_request
+    from backend.auth_service import auth_service
+
+    # CSWSH-Schutz: Origin-Header muss mit Host uebereinstimmen (wenn gesendet)
+    origin = (websocket.headers.get("origin") or "").strip()
+    host = (websocket.headers.get("x-forwarded-host") or websocket.headers.get("host") or "").strip().lower()
+    if origin and host:
+        orig_host = (urlparse(origin).netloc or "").strip().lower()
+        if orig_host != host:
+            await websocket.close(code=1008)
+            return
+
+    try:
+        auth_service.is_auth_enabled()
+        user = get_current_user_from_request(websocket)  # type: ignore[arg-type]
+    except Exception:
+        await websocket.close(code=1011)
+        return
+
+    if user.get("role") != "admin":
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    query = websocket.url.query or ""
+    suffix = f"/rest/push?{query}" if query else "/rest/push"
+
+    cookie_hdr = websocket.headers.get("cookie", "")
+    extra_headers = []
+    if cookie_hdr:
+        cleaned = [
+            c.strip()
+            for c in cookie_hdr.split(";")
+            if c.strip() and not c.strip().startswith("archon_session=")
+        ]
+        if cleaned:
+            extra_headers.append(("Cookie", "; ".join(cleaned)))
+
+    import websockets
+
+    upstream_ws = None
+    for host in ("n8n:5678", "host.docker.internal:5678"):
+        try:
+            upstream_ws = await websockets.connect(
+                f"ws://{host}{suffix}",
+                additional_headers=extra_headers or None,
+                open_timeout=5.0,
+            )
+            break
+        except Exception:
+            upstream_ws = None
+    if upstream_ws is None:
+        await websocket.close(code=1013)
+        return
+
+    async def _c2u():
+        try:
+            while True:
+                msg = await websocket.receive()
+                if msg.get("type") == "websocket.disconnect":
+                    break
+                if msg.get("text") is not None:
+                    await upstream_ws.send(msg["text"])
+                elif msg.get("bytes") is not None:
+                    await upstream_ws.send(msg["bytes"])
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            pass
+
+    async def _u2c():
+        try:
+            async for msg in upstream_ws:
+                if isinstance(msg, bytes):
+                    await websocket.send_bytes(msg)
+                else:
+                    await websocket.send_text(msg)
+        except Exception:
+            pass
+
+    try:
+        t1 = asyncio.create_task(_c2u())
+        t2 = asyncio.create_task(_u2c())
+        done, pending = await asyncio.wait({t1, t2}, return_when=asyncio.FIRST_COMPLETED)
+        for p in pending:
+            p.cancel()
+    finally:
+        try:
+            await upstream_ws.close()
+        except Exception:
+            pass
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
+@router.websocket("/n8n-proxy/rest/push")
+async def n8n_ws_push_prefixed(websocket: WebSocket):
+    await _ws_forward_n8n_push(websocket)
+
+
+@router.websocket("/rest/push")
+async def n8n_ws_push_root(websocket: WebSocket):
+    await _ws_forward_n8n_push(websocket)
 
 
 _ANYTHINGLLM_PROXY = None

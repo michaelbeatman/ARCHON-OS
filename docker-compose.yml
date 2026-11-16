@@ -202,6 +202,8 @@ services:
       - ALLOW_CONTAINER_RENAME=${ARCHON_PROXY_ALLOW_UPDATER:-0}
       - ALLOW_IMAGE_PULL=${ARCHON_PROXY_ALLOW_UPDATER:-0}
       - ALLOW_IMAGE_TAG=${ARCHON_PROXY_ALLOW_UPDATER:-0}
+      - LOG_LEVEL=${DOCKER_PROXY_LOG_LEVEL:-info}
+      - SOCKET_PATH=${DOCKER_SOCKET_PATH:-/var/run/docker.sock}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./deploy/docker-socket-proxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro

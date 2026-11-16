@@ -8,6 +8,13 @@
   const MODAL_ID = "archon-calendar-modal";
   let activeSource = "all";
 
+  function _calT(key, fallback) {
+    if (window.archonI18n && typeof window.archonI18n.t === "function") {
+      return window.archonI18n.t(key, fallback);
+    }
+    return fallback;
+  }
+
   function _escCal(str) {
     return String(str ?? "")
       .replace(/&/g, "&amp;")
@@ -26,9 +33,35 @@
     return await res.json();
   }
 
+  function applyModalTranslations(modal) {
+    if (!modal) return;
+    const titleEl = modal.querySelector("#cal-modal-title");
+    if (titleEl) titleEl.textContent = _calT("ui.operations_calendar.modal_title", "Operations-Kalender (Kanban, ERP, n8n & Termine)");
+    const closeBtn = modal.querySelector("#cal-close-btn");
+    if (closeBtn) closeBtn.textContent = _calT("ui.operations_calendar.close_btn", "Schließen");
+    const filterMap = {
+      all: ["ui.operations_calendar.filter_all", "Alle"],
+      kanban: ["ui.operations_calendar.filter_kanban", "Kanban"],
+      erp: ["ui.operations_calendar.filter_erp", "ERP-Fälligkeiten"],
+      n8n: ["ui.operations_calendar.filter_n8n", "n8n-Crons"],
+      custom: ["ui.operations_calendar.filter_custom", "Eigene Termine"],
+    };
+    modal.querySelectorAll(".cal-filter").forEach((b) => {
+      const spec = filterMap[b.dataset.calsrc];
+      if (spec) b.textContent = _calT(spec[0], spec[1]);
+    });
+    const newTitleInput = modal.querySelector("#cal-new-title");
+    if (newTitleInput) newTitleInput.placeholder = _calT("ui.operations_calendar.ph_new_title", "Neuer Termin / Geburtstag / Frist...");
+    const addBtn = modal.querySelector("#cal-add-btn");
+    if (addBtn) addBtn.textContent = _calT("ui.operations_calendar.add_btn", "+ Anlegen");
+  }
+
   function ensureModal() {
     let modal = document.getElementById(MODAL_ID);
-    if (modal) return modal;
+    if (modal) {
+      applyModalTranslations(modal);
+      return modal;
+    }
     modal = document.createElement("div");
     modal.id = MODAL_ID;
     modal.setAttribute("role", "dialog");
@@ -37,25 +70,26 @@
     modal.innerHTML = `
       <div class="w-full max-w-3xl rounded-xl border theme-border bg-white dark:bg-zinc-900 p-5 shadow-2xl max-h-[88vh] flex flex-col gap-3">
         <div class="flex items-center justify-between border-b theme-border pb-2">
-          <h2 class="text-base font-bold">Operations-Kalender (Kanban, ERP, n8n &amp; Termine)</h2>
-          <button id="cal-close-btn" class="px-2 py-1 text-xs rounded border theme-border">Schließen</button>
+          <h2 id="cal-modal-title" class="text-base font-bold"></h2>
+          <button id="cal-close-btn" class="px-2 py-1 text-xs rounded border theme-border"></button>
         </div>
         <div class="flex flex-wrap gap-1.5 text-xs">
-          <button data-calsrc="all" class="cal-filter px-2.5 py-1 rounded border theme-border font-semibold">Alle</button>
-          <button data-calsrc="kanban" class="cal-filter px-2.5 py-1 rounded border theme-border">Kanban</button>
-          <button data-calsrc="erp" class="cal-filter px-2.5 py-1 rounded border theme-border">ERP-Fälligkeiten</button>
-          <button data-calsrc="n8n" class="cal-filter px-2.5 py-1 rounded border theme-border">n8n-Crons</button>
-          <button data-calsrc="custom" class="cal-filter px-2.5 py-1 rounded border theme-border">Eigene Termine</button>
+          <button data-calsrc="all" class="cal-filter px-2.5 py-1 rounded border theme-border font-semibold"></button>
+          <button data-calsrc="kanban" class="cal-filter px-2.5 py-1 rounded border theme-border"></button>
+          <button data-calsrc="erp" class="cal-filter px-2.5 py-1 rounded border theme-border"></button>
+          <button data-calsrc="n8n" class="cal-filter px-2.5 py-1 rounded border theme-border"></button>
+          <button data-calsrc="custom" class="cal-filter px-2.5 py-1 rounded border theme-border"></button>
         </div>
         <div class="flex flex-wrap gap-2 items-center text-xs border theme-border rounded p-2">
-          <input id="cal-new-title" class="flex-1 min-w-[160px] p-1.5 rounded border theme-border bg-transparent" placeholder="Neuer Termin / Geburtstag / Frist..." />
+          <input id="cal-new-title" class="flex-1 min-w-[160px] p-1.5 rounded border theme-border bg-transparent" />
           <input id="cal-new-date" type="date" class="p-1.5 rounded border theme-border bg-transparent" />
           <input id="cal-new-time" type="time" class="p-1.5 rounded border theme-border bg-transparent" />
-          <button id="cal-add-btn" class="px-3 py-1.5 rounded bg-indigo-600 text-white font-semibold">+ Anlegen</button>
+          <button id="cal-add-btn" class="px-3 py-1.5 rounded bg-indigo-600 text-white font-semibold"></button>
         </div>
         <div id="cal-list" class="overflow-y-auto flex-1 space-y-1.5 text-xs"></div>
       </div>`;
     document.body.appendChild(modal);
+    applyModalTranslations(modal);
 
     modal.querySelector("#cal-close-btn").onclick = () => {
       modal.classList.add("hidden");
@@ -89,9 +123,10 @@
     const data = await api(`/api/v1/calendar/events?source=${encodeURIComponent(activeSource)}`);
     const events = data.events || [];
     if (!events.length) {
-      listEl.innerHTML = `<div class="opacity-60 p-3">Keine Einträge für diesen Filter.</div>`;
+      listEl.innerHTML = `<div class="opacity-60 p-3">${_escCal(_calT("ui.operations_calendar.empty_list", "Keine Einträge für diesen Filter."))}</div>`;
       return;
     }
+    const delLabel = _escCal(_calT("ui.operations_calendar.delete_btn", "Löschen"));
     listEl.innerHTML = events
       .map(
         (ev) => `
@@ -103,7 +138,7 @@
         </div>
         ${
           ev.source === "custom"
-            ? `<button data-caldel="${_escCal(ev.id)}" class="px-2 py-0.5 rounded border theme-border text-[11px]">Löschen</button>`
+            ? `<button data-caldel="${_escCal(ev.id)}" class="px-2 py-0.5 rounded border theme-border text-[11px]">${delLabel}</button>`
             : ""
         }
       </div>`
@@ -111,7 +146,7 @@
       .join("");
     listEl.querySelectorAll("[data-caldel]").forEach((b) => {
       b.onclick = async () => {
-        if (!confirm("Diesen Termin wirklich löschen?")) return;
+        if (!confirm(_calT("ui.operations_calendar.confirm_delete", "Diesen Termin wirklich löschen?"))) return;
         await api(`/api/v1/calendar/events/${encodeURIComponent(b.dataset.caldel)}`, { method: "DELETE" });
         loadEvents();
       };
@@ -125,18 +160,29 @@
     loadEvents();
   };
 
+  function updateTileLabel() {
+    const btn = document.getElementById("ops-subtab-calendar");
+    if (!btn) return;
+    btn.title = _calT("ui.operations_calendar.tile_title", "Operations-Kalender (M25)");
+    const lbl = btn.querySelector(".ops-tab-label");
+    if (lbl) lbl.textContent = _calT("ui.operations_calendar.tile_label", "Kalender");
+  }
+
   function injectCalendarTile() {
-    if (document.getElementById("ops-subtab-calendar")) return;
+    if (document.getElementById("ops-subtab-calendar")) {
+      updateTileLabel();
+      return true;
+    }
     const anchor =
       document.getElementById("ops-subtab-playbooks") ||
       document.getElementById("ops-subtab-org") ||
       document.getElementById("ops-subtab-kanban");
-    if (!anchor || !anchor.parentNode) return;
+    if (!anchor || !anchor.parentNode) return false;
 
     const btn = document.createElement("button");
     btn.type = "button";
     btn.id = "ops-subtab-calendar";
-    btn.title = "Operations-Kalender (M25)";
+    btn.title = _calT("ui.operations_calendar.tile_title", "Operations-Kalender (M25)");
     btn.className =
       "ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
     btn.innerHTML = `
@@ -148,14 +194,51 @@
           <line x1="3" y1="10" x2="21" y2="10"/>
         </svg>
       </div>
-      <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Kalender</span>`;
+      <span class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">${_escCal(_calT("ui.operations_calendar.tile_label", "Kalender"))}</span>`;
     btn.onclick = window.openOperationsCalendar;
     anchor.parentNode.insertBefore(btn, anchor.nextSibling);
+    return true;
   }
 
+  function mountTileWithObserver() {
+    if (injectCalendarTile()) return;
+    let retries = 0;
+    const maxRetries = 12;
+    let obs = null;
+    const tryMount = () => {
+      if (injectCalendarTile()) {
+        if (obs) obs.disconnect();
+        return true;
+      }
+      return false;
+    };
+    const rootTarget = document.getElementById("view-operations") || document.body;
+    if (rootTarget && typeof MutationObserver !== "undefined") {
+      obs = new MutationObserver(() => { tryMount(); });
+      obs.observe(rootTarget, { childList: true, subtree: true });
+    }
+    const tick = () => {
+      if (tryMount() || ++retries >= maxRetries) {
+        if (obs) obs.disconnect();
+        return;
+      }
+      setTimeout(tick, 250);
+    };
+    setTimeout(tick, 250);
+  }
+
+  window.addEventListener("archon:language-changed", () => {
+    updateTileLabel();
+    const modal = document.getElementById(MODAL_ID);
+    if (modal) {
+      applyModalTranslations(modal);
+      if (!modal.classList.contains("hidden")) loadEvents();
+    }
+  });
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", injectCalendarTile);
+    document.addEventListener("DOMContentLoaded", mountTileWithObserver);
   } else {
-    injectCalendarTile();
+    mountTileWithObserver();
   }
 })();

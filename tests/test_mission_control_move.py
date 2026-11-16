@@ -142,7 +142,9 @@ async def test_parallel_moves_do_not_overwrite_each_other(store):
     """
     path, _ = store
     await asyncio.gather(
-        mcr.move_mission_control_task(mcr.TaskMoveRequest(task_id="t1", target_status="completed")),
+        mcr.move_mission_control_task(
+            mcr.TaskMoveRequest(task_id="t1", target_status="completed", result_summary="Parallel erledigt.")
+        ),
         mcr.move_mission_control_task(mcr.TaskMoveRequest(task_id="t2", target_status="in_progress")),
     )
 

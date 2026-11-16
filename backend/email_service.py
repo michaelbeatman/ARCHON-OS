@@ -179,14 +179,27 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
 
                 final_text = body_plain or (body_html if body_html else "")
 
-                # Sicherheitsprüfung auf Prompt Injections
+                # Sicherheitsprüfung auf Prompt Injections (local_security_guard + dual_llm_sanitizer)
                 sec_verdict = "safe"
                 sec_flags = []
+                sanitized_text = final_text
                 try:
                     from local_security_guard import scan_prompt_injection
                     scan_res = scan_prompt_injection(final_text, subject=subject, sender=sender)
                     sec_verdict = scan_res.get("verdict", "safe")
-                    sec_flags = scan_res.get("pattern_matches", [])
+                    sec_flags = list(scan_res.get("pattern_matches", []))
+                except Exception:
+                    pass
+                try:
+                    from backend.dual_llm_sanitizer import sanitize_external_input
+                    dl_res = sanitize_external_input(final_text, source_id=sender, source_type="email")
+                    if not dl_res.get("is_safe", True):
+                        if dl_res.get("threat_level") == "critical":
+                            sec_verdict = "blocked"
+                        elif sec_verdict == "safe":
+                            sec_verdict = "suspicious"
+                        sec_flags = sorted(set(sec_flags + list(dl_res.get("detected_patterns", []))))
+                        sanitized_text = dl_res.get("clean_summary") or "[INHALT WEGEN SICHERHEITSRISIKEN GEFILTERT]"
                 except Exception:
                     pass
 
@@ -201,10 +214,11 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                     "date": formatted_date,
                     "timestamp": formatted_date,
                     "mtime": parsed_ts,
-                    "body": final_text,
-                    "content": final_text,
+                    "body": sanitized_text,
+                    "content": sanitized_text,
+                    "raw_quarantined": sec_verdict == "blocked",
                     "html": body_html,
-                    "preview": (final_text[:160] + "...") if len(final_text) > 160 else final_text,
+                    "preview": (sanitized_text[:160] + "...") if len(sanitized_text) > 160 else sanitized_text,
                     "source": "email",
                     "security_status": sec_verdict,
                     "security_flags": sec_flags
@@ -240,3 +254,69 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                 mail.logout()
             except Exception:
                 pass
+
+
+def send_email(
+    to_email: str,
+    subject: str,
+    body_text: str,
+    from_email: Optional[str] = None,
+    html_body: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Sendet eine E-Mail über den konfigurierten SMTP-Server."""
+    from email.message import EmailMessage
+
+    recipient = str(to_email or "").strip()
+    if not recipient or "@" not in recipient:
+        return {"status": "error", "message": "Ungültige Empfänger-Adresse."}
+
+    cfg: Dict[str, Any] = {}
+    try:
+        from backend.post_task_pipeline import get_smtp_config
+        cfg = get_smtp_config() or {}
+    except Exception:
+        cfg = {}
+
+    smtp_host = str(cfg.get("smtp_host") or cfg.get("host") or os.environ.get("SMTP_HOST") or "").strip()
+    try:
+        smtp_port = int(cfg.get("smtp_port") or cfg.get("port") or os.environ.get("SMTP_PORT") or 587)
+    except (TypeError, ValueError):
+        smtp_port = 587
+    user = str(cfg.get("username") or os.environ.get("SMTP_USER") or "").strip()
+    pwd = str(cfg.get("password") or os.environ.get("SMTP_PASSWORD") or "").strip()
+    sender = str(from_email or cfg.get("from_email") or user or "noreply@archon.local").strip()
+
+    if not smtp_host or not user or not pwd:
+        return {
+            "status": "skipped",
+            "reason": "no_smtp_credentials",
+            "message": "SMTP-Zugangsdaten nicht konfiguriert.",
+        }
+
+    msg = EmailMessage()
+    msg["Subject"] = str(subject or "").replace("\r", " ").replace("\n", " ")
+    msg["From"] = sender.replace("\r", " ").replace("\n", " ")
+    msg["To"] = recipient.replace("\r", " ").replace("\n", " ")
+    msg.set_content(body_text or "")
+    if html_body:
+        msg.add_alternative(html_body, subtype="html")
+
+    try:
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as server:
+                server.login(user, pwd)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                server.ehlo()
+                try:
+                    server.starttls()
+                    server.ehlo()
+                except smtplib.SMTPException:
+                    pass
+                server.login(user, pwd)
+                server.send_message(msg)
+        return {"status": "sent", "recipient": recipient, "host": smtp_host}
+    except Exception as exc:
+        logger.error("SMTP-Versand fehlgeschlagen: %s", exc)
+        return {"status": "error", "message": str(exc), "recipient": recipient}

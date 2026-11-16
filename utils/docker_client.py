@@ -48,9 +48,10 @@ _IMAGE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,200}$")
 # Pfadbaustein fuer Container-Namen in Regex-Allowlists. Reserved-Woerter von
 # /containers/<x>, die keine Container-IDs sind, werden ausgeschlossen, damit
 # z.B. DELETE /containers/json nicht durch eine Namensregel faellt.
-_CN_PAT = r"(?!json$|create$|prune$)[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
+_CN_PAT = r"(?!json(?=/|$|\?)|create(?=/|$|\?)|prune(?=/|$|\?))[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
 # Pfadbaustein fuer Image-Referenzen (darf '/' enthalten, weil Repos verschachtelt sind).
 _REF_PAT = r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,200}"
+_EXEC_ID_PAT = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
 
 
 # Erlaubte Operationen: (Methode, Pfad-Regex)

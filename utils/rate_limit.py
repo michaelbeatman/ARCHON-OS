@@ -28,6 +28,7 @@ Konfiguration über Umgebung:
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import threading
 import time
@@ -44,15 +45,19 @@ __all__ = ["RateLimitMiddleware", "STRICT_PREFIXES", "EXEMPT_PREFIXES"]
 # Teure oder gefaehrliche Ziele: enges Limit.
 STRICT_PREFIXES: Tuple[str, ...] = (
     "/api/sandbox",
+    "/api/v1/sandbox",
     "/api/v1/container/exec",
     "/api/hermes/update",
+    "/api/v1/hermes/update",
     "/api/system/update",
+    "/api/v1/system/update",
     "/api/proxy",
     "/api/router/hedged",
     "/api/auth",
     "/api/healing/attempt",
     "/api/fleet/heal",
     "/api/documents/parse",
+    "/api/v1/documents/parse",
     "/api/llm-providers/test-connection",
     "/api/v1/library/upload",
 )
@@ -68,8 +73,30 @@ EXEMPT_PREFIXES: Tuple[str, ...] = (
     "/api/v1/events/stream",
 )
 
-_PRIVATE_PREFIXES = ("127.", "10.", "192.168.", "172.16.", "172.17.", "172.18.",
-                     "172.19.", "172.2", "172.30.", "172.31.", "::1", "localhost")
+# Eingebettete Vite-/Next-UIs (n8n, OmniRoute, AnythingLLM) laden beim Start
+# hunderte ES-Modul- und CSS-Chunks parallel; fuer reine Lesezugriffe dürfen
+# diese statischen Proxy-Assets nicht am 600/min-Bucket in 429 laufen.
+EXEMPT_READ_ASSET_PREFIXES: Tuple[str, ...] = (
+    "/n8n-proxy/assets/",
+    "/n8n-proxy/static/",
+    "/n8n-proxy/favicon",
+    "/assets/",
+    "/_next/",
+    "/omniroute-proxy/_next/",
+    "/anythingllm-proxy/assets/",
+)
+
+def _is_trusted_proxy_ip(client: str) -> bool:
+    if not client:
+        return False
+    low = client.strip().lower()
+    if low == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(low)
+        return bool(ip.is_loopback or ip.is_private or ip.is_link_local)
+    except ValueError:
+        return False
 
 
 def _env_int(name: str, default: int) -> int:
@@ -118,8 +145,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     # ---------------- intern ----------------
 
     @staticmethod
-    def _exempt(path: str) -> bool:
-        return any(path == p or path.startswith(p) for p in EXEMPT_PREFIXES)
+    def _exempt(path: str, method: str = "GET") -> bool:
+        if any(path == p or path.startswith(p) for p in EXEMPT_PREFIXES):
+            return True
+        if method in ("GET", "HEAD") and any(path.startswith(p) for p in EXEMPT_READ_ASSET_PREFIXES):
+            return True
+        return False
 
     @staticmethod
     def _strict(path: str) -> bool:
@@ -130,7 +161,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client = request.client.host if request.client else "unknown"
         if _trust_forwarded():
             forwarded = request.headers.get("x-forwarded-for", "")
-            if forwarded and any(client.startswith(p) for p in _PRIVATE_PREFIXES):
+            if forwarded and _is_trusted_proxy_ip(client):
                 return forwarded.split(",")[0].strip()
         return client
 
@@ -161,7 +192,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         path = request.url.path
-        if request.method == "OPTIONS" or self._exempt(path):
+        if request.method == "OPTIONS" or self._exempt(path, request.method):
             return await call_next(request)
 
         strict = self._strict(path)

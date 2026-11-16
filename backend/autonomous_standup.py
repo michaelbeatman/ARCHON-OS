@@ -14,8 +14,13 @@ import httpx
 from typing import Dict, Any
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KANBAN_DB = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
-STATE_DB = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    KANBAN_DB = _resolve_db("kanban.db")
+    STATE_DB = _resolve_db("state.db")
+except Exception:
+    KANBAN_DB = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
+    STATE_DB = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
 
 async def generate_morning_standup(force: bool = True) -> dict:
     standup_time = "08:00"

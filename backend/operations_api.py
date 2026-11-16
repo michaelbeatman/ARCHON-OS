@@ -17,13 +17,17 @@ import subprocess
 import time
 import secrets
 from typing import List, Dict, Optional, Any
-from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, File
+from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, File, Depends
 
-from archon.routers._rbac import require_admin_or_503
+from archon.routers._rbac import require_admin_or_503, forbid_viewer_writes
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/operations", tags=["operations"])
+router = APIRouter(
+    prefix="/api/operations",
+    tags=["operations"],
+    dependencies=[Depends(forbid_viewer_writes)],
+)
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
@@ -91,6 +95,28 @@ def _get_kanban_connection(company_id: Optional[str] = None):
                   )
             """, (cutoff_ts, cutoff_iso, cutoff_iso))
             conn.commit()
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS task_comments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT NOT NULL,
+                    author TEXT DEFAULT 'user',
+                    body TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS task_links (
+                    parent_id TEXT NOT NULL,
+                    child_id TEXT NOT NULL,
+                    PRIMARY KEY (parent_id, child_id)
+                );
+                CREATE TABLE IF NOT EXISTS task_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT NOT NULL,
+                    run_id INTEGER,
+                    kind TEXT NOT NULL,
+                    payload TEXT,
+                    created_at INTEGER NOT NULL
+                );
+            """)
         except Exception:
             pass
         _KANBAN_JOURNAL_INIT = True
@@ -1723,45 +1749,56 @@ def get_kanban_project_files(task_id: str):
 
 
 @router.get("/raw")
-def get_raw_original(path: str):
+def get_raw_original(request: Request, path: str):
     """'Original oeffnen' fuer Dateien AUSSERHALB des Vaults (systeminterne
     Pfade /opt/data, /app): liefert Bytes mit inline-disposition, damit der
     Browser PDF/Bilder/MD direkt zeigt bzw. laedt. Traversal-Schutz ueber
     erlaubte Basis-Pruefung."""
+    require_admin_or_503(request)
     from pathlib import Path as _P
     import mimetypes as _mt
     from fastapi.responses import Response
+    from utils.path_jail import safe_path_within, PathJailError
+
     raw = (path or "").strip()
     p = _P(raw)
     if not p.is_absolute():
         raise HTTPException(status_code=400, detail="Absoluter Pfad erwartet (z.B. /opt/data/...).")
-    rp = p.resolve()
-    erlaubte_basen = ("/opt/data/", "/app/")
-    if not any(str(rp).startswith(b) for b in erlaubte_basen):
-        raise HTTPException(status_code=403,
-                            detail="Nur systeminterne Pfade sind oeffenbar (/opt/data, /app). "
-                                   "Host-Dateien ausserhalb der Container-Binds: Pfad kopieren.")
-    if not rp.is_file():
-        raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {raw}")
+    try:
+        resolved_str = safe_path_within(str(p), ["/opt/data", "/app"], must_exist=True, allow_dirs=False)
+    except PathJailError as exc:
+        msg = str(exc)
+        if "existiert nicht" in msg:
+            raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {raw}")
+        raise HTTPException(
+            status_code=403,
+            detail="Nur systeminterne Pfade sind oeffenbar (/opt/data, /app). "
+                   "Host-Dateien ausserhalb der Container-Binds: Pfad kopieren.",
+        )
+    rp = _P(resolved_str)
     try:
         data = rp.read_bytes()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lesen fehlgeschlagen: {e}")
     mime = _mt.guess_type(rp.name)[0] or "application/octet-stream"
+    safe_cd_name = rp.name.replace('"', "").replace("\r", "").replace("\n", "")
     return Response(content=data, media_type=mime,
-                    headers={"Content-Disposition": f'inline; filename="{rp.name}"'})
+                    headers={"Content-Disposition": f'inline; filename="{safe_cd_name}"'})
 
 
 @router.get("/vault/file")
 def get_vault_file(path: str):
     """SYSTEMWEITER Datei-Reader: liefert EINE Vault-Datei (01_PROJEKTE/...) als Text.
-    Traversal-Schutz: resolve + startswith(Vault) + Suffix-Whitelist."""
+    Traversal-Schutz: safe_path_within(Vault) + Suffix-Whitelist."""
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
+    from utils.path_jail import safe_path_within, PathJailError
+
     rel = path.strip().lstrip("/\\")
     vault = _P(get_vault_dir()).resolve()
-    target = (vault / rel).resolve()
-    if not str(target).startswith(str(vault)) or not target.is_file():
+    try:
+        target = _P(safe_path_within(str(vault / rel), [str(vault)], must_exist=True, allow_dirs=False))
+    except PathJailError:
         raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {rel}")
     if target.suffix.lower() not in (".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html", ".log"):
         raise HTTPException(status_code=415, detail="Nur Textdateien (.md/.txt/...).")
@@ -1808,16 +1845,20 @@ def get_kanban_project_file(task_id: str, path: str):
     """Liefert EINE Projektdatei als Text - nur innerhalb des Projektordners (Traversal-Schutz)."""
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
+    from utils.path_jail import safe_path_within, PathJailError
+
     meta = _load_kanban_meta()
     rel = _resolve_task_obsidian_rel(task_id, meta)
     if not rel:
         raise HTTPException(status_code=404, detail="Kein Obsidian-Projekt verknuepft.")
     vault = _P(get_vault_dir()).resolve()
-    proj = (vault / rel).resolve()
-    if not str(proj).startswith(str(vault)):
+    try:
+        proj = _P(safe_path_within(str(vault / rel), [str(vault)], allow_dirs=True))
+    except PathJailError:
         raise HTTPException(status_code=400, detail="Pfad ausserhalb des Vaults.")
-    target = (proj / path).resolve()
-    if not str(target).startswith(str(proj)) or not target.is_file():
+    try:
+        target = _P(safe_path_within(str(proj / path), [str(proj)], must_exist=True, allow_dirs=False))
+    except PathJailError:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
     if target.suffix.lower() not in (".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html", ".log"):
         raise HTTPException(status_code=415, detail="Nur Textdateien (.md/.txt/.csv/...).")
@@ -2204,19 +2245,23 @@ def api_esign_create_submission(req: Dict[str, Any] = Body(...)):
             signer_email=signer_email,
             signer_name=signer_name,
             template_id=template_id,
-            kanban_task_id=kanban_task_id
+            kanban_task_id=kanban_task_id,
+            company_id=req.get("company_id"),
         )
-        return {"status": "success", "submission": res}
+        return {"status": res.get("status", "draft_offline"), "submission": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DocuSeal Submission fehlgeschlagen: {e}")
 
 
 @router.get("/esign/contracts")
-def api_esign_list_contracts(limit: int = Query(default=50)):
+def api_esign_list_contracts(
+    limit: int = Query(default=50),
+    company_id: Optional[str] = Query(default=None),
+):
     """Listet alle Signaturverträge auf."""
     try:
         from backend.docuseal_client import docuseal_client
-        contracts = docuseal_client.list_contracts(limit=limit)
+        contracts = docuseal_client.list_contracts(limit=limit, company_id=company_id)
         return {"status": "success", "count": len(contracts), "contracts": contracts}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

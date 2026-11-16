@@ -543,7 +543,7 @@ async function renderTemplateLivePreview() {
         _renderUstgCompliancePanel(data.compliance);
       }
       if (data && data.html) {
-        container.innerHTML = data.html;
+        container.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(data.html) : data.html;
         return;
       }
     }
@@ -555,6 +555,8 @@ function printTemplatePreview() {
   const container = document.getElementById("tmpl-preview-container");
   if (!container) return;
   const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+  printWindow.opener = null;
   printWindow.document.write(`
     <html>
       <head>
@@ -620,85 +622,4 @@ window.insertTemplatePlaceholder = insertTemplatePlaceholder;
 window.downloadCorporateTemplatePdf = downloadCorporateTemplatePdf;
 window.openDocumentInTemplateEditor = openDocumentInTemplateEditor;
 
-const _origSetBoardroomTab = typeof window.setBoardroomTab === "function" ? window.setBoardroomTab : null;
-window.setBoardroomTab = function(tab) {
-  if (_origSetBoardroomTab && _origSetBoardroomTab !== window.setBoardroomTab) {
-    try { _origSetBoardroomTab(tab); } catch (e) {}
-  }
-  const tabs = ["overview", "debate", "live"];
-  const titles = {
-    overview: [
-      corpT('ui.corporate_controller.boardroom_overview_title', "Decision Engine · Übersicht"),
-      corpT('ui.corporate_controller.boardroom_overview_subtitle', "Historie, frühere Debatten & strategische Konsens-Ergebnisse")
-    ],
-    debate: [
-      corpT('ui.corporate_controller.boardroom_debate_title', "Decision Engine · Debatte"),
-      corpT('ui.corporate_controller.boardroom_debate_subtitle', "Methodik-Auswahl ({count} Frameworks), Chairman & C-Suite Kader-Konfiguration", { count: 55 })
-    ],
-    live: [
-      corpT('ui.corporate_controller.boardroom_live_title', "Decision Engine · Live-Arena"),
-      corpT('ui.corporate_controller.boardroom_live_subtitle', "Echtzeit-Debatten-Streaming, Kontroverse & Synthese-Transkript")
-    ]
-  };
-  tabs.forEach(t => {
-    const view = document.getElementById("boardroom-view-" + t);
-    const btn = document.getElementById("boardroom-subtab-" + t);
-    if (view) {
-      if (t === tab) view.classList.remove("hidden");
-      else view.classList.add("hidden");
-    }
-    if (btn) {
-      const wrap = btn.querySelector(".tile-icon-wrap");
-      const lbl = btn.querySelector(".boardroom-tab-label");
-      if (t === tab) {
-        btn.classList.add("active-cadre-tab", "opacity-100");
-        btn.classList.remove("opacity-80");
-        if (wrap) wrap.classList.add("active-tile");
-        if (lbl) { lbl.classList.add("text-red-600", "font-bold"); lbl.classList.remove("text-[var(--muted-foreground)]", "font-medium"); }
-      } else {
-        btn.classList.remove("active-cadre-tab", "opacity-100");
-        btn.classList.add("opacity-80");
-        if (wrap) wrap.classList.remove("active-tile");
-        if (lbl) { lbl.classList.remove("text-red-600", "font-bold"); lbl.classList.add("text-[var(--muted-foreground)]", "font-medium"); }
-      }
-    }
-  });
-  const tEl = document.getElementById("boardroom-main-title");
-  const sEl = document.getElementById("boardroom-main-subtitle");
-  if (tEl && titles[tab]) tEl.textContent = titles[tab][0];
-  if (sEl && titles[tab]) sEl.textContent = titles[tab][1];
-};
-
-const _origSetSettingsTab = typeof window.setSettingsTab === "function" ? window.setSettingsTab : null;
-window.setSettingsTab = function(tab) {
-  if (_origSetSettingsTab && _origSetSettingsTab !== window.setSettingsTab) {
-    try { _origSetSettingsTab(tab); } catch (e) {}
-  }
-  const allTabs = ["kernel", "autonomy", "services", "routing", "keys", "frameworks", "plugins", "comm", "design", "update"];
-  allTabs.forEach(t => {
-    const panel = document.getElementById("settings-tab-" + t);
-    const btn = document.getElementById("btn-tab-" + t);
-    if (panel) {
-      if (t === tab) panel.classList.remove("hidden");
-      else panel.classList.add("hidden");
-    }
-    if (btn) {
-      if (t === tab) {
-        btn.classList.add("font-bold", "text-[var(--foreground)]");
-        btn.classList.remove("font-normal", "text-[var(--muted-foreground)]");
-        btn.style.borderColor = "var(--border)";
-        btn.style.backgroundColor = "var(--card)";
-        btn.style.borderBottom = "1.5px solid var(--card)";
-        btn.style.zIndex = "2";
-      } else {
-        btn.classList.remove("font-bold", "text-[var(--foreground)]");
-        btn.classList.add("font-normal", "text-[var(--muted-foreground)]");
-        btn.style.borderColor = "transparent";
-        btn.style.backgroundColor = "transparent";
-        btn.style.borderBottom = "";
-        btn.style.zIndex = "1";
-      }
-    }
-  });
-};
 

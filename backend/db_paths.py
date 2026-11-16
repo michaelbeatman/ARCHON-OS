@@ -41,6 +41,15 @@ DB_HOME = {
 }
 
 
+def resolve_tenant_db(filename: str, company_id: Optional[str] = None) -> str:
+    """Löst mandantenspezifische DBs über tenant_context auf, sonst fallback auf resolve_db."""
+    try:
+        from backend.tenant_context import tenant_context
+        return tenant_context.resolve_active_db(os.path.basename(filename), company_id)
+    except Exception:
+        return resolve_db(os.path.basename(filename))
+
+
 def _has_tables(path: str) -> bool:
     """True, wenn die Datei existiert und mindestens eine Tabelle enthält (read-only)."""
     if not os.path.isfile(path):

@@ -5,7 +5,7 @@ import time
 sys.path.insert(0, os.path.abspath("."))
 from utils.batch_library_importer import process_document, slugify
 
-SOURCE_DIR = r"Y:\_CANNABIS"
+SOURCE_DIR = os.environ.get("ARCHON_CANNABIS_SOURCE_DIR", os.path.join(".", "data", "imports", "cannabis"))
 VAULT_DIR = r"./obsidian_vault"
 TARGET_CATEGORY = "06_Cannabis_Wirtschaft_Medizin"
 

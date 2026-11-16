@@ -206,9 +206,13 @@
       } else if (subtab === 'automation') {
         const iframe = document.getElementById('automation-n8n-iframe');
         const extLink = document.getElementById("n8n-external-link");
+        const loader = document.getElementById("n8n-loading-overlay");
         if (extLink) extLink.href = "/n8n-proxy/";
         if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.indexOf('/n8n-proxy') === -1)) {
+          if (loader) loader.classList.remove('hidden');
           iframe.src = '/n8n-proxy/';
+        } else if (loader && iframe && iframe.src && iframe.src.indexOf('/n8n-proxy') !== -1) {
+          loader.classList.add('hidden');
         }
       } else if (subtab === 'kanban') {
         const colContainer = document.getElementById('ops-kanban-columns-container');
@@ -3536,12 +3540,15 @@
 
       const card = document.createElement("div");
       card.className = "p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xs font-sans text-xs flex items-start gap-3 animate-in fade-in duration-150";
+      const rawAvatar = String(item.author_avatar || '/static/avatars/avatar_001.jpg');
+      const safeAvatar = (rawAvatar.startsWith('/') || rawAvatar.startsWith('http://') || rawAvatar.startsWith('https://'))
+        ? escapeHtml(rawAvatar) : '/static/avatars/avatar_001.jpg';
       card.innerHTML = `
-        <img src="${item.author_avatar || '/static/avatars/avatar_001.jpg'}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)] mt-0.5" />
+        <img src="${safeAvatar}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)] mt-0.5" />
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between pb-1 border-b border-[var(--border)] mb-1.5">
             <span class="font-bold text-[var(--foreground)] font-mono">${escapeHtml(item.author_name || item.author_id)}</span>
-            <span class="text-[10px] text-[var(--muted-foreground)] font-mono">${item.timestamp || 'jetzt'}</span>
+            <span class="text-[10px] text-[var(--muted-foreground)] font-mono">${escapeHtml(item.timestamp || 'jetzt')}</span>
           </div>
           <div class="text-[11.5px] leading-relaxed text-[var(--foreground)] whitespace-pre-wrap select-text">${escapeHtml(item.message || '')}</div>
           ${item.takeover_requested ? `

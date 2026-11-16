@@ -202,8 +202,23 @@ class WatchdogDaemon:
                     delta_bytes = max(0, current_size - prev_size)
                     delta_mb = delta_bytes / (1024 * 1024)
 
-                    # Profil-Handle aus Dateiname oder Ordnerstruktur ableiten
-                    profile_handle = file.replace(".log", "").replace("agent_", "").replace("gateway-", "").split("_")[0]
+                    # Profil-Handle aus Dateiname oder Ordnerstruktur ableiten (ohne Unterstriche abzuschneiden)
+                    if file in ("agent.log", "gateway.log") and os.path.basename(os.path.dirname(root)):
+                        parent_name = os.path.basename(root)
+                        profile_handle = (
+                            os.path.basename(os.path.dirname(root))
+                            if parent_name == "logs"
+                            else parent_name
+                        )
+                    else:
+                        stem = file
+                        if stem.endswith(".log"):
+                            stem = stem[:-4]
+                        if stem.startswith("agent_"):
+                            stem = stem[len("agent_"):]
+                        elif stem.startswith("gateway-"):
+                            stem = stem[len("gateway-"):]
+                        profile_handle = stem or "unknown"
 
                     # 1. Prüfe Log-Wachstum (Endlosschleifen-Indikator)
                     if delta_mb >= CONFIG["MAX_LOG_SIZE_MB"]:
@@ -248,16 +263,22 @@ class WatchdogDaemon:
             except Exception as e:
                 logger.error(f"Exception during watchdog scan: {e}")
 
-            # Oracle News Radar alle 4 Stunden autonom im Hintergrund ausführen
+            # Oracle News Radar alle 4 Stunden autonom im separaten Daemon-Thread ausführen,
+            # damit Netzwerk-I/O niemals den 30s-Watchdog-Loop blockiert (Pillar 1)
             if time.time() - self.last_oracle_run > 14400:
                 self.last_oracle_run = time.time()
-                try:
-                    import oracle_news_radar
-                    radar = oracle_news_radar.OracleNewsRadar()
-                    radar.run_radar_cycle()
-                    logger.info("Autonomous Oracle News Radar cycle executed.")
-                except Exception as oe:
-                    logger.warning(f"Oracle News Radar background run failed: {oe}")
+                import threading
+
+                def _run_oracle_bg():
+                    try:
+                        import oracle_news_radar
+                        radar = oracle_news_radar.OracleNewsRadar()
+                        radar.run_radar_cycle()
+                        logger.info("Autonomous Oracle News Radar cycle executed.")
+                    except Exception as oe:
+                        logger.warning(f"Oracle News Radar background run failed: {oe}")
+
+                threading.Thread(target=_run_oracle_bg, daemon=True, name="OracleRadarBg").start()
 
             time.sleep(CONFIG["CHECK_INTERVAL_SEC"])
 

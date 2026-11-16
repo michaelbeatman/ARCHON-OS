@@ -246,6 +246,20 @@ def api_erp_convert_document(request: Request, doc_id: str, payload: Dict = Body
     return {"success": True, "document": converted}
 
 
+@router.post("/api/erp/documents/{doc_id}/cancel")
+def api_erp_cancel_document(request: Request, doc_id: str, payload: Dict = Body(default={})):
+    """Storniert einen Beleg GoBD-konform über eine Storno-Gutschrift (Typ 381)."""
+    require_admin_or_503(request)
+    from backend.erp_manager import erp_manager
+    company_id = payload.get("company_id")
+    reason = str(payload.get("reason") or "")
+    try:
+        res = erp_manager.cancel_document(doc_id=doc_id, reason=reason, company_id=company_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, **res}
+
+
 @router.get("/api/erp/documents/{doc_id}/xrechnung.xml")
 def api_erp_document_xrechnung_xml(doc_id: str, company_id: Optional[str] = None):
     """Exportiert einen ERP-Beleg als EN-16931 / XRechnung-3.0-konforme UBL-XML-Datei."""

@@ -8,7 +8,7 @@ print("FOCUSED DUMMY / MOCK DATA AUDIT")
 print("==================================================")
 
 # 1. Inspect kanban.db details
-kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else "C:/Users/User/.hermes/kanban.db"
+kanban_db = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
 print(f"\n--- 1. KANBAN DB: {kanban_db} ---")
 if os.path.exists(kanban_db):
     conn = sqlite3.connect(kanban_db)
@@ -28,7 +28,7 @@ if os.path.exists(kanban_db):
     conn.close()
 
 # 2. Check state.db for any dummy/mock records
-state_db = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else "C:/Users/User/.hermes/state.db"
+state_db = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
 print(f"\n--- 2. STATE DB: {state_db} ---")
 if os.path.exists(state_db):
     try:

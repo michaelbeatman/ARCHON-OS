@@ -49,13 +49,29 @@ class OperationsCalendarManager:
             json.dump(events, fh, ensure_ascii=False, indent=2)
         os.replace(tmp, self.custom_file)
 
-    def create_event(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _active_cid(company_id: Optional[str] = None) -> str:
+        if company_id:
+            try:
+                from backend.tenant_context import sanitize_tenant_id
+                return sanitize_tenant_id(company_id)
+            except Exception:
+                return str(company_id).strip() or "default"
+        try:
+            from backend.tenant_context import get_active_company_id, sanitize_tenant_id
+            return sanitize_tenant_id(get_active_company_id() or "default")
+        except Exception:
+            return "default"
+
+    def create_event(self, payload: Dict[str, Any], company_id: Optional[str] = None) -> Dict[str, Any]:
         title = str(payload.get("title") or "").strip()
         date_str = str(payload.get("date") or "").strip()
         if not title or not date_str:
             raise ValueError("title und date (YYYY-MM-DD) sind erforderlich.")
+        cid = self._active_cid(company_id or payload.get("company_id"))
         ev = {
             "id": f"cal_{uuid.uuid4().hex[:8]}",
+            "company_id": cid,
             "title": title,
             "date": date_str[:10],
             "time": str(payload.get("time") or ""),
@@ -70,10 +86,14 @@ class OperationsCalendarManager:
             self._save_custom(events)
         return ev
 
-    def delete_event(self, event_id: str) -> bool:
+    def delete_event(self, event_id: str, company_id: Optional[str] = None) -> bool:
+        cid = self._active_cid(company_id)
         with self._lock:
             events = self._load_custom()
-            new_events = [e for e in events if e.get("id") != event_id]
+            new_events = [
+                e for e in events
+                if not (e.get("id") == event_id and (e.get("company_id") in (None, "", cid) or company_id is None))
+            ]
             if len(new_events) == len(events):
                 return False
             self._save_custom(new_events)
@@ -113,11 +133,11 @@ class OperationsCalendarManager:
             pass
         return out
 
-    def _collect_erp_due_dates(self) -> List[Dict[str, Any]]:
+    def _collect_erp_due_dates(self, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
         candidates = [self.erp_db_path] if self.erp_db_path else []
         try:
             from backend.tenant_context import tenant_context
-            candidates.append(tenant_context.resolve_tenant_db("erp.db"))
+            candidates.append(tenant_context.resolve_tenant_db("erp.db", company_id=company_id))
         except Exception:
             pass
         db_path = next((p for p in candidates if p and os.path.isfile(p)), None)
@@ -176,14 +196,18 @@ class OperationsCalendarManager:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         source: str = "all",
+        company_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        cid = self._active_cid(company_id)
         events: List[Dict[str, Any]] = []
         if source in ("all", "custom"):
-            events.extend(self._load_custom())
+            for ev in self._load_custom():
+                if ev.get("company_id") in (None, "", cid) or company_id is None:
+                    events.append(ev)
         if source in ("all", "kanban"):
             events.extend(self._collect_kanban_deadlines())
         if source in ("all", "erp"):
-            events.extend(self._collect_erp_due_dates())
+            events.extend(self._collect_erp_due_dates(company_id=cid))
         if source in ("all", "n8n"):
             events.extend(self._collect_n8n_routines(start_date, end_date))
 

@@ -1376,7 +1376,7 @@ window.crmStudio = (function() {
   function scheduleGoogleCalendar() {
     if (!currentDrawerContact) return;
     const title = encodeURIComponent(crmT('ui.crm_studio.meeting_with', 'Meeting mit {name}', { name: currentDrawerContact.name || crmT('ui.crm_studio.contact_fallback', 'Kontakt') }));
-    window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}`, '_blank');
+    window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}`, '_blank', 'noopener,noreferrer');
   }
 
   async function addDrawerNote() {
@@ -1798,7 +1798,7 @@ window.crmStudio = (function() {
     let url = `/api/erp/documents/${encodeURIComponent(docNo)}/print?entity_name=${encodeURIComponent(name)}`;
     if (docType) url += `&doc_type=${encodeURIComponent(docType)}`;
     if (amountNet) url += `&amount_net=${encodeURIComponent(amountNet)}`;
-    window.open(url, '_blank');
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   function createNewDocumentForContact(type) {

@@ -74,7 +74,7 @@ node_modules/
 .npm/
 .next/
 dist/
-build/
+/build/
 
 # Backups & Temporary files
 *.bak
@@ -96,6 +96,7 @@ test_output.html
 *.png
 !static/img/**
 !static/avatars/**
+!static/archon_os_logo.png
 !assets/**
 run_pw*.js
 test_browser*.js

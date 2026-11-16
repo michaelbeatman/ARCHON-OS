@@ -20,10 +20,11 @@ VERSION = "v0.3.2"
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # Target backup directory
-if os.path.exists("/mnt/raid/_ARCHON Backups"):
+env_out = os.environ.get("ARCHON_BACKUP_DIR", "").strip()
+if env_out:
+    OUT_DIR = os.path.join(env_out, f"Archon {VERSION}")
+elif os.path.exists("/mnt/raid/_ARCHON Backups"):
     OUT_DIR = f"/mnt/raid/_ARCHON Backups/Archon {VERSION}"
-elif os.path.exists(r"Y:\_ARCHON Backups"):
-    OUT_DIR = rf"Y:\_ARCHON Backups\Archon {VERSION}"
 else:
     OUT_DIR = os.path.join(BASE_DIR, "backups", f"Archon_{VERSION}")
 

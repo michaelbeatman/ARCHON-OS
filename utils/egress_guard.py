@@ -126,17 +126,25 @@ def check_target_url(url: str, *, allowed: Optional[Iterable[str]] = None) -> st
 
     entries = set(_env_targets() if allowed is None else allowed)
     if _match_allowlist(host, port, entries):
-        # DNS-Rebinding / Metadaten-Alias-Schutz: aufgeloeste IPs gegen _NEVER_ALLOWED pruefen
+        # DNS-Rebinding / Metadaten-Alias-Schutz: aufgeloeste IPs gegen verbotene Netze pruefen
         try:
             addr_info = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
             for _fam, _type, _proto, _canon, sockaddr in addr_info:
                 resolved_ip = ipaddress.ip_address(sockaddr[0])
-                if _is_never_allowed(resolved_ip):
+                if (
+                    _is_never_allowed(resolved_ip)
+                    or resolved_ip.is_loopback
+                    or resolved_ip.is_link_local
+                    or resolved_ip.is_multicast
+                    or (resolved_ip.is_private and ("." in host and not host.endswith(".internal")))
+                ):
                     raise EgressBlocked(
                         f"Host '{host}' loest auf verbotene IP {resolved_ip} auf", target
                     )
-        except socket.gaierror:
-            pass
+        except socket.gaierror as err:
+            raise EgressBlocked(
+                f"DNS-Aufloesung fuer '{host}' fehlgeschlagen (Fail-Closed): {err}", target
+            )
         return target
 
     raise EgressBlocked(

@@ -28,7 +28,6 @@ def get_all_hermes_profiles() -> List[Dict]:
         "/opt/data/profiles",
         os.path.expanduser("~/.hermes/profiles"),
         os.path.join(MEMORY_DIR, "hermes_profiles"),
-        "C:\\\\Users\\\\micha\\\\.hermes\\\\profiles"
     ]
     
     for p_base in candidate_dirs:
@@ -285,7 +284,6 @@ def _resolve_profile_base_prompt(profile_id: str, existing_prompt: str = "") -> 
     candidate_paths = [
         f"/opt/data/profiles/{profile_id}/SOUL.md",
         os.path.expanduser(f"~/.hermes/profiles/{profile_id}/SOUL.md"),
-        f"C:\\\\Users\\\\micha\\\\.hermes\\\\profiles\\\\{profile_id}\\\\SOUL.md"
     ]
     for p in candidate_paths:
         if os.path.exists(p):

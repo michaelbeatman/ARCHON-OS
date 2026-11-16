@@ -218,6 +218,7 @@ def get_index_v2():
 
 
 @router.get("/")
+@router.get("/login")
 def get_index():
     return FileResponse(
         os.path.join("static", "index.html"),

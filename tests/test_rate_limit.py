@@ -123,3 +123,27 @@ def test_limiter_disabled_via_env(monkeypatch):
     client = TestClient(_app(default_limit=1, strict_limit=1))
     codes = [client.get("/api/ticker").status_code for _ in range(10)]
     assert set(codes) == {200}
+
+
+def test_proxy_static_assets_exempt_for_get_but_rest_still_limited():
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware, default_limit=2, strict_limit=1)
+
+    @app.get("/n8n-proxy/assets/chunk.js")
+    def n8n_asset():
+        return "js"
+
+    @app.get("/n8n-proxy/rest/login")
+    def n8n_rest():
+        return {"ok": True}
+
+    @app.post("/n8n-proxy/assets/chunk.js")
+    def n8n_asset_post():
+        return {"ok": True}
+
+    client = TestClient(app)
+    assert {client.get("/n8n-proxy/assets/chunk.js").status_code for _ in range(10)} == {200}
+    rest_codes = [client.get("/n8n-proxy/rest/login").status_code for _ in range(4)]
+    assert rest_codes[:2] == [200, 200] and 429 in rest_codes[2:]
+    post_codes = [client.post("/n8n-proxy/assets/chunk.js").status_code for _ in range(4)]
+    assert 429 in post_codes

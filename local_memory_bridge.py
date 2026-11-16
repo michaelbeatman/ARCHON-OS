@@ -52,10 +52,7 @@ class LocalMemoryBridge:
 
     def _init_db(self):
         with self._get_conn() as conn:
-            # Kein WAL auf Docker Windows Bind-Mounts (/opt/data), auf Host-SSD jedoch WAL für parallele Zugriffe
-            if str(self.db_path).replace("\\", "/").startswith("/opt/data"):
-                conn.execute("PRAGMA journal_mode=DELETE;")
-            else:
+            if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
                 conn.execute("PRAGMA journal_mode=WAL;")
                 conn.execute("PRAGMA synchronous=NORMAL;")
             conn.executescript("""
@@ -368,6 +365,9 @@ tags: ["learning", "memory", "{agent_id}"]
                 if " " in s and "T" not in s:
                     s = s.replace(" ", "T")
                 dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    # SQLite CURRENT_TIMESTAMP liefert UTC ohne Zeitzonen-Suffix
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
                 ts = dt.timestamp()
             except Exception:
                 ts = time.time()
@@ -478,16 +478,22 @@ tags: ["learning", "memory", "{agent_id}"]
         with self._get_conn() as conn:
             cur = conn.cursor()
             try:
-                cur.execute(f"SELECT id, importance, last_accessed, {time_col} FROM {table}")
+                cur.execute(f"SELECT id, importance, accesses, last_accessed, {time_col} FROM {table}")
+                rows = cur.fetchall()
+            except sqlite3.OperationalError:
+                cur.execute(f"SELECT id, importance, 1 AS accesses, last_accessed, {time_col} FROM {table}")
                 rows = cur.fetchall()
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 
             stale_ids = []
             for r in rows:
-                imp = r["importance"] if "importance" in r.keys() and r["importance"] is not None else 1.0
+                imp = float(r["importance"] if "importance" in r.keys() and r["importance"] is not None else 1.0)
+                acc = int(r["accesses"] if "accesses" in r.keys() and r["accesses"] is not None else 1)
+                # LRU-K Faktor: häufig abgerufene Erinnerungen (K >= 2) zerfallen langsamer
+                effective_imp = imp * (1.0 + 0.15 * min(max(acc - 1, 0), 20))
                 last_acc = r["last_accessed"] if "last_accessed" in r.keys() and r["last_accessed"] is not None else r[time_col]
-                decayed = self.calculate_decay_score(imp, last_acc)
+                decayed = self.calculate_decay_score(effective_imp, last_acc)
                 if decayed < threshold:
                     stale_ids.append(r["id"])
 

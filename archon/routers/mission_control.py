@@ -274,6 +274,14 @@ async def move_mission_control_task(req: TaskMoveRequest):
         if task is None:
             return {"found": False}
 
+        if req.target_status not in ("backlog", "approval", "in_progress", "completed", "failed", "dismissed", "paused"):
+            return {"found": True, "invalid_status": req.target_status, "task": task}
+
+        prev_status = task.get("status", "")
+        # Verhindere direkten Sprung von 'approval'/'backlog' auf 'completed' ohne Ausfuehrung
+        if req.target_status == "completed" and prev_status in ("approval", "backlog") and not req.result_summary:
+            return {"found": True, "approval_required": True, "task": task}
+
         if req.target_status == "dismissed":
             tasks.remove(task)
             return {
@@ -284,7 +292,7 @@ async def move_mission_control_task(req: TaskMoveRequest):
             }
 
         task["status"] = req.target_status
-        plan: dict = {"found": True, "task": task}
+        plan: dict = {"found": True, "task": task, "prev_status": prev_status}
 
         if req.target_status == "in_progress":
             task["started_at"] = time.time()
@@ -328,6 +336,10 @@ async def move_mission_control_task(req: TaskMoveRequest):
 
     if not plan.get("found"):
         raise HTTPException(status_code=404, detail="Task nicht gefunden.")
+    if plan.get("invalid_status"):
+        raise HTTPException(status_code=400, detail=f"Ungueltiger Zielstatus: {plan['invalid_status']}")
+    if plan.get("approval_required"):
+        raise HTTPException(status_code=409, detail="Direkter Abschluss ohne vorherige Ausfuehrung oder Ergebnis nicht erlaubt.")
 
     task = plan["task"]
 

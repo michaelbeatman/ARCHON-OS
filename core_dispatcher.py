@@ -6,7 +6,7 @@ import json
 import httpx
 import asyncio
 import sqlite3
-from typing import Optional
+from typing import Any, Optional
 
 # --- External Agent URLs ---
 # Defaulting to docker network hostnames, but can be overridden by env vars
@@ -94,141 +94,162 @@ async def trigger_n8n_execution(
             "message": f"n8n unreachable - stored locally: {str(e)}"
         }
 
-async def dispatch_to_hermes(agent_name: str, prompt: str, timeout: int = 30) -> dict:
-    """
-    Routet Anfragen physisch an den Hermes Agent (Port 9119).
-    Da Hermes eine Authentifizierung erfordert, muss ggf. ein API-Token als Header mitgeschickt werden.
-    """
-    from backend.llm_egress_guard import ZeroEgressBlockedError, evaluate_and_gate_llm_dispatch, log_completed_llm_dispatch
-    url = f"{HERMES_URL}/api/chat"
+def _clean_dispatch_output(text: Any) -> str:
+    s = str(text or "")
     try:
-        gate = evaluate_and_gate_llm_dispatch(
-            agent_id=agent_name or "hermes",
-            provider="hermes",
-            model="hermes-gateway",
-            messages=[{"role": "user", "content": prompt}],
-            intended_url=url,
-        )
+        from backend.secret_masker import mask_sensitive_text
+        s, _ = mask_sensitive_text(s)
+    except Exception:
+        pass
+    try:
+        from backend.output_policy_linter import output_policy_linter
+        linted = output_policy_linter.lint_and_clean(s)
+        if isinstance(linted, dict) and linted.get("cleaned_text") is not None:
+            s = linted["cleaned_text"]
+    except Exception:
+        pass
+    return s
+
+
+def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt: str, url: str) -> dict:
+    """Einheitliches Pre-Flight-Gate für Container-Dispatches (Compliance + DataClassifier + Zero-Egress)."""
+    from backend.llm_egress_guard import (
+        ZeroEgressBlockedError,
+        enforce_egress_firewall_for_url,
+        evaluate_and_gate_llm_dispatch,
+    )
+    aid = agent_name or provider
+    try:
+        from backend.compliance_engine import compliance_engine
+        chk = compliance_engine.check_activation_allowed(aid)
+        if not chk.get("allowed", True):
+            raise ZeroEgressBlockedError(
+                chk.get("reason") or f"Compliance Guardrail blockiert '{aid}'.",
+                error_code=chk.get("error_code") or "COMPLIANCE_BLOCKED",
+            )
+    except ZeroEgressBlockedError:
+        raise
+    except Exception:
+        pass
+
+    explicit_cat = ""
+    try:
+        from backend.data_classifier import DataClassifier
+        if not DataClassifier.classify(prompt or "").get("cloud_llm_allowed", True):
+            explicit_cat = "confidential"
+    except Exception:
+        pass
+
+    gate = evaluate_and_gate_llm_dispatch(
+        agent_id=aid,
+        provider=provider,
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        explicit_category=explicit_cat,
+        intended_url=url,
+    )
+    enforce_egress_firewall_for_url(url, agent_id=aid)
+    return gate
+
+
+async def _dispatch_to_container_endpoint(
+    *,
+    agent_name: str,
+    provider: str,
+    model: str,
+    url: str,
+    headers: dict,
+    payload: dict,
+    prompt: str,
+    extract_fn,
+    timeout: int = 30,
+) -> dict:
+    from backend.llm_egress_guard import ZeroEgressBlockedError, log_completed_llm_dispatch
+    aid = agent_name or provider
+    try:
+        gate = _gate_container_dispatch(agent_name, provider, model, prompt, url)
     except ZeroEgressBlockedError as ze:
         return {"status": "blocked", "error_code": ze.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}"}
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('HERMES_API_TOKEN', '')}"
-    }
-    payload = {
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    
+
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
             log_completed_llm_dispatch(
-                agent_id=agent_name or "hermes",
-                provider="hermes",
-                model="hermes-gateway",
+                agent_id=aid,
+                provider=provider,
+                model=model,
                 target_endpoint=url,
                 http_status=resp.status_code,
                 data_category=gate["data_category"],
                 zero_egress_active=gate["zero_egress_active"],
             )
             if resp.status_code == 200:
-                data = resp.json()
-                # Versuche Standard-Chat-Completion Format zu lesen
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", str(data))
+                content = _clean_dispatch_output(extract_fn(resp.json()))
+                try:
+                    from backend.execution_receipt_ledger import execution_receipt_ledger
+                    execution_receipt_ledger.issue_receipt(
+                        task_id=f"{provider}-{int(time.time())}",
+                        agent_role=aid,
+                        model_used=model,
+                        prompt_tokens=max(1, len(prompt or "") // 4),
+                        completion_tokens=max(1, len(content) // 4),
+                        cost_usd=0.0,
+                        tools_invoked=[f"core_dispatcher.dispatch_to_{provider}"],
+                    )
+                except Exception:
+                    pass
                 return {"status": "success", "content": content}
-            else:
-                return {"status": "error", "content": f"Hermes Error (HTTP {resp.status_code}): {resp.text}"}
+            return {"status": "error", "content": f"{provider.capitalize()} Error (HTTP {resp.status_code}): {resp.text}"}
     except Exception as e:
-        return {"status": "error", "content": f"Connection to Hermes failed: {str(e)}"}
+        return {"status": "error", "content": f"Connection to {provider.capitalize()} failed: {str(e)}"}
+
+
+async def dispatch_to_hermes(agent_name: str, prompt: str, timeout: int = 30) -> dict:
+    """Routet Anfragen physisch an den Hermes Agent (Port 9119)."""
+    return await _dispatch_to_container_endpoint(
+        agent_name=agent_name,
+        provider="hermes",
+        model="hermes-gateway",
+        url=f"{HERMES_URL}/api/chat",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {os.getenv('HERMES_API_TOKEN', '')}",
+        },
+        payload={"messages": [{"role": "user", "content": prompt}]},
+        prompt=prompt,
+        extract_fn=lambda d: d.get("choices", [{}])[0].get("message", {}).get("content", str(d)),
+        timeout=timeout,
+    )
+
 
 async def dispatch_to_odysseus(agent_name: str, prompt: str, timeout: int = 30) -> dict:
-    """
-    Routet Anfragen physisch an den Odysseus Agent (Port 7000).
-    """
-    from backend.llm_egress_guard import ZeroEgressBlockedError, evaluate_and_gate_llm_dispatch, log_completed_llm_dispatch
-    url = f"{ODYSSEUS_URL}/api/run"
-    try:
-        gate = evaluate_and_gate_llm_dispatch(
-            agent_id=agent_name or "odysseus",
-            provider="odysseus",
-            model="odysseus-agent",
-            messages=[{"role": "user", "content": prompt}],
-            intended_url=url,
-        )
-    except ZeroEgressBlockedError as ze:
-        return {"status": "blocked", "error_code": ze.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}"}
-    headers = {
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "prompt": prompt
-    }
-    
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            log_completed_llm_dispatch(
-                agent_id=agent_name or "odysseus",
-                provider="odysseus",
-                model="odysseus-agent",
-                target_endpoint=url,
-                http_status=resp.status_code,
-                data_category=gate["data_category"],
-                zero_egress_active=gate["zero_egress_active"],
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data.get("result", data.get("response", str(data)))
-                return {"status": "success", "content": content}
-            else:
-                return {"status": "error", "content": f"Odysseus Error (HTTP {resp.status_code}): {resp.text}"}
-    except Exception as e:
-        return {"status": "error", "content": f"Connection to Odysseus failed: {str(e)}"}
+    """Routet Anfragen physisch an den Odysseus Agent (Port 7000)."""
+    return await _dispatch_to_container_endpoint(
+        agent_name=agent_name,
+        provider="odysseus",
+        model="odysseus-agent",
+        url=f"{ODYSSEUS_URL}/api/run",
+        headers={"Content-Type": "application/json"},
+        payload={"prompt": prompt},
+        prompt=prompt,
+        extract_fn=lambda d: d.get("result", d.get("response", str(d))),
+        timeout=timeout,
+    )
+
 
 async def dispatch_to_openclaw(agent_name: str, prompt: str, timeout: int = 30) -> dict:
-    """
-    Routet Anfragen physisch an OpenClaw. 
-    (Kann über HTTP oder Subprocess aufgerufen werden, hier generisch als HTTP mock, bis CLI-Befehl bekannt ist).
-    """
-    from backend.llm_egress_guard import ZeroEgressBlockedError, evaluate_and_gate_llm_dispatch, log_completed_llm_dispatch
-    url = f"{OPENCLAW_URL}/api/execute"
-    try:
-        gate = evaluate_and_gate_llm_dispatch(
-            agent_id=agent_name or "openclaw",
-            provider="openclaw",
-            model="openclaw-agent",
-            messages=[{"role": "user", "content": prompt}],
-            intended_url=url,
-        )
-    except ZeroEgressBlockedError as ze:
-        return {"status": "blocked", "error_code": ze.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}"}
-    headers = {
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "task": prompt
-    }
-    
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            log_completed_llm_dispatch(
-                agent_id=agent_name or "openclaw",
-                provider="openclaw",
-                model="openclaw-agent",
-                target_endpoint=url,
-                http_status=resp.status_code,
-                data_category=gate["data_category"],
-                zero_egress_active=gate["zero_egress_active"],
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data.get("output", str(data))
-                return {"status": "success", "content": content}
-            else:
-                return {"status": "error", "content": f"OpenClaw Error (HTTP {resp.status_code}): {resp.text}"}
-    except Exception as e:
-        return {"status": "error", "content": f"Connection to OpenClaw failed: {str(e)}"}
+    """Routet Anfragen physisch an OpenClaw."""
+    return await _dispatch_to_container_endpoint(
+        agent_name=agent_name,
+        provider="openclaw",
+        model="openclaw-agent",
+        url=f"{OPENCLAW_URL}/api/execute",
+        headers={"Content-Type": "application/json"},
+        payload={"task": prompt},
+        prompt=prompt,
+        extract_fn=lambda d: d.get("output", str(d)),
+        timeout=timeout,
+    )
 
 def clean_think_tags(text: str) -> str:
     """
@@ -324,7 +345,11 @@ class _DispClosingConn(sqlite3.Connection):
 def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, task_id: str = ""):
     try:
         import sqlite3, os, time, sys
-        db_path = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
+        try:
+            from backend.db_paths import resolve_db as _resolve_db
+            db_path = _resolve_db("state.db")
+        except Exception:
+            db_path = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
         if not os.path.exists(os.path.dirname(db_path)):
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
             
@@ -377,6 +402,19 @@ def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, 
                 m._LIVE_TELEMETRY_CACHE["data"] = None
             if hasattr(m, "_MC_STATE_CACHE"):
                 m._MC_STATE_CACHE["data"] = None
+        try:
+            from backend.execution_receipt_ledger import execution_receipt_ledger
+            execution_receipt_ledger.issue_receipt(
+                task_id=str(eff_task),
+                agent_role=str(agent_id or "dispatcher"),
+                model_used=str(model or "unknown"),
+                prompt_tokens=int(in_tok),
+                completion_tokens=int(out_tok),
+                cost_usd=float(cost_usd),
+                tools_invoked=["core_dispatcher"],
+            )
+        except Exception:
+            pass
     except Exception as e:
         print(f"[DISPATCHER] Token telemetry write error: {e}", file=sys.stderr)
 
@@ -619,7 +657,7 @@ async def _dispatch_to_omniroute_or_container_exec(
     else:
         selected_model = model.strip() if (model and model not in ("free-forever", "gpt-4o-mini", "default")) else "deepseek/deepseek-chat"
 
-    # Zero-Egress & Privacy-Router Pre-Flight Gate + SHA-256 Dispatch Auditor
+    # Zero-Egress & Privacy-Router Pre-Flight Gate + EU AI Act + DataClassifier
     from backend.llm_egress_guard import (
         ZeroEgressBlockedError,
         evaluate_and_gate_llm_dispatch,
@@ -628,12 +666,35 @@ async def _dispatch_to_omniroute_or_container_exec(
     from backend.privacy_router import get_privacy_config
 
     try:
+        from backend.compliance_engine import compliance_engine
+        chk = compliance_engine.check_activation_allowed(agent_id, system_prompt=system_prompt or "")
+        if not chk.get("allowed", True):
+            return {
+                "status": "blocked",
+                "error": chk.get("reason") or "EU AI Act Guardrail verweigert Aktivierung.",
+                "error_code": chk.get("error_code") or "COMPLIANCE_BLOCKED",
+                "content": f"🛑 [COMPLIANCE GUARDRAIL BLOCK]: {chk.get('reason')}",
+            }
+    except Exception:
+        pass
+
+    classified_cat = ""
+    try:
+        from backend.data_classifier import DataClassifier
+        cls_res = DataClassifier.classify(prompt or "")
+        if not cls_res.get("cloud_llm_allowed", True):
+            classified_cat = "confidential"
+    except Exception:
+        pass
+
+    try:
         preflight_gate = evaluate_and_gate_llm_dispatch(
             agent_id=agent_id,
             provider=prov_lower or "omniroute",
             model=selected_model,
             messages=messages,
             role=role,
+            explicit_category=classified_cat,
         )
     except ZeroEgressBlockedError as ze_err:
         return {

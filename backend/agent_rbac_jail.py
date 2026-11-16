@@ -72,22 +72,50 @@ class AgentRBACJail:
             norm_path = norm_path[2:]
         low_path = norm_path.lower()
 
-        # 1. Sensible Dateien (.env / SSH-Keys) schützen
-        if bool(cfg.get("block_dotenv_access", True)) and norm_path:
-            base = os.path.basename(low_path)
-            if base in SENSITIVE_FILENAMES or base.startswith(".env"):
+        # Reale Symlink-Auflösung gegen Workspace-Root, damit Symlink-Escapes auffallen
+        workspace_root = os.path.realpath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        real_check = ""
+        if norm_path:
+            candidate = norm_path if os.path.isabs(norm_path) else os.path.join(workspace_root, norm_path)
+            real_check = os.path.realpath(candidate).replace("\\", "/")
+            ws_prefix = workspace_root.replace("\\", "/").rstrip("/") + "/"
+            if os.path.isabs(norm_path) or real_check == workspace_root.replace("\\", "/") or real_check.startswith(ws_prefix):
+                rel_after_ws = real_check[len(ws_prefix):] if real_check.startswith(ws_prefix) else real_check
+            else:
                 return {
                     "allowed": False,
                     "blocked": True,
                     "role": norm_role,
                     "tool": tool_name,
                     "target_path": target_path,
-                    "reason": f"Zugriff auf geschützte Geheimnis-Datei '{base}' durch RBAC-Jail verweigert."
+                    "reason": f"Symlink- oder Workspace-Ausbruch ('{target_path}' -> '{real_check}') durch RBAC-Jail blockiert."
                 }
+            # Wenn ein Symlink auf etwas anderes zeigte, prüfen wir sowohl norm_path als auch real_check/rel_after_ws
+            low_check = rel_after_ws.lower()
+        else:
+            low_check = low_path
+
+        # 1. Sensible Dateien (.env / SSH-Keys) schützen
+        if bool(cfg.get("block_dotenv_access", True)) and norm_path:
+            for candidate_low in (low_path, low_check):
+                base = os.path.basename(candidate_low)
+                if base in SENSITIVE_FILENAMES or base.startswith(".env"):
+                    return {
+                        "allowed": False,
+                        "blocked": True,
+                        "role": norm_role,
+                        "tool": tool_name,
+                        "target_path": target_path,
+                        "reason": f"Zugriff auf geschützte Geheimnis-Datei '{base}' durch RBAC-Jail verweigert."
+                    }
 
         # 2. Systemverzeichnisse & Path-Traversal (..) schützen
         if bool(cfg.get("block_system_dirs", True)) and norm_path:
-            if ".." in norm_path.split("/") or any(low_path.startswith(p) for p in FORBIDDEN_SYSTEM_PREFIXES):
+            if (
+                ".." in norm_path.split("/")
+                or any(low_path.startswith(p) for p in FORBIDDEN_SYSTEM_PREFIXES)
+                or any(real_check.lower().startswith(p) for p in FORBIDDEN_SYSTEM_PREFIXES)
+            ):
                 return {
                     "allowed": False,
                     "blocked": True,
@@ -112,7 +140,10 @@ class AgentRBACJail:
         # 4. Datei-Scope-Jail prüfen
         if bool(cfg.get("enforce_path_jail", True)) and norm_path:
             allowed_prefixes = policy["allowed_path_prefixes"]
-            if "*" not in allowed_prefixes and not any(low_path.startswith(pref.lower()) for pref in allowed_prefixes):
+            if "*" not in allowed_prefixes and (
+                not any(low_path.startswith(pref.lower()) for pref in allowed_prefixes)
+                or not any(low_check.startswith(pref.lower()) for pref in allowed_prefixes)
+            ):
                 return {
                     "allowed": False,
                     "blocked": True,

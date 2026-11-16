@@ -50,6 +50,51 @@ def _task_by_id(data: dict, task_id: str):
     return next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
 
 
+def _extract_nominated_json_blocks(reply: str) -> List[str]:
+    """Extrahiert JSON-Objekte mit `nominated_agents` sauber via Klammer-Tiefe (auch verschachtelt)."""
+    if not reply or "nominated_agents" not in reply:
+        return []
+    blocks: List[str] = []
+    for part in reply.split("```"):
+        clean_p = part.strip()
+        if clean_p.startswith("json"):
+            clean_p = clean_p[4:].strip()
+        if "nominated_agents" in clean_p and clean_p.startswith("{") and clean_p.endswith("}"):
+            blocks.append(clean_p)
+    if blocks:
+        return blocks
+
+    # Fallback: verschachtelte JSON-Objekte über Klammerzählung finden
+    depth = 0
+    in_str = False
+    esc = False
+    start = -1
+    for i, ch in enumerate(reply):
+        if esc:
+            esc = False
+            continue
+        if ch == "\\" and in_str:
+            esc = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}" and depth > 0:
+            depth -= 1
+            if depth == 0 and start >= 0:
+                cand = reply[start : i + 1]
+                if "nominated_agents" in cand:
+                    blocks.append(cand)
+                start = -1
+    return blocks
+
+
 def _merge_task_delta(fresh: dict, local_data: dict, task_id: str, local_tasks: list, orig_ids: Optional[set] = None) -> None:
     """Uebertraegt nur die Aenderungen DIESES Tasks in den frisch geladenen Store.
 
@@ -198,16 +243,7 @@ async def _execute_mission_control_task(
         # --- AUTO-STAFFING / DISPATCH-KETTE (MUSTER B) ---
         # Prüfe, ob die Antwort eine Nominierungsmatrix (nominated_agents) enthält
         try:
-            # Suche gezielt nach Blöcken zwischen Backticks
-            candidate_blocks = []
-            for part in reply.split("```"):
-                clean_p = part.strip()
-                if clean_p.startswith("json"):
-                    clean_p = clean_p[4:].strip()
-                if "nominated_agents" in clean_p and clean_p.startswith("{") and clean_p.endswith("}"):
-                    candidate_blocks.append(clean_p)
-            if not candidate_blocks:
-                candidate_blocks = re.findall(r'(\{[^\}]*"nominated_agents"[^\}]*\})', reply)
+            candidate_blocks = _extract_nominated_json_blocks(reply)
             for jm in candidate_blocks:
                 try:
                     parsed_dispatch = json.loads(jm)
@@ -486,15 +522,7 @@ Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, ful
         reply = res.get("content", "").strip()
         # Lokalen Snapshot laden, Änderungen vorbereiten
         data = load_mc()
-        candidate_blocks = []
-        for part in reply.split("```"):
-            clean_p = part.strip()
-            if clean_p.startswith("json"):
-                clean_p = clean_p[4:].strip()
-            if "nominated_agents" in clean_p and clean_p.startswith("{") and clean_p.endswith("}"):
-                candidate_blocks.append(clean_p)
-        if not candidate_blocks:
-            candidate_blocks = re.findall(r'(\{[^}]*"nominated_agents"[^}]*\})', reply)
+        candidate_blocks = _extract_nominated_json_blocks(reply)
 
         created_sub_ids = []
         created_subtasks = []
@@ -796,7 +824,14 @@ def _tg_ping_synthesis(
             return
         if dpath:
             logger.warning("[Synthese] Dossier-Ping fehlgeschlagen — Text-Ping stattdessen.")
-        send_msg(caption + (f"\n\n📄 Entwurf: {draft_path}" if draft_path else ""), reply_markup=markup)
+        from telegram_notify import tg_escape as _tg_esc
+        safe_caption = (
+            "🔐 <b>ENTSCHEIDUNG NÖTIG — Synthese</b>\n"
+            f"<b>Projekt:</b> {_tg_esc(parent_title)}\n\n{_tg_esc(_kurz)}"
+            + ("\n\nDer vollständige Entwurf liegt als Anhang bei." if dpath else "")
+            + (f"\n\n📄 Entwurf: <code>{_tg_esc(draft_path)}</code>" if draft_path else "")
+        )
+        send_msg(safe_caption, reply_markup=markup)
     except Exception as e:
         logger.warning(f"[Synthese] Telegram-Ping fehlgeschlagen: {e}")
 
@@ -1078,7 +1113,11 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
             os.makedirs(d_ziel, exist_ok=True)
             p = os.path.join(d_ziel, draft_name)
             with open(p, "w", encoding="utf-8") as f:
-                f.write(f"# Synthese-Entwurf: {parent_title}\n\n{synthesis_reply}\n")
+                critique_section = (
+                    f"\n\n---\n\n## Unabhängige Qualitätsprüfung (Kritischer Reviewer)\n\n{reviewer_critique}\n"
+                    if reviewer_critique else ""
+                )
+                f.write(f"# Synthese-Entwurf: {parent_title}\n\n{synthesis_reply}{critique_section}")
             draft_path = p
         except Exception:
             continue

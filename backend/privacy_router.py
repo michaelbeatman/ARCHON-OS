@@ -96,14 +96,26 @@ def get_privacy_config() -> Dict[str, Any]:
         except Exception:
             pass
 
+    has_explicit_local_url = False
     if os.path.exists(PRIVACY_CFG_FILE):
         try:
             with open(PRIVACY_CFG_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
+                    has_explicit_local_url = bool(str(data.get("local_llm_url") or "").strip())
                     merged.update(data)
         except Exception as e:
             logger.warning(f"Konnte privacy_routing.json nicht lesen: {e}")
+
+    env_ollama = (os.environ.get("OLLAMA_BASE_URL") or "").strip()
+    if env_ollama and (
+        not has_explicit_local_url
+        or str(merged.get("local_llm_url") or "").strip() == DEFAULT_PRIVACY_CONFIG["local_llm_url"]
+    ):
+        norm_ollama = env_ollama.rstrip("/")
+        if not norm_ollama.endswith("/v1"):
+            norm_ollama = f"{norm_ollama}/v1"
+        merged["local_llm_url"] = norm_ollama
 
     env_ze = (os.environ.get("PRIVACY_ZERO_EGRESS") or "").strip().lower()
     if env_ze in ("1", "true", "yes", "on"):

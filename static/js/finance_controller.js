@@ -237,7 +237,7 @@ async function saveReceiptUpdates(updates) {
     const res = await fetch(`/api/operations/receipts/${selectedReceipt.receipt_id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: json.stringify(updates)
+      body: JSON.stringify(updates)
     });
     if (!res.ok) throw new Error("Fehler beim Speichern");
     
@@ -413,15 +413,16 @@ function renderDunningInvoices() {
     }
 
     const safeInvId = _finEsc(inv.invoice_id);
+    const jsInvId = _finEsc(String(inv.invoice_id || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
     return `
-      <tr class="${rowClass}" onclick="selectDunningInvoice('${safeInvId}')">
+      <tr class="${rowClass}" onclick="selectDunningInvoice('${jsInvId}')">
         <td class="py-2.5 px-3 font-mono font-bold text-sky-500 whitespace-nowrap">${safeInvId}</td>
         <td class="py-2.5 px-3 font-semibold text-[var(--foreground)] truncate max-w-[140px]">${_finEsc(inv.customer_name)}</td>
         <td class="py-2.5 px-3 font-mono text-[11px] whitespace-nowrap text-[var(--muted-foreground)]">${_finEsc(inv.due_date)}</td>
         <td class="py-2.5 px-3 text-right font-mono font-bold text-[var(--foreground)] whitespace-nowrap">${(parseFloat(inv.amount_gross) || 0).toFixed(2)} EUR</td>
         <td class="py-2.5 px-3 whitespace-nowrap">${badge}</td>
         <td class="py-2.5 px-3 text-right">
-          <button onclick="event.stopPropagation(); selectDunningInvoice('${safeInvId}');" class="px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] text-[10.5px] font-semibold text-[var(--foreground)]">
+          <button onclick="event.stopPropagation(); selectDunningInvoice('${jsInvId}');" class="px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] text-[10.5px] font-semibold text-[var(--foreground)]">
             Mahnung &rarr;
           </button>
         </td>

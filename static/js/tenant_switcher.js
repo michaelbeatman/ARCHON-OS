@@ -13,6 +13,13 @@
   const GEAR_SVG =
     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.77 1.02 1.41 1.09H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 
+  function _tenT(key, fallback) {
+    if (window.archonI18n && typeof window.archonI18n.t === "function") {
+      return window.archonI18n.t(key, fallback);
+    }
+    return fallback;
+  }
+
   function esc(v) {
     return String(v == null ? "" : v)
       .replace(/&/g, "&amp;")
@@ -69,6 +76,8 @@
     if (!modal) {
       modal = document.createElement("div");
       modal.id = MODAL_ID;
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
       modal.className = "fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4";
       document.body.appendChild(modal);
     }
@@ -83,20 +92,20 @@
       <div class="w-full max-w-3xl rounded-2xl border theme-border bg-white dark:bg-zinc-900 p-5 shadow-2xl max-h-[88vh] overflow-y-auto space-y-4 text-xs">
         <div class="flex items-center justify-between border-b theme-border pb-2.5">
           <div>
-            <h3 class="text-sm font-bold">Multi-Mandanten-DB-Isolation &amp; Nummernkreise (M43)</h3>
-            <p class="text-[11px] opacity-70">Aktive Gesellschaft: <strong>${esc(active.name || ctx.active_tenant_id)}</strong> (${esc(active.entity_type || "operative_gmbh")})</p>
+            <h3 class="text-sm font-bold">${esc(_tenT("ui.tenant_switcher.modal_title", "Multi-Mandanten-DB-Isolation & Nummernkreise (M43)"))}</h3>
+            <p class="text-[11px] opacity-70">${esc(_tenT("ui.tenant_switcher.active_company", "Aktive Gesellschaft:"))} <strong>${esc(active.name || ctx.active_tenant_id)}</strong> (${esc(active.entity_type || "operative_gmbh")})</p>
           </div>
-          <button id="m43-close-btn" type="button" class="px-2.5 py-1 rounded border theme-border">Schließen</button>
+          <button id="m43-close-btn" type="button" class="px-2.5 py-1 rounded border theme-border">${esc(_tenT("ui.tenant_switcher.close_btn", "Schließen"))}</button>
         </div>
 
         <div class="overflow-x-auto rounded-lg border theme-border">
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="border-b theme-border bg-black/5 dark:bg-white/5 text-[11px]">
-                <th class="p-2 font-semibold">SQLite-DB</th>
-                <th class="p-2 font-semibold">Modus</th>
-                <th class="p-2 font-semibold">Größe</th>
-                <th class="p-2 font-semibold">Aktiver Pfad</th>
+                <th class="p-2 font-semibold">${esc(_tenT("ui.tenant_switcher.col_db", "SQLite-DB"))}</th>
+                <th class="p-2 font-semibold">${esc(_tenT("ui.tenant_switcher.col_mode", "Modus"))}</th>
+                <th class="p-2 font-semibold">${esc(_tenT("ui.tenant_switcher.col_size", "Größe"))}</th>
+                <th class="p-2 font-semibold">${esc(_tenT("ui.tenant_switcher.col_path", "Aktiver Pfad"))}</th>
               </tr>
             </thead>
             <tbody>
@@ -119,9 +128,9 @@
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="border-b theme-border bg-black/5 dark:bg-white/5 text-[11px]">
-                <th class="p-2 font-semibold">Belegtyp</th>
-                <th class="p-2 font-semibold">Präfix</th>
-                <th class="p-2 font-semibold">Nächste Nr.</th>
+                <th class="p-2 font-semibold">${esc(_tenT("ui.tenant_switcher.col_doc_type", "Belegtyp"))}</th>
+                <th class="p-2 font-semibold">${esc(_tenT("ui.tenant_switcher.col_prefix", "Präfix"))}</th>
+                <th class="p-2 font-semibold">${esc(_tenT("ui.tenant_switcher.col_next_seq", "Nächste Nr."))}</th>
               </tr>
             </thead>
             <tbody>
@@ -140,16 +149,16 @@
         </div>
 
         <div class="p-3 rounded-lg border theme-border space-y-2">
-          <div class="font-semibold">Neue Gesellschaft anlegen (provisioniert sofort 5 isolierte SQLite-DBs + eigene Nummernkreise)</div>
+          <div class="font-semibold">${esc(_tenT("ui.tenant_switcher.create_title", "Neue Gesellschaft anlegen (provisioniert sofort 5 isolierte SQLite-DBs + eigene Nummernkreise)"))}</div>
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
-            <input id="m43-new-name" class="p-1.5 rounded border theme-border bg-transparent" placeholder="z. B. Keller Holding GmbH" />
+            <input id="m43-new-name" class="p-1.5 rounded border theme-border bg-transparent" placeholder="${esc(_tenT("ui.tenant_switcher.ph_name", "z. B. Keller Holding GmbH"))}" />
             <select id="m43-new-type" class="p-1.5 rounded border theme-border bg-transparent">
-              <option value="holding">Holding</option>
-              <option value="operative_gmbh" selected>Operative GmbH</option>
-              <option value="spv">Projekt- / Immobilien-SPV</option>
+              <option value="holding">${esc(_tenT("ui.tenant_switcher.type_holding", "Holding"))}</option>
+              <option value="operative_gmbh" selected>${esc(_tenT("ui.tenant_switcher.type_operative", "Operative GmbH"))}</option>
+              <option value="spv">${esc(_tenT("ui.tenant_switcher.type_spv", "Projekt- / Immobilien-SPV"))}</option>
             </select>
-            <input id="m43-new-vat" class="p-1.5 rounded border theme-border bg-transparent" placeholder="USt-IdNr. (optional)" />
-            <button id="m43-create-btn" type="button" class="px-3 py-1.5 rounded bg-amber-600 text-white font-semibold hover:bg-amber-500">+ Mandant anlegen</button>
+            <input id="m43-new-vat" class="p-1.5 rounded border theme-border bg-transparent" placeholder="${esc(_tenT("ui.tenant_switcher.ph_vat", "USt-IdNr. (optional)"))}" />
+            <button id="m43-create-btn" type="button" class="px-3 py-1.5 rounded bg-amber-600 text-white font-semibold hover:bg-amber-500">${esc(_tenT("ui.tenant_switcher.create_btn", "+ Mandant anlegen"))}</button>
           </div>
         </div>
       </div>`;
@@ -191,10 +200,10 @@
     const anchor =
       document.getElementById("topbar-user-badge") ||
       document.getElementById("topbar-custom-content");
-    if (!anchor) return;
+    if (!anchor) return false;
 
     const ctx = await fetchTenantContext();
-    if (!ctx || !Array.isArray(ctx.companies)) return;
+    if (!ctx || !Array.isArray(ctx.companies)) return false;
 
     let wrap = document.getElementById(CONTAINER_ID);
     if (!wrap) {
@@ -215,8 +224,8 @@
 
     wrap.innerHTML = `
       ${BADGE_SVG}
-      <select id="archon-tenant-select" class="bg-transparent text-xs font-medium outline-none cursor-pointer" title="Mandant wechseln (Holding / GmbH / SPV)">${options}</select>
-      <button id="archon-tenant-manage-btn" type="button" class="opacity-70 hover:opacity-100 p-0.5 cursor-pointer" title="Mandanten-DB-Isolation &amp; Nummernkreise anzeigen">${GEAR_SVG}</button>`;
+      <select id="archon-tenant-select" class="bg-transparent text-xs font-medium outline-none cursor-pointer" title="${esc(_tenT("ui.tenant_switcher.select_title", "Mandant wechseln (Holding / GmbH / SPV)"))}">${options}</select>
+      <button id="archon-tenant-manage-btn" type="button" class="opacity-70 hover:opacity-100 p-0.5 cursor-pointer" aria-label="${esc(_tenT("ui.tenant_switcher.manage_title", "Mandanten-DB-Isolation & Nummernkreise anzeigen"))}" title="${esc(_tenT("ui.tenant_switcher.manage_title", "Mandanten-DB-Isolation & Nummernkreise anzeigen"))}">${GEAR_SVG}</button>`;
 
     const selEl = document.getElementById("archon-tenant-select");
     if (selEl) {
@@ -230,11 +239,51 @@
     if (manageBtn) {
       manageBtn.onclick = openTenantIsolationModal;
     }
+    return true;
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", renderTenantSwitcher);
-  } else {
+  function mountSwitcherWithObserver() {
+    renderTenantSwitcher().then((ok) => {
+      if (ok) return;
+      let retries = 0;
+      const maxRetries = 10;
+      let obs = null;
+      const rootTarget = document.getElementById("main-topbar") || document.body;
+      if (rootTarget && typeof MutationObserver !== "undefined") {
+        obs = new MutationObserver(() => {
+          if (document.getElementById("topbar-user-badge") || document.getElementById("topbar-custom-content")) {
+            if (obs) obs.disconnect();
+            renderTenantSwitcher();
+          }
+        });
+        obs.observe(rootTarget, { childList: true, subtree: true });
+      }
+      const tick = async () => {
+        if (await renderTenantSwitcher()) {
+          if (obs) obs.disconnect();
+          return;
+        }
+        if (++retries >= maxRetries) {
+          if (obs) obs.disconnect();
+          return;
+        }
+        setTimeout(tick, 300);
+      };
+      setTimeout(tick, 300);
+    });
+  }
+
+  window.addEventListener("archon:language-changed", () => {
     renderTenantSwitcher();
+    const modal = document.getElementById(MODAL_ID);
+    if (modal && !modal.classList.contains("hidden")) {
+      openTenantIsolationModal();
+    }
+  });
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", mountSwitcherWithObserver);
+  } else {
+    mountSwitcherWithObserver();
   }
 })();

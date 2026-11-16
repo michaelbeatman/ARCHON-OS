@@ -84,6 +84,10 @@ class TestAdaptiveMemoryBridge(unittest.TestCase):
         self.assertTrue(evict_res["dry_run"])
 
 
+@unittest.skipUnless(
+    (HERMES_PLUGINS / "evey-learner" / "__init__.py").exists(),
+    "evey-learner plugin not installed in HERMES_PLUGINS",
+)
 class TestEveyLearnerIntegration(unittest.TestCase):
     """Angepasst an den aktuellen evey-learner-Stand (11/2026).
 
@@ -139,6 +143,10 @@ class TestEveyLearnerIntegration(unittest.TestCase):
             self.assertGreater(apply_res.get("matches", 0), 0)
 
 
+@unittest.skipUnless(
+    (HERMES_PLUGINS / "evey-memory-consolidate" / "__init__.py").exists(),
+    "evey-memory-consolidate plugin not installed in HERMES_PLUGINS",
+)
 class TestEveyMemoryConsolidate(unittest.TestCase):
     """Angepasst an den aktuellen evey-memory-consolidate-Stand (11/2026).
 

@@ -88,14 +88,17 @@ def client():
 @pytest.fixture
 def fakes():
     """Ersetzt jede Fachfunktion der sechs Routen durch eine Attrappe."""
+    import archon.routers.docker_services as docker_services
     import backend.system_updater as system_updater
     from backend.ephemeral_sandbox import ephemeral_sandbox
     import jev_router
 
     m = _app()
     f = Fakes()
-    with patch.object(m, "post_docker_container_action",
+    with patch.object(docker_services, "post_docker_container_action",
                       return_value={"status": "success"}) as f.docker_action, \
+            patch.object(m, "post_docker_container_action",
+                         return_value={"status": "success"}), \
             patch.object(m, "load_agent_configs", return_value={}) as f.load_configs, \
             patch.object(m, "send_prompt_to_agent", return_value="ok") as f.send_prompt, \
             patch.object(system_updater, "apply_update",

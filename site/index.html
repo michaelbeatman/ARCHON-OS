@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archon OS - Self-hosted multi-agent workspace</title>
+<meta name="description" content="Archon OS is a self-hosted, MIT-licensed multi-agent workspace built on Hermes Agent: specialist profiles, Kanban decision workflows, local model routing and SHA-256 audit logs.">
+<style>
+:root{--fg:#1a1a1a;--bg:#fbfbf9;--muted:#5c5c5c;--line:#e2e0d9;--accent:#3d6b4f}
+@media (prefers-color-scheme:dark){:root{--fg:#ecebe6;--bg:#16181a;--muted:#a0a09a;--line:#2c3033;--accent:#8fbfa3}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:44rem;margin:0 auto;padding:3.5rem 1.25rem 4rem}
+h1{font-size:1.9rem;line-height:1.2;margin:0 0 .4rem}
+.sub{color:var(--muted);margin:0 0 2.25rem}
+h2{font-size:1rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:2.5rem 0 .75rem;font-weight:600}
+ul{margin:0;padding-left:1.1rem}
+li{margin:.3rem 0}
+pre{background:color-mix(in srgb,var(--fg) 6%,transparent);border:1px solid var(--line);border-radius:.5rem;padding:.9rem 1rem;overflow-x:auto;font-size:.86rem}
+a{color:var(--accent)}
+.note{border-left:3px solid var(--accent);padding:.1rem 0 .1rem .9rem;color:var(--muted);margin:1rem 0 0}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.86rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Archon OS</h1>
+<p class="sub">Self-hosted, MIT-licensed multi-agent workspace built on <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>. Pre-1.0.</p>
+
+<h2>What it does</h2>
+<ul>
+<li>Specialist agent profiles across business domains, each with a defined scope and tool rights</li>
+<li>Kanban task handling with explicit decision gates: approve, reject with a reason, or escalate on expiry</li>
+<li>Local model routing (Ollama, LM Studio) with cost attribution per model and per task</li>
+<li>Obsidian vault as the local knowledge source, no hosted vector database required</li>
+<li>SHA-256 hash-chained audit log, so a record cannot be altered unnoticed</li>
+</ul>
+
+<h2>Run it</h2>
+<pre>git clone https://github.com/michaelbeatman/ARCHON-OS.git
+cd ARCHON-OS
+docker compose up -d</pre>
+<p>Read-only demo, no API key and no token cost:</p>
+<pre>ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d</pre>
+
+<h2>Honest status</h2>
+<p>Pre-1.0. The ERP and CRM module is alpha, multi-user role enforcement is still being hardened, and interfaces change between releases. Issues are welcome.</p>
+<p class="note">License: MIT. Documentation, guides and the full changelog live in the repository.</p>
+
+<footer>
+<a href="https://github.com/michaelbeatman/ARCHON-OS">Repository</a> &middot;
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a> &middot;
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">License</a> &middot;
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">Disclaimer</a>
+</footer>
+</main>
+</body>
+</html>

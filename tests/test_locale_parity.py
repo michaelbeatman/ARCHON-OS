@@ -155,6 +155,7 @@ GROUP1_REGIONS = (
 GROUP1_EXCEPTIONS = {
     # Sidebar
     "ARCHON OS": "Produktname (Wortmarke im Logo-Header)",
+    "Archon": "Produktname (Wortmarke der Update-LED in der Sidebar)",
     "alpha": "Release-Badge der Wirtschaft-Sektion",
     "KILL-SWITCH AKT...": "dynamischer Zustandstext, kommt aus JS",
     "1 Vorfall: telegram_bot ge...": "dynamischer Text mit Laufzeitdaten",
@@ -1026,6 +1027,7 @@ INDEX_HTML_EXCEPTIONS = {
     "1 Vorfall: telegram_bot ge...": "sidebar-killswitch-subtitle, index.html:6594 setzt den Text",
     "-- ms": "Telemetriewerte health-val-hermes_core/omniroute/hermes_dashboard/docker_proxy (index.html:472-475), aus JS",
     "Healthy": "Live-Status health-overall-text, index.html:8166 setzt den Text",
+    "Archon OS Update-Status wird geprüft...": "Laufzeitwert: archon_version_badge.js ueberschreibt row.title von sidebar-archon-version-row (index.html:399)",
     "51 Profile": "Zaehler mc-sub-fleet (mission_control_cockpit.js) und statischer Kartenzaehler (index.html:668) - Wert + Einheit",
     "0 / 51 Aktiv": "KPI-Wert mc-kpi-fleet, mission_control_cockpit.js",
     "0 Tok/m": "KPI-Wert mc-kpi-tpm, mission_control_cockpit.js",
@@ -1060,6 +1062,7 @@ INDEX_HTML_EXCEPTIONS = {
     # --- (b) Produktnamen, technische Identifier -------------------------
     "ARCHON-OS": "Produktname (Wortmarke im <title>, index.html:6)",
     "ARCHON OS": "Produktname (Wortmarke im Logo-Header, index.html:170)",
+    "Archon": "Produktname (Wortmarke der Update-LED in der Sidebar, index.html:407)",
     "/opt/data/obsidian/Projects/...": "Pfad-Identifier mc-artifact-modal-path (index.html:1026)",
     "http://host.docker.internal:20128/v1": "Gateway-URL im LLM-Router-Status (index.html:1344)",
     "free-forever": "Modell-Identifier der Agenten-Auswahl (index.html:1384)",

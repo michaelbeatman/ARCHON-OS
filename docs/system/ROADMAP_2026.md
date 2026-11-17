@@ -420,6 +420,8 @@
 ### Meilenstein 65: Design & Struktur der Systemeinstellungen (Settings) überarbeiten (Geplant – Hoch)
 - **Settings-Redesign:** Grundlegende Modernisierung des *System Control Center* (`static/views/system_settings_modal.html`, `static/js/system_settings.js`, verzahnt mit M6): ruhigere, konsistente Karten-/Formular-Layouts, aufgeräumte Tab-Führung ohne visuelles Gedränge, bessere Abstände/Typografie im Light- und Dark-Mode sowie saubere Einordnung von Bereichen wie Onboarding, Kernel, Routing und Design.
 
-
-
-
+### Meilenstein 66: Hardware-gebundene Agent-Authentifizierung („Agent Authenticator“) (Geplant – Mittel)
+- **Orientierung:** IETF-Entwurf „Agent Authenticator: Hardware-Bound, Origin-Bound Authentication for AI Agents“ (draft-ganesan-agent-authenticator-00, H. S. Ganesan, 15.11.2026): https://www.ietf.org/archive/id/draft-ganesan-agent-authenticator-00.txt — Agentenprozesse halten keine Geheimnisse; Schlüssel liegen in Secure Hardware oder einem attestierten Key-Dienst; Origin-Binding verhindert die Umleitung von Credentials durch Prompt-Injection; eine namentlich bekannte Person genehmigt jede Agent-Credential und jede Hochrisiko-Aktion per Passkey (Step-Up); jede signierte/verweigerte Aktion landet in einem signierten, tamper-evidenten Action-Record.
+- **Status des Entwurfs:** Draft `-00`, Work in Progress, läuft 19.05.2027 aus. Noch keine Implementierungen oder unterstützende Dienste. Gilt hier als Architektur-Orientierung, nicht als Compliance-Claim.
+- **Anschluss an Bestand:** Die Hälfte der Eigenschaften ist vorhanden — menschliche Freigabe pro Hochrisiko-Aktion (`approval_policy_engine.py`, Kanban Four-Eyes-Gate) und tamper-evidentes Log (`audit_log.py`, SHA-256-Kette). Fehlend und Zielbild dieses Meilensteins: Agentenprozesse ohne eigene Secrets; ein Authenticator-Dienst mit hardware-gebundenen Schlüsseln (z. B. TPM 2.0 auf dem Host) als Signaturendienst; Step-Up-Freigabe über das Kanban-Gate für Hochrisiko-Domänen (Buchhaltung/ERP-Schreibvorgänge); Action-Records in die bestehende Audit-Kette einspeisen.
+- **Offen:** Hardware-Basis (TPM 2.0 / Secure Enclave / attestierter Cloud-KMS), Integration mit der MCP-Autorisierung, Bewertung der weiteren Draft-Entwicklung (Nachfolge-Drafts, IETF-Arbeitsgruppe) vor Umsetzung.

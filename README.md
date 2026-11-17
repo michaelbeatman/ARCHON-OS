@@ -7,7 +7,7 @@
 **Self-Hosted Multi-Agent Operating System for Founders, Teams & Domain Specialists**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release: v0.5.2.1](https://img.shields.io/badge/Release-v0.5.2.1%20Global%20Edition-6366f1.svg)](CHANGELOG.md)
+[![Release: v0.5.4.1](https://img.shields.io/badge/Release-v0.5.4.1-6366f1.svg)](CHANGELOG.md)
 [![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)

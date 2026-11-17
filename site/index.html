@@ -3,56 +3,134 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Archon OS - Self-hosted multi-agent workspace</title>
-<meta name="description" content="Archon OS is a self-hosted, MIT-licensed multi-agent workspace built on Hermes Agent: specialist profiles, Kanban decision workflows, local model routing and SHA-256 audit logs.">
+<title>Archon OS — Self-hosted multi-agent workspace</title>
+<meta name="description" content="Self-hosted, MIT-licensed multi-agent workspace built on Hermes Agent: 70 specialist profiles, AI Boardroom debates across 55 frameworks, OmniRoute cost control, Zero-Egress local routing, SHA-256 audit log, Obsidian RAG.">
 <style>
-:root{--fg:#1a1a1a;--bg:#fbfbf9;--muted:#5c5c5c;--line:#e2e0d9;--accent:#3d6b4f}
-@media (prefers-color-scheme:dark){:root{--fg:#ecebe6;--bg:#16181a;--muted:#a0a09a;--line:#2c3033;--accent:#8fbfa3}}
+:root{--fg:#1c1c1a;--bg:#fbfbf8;--card:#ffffff;--muted:#5f5f58;--line:#e3e1d8;--accent:#3d6b4f;--accent2:#8a5a2b;--code:#f3f2ec}
+@media (prefers-color-scheme:dark){:root{--fg:#ecebe6;--bg:#14161a;--card:#1c1f23;--muted:#a3a39b;--line:#2e3236;--accent:#8fbfa3;--accent2:#d0a37a;--code:#101316}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:44rem;margin:0 auto;padding:3.5rem 1.25rem 4rem}
-h1{font-size:1.9rem;line-height:1.2;margin:0 0 .4rem}
-.sub{color:var(--muted);margin:0 0 2.25rem}
-h2{font-size:1rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:2.5rem 0 .75rem;font-weight:600}
-ul{margin:0;padding-left:1.1rem}
-li{margin:.3rem 0}
-pre{background:color-mix(in srgb,var(--fg) 6%,transparent);border:1px solid var(--line);border-radius:.5rem;padding:.9rem 1rem;overflow-x:auto;font-size:.86rem}
-a{color:var(--accent)}
-.note{border-left:3px solid var(--accent);padding:.1rem 0 .1rem .9rem;color:var(--muted);margin:1rem 0 0}
-footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.86rem}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:62rem;margin:0 auto;padding:0 1.25rem}
+header{border-bottom:1px solid var(--line);padding:1.1rem 0}
+header .wrap{display:flex;align-items:center;gap:.9rem;flex-wrap:wrap}
+header img{height:44px;width:44px;border-radius:9px}
+header h1{font-size:1.15rem;margin:0}
+header .tag{color:var(--muted);font-size:.9rem}
+header nav{margin-left:auto;display:flex;gap:1.1rem;font-size:.92rem;flex-wrap:wrap}
+.hero{padding:4rem 0 2.5rem}
+.hero h2{font-size:2.4rem;line-height:1.15;margin:0 0 1rem;max-width:52rem}
+.hero p{font-size:1.12rem;color:var(--muted);max-width:46rem;margin:0 0 1.6rem}
+.btnrow{display:flex;gap:.8rem;flex-wrap:wrap}
+.btn{display:inline-block;padding:.65rem 1.2rem;border-radius:.55rem;border:1px solid var(--line);font-weight:600;font-size:.95rem}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme:dark){.btn.primary{color:#10130f}}
+.badges{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1.6rem}
+.badge{font-size:.78rem;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:.22rem .7rem;background:var(--card)}
+h3.sec{font-size:.85rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:3.2rem 0 1.1rem;font-weight:600}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
+.shots figure{margin:0;border:1px solid var(--line);border-radius:.7rem;overflow:hidden;background:var(--card)}
+.shots img{display:block;width:100%;height:auto}
+.shots figcaption{padding:.55rem .8rem;font-size:.85rem;color:var(--muted);border-top:1px solid var(--line)}
+.feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
+.feat{border:1px solid var(--line);border-radius:.7rem;padding:1.1rem 1.2rem;background:var(--card)}
+.feat h4{margin:0 0 .45rem;font-size:1rem}
+.feat p{margin:0;font-size:.92rem;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:.92rem;background:var(--card);border:1px solid var(--line);border-radius:.6rem;overflow:hidden}
+th,td{text-align:left;padding:.55rem .8rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em}
+tr:last-child td{border-bottom:0}
+pre{background:var(--code);border:1px solid var(--line);border-radius:.55rem;padding:.85rem 1rem;overflow-x:auto;font-size:.85rem;margin:.5rem 0 1.2rem}
+.install{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
+.install .card{border:1px solid var(--line);border-radius:.7rem;padding:1rem 1.1rem;background:var(--card)}
+.install h4{margin:0 0 .3rem;font-size:.98rem}
+.install p{margin:.2rem 0 .6rem;font-size:.88rem;color:var(--muted)}
+.status{border-left:3px solid var(--accent2);padding:.15rem 0 .15rem 1rem;color:var(--muted);max-width:52rem}
+footer{margin-top:3.5rem;border-top:1px solid var(--line);padding:1.4rem 0 2.5rem;color:var(--muted);font-size:.88rem}
+footer .wrap{display:flex;gap:1.3rem;flex-wrap:wrap}
 </style>
 </head>
 <body>
-<main>
-<h1>Archon OS</h1>
-<p class="sub">Self-hosted, MIT-licensed multi-agent workspace built on <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>. Pre-1.0.</p>
+<header><div class="wrap">
+<img src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/archon_logo.png" alt="Archon OS logo">
+<div><h1>Archon OS</h1><span class="tag">Self-hosted multi-agent workspace &middot; MIT</span></div>
+<nav><a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a><a href="#install">Install</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Security</a></nav>
+</div></header>
 
-<h2>What it does</h2>
-<ul>
-<li>Specialist agent profiles across business domains, each with a defined scope and tool rights</li>
-<li>Kanban task handling with explicit decision gates: approve, reject with a reason, or escalate on expiry</li>
-<li>Local model routing (Ollama, LM Studio) with cost attribution per model and per task</li>
-<li>Obsidian vault as the local knowledge source, no hosted vector database required</li>
-<li>SHA-256 hash-chained audit log, so a record cannot be altered unnoticed</li>
-</ul>
+<section class="hero"><div class="wrap">
+<h2>A multi-agent workspace that runs on your own server.</h2>
+<p>Archon OS extends Hermes Agent into a business operating system: 70 specialist agent profiles across 8 domains, structured debates for decisions, per-model cost control, local-first routing and a hash-chained audit log. Your documents, your Obsidian vault, your models.</p>
+<div class="btnrow">
+<a class="btn primary" href="https://github.com/michaelbeatman/ARCHON-OS">View on GitHub</a>
+<a class="btn" href="#install">Quick start</a>
+</div>
+<div class="badges"><span class="badge">v0.5.4.1 &middot; pre-1.0</span><span class="badge">MIT license</span><span class="badge">70 specialists &middot; 8 domains</span><span class="badge">55 decision frameworks</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11 languages</span></div>
+</div></section>
 
-<h2>Run it</h2>
+<div class="wrap">
+<h3 class="sec">Inside the cockpit</h3>
+<div class="shots">
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png" alt="Mission Control dashboard"><figcaption>Mission Control — operations dashboard</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/kader.png" alt="Agent fleet overview"><figcaption>The 70-specialist fleet with 3-tier SOUL prompts</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/boardroom_debate.png" alt="AI Boardroom debate"><figcaption>AI Boardroom — multi-agent debate with critic stage</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/org.png" alt="Org chart and teams"><figcaption>Org hierarchy — what agents may decide alone, what needs approval</figcaption></figure>
+</div>
+
+<h3 class="sec">What it does</h3>
+<div class="feats">
+<div class="feat"><h4>AI Boardroom</h4><p>Decisions run as isolated multi-perspective debates with critic cross-examination and synthesis, across 55 frameworks from OKR to Pre-Mortem.</p></div>
+<div class="feat"><h4>OmniRoute cost control</h4><p>A central switchboard routes every request to local (Ollama, LM Studio) or cloud models. Budgets are checked before dispatch and attributed per model and per task.</p></div>
+<div class="feat"><h4>Zero-Egress routing</h4><p>Finance, contract and CRM work stays on local models. Worker containers run in an internal Docker network with no internet route. Fails closed, not open.</p></div>
+<div class="feat"><h4>Tamper-evident audit log</h4><p>A SHA-256 hash-chained log records every dispatch, including provider, model and host. Records cannot be altered unnoticed.</p></div>
+<div class="feat"><h4>Obsidian vault + RAG</h4><p>Your vault is the knowledge base. Documents and scans are OCR-read, converted to Markdown and indexed into AnythingLLM/Chroma — locally.</p></div>
+<div class="feat"><h4>Kanban with approval gates</h4><p>Tasks move through a four-eyes gate: approve, reject with a reason, or escalate on expiry. Email triage, CRM and an ERP suite (alpha) sit on top.</p></div>
+</div>
+
+<h3 class="sec">The 70-specialist fleet — 8 domains</h3>
+<table>
+<tr><th>Domain</th><th>Count</th><th>Focus</th></tr>
+<tr><td>Strategy, Leadership &amp; Life</td><td>12</td><td>CEO copilot, OKRs, M&amp;A decisions, cross-domain synthesis and final QA</td></tr>
+<tr><td>Law, Tax, Finance &amp; Insurance</td><td>11</td><td>Contracts, GDPR, IP, holdings, debt financing — with a mandatory legal/tax warning dialog</td></tr>
+<tr><td>Sales, CRM, Marketing &amp; Growth</td><td>11</td><td>B2B outreach, pricing, SEO/GEO, paid ads, retention</td></tr>
+<tr><td>Creation, Media &amp; Content</td><td>8</td><td>Copywriting, video scripts, keynotes, UI/UX brand design</td></tr>
+<tr><td>Tech, Software, Data &amp; QA</td><td>8</td><td>Fullstack architecture, DevOps/CloudSec, database tuning, test automation</td></tr>
+<tr><td>Commerce, Procurement &amp; E-Commerce</td><td>7</td><td>Supply chain, inventory forecasting, vendor negotiation, Shopify</td></tr>
+<tr><td>Real Estate &amp; Construction</td><td>7</td><td>DCF valuation, zoning/BauGB, ESG/KfW, construction management</td></tr>
+<tr><td>Medicine, Chemistry, Science &amp; Engineering</td><td>6</td><td>Clinical advisor, EU-MDR, REACH, pharma — regulated-domain guardrails</td></tr>
+</table>
+
+<h3 class="sec">Install</h3>
+<div class="install">
+<div class="card"><h4>Full stack</h4><p>Six containers: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy.</p>
 <pre>git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
-docker compose up -d</pre>
-<p>Read-only demo, no API key and no token cost:</p>
-<pre>ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d</pre>
+docker compose up -d</pre></div>
+<div class="card"><h4>Zero-key demo</h4><p>Read-only showcase without API keys and token cost, for a first look.</p>
+<pre>ARCHON_DEMO_MODE=true \
+docker compose -f docker-compose.demo.yml up --build -d
+# open http://localhost:8501</pre></div>
+<div class="card"><h4>Interactive installers</h4><p><code>setup.ps1</code> for Windows, <code>install.sh</code> for Linux/macOS, or a structured onboarding prompt for your AI coding agent (<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md">INSTALL_AGENT.md</a>).</p></div>
+</div>
 
-<h2>Honest status</h2>
-<p>Pre-1.0. The ERP and CRM module is alpha, multi-user role enforcement is still being hardened, and interfaces change between releases. Issues are welcome.</p>
-<p class="note">License: MIT. Documentation, guides and the full changelog live in the repository.</p>
+<h3 class="sec">Honest status</h3>
+<p class="status">Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome.</p>
 
-<footer>
-<a href="https://github.com/michaelbeatman/ARCHON-OS">Repository</a> &middot;
-<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a> &middot;
-<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">License</a> &middot;
+<h3 class="sec">Documentation</h3>
+<table>
+<tr><th>Document</th><th>Scope</th></tr>
+<tr><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf">User &amp; Company Manual (EN, 97 pp.)</a></td><td>Installation, chapters 1–19, five use cases, encryption/GDPR overview, A–Z glossary</td></tr>
+<tr><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf">Complete Feature List (EN)</a></td><td>Full module catalog, demo mode, first-run wizard, FinOps, security</td></tr>
+<tr><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf">AI Boardroom: 55 Frameworks (EN)</a></td><td>All 55 decision-engine methodologies, indexed</td></tr>
+<tr><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ROADMAP_2026.md">Roadmap M0–M53</a></td><td>The 54-milestone plan, including what is not built yet</td></tr>
+</table>
+</div>
+
+<footer><div class="wrap">
+<span>Built on <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> by Nous Research</span>
+<a href="https://github.com/michaelbeatman/ARCHON-OS">Repository</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT License</a>
 <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">Disclaimer</a>
-</footer>
-</main>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md">Third-party licenses</a>
+</div></footer>
 </body>
 </html>

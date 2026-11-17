@@ -2767,7 +2767,46 @@
     }
     window.onCustomVersionInput = onCustomVersionInput;
 
-    async function pushChangesToGitHub() {
+    // Push-/Sync-Ergebnis inline statt alert(): selektierbar und kopierbar,
+// damit Fehlermeldungen (z. B. Git-Konflikte) fuer Support und Dokumentation abrufbar sind.
+function showPushResult(text, kind) {
+  const badge = document.getElementById("push-status-badge");
+  let box = document.getElementById("push-result-box");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "push-result-box";
+    box.style.display = "none";
+    if (badge && badge.parentElement) badge.parentElement.appendChild(box);
+  }
+  const tone = kind === "error" ? "border-rose-500/40 bg-rose-500/10 text-rose-600"
+    : kind === "success" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+    : "border-sky-500/40 bg-sky-500/10 text-sky-600";
+  box.className = "mt-2 rounded-md border p-2.5 text-xs " + tone;
+  box.style.display = "block";
+  box.innerHTML =
+    '<pre style="margin:0;white-space:pre-wrap;user-select:text;cursor:text;-webkit-user-select:text" id="push-result-text"></pre>' +
+    '<button type="button" id="push-result-copy" class="mt-2 text-[10px] font-mono px-2 py-1 rounded border cursor-pointer" style="user-select:text">' + cfgT('ui.system_settings.copy_message', 'Meldung kopieren') + '</button>';
+  box.querySelector("#push-result-text").textContent = text;
+  box.querySelector("#push-result-copy").onclick = async function () {
+    const t = box.querySelector("#push-result-text").textContent;
+    let ok = false;
+    try { await navigator.clipboard.writeText(t); ok = true; } catch (e) { /* Fallback unten */ }
+    if (!ok) {
+      const ta = document.createElement("textarea");
+      ta.value = t;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      ta.remove();
+    }
+    this.textContent = ok ? cfgT('ui.system_settings.copied', "Kopiert ✓") : cfgT('ui.system_settings.copy_failed', "Kopieren fehlgeschlagen — Text manuell markieren");
+    setTimeout(() => { this.textContent = cfgT('ui.system_settings.copy_message', 'Meldung kopieren'); }, 2500);
+  };
+}
+
+async function pushChangesToGitHub() {
       const btn = document.getElementById("btn-push-github");
       const badge = document.getElementById("push-status-badge");
       const msgInput = document.getElementById("push-commit-message");
@@ -2798,7 +2837,7 @@
         });
         const data = await res.json();
         if (data.status === "success") {
-          alert(cfgT('ui.system_settings.release_published', 'Release {version} erfolgreich auf GitHub veröffentlicht!\n\nCommit: {commit}\nGit-Tag: {tag}\n{message}', { version: data.version || "", commit: data.commit, tag: data.version || "", message: data.message }));
+          showPushResult(cfgT('ui.system_settings.release_published', 'Release {version} erfolgreich auf GitHub veröffentlicht!\n\nCommit: {commit}\nGit-Tag: {tag}\n{message}', { version: data.version || "", commit: data.commit, tag: data.version || "", message: data.message }), "success");
           if (badge) {
             badge.innerText = `Release ${data.version || ""} live`;
             badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20";
@@ -2806,20 +2845,20 @@
           if (msgInput) msgInput.value = "";
           await checkSystemUpdateStatus(true);
         } else if (data.status === "nothing_to_commit") {
-          alert(data.message);
+          showPushResult(data.message, "info");
           if (badge) {
             badge.innerText = cfgT('ui.system_settings.all_current', "Alles aktuell");
             badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20";
           }
         } else {
-          alert(`Push fehlgeschlagen: ${data.message || cfgT('ui.system_settings.unknown_error', "Unbekannter Fehler")}`);
+          showPushResult(`Push fehlgeschlagen: ${data.message || cfgT('ui.system_settings.unknown_error', "Unbekannter Fehler")}`, "error");
           if (badge) {
             badge.innerText = cfgT('ui.system_settings.error', "Fehler");
             badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20";
           }
         }
       } catch (err) {
-        alert(cfgT('ui.system_settings.push_network_error', "Netzwerkfehler beim Pushen: ") + err.message);
+        showPushResult(cfgT('ui.system_settings.push_network_error', "Netzwerkfehler beim Pushen: ") + err.message, "error");
         if (badge) {
           badge.innerText = "Netzwerkfehler";
           badge.className = "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20";

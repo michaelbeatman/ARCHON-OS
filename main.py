@@ -880,6 +880,11 @@ from archon.routers.ui import (
 app.include_router(_quickchat_router)
 app.include_router(_ui_router)
 
+# Kontext-Meter & Session-Compaction (M73, Teil 1+2)
+from archon.routers.context_meter import router as _context_meter_router  # noqa: E402
+app.include_router(_context_meter_router)
+
+
 # ============================================================================
 # BRAIN & ARCHIV ROUTER (ausgelagert nach archon.routers.brain)
 # ============================================================================

@@ -635,6 +635,7 @@ async function initMasterChat() {
     }
     async function selectMasterChatSession(sessionId, skipProfileSync = false) {
       currentMasterChatSessionId = sessionId;
+      try { scheduleMasterChatContextMeter(); } catch (e) { /* Meter optional */ }
       // Ermittle Profil der Session und synchronisiere Profil-Dropdown & Header falls abweichend
       if (!skipProfileSync) {
         const targetSess = masterChatSessions.find(s => s && s.id === sessionId);
@@ -753,6 +754,7 @@ async function initMasterChat() {
     }
     // 7. Nachrichten rendern (Monochrome Theme-Aware Chat Bubble)
     function appendMasterChatMessageBubble(role, content, timestamp, msgId, skipBatchIcons = false) {
+      try { scheduleMasterChatContextMeter(); } catch (e) { /* Meter optional */ }
       const messagesContainer = document.getElementById("master-chat-messages");
       if (!messagesContainer) return null;
       const safeContent = content == null ? "" : String(content);
@@ -1154,5 +1156,88 @@ async function initMasterChat() {
     window.refreshMasterChatPrices = function(btn) {
       if (typeof window.refreshAgentTabPrices === "function") {
         return window.refreshAgentTabPrices(btn);
+      }
+    };
+
+    // ===== Kontext-Meter & Compaction (M73, Teil 1+2) =====
+    let ctxMeterTimer = null;
+    function scheduleMasterChatContextMeter() {
+      if (ctxMeterTimer) clearTimeout(ctxMeterTimer);
+      ctxMeterTimer = setTimeout(updateMasterChatContextMeter, 800);
+    }
+    function fmtCtxK(n) {
+      n = Number(n) || 0;
+      return n >= 1000 ? (n / 1000).toFixed(1).replace(".", ",") + "k" : String(n);
+    }
+    function ctxBarClass(pct) {
+      return "block h-full transition-all " + (pct >= 85 ? "bg-red-500" : pct >= 60 ? "bg-amber-500" : "bg-emerald-500");
+    }
+    async function updateMasterChatContextMeter() {
+      const bar = document.getElementById("master-chat-context-bar");
+      const label = document.getElementById("master-chat-context-label");
+      if (!bar || !label) return;
+      const sid = currentMasterChatSessionId;
+      if (!sid) { bar.style.width = "0%"; bar.className = ctxBarClass(0); label.textContent = "—"; return; }
+      try {
+        const res = await fetch(`/api/chat/context-status?session_id=${encodeURIComponent(sid)}`);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const d = await res.json();
+        const pct = Math.max(0, Math.min(100, d.fill_pct || 0));
+        bar.style.width = pct + "%";
+        bar.className = ctxBarClass(pct);
+        label.textContent = fmtCtxK(d.used_tokens) + "/" + fmtCtxK(d.max_context_tokens);
+        label.title = `Kontextfenster: ${d.used_tokens} von ${d.max_context_tokens} Tokens (${d.fill_pct}%) · ${d.message_count} Nachrichten`;
+        fillMasterChatContextPanel(d);
+      } catch (e) {
+        label.textContent = "—";
+      }
+    }
+    function fillMasterChatContextPanel(d) {
+      const bar = document.getElementById("ctx-panel-bar");
+      if (bar) {
+        const pct = Math.max(0, Math.min(100, d.fill_pct || 0));
+        bar.style.width = pct + "%";
+        bar.className = "h-full transition-all " + (pct >= 85 ? "bg-red-500" : pct >= 60 ? "bg-amber-500" : "bg-emerald-500");
+      }
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      set("ctx-panel-used", d.used_tokens.toLocaleString(chatLocale()));
+      set("ctx-panel-max", d.max_context_tokens.toLocaleString(chatLocale()));
+      set("ctx-panel-count", String(d.message_count ?? "—"));
+      set("ctx-panel-compacted", d.compacted_parts > 0 ? d.compacted_parts + " Teile" : "nein");
+    }
+    window.toggleMasterChatContextPanel = function() {
+      const panel = document.getElementById("master-chat-context-panel");
+      if (!panel) return;
+      panel.classList.toggle("hidden");
+      if (!panel.classList.contains("hidden")) updateMasterChatContextMeter();
+    };
+    window.compactMasterChatSession = async function() {
+      const sid = currentMasterChatSessionId;
+      const btn = document.getElementById("ctx-panel-compact-btn");
+      const resEl = document.getElementById("ctx-panel-result");
+      if (!sid || !btn) return;
+      btn.disabled = true;
+      const oldLabel = btn.textContent;
+      btn.textContent = "Komprimiere...";
+      if (resEl) { resEl.classList.remove("hidden"); resEl.textContent = "Arbeite..."; }
+      try {
+        const res = await fetch("/api/chat/compact-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sid }),
+        });
+        const d = await res.json();
+        if (d.compacted) {
+          if (resEl) resEl.textContent = `Fertig: ${(d.original_tokens || 0).toLocaleString(chatLocale())} -> ${(d.compacted_tokens || 0).toLocaleString(chatLocale())} Tokens (${d.saved_pct}% gespart)`;
+          await selectMasterChatSession(sid, true);
+        } else {
+          if (resEl) resEl.textContent = d.reason || "Nichts zu komprimieren.";
+        }
+        setTimeout(updateMasterChatContextMeter, 300);
+      } catch (e) {
+        if (resEl) resEl.textContent = "Fehler: " + e;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = oldLabel;
       }
     };

@@ -473,6 +473,16 @@
   - **Skill-Verleih auf Task-Ebene:** Aus dem `hermes_skills_index` erhält ein Agent nur die Skills, die zu seiner Aufgabe passen (Attribut je Skill: passende Domänen/Aufgabentypen), und verliert sie nach Abschluss — schlanke Prompts, weniger Token, weniger Ablenkung. Ergänzt das bestehende 3-Stufen-SOUL-Prinzip um die Skill-Dimension.
 - **Verhältnis zum Bestand:** Keine Konkurrenz — Komplementär. Das Plugin adressiert Coding-Agenten, ARCHON OS Business-Operations; beide bauen auf Hermes Agent und befeuern dieselbe Architekturidee (Frontier-Urteil lokal ausgeführt).
 
+### Meilenstein 74: Freigabe-Gate 2.0 — Konsolidierung der Freigabe-Ebenen (Geplant – Hoch)
+- **Ausgangslage:** Es gibt heute mehrere Freigabe-Flaechen: das Missions-Approval-Gate (Mission Control), die Policy-Engine-Freigaben (`approval_policy_engine`, Domains + Vier-Augen + Vertretungsmodus + Eskalations-Timeout) und das HITL-Gate am MCP-Gateway (Replay-geschuetzte `hitl_approval_id`-Zweiaufrufe). Funktional korrekt, aber drei ueberpruefte Ebenen, zwei Listen und uneinheitliche Texte — Freigaben muessen an einer Stelle landen und aussehen wie voneinander.
+- **Zielzustand:**
+  - **Ein „Braucht mich“-Panel:** alle ausstehenden Freigaben (Missions-, Policy- und HITL-Gate) in einer Liste mit Quelle, Domain, Betrag/Kontext und Ablaufzeit — entsprechend der Auto-Review-Vision aus M70.
+  - **Einheitliche Freigabe-Semantik:** jeder Request erhaelt dieselben Pflichtfelder (wer beantragt, was, Risiko-Einordnung, was geschieht bei Freigabe/ Ablehnung/ Ablauf).
+  - **Rollenklarheit:** beantragen duerfen alle Level, freigeben nur die im Organigramm zustaendigen Rollen; der Vertretungsmodus der Policy-Engine wird zum Muster fuer alle Ebenen.
+  - **Audit-Kette:** jede Freigabe/Ablehnung landet unverzueglich im Hash-Chained-Log, inkl. Replay-Schutz wie am MCP-Gateway.
+  - **Escalation:** Ablauf-Timeouts und Eskalationsregeln aus der Policy-Engine gelten einheitlich auch fuer Missions- und HITL-Requests.
+- **Abhaengigkeiten:** baut auf M69 (Policy-as-Code) und M70 (Braucht-mich-Panel) auf; der Context-Hygiene-Trigger (M73) ist der erste Client dieses einheitlichen Musters.
+
 ## Ideen-Pool (beobachten, nicht geplant)
 
 Themen, die im Blick bleiben, aber keinen Meilenstein und keinen Zeitslot haben. Sie werden erst dann zu Meilensteinen, wenn ein klarer Nutzen oder ein Community-Signal vorliegt.

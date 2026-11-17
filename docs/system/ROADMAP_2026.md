@@ -442,6 +442,8 @@
   - **Getesteter Replay:** Aus einem Audit-Log-Eintrag den Dispatch rekonstruieren und als Test laufen lassen (Gegenstueck zur_receipt_ledger.verify_chain_integrity); der Test selbst ist der Nachweis, nicht nur die Kette.
   - **Ein-Seiten-Policy-Export:** Aus den aktiven Controls (Klassifizierung, Freigaben, Log, Egress) automatisch eine einseitige KI-Policy pro Organisation generieren — Zielgruppe: Geschaeftsfuehrung und externe Auditoren.
   - **KI-Inhalts-Kennzeichnung ueber den Chat hinaus:** Art. 50 AI Act (gilt seit 02.08.2026, Umsetzungsfrist fuer bestehende Tools 02.12.2026): agentenerstellte E-Mails und Belege im ERP/CRM-Fluss als KI-generiert markieren.
+- **Bewerbungs-Screener häärten (Ergänzung, Quelle: Stepstone Hiring Trends Update, C. Langer, 17.11.2026, https://www.linkedin.com/feed/update/urn:li:activity:):** Laut Studie berichten Recruiter von versteckten Anweisungen in Bewerbungsunterlagen, die automatisierte Vorauswahl beeinflussen sollen. Für den Bewerber-Screener gilt deshalb: Bewerbungs-PDFs sind grundsätzlich unvertraute Eingabe (Prompt-Injection-Fläche); Detektion versteckter Anweisungen (Weißschrift, Textlayer, Metadaten) vor der Auswertung; jede Screening-Entscheidung mit nachvollziehbarer Begründung ins Audit-Log und an einen menschlichen Entscheider gekoppelt (Art. 22 DSGVO-Nachweis: keine vollautomatische Ablehnung).
+
 - **Nicht-Ziel:** Rechtsberatung ersetzen; das Inventar beschreibt den Ist-Zustand der Konfiguration, die rechtliche Bewertung bleibt beim Betreiber/beratenden Dritten.
 
 ### Meilenstein 69: Policy-as-Code für Freigaben (YAML, Vendor-Limits, Telegram-Buttons, Freigabe-Tokens) (Geplant – Mittel)

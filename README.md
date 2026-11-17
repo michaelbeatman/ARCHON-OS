@@ -29,19 +29,20 @@ Archon OS replaces isolated single-prompt chatbots with a persistent, self-hoste
 
 ---
 
-## Why Archon OS? — The Pitch
+## What is Archon OS?
 
-**Archon OS is not a chatbot. It's an operating system for an AI workforce.**
+Archon OS is a self-hosted multi-agent workspace built on [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research). It runs on your own server and orchestrates **70 specialist agent profiles** (`agent_profiles.json`) across 8 domains — tax, law, procurement, sales, software, real estate, medicine, strategy. Each profile has a 3-tier `SOUL.md` prompt (Compact / Pro / Full), so agents only spend tokens when their domain is actually needed.
 
-On your own server, Archon OS orchestrates **70 highly specialized AI profiles** — from tax law to sales leadership to software architecture — with a **3-tier SOUL competence system** (compact → pro → full): each agent only spends tokens when its domain is actually needed.
+What that means in practice:
 
-The core is the **AI Boardroom**: **55 decision frameworks** — from OKR to Six Thinking Hats to Pre-Mortem — force your agents into structured debates with verifiable reasoning instead of confident gut answers.
+- **Structured decisions, not one-shot answers.** An AI Boardroom runs isolated multi-perspective debates with critic cross-examination and synthesis across 55 frameworks (OKR, Pre-Mortem, Six Thinking Hats, …).
+- **Cost control per model and per task.** OmniRoute routes each request to local (Ollama, LM Studio) or cloud providers and attributes cost before dispatch (`cost_estimator.py` checks budgets).
+- **Data sovereignty.** Zero-Egress routing keeps finance, contract and CRM work on local models; worker containers run in an `internal: true` Docker network without an internet route.
+- **Tamper-evident audit trail.** A SHA-256 hash-chained audit log records every dispatch, including provider, model and host.
+- **Your documents.** An Obsidian vault plus AnythingLLM/Chroma RAG indexes your library locally.
+- **Business operations.** Kanban with four-eyes approval gates, email triage, CRM, and an ERP suite (offers, contracts, invoices, receivables) — **alpha**.
 
-Around it, a complete OS: an **org hierarchy with autonomy mechanisms** (what an agent may decide alone vs. what needs approval), **Kanban operations** for every task, and **OmniRoute** as the central cost-control switchboard across all models and providers — local or cloud, transparent in euros.
-
-Your **Second Brain**: a central **Library with an ingestion module and direct vectorization** — documents and scans are OCR-read automatically, converted to searchable Markdown and **vectorized straight into RAG**. Wired to your **Obsidian vault**.
-
-And the best part: Archon OS is a **self-improving system built on Hermes Agent** — the platform can configure and evolve its own agents. Plus: **n8n integration** for thousands of automations, **Zero-Egress routing** for full data sovereignty, a **CRM & ERP (alpha)** with human approval gates, **Telegram** alerts — documented in **11 languages**, MIT licensed, installed with a single prompt to your AI agent.
+**Pre-1.0, and we say that up front:** interfaces and config keys change between releases, the ERP/CRM module is alpha, and multi-user role enforcement is still being hardened. If that works for you, issues and PRs are welcome.
 
 ### Product Tour
 

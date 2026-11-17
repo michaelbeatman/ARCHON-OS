@@ -42,6 +42,8 @@ TOOL_SECURITY_POLICY: Dict[str, Dict[str, Any]] = {
     "archon__update_task_status": {"scope": "kanban_rw", "hitl": False},
     "archon__trigger_boardroom_debate": {"scope": "agent_execute", "hitl": True, "domain": "boardroom"},
     "archon__ask_specialist": {"scope": "agent_execute", "hitl": True, "domain": "agent_dispatch"},
+    # M73 Teil 4: Kontext-Hygiene durch den Orchestrator (immer via Freigabe)
+    "archon__compress_agent_context": {"scope": "agent_execute", "hitl": True, "domain": "context_hygiene"},
 }
 
 
@@ -244,6 +246,18 @@ class ArchonMcpGateway:
                     "required": ["query"],
                 },
             },
+            {
+                "name": "archon__compress_agent_context",
+                "description": "Kompaktiert die Chat-Historie einer Agent-Session, um das Kontextfenster freizuraeumen. HITL-geschuetzt: erster Aufruf liefert eine Freigabe-Request-ID, nach Freigabe in Archon OS (Freigaben/Telegram) erneut mit hitl_approval_id aufrufen.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "ID der zu kompaktierenden Session (z. B. 'mc_20261117_103000_ceo')"},
+                        "hitl_approval_id": {"type": "string", "description": "ID einer bereits genehmigten HITL-Freigabe"},
+                    },
+                    "required": ["session_id"],
+                },
+            },
         ]
 
         # Boardroom-Tool um optionales hitl_approval_id ergänzen
@@ -444,6 +458,32 @@ class ArchonMcpGateway:
             ),
         }
 
+    def _tool_compress_agent_context(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """M73 Teil 4: Orchestrator-Trigger zur Session-Kompaktierung.
+
+        Immer HITL-pflichtig (Security-Policy): 1. Aufruf liefert
+        request_id zur Freigabe, 2. Aufruf mit hitl_approval_id fuehrt aus.
+        """
+        session_id = str(args.get("session_id") or "").strip()
+        if not session_id:
+            return {"status": "error", "message": "Parameter 'session_id' ist erforderlich."}
+        try:
+            from archon.routers.context_meter import compact_session_core
+            res = compact_session_core(session_id)
+            if res.get("compacted"):
+                return {
+                    "status": "compacted",
+                    "session_id": session_id,
+                    "original_tokens": res.get("original_tokens"),
+                    "compacted_tokens": res.get("compacted_tokens"),
+                    "saved_pct": res.get("saved_pct"),
+                    "compacted_messages": res.get("compacted_messages"),
+                    "kept_recent": res.get("kept_recent"),
+                }
+            return {"status": "skipped", "reason": res.get("reason", ""), "session_id": session_id}
+        except Exception as e:
+            return {"status": "error", "message": f"Kompaktierung fehlgeschlagen: {e}"}
+
     def _tool_list_specialists(self, args: Dict[str, Any]) -> Dict[str, Any]:
         domain_filter = str(args.get("domain") or "").strip().lower()
         limit = min(max(int(args.get("limit", 25)), 1), 200)
@@ -561,6 +601,8 @@ class ArchonMcpGateway:
             return 0, self._tool_ask_specialist(arguments)
         if name == "archon__search_vault":
             return 0, self._tool_search_vault(arguments)
+        if name == "archon__compress_agent_context":
+            return 0, self._tool_compress_agent_context(arguments)
 
         from scripts.archon_mcp_server import ArchonMcpServer
         res = ArchonMcpServer().execute_tool(name, arguments)

@@ -4,6 +4,9 @@ All notable changes to **Archon OS** are documented in this file.
 
 ## [Unreleased] — 2026-11-15 (Core Audit & Hardening Fixes)
 
+### Added
+- **Context Hygiene (M73):** Context meter in the master chat footer (fill level with green/amber/red thresholds), click-to-open context panel with one-click session compaction (`POST /api/chat/compact-session`), automatic compaction hook before every chat dispatch (`auto_compact_pct`, default 85%), and the HITL-gated MCP tool `archon__compress_agent_context` for orchestrator-triggered compaction. Docs: `docs/system/CONTEXT_METER_GUIDE.md`.
+
 ### Fixed
 - **Orchestration & Runtime Stability:**
   - Imported missing orchestration helpers (`project_folder_name`, `build_dossier_from_report`, `send_telegram_document`, `send_telegram_message`) in `main.py` to resolve `NameError` in synthesis wrappers, and fixed `_set_agent_profile_status` to return its `bool` result for AutoHire.

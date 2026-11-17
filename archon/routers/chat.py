@@ -723,6 +723,19 @@ async def api_chat_stream(req: ChatStreamRequest):
     except Exception as db_err:
         logger.warning(f"[Chat Stream] Session/Message DB init warning: {db_err}")
 
+    # M73 Teil 3: Auto-Kompaktierung, wenn die Historie das Kontextfenster zu stark fuellt
+    try:
+        from archon.routers.context_meter import maybe_auto_compact_session
+        _auto = await asyncio.to_thread(maybe_auto_compact_session, session_id)
+        if _auto.get("compacted"):
+            logger.info(
+                f"[Chat Stream] Auto-Kompaktierung: Session {session_id} "
+                f"{_auto.get('original_tokens')} -> {_auto.get('compacted_tokens')} Tokens "
+                f"({_auto.get('saved_pct')}% gespart)"
+            )
+    except Exception as auto_err:
+        logger.warning(f"[Chat Stream] Auto-Kompaktierung uebersprungen: {auto_err}")
+
     # Lade letzten Kontext aus DB (bis zu 50 Nachrichten fuer stabilen Sitzungsverlauf)
     recent_messages = []
     try:

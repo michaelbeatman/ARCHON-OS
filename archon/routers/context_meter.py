@@ -100,19 +100,21 @@ class CompactSessionRequest(BaseModel):
     session_id: str
 
 
-@router.post("/api/chat/compact-session")
-def api_chat_compact_session(request: Request, req: CompactSessionRequest):
-    """Kompaktiert die aktive Historie einer Chat-Session (manuell aus der UI)."""
-    require_admin_or_503(request)
-    session_id = (req.session_id or "").strip()
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id fehlt")
+def compact_session_core(session_id: str) -> Dict[str, Any]:
+    """Kompaktiert die aktive Historie einer Session (Kern, ohne RBAC).
 
+    Wird von drei Stellen genutzt: manueller UI-Knopf, Auto-Hook im
+    Chat-Flow (M73 Teil 3) und dem HITL-geschützten MCP-Werkzeug
+    archon__compress_agent_context (M73 Teil 4).
+    """
     from backend.context_compactor import context_compactor
+
+    session_id = (session_id or "").strip()
+    if not session_id:
+        return {"compacted": False, "reason": "session_id fehlt", "session_id": session_id}
 
     db_key, msgs = _find_active_messages(session_id)
     non_system = [m for m in msgs if (m.get("role") or "").lower() != "system"]
-    system_msgs = [m for m in msgs if (m.get("role") or "").lower() == "system"]
 
     if len(non_system) < 6:
         return {"compacted": False, "reason": "Zu wenig Historie zum Verdichten.", "session_id": session_id}
@@ -169,9 +171,62 @@ def api_chat_compact_session(request: Request, req: CompactSessionRequest):
     }
 
 
+@router.post("/api/chat/compact-session")
+def api_chat_compact_session(request: Request, req: CompactSessionRequest):
+    """Kompaktiert die aktive Historie einer Chat-Session (manuell aus der UI)."""
+    require_admin_or_503(request)
+    session_id = (req.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id fehlt")
+    return compact_session_core(session_id)
+
+
 def _compactor_keep_recent() -> int:
     try:
         from backend.autonomy_settings import get_module_config
         return int(get_module_config("context_compactor").get("keep_recent_turns", 4))
     except Exception:
         return 4
+
+
+def maybe_auto_compact_session(session_id: str) -> Dict[str, Any]:
+    """M73 Teil 3: Auto-Kompaktierung vor jedem Chat-Versand.
+
+    Greift nur, wenn der Compactor aktiv ist und die Session-Historie
+    mehr als `auto_compact_pct` (Standard 85 %) des Kontextfensters
+    belegt. Kompaktiert niemals frische Sessions (< 6 Nachrichten).
+    """
+    try:
+        from backend.autonomy_settings import get_module_config
+        cfg = get_module_config("context_compactor")
+    except Exception:
+        cfg = {}
+    if not bool((cfg or {}).get("enabled", True)):
+        return {"compacted": False, "reason": "Compactor deaktiviert"}
+    auto_pct = float((cfg or {}).get("auto_compact_pct", 85))
+    min_msgs = int((cfg or {}).get("auto_compact_min_messages", 24))
+
+    status = api_chat_context_status_impl(session_id)
+    if status["fill_pct"] < auto_pct or status["message_count"] < min_msgs:
+        return {
+            "compacted": False,
+            "reason": (
+                f"Fuellstand {status['fill_pct']}% unter Schwellwert {auto_pct}% "
+                f"oder {status['message_count']} < {min_msgs} Nachrichten"
+            ),
+        }
+    return compact_session_core(session_id)
+
+
+def api_chat_context_status_impl(session_id: str) -> Dict[str, Any]:
+    """Status-Logik ohne FastAPI-Wrapper (fuer Auto-Hook und Tests)."""
+    _, msgs = _find_active_messages(session_id)
+    used = sum(_tokens_of(m.get("content"), m.get("token_count")) for m in msgs)
+    max_tokens = _settings_max_context_tokens()
+    return {
+        "session_id": session_id,
+        "used_tokens": used,
+        "max_context_tokens": max_tokens,
+        "fill_pct": round(min(100.0, (used / max(1, max_tokens)) * 100.0), 1),
+        "message_count": len(msgs),
+    }

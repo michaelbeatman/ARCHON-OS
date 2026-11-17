@@ -2535,7 +2535,15 @@
       "tab_group": "グループ",
       "ph_session_search": "セッションを検索...",
       "title_new_chat": "新しいチャットを開始",
-      "action_new_chat": "新しいチャット"
+      "action_new_chat": "新しいチャット",
+      "ctx_panel_title": "コンテキストウィンドウ",
+      "ctx_close": "閉じる",
+      "ctx_label_used": "使用済み:",
+      "ctx_label_window": "ウィンドウ:",
+      "ctx_label_messages": "メッセージ:",
+      "ctx_label_compacted": "圧縮済み:",
+      "ctx_action_compact_now": "コンテキストを今すぐ圧縮",
+      "ctx_title_meter": "コンテキストウィンドウ: 使用率の表示と圧縮"
     },
     "plugins": {
       "title": "拡張機能とモジュールセンター",

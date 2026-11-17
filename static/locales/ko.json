@@ -2535,7 +2535,15 @@
       "tab_group": "그룹",
       "ph_session_search": "세션 검색...",
       "title_new_chat": "새 채팅 시작",
-      "action_new_chat": "새 채팅"
+      "action_new_chat": "새 채팅",
+      "ctx_panel_title": "컨텍스트 창",
+      "ctx_close": "닫기",
+      "ctx_label_used": "사용됨:",
+      "ctx_label_window": "창:",
+      "ctx_label_messages": "메시지:",
+      "ctx_label_compacted": "압축됨:",
+      "ctx_action_compact_now": "지금 컨텍스트 압축",
+      "ctx_title_meter": "컨텍스트 창: 사용률 표시 및 압축"
     },
     "plugins": {
       "title": "확장 및 모듈 센터",

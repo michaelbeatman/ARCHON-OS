@@ -2535,7 +2535,15 @@
       "tab_group": "Grupo",
       "ph_session_search": "Buscar sesiones...",
       "title_new_chat": "Iniciar un nuevo chat",
-      "action_new_chat": "Nuevo chat"
+      "action_new_chat": "Nuevo chat",
+      "ctx_panel_title": "Ventana de contexto",
+      "ctx_close": "Cerrar",
+      "ctx_label_used": "Usado:",
+      "ctx_label_window": "Ventana:",
+      "ctx_label_messages": "Mensajes:",
+      "ctx_label_compacted": "Comprimido:",
+      "ctx_action_compact_now": "Comprimir contexto ahora",
+      "ctx_title_meter": "Ventana de contexto: mostrar nivel y comprimir"
     },
     "plugins": {
       "title": "Extensiones y central de módulos",

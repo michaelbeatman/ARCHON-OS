@@ -2539,7 +2539,15 @@
       "tab_group": "Groep",
       "ph_session_search": "Sessies doorzoeken...",
       "title_new_chat": "Nieuwe chat starten",
-      "action_new_chat": "Nieuwe chat"
+      "action_new_chat": "Nieuwe chat",
+      "ctx_panel_title": "Contextvenster",
+      "ctx_close": "Sluiten",
+      "ctx_label_used": "Gebruikt:",
+      "ctx_label_window": "Venster:",
+      "ctx_label_messages": "Berichten:",
+      "ctx_label_compacted": "Comprimé:",
+      "ctx_action_compact_now": "Context nu comprimeren",
+      "ctx_title_meter": "Contextvenster: vulling tonen & comprimeren"
     },
     "plugins": {
       "title": "Uitbreidingen & modulecentrale",

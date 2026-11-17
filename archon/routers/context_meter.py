@@ -68,6 +68,19 @@ def _find_active_messages(session_id: str) -> Tuple[str, List[Dict[str, Any]]]:
     return "root", []
 
 
+def _compacted_parts_count(session_id: str) -> int:
+    """Zaehlt verdichtete Verlaufsteile einer Session (DB, nicht im Handler)."""
+    try:
+        with _get_state_db() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM messages WHERE session_id = ? AND compacted = 1",
+                (session_id,),
+            ).fetchone()
+            return int(row["c"]) if row else 0
+    except Exception:
+        return 0
+
+
 @router.get("/api/chat/context-status")
 def api_chat_context_status(session_id: str):
     """Fuellstand des Kontextfensters fuer die Kontext-Anzeige im Chat."""
@@ -75,16 +88,7 @@ def api_chat_context_status(session_id: str):
         raise HTTPException(status_code=400, detail="session_id fehlt")
     _, msgs = _find_active_messages(session_id)
     used = sum(_tokens_of(m.get("content"), m.get("token_count")) for m in msgs)
-    compacted_hint = 0
-    try:
-        with _get_state_db() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) AS c FROM messages WHERE session_id = ? AND compacted = 1",
-                (session_id,),
-            ).fetchone()
-            compacted_hint = int(row["c"]) if row else 0
-    except Exception:
-        pass
+    compacted_hint = _compacted_parts_count(session_id)
     max_tokens = _settings_max_context_tokens()
     return {
         "session_id": session_id,

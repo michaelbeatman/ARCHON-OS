@@ -2535,7 +2535,15 @@
       "tab_group": "Группа",
       "ph_session_search": "Поиск сессий...",
       "title_new_chat": "Начать новый чат",
-      "action_new_chat": "Новый чат"
+      "action_new_chat": "Новый чат",
+      "ctx_panel_title": "Окно контекста",
+      "ctx_close": "Закрыть",
+      "ctx_label_used": "Использовано:",
+      "ctx_label_window": "Окно:",
+      "ctx_label_messages": "Сообщения:",
+      "ctx_label_compacted": "Сжато:",
+      "ctx_action_compact_now": "Сжать контекст сейчас",
+      "ctx_title_meter": "Окно контекста: уровень заполнения и сжатие"
     },
     "plugins": {
       "title": "Расширения и центр модулей",

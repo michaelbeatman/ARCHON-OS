@@ -2539,7 +2539,15 @@
       "tab_group": "Gruppo",
       "ph_session_search": "Cerca sessioni...",
       "title_new_chat": "Avvia nuova chat",
-      "action_new_chat": "Nuova chat"
+      "action_new_chat": "Nuova chat",
+      "ctx_panel_title": "Finestra di contesto",
+      "ctx_close": "Chiudi",
+      "ctx_label_used": "Usato:",
+      "ctx_label_window": "Finestra:",
+      "ctx_label_messages": "Messaggi:",
+      "ctx_label_compacted": "Compresso:",
+      "ctx_action_compact_now": "Comprimi contesto ora",
+      "ctx_title_meter": "Finestra di contesto: mostra livello e comprimi"
     },
     "plugins": {
       "title": "Estensioni & Centro moduli",

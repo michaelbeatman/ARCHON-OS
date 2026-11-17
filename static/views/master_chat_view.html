@@ -147,19 +147,19 @@
               <!-- Footer Toolbar mit Modellauswahl -->
               <div id="master-chat-context-panel" class="hidden absolute bottom-full left-2 mb-2 w-80 z-50 border border-[var(--border)] rounded-xl bg-[var(--card)] shadow-lg p-4 text-xs">
                 <div class="flex items-center justify-between mb-2">
-                  <span class="font-semibold text-[var(--foreground)]">Kontextfenster</span>
-                  <button type="button" onclick="toggleMasterChatContextPanel()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer text-sm leading-none" title="Schließen">✕</button>
+                  <span data-i18n="view.master_chat.ctx_panel_title" class="font-semibold text-[var(--foreground)]">Kontextfenster</span>
+                  <button type="button" onclick="toggleMasterChatContextPanel()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer text-sm leading-none" data-i18n-title="view.master_chat.ctx_close" title="Schließen">✕</button>
                 </div>
                 <div class="w-full h-2 rounded-full bg-[var(--border)] overflow-hidden mb-2">
                   <div id="ctx-panel-bar" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[11px] mb-3">
-                  <span class="text-[var(--muted-foreground)]">Genutzt:</span><span id="ctx-panel-used" class="text-[var(--foreground)] text-right">—</span>
-                  <span class="text-[var(--muted-foreground)]">Fenster:</span><span id="ctx-panel-max" class="text-[var(--foreground)] text-right">—</span>
-                  <span class="text-[var(--muted-foreground)]">Nachrichten:</span><span id="ctx-panel-count" class="text-[var(--foreground)] text-right">—</span>
-                  <span class="text-[var(--muted-foreground)]">Verdichtet:</span><span id="ctx-panel-compacted" class="text-[var(--foreground)] text-right">—</span>
+                  <span data-i18n="view.master_chat.ctx_label_used" class="text-[var(--muted-foreground)]">Genutzt:</span><span id="ctx-panel-used" class="text-[var(--foreground)] text-right">—</span>
+                  <span data-i18n="view.master_chat.ctx_label_window" class="text-[var(--muted-foreground)]">Fenster:</span><span id="ctx-panel-max" class="text-[var(--foreground)] text-right">—</span>
+                  <span data-i18n="view.master_chat.ctx_label_messages" class="text-[var(--muted-foreground)]">Nachrichten:</span><span id="ctx-panel-count" class="text-[var(--foreground)] text-right">—</span>
+                  <span data-i18n="view.master_chat.ctx_label_compacted" class="text-[var(--muted-foreground)]">Verdichtet:</span><span id="ctx-panel-compacted" class="text-[var(--foreground)] text-right">—</span>
                 </div>
-                <button type="button" id="ctx-panel-compact-btn" onclick="compactMasterChatSession()" class="w-full rounded-md bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold py-1.5 cursor-pointer transition">Kontext jetzt komprimieren</button>
+                <button type="button" id="ctx-panel-compact-btn" onclick="compactMasterChatSession()" data-i18n="view.master_chat.ctx_action_compact_now" class="w-full rounded-md bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold py-1.5 cursor-pointer transition">Kontext jetzt komprimieren</button>
                 <div id="ctx-panel-result" class="mt-2 text-[10.5px] font-mono text-[var(--muted-foreground)] hidden"></div>
               </div>
               <div id="master-chat-footer-bar" class="mt-2 flex items-center justify-between text-[11px] font-mono px-1 gap-3 text-[var(--muted-foreground)]">
@@ -199,7 +199,7 @@
                     <i data-lucide="rotate-cw" class="w-3 h-3"></i>
                   </button>
                   <!-- Kontext-Meter (M73): Fuellstand des Kontextfensters -->
-                  <button type="button" id="master-chat-context-meter" onclick="toggleMasterChatContextPanel()" class="p-1 rounded-md bg-[var(--secondary)] hover:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-[var(--border)] cursor-pointer transition shrink-0 flex items-center gap-1.5 ml-0.5" title="Kontextfenster: Füllstand anzeigen & komprimieren">
+                  <button type="button" id="master-chat-context-meter" onclick="toggleMasterChatContextPanel()" class="p-1 rounded-md bg-[var(--secondary)] hover:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-[var(--border)] cursor-pointer transition shrink-0 flex items-center gap-1.5 ml-0.5" data-i18n-title="view.master_chat.ctx_title_meter" title="Kontextfenster: Füllstand anzeigen & komprimieren">
                     <i data-lucide="gauge" class="w-3.5 h-3.5"></i>
                     <span class="w-14 h-1 rounded-full bg-[var(--border)] overflow-hidden inline-block align-middle"><span id="master-chat-context-bar" class="block h-full bg-emerald-500 transition-all" style="width:0%"></span></span>
                     <span id="master-chat-context-label" class="text-[10px] font-mono">—</span>

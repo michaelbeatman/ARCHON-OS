@@ -2535,7 +2535,15 @@
       "tab_group": "Group",
       "ph_session_search": "Search sessions...",
       "title_new_chat": "Start a new chat",
-      "action_new_chat": "New chat"
+      "action_new_chat": "New chat",
+      "ctx_panel_title": "Context window",
+      "ctx_close": "Close",
+      "ctx_label_used": "Used:",
+      "ctx_label_window": "Window:",
+      "ctx_label_messages": "Messages:",
+      "ctx_label_compacted": "Compacted:",
+      "ctx_action_compact_now": "Compact context now",
+      "ctx_title_meter": "Context window: show fill level & compact"
     },
     "plugins": {
       "title": "Extensions & module hub",

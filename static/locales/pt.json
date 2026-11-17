@@ -2535,7 +2535,15 @@
       "tab_group": "Grupo",
       "ph_session_search": "Pesquisar sessões...",
       "title_new_chat": "Iniciar um novo chat",
-      "action_new_chat": "Novo chat"
+      "action_new_chat": "Novo chat",
+      "ctx_panel_title": "Janela de contexto",
+      "ctx_close": "Fechar",
+      "ctx_label_used": "Usado:",
+      "ctx_label_window": "Janela:",
+      "ctx_label_messages": "Mensagens:",
+      "ctx_label_compacted": "Comprimido:",
+      "ctx_action_compact_now": "Comprimir contexto agora",
+      "ctx_title_meter": "Janela de contexto: mostrar nível e comprimir"
     },
     "plugins": {
       "title": "Extensões e central de módulos",

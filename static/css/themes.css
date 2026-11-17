@@ -1618,3 +1618,28 @@ div.p-3 > div.flex > button.px-2 {
       border-color: var(--primary, #6366f1) !important;
       box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 1.5px var(--primary, #6366f1) !important;
     }
+
+    /* Minimalistische Sidebar-Ecke unten links: keine Rahmen, keine Button-Kästen */
+    #archon-tenant-switcher,
+    #archon-tenant-switcher *,
+    #topbar-user-badge > div,
+    #archon-sidebar-footer button {
+      border: none !important;
+      box-shadow: none !important;
+    }
+    #archon-tenant-select {
+      appearance: none !important;
+      -webkit-appearance: none !important;
+      background: transparent !important;
+      padding: 0 2px !important;
+      margin: 0 !important;
+      min-height: 0 !important;
+      line-height: 1.25 !important;
+    }
+    #archon-tenant-select:focus {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+    #archon-sidebar-footer button:hover {
+      background: color-mix(in srgb, var(--foreground) 6%, transparent) !important;
+    }

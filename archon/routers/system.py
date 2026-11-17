@@ -121,6 +121,18 @@ async def _check_service_health(name: str, url_candidates: List[str], client: ht
                 return {"status": "up", "latency_ms": latency, "endpoint": url}
         except Exception:
             continue
+    if name == "hermes_core":
+        t0 = time.time()
+        try:
+            resp = await client.get(
+                "http://docker-socket-proxy:2375/containers/hermes-agent/json",
+                timeout=2.0,
+            )
+            latency = round((time.time() - t0) * 1000, 1)
+            if resp.status_code == 200 and resp.json().get("State", {}).get("Running"):
+                return {"status": "up", "latency_ms": latency, "endpoint": "container://hermes-agent"}
+        except Exception:
+            pass
     return {"status": "down", "latency_ms": 0.0}
 
 

@@ -94,7 +94,7 @@
     })();
     */
   </script>
-  <link rel="stylesheet" href="/static/css/themes.css?v=2026111113">
+  <link rel="stylesheet" href="/static/css/themes.css?v=20261116b">
 
   <style id="archon-live-custom-styles">
     :root {
@@ -340,7 +340,7 @@
     <div class="px-2 pt-1 pb-0.5 space-y-0.5">
       <div id="topbar-user-badge"></div>
     </div>
-    <div class="px-2.5 py-1 border-t theme-border-strong mt-auto space-y-1">
+    <div id="archon-sidebar-footer" class="px-2.5 py-1 border-t theme-border-strong mt-auto space-y-1">
       
       <!-- WATCHDOG KILL-SWITCH ALARM PILL (RED ALERT) -->
       <div id="sidebar-killswitch-alert" class="hidden p-2 rounded-xl border border-rose-500/50 bg-rose-950/40 text-rose-300 select-none shadow-sm">
@@ -394,34 +394,30 @@
         </button>
       </div>
 
-      <!-- Update-LEDs: Archon & Core (ohne Versionsnummern) -->
-      <div id="sidebar-update-leds-row" class="flex items-center gap-4 px-1 text-[10px] font-mono text-[var(--muted-foreground)]">
+      <!-- Update-LEDs: Archon & Core mit Versionsnummer im LED-Farbcode -->
+      <div id="sidebar-update-leds-row" class="flex items-center justify-between gap-2 px-1 text-[10px] font-mono text-[var(--muted-foreground)]">
         <button
           type="button"
           id="sidebar-archon-version-row"
           onclick="window.openSystemSettingsModal && window.openSystemSettingsModal('update')"
-          class="flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5"
+          class="flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5 min-w-0"
           title="Archon OS Update-Status wird geprüft..."
         >
           <span id="dot-archon-update" class="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors"></span>
           <span>Archon</span>
+          <span id="sidebar-archon-version-text" class="truncate"></span>
         </button>
         <button 
           type="button" 
           id="status-badge-update" 
           onclick="window.openSystemUpdateDialog && window.openSystemUpdateDialog()" 
-          class="flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5"
+          class="flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5 min-w-0"
           title="Hermes Core-Update einsehen" data-i18n-title="telemetry.update_title"
         >
           <span id="dot-update" class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors"></span>
           <span id="label-update-text">Core</span>
+          <span id="label-update-version" class="truncate"></span>
         </button>
-      </div>
-
-      <div class="px-1 flex items-center justify-center gap-2 text-[9.5px] leading-none text-[var(--muted-foreground)]">
-        <a href="/api/legal/impressum" target="_blank" rel="noopener" data-i18n="ui.legal.impressum" class="hover:text-[var(--foreground)] transition">Impressum</a>
-        <span>·</span>
-        <a href="/api/legal/datenschutz" target="_blank" rel="noopener" data-i18n="ui.legal.datenschutz" class="hover:text-[var(--foreground)] transition">Datenschutz</a>
       </div>
 
       <!-- Bottom Controls Row: Palette, Gateway, Settings, Hermes [H], Theme -->
@@ -466,7 +462,7 @@
           </button>
 
           <!-- 4. Hermes Dashboard [H] (Port 9119 in New Tab) - positioned between Settings and Theme switch -->
-          <button onclick="window.open('http://' + (window.location.hostname || 'localhost') + ':9119', '_blank', 'noopener,noreferrer')" class="w-7 h-7 flex items-center justify-center rounded hover:bg-[var(--secondary)] font-mono font-bold text-xs text-black dark:text-white transition cursor-pointer border border-transparent hover:border-[var(--border)]" title="Hermes Dashboard (Port 9119)" data-i18n-title="nav.hermes_dashboard_title">
+          <button onclick="window.open('http://' + (window.location.hostname || 'localhost') + ':9119', '_blank', 'noopener,noreferrer')" class="p-1.5 rounded hover:bg-[var(--secondary)] font-mono font-bold text-xs text-black dark:text-white transition cursor-pointer leading-none" title="Hermes Dashboard (Port 9119)" data-i18n-title="nav.hermes_dashboard_title">
             H
           </button>
 
@@ -475,6 +471,12 @@
             <i data-lucide="sun" id="sidebar-theme-icon" class="w-3.5 h-3.5 text-black dark:text-white"></i>
           </button>
         </div>
+      </div>
+
+      <div class="px-1 pt-0.5 flex items-center justify-center gap-2 text-[9.5px] leading-none text-[var(--muted-foreground)]">
+        <a href="/api/legal/impressum" target="_blank" rel="noopener" data-i18n="ui.legal.impressum" class="hover:text-[var(--foreground)] transition">Impressum</a>
+        <span>·</span>
+        <a href="/api/legal/datenschutz" target="_blank" rel="noopener" data-i18n="ui.legal.datenschutz" class="hover:text-[var(--foreground)] transition">Datenschutz</a>
       </div>
     </div>
   </aside>
@@ -2121,12 +2123,12 @@ print('Ausführung erfolgreich!')</textarea>
       <!-- VIEW: VIEW-DESIGN-SYSTEM (Extracted) -->
     </main>
   <script src="/static/js/archon_i18n.js"></script>
-  <script src="/static/js/auth_manager.js"></script>
+  <script src="/static/js/auth_manager.js?v=20261116b"></script>
   <script src="/static/js/auth_gate.js"></script>
   <script src="/static/js/chat_engine.js?v=2026111113"></script>
   <script src="/static/js/system_settings.js?v=2026111113"></script>
   <script src="/static/js/settings_search.js?v=2026111113"></script>
-  <script src="/static/js/system_update_badge.js?v=2026111113"></script>
+  <script src="/static/js/system_update_badge.js?v=20261117"></script>
   <script src="/static/js/agent_profiles.js?v=2026111113"></script>
   <script src="/static/js/customizer.js?v=2026111113"></script>
   <script src="/static/js/component_design_studio.js?v=2026111113"></script>
@@ -8167,7 +8169,7 @@ ${logExcerpt}
         setVal("hermes_dashboard", s.hermes_dashboard);
         setVal("docker_proxy", s.docker_proxy);
         // Overall status color logic
-        let colorClass = "bg-zinc-900 dark:bg-zinc-100";
+        let colorClass = "bg-emerald-500";
         let textColor = "text-[var(--foreground)]";
         let statusLabel = "Healthy";
         if (data.status === "degraded") {
@@ -8179,7 +8181,7 @@ ${logExcerpt}
           textColor = "text-rose-400";
           statusLabel = "System Down";
         }
-        if (dot) dot.className = `inline-block w-2 h-2 rounded-full ${colorClass}`;
+        if (dot) dot.className = `w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${colorClass}`;
         if (popoverOverallDot) popoverOverallDot.className = `w-2 h-2 rounded-full ${data.status === 'unhealthy' ? 'bg-rose-500' : (data.status === 'degraded' ? 'bg-amber-400' : 'bg-zinc-900 dark:bg-zinc-100')}`;
         if (overallText) {
           overallText.innerText = statusLabel;
@@ -12914,20 +12916,20 @@ ${logExcerpt}
         const localInfo = data.local_llm || {};
         const dsgvoInfo = data.dsgvo || {};
 
+        const baseFlatCls = "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5";
+
         // 1. Update Lokal-LLM Indicator
         const dotLocal = document.getElementById("dot-local-llm");
         const btnLocal = document.getElementById("status-badge-local-llm");
         if (dotLocal && btnLocal) {
           btnLocal.title = localInfo.tooltip || "Lokal-LLM";
+          btnLocal.className = baseFlatCls;
           if (localInfo.indicator === "green") {
-            dotLocal.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-xs shadow-emerald-500/50";
-            btnLocal.className = "flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 transition cursor-pointer select-none shadow-2xs font-bold";
+            dotLocal.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors";
           } else if (localInfo.indicator === "amber") {
-            dotLocal.className = "w-1.5 h-1.5 rounded-full bg-amber-500";
-            btnLocal.className = "flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 transition cursor-pointer select-none shadow-2xs font-bold";
+            dotLocal.className = "w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 transition-colors";
           } else {
-            dotLocal.className = "w-1.5 h-1.5 rounded-full bg-zinc-400";
-            btnLocal.className = "flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--secondary)] text-[var(--muted-foreground)] hover:border-zinc-400 transition cursor-pointer select-none shadow-2xs";
+            dotLocal.className = "w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors";
           }
         }
 
@@ -12936,15 +12938,13 @@ ${logExcerpt}
         const btnDsgvo = document.getElementById("status-badge-dsgvo");
         if (dotDsgvo && btnDsgvo) {
           btnDsgvo.title = dsgvoInfo.tooltip || "DSGVO";
+          btnDsgvo.className = baseFlatCls;
           if (dsgvoInfo.indicator === "green") {
-            dotDsgvo.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-xs shadow-emerald-500/50";
-            btnDsgvo.className = "flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 transition cursor-pointer select-none shadow-2xs font-bold";
+            dotDsgvo.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors";
           } else if (dsgvoInfo.indicator === "yellow") {
-            dotDsgvo.className = "w-1.5 h-1.5 rounded-full bg-amber-500";
-            btnDsgvo.className = "flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 transition cursor-pointer select-none shadow-2xs font-bold";
+            dotDsgvo.className = "w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 transition-colors";
           } else {
-            dotDsgvo.className = "w-1.5 h-1.5 rounded-full bg-zinc-400";
-            btnDsgvo.className = "flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--secondary)] text-[var(--muted-foreground)] hover:border-zinc-400 transition cursor-pointer select-none shadow-2xs";
+            dotDsgvo.className = "w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors";
           }
         }
       } catch (err) {
@@ -13548,11 +13548,11 @@ ${logExcerpt}
   <script src="/static/js/crm_studio.js?v=2026111113"></script>
   <script src="/static/js/demo_banner.js" defer></script>
   <script src="/static/js/onboarding_wizard.js" defer></script>
-  <script src="/static/js/tenant_switcher.js" defer></script>
+  <script src="/static/js/tenant_switcher.js?v=20261116b" defer></script>
   <script src="/static/js/playbooks_studio.js" defer></script>
   <script src="/static/js/operations_calendar.js" defer></script>
   <script src="/static/js/eu_ai_act_studio.js" defer></script>
-  <script src="/static/js/archon_version_badge.js" defer></script>
+  <script src="/static/js/archon_version_badge.js?v=20261117" defer></script>
   <!-- MODAL: MIXTURE OF AGENTS (MoA) KONFIGURATION -->
   <div id="boardroom-moa-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
     <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-5 w-[92vw] max-w-lg shadow-2xl overflow-hidden flex flex-col space-y-4 font-sans">

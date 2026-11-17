@@ -45,10 +45,10 @@
       row.type = "button";
       row.id = ROW_ID;
       row.className =
-        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5";
+        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5 min-w-0";
       row.title = "Archon OS Update-Status wird geprüft...";
       row.innerHTML =
-        '<span id="dot-archon-update" class="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors"></span><span>Archon</span>';
+        '<span id="dot-archon-update" class="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors"></span><span>Archon</span><span id="sidebar-archon-version-text" class="truncate"></span>';
       parent.insertBefore(row, hermesUpdateBtn || parent.firstChild);
     }
 
@@ -68,20 +68,24 @@
     if (!row || !data) return;
 
     const dotEl = document.getElementById("dot-archon-update");
+    const verEl = document.getElementById("sidebar-archon-version-text");
     if (!dotEl) return;
 
     const curVer = data.version || "v0.5.2.1";
+    if (verEl) verEl.textContent = curVer;
 
     if (isLocalOnly) {
       dotEl.className = "w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse shrink-0 transition-colors";
+      if (verEl) verEl.className = "truncate text-sky-600 dark:text-sky-400";
       row.title = `Archon OS ${curVer} — prüfe GitHub-Status...`;
       return;
     }
 
     if (data.status === "offline_or_error" || data.status === "error") {
       dotEl.className = "w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 transition-colors";
+      if (verEl) verEl.className = "truncate text-[var(--muted-foreground)]";
       row.className =
-        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5";
+        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5 min-w-0";
       row.title = `Archon OS ${curVer} (${data.message || "GitHub offline"}) — Klick öffnet System-Update`;
       return;
     }
@@ -90,13 +94,18 @@
       const remoteVer = data.remote_version && data.remote_version !== curVer ? data.remote_version : null;
       const behind = Number(data.commits_behind || 0);
       dotEl.className = "w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0 transition-colors";
+      if (verEl) {
+        verEl.textContent = remoteVer || curVer;
+        verEl.className = "truncate text-rose-600 dark:text-rose-400 font-semibold";
+      }
       row.className =
-        "flex items-center gap-1 text-rose-600 dark:text-rose-400 font-semibold transition cursor-pointer select-none py-0.5";
+        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5 min-w-0";
       row.title = `Archon OS Update verfügbar (${remoteVer || "+" + (behind || 1) + " Commits"}, aktuell ${curVer}) — Klick öffnet Settings -> System-Update`;
     } else {
       dotEl.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors";
+      if (verEl) verEl.className = "truncate text-emerald-600 dark:text-emerald-400";
       row.className =
-        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5";
+        "flex items-center gap-1 hover:text-[var(--foreground)] transition cursor-pointer select-none py-0.5 min-w-0";
       row.title = `Archon OS ${curVer} ist aktuell — Klick öffnet Settings -> System-Update`;
     }
   }

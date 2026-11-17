@@ -49,23 +49,30 @@
 
       if (dot) {
         const label = document.getElementById('label-update-text');
+        const verEl = document.getElementById('label-update-version');
+        if (label) {
+          label.innerText = 'Core';
+          label.className = '';
+        }
         if (data.update_available) {
           dot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0 transition-colors';
+          const verStr = data.latest_release_tag || data.installed_version || '';
           if (badgeBtn) {
             badgeBtn.title = updT('ui.system_update_badge.badge_title_available', 'Hermes Core Update verfügbar: {tag} ({count} neue Commits)', { tag: data.latest_release_tag || updT('ui.system_update_badge.release_new_fallback', 'Neues Release'), count: data.incoming_commits?.length || 0 });
           }
-          if (label) {
-            label.innerText = 'Core';
-            label.className = 'text-rose-600 dark:text-rose-400 font-semibold';
+          if (verEl) {
+            verEl.innerText = verStr;
+            verEl.className = 'truncate text-rose-600 dark:text-rose-400 font-semibold';
           }
         } else {
           dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-colors';
+          const verStr = data.installed_version || '';
           if (badgeBtn) {
-            badgeBtn.title = updT('ui.system_update_badge.badge_title_current', 'Hermes Agent Core ist auf dem neuesten Stand ({version})', { version: data.installed_version || '' });
+            badgeBtn.title = updT('ui.system_update_badge.badge_title_current', 'Hermes Agent Core ist auf dem neuesten Stand ({version})', { version: verStr });
           }
-          if (label) {
-            label.innerText = 'Core';
-            label.className = '';
+          if (verEl) {
+            verEl.innerText = verStr;
+            verEl.className = 'truncate text-emerald-600 dark:text-emerald-400';
           }
         }
       }

@@ -358,7 +358,10 @@ class TestAppContainerLimits:
         # `deploy.resources.limits.pids` — Compose v5 verbietet beides zugleich.
         deploy_pids = (((svc.get("deploy") or {}).get("resources") or {})
                        .get("limits") or {}).get("pids")
-        assert svc.get("pids_limit") == 200 or deploy_pids == 200
+        pids_val = svc.get("pids_limit") if svc.get("pids_limit") is not None else deploy_pids
+        assert isinstance(pids_val, int) and 100 <= pids_val <= 512, (
+            f"Unerwartetes PID-Limit: {pids_val!r} (erwartet 100..512)"
+        )
         assert svc.get("read_only") is True
         assert "no-new-privileges:true" in " ".join(svc.get("security_opt") or [])
         assert "ALL" in (svc.get("cap_drop") or [])

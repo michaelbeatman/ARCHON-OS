@@ -240,8 +240,10 @@ class OpenTelemetryTracer:
             except Exception:
                 pass  # Nie den laufenden Betrieb stören
 
-        t = threading.Thread(target=_do_export, daemon=True)
-        t.start()
+        if not hasattr(self, "_export_pool"):
+            from concurrent.futures import ThreadPoolExecutor
+            self._export_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="otel_export")
+        self._export_pool.submit(_do_export)
 
 # Globales Singleton
 tracer = OpenTelemetryTracer()

@@ -7,7 +7,7 @@
 **Autonomes, lokal betreibbares Multi-Agenten-Betriebssystem für Gründer, Teams & Fachdomänen**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release: v0.5.2.1](https://img.shields.io/badge/Release-v0.5.2.1%20Global%20Edition-6366f1.svg)](CHANGELOG.md)
+[![Release: v0.5.4.2](https://img.shields.io/badge/Release-v0.5.4.2-6366f1.svg)](CHANGELOG.md)
 [![Agenten: 70 Spezialisten](https://img.shields.io/badge/Spezialisten-70%20in%208%20Dom%C3%A4nen%20(DE%2FEN)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
@@ -15,7 +15,7 @@
 
 [🇬🇧 English](README.md) · **🇩🇪 Deutsch** · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 Agenten-Installationsprotokoll](INSTALL_AGENT.md) | [⚡ Zero-Key Live-Demo](#weg-c-sofortige-read-only-live-demo-archon_demo_modetrue) | [📘 Handbücher & PDFs](#dokumentation--handbücher-pdf) | [🗺️ Roadmap (M0–M56)](docs/system/ROADMAP_2026.md)
+[🤖 Agenten-Installationsprotokoll](INSTALL_AGENT.md) | [⚡ Zero-Key Live-Demo](#weg-c-sofortige-read-only-live-demo-archon_demo_modetrue) | [📘 Handbücher & PDFs](#dokumentation--handbücher-pdf) | [🗺️ Roadmap (M0–M74)](docs/system/ROADMAP_2026.md)
 
 </div>
 
@@ -54,11 +54,23 @@ Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehos
 
 ## Einblicke ins System
 
+### Animierte Produkt-Tour
+
+| Prompt Studio (direkt im Chat) | 70-Spezialisten-Flotte (3-Stufen-SOUL) |
+|---|---|
+| ![Prompt Studio](docs/system/screenshots/demo_1_prompt_studio.gif) | ![Agent Fleet](docs/system/screenshots/demo_2_agent_fleet.gif) |
+| **Organisations-Hierarchie & Teams** | **AI-Boardroom-Debatte (55 Frameworks)** |
+| ![Org Hierarchy](docs/system/screenshots/demo_3_org_hierarchy.gif) | ![AI Boardroom](docs/system/screenshots/demo_4_boardroom.gif) |
+
+### System-Ansichten
+
 | Mission Control & Operations | 70-Spezialisten-Kader & 3-Stufen-SOUL |
 |---|---|
 | ![Mission Control](docs/system/screenshots/mission_control.png) | ![Agenten-Kader](docs/system/screenshots/kader.png) |
 | **AI-Boardroom (Multi-Agenten-Debatte)** | **Org-Chart & Teams** |
 | ![AI Boardroom Debate](docs/system/screenshots/boardroom_debate.png) | ![Org-Chart](docs/system/screenshots/org.png) |
+
+[![Star History](https://api.star-history.com/svg?repos=michaelbeatman/ARCHON-OS&type=Date)](https://star-history.com/#michaelbeatman/ARCHON-OS&Date)
 
 ---
 

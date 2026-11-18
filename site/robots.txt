@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://michaelbeatman.github.io/ARCHON-OS/sitemap.xml

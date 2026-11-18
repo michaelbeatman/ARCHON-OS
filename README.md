@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/system/screenshots/archon_header.jpg" alt="Archon OS — Agentic Operating System" width="1024" />
+<img src="docs/system/screenshots/archon_header.png" alt="Archon OS — Agentic Operating System" width="1024" />
 
 # ARCHON OS - AGENTIC OPERATING SYSTEM
 

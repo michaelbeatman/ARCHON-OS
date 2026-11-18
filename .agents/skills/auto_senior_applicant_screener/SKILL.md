@@ -23,5 +23,5 @@ Dieser Skill wurde durch menschliches Vormachen im Bot-Screen (Programming by De
 ## Ausführung
 Führe das generierte Automations-Skript aus:
 ```bash
-python scripts\dynamic_tools\auto_senior_applicant_screener.py
+python scripts/dynamic_tools/auto_senior_applicant_screener.py
 ```

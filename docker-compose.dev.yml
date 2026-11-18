@@ -41,7 +41,7 @@ services:
     # sind; /tmp braucht ein tmpfs (HOME=/tmp steht oben bereits).
     mem_limit: 2g
     memswap_limit: 2g
-    pids_limit: 200
+    pids_limit: 512
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m

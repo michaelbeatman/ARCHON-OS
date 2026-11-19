@@ -16,6 +16,7 @@ import datetime
 import subprocess
 import time
 import secrets
+import threading
 from typing import List, Dict, Optional, Any
 from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, File, Depends
 
@@ -1809,14 +1810,115 @@ def get_projects_overview():
                 "files_summary": {"zwischenberichte": 0, "medien": 0, "endprodukte": 0}
             })
 
+    # Sidecar config/projects_meta.json mergen (User-Entscheidung 19.11.2026):
+    # manuelle Felder (Beschreibung/Ziel/Status/Lead-Agent) uebersteuern die generierten Werte.
+    _projects_meta = _load_projects_meta()
+    for p in projects:
+        m = _projects_meta.get(p["id"])
+        if not m:
+            continue
+        if m.get("description") is not None:
+            p["description"] = m["description"]
+        if m.get("goal") is not None:
+            p["goal"] = m["goal"]
+        if m.get("status") in ("in_progress", "completed", "planned"):
+            p["status"] = m["status"]
+        if m.get("lead_agent"):
+            p["lead_agent"] = m["lead_agent"]
+            p["lead_agent_display"] = cadre_map.get(m["lead_agent"], {}).get("display", m["lead_agent"])
+
     return {
         "status": "success",
         "total": len(projects),
         "in_progress": [p for p in projects if p["status"] == "in_progress"],
         "completed": [p for p in projects if p["status"] == "completed"],
         "planned": [p for p in projects if p["status"] == "planned"],
-        "all": projects
+        "all": projects,
+        "cadre_options": [
+            {"id": aid, "display": info.get("display", aid), "person_name": info.get("person_name", aid)}
+            for aid, info in sorted(cadre_map.items())
+        ]
     }
+
+
+# --- Projekt-Meta-Sidecar (19.11.2026, User-Entscheidung: Editierfelder im Detail-Dialog) ---
+# config/projects_meta.json: { "<projekt-id>": {"description":..., "goal":..., "status":..., "lead_agent":...} }
+# PROJEKT.md und Engine-DB bleiben unangetastet (gleiche Bauart wie kanban_meta.json).
+_PROJECTS_META_FILE = os.path.join(WORKSPACE_DIR, "config", "projects_meta.json")
+_PROJECTS_META_LOCK = threading.Lock()
+_PROJECTS_META_ALLOWED = ("description", "goal", "status", "lead_agent")
+
+
+def _load_projects_meta() -> Dict:
+    try:
+        with open(_PROJECTS_META_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+
+def _save_projects_meta(data: Dict) -> None:
+    os.makedirs(os.path.dirname(_PROJECTS_META_FILE), exist_ok=True)
+    tmp = _PROJECTS_META_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, _PROJECTS_META_FILE)
+
+
+class ProjectMetaUpdate(BaseModel):
+    description: Optional[str] = None
+    goal: Optional[str] = None
+    status: Optional[str] = None
+    lead_agent: Optional[str] = None
+
+
+@router.get("/projects/{project_id}/meta")
+def get_project_meta(project_id: str):
+    meta = _load_projects_meta().get(project_id) or {}
+    return {"status": "success", "project_id": project_id, "meta": meta}
+
+
+@router.put("/projects/{project_id}/meta")
+def put_project_meta(project_id: str, upd: ProjectMetaUpdate):
+    patch = {k: v for k, v in upd.model_dump().items() if v is not None and k in _PROJECTS_META_ALLOWED}
+    if "status" in patch and patch["status"] not in ("in_progress", "completed", "planned"):
+        raise HTTPException(status_code=422, detail="status muss in_progress|completed|planned sein.")
+    with _PROJECTS_META_LOCK:
+        data = _load_projects_meta()
+        entry = data.get(project_id) or {}
+        entry.update(patch)
+        data[project_id] = entry
+        _save_projects_meta(data)
+    return {"status": "success", "project_id": project_id, "meta": entry}
+
+
+@router.get("/projects/{project_id}/files")
+def get_project_folder_files(project_id: str):
+    """Listet alle Dateien des Projektordners 01_PROJEKTE/<id> im Obsidian-Vault (traversal-geschuetzt)."""
+    from pathlib import Path as _P
+    from backend.post_task_pipeline import get_vault_dir
+    vault = _P(get_vault_dir()).resolve()
+    proj = (vault / "01_PROJEKTE" / project_id).resolve()
+    # Traversal-Schutz: muss innerhalb von 01_PROJEKTE liegen
+    if not str(proj).startswith(str((vault / "01_PROJEKTE").resolve())):
+        raise HTTPException(status_code=400, detail="Ungueltiger Projekt-Pfad.")
+    if not proj.is_dir():
+        raise HTTPException(status_code=404, detail="Projektordner nicht gefunden.")
+    files = []
+    for f in sorted(proj.rglob("*")):
+        if f.is_file() and not f.name.startswith("."):
+            files.append({
+                "name": f.name,
+                "path": str(f.relative_to(vault)).replace("\\\\", "/"),
+                "dir": str(f.parent.relative_to(proj)).replace("\\\\", "/") or "Root",
+                "size": f.stat().st_size
+            })
+    return {"status": "success", "project_id": project_id, "folder": f"01_PROJEKTE/{project_id}", "files": files}
 
 
 @router.get("/kanban/projects/{task_id}")

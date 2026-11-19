@@ -44,6 +44,7 @@ Technische Referenz der zehn neu umgesetzten Architektur-Meilensteine in Archon 
 - **Hybrid-Gantt:** Nutzt explizite `started_at`/`completed_at`/`due_date`-Felder und füllt fehlende Endzeiten automatisch aus `created_at` + Default-Dauer bzw. Live-Laufzeit.
 - **Dependency-Graph:** Berechnet aus `tasks` + `task_links` Longest-Path-Layer (`layer`) und Abhängigkeitskanten.
 - **API:** `GET /api/operations/kanban/gantt`, `GET /api/operations/kanban/graph`.
+- **UI-Integration (19.11.2026):** Die drei Sichten (Board/Gantt/Graph) sind über Umschalt-Buttons direkt im Operations-Kanban vereint (`setOpsKanbanViewMode` in `kanban_gantt_graph.js`) statt als separate Views.
 
 ---
 

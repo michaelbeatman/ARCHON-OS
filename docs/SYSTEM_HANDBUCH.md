@@ -13,10 +13,11 @@
 - **Vorwort: Was ist Archon OS und wie arbeitet man damit?**
 - **1. Operations – Operative Projektsteuerung & Funk**
   - 1.1 Mission Control
-  - 1.2 Kanban
-  - 1.3 Organisation
-  - 1.4 n8n Automatisierung
-  - 1.5 Kommunikation
+  - 1.2 Projekte
+  - 1.3 Kanban
+  - 1.4 Organisation
+  - 1.5 n8n Automatisierung
+  - 1.6 Kommunikation
 - **2. Posteingang & Ereignis-Stream**
   - 2.1 Übersicht
   - 2.2 Webhooks
@@ -142,27 +143,39 @@
 Mission Control ist das zentrale Cockpit und der operative Leitstand von Archon OS. Es bietet die aggregierte Übersicht über Systemlast, Flottenaktivität und offene Prioritäten.
 
 
-### 1.2 Kanban
+### 1.2 Projekte (Operations → Sub-Tab „Projects“)
+Die Projekt-Zentrale listet alle Projekte aus dem Obsidian-Vault (`01_PROJEKTE/`) mit Status, Fortschritt und Team-Chips als Karten-Ansicht.
+
+**Projekt-Detail-Dialog (Klick auf eine Card):** Jede Card öffnet einen CRM-artigen Detail-Dialog mit drei Reitern:
+- **Übersicht:** Beschreibung/Mission, Ziel, Status (Geplant / In Bearbeitung / Abgeschlossen) und Lead-Agent sind **editierbar**; Fortschritt und zugewiesene Agenten (mit Direktchat-Chips) sind Anzeige.
+- **Aufgaben:** Alle verknüpften Kanban-Subtasks; ein Klick öffnet den jeweiligen Task im Kanban-Detail-Dialog. Auf der Card selbst stehen Aufgaben nur als Zähler („5/8“).
+- **Dateien:** Sämtliche Dateien des Projektordners (`01_Zwischenberichte`, `02_Medien`, `03_Endprodukte`) mit Klick-Vorschau.
+
+**Speichermodell:** Manuelle Felder (Beschreibung, Ziel, Status, Lead-Agent) liegen im Sidecar `config/projects_meta.json` und übersteuern die generierten Werte — `PROJEKT.md` und die Engine-Datenbank bleiben unangetastet. Endpunkte: `GET/PUT /api/operations/projects/{id}/meta`, `GET /api/operations/projects/{id}/files`. Ein leerer PUT kann Sidecar-Einträge nicht löschen (Felder mit `null` werden gefiltert) — Bereinigung direkt in der JSON-Datei.
+
+### 1.3 Kanban
 Das Kanban-Board bildet die Steuerzentrale für alle laufenden, geplanten und abgeschlossenen Aufgaben.
+
+- **Drei Sichten mit Umschalter:** Über die Buttons oben im Board wechselt die Ansicht zwischen **Board** (Kanban-Spalten), **Gantt** (Zeitachse mit Start/Laufzeit/Deadline) und **Graph** (Dependency-Graph mit Longest-Path-Layout) — alle drei lesen dieselbe `tasks`-SQLite-DB (`backend/kanban_views.py`, Endpunkte `/api/operations/kanban/gantt|graph`).
 
 
 > 📖 **Vertiefender Leitfaden:** Siehe die vollständige Spezifikation zu Massenoperationen im Board in [Anhang V.7: Kanban Bulk Actions](#v7-kanban-bulk-actions--massenoperationen).
 
 - **Deal-Pipeline & Vertriebs-Integration (`t-5b159d`):** Phasensteuerung für Leads, Proposals, Verhandlungen und Abschlüsse mit automatischer Win-Rate- und Forecast-Berechnung.
 
-### 1.3 Organisation
+### 1.4 Organisation
 Visualisiert die Aufbau- und Ablaufstruktur der Organisation als interaktiven Graphen:
 - **Apex & Führungs-Ebene:** Michael Keller und das Telegram Gateway an der Spitze; Robert (Executive Decision Architect) als zentraler Koordinator.
 - **C-Suite & Lead-Agenten:** Fachbereichsleiter für Recht, Finanzen, Technologie, Marketing und HR.
 - **Fachspezialisten:** Operative Ausführer, die über klare Eskalations- und Übergabepfade miteinander vernetzt sind.
 
-### 1.4 n8n Automatisierung
+### 1.5 n8n Automatisierung
 Die integrierte n8n Workflow-Engine (Port 5678) verbindet deterministische Cron-Trigger mit kognitiven Agenten-Workflows:
 - Zeitgesteuerte Datenabgleiche (z. B. morgendlicher Pressespiegel um 06:30 Uhr).
 - Automatische Task-Erstellung im Kanban-Board bei externen Webhook-Events.
 - Ausfallsichere Warteschlangen bei temporärer Unerreichbarkeit externer APIs.
 
-### 1.5 Kommunikation
+### 1.6 Kommunikation
 Der Funkverkehr-Monitor erlaubt die Echtzeit-Einsicht in die interne Agenten-zu-Agenten-Kommunikation:
 - Transparente Verfolgung von Kontextübergaben zwischen Spezialisten.
 - Frühzeitiges Erkennen von Klärungsbedarf oder Widersprüchen ohne manuelles Nachfragen.
@@ -601,9 +614,12 @@ Das System Control Center (Settings) ist die zentrale Schaltstelle zur Konfigura
 - Steuerung von Task-Queues, Watchdog-Intervallen (30s) und Event-Loops.
 - Zum Notfallbetrieb siehe [Anhang IV.8: Break-Glass Recovery](#iv8-break-glass-recovery--notfallzugriff) und [Anhang V.17: Chaos Resilience](#v17-chaos-resilience--störungs-simulation).
 
-### 14.2 Autonomie & Module
-- Aktivierung und Deaktivierung autonomer Hintergrund-Daemons (z. B. nächtliche Speicherkonsolidierung, Standup-Reports).
+### 14.2 Autonomie & Module (Erweiterungen & Modul-Zentrale)
+Die 36 Autonomie-, Resilienz- und Enterprise-Module sind in der **Erweiterungen & Modul-Zentrale** gebündelt (Sidebar → „Erweiterungen & Modul-Zentrale"), mit zwei Ansichten:
+- **Plugin-Katalog:** Alle Hermes-Spezial-Plugins nach Fachbereichen, mit Volltextsuche (Plugins, Tools, Beschreibungen) und Kategorie-Pills zum Filtern.
+- **Autonomie-Module (36):** Die Subsysteme 1–36 (u. a. Modul 32 „Zero-Egress & Privacy-Router", Modul 5 „Ephemeral Docker Sandbox", nächtliche Speicherkonsolidierung) mit Deduplizierungs-Filter; jede Card aktivier-/konfigurierbar.
 - Steuerung flüchtiger Sandbox-Container für Code-Ausführungen (`t-a42e5d`).
+- Die Guardrail-Seite (PreDecision, Memory, Injection Guard, Quality Gate, Token-Budgets, Zero-Egress, Worker-Netz) liegt im System Control Center unter dem Reiter **ROUTER & GUARDRAILS**; die klassischen Sub-Reiter (JEV, Memory, E-Mail-Guard, Validate, Cost) bleiben im Einstellungs-Modal erreichbar.
 
 ### 14.3 Container & Dienste
 - Live-Statusmatrix aller 13 Docker-Container inklusive Neustart-Schaltflächen.
@@ -653,7 +669,7 @@ Das System Control Center (Settings) ist die zentrale Schaltstelle zur Konfigura
 
 ## 16. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector
 
-
+Das Visual CSS Live Studio ist in das System Control Center integriert: **Einstellungen (Topbar-Zahnrad) → Reiter DESIGN** öffnet die **15-Bausteine Design-Engine** (`component_design_studio.js`) — links die Baustein-Liste, rechts Live-Preview mit State-Switcher, Component-Inspector und CSS-Studio-Akkordeons. Über den In-Place-Inspector (`cdsToggleInspectorMode`, Button im Design-Reiter) klickst du ein beliebiges Element im Workspace an und bearbeitet seinen Baustein direkt. Der alte Standalone-Panel-View (`view_app_frame_studio.html`) wurde in der Neuordnung 19.11.2026 entfernt. Globale Studio-Regeln liegen weiterhin in `static/custom_studio.css` (localStorage + Server-Store).
 
 ---
 
@@ -874,7 +890,7 @@ $$\text{current\_hash} = \text{SHA-256}(\text{prev\_hash} \parallel \text{"|"} \
 1. **Forensische Ansicht:** Seitenleiste **Telemetrie & Logs** → Reiter **GoBD / Revisions-Log** → Kategorie-Pill **`LLM-Dispatches`** wählen. Jede Zeile zeigt unmittelbar `Provider / Modell → Ziel-Host (Ziel-Endpunkt)` sowie den verketteten SHA-256-Block-Hash.
 2. **System Control Center (Einstellungen):**
    - Reiter **PROVIDER & GATEWAY** → Karte *„Zero-Egress, Privacy-Router Hard-Block & SHA-256 Dispatch-Audit"* → Button **„Posture prüfen"**.
-   - Reiter **AUTONOMIE & MODULE** → **Bereich 7 / Modul 32** (Suche über `/` nach `SHA-256`, `LLM-Dispatch` oder `Zero-Egress`).
+   - Reiter **ROUTER & GUARDRAILS** → Bereich *Zero-Egress, Privacy-Router & Worker-Netz*; die vollständigen 36 Autonomie-Module (inkl. **Bereich 7 / Modul 32**) liegen seit der Neuordnung in der **Erweiterungen & Modul-Zentrale** (Sidebar → „Erweiterungen & Modul-Zentrale" → Modus **Autonomie-Module (36)**).
 3. **1-Klick GoBD- & EU-AI-Act-Verfahrensdokumentation als PDF (M49):**
    - In **Operations** → Kachel **`AI Act / GoBD`** → **„GoBD + EU AI Act PDF herunterladen"** (`GET /api/v1/governance/compliance/verfahrensdokumentation.pdf`). Kapitel 3 dokumentiert live die Anzahl verifizierter Blöcke, die Zahl signierter LLM-Dispatches, den aktiven Hard-Block-Status sowie die Docker-Worker-Netzwerk-Isolation (`Internal=true`).
 
@@ -1119,7 +1135,7 @@ Zusätzlich schreibt jeder erlaubte und jeder geblockte LLM-Aufruf einen signier
 
 Alle steuerbaren Parameter sind an drei synchronisierten Stellen im Web-UI verfügbar (Single Source of Truth):
 
-1. **System Control Center → Reiter `AUTONOMIE & MODULE` → Bereich 7 / Modul 32** *(Schnellsuche mit Taste `/` nach `Zero-Egress` oder `Hard-Block`)*:
+1. **System Control Center → Reiter `ROUTER & GUARDRAILS`** *(Schnellsuche mit Taste `/` nach `Zero-Egress` oder `Hard-Block`)* sowie die vollständigen 36 Module in der **Erweiterungen & Modul-Zentrale** (Sidebar → Modus „Autonomie-Module (36)") → **Bereich 7 / Modul 32**:
    - `Sensibles Lokal-Routing` (`sensitive_local_routing`)
    - `Hard-Block (Lokal offline)` (`hard_block_on_local_offline`)
    - `Strict Zero-Egress (Alle)` (`zero_egress_strict`)

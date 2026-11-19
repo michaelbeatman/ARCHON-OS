@@ -114,8 +114,9 @@ def api_get_agent_projects(agent_id: str):
         pass
 
     agent_id_clean = agent_id.strip().lower()
-    person_name = (prof.get("person_name") if prof else "").strip().lower()
-    role_name = (prof.get("name") if prof else "").strip().lower()
+    # 19.11.2026: person_name kann im Profil None sein -> AttributeError beim .strip() (Live-Log)
+    person_name = ((prof.get("person_name") if prof else "") or "").strip().lower()
+    role_name = ((prof.get("name") if prof else "") or "").strip().lower()
 
     match_terms = {agent_id_clean, agent_id_clean.replace("_", " ")}
     if person_name:

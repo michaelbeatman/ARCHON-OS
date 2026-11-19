@@ -599,6 +599,10 @@
 - **Ausgangslage:** Einzelne Dialoge und Modals weichen in Breite, Höhe, Z-Index und Backdrop-Blur leicht voneinander ab.
 - **Zielzustand:** Systemweite Vereinheitlichung aller Detail-Modals und Overlay-Dialoge nach dem Maßstab des **System Control Center** (einheitliche feste Größe, konsistente `backdrop-blur`-Abdeckung inklusive Header-Bereich, einheitliche Abstände und Typografie).
 
+### Meilenstein 98: Vereinheitlichte API-Key- & OmniRoute-Scope-Verwaltung (Geplant – Hoch)
+- **Ausgangslage:** Eingehende Archon-API-Tokens (`API-Keys & Zugriffs-Governance` mit `read_only` / `kanban_rw` / `agent_execute` / `admin_full` Scopes) und ausgehende LLM-Provider-Keys (OpenRouter, Google/Gemini, OmniRoute, Groq, OpenAI) liegen aktuell in getrennten Bereichen.
+- **Zielzustand:** Konsolidierte API-Key-Verwaltung inklusive direkter Sichtbarkeit der konfigurierten Provider-Keys sowie Verknüpfung bzw. Vereinheitlichung der Scope-Steuerung mit OmniRoute.
+
 ## Ideen-Pool (beobachten, nicht geplant)
 
 Themen, die im Blick bleiben, aber keinen Meilenstein und keinen Zeitslot haben. Sie werden erst dann zu Meilensteinen, wenn ein klarer Nutzen oder ein Community-Signal vorliegt.

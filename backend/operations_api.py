@@ -1979,6 +1979,7 @@ def get_projects_overview():
     # manuelle Felder (Beschreibung/Ziel/Status/Lead-Agent) uebersteuern die generierten Werte.
     _projects_meta = _load_projects_meta()
     for p in projects:
+        p["archived"] = False
         m = _projects_meta.get(p["id"])
         if not m:
             continue
@@ -1991,6 +1992,8 @@ def get_projects_overview():
         if m.get("lead_agent"):
             p["lead_agent"] = m["lead_agent"]
             p["lead_agent_display"] = cadre_map.get(m["lead_agent"], {}).get("display", m["lead_agent"])
+        if m.get("archived") is not None:
+            p["archived"] = bool(m["archived"])
 
     # Neueste Projekte/Tasks zuerst (absteigend nach created_ts)
     projects.sort(key=lambda x: float(x.get("created_ts") or 0.0), reverse=True)
@@ -1999,12 +2002,16 @@ def get_projects_overview():
     for idx, proj_item in enumerate(projects, start=1):
         proj_item["seq_number"] = idx
 
+    active_projects = [p for p in projects if not p.get("archived")]
+    archived_projects = [p for p in projects if p.get("archived")]
+
     return {
         "status": "success",
-        "total": len(projects),
-        "in_progress": [p for p in projects if p["status"] == "in_progress"],
-        "completed": [p for p in projects if p["status"] == "completed"],
-        "planned": [p for p in projects if p["status"] == "planned"],
+        "total": len(active_projects),
+        "in_progress": [p for p in active_projects if p["status"] == "in_progress"],
+        "completed": [p for p in active_projects if p["status"] == "completed"],
+        "planned": [p for p in active_projects if p["status"] == "planned"],
+        "archived": archived_projects,
         "all": projects,
         "cadre_options": [
             {"id": aid, "display": info.get("display", aid), "person_name": info.get("person_name", aid)}
@@ -2018,7 +2025,7 @@ def get_projects_overview():
 # PROJEKT.md und Engine-DB bleiben unangetastet (gleiche Bauart wie kanban_meta.json).
 _PROJECTS_META_FILE = os.path.join(WORKSPACE_DIR, "config", "projects_meta.json")
 _PROJECTS_META_LOCK = threading.Lock()
-_PROJECTS_META_ALLOWED = ("description", "goal", "status", "lead_agent")
+_PROJECTS_META_ALLOWED = ("description", "goal", "status", "lead_agent", "archived")
 
 
 def _load_projects_meta() -> Dict:
@@ -2047,6 +2054,7 @@ class ProjectMetaUpdate(BaseModel):
     goal: Optional[str] = None
     status: Optional[str] = None
     lead_agent: Optional[str] = None
+    archived: Optional[bool] = None
 
 
 @router.get("/projects/{project_id}/meta")

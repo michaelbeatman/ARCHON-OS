@@ -97,7 +97,10 @@
               studioTextOverrides = data.textOverrides || {};
               studioHtmlOverrides = data.htmlOverrides || {};
               localStorage.setItem("archon_theme_migration_version", data.migration_version);
-              if (data.reset_all || Object.keys(studioRules).length === 0) {
+              const hasServerContent = Object.keys(data.rules || {}).length > 0
+                || Object.keys(data.textOverrides || {}).length > 0
+                || Object.keys(data.htmlOverrides || {}).length > 0;
+              if (data.reset_all && !hasServerContent) {
                 studioRules = {};
                 studioTextOverrides = {};
                 studioHtmlOverrides = {};
@@ -140,7 +143,7 @@
                 // reset_all-Signal (der DELETE-Endpoint setzt es). Server
                 // "leer" kann auch 'nie gespeichert' bedeuten - lokale
                 // Altregeln duerfen dann NICHT zerstoert werden.
-                if (data.reset_all) {
+                if (data.reset_all && serverCount === 0) {
                   studioRules = {};
                   studioTextOverrides = {};
                   studioHtmlOverrides = {};

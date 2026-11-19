@@ -197,7 +197,18 @@
       "onboarding_btn": "Installatiewizard",
       "onboarding_title": "Installatiewizard opnieuw starten",
       "tab_guardrails_router": "ROUTER & GUARDRAILS",
-      "tab_corporate": "CORPORATE & MANDANT"
+      "tab_corporate": "CORPORATE & MANDANT",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "INJECTION GUARD",
+      "tab_validate": "QUALITY GATE",
+      "tab_cost": "BUDGET",
+      "tab_services_short": "CONTAINERS",
+      "tab_routing_short": "PROVIDERS",
+      "tab_keys_short": "API-SLEUTELS",
+      "tab_corporate_short": "CORPORATE",
+      "tab_users_short": "GEBRUIKERS",
+      "tab_update_short": "UPDATE"
     },
     "keys": {
       "close_btn": "Sluiten",
@@ -2509,7 +2520,9 @@
       "audit_modal_prev_hash": "Vorige blokhash (link):",
       "audit_modal_payload": "Transactie-payload (JSON):",
       "action_close": "Sluiten",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "Communicatie",
+      "title_tab_comm": "Agent-communicatie & livestream"
     },
     "master_chat": {
       "title_avatar": "Profiel & instellingen in agentenkader openen",
@@ -3625,7 +3638,8 @@
       "tab_title_organisation": "Organisatie",
       "title": "Operaties",
       "n8n_loading": "n8n Workflow-Engine wordt geladen...",
-      "n8n_open_external": "Openen in nieuw tabblad ↗"
+      "n8n_open_external": "Openen in nieuw tabblad ↗",
+      "filter_archived": "Archief"
     },
     "pricing": {
       "cache_note": "Prijzen worden 1 uur gecached in RAM en continu opgehaald van OpenRouter.",

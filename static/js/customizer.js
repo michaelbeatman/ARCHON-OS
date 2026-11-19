@@ -296,11 +296,34 @@
       }, 500);
     }
     window.ARCHON_COMPONENT_DESIGN_ACTIVE = true; // Ausgeklammert am 2026-10-16 zugunsten 15-Komponenten-System
+    function applyMediaThemeFields(source) {
+      if (!source || typeof source !== "object") return;
+      ["logoUrl", "bgImageUrl", "bgOpacity"].forEach(key => {
+        if (source[key] !== undefined && source[key] !== null) {
+          themeSettings[key] = source[key];
+          applyCustomizerSetting(key, source[key], false);
+        }
+      });
+    }
     async function loadThemeFromServer() {
       if (window.ARCHON_COMPONENT_DESIGN_ACTIVE) {
         if (typeof window.initArchonComponentDesign === "function") {
           await window.initArchonComponentDesign();
         }
+        try {
+          const cached = localStorage.getItem("archon_theme_custom");
+          if (cached) applyMediaThemeFields(JSON.parse(cached));
+        } catch (e) {}
+        try {
+          const res = await fetch("/api/theme");
+          if (res.ok) {
+            const serverTheme = await res.json();
+            applyMediaThemeFields(serverTheme);
+            try {
+              localStorage.setItem("archon_theme_custom", JSON.stringify(themeSettings));
+            } catch (e) {}
+          }
+        } catch (e) {}
         return;
       }
       try {

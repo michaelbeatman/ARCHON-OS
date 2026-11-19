@@ -271,6 +271,7 @@ SCANNER_PATH = REPO_ROOT / "scripts" / "i18n_scan_textnodes.py"
 SETTINGS_MODAL_DONE = frozenset({
     "general", "search", "users", "keys", "update", "routing",
     "services", "frameworks", "comm", "kernel", "autonomy", "design", "plugins", "corporate",
+    "jev", "memory", "email", "validate", "cost",
 })
 
 SETTINGS_MODAL_PENDING = frozenset()
@@ -351,6 +352,7 @@ SETTINGS_MODAL_EXCEPTIONS = {
     "DE89 1007 0000 0123 4567 89": "Beispiel-IBAN im Placeholder corp-input-iban",
     "DEUTDEDDBER": "Beispiel-BIC im Placeholder corp-input-bic",
     "/static/img/logo.png": "Pfad-Identifier im Placeholder corp-input-logo",
+    "Vollbild": "Schalter-Label btn-corp-template-fullscreen-label, wird per JS umgeschaltet",
 }
 
 ATTRIBUTE_SECTIONS = SETTINGS_MODAL_DONE
@@ -712,20 +714,6 @@ VIEW_EXCEPTIONS = {
             "Mixed-Knoten: Text und Kind-Element teilen sich den Elternknoten; archon_i18n.js:128-133 setzt el.textContent und wuerde das Kind loeschen (Farbpunkt-<span> im Bulk-Menue, operations_view.html:100)",
         "Aufgaben aktualisiert":
             "Laufzeitwert ops-kanban-undo-msg, operations_kanban.js:3266 setzt die Meldung",
-        "#all-stream":
-            "Kanal-Identifier (switchCommChannel('all'), operations_kanban.js:3492)",
-        "#boardroom":
-            "Kanal-Identifier (switchCommChannel('boardroom'), operations_kanban.js:3511)",
-        "#projekte-tasks":
-            "Kanal-Identifier (switchCommChannel('projects'), operations_kanban.js:3514)",
-        "📡 #all-stream — Gesamt-Funkverkehr aller Agenten":
-            "Laufzeitwert ops-comm-active-title, operations_kanban.js:3518/3349 ueberschreiben den Knoten",
-        "· Echtzeit-Streaming aktiv":
-            "Laufzeitwert ops-comm-active-desc, operations_kanban.js:3519 ueberschreibt den Knoten",
-        "👑 Commander":
-            "Rollen-Identifier des Absenders (option value=commander, operations_view.html:313)",
-        "🤖 Dispatcher":
-            "Rollen-Identifier des Absenders (option value=system_dispatcher, operations_view.html:314)",
         "n":
             "Ein-Zeichen-Platzhalter der Zahleneingabe ops-kanban-wip-n (Feldbreite, view:39)",
     },
@@ -846,6 +834,20 @@ VIEW_EXCEPTIONS = {
     "log_stream_view.html": {
         "Telemetrie & Logs — Container":
             "Laufzeitwert logstream-main-title: static/index.html:5961-5963 setzt Titel und Untertitel je Modus aus dem meta-Objekt",
+        "#all-stream":
+            "Kanal-Identifier (switchCommChannel('all'), aus Operations nach Telemetrie verschoben)",
+        "#boardroom":
+            "Kanal-Identifier (switchCommChannel('boardroom'), aus Operations nach Telemetrie verschoben)",
+        "#projekte-tasks":
+            "Kanal-Identifier (switchCommChannel('projects'), aus Operations nach Telemetrie verschoben)",
+        "📡 #all-stream — Gesamt-Funkverkehr aller Agenten":
+            "Laufzeitwert ops-comm-active-title, operations_kanban.js ueberschreibt den Knoten",
+        "· Echtzeit-Streaming aktiv":
+            "Laufzeitwert ops-comm-active-desc, operations_kanban.js ueberschreibt den Knoten",
+        "👑 Commander":
+            "Rollen-Identifier des Absenders (option value=commander)",
+        "🤖 Dispatcher":
+            "Rollen-Identifier des Absenders (option value=system_dispatcher)",
         "Live-Audit, Docker-Streams, Hermes Agentenprotokolle und SHA-256 Hash-Chains":
             "Laufzeitwert logstream-main-subtitle: static/index.html:5961-5963 ueberschreibt den Knoten beim Moduswechsel",
         "10 Live":

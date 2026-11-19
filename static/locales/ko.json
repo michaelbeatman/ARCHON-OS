@@ -197,7 +197,18 @@
       "onboarding_btn": "설정 마법사",
       "onboarding_title": "설정 마법사 다시 실행",
       "tab_guardrails_router": "라우터 및 가드레일",
-      "tab_corporate": "법인 및 테넌트"
+      "tab_corporate": "법인 및 테넌트",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "INJECTION GUARD",
+      "tab_validate": "품질 게이트",
+      "tab_cost": "예산",
+      "tab_services_short": "컨테이너",
+      "tab_routing_short": "프로바이더",
+      "tab_keys_short": "API 키",
+      "tab_corporate_short": "법인",
+      "tab_users_short": "사용자",
+      "tab_update_short": "업데이트"
     },
     "keys": {
       "close_btn": "닫기",
@@ -2505,7 +2516,9 @@
       "audit_modal_prev_hash": "이전 블록 해시 (링크):",
       "audit_modal_payload": "트랜잭션 페이로드 (JSON):",
       "action_close": "닫기",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "커뮤니케이션",
+      "title_tab_comm": "에이전트 통신 및 라이브 스트림"
     },
     "master_chat": {
       "title_avatar": "에이전트 편제에서 프로필 및 설정 열기",
@@ -3446,7 +3459,8 @@
       "tab_title_n8n": "n8n 자동화",
       "tab_title_communication": "커뮤니케이션",
       "n8n_loading": "n8n 워크플로 엔진을 불러오는 중...",
-      "n8n_open_external": "새 탭에서 열기 ↗"
+      "n8n_open_external": "새 탭에서 열기 ↗",
+      "filter_archived": "보관함"
     },
     "agent": {
       "tab_terminal": "터미널",

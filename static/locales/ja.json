@@ -197,7 +197,18 @@
       "onboarding_btn": "セットアップウィザード",
       "onboarding_title": "セットアップウィザードを再起動",
       "tab_guardrails_router": "ルーター・ガードレール",
-      "tab_corporate": "法人・テナント"
+      "tab_corporate": "法人・テナント",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "INJECTION GUARD",
+      "tab_validate": "品質ゲート",
+      "tab_cost": "予算",
+      "tab_services_short": "コンテナ",
+      "tab_routing_short": "プロバイダ",
+      "tab_keys_short": "APIキー",
+      "tab_corporate_short": "法人",
+      "tab_users_short": "ユーザー",
+      "tab_update_short": "更新"
     },
     "keys": {
       "close_btn": "閉じる",
@@ -2505,7 +2516,9 @@
       "audit_modal_prev_hash": "前のブロックハッシュ (リンク):",
       "audit_modal_payload": "トランザクションのペイロード (JSON):",
       "action_close": "閉じる",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "通信",
+      "title_tab_comm": "エージェント通信・ライブストリーム"
     },
     "master_chat": {
       "title_avatar": "エージェント幹部でプロフィールと設定を開く",
@@ -3446,7 +3459,8 @@
       "tab_title_n8n": "n8n自動化",
       "tab_title_communication": "コミュニケーション",
       "n8n_loading": "n8n ワークフローエンジンを読み込み中...",
-      "n8n_open_external": "新しいタブで開く ↗"
+      "n8n_open_external": "新しいタブで開く ↗",
+      "filter_archived": "アーカイブ"
     },
     "agent": {
       "tab_terminal": "ターミナル",

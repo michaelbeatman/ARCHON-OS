@@ -232,16 +232,15 @@
       let targetSubTab = null;
       if (tabName === "roles") {
         targetTab = "kernel";
-      } else if (["jev", "memory", "email-guard", "validate", "cost"].includes(tabName)) {
-        targetTab = "plugins";
-        targetSubTab = tabName;
+      } else if (tabName === "plugins") {
+        targetTab = "jev";
       } else if (["smtp", "telegram", "n8n"].includes(tabName)) {
         targetTab = "comm";
         targetSubTab = tabName;
       }
 
       activeSettingsTab = targetTab;
-      const tabs = ["kernel", "autonomy", "services", "routing", "keys", "frameworks", "plugins", "comm", "design", "update", "users"];
+      const tabs = ["kernel", "jev", "memory", "email-guard", "validate", "cost", "services", "routing", "keys", "frameworks", "comm", "design", "corporate", "users", "update"];
       tabs.forEach(t => {
         const pane = document.getElementById(`settings-tab-${t}`);
         const btn = document.getElementById(`btn-tab-${t}`);
@@ -306,8 +305,10 @@
         if (typeof loadModelRoutingSettings === "function") {
           loadModelRoutingSettings();
         }
-      } else if (targetTab === "plugins") {
-        setPluginSubTab(targetSubTab || "jev");
+      } else if (targetTab === "memory") {
+        if (typeof loadMemoryStats === "function") loadMemoryStats();
+      } else if (targetTab === "email-guard") {
+        if (typeof loadEmailGuardStats === "function") loadEmailGuardStats();
       } else if (targetTab === "comm") {
         if (targetSubTab) {
           setCommSubTab(targetSubTab);
@@ -1148,6 +1149,17 @@
     window.setSettingsTab = setSettingsTab;
     window.setPluginSubTab = setPluginSubTab;
     window.selectPluginRegistryCategory = selectPluginRegistryCategory;
+    window.toggleCorporateTemplateFullscreen = function () {
+      const el = document.getElementById("corp-subview-templates");
+      const lbl = document.getElementById("btn-corp-template-fullscreen-label");
+      if (!el) return;
+      const isFs = el.classList.toggle("fixed");
+      el.classList.toggle("inset-0", isFs);
+      el.classList.toggle("z-[100000]", isFs);
+      el.classList.toggle("bg-[var(--card)]", isFs);
+      el.classList.toggle("p-5", isFs);
+      if (lbl) lbl.textContent = isFs ? "← Zurück" : "Vollbild";
+    };
     window.loadPluginSettingsRegistry = loadPluginSettingsRegistry;
     window.updatePluginSettingsCounters = updatePluginSettingsCounters;
     window.filterPluginSettingsRegistry = filterPluginSettingsRegistry;

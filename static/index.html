@@ -112,7 +112,7 @@
       <!-- VIEW: APP FRAME STUDIO / CSS LIVE STUDIO -->
       <div id="view-app-frame-studio-mount"></div>
   <!-- SIDEBAR -->
-  <aside class="flex-shrink-0 flex flex-col border-r h-full overflow-y-auto theme-sidebar transition-colors duration-300 w-[200px]" style="width: var(--sidebar-width, 200px); min-width: var(--sidebar-width, 200px); max-width: var(--sidebar-width, 200px);">
+  <aside class="flex-shrink-0 flex flex-col border-r h-full overflow-hidden theme-sidebar transition-colors duration-300 w-[200px]" style="width: var(--sidebar-width, 200px); min-width: var(--sidebar-width, 200px); max-width: var(--sidebar-width, 200px);">
     <!-- Header -->
     <div id="sidebar-logo-header" class="custom-logo-active flex items-center gap-0 px-0 py-0 border-b theme-border-strong select-none" style="height: 80px !important; min-height: 80px !important; max-height: 80px !important;">
       <div id="sidebar-logo-wrapper" class="w-full h-full flex items-center justify-center flex-shrink-0 bg-transparent overflow-hidden">
@@ -124,8 +124,8 @@
         </span>
       </div>
     </div>
-    <!-- Navigationsbereich: Hierarchische 3-Säulen-Architektur -->
-    <nav class="flex-1 px-2 py-1 space-y-1">
+    <!-- Navigationsbereich: Hierarchische Säulen-Architektur -->
+    <nav class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-2 py-0.5 space-y-0.5">
       <!-- SÄULE 1: OPERATIVE STEUERUNG -->
       <div class="space-y-[2px]">
         <div class="px-2 py-0.5 text-[9.5px] font-mono font-bold tracking-wider text-muted-custom uppercase opacity-80 select-none" data-i18n="nav.section.operative">
@@ -1118,21 +1118,6 @@
               <span data-i18n="ui.ops.tab_n8n" class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">n8n-Automation</span>
             </button>
 
-            <!-- 6. Kommunikation -->
-            <button data-i18n-title="ui.ops.tab_title_communication" 
-              type="button" 
-              id="ops-subtab-comm" 
-              onclick="setOperationsTab('comm')" 
-              class="ops-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150"
-              title="Kommunikation"
-            >
-              <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-                <img src="/static/img/cadre_icons/contact_nachrichten.png" alt="Kommunikation" class="w-full h-full object-contain drop-shadow-xs pointer-events-none">
-                <span id="ops-comm-badge" class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[var(--card)]"></span>
-              </div>
-              <span data-i18n="ui.ops.tab_communication" class="ops-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--foreground)] font-medium leading-none">Kommunikation</span>
-            </button>
-
           </div>
         </div>
 
@@ -1161,6 +1146,10 @@
                 <button data-filter="planned" onclick="setProjectsFilter('planned')" class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5">
                   <span data-i18n="ui.board.planned">Geplant</span>
                   <span id="badge-count-plan" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-sky-500/20 text-sky-500">0</span>
+                </button>
+                <button data-filter="archived" onclick="setProjectsFilter('archived')" class="proj-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5">
+                  <span data-i18n="ui.ops.filter_archived">Archiv</span>
+                  <span id="badge-count-arch" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-zinc-500/20 text-zinc-500">0</span>
                 </button>
               </div>
               <div class="flex items-center gap-2">
@@ -2114,11 +2103,11 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/auth_manager.js?v=20261116b"></script>
   <script src="/static/js/auth_gate.js"></script>
   <script src="/static/js/chat_engine.js?v=2026111113"></script>
-  <script src="/static/js/system_settings.js?v=2026112009"></script>
+  <script src="/static/js/system_settings.js?v=2026112011"></script>
   <script src="/static/js/settings_search.js?v=2026111113"></script>
   <script src="/static/js/system_update_badge.js?v=20261117"></script>
   <script src="/static/js/agent_profiles.js?v=2026111113"></script>
-  <script src="/static/js/customizer.js?v=2026111113"></script>
+  <script src="/static/js/customizer.js?v=2026112015"></script>
   <script src="/static/js/component_design_studio.js?v=2026111113"></script>
   <script src="/static/js/command_palette.js?v=2026111113"></script>
   <script>
@@ -2149,9 +2138,9 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/enterprise_calendar_ui.js?v=2026111901"></script>
   <script src="/static/js/v2_capabilities_panel.js?v=2026111901"></script>
   <script src="/static/js/global_header_sync.js?v=2026112008"></script>
-  <script src="/static/js/operations_projects.js?v=2026112007"></script>
+  <script src="/static/js/operations_projects.js?v=2026112012"></script>
   <script src="/static/js/appshell_architect.js?v=2026111113"></script>
-  <script src="/static/js/css_live_studio.js?v=2026111113"></script>
+  <script src="/static/js/css_live_studio.js?v=2026112015"></script>
   <script src="/static/js/guardian.js?v=2026111113"></script>
   <script src="/static/js/finance_controller.js?v=2026111113"></script>
   <script src="/static/js/approval_policies_controller.js?v=2026112010"></script>
@@ -2712,7 +2701,7 @@ print('Ausführung erfolgreich!')</textarea>
       };
       const _coreViews = [
         _v2Mount('/static/views/view_app_frame_studio.html?v=2026111113', 'view-app-frame-studio-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); }),
-        _v2Mount('/static/views/system_settings_modal.html?v=2026112009', 'system-settings-mount'),
+        _v2Mount('/static/views/system_settings_modal.html?v=2026112014', 'system-settings-mount'),
         _v2Mount('/static/views/operations_view.html?v=2026111902', 'view-operations-mount'),
         _v2Mount('/static/views/agent_profiles_view.html?v=2026111113', 'view-agent-profiles-mount'),
         _v2Mount('/static/views/master_chat_view.html?v=2026111113', 'view-master-chat-mount'),
@@ -2721,7 +2710,7 @@ print('Ausführung erfolgreich!')</textarea>
         ['library', '/static/views/library_view.html?v=2026111113', 'view-library-mount', null],
         ['inbox', '/static/views/inbox_view.html?v=2026111113', 'view-inbox-mount', null],
         ['showroom', '/static/views/view_showroom.html?v=2026111113', 'view-showroom-mount', null],
-        ['log-stream', '/static/views/log_stream_view.html?v=2026111113', 'view-log-stream-mount', null],
+        ['log-stream', '/static/views/log_stream_view.html?v=2026112012', 'view-log-stream-mount', null],
         ['guardian', '/static/views/view_guardian.html?v=2026111113', 'view-guardian-mount', null],
         ['plugins', '/static/views/view_plugins.html?v=2026112010', 'view-plugins-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof loadPluginSettingsRegistry === 'function') loadPluginSettingsRegistry(); if (typeof loadSystemSettings === 'function') loadSystemSettings(); }],
         ['research', '/static/views/view_research.html?v=2026111113', 'view-research-mount', null],
@@ -5929,7 +5918,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (!mode) mode = "containers";
       currentLogStreamMode = mode;
 
-      const tabs = ["containers", "profiles", "audit"];
+      const tabs = ["containers", "profiles", "audit", "comm"];
       const meta = {
         containers: {
           title: "Telemetrie & Logs — Container",
@@ -5942,6 +5931,10 @@ print('Ausführung erfolgreich!')</textarea>
         audit: {
           title: "Telemetrie & Logs — Audit-Trail",
           subtitle: "Kryptografisch verkettete SHA-256 Transaktionshistorie (Pillar 6 / Zero-Trust)"
+        },
+        comm: {
+          title: "Telemetrie & Logs — Kommunikation",
+          subtitle: "Interne Multi-Agenten-Kommunikation, Funkverkehr & Live-Kanäle"
         }
       };
 
@@ -5980,9 +5973,18 @@ print('Ausführung erfolgreich!')</textarea>
       const paneProf = document.getElementById("log-pane-profiles");
       const consoleLog = document.getElementById("logstream-main-console");
       const consoleAudit = document.getElementById("logstream-audit-console");
+      const commView = document.getElementById("ops-view-comm");
       const badge = document.getElementById("logstream-source-count-badge");
 
-      if (mode === "audit") {
+      if (commView) commView.classList.toggle("hidden", mode !== "comm");
+
+      if (mode === "comm") {
+        if (sidebarExp) sidebarExp.classList.add("hidden");
+        if (consoleLog) consoleLog.classList.add("hidden");
+        if (consoleAudit) consoleAudit.classList.add("hidden");
+        if (badge) badge.innerText = "Live";
+        if (typeof loadOperationsData === "function") loadOperationsData(false);
+      } else if (mode === "audit") {
         if (sidebarExp) sidebarExp.classList.add("hidden");
         if (consoleLog) consoleLog.classList.add("hidden");
         if (consoleAudit) consoleAudit.classList.remove("hidden");

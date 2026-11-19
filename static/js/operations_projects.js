@@ -65,10 +65,11 @@
     const searchInput = document.getElementById("operations-projects-search");
     const query = (searchInput ? searchInput.value : "").trim().toLowerCase();
 
-    let list = allProjectsData.all || [];
+    let list = (allProjectsData.all || []).filter(p => !p.archived);
     if (activeFilter === "in_progress") list = allProjectsData.in_progress || [];
     else if (activeFilter === "completed") list = allProjectsData.completed || [];
     else if (activeFilter === "planned") list = allProjectsData.planned || [];
+    else if (activeFilter === "archived") list = allProjectsData.archived || [];
 
     if (query) {
       list = list.filter(p =>
@@ -84,10 +85,12 @@
     const bProg = document.getElementById("badge-count-prog");
     const bComp = document.getElementById("badge-count-comp");
     const bPlan = document.getElementById("badge-count-plan");
+    const bArch = document.getElementById("badge-count-arch");
     if (bAll) bAll.innerText = allProjectsData.total || 0;
     if (bProg) bProg.innerText = (allProjectsData.in_progress || []).length;
     if (bComp) bComp.innerText = (allProjectsData.completed || []).length;
     if (bPlan) bPlan.innerText = (allProjectsData.planned || []).length;
+    if (bArch) bArch.innerText = (allProjectsData.archived || []).length;
 
     if (list.length === 0) {
       listContainer.innerHTML = `
@@ -132,18 +135,23 @@
       const files = p.files_summary || { zwischenberichte: 0, medien: 0, endprodukte: 0 };
       const totalFiles = (files.zwischenberichte || 0) + (files.medien || 0) + (files.endprodukte || 0);
 
-      // Buttons
+      // Buttons: Bericht öffnet direkt den Ergebnisse-Tab im Detail-Modal
       const htmlBtn = p.has_html_report && p.primary_document
-        ? `<button onclick="event.stopPropagation(); openProjectHtmlReport('${escapeHtml(p.primary_document)}', '${escapeHtml(p.title)}')" class="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer">
+        ? `<button onclick="event.stopPropagation(); openProjectDetailModal('${escapeHtml(p.id)}', 'results')" class="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer">
              <i data-lucide="file-check-2" class="w-3.5 h-3.5"></i>
-             <span>Abschlussbericht (HTML)</span>
+             <span>Bericht</span>
            </button>`
         : (p.primary_document
-          ? `<button onclick="event.stopPropagation(); openProjectDocument('${escapeHtml(p.primary_document)}', '${escapeHtml(p.title)}')" class="h-8 px-3 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition cursor-pointer">
+          ? `<button onclick="event.stopPropagation(); openProjectDetailModal('${escapeHtml(p.id)}', 'results')" class="h-8 px-3 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-[var(--foreground)] font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition cursor-pointer">
                <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-500"></i>
-               <span>Bericht (MD)</span>
+               <span>Bericht</span>
              </button>`
           : ``);
+
+      const archiveBtn = `<button onclick="event.stopPropagation(); toggleProjectArchive('${escapeHtml(p.id)}', ${p.archived ? 'false' : 'true'})" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="${p.archived ? 'Aus Archiv wiederherstellen' : 'Projekt archivieren'}">
+        <i data-lucide="${p.archived ? 'archive-restore' : 'archive'}" class="w-3.5 h-3.5"></i>
+        <span>${p.archived ? 'Wiederherstellen' : 'Archiv'}</span>
+      </button>`;
 
       const filesBtn = `<button onclick="event.stopPropagation(); openProjectDetailModal('${escapeHtml(p.id)}', 'files')" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="Dateien im Projekt-Detail öffnen">
         <i data-lucide="folder-open" class="w-3.5 h-3.5 text-amber-500"></i>
@@ -175,16 +183,11 @@
              title="Projekt-Detail öffnen">
           <div>
             <div class="space-y-1.5 mb-2.5">
-              <!-- Reihe 1: Schlichte Tasknummer (YYYYMMDDHHMMSS) & US-Datum -->
-              <div class="flex items-center justify-between gap-2 text-[10.5px] font-mono text-muted-custom">
-                <span>${escapeHtml(taskNum)}</span>
-                <span>${escapeHtml(dateStr)}</span>
-              </div>
-              <!-- Reihe 2: Dick & schwarz die Taskbezeichnung -->
+              <!-- Reihe 1: Dick & schwarz die Taskbezeichnung -->
               <h3 class="text-sm sm:text-base font-black text-zinc-950 dark:text-zinc-50 tracking-tight truncate group-hover:text-sky-500 transition" title="${escapeHtml(p.title)}">
                 ${escapeHtml(p.title)}
               </h3>
-              <!-- Reihe 3: 2 Spalten: links Lead/Auftraggeber, rechts Status -->
+              <!-- Reihe 2: 2 Spalten: links Lead/Auftraggeber, rechts Status -->
               <div class="flex items-center justify-between gap-2 pt-0.5">
                 <span class="text-[11px] font-mono text-muted-custom truncate min-w-0" title="${escapeHtml(leadDisplay)}">
                   Lead: <strong class="text-[var(--foreground)] font-semibold">${escapeHtml(leadDisplay)}</strong>
@@ -192,6 +195,11 @@
                 <div class="shrink-0">
                   ${statusBadge}
                 </div>
+              </div>
+              <!-- Reihe 3: Schlichte Tasknummer (YYYYMMDDHHMMSS) & US-Datum -->
+              <div class="flex items-center justify-between gap-2 text-[10.5px] font-mono text-muted-custom pt-0.5">
+                <span>${escapeHtml(taskNum)}</span>
+                <span>${escapeHtml(dateStr)}</span>
               </div>
             </div>
 
@@ -222,8 +230,9 @@
                 ${filesBtn}
                 ${chatBtn}
               </div>
-              <div class="ml-auto">
+              <div class="ml-auto flex items-center gap-1.5">
                 ${htmlBtn}
+                ${archiveBtn}
               </div>
             </div>
           </div>
@@ -805,6 +814,20 @@
       closeProjectDetailModal();
     }
   });
+
+  window.toggleProjectArchive = async function(projectId, archiveState) {
+    try {
+      const res = await fetch(`/api/operations/projects/${encodeURIComponent(projectId)}/meta`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: !!archiveState })
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      await loadOperationsProjects();
+    } catch (err) {
+      console.error("[OperationsProjects] Archive toggle error:", err);
+    }
+  };
 
   window.openProjectObsidianFolder = function(relFolder) {
     const clean = String(relFolder || "").replace(/^\/+/, "");

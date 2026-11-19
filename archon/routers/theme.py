@@ -257,6 +257,9 @@ def api_save_theme_live_overrides(payload: Dict = Body(...)):
         if meta_key in payload:
             merged[meta_key] = payload[meta_key]
 
+    # Clear any prior bake/reset_all marker once new live overrides are saved
+    merged.pop("reset_all", None)
+
     _save_json_delegate(target_file, merged)
     return {"status": "success"}
 

@@ -197,7 +197,18 @@
       "onboarding_btn": "Asistente de configuración",
       "onboarding_title": "Reiniciar asistente de configuración",
       "tab_guardrails_router": "ROUTER Y GUARDRAILS",
-      "tab_corporate": "CORPORATIVO Y MANDANTE"
+      "tab_corporate": "CORPORATIVO Y MANDANTE",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "INJECTION GUARD",
+      "tab_validate": "QUALITY GATE",
+      "tab_cost": "PRESUPUESTO",
+      "tab_services_short": "CONTENEDORES",
+      "tab_routing_short": "PROVEEDORES",
+      "tab_keys_short": "CLAVES API",
+      "tab_corporate_short": "CORPORATIVO",
+      "tab_users_short": "USUARIOS",
+      "tab_update_short": "ACTUALIZAR"
     },
     "keys": {
       "close_btn": "Cerrar",
@@ -2505,7 +2516,9 @@
       "audit_modal_prev_hash": "Hash del bloque anterior (vínculo):",
       "audit_modal_payload": "Carga útil de la transacción (JSON):",
       "action_close": "Cerrar",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "Comunicación",
+      "title_tab_comm": "Comunicación de agentes y transmisión"
     },
     "master_chat": {
       "title_avatar": "Abrir perfil y ajustes en el Cuadro de agentes",
@@ -3446,7 +3459,8 @@
       "tab_title_n8n": "Automatización n8n",
       "tab_title_communication": "Comunicación",
       "n8n_loading": "Cargando el motor de flujos n8n...",
-      "n8n_open_external": "Abrir en nueva pestaña ↗"
+      "n8n_open_external": "Abrir en nueva pestaña ↗",
+      "filter_archived": "Archivo"
     },
     "agent": {
       "tab_terminal": "Terminal",

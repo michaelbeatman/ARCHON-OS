@@ -197,7 +197,18 @@
       "onboarding_btn": "Procedura guidata",
       "onboarding_title": "Riavvia procedura guidata",
       "tab_guardrails_router": "ROUTER E GUARDRAILS",
-      "tab_corporate": "CORPORATE & MANDANTE"
+      "tab_corporate": "CORPORATE & MANDANTE",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "INJECTION GUARD",
+      "tab_validate": "QUALITY GATE",
+      "tab_cost": "BUDGET",
+      "tab_services_short": "CONTAINER",
+      "tab_routing_short": "PROVIDER",
+      "tab_keys_short": "CHIAVI API",
+      "tab_corporate_short": "CORPORATE",
+      "tab_users_short": "UTENTI",
+      "tab_update_short": "AGGIORNA"
     },
     "keys": {
       "close_btn": "Chiudi",
@@ -2509,7 +2520,9 @@
       "audit_modal_prev_hash": "Hash del blocco precedente (Link):",
       "audit_modal_payload": "Payload della transazione (JSON Payload):",
       "action_close": "Chiudi",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "Comunicazione",
+      "title_tab_comm": "Comunicazione agenti e streaming"
     },
     "master_chat": {
       "title_avatar": "Apri profilo e impostazioni nel gruppo agenti",
@@ -3623,7 +3636,8 @@
       "tab_title_n8n": "Automazione n8n",
       "tab_title_operations": "Operations (Centrale progetti)",
       "tab_title_organisation": "Organizzazione",
-      "title": "Operazioni"
+      "title": "Operazioni",
+      "filter_archived": "Archivio"
     },
     "pricing": {
       "cache_note": "I prezzi vengono memorizzati in cache nella RAM per 1 ora e aggiornati continuamente da OpenRouter.",

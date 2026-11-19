@@ -197,7 +197,18 @@
       "onboarding_btn": "Мастер настройки",
       "onboarding_title": "Перезапустить мастер настройки",
       "tab_guardrails_router": "РОУТЕР И ПРАВИЛА",
-      "tab_corporate": "КОРПОРАЦИЯ И ТЕНАНТ"
+      "tab_corporate": "КОРПОРАЦИЯ И ТЕНАНТ",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "ЗАЩИТА ИНЪЕКЦИЙ",
+      "tab_validate": "КОНТРОЛЬ КАЧЕСТВА",
+      "tab_cost": "БЮДЖЕТ",
+      "tab_services_short": "КОНТЕЙНЕРЫ",
+      "tab_routing_short": "ПРОВАЙДЕРЫ",
+      "tab_keys_short": "API-КЛЮЧИ",
+      "tab_corporate_short": "КОРПОРАЦИЯ",
+      "tab_users_short": "ПОЛЬЗОВАТЕЛИ",
+      "tab_update_short": "ОБНОВЛЕНИЕ"
     },
     "keys": {
       "close_btn": "Закрыть",
@@ -2505,7 +2516,9 @@
       "audit_modal_prev_hash": "Хеш предыдущего блока (ссылка):",
       "audit_modal_payload": "Полезная нагрузка транзакции (JSON):",
       "action_close": "Закрыть",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "Коммуникация",
+      "title_tab_comm": "Коммуникация агентов и поток"
     },
     "master_chat": {
       "title_avatar": "Открыть профиль и настройки в Кадрах агентов",
@@ -3446,7 +3459,8 @@
       "tab_title_n8n": "Автоматизация n8n",
       "tab_title_communication": "Коммуникации",
       "n8n_loading": "Загрузка движка рабочих процессов n8n...",
-      "n8n_open_external": "Открыть в новой вкладке ↗"
+      "n8n_open_external": "Открыть в новой вкладке ↗",
+      "filter_archived": "Архив"
     },
     "agent": {
       "tab_terminal": "Терминал",

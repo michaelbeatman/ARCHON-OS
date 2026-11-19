@@ -197,7 +197,18 @@
       "onboarding_btn": "Setup Wizard",
       "onboarding_title": "Relaunch Setup Wizard",
       "tab_guardrails_router": "ROUTER & GUARDRAILS",
-      "tab_corporate": "CORPORATE & TENANT"
+      "tab_corporate": "CORPORATE & TENANT",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "INJECTION GUARD",
+      "tab_validate": "QUALITY GATE",
+      "tab_cost": "BUDGET",
+      "tab_services_short": "CONTAINERS",
+      "tab_routing_short": "PROVIDERS",
+      "tab_keys_short": "API KEYS",
+      "tab_corporate_short": "CORPORATE",
+      "tab_users_short": "USERS",
+      "tab_update_short": "UPDATE"
     },
     "keys": {
       "close_btn": "Close",
@@ -2505,7 +2516,9 @@
       "audit_modal_prev_hash": "Previous block hash (link):",
       "audit_modal_payload": "Transaction payload (JSON):",
       "action_close": "Close",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "Communication",
+      "title_tab_comm": "Agent Communication & Live Stream"
     },
     "master_chat": {
       "title_avatar": "Open profile & settings in the Agent Cadre",
@@ -3446,7 +3459,8 @@
       "tab_title_n8n": "n8n automation",
       "tab_title_communication": "Communication",
       "n8n_loading": "Loading n8n Workflow Engine...",
-      "n8n_open_external": "Open in new tab ↗"
+      "n8n_open_external": "Open in new tab ↗",
+      "filter_archived": "Archive"
     },
     "agent": {
       "tab_terminal": "Terminal",

@@ -197,7 +197,18 @@
       "onboarding_btn": "Assistant de configuration",
       "onboarding_title": "Relancer l'assistant de configuration",
       "tab_guardrails_router": "ROUTEUR & GUARDRAILS",
-      "tab_corporate": "CORPORATE & MANDANT"
+      "tab_corporate": "CORPORATE & MANDANT",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "INJECTION GUARD",
+      "tab_validate": "QUALITY GATE",
+      "tab_cost": "BUDGET",
+      "tab_services_short": "CONTENEURS",
+      "tab_routing_short": "FOURNISSEURS",
+      "tab_keys_short": "CLÉS API",
+      "tab_corporate_short": "CORPORATE",
+      "tab_users_short": "UTILISATEURS",
+      "tab_update_short": "MISE À JOUR"
     },
     "keys": {
       "close_btn": "Fermer",
@@ -2505,7 +2516,9 @@
       "audit_modal_prev_hash": "Hash du bloc précédent (lien) :",
       "audit_modal_payload": "Charge utile de la transaction (JSON) :",
       "action_close": "Fermer",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "Communication",
+      "title_tab_comm": "Communication des agents et flux"
     },
     "master_chat": {
       "title_avatar": "Ouvrir le profil et les réglages dans le Cadre des agents",
@@ -3446,7 +3459,8 @@
       "tab_title_n8n": "Automatisation n8n",
       "tab_title_communication": "Communication",
       "n8n_loading": "Chargement du moteur de workflows n8n...",
-      "n8n_open_external": "Ouvrir dans un nouvel onglet ↗"
+      "n8n_open_external": "Ouvrir dans un nouvel onglet ↗",
+      "filter_archived": "Archives"
     },
     "agent": {
       "tab_terminal": "Terminal",

@@ -197,7 +197,18 @@
       "onboarding_btn": "Setup-Wizard",
       "onboarding_title": "Setup-Wizard erneut starten",
       "tab_guardrails_router": "ROUTER & GUARDRAILS",
-      "tab_corporate": "CORPORATE & MANDANT"
+      "tab_corporate": "CORPORATE & MANDANT",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "INJECTION GUARD",
+      "tab_validate": "QUALITY GATE",
+      "tab_cost": "BUDGET",
+      "tab_services_short": "CONTAINER",
+      "tab_routing_short": "PROVIDER",
+      "tab_keys_short": "API-KEYS",
+      "tab_corporate_short": "CORPORATE",
+      "tab_users_short": "BENUTZER",
+      "tab_update_short": "UPDATE"
     },
     "keys": {
       "close_btn": "Schließen",
@@ -2505,7 +2516,9 @@
       "audit_modal_prev_hash": "Vorheriger Block-Hash (Link):",
       "audit_modal_payload": "Transaktions-Nutzlast (Payload JSON):",
       "action_close": "Schließen",
-      "audit_cat_llm_dispatch": "LLM-Dispatches"
+      "audit_cat_llm_dispatch": "LLM-Dispatches",
+      "tab_comm": "Kommunikation",
+      "title_tab_comm": "Agenten-Kommunikation & Funkverkehr"
     },
     "master_chat": {
       "title_avatar": "Profil & Einstellungen im Agenten-Kader öffnen",
@@ -3621,7 +3634,8 @@
       "tab_title_organisation": "Organisation",
       "title": "Operations",
       "n8n_loading": "n8n Workflow-Engine wird geladen...",
-      "n8n_open_external": "In neuem Tab öffnen ↗"
+      "n8n_open_external": "In neuem Tab öffnen ↗",
+      "filter_archived": "Archiv"
     },
     "pricing": {
       "cache_note": "Preise werden 1 Stunde im RAM gecacht und laufend von OpenRouter bezogen.",

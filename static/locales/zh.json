@@ -197,7 +197,18 @@
       "onboarding_btn": "设置向导",
       "onboarding_title": "重新启动设置向导",
       "tab_guardrails_router": "路由与护栏",
-      "tab_corporate": "企业与租户"
+      "tab_corporate": "企业与租户",
+      "tab_jev": "PREDECISION",
+      "tab_memory": "2ND BRAIN",
+      "tab_email_guard": "注入防护",
+      "tab_validate": "质量门控",
+      "tab_cost": "预算",
+      "tab_services_short": "容器",
+      "tab_routing_short": "提供商",
+      "tab_keys_short": "API 密钥",
+      "tab_corporate_short": "企业",
+      "tab_users_short": "用户",
+      "tab_update_short": "更新"
     },
     "keys": {
       "close_btn": "关闭",
@@ -2505,7 +2516,9 @@
       "audit_modal_prev_hash": "前一区块哈希 (链接):",
       "audit_modal_payload": "交易负载 (JSON):",
       "action_close": "关闭",
-      "audit_cat_llm_dispatch": "LLM Dispatches"
+      "audit_cat_llm_dispatch": "LLM Dispatches",
+      "tab_comm": "通信",
+      "title_tab_comm": "代理通信与实时流"
     },
     "master_chat": {
       "title_avatar": "在智能体花名册中打开资料与设置",
@@ -3446,7 +3459,8 @@
       "tab_title_n8n": "n8n 自动化",
       "tab_title_communication": "沟通",
       "n8n_loading": "正在加载 n8n 工作流引擎...",
-      "n8n_open_external": "在新标签页中打开 ↗"
+      "n8n_open_external": "在新标签页中打开 ↗",
+      "filter_archived": "归档"
     },
     "agent": {
       "tab_terminal": "终端",

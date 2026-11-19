@@ -190,7 +190,9 @@
       "tab_routing": "プロバイダーとゲートウェイ",
       "tab_services": "コンテナとサービス",
       "tab_update": "システムアップデート",
-      "tab_users": "ユーザーとロール"
+      "tab_users": "ユーザーとロール",
+      "onboarding_btn": "セットアップウィザード",
+      "onboarding_title": "セットアップウィザードを再起動"
     },
     "keys": {
       "close_btn": "閉じる",
@@ -3740,7 +3742,8 @@
       "feedback_correction_placeholder": "期待する目標結果（ゴールドスタンダード）...",
       "due_title": "期限日",
       "tags_placeholder": "タグ（カンマ区切り）",
-      "comment_placeholder": "エージェントへのメッセージまたは指示を入力..."
+      "comment_placeholder": "エージェントへのメッセージまたは指示を入力...",
+      "start_now": "今すぐ開始"
     },
     "roles": {
       "title": "AI ロール＆プロンプトを管理",

@@ -190,7 +190,9 @@
       "tab_routing": "FOURNISSEUR ET PASSERELLE",
       "tab_services": "CONTENEURS ET SERVICES",
       "tab_update": "MISE À JOUR SYSTÈME",
-      "tab_users": "UTILISATEURS ET RÔLES"
+      "tab_users": "UTILISATEURS ET RÔLES",
+      "onboarding_btn": "Assistant de configuration",
+      "onboarding_title": "Relancer l'assistant de configuration"
     },
     "keys": {
       "close_btn": "Fermer",
@@ -3740,7 +3742,8 @@
       "feedback_correction_placeholder": "Résultat attendu (gold standard)...",
       "due_title": "Date d'échéance",
       "tags_placeholder": "Étiquettes séparées par des virgules",
-      "comment_placeholder": "Rédiger un message ou une instruction pour l'agent..."
+      "comment_placeholder": "Rédiger un message ou une instruction pour l'agent...",
+      "start_now": "Démarrer maintenant"
     },
     "roles": {
       "title": "Gérer les rôles et prompts IA",

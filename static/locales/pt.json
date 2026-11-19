@@ -190,7 +190,9 @@
       "tab_routing": "PROVEDOR E GATEWAY",
       "tab_services": "CONTENTORES E SERVIÇOS",
       "tab_update": "ATUALIZAÇÃO DO SISTEMA",
-      "tab_users": "UTILIZADORES E PAPÉIS"
+      "tab_users": "UTILIZADORES E PAPÉIS",
+      "onboarding_btn": "Assistente de configuração",
+      "onboarding_title": "Reiniciar assistente de configuração"
     },
     "keys": {
       "close_btn": "Fechar",
@@ -3740,7 +3742,8 @@
       "feedback_correction_placeholder": "Resultado esperado (gold standard)...",
       "due_title": "Data de vencimento",
       "tags_placeholder": "Tags, separadas por vírgulas",
-      "comment_placeholder": "Escreva uma mensagem ou instrução para o agente..."
+      "comment_placeholder": "Escreva uma mensagem ou instrução para o agente...",
+      "start_now": "Iniciar agora"
     },
     "roles": {
       "title": "Gerenciar papéis e prompts de IA",

@@ -2738,7 +2738,26 @@
         }
         if (nameEl) nameEl.textContent = task.assignee_name || task.assignee || kanT('ui.operations_kanban.unassigned', 'Nicht zugewiesen');
         const selEl = document.getElementById('ops-detail-assignee-select');
-        if (selEl) selEl.value = task.assignee || 'default';
+        if (selEl) {
+          if (!selEl.options.length) {
+            const opts = [
+              ['default', '🤖 Auto / Hermes Root (default)'],
+              ['executive_decision_architect', 'CEO Robert'],
+              ['senior_fullstack_engineer', 'Senior Fullstack Engineer'],
+              ['system_architect_orchestrator', 'System Architect'],
+              ['devops_cloud_sec_specialist', 'DevOps & Cloud Sec'],
+              ['qa_test_engineer', 'QA & Test Engineer'],
+              ['legal_counsel', 'Legal Counsel'],
+              ['finance_lead', 'Finance Lead'],
+              ['knowledge_librarian', 'Knowledge Librarian'],
+              ['lead_enrichment_analyst', 'Lead Analyst'],
+              ['bi_controller', 'BI Controller'],
+              ['database_performance_tuner', 'DB Tuner'],
+            ];
+            selEl.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+          }
+          selEl.value = task.assignee || 'default';
+        }
         const qgEl = document.getElementById('ops-detail-quality-gate');
         if (qgEl) {
           const stLow = String(task.status || '').toLowerCase();

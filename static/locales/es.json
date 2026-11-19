@@ -190,7 +190,9 @@
       "tab_routing": "PROVEEDOR Y GATEWAY",
       "tab_services": "CONTENEDORES Y SERVICIOS",
       "tab_update": "ACTUALIZACIÓN DEL SISTEMA",
-      "tab_users": "USUARIOS Y ROLES"
+      "tab_users": "USUARIOS Y ROLES",
+      "onboarding_btn": "Asistente de configuración",
+      "onboarding_title": "Reiniciar asistente de configuración"
     },
     "keys": {
       "close_btn": "Cerrar",
@@ -3740,7 +3742,8 @@
       "feedback_correction_placeholder": "Resultado esperado (gold standard)...",
       "due_title": "Fecha de vencimiento",
       "tags_placeholder": "Etiquetas, separadas por comas",
-      "comment_placeholder": "Escribe un mensaje o instrucción para el agente..."
+      "comment_placeholder": "Escribe un mensaje o instrucción para el agente...",
+      "start_now": "Iniciar ahora"
     },
     "roles": {
       "title": "Gestionar roles y prompts de IA",

@@ -190,7 +190,9 @@
       "tab_routing": "PROVIDER & GATEWAY",
       "tab_services": "CONTAINERS & SERVICES",
       "tab_update": "SYSTEM UPDATE",
-      "tab_users": "USERS & ROLES"
+      "tab_users": "USERS & ROLES",
+      "onboarding_btn": "Setup Wizard",
+      "onboarding_title": "Relaunch Setup Wizard"
     },
     "keys": {
       "close_btn": "Close",
@@ -3740,7 +3742,8 @@
       "feedback_correction_placeholder": "Expected target result (gold standard)...",
       "due_title": "Due date",
       "tags_placeholder": "Tags, comma-separated",
-      "comment_placeholder": "Write a message or instruction for the agent..."
+      "comment_placeholder": "Write a message or instruction for the agent...",
+      "start_now": "Start now"
     },
     "roles": {
       "title": "Manage AI roles & prompts",

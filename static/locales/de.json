@@ -190,7 +190,9 @@
       "tab_routing": "PROVIDER & GATEWAY",
       "tab_services": "CONTAINER & DIENSTE",
       "tab_update": "SYSTEM-UPDATE",
-      "tab_users": "BENUTZER & ROLLEN"
+      "tab_users": "BENUTZER & ROLLEN",
+      "onboarding_btn": "Setup-Wizard",
+      "onboarding_title": "Setup-Wizard erneut starten"
     },
     "keys": {
       "close_btn": "Schließen",
@@ -3933,7 +3935,8 @@
       "feedback_correction_placeholder": "Erwartetes Wunschergebnis (Gold-Standard)...",
       "due_title": "Fälligkeitsdatum",
       "tags_placeholder": "Tags, mit Komma getrennt",
-      "comment_placeholder": "Nachricht oder Anweisung an den Agenten verfassen..."
+      "comment_placeholder": "Nachricht oder Anweisung an den Agenten verfassen...",
+      "start_now": "Jetzt starten"
     },
     "tasks": {
       "backlog": "📥 Backlog",

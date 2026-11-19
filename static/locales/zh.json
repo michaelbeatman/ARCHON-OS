@@ -190,7 +190,9 @@
       "tab_routing": "提供商与网关",
       "tab_services": "容器与服务",
       "tab_update": "系统更新",
-      "tab_users": "用户与角色"
+      "tab_users": "用户与角色",
+      "onboarding_btn": "设置向导",
+      "onboarding_title": "重新启动设置向导"
     },
     "keys": {
       "close_btn": "关闭",
@@ -3740,7 +3742,8 @@
       "feedback_correction_placeholder": "预期目标结果（黄金标准）...",
       "due_title": "截止日期",
       "tags_placeholder": "标签，以逗号分隔",
-      "comment_placeholder": "撰写给智能体的消息或指令..."
+      "comment_placeholder": "撰写给智能体的消息或指令...",
+      "start_now": "立即启动"
     },
     "roles": {
       "title": "管理 AI 角色与提示词",

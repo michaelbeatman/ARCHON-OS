@@ -190,7 +190,9 @@
       "tab_routing": "PROVIDER E GATEWAY",
       "tab_services": "CONTAINER E SERVIZI",
       "tab_update": "AGGIORNAMENTO SISTEMA",
-      "tab_users": "UTENTI E RUOLI"
+      "tab_users": "UTENTI E RUOLI",
+      "onboarding_btn": "Procedura guidata",
+      "onboarding_title": "Riavvia procedura guidata"
     },
     "keys": {
       "close_btn": "Chiudi",
@@ -3935,7 +3937,8 @@
       "feedback_correction_placeholder": "Risultato atteso desiderato (Gold Standard)...",
       "due_title": "Data di scadenza",
       "tags_placeholder": "Tag, separati da virgola",
-      "comment_placeholder": "Scrivi un messaggio o un'istruzione per l'agente..."
+      "comment_placeholder": "Scrivi un messaggio o un'istruzione per l'agente...",
+      "start_now": "Avvia ora"
     },
     "tasks": {
       "backlog": "📥 Backlog",

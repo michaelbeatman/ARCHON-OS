@@ -190,7 +190,9 @@
       "tab_routing": "PROVIDERS & GATEWAY",
       "tab_services": "CONTAINERS & DIENSTEN",
       "tab_update": "SYSTEMUPDATE",
-      "tab_users": "GEBRUIKERS & ROLLEN"
+      "tab_users": "GEBRUIKERS & ROLLEN",
+      "onboarding_btn": "Installatiewizard",
+      "onboarding_title": "Installatiewizard opnieuw starten"
     },
     "keys": {
       "close_btn": "Sluiten",
@@ -3937,7 +3939,8 @@
       "feedback_correction_placeholder": "Verwacht gewenst resultaat (Gold Standard)...",
       "due_title": "Vervaldatum",
       "tags_placeholder": "Tags, gescheiden door komma's",
-      "comment_placeholder": "Bericht of instructie voor de agent schrijven..."
+      "comment_placeholder": "Bericht of instructie voor de agent schrijven...",
+      "start_now": "Nu starten"
     },
     "tasks": {
       "backlog": "📥 Backlog",

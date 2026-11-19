@@ -190,7 +190,9 @@
       "tab_routing": "프로바이더 및 게이트웨이",
       "tab_services": "컨테이너 및 서비스",
       "tab_update": "시스템 업데이트",
-      "tab_users": "사용자 및 역할"
+      "tab_users": "사용자 및 역할",
+      "onboarding_btn": "설정 마법사",
+      "onboarding_title": "설정 마법사 다시 실행"
     },
     "keys": {
       "close_btn": "닫기",
@@ -3740,7 +3742,8 @@
       "feedback_correction_placeholder": "기대하는 목표 결과 (골드 스탠다드)...",
       "due_title": "마감일",
       "tags_placeholder": "태그 (쉼표로 구분)",
-      "comment_placeholder": "에이전트에게 보낼 메시지 또는 지시 작성..."
+      "comment_placeholder": "에이전트에게 보낼 메시지 또는 지시 작성...",
+      "start_now": "지금 시작"
     },
     "roles": {
       "title": "AI 역할 및 프롬프트 관리",

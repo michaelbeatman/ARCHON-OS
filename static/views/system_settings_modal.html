@@ -40,8 +40,8 @@
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
-          <button type="button" id="modal-header-onboarding-btn" onclick="window.openOnboardingWizard ? window.openOnboardingWizard(true) : fetch('/api/onboarding/status')" title="Setup-Wizard erneut starten" class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] transition flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="compass" class="w-3.5 h-3.5"></i> <span>Setup-Wizard</span>
+          <button type="button" id="modal-header-onboarding-btn" onclick="window.openOnboardingWizard ? window.openOnboardingWizard(true) : fetch('/api/onboarding/status')" title="Setup-Wizard erneut starten" data-i18n-title="settings.general.onboarding_title" class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="compass" class="w-3.5 h-3.5"></i> <span data-i18n="settings.general.onboarding_btn">Setup-Wizard</span>
           </button>
           <button type="button" id="modal-header-dock-btn" onclick="toggleSettingsDockMode()" title="Fenster rechts andocken für freien Live-Blick auf die echte Oberfläche" data-i18n-title="settings.general.dock_title" class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-[var(--foreground)] transition flex items-center gap-1.5 cursor-pointer">
             <i data-lucide="panel-right" class="w-3.5 h-3.5"></i> <span data-i18n="settings.general.dock_btn">Live-Dock</span>

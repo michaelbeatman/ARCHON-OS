@@ -109,13 +109,21 @@ def api_get_plugin_tools():
 async def api_execute_plugin_tool(request: Request, payload: dict = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
+    from backend.delegation_isolation import enforce_runtime_tool_gate, mark_session_tainted_on_tool_read
     pm = get_plugin_manager()
     tool_name = payload.get("tool_name", "")
     args = payload.get("args", {})
+    agent_id = str(payload.get("agent_id") or "").strip()
+    session_id = str(payload.get("session_id") or "default_session").strip()
+    approval_id = payload.get("approval_id")
     if not tool_name:
         raise HTTPException(status_code=400, detail={"code": "plugins_tool_name_required", "params": {}})
+    gate = enforce_runtime_tool_gate(agent_id=agent_id, session_id=session_id, tool_name=tool_name, args=args, approval_id=approval_id)
+    if not gate.get("allowed"):
+        raise HTTPException(status_code=403, detail=gate)
     try:
         res = await pm.execute_plugin_tool(tool_name, args)
+        mark_session_tainted_on_tool_read(session_id, tool_name)
         return {"status": "success", "result": res}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

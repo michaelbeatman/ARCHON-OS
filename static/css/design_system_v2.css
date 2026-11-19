@@ -1,0 +1,34 @@
+/* M6: Archon OS Ergonomisches Designsystem v2 (Typografie, Fokus-Ringe, Dark/Light-Verfeinerung) */
+:root {
+  --archon-radius-sm: 0.5rem;
+  --archon-radius-md: 0.75rem;
+  --archon-radius-lg: 1rem;
+  --archon-space-card: 1.25rem;
+  --archon-font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --archon-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+body {
+  font-family: var(--archon-font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.os-modal {
+  border-radius: var(--archon-radius-lg);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+}

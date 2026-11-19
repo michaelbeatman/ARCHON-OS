@@ -138,3 +138,133 @@ async def api_save_kanban(request: Request):
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+# --- M78: Kanban Gantt & Dependency Graph ---
+def _load_tasks_and_links_sync():
+    kanban_db = _resolve_active_kanban_db()
+    if not os.path.exists(kanban_db):
+        return [], []
+    kconn = None
+    try:
+        kconn = get_db_connection(kanban_db, timeout=5.0)
+        kconn.row_factory = sqlite3.Row
+        tasks = [
+            dict(r)
+            for r in kconn.execute("SELECT * FROM tasks WHERE status != 'archived'").fetchall()
+        ]
+        links = []
+        try:
+            links = [dict(r) for r in kconn.execute("SELECT * FROM task_links").fetchall()]
+        except Exception:
+            links = []
+        return tasks, links
+    finally:
+        if kconn:
+            kconn.close()
+
+
+@router.get("/api/operations/kanban/gantt")
+async def api_kanban_gantt(default_hours: int = 4):
+    from backend.kanban_views import build_gantt_items
+    tasks, _ = await run_io_bound(_load_tasks_and_links_sync)
+    return {"status": "success", "items": build_gantt_items(tasks, default_duration_hours=max(1, default_hours))}
+
+
+@router.get("/api/operations/kanban/graph")
+async def api_kanban_graph():
+    from backend.kanban_views import build_dependency_graph
+    tasks, links = await run_io_bound(_load_tasks_and_links_sync)
+    return {"status": "success", **build_dependency_graph(tasks, links)}
+
+
+# --- M76: Kanban Card HITL Decision (override_budget | retry | abort) ---
+@router.post("/api/operations/kanban/tasks/{task_id}/hitl")
+async def api_kanban_task_hitl(request: Request, task_id: str):
+    from archon.routers._rbac import require_admin_or_503
+    require_admin_or_503(request)
+    payload = await request.json()
+    action = str(payload.get("action") or "").strip()
+    override_budget = payload.get("token_budget")
+
+    from backend.kanban_verifier import resolve_card_hitl_decision
+    try:
+        decision = resolve_card_hitl_decision(action, override_budget=override_budget)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    def _apply_hitl():
+        kanban_db = _resolve_active_kanban_db()
+        if not os.path.exists(kanban_db):
+            return False
+        kconn = get_db_connection(kanban_db, timeout=5.0)
+        try:
+            kconn.execute(
+                "UPDATE tasks SET status = ?, block_kind = ? WHERE id = ?",
+                (decision["next_status"], decision["block_kind"], task_id),
+            )
+            kconn.commit()
+            return True
+        finally:
+            kconn.close()
+
+    ok = await run_io_bound(_apply_hitl)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Kanban DB or task not found")
+    return {"status": "success", "task_id": task_id, **decision}
+
+
+# --- M91: Precedent Log (Tenant-/Project-isoliert) ---
+@router.get("/api/operations/precedents")
+async def api_list_precedents(tenant_id: str = "default", project_id: Optional[str] = None):
+    from backend.precedent_log import list_precedents
+    return {"status": "success", "precedents": list_precedents(tenant_id, project_id)}
+
+
+@router.post("/api/operations/precedents")
+async def api_create_precedent(request: Request):
+    from archon.routers._rbac import require_admin_or_503
+    require_admin_or_503(request)
+    payload = await request.json()
+    from backend.precedent_log import record_precedent
+    rec = record_precedent(
+        tenant_id=str(payload.get("tenant_id") or "default"),
+        project_id=str(payload.get("project_id") or ""),
+        question=str(payload.get("question") or ""),
+        ruling_text=str(payload.get("ruling_text") or ""),
+        created_by=str(payload.get("created_by") or "human"),
+        expires_at=payload.get("expires_at"),
+    )
+    return {"status": "success", "precedent": rec}
+
+
+@router.delete("/api/operations/precedents/{precedent_id}")
+async def api_revoke_precedent(request: Request, precedent_id: str, tenant_id: str = "default"):
+    from archon.routers._rbac import require_admin_or_503
+    require_admin_or_503(request)
+    from backend.precedent_log import revoke_precedent
+    ok = revoke_precedent(precedent_id, tenant_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Precedent not found")
+    return {"status": "success", "revoked": precedent_id}
+
+
+# --- M89: Session Taint Guard HITL Approvals ---
+@router.get("/api/v1/guardian/taint/approvals")
+async def api_list_taint_approvals():
+    from backend.session_taint_guard import list_pending_taint_approvals
+    return {"status": "success", "approvals": list_pending_taint_approvals()}
+
+
+@router.post("/api/v1/guardian/taint/approvals/{approval_id}")
+async def api_resolve_taint_approval(request: Request, approval_id: str):
+    from archon.routers._rbac import require_admin_or_503
+    require_admin_or_503(request)
+    payload = await request.json()
+    approved = bool(payload.get("approved", False))
+    reviewer = str(payload.get("reviewer") or "admin")
+    from backend.session_taint_guard import resolve_taint_approval
+    res = resolve_taint_approval(approval_id, approved=approved, reviewer=reviewer)
+    if not res:
+        raise HTTPException(status_code=404, detail="Pending taint approval not found")
+    return {"status": "success", "approval": res}

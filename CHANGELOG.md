@@ -2,6 +2,64 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [Unreleased] — 2026-11-18 (Hermes Marketplace Skills & MCP Plugins)
+
+### Added
+- **M6 Design System v2 & v2 Capabilities UI Bridge:** Added `static/css/design_system_v2.css` (typography, WCAG 2.2 `:focus-visible`, refined scrollbar/modal tokens) and `static/js/v2_capabilities_panel.js` (`window.archonV2Panel`), wired into `static/index.html`.
+- **Compliance, Tenant DB Registry & Legacy RCE Cleanup:**
+  - Removed legacy `node -e eval(...)`, `sql.unsafe(...)`, and hardcoded Postgres credentials from `backend/post_task_pipeline.py` (`sync_paperclip_completion` now fails closed).
+  - Added `backend/tenant_db_registry.py` (`resolve_tenant_db_path`, `gdpr_erase_subject_data`) and mounted `POST /api/v2/gdpr/erase` in `archon/routers/v2_capabilities.py` for Art. 17 DSGVO erasure across all v2 SQLite DBs.
+  - Enforced § 201 StGB participant consent gate (`all_participants_consented=True`) in `backend/meeting_copilot.py` and `/api/v2/meetings/note`.
+  - Enforced BGB/EU-AI-Act Art. 50 contract confirmation (`terms_accepted`, `ai_disclosure_shown`, `client_ip`, `document_sha256`) in `backend/client_approval_portal.py`.
+  - Added EU AI Act Annex III high-risk human-oversight mandate to `.agents/skills/auto_senior_applicant_screener/SKILL.md`.
+- **Audit Hardening & Full v2 Router Wiring:**
+  - Hardened `backend/main.py` CORS (replaced `allow_origins=["*"]` with configurable localhost origins via `ARCHON_CORS_ORIGINS`).
+  - Removed hardcoded HMAC fallback secret in `backend/tool_warrants.py` (now loads `ARCHON_WARRANT_SECRET` or generates a 32-byte random local key in `data/warrant_hmac.key`).
+  - Added unified runtime gate `enforce_runtime_tool_gate` + `mark_session_tainted_on_tool_read` in `backend/delegation_isolation.py` and wired it into `archon/routers/plugins.py` (`api_execute_plugin_tool`).
+  - Mounted all 26 v2 capability modules via `archon/routers/v2_capabilities.py` (`/api/v2/*`) in `main.py` (orphaned backend modules reduced from 26 to 0).
+- **Milestone M88 Implemented (`backend/special_extensions.py`):** Added SSH/Slurm remote worker command builder (`flota`/`own-compute`), approval-gated Kujo runtime bridge (`kujo-hermes`), media Keep/Cut/Redo swipe deck (`riah-swipe`), and politeness/token metrics (`manners-meter`).
+- **Milestones M41, M40, M42, M85, M87 Implemented:**
+  - **M41 (`backend/calendar_sync_blocker.py`):** Bidirectional CalDAV/ICS sync (`parse_ics_events`, `export_ics_events`, `sync_calendar_bidirectional`) and automated Deep-Work focus blocker (`schedule_focus_blocks`).
+  - **M40 (`backend/contract_diff_redliner.py`):** Clause-level contract diff, XSS-safe HTML redlining, and legal risk keyword detection (`diff_contract_clauses`, `assess_clause_risks`).
+  - **M42 (`backend/client_approval_portal.py`):** Password-protected, expiring client approval links (`data/client_portal.db`) with direct ERP status transition (`Angebot` -> `Auftrag`).
+  - **M85 (`backend/worktree_joust.py`):** Best-of-N isolated Git worktree contender planning, creation, and test/diff ranking (`score_joust_contenders`).
+  - **M87 (`backend/external_connectors.py`):** Unified connector adapters for `inkly` (eSignature), `local-business-leads`, `hermes-issue-sync`, and `ghl-command`.
+- **Block C & D Milestones Implemented (M32, M63, M64, M62, M55/M25, M33, M38, M37, M39, M54):**
+  - **M32 (`backend/telegram_gateway_v2.py`):** Conflict-free session keying, slash-command agent routing, inline HITL keyboards, and live status formatting.
+  - **M63 (`static/js/sidebar_v2.js`):** Persistent collapsible sidebar sections wired into `static/index.html`.
+  - **M64 (`static/views/system_settings_modal.html`):** Added `Setup-Wizard` relaunch button (`#modal-header-onboarding-btn`) in the Settings header.
+  - **M62 (`backend/operations_templates.py`):** Unified template registry and live placeholder preview renderer (`list_operations_templates`, `preview_operations_template`).
+  - **M55 / M25 (`backend/enterprise_calendar.py`, `static/js/enterprise_calendar_ui.js`):** Day/week/month grid builder, recurring event expansion, drag-and-drop reschedule, and agent resource grouping.
+  - **M33 (`backend/watchdog_radar_v2.py`):** Semantic relevance scoring, SHA-256 deduplication (`data/watchdog_v2.db`), and automatic fallback-URL self-healing.
+  - **M38 (`backend/contract_deadline_watcher.py`):** 30/14-day contract & subscription deadline scanner with automated cancellation notice drafts.
+  - **M37 (`backend/time_tracking_invoice.py`):** SQLite WAL timer (`data/time_tracking.db`), project budget variance, and 1-click ERP invoice line-item export.
+  - **M39 (`backend/meeting_copilot.py`):** Speaker-diarized transcript formatting, Kanban action-item extraction, and CRM meeting note builder.
+  - **M54 (`backend/voice_to_workflow.py`):** Two-stage dictation ambiguity detector and deterministic playbook compiler.
+- **Block A & B Milestones Implemented (M84, M90, M80, M82, M93, M92, M94, M50, M45, M65):**
+  - **M84 (`backend/injection_range.py`):** 8-scenario prompt injection drill suite (`run_injection_drill`) incl. Base64, HTML comments, memory poisoning, and tool smuggling.
+  - **M90 (`backend/tool_warrants.py`):** HMAC-SHA256 signed, expiring tool warrants with parameter constraints (`issue_warrant`, `verify_warrant_for_call`).
+  - **M80 (`backend/hybrid_sop_runner.py`):** Hybrid SOP runner separating deterministic `script` steps from `agent` judgment steps.
+  - **M82 (`backend/session_receipts.py`):** Structured delegation receipts and self-contained offline HTML evidence documents (`render_offline_html_receipt`).
+  - **M93 (`backend/tool_output_firewall.py`):** Context-protecting `guard_tool_output` and single-turn `run_batch_tool_calls`.
+  - **M92 (`backend/workflow_freeze.py`):** Deterministic `freeze_tool_sequence` and zero-token `replay_frozen_workflow` (`data/frozen_workflows.db`).
+  - **M94 (`backend/lossless_session_dag.py`):** Lossless SQLite turn/summary DAG (`data/lcm_sessions.db`) and multi-perspective `run_storm_panel`.
+  - **M50 (`backend/agent_eval_arena.py`):** Local reference benchmark deck (`run_eval_arena`, `data/eval_arena.db`).
+  - **M45 (`backend/deep_research_lab.py`):** Trust-tier source triangulation (`triangulate_sources`) and Obsidian dossier export (`compile_research_dossier`).
+  - **M65 (`static/views/system_settings_modal.html`):** Grouped wrapping tab navigation and consistent spacing in the System Control Center modal.
+- **Next-5 Roadmap Milestones Implemented (M77, M79, M81, M83, M86):**
+  - **M77 (Workflow DAG Runner):** Added `backend/workflow_dag_runner.py` (JSON-DAGs with parallel fan-out/quorum, human/machine gates, and SHA-256 fingerprint replay-skip resume in SQLite WAL).
+  - **M79 (Offline Encrypted Memory Vault):** Added `backend/offline_memory_vault.py` (100% offline AEAD-encrypted local hybrid/vector memory store with zero network calls or external API keys).
+  - **M81 (Cross-Model Verifier & Assertion Guard):** Extended `backend/kanban_verifier.py` with `detect_deleted_test_assertions`, `pick_independent_verifier_model`, and `cross_model_verify_card`.
+  - **M83 (Flightlog & Policy Backtester):** Added `backend/flightlog_backtester.py` (`record_flight_event`, `detect_silent_failures`, `backtest_policy`).
+  - **M86 (Quota & Verification Escalation):** Extended `backend/agent_router.py` with `select_quota_and_escalation_route` and `chat_with_verification_escalation`.
+- **Top-5 Roadmap Milestones Implemented (M75, M89, M76, M91, M78):**
+  - **M75 (Delegation Isolation):** Added `backend/delegation_isolation.py` and wired strict profile-only `tools`/`skills`/`model` isolation into `archon/core/delegation.py` (`_execute_delegation`).
+  - **M89 (Session Taint Guard):** Added `backend/session_taint_guard.py` (SQLite WAL) and HITL approval endpoints (`GET/POST /api/v1/guardian/taint/approvals`) in `archon/routers/kanban.py`.
+  - **M76 (Kanban Verifier & Proof Gate):** Added `backend/kanban_verifier.py` (token budget check, proof-command execution, 1 auto-retry, HITL decision endpoint `POST /api/operations/kanban/tasks/{task_id}/hitl`) and wired it into `backend/operations_api.py`.
+  - **M91 (Tenant-Isolated Precedent Log):** Added `backend/precedent_log.py` (strict `(tenant_id, project_id)` isolation, CRUD endpoints `/api/operations/precedents`) and prompt injection in `backend/operations_api.py`.
+  - **M78 (Kanban Gantt & Dependency Graph):** Added `backend/kanban_views.py` (hybrid Gantt + longest-path dependency graph), endpoints `GET /api/operations/kanban/gantt|graph`, and frontend renderer `static/js/kanban_gantt_graph.js`.
+- **Hermes Marketplace Skills & MCP Integration:** Integrated 18 skills in `.agents/skills/` (`hermes-agent`, `sdlc-review`, `simplify-code`, `claude-code`, `codex`, `kinocut`, `kinocut-repurpose`, `pay`, `patsnap-search`, `canonry`, `penthera`, `opendockit`, `seo`, `seo-audit`, `seo-geo`, `seo-technical`, `seo-schema`, `seo-content`), added `.mcp.json` (`kinocut`, `pay`, `pay-cli`, `patsnap`, `canonry`, `opendockit`), assigned skills and `mcp` tool access to specialist profiles in `agent_profiles.json`, added Roadmap Milestones **M75–M94** in `docs/system/ROADMAP_2026.md`, and documented server prerequisites in `docs/HERMES_PLUGINS_SKILLS_INTEGRATION.md`.
+
 ## [Unreleased] — 2026-11-15 (Core Audit & Hardening Fixes)
 
 ### Added

@@ -477,59 +477,10 @@ Verknüpftes Projekt:
 
 def sync_paperclip_completion(task: dict, artifact_path: str) -> bool:
     """
-    Setzt in Paperclip den Issue-Status auf completed und hängt das Endprodukt an.
+    Legacy Paperclip-Sync deaktiviert (Security Hardening: Remote-eval,
+    sql.unsafe und Klartext-DB-Credentials entfernt). Archon nutzt nativ kanban.db.
     """
-    pc_issue = task.get("paperclip_issue") or {}
-    issue_id = pc_issue.get("id") or ""
-    title = (task.get("title") or "")[:30].replace("'", "").replace('"', "")
-    clean_art_path = artifact_path.replace("\\", "/")
-
-    # Node-Skript via docker exec ausführen
-    script = f"""
-const postgres = require('/app/node_modules/.pnpm/postgres@3.4.9/node_modules/postgres');
-async function run() {{
-  const sql = postgres('postgresql://paperclip:paperclip@127.0.0.1:54329/paperclip');
-  let targetId = '{issue_id}';
-  
-  if (!targetId) {{
-    const rows = await sql.unsafe("SELECT id FROM issues WHERE title LIKE '%{title}%' LIMIT 1");
-    if (rows.length > 0) targetId = rows[0].id;
-  }}
-  
-  if (targetId) {{
-    await sql.unsafe("UPDATE issues SET status = 'completed', updated_at = NOW() WHERE id = '" + targetId + "'");
-    try {{
-      await sql.unsafe("INSERT INTO issue_work_products (id, issue_id, kind, label, path, created_at) VALUES (gen_random_uuid(), '" + targetId + "', 'document', 'Finales Endprodukt', '{clean_art_path}', NOW())");
-    }} catch(e) {{}}
-    await sql.unsafe("INSERT INTO issue_comments (id, issue_id, author_type, body, created_at, updated_at) VALUES (gen_random_uuid(), '" + targetId + "', 'system', 'Post-Task-Pipeline: Auftrag erfolgreich abgeschlossen und in Obsidian Projects abgelegt.', NOW(), NOW())");
-    console.log('Paperclip issue ' + targetId + ' marked completed.');
-  }} else {{
-    console.log('No matching Paperclip issue found.');
-  }}
-  process.exit(0);
-}}
-run();
-"""
-    try:
-        import base64
-        import httpx
-        import json
-        b64 = base64.b64encode(script.encode("utf-8")).decode("utf-8")
-        payload = {
-            "AttachStdout": True,
-            "AttachStderr": True,
-            "Cmd": ["node", "-e", f"eval(Buffer.from('{b64}', 'base64').toString('utf8'))"]
-        }
-        resp = httpx.post("http://docker-socket-proxy:2375/containers/paperclip-orchestrator/exec", json=payload, timeout=5.0)
-        if resp.status_code == 201:
-            exec_id = resp.json().get("Id")
-            if exec_id:
-                start_resp = httpx.post(f"http://docker-socket-proxy:2375/exec/{exec_id}/start", json={"Detach": False, "Tty": False}, timeout=10.0)
-                return "marked completed" in start_resp.text
-        return False
-    except Exception as e:
-        pass  # print(f"[PostTaskPipeline] Paperclip-Sync Warnung: {e}")
-        return False
+    return False
 
 
 def execute_post_task_pipeline(task: dict) -> Dict[str, Any]:

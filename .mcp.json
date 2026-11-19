@@ -1,0 +1,53 @@
+{
+  "mcpServers": {
+    "kinocut": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "kinocut==2.0.1"
+      ]
+    },
+    "pay": {
+      "type": "streamable-http",
+      "url": "https://connect.pay.sh/mcp"
+    },
+    "pay-cli": {
+      "type": "stdio",
+      "command": "pay",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "PAY_FORCE_ELICITATION": "1"
+      }
+    },
+    "patsnap": {
+      "type": "streamable-http",
+      "url": "https://connect.patsnap.com/2b0355/logic-mcp",
+      "headers": {
+        "apikey": "${PATSNAP_API_KEY}"
+      }
+    },
+    "canonry": {
+      "type": "stdio",
+      "command": "canonry-mcp",
+      "args": []
+    },
+    "opendockit": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--python",
+        ">=3.12",
+        "--exclude-newer",
+        "2026-11-17T07:03:00Z",
+        "--from",
+        "opendockit[mcp]==0.3.13",
+        "opendockit-mcp"
+      ],
+      "env": {
+        "OPENDOCKIT_MCP_ROOTS": "${OPENDOCKIT_MCP_ROOTS}"
+      }
+    }
+  }
+}

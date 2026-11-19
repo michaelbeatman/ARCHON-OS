@@ -1316,6 +1316,10 @@ from archon.routers.kanban import (
 )
 app.include_router(_kanban_router)
 
+# --- ARCHON V2 CAPABILITIES ROUTER (M32-M94) ---
+from archon.routers.v2_capabilities import router as _v2_capabilities_router
+app.include_router(_v2_capabilities_router)
+
 # --- DOCKER CONTAINER MANAGEMENT ROUTER (ausgelagert nach archon.routers.containers) ---
 from archon.routers.containers import (
     router as _containers_router,

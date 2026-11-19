@@ -6,7 +6,7 @@ import logging
 import asyncio
 import json
 import httpx
-from typing import Dict, Any, List, AsyncGenerator
+from typing import Dict, Any, List, Optional, AsyncGenerator
 from datetime import datetime
 
 logger = logging.getLogger("agent_router")
@@ -1009,3 +1009,87 @@ def check_task_budget(task_id: str, cost_usd: float, budget_usd: float = 0.25, t
             "recommend_model": "deepseek/deepseek-chat"
         }
     return {"status": "ok", "task_id": task_id, "cost_usd": cost, "budget_usd": budget, "paused": False}
+
+
+# --- M86: Quota-, Verification- & Quality-Escalation-Fallback ---
+def select_quota_and_escalation_route(
+    primary_model: str,
+    remaining_quota_pct: float = 100.0,
+    quota_threshold_pct: float = 51.0,
+    cheap_model: str = "deepseek/deepseek-chat",
+    frontier_model: str = "anthropic/claude-sonnet-4",
+    verification_passed: bool = True,
+) -> Dict[str, Any]:
+    """
+    Waehlt das Zielmodell anhand von Rest-Quota (vibe-relay) und
+    Verifikationsergebnis (nvidia-switchyard / calling-mom).
+    """
+    if not verification_passed:
+        return {"model": frontier_model, "reason": "verification_escalation", "escalated": True}
+    if remaining_quota_pct < quota_threshold_pct:
+        return {"model": cheap_model, "reason": "quota_threshold_fallback", "escalated": False}
+    return {"model": primary_model, "reason": "primary", "escalated": False}
+
+
+async def chat_with_verification_escalation(
+    router_instance: "AgentRouter",
+    messages: List[Dict],
+    provider: str,
+    primary_model: str,
+    api_keys: Dict[str, str],
+    verifier_fn: Optional[Any] = None,
+    remaining_quota_pct: float = 100.0,
+    quota_threshold_pct: float = 51.0,
+    cheap_model: str = "deepseek/deepseek-chat",
+    frontier_model: str = "anthropic/claude-sonnet-4",
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    Fuehrt zuerst das ausgewaehlte (ggf. guenstige/lokale) Modell aus und
+    eskaliert nur dann auf `frontier_model`, wenn `verifier_fn` False liefert.
+    """
+    first_pick = select_quota_and_escalation_route(
+        primary_model=primary_model,
+        remaining_quota_pct=remaining_quota_pct,
+        quota_threshold_pct=quota_threshold_pct,
+        cheap_model=cheap_model,
+        frontier_model=frontier_model,
+        verification_passed=True,
+    )
+    first_out = await router_instance.chat_completion(
+        messages=messages,
+        provider=provider,
+        model=first_pick["model"],
+        api_keys=api_keys,
+        **kwargs,
+    )
+    passed = bool(verifier_fn(first_out)) if callable(verifier_fn) else bool((first_out or "").strip())
+    if passed or first_pick["model"] == frontier_model:
+        return {
+            "content": first_out,
+            "model_used": first_pick["model"],
+            "escalated": False,
+            "route_reason": first_pick["reason"],
+        }
+
+    esc_pick = select_quota_and_escalation_route(
+        primary_model=primary_model,
+        remaining_quota_pct=remaining_quota_pct,
+        quota_threshold_pct=quota_threshold_pct,
+        cheap_model=cheap_model,
+        frontier_model=frontier_model,
+        verification_passed=False,
+    )
+    esc_out = await router_instance.chat_completion(
+        messages=messages,
+        provider=provider,
+        model=esc_pick["model"],
+        api_keys=api_keys,
+        **kwargs,
+    )
+    return {
+        "content": esc_out,
+        "model_used": esc_pick["model"],
+        "escalated": True,
+        "route_reason": esc_pick["reason"],
+    }

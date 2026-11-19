@@ -1535,6 +1535,47 @@
       }
     }
 
+    // Direkt-Start fuer To-Do / Ready Karten im Operations-Kanban (analog zum Dashboard)
+    async function startKanbanTask(taskId) {
+      try {
+        const res = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(taskId)}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'in_progress' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (typeof showNotification === 'function') showNotification('Kanban', data.detail || 'Start fehlgeschlagen', 'error');
+          return;
+        }
+        if (typeof showNotification === 'function') showNotification('Kanban', 'Aufgabe gestartet.', 'success');
+        await loadOperationsData(false);
+      } catch (e) {
+        if (typeof showNotification === 'function') showNotification('Kanban', 'Netzwerkfehler beim Starten', 'error');
+      }
+    }
+
+    // Schnell-Zuweisung eines Profils direkt auf der Kanban-Karte
+    async function quickAssignKanbanTask(taskId, assigneeId) {
+      if (!assigneeId) return;
+      try {
+        const res = await fetch('/api/operations/kanban/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'assign', task_ids: [taskId], assignee: assigneeId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (typeof showNotification === 'function') showNotification('Zuweisung', data.detail || 'Profil-Zuweisung fehlgeschlagen', 'error');
+          return;
+        }
+        if (typeof showNotification === 'function') showNotification('Zuweisung', `Profil '${assigneeId}' zugewiesen.`, 'success');
+        await loadOperationsData(false);
+      } catch (e) {
+        if (typeof showNotification === 'function') showNotification('Zuweisung', 'Netzwerkfehler bei Profil-Zuweisung', 'error');
+      }
+    }
+
     function renderOperationsKanban(data) {
       const container = document.getElementById('ops-kanban-columns-container');
       const badge = document.getElementById('ops-kanban-badge');
@@ -1682,9 +1723,30 @@
                 <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2">${opsEscapeHtml(t.title)}</h4>
                 ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-tight">${opsEscapeHtml(t.body)}</p>` : ''}
                 ${projektName ? `<div class="inline-block max-w-full truncate px-1.5 py-0.5 rounded text-[9px] font-mono text-muted-custom bg-[var(--secondary)] border border-[var(--border)]" title="${opsEscapeHtml(t.obsidian)}">📁 ${opsEscapeHtml(projektName)}</div>` : ''}
-                ${(t.block_kind === 'approval') ? `<button type="button" onclick="event.stopPropagation(); approveKanbanTask('${t.id}')"
+                ${(t.block_kind === 'approval' || (t.block_kind && String(t.block_kind).endsWith('_hitl'))) ? `<button type="button" onclick="event.stopPropagation(); approveKanbanTask('${t.id}')"
                   class="w-full mt-1 px-2 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-[10px] font-bold transition cursor-pointer"
                   title="${kanT('ui.operations_kanban.autonomy_release_start', 'Autonomie-Freigabe erteilen und Aufgabe starten')}">🔓 Freigeben &amp; starten</button>` : ''}
+                ${(['todo', 'ready', 'triage', 'scheduled', 'blocked'].includes(String(t.status || '').toLowerCase()) && t.block_kind !== 'approval') ? `<div class="mt-1 flex items-center gap-1.5">
+                  ${String(t.status || '').toLowerCase() !== 'blocked' ? `<button type="button" onclick="event.stopPropagation(); startKanbanTask('${t.id}')"
+                    class="flex-1 px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold transition cursor-pointer"
+                    title="Aufgabe direkt aus dem Kanban starten">▶ Starten</button>` : ''}
+                  <select onclick="event.stopPropagation()" onchange="event.stopPropagation(); quickAssignKanbanTask('${t.id}', this.value)"
+                    class="flex-1 px-1.5 py-1 rounded-lg border ${!t.assignee ? 'border-amber-500/60' : 'border-[var(--border)]'} bg-[var(--secondary)] text-[10px] text-[var(--foreground)] cursor-pointer"
+                    title="Profil zuweisen oder ändern (leer = Orchestrator übernimmt automatisch)">
+                    <option value="default" ${(!t.assignee || t.assignee === 'default') ? 'selected' : ''}>${!t.assignee ? '🤖 Auto (Orchestrator)' : 'Hermes Root (default)'}</option>
+                    <option value="executive_decision_architect" ${t.assignee === 'executive_decision_architect' ? 'selected' : ''}>CEO Robert</option>
+                    <option value="senior_fullstack_engineer" ${t.assignee === 'senior_fullstack_engineer' ? 'selected' : ''}>Senior Fullstack Engineer</option>
+                    <option value="system_architect_orchestrator" ${t.assignee === 'system_architect_orchestrator' ? 'selected' : ''}>System Architect</option>
+                    <option value="devops_cloud_sec_specialist" ${t.assignee === 'devops_cloud_sec_specialist' ? 'selected' : ''}>DevOps &amp; Cloud Sec</option>
+                    <option value="qa_test_engineer" ${t.assignee === 'qa_test_engineer' ? 'selected' : ''}>QA &amp; Test Engineer</option>
+                    <option value="legal_counsel" ${t.assignee === 'legal_counsel' ? 'selected' : ''}>Legal Counsel</option>
+                    <option value="finance_lead" ${t.assignee === 'finance_lead' ? 'selected' : ''}>Finance Lead</option>
+                    <option value="knowledge_librarian" ${t.assignee === 'knowledge_librarian' ? 'selected' : ''}>Knowledge Librarian</option>
+                    <option value="lead_enrichment_analyst" ${t.assignee === 'lead_enrichment_analyst' ? 'selected' : ''}>Lead Analyst</option>
+                    <option value="bi_controller" ${t.assignee === 'bi_controller' ? 'selected' : ''}>BI Controller</option>
+                    <option value="database_performance_tuner" ${t.assignee === 'database_performance_tuner' ? 'selected' : ''}>DB Tuner</option>
+                  </select>
+                </div>` : ''}
                 <div class="pt-1 flex items-center justify-between border-t border-[var(--border)]/50 text-[10px]">
                   <div class="flex items-center gap-1.5 min-w-0">
                     <img src="${avatar}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)]" style="width:28px;height:28px;min-width:28px;max-width:28px;min-height:28px;max-height:28px;" />
@@ -2675,6 +2737,14 @@
           }
         }
         if (nameEl) nameEl.textContent = task.assignee_name || task.assignee || kanT('ui.operations_kanban.unassigned', 'Nicht zugewiesen');
+        const selEl = document.getElementById('ops-detail-assignee-select');
+        if (selEl) selEl.value = task.assignee || 'default';
+        const qgEl = document.getElementById('ops-detail-quality-gate');
+        if (qgEl) {
+          const stLow = String(task.status || '').toLowerCase();
+          const showQg = ['review', 'done'].includes(stLow) || (stLow === 'in_progress' && !!(task.result && String(task.result).trim())) || !!task.quality_review;
+          qgEl.classList.toggle('hidden', !showQg);
+        }
         if (avatarEl) avatarEl.src = task.assignee_avatar || '/static/avatars/avatar_001.jpg';
         if (modelTag) modelTag.textContent = task.model_override ? task.model_override.split('/').pop() : 'OmniRoute Auto';
         populateOpsDetailMeta(taskId);
@@ -2792,6 +2862,24 @@
       if (modal) modal.classList.add('hidden');
       currentOpsDetailTaskId = null;
     }
+
+    window.startCurrentDetailTask = async function() {
+      if (!currentOpsDetailTaskId) return;
+      const btn = document.getElementById('btn-ops-detail-start');
+      if (btn) btn.disabled = true;
+      try {
+        await startKanbanTask(currentOpsDetailTaskId);
+        await openTaskDetailModal(currentOpsDetailTaskId);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    };
+
+    window.assignCurrentDetailTask = async function(assigneeId) {
+      if (!currentOpsDetailTaskId || !assigneeId) return;
+      await quickAssignKanbanTask(currentOpsDetailTaskId, assigneeId);
+      await openTaskDetailModal(currentOpsDetailTaskId);
+    };
 
     window.triggerTaskQualityReview = async function() {
       if (!currentOpsDetailTaskId) return;

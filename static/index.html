@@ -14,6 +14,7 @@
   <!-- Custom Studio CSS Overrides -->
   <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
   <link rel="stylesheet" href="/static/custom.css?v=2026111113">
+  <link rel="stylesheet" href="/static/css/design_system_v2.css?v=2026111901">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
   <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=2026111113">
   <script src="/static/vendor/lucide.min.js"></script>
@@ -2155,7 +2156,11 @@ print('Ausführung erfolgreich!')</textarea>
   </script>
   <script src="/static/js/mission_control_cockpit.js?v=2026111113"></script>
   <script src="/static/js/research_lab.js?v=2026111113"></script>
-  <script src="/static/js/operations_kanban.js?v=2026111601"></script>
+  <script src="/static/js/operations_kanban.js?v=2026111903"></script>
+  <script src="/static/js/kanban_gantt_graph.js?v=2026111901"></script>
+  <script src="/static/js/sidebar_v2.js?v=2026111901"></script>
+  <script src="/static/js/enterprise_calendar_ui.js?v=2026111901"></script>
+  <script src="/static/js/v2_capabilities_panel.js?v=2026111901"></script>
   <script src="/static/js/operations_projects.js?v=2026111113"></script>
   <script src="/static/js/appshell_architect.js?v=2026111113"></script>
   <script src="/static/js/css_live_studio.js?v=2026111113"></script>
@@ -10288,8 +10293,22 @@ ${logExcerpt}
           <div>
             <span data-i18n="ui.task_detail.label_assignee" class="text-[10px] uppercase font-mono text-muted-custom block mb-1">Verantwortlicher Agent</span>
             <div id="ops-detail-assignee-box" class="flex items-center gap-2 mt-0.5">
-              <img id="ops-detail-assignee-avatar" src="/static/avatars/avatar_001.jpg" class="w-6 h-6 rounded-full object-cover border border-[var(--border)]" />
-              <span id="ops-detail-assignee-name" class="font-medium text-xs truncate">Nicht zugewiesen</span>
+              <img id="ops-detail-assignee-avatar" src="/static/avatars/avatar_001.jpg" class="w-6 h-6 rounded-full object-cover border border-[var(--border)] shrink-0" />
+              <span id="ops-detail-assignee-name" class="hidden font-medium text-xs truncate">Nicht zugewiesen</span>
+              <select id="ops-detail-assignee-select" onchange="assignCurrentDetailTask(this.value)" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--card)] text-xs font-mono text-[var(--foreground)] focus:outline-none cursor-pointer">
+                <option value="default">🤖 Auto / Hermes Root (default)</option>
+                <option value="executive_decision_architect">CEO Robert</option>
+                <option value="senior_fullstack_engineer">Senior Fullstack Engineer</option>
+                <option value="system_architect_orchestrator">System Architect</option>
+                <option value="devops_cloud_sec_specialist">DevOps &amp; Cloud Sec</option>
+                <option value="qa_test_engineer">QA &amp; Test Engineer</option>
+                <option value="legal_counsel">Legal Counsel</option>
+                <option value="finance_lead">Finance Lead</option>
+                <option value="knowledge_librarian">Knowledge Librarian</option>
+                <option value="lead_enrichment_analyst">Lead Analyst</option>
+                <option value="bi_controller">BI Controller</option>
+                <option value="database_performance_tuner">DB Tuner</option>
+              </select>
             </div>
           </div>
           <div>
@@ -10304,7 +10323,10 @@ ${logExcerpt}
             <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i>
             <span data-i18n="ui.task_detail.quick_actions" class="font-bold uppercase text-[10px]">Schnellaktionen:</span>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <button type="button" id="btn-ops-detail-start" onclick="startCurrentDetailTask()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10.5px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1">
+              <i data-lucide="play" class="w-3 h-3"></i> <span>Jetzt starten</span>
+            </button>
             <button type="button" onclick="opsQuickAction('retry')" class="px-2.5 py-1 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 text-[10.5px] font-bold transition cursor-pointer flex items-center gap-1">
               <i data-lucide="rotate-cw" class="w-3 h-3"></i> <span data-i18n="ui.task_detail.retry">Wiederholen</span>
             </button>
@@ -10360,8 +10382,8 @@ ${logExcerpt}
           </div>
         </div>
 
-        <!-- 4-AUGEN QUALITÄTS-GATE -->
-        <div id="ops-detail-quality-gate" class="p-3.5 rounded-xl border border-indigo-500/25 bg-indigo-500/5 space-y-3">
+        <!-- 4-AUGEN QUALITÄTS-GATE (nur sichtbar bei Review / Done oder vorhandenem Ergebnis) -->
+        <div id="ops-detail-quality-gate" class="hidden p-3.5 rounded-xl border border-indigo-500/25 bg-indigo-500/5 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg bg-indigo-500/15 flex items-center justify-center text-indigo-500 font-bold">

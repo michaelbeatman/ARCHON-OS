@@ -1,0 +1,327 @@
+# Google Business Profile Integration
+
+Canonry integrates with the Google Business Profile (GBP) API to surface local AEO signals: search-keyword impressions, daily performance metrics, hotel lodging attributes, and booking/reservation CTAs (plus reviews on the projects where Google has granted v4 access — see the gating section). This data feeds the local-AEO dashboard and the Aero analyst.
+
+> **Q&A is not available.** Google **retired** the My Business Q&A API (`mybusinessqanda.googleapis.com`) on 2025-11-03, and began winding down the public Q&A section on profiles shortly after. There is no programmatic way to read or write profile Q&A. Don't plan around it.
+
+## What Canonry Automates
+
+- Discover GBP accounts and locations the connected user manages, with explicit per-location selection
+- Sync search-keyword impressions aggregated over a date window (default ~12 months; stored with `periodStart`/`periodEnd`)
+- Sync daily performance metrics — impressions, website clicks, call clicks, direction requests (all 11 `DailyMetric`s)
+- For hotels: sync lodging attributes (amenities, accessibility, pets, etc.) and place action links (booking CTAs)
+- Roll the above into a composite summary scorecard (`canonry gbp summary`)
+- Sync reviews per location from the v4 API **where Google has granted v4 access** (gated; unavailable on most projects, see below). Elsewhere, fall back to the public Places listing: the overall rating and at most five reviews by relevance (`atmosphere` Places tier with a key)
+- Alert on negative reviews: `review.negative` webhooks for new or edited reviews at or below the project's threshold (1-3 stars by default), `review.rating-dropped` when the public rating falls (see "Review alerts" below)
+
+## What Stays Manual
+
+- Replying to reviews
+- Publishing offers and other posts outside the editorial article format
+- Updating lodging attributes
+- Configuring Google Pub/Sub notifications
+
+Canonry can publish a `STANDARD` editorial article with one photo and a `LEARN_MORE` link. Publishing requires explicit approval for the exact post and a credential with `gbp.posts.write`. Signed-in users must also be administrators.
+
+Use `canonry gbp posts create <project> --request <file>` for the approved request. The request binds the selected account and location to an attempt ID and package ID. If the result is uncertain, read the saved attempt with `canonry gbp posts attempt <project> --attempt <id> --package <id>`. Reconcile the attempt before you retry that publication. MCP can read posts and saved attempts.
+
+## Hard Prerequisite: API Access Approval
+
+**Before anything works**, your Google Cloud project must be approved through Google's Business Profile API Basic Access form. Until approved, every API call returns HTTP 403 / 0 QPM — regardless of OAuth scope or which APIs you've enabled.
+
+### Eligibility requirements
+
+From [Google's prerequisites doc](https://developers.google.com/my-business/content/prereqs#request-access):
+
+- **Active Verified Profile** — "Manage a Google Business Profile that is verified and active for 60+ days."
+- **Website Requirement** — "Have a website representing the business listed on the GBP."
+- **Profile Completeness** — Google recommends the profile be "fully complete and kept up-to-date with the current business information."
+
+Brand-new profiles (under 60 days) and profiles with no associated website are not eligible.
+
+### Submitting the access request
+
+1. Go to the GBP API contact form: <https://support.google.com/business/contact/api_default>
+2. Select **"Application for Basic API Access"** from the dropdown.
+3. Provide:
+   - Your **Google Cloud Console project number** (Cloud Console → Project Info dashboard, *not* the project ID)
+   - Email address listed as an **owner or manager** on the target GBP profile
+
+### Approval timeline
+
+- Google sends a follow-up email after review (timing varies; common reports are days to a few weeks).
+- Approval is signaled by a **quota change** in Google Cloud Console:
+  - **Not approved**: quota is **0 QPM** (Queries Per Minute) — every API call returns 403.
+  - **Approved**: quota is **300 QPM** — all enabled APIs become callable.
+
+Check quota at Cloud Console → APIs & Services → quotas, filtered by one of the GBP APIs.
+
+## GCP Setup
+
+### Enable the right APIs
+
+In Cloud Console → APIs & Services → Library, enable:
+
+| API | Purpose |
+|---|---|
+| My Business Account Management API | List accounts |
+| My Business Business Information API | List locations + owner-set attributes |
+| Business Profile Performance API | Daily metrics + monthly search keywords |
+| My Business Verifications API | (optional) Voice-of-Merchant state |
+| **My Business Lodging API** | **Hotel attributes — required for every GBP sync; non-lodging locations return no lodging data** |
+| **My Business Place Actions API** | **Booking / reservation CTAs — required for every GBP sync, even when no CTAs are configured** |
+
+**Do NOT enable "My Business Q&A API"** — Google **retired** it on 2025-11-03. It's listed in some older setup docs but no longer functions.
+
+### The legacy "Google My Business API" (v4 — reviews)
+
+Reviews and Local Posts use the legacy `mybusiness.googleapis.com` v4 API. In May 2026, the v4 reviews endpoint returned `403 SERVICE_DISABLED` for a project with Basic API Access.
+
+What we confirmed, with a project approved and running the v1 family at 300 QPM, authenticated as the exact approved account with the `business.manage` scope:
+
+- The v4 reviews call still returns `403 SERVICE_DISABLED`.
+- The API is **not searchable in the API Library** — the library page returns "Failed to load."
+- `gcloud services enable mybusiness.googleapis.com` returns `PERMISSION_DENIED` reason `110002` (`AUTH_PERMISSION_DENIED`) **even as the approved account** — this is the signature of a producer-restricted (Google-allowlisted) service that the project owner cannot toggle.
+- Per Google's [Basic setup](https://developers.google.com/my-business/content/basic-setup) doc: *"The Google My Business API is only visible in the Google API Console to users who submit and receive approval for their Google Account through the access request form."*
+
+**Conclusion:** the v4 GMB API is gated independently of the v1 approval and Google controls the switch. The only routes are (1) the **shortcut "enable" link from the access-approval email**, opened as the approved account in the browser, or (2) replying to the access-request thread asking Google to enable `mybusiness.googleapis.com` for your project number. Self-service (library, gcloud) does not work. Build reviews behind this gate and ship the rest without it.
+
+### Review alerts
+
+`cnry gbp sync` tries v4 reviews for every selected location. `cnry gbp reviews <project>` and `gbp.reviews.access` show the stored outcome per location. If v4 is unavailable, the fallback needs the `atmosphere` Places tier, an API key, and a Maps place ID. Canonry waits 20 hours after the last Places review observation before refreshing it. The fallback stops once v4 covers the location.
+
+| | Business Profile v4 | Places fallback |
+|---|---|---|
+| Reviews seen | Every review, including edits and owner replies | At most five, chosen by relevance, no replies |
+| `review.negative` | Each new or edited review at or below the threshold | A review at or below the threshold that appears among the five |
+| `review.rating-dropped` | Never (each review alerts on its own) | When the one-decimal public rating falls |
+
+The threshold is per project: 3 stars by default, set with `cnry project update <project> --negative-review-max-stars <1-4|default>` or `spec.negativeReviewMaxStars` in `canonry apply`. A hotel with hundreds of reviews may want 2; a small business may want every 3-star review.
+
+Rules that hold for both sources:
+
+- A location's first sync per source records a baseline and sends nothing, so connecting never replays old reviews.
+- A review older than 30 days never alerts. This keeps an old review that the Places listing surfaces by relevance from reading as new, and keeps a webhook that was broken for weeks from replaying a month of reviews once fixed.
+- A rating or text edit re-alerts; a new timestamp or an owner reply alone does not.
+- An alert is marked sent only after a destination accepts it, and retried on the next sync when every delivery failed. With no subscribed webhook it is skipped, not held.
+- Once v4 covers a location, queued Places alerts for it are suppressed so nothing is sent twice.
+
+Subscribe: `cnry notify add <project> --webhook <url> --events review.negative,review.rating-dropped`. Discord and Slack webhook URLs get a formatted message; any other URL gets the signed JSON payload. The doctor check warns only when a project subscribes to review events and some location has no review source at all; missing v4 access alone reports as skipped, since it is the normal state.
+
+**Account-credential gotcha:** Application Default Credentials (ADC) and the
+gcloud CLI have separate authentication configurations. An API diagnostic
+using ADC can therefore run as a different identity from `gcloud services
+enable`, which uses the CLI account shown by `gcloud config get-value account`.
+Confirm which credential source the diagnostic uses and which account was
+authorized for it before concluding that API access is missing. If the local
+ADC identity is wrong, have the operator authorize the intended account with
+`gcloud auth application-default login`; changing the CLI's active account
+does not change ADC. See [Google's ADC configuration and search order](https://cloud.google.com/docs/authentication/application-default-credentials).
+
+### Create OAuth client credentials
+
+1. Cloud Console → APIs & Services → **OAuth consent screen** → set up consent (External works). Add your own email under "Test users" while the app is in test mode.
+2. Cloud Console → APIs & Services → **Credentials** → **+ Create Credentials** → **OAuth client ID**.
+3. Application type: **Web application**.
+4. Register the exact redirect URI that `canonry gbp connect <project>` prints. A default local install uses `http://localhost:4100/api/v1/google/callback`. Include the base path if your Canonry URL has one.
+5. Save the **Client ID** and **Client secret**.
+
+### Store credentials for canonry
+
+Enter the OAuth client ID and secret under **Settings → Google OAuth**. You can also store them in `~/.canonry/config.yaml`.
+
+```yaml
+google:
+  clientId: "your-client-id"
+  clientSecret: "your-client-secret"
+```
+
+OAuth tokens (per-user, obtained at connect time) are stored in the same file under `google.connections`. They are never written to the canonry database.
+
+## Connect a Project
+
+Once GCP setup is done and the access form is approved:
+
+```bash
+canonry gbp connect <project>
+canonry gbp accounts <project>               # list accessible accounts (pick one)
+canonry gbp locations discover <project> --account accounts/123   # discover that account's locations
+canonry gbp locations <project>              # verify discovered locations
+canonry gbp sync <project> --wait            # run a first sync
+canonry gbp summary <project>                # check derived metrics
+```
+
+The consent screen requests `https://www.googleapis.com/auth/business.manage`. Canonry applies separate permissions and approval to editorial publishing.
+
+### Account selection is per project
+
+A single OAuth user often manages **multiple GBP accounts** (a personal account, a location group, agency-managed businesses). Each canonry project tracks **one** account's locations — so to track two businesses, use two projects.
+
+- **List accounts:** `canonry gbp accounts <project>` (API `GET /gbp/accounts`, MCP `canonry_gbp_accounts`) shows every account the connection can see, with its `accounts/{n}` resource name.
+- **Pick one at discover time:** `canonry gbp locations discover <project> --account accounts/{n}`. Omitting `--account` reuses the account the project already tracks; on the very first discover with no `--account`, canonry falls back to the **first** account the user can see — so if you manage more than one account, always pass `--account` the first time to avoid silently tracking the wrong business.
+- **Switching accounts is destructive:** re-pointing a project at a *different* account would drop the old account's locations and all its synced data, so it's rejected unless you pass `--switch-account` (API `switchAccount: true`). You can also `canonry gbp disconnect <project>` (which now clears the project's entire GBP footprint) and start fresh.
+
+## The Summary Scorecard (`canonry gbp summary`)
+
+`canonry gbp summary <project> [--location locations/XXX]` (API: `GET /gbp/summary`, MCP: `canonry_gbp_summary`) is the single composite read that rolls every synced GBP surface into one scorecard. All math lives in the API (`buildGbpSummary`) — the CLI and dashboard only render it, so `--format json` matches the API response field-for-field. Fields:
+
+- **`scope`** — `{ locationName, locationCount }`. `locationName` is null when summarizing across all selected locations.
+- **`performance`** — daily-metric roll-up:
+  - `totals` — sum per `DailyMetric` over everything synced.
+  - `recent7d` / `prior7d` — per-metric sums for the last 7 days vs the 7 days before, anchored to the **last complete (non-zero) day** (`freshness.dataThroughDate`), not wall-clock and not the max stored date. GBP data lags ~2–3 days and the trailing days can arrive as not-yet-reported zeros; anchoring to the last complete day keeps those lag zeros out of the recent window so a reporting-lag artifact is never shown as a real decline (#658). Both maps are backfilled with the union of metrics as explicit `0`s.
+  - `deltaPct` — percent change recent-vs-prior per metric, **over complete days only**; **`null` when the prior window is `0`** (no divide-by-zero, and "appeared from nothing" is not a percentage).
+- **`freshness`** — `{ dataThroughDate, latestStoredDate, pendingDays }` (#658). `dataThroughDate` is the last day with reported activity; `latestStoredDate` is the max stored date (≥ dataThroughDate when the lag tail was stored as zeros); `pendingDays` is how many trailing days are still pending vs today. Renderers show "data through &lt;date&gt; · Nd pending" and never treat the tail as a drop.
+- **`timeseries`** — `[{ date, pending, metrics }]` over the most recent ~30 days, for the trend charts. Each day carries every in-window metric (0 where absent that day) and a `pending` flag marking the reporting-lag tail.
+- **`keywords`** — `{ total, thresholdedCount, thresholdedPct }`. `thresholdedPct` (0–100) is the share of keywords whose exact count Google redacted — your headline data-fidelity number (expect ~89% for a busy hotel, 100% for an SMB).
+- **`placeActions`** — `{ total, hasReservationCta, hasBookingCta, hasDirectMerchantCta }`. `hasDirectMerchantCta` is false when the only booking links are OTA/aggregator (Expedia/Booking) — a recommendation to add a direct CTA.
+- **`lodging`** — `{ lodgingLocationCount, populatedLodgingCount, emptyLodgingCount }`. `emptyLodgingCount` counts lodging-capable locations whose Lodging API response contains zero readable structured groups. That is common even for complete hotels (the owner-set "Hotel details" amenity panel can be populated while this API response is still only `{name}`), so it is a verify signal, not a confirmed gap.
+
+## Scheduling
+
+`gbp-sync` is a schedulable run kind (alongside `answer-visibility` and `traffic-sync`). It needs no source — it syncs the project's selected locations:
+
+```bash
+canonry schedule set <project> --kind gbp-sync --preset daily
+canonry schedule show <project> --kind gbp-sync
+```
+
+One schedule row per `(project, kind)`, so a GBP sync schedule coexists with a visibility-sweep schedule. The scheduler creates the `gbp-sync` run and runs the same worker the manual `canonry gbp sync` uses; on completion the run flows through the post-run pipeline (insights + Aero wake-up).
+
+## Health Checks (`canonry doctor`)
+
+```bash
+canonry doctor --project <name> --check 'gbp.*'
+```
+
+- `gbp.auth.connection` — OAuth creds present + refresh token works.
+  - **Skipped** (`gbp.auth.not-connected`) for a project that never connected GBP: no connection and no selected location. It **fails** (`gbp.auth.no-connection`) only when the connection is gone while the project still has selected locations.
+- `gbp.auth.scopes` — granted scope includes `business.manage`.
+- `gbp.account.access` — the tracked account is still listable. A `gbp.account.quota-pending` **warn** means the API access form is still pending Google approval (0 QPM) — auth is fine, the API just isn't enabled yet.
+- `gbp.places.api-key` — Places API readiness for the listing cross-reference (#648). **Warns** when GBP is connected but no Places key is set, or when no selected location carries a Maps place id (re-run `gbp locations discover`). Skipped when Places is disabled (`places.tier: off`) or GBP isn't connected.
+- `gbp.data.recent-sync` — a selected location synced in the last 7d (warn) / 30d (fail); warns when never synced.
+
+## Insights (after a `gbp-sync` run)
+
+A completed `gbp-sync` run generates location-scoped insights (`provider = 'gbp'`), surfaced in `canonry insights`, the dashboard, notifications (`insight.critical`/`insight.high`), and Aero's proactive wake-up:
+
+- `gbp-lodging-gap` (low) — a lodging-capable location whose structured Lodging attributes canonry can't read via the GBP Lodging API, **and no Places evidence available** (Places disabled, no key, or no snapshot yet). This is a **verify-nudge, not a confirmed gap**: the Lodging API returns empty even for complete hotels because the owner-set "Hotel details" amenity panel writes to a separate surface the API doesn't expose. Treat `populatedGroupCount === 0` as "can't confirm via the API", not "owner set no amenities", and recommend verifying the "Hotel details" panel.
+- `gbp-listing-discrepancy` (medium) — the version of the above with Places evidence (#648 Phase B): canonry can't read the Lodging attributes, *plus* a Places snapshot showing the public listing advertises specific amenities (e.g. breakfast, parking, pet-friendly). Because Places can read amenities the Lodging API can't, those amenities are likely already set in "Hotel details" and simply not API-readable, so this is still a **verify** (confirm in "Hotel details"), not a confirmed gap. Names the exact amenities. **Supersedes `gbp-lodging-gap`** when Places data exists. Requires a Places API key + a synced lodging location with a place id.
+- `gbp-cta-gap` (medium) — place actions present but no direct-merchant booking CTA (only aggregators).
+- `gbp-description-missing` (low) — a selected location with no owner business description (`profile.description`). Unlike the lodging nudge this is a **reliable, confirmable gap** (the description reads straight from the Business Information API): recommend adding a description (up to 750 chars), the cheapest owner-controlled prose AI engines lift to describe the business.
+- `gbp-metric-drop` (high/medium) — a headline conversion metric (direction requests, website clicks, call clicks) fell sharply week-over-week within the synced window.
+- `gbp-keyword-drop` (high/medium) — a head search term's impressions fell month-over-month.
+
+The month-over-month keyword signal is powered by the **accumulating** `gbp_keyword_monthly` table: each sync fetches the last few complete months (one call per month, since the API aggregates a range into a single figure) and preserves older in-retention months, so a real monthly series builds up over time. The current-snapshot reads (`gbp keywords`, `gbp summary`) are unchanged — they still use the trailing-window `gbp_keyword_impressions` table.
+
+## Owner-Set Attributes (`gbp attributes`)
+
+Every `gbp sync` also captures the location's **owner-set attributes** via the Business Information API (`getAttributes`) and stores them snapshot-on-change in `gbp_attributes_snapshots`. Unlike the Lodging API (hotels only) this works for **any** business category: amenity / service / accessibility / identity / social-URL tags such as `has_onsite_services`, `offers_online_estimates`, `is_owned_by_women`, wheelchair accessibility, `url_instagram`, `url_facebook`. The API returns **only the attributes the owner has set**, so `attributeCount` is a reliable, owner-readable completeness signal (not a verify-nudge like the lodging gap).
+
+Read them with `canonry gbp attributes <project> [--location <name>] [--format json]` (API `GET /gbp/attributes`, MCP `canonry_gbp_attributes`). The CLI prints each location's set attributes (`key: value`); `--format json` returns the full normalized records (`{name, valueType, values, unsetValues, uris}`).
+
+## The Dashboard (`GbpSection`)
+
+The project page shows a self-gating "Google Business Profile" section (only when a GBP connection exists): a **graph-first** performance block — a daily conversion-trend chart (the hero) plus a reach (impressions) area, with the reporting-lag tail greyed as "pending", a "data through &lt;date&gt;" label, and all-zero series collapsed to a "Not active" footnote (#658) — alongside the owner-vs-public gap insight (`gbp-listing-discrepancy`), the public-listing (Places) amenity block, a search-terms table, and a locations table with a track/untrack toggle and a Sync button. Every number is computed server-side by `buildGbpSummary`; the component only renders (Recharts via `ChartPrimitives`). The raw owner-configured Place Action CTAs and the lodging-completeness count are **deliberately not shown in the dashboard**: they are owner-set with no public counterpart to cross-reference, so an "Absent" / "empty" tile would read as a fact about the live listing when it is only an unverifiable owner signal (#648, PR #660). Operators still read them via `cnry gbp place-actions` / `cnry gbp lodging`, and the `/gbp/summary` API still carries both fields.
+
+## Hotel-Specific Setup
+
+For hotel groups, two extra signal sources are critical:
+
+### Lodging attributes (`canonry gbp lodging`)
+
+Hotel amenities are a high-signal local-AEO surface: answer engines often answer queries like "does X hotel have a pool?" or "is Y pet-friendly?" from structured hotel facts instead of website copy alone. Canonry therefore treats the Lodging API as a separate hotel-only source from generic Business Information `getAttributes`.
+
+Canonry reads the Lodging API during `gbp sync` and saves a new snapshot when the resource changes. It reports how many top-level groups are readable. If the count is zero, check the Hotel details panel. Generic Business Information attributes cover a separate surface.
+
+A non-lodging location returns HTTP 400 `FAILED_PRECONDITION` ("This operation is not supported for this location. Please check the value of `Location.location_state.can_operate_lodging_data`") — not a 404. Fix the primary category in the Business Profile UI to a lodging category first. A lodging-category location can return HTTP 200 with only `{ "name": "..." }`. That is the common case observed on a complete hotel, even when the owner-facing "Hotel details" panel has amenities filled in. So an empty result is a "can't read via the API" verify, not proof the hotel has no amenities.
+
+### Place action links (`canonry gbp place-actions`)
+
+Booking and reservation CTAs surfaced in AI answers come from `placeActionLinks`, not from the website URL. Canonry tracks:
+
+- `placeActionType` (`RESERVATION`, `BOOK`, `ORDER_FOOD`, …)
+- `providerType` (`MERCHANT` for direct, `AGGREGATOR` for OTA links like Expedia/Booking)
+- `isPreferred` flag
+- `uri`
+
+A property with only aggregator booking links and no direct merchant CTA is a recommendation to surface.
+
+## Places enrichment — the rendered-listing cross-reference (#648)
+
+For lodging locations, canonry pulls the **Places API (New) Place Details** — the amenities Google's *public* listing advertises (breakfast, parking, pet policy, accessibility, editorial summary) — and cross-references them against the owner-configured GBP profile. When the Lodging API returns nothing but the public listing advertises amenities, the `gbp-listing-discrepancy` insight names those amenities so the operator can verify they are set in the "Hotel details" panel (the listing may already be drawing them from there even though this Lodging API response returned no readable groups).
+
+**Setup** — the Places API uses a plain **API key**, not OAuth (unrelated to `google.clientId`). A billing account (card) is required on the GCP project even within the free tier.
+
+```yaml
+# ~/.canonry/config.yaml — top-level `places` block (an API key, not OAuth, so
+# it is separate from the `google` block — same as `ga4`, `bing`, `wordpress`).
+places:
+  apiKey: "AIza..."          # or env GOOGLE_PLACES_API_KEY
+  tier: atmosphere           # atmosphere (default) | pro | off
+  refreshIntervalDays: 7     # cost lever — re-fetch a location at most weekly
+```
+
+The next `gbp sync` then snapshots Place Details for selected lodging locations that carry a Maps place id (re-run `gbp locations discover` if `gbp.places.api-key` warns there are none). Read it back with `canonry gbp places <project>` (the `amenities` list is computed server-side).
+
+**Cost** — Place Details is billed at the highest field-mask tier requested. The amenity booleans powering the cross-reference are the **Enterprise + Atmosphere** SKU: **1,000 free calls/month, then $25/1,000**. Because canonry fetches Places only for lodging locations and only past the refresh interval (default weekly), a typical operator book (a handful to ~200 hotels on a weekly refresh) stays inside the free tier — **$0/month**. Drop `tier` to `pro` (5,000 free, accessibility-only — thinner cross-reference) or `off` to disable. `accessibilityOptions` is Pro tier; the IDs-only refresh is free.
+
+## Provenance: the three data planes (how to present GBP)
+
+Every GBP number belongs to one of three planes. **Tag each figure by plane before you show or say it.** The two classic mistakes are presenting plane 1 as if it were plane 2, and presenting a plane-3 lag artifact as a real change.
+
+| Plane | Source | How to present it |
+|---|---|---|
+| **1. Owner-configured / owner-readable** (CTAs, profile fields, generic attributes, readable lodging groups) | Business Info / Place Actions / Lodging APIs | "Owner profile completeness", never a fact about the live listing. An empty field is the operator's blind spot, not proof the public listing is empty. Surface as a finding **only when cross-referenced** against plane 2. |
+| **2. Public rendered** (what searchers and AI see) | Places API (New): a thin, schema-bound subset | Label it a **partial** public view. Thin or empty Places data is NOT evidence the listing is sparse, because the full rendered listing also synthesizes Hotel Center pricing, OTA links, and Local Guide contributions that no API returns. |
+| **3. Performance** (impressions, clicks, directions, calls) | Performance API, ~2 to 3 day reporting lag | NOT an owner-content signal: the owner-configured caveat does not apply. The honesty lever here is the lag. Anchor windows to the last complete day, show `freshness`, and never call the unreported tail a decline (worse right after US holidays). |
+
+**The only thing to present as a "finding"** is the plane-1-vs-plane-2 delta: the `gbp-listing-discrepancy` insight. Quote its named amenities as a floor ("the public listing advertises at least X that your profile doesn't"), never a complete inventory.
+
+## Important Constraints
+
+- **GBP API returns owner-configured data only** — the API exposes only what the profile owner has set. Google's *rendered* hotel listing synthesizes additional amenities, room pricing, and booking links from Google Hotel Center, OTA feeds (Booking/Expedia/Hotels.com), and Places/user-contributed data — none of which the GBP API returns. So an empty Lodging API result does **not** mean the public listing is empty, and it does **not** prove the owner set no amenities: the owner-facing "Hotel details" amenity panel writes to a separate surface the Lodging API does not return, so it is commonly empty even for complete hotels. Treat it as a "verify the Hotel details panel", not a confirmed gap. **Canonry pulls the rendered-listing side from the Places API and cross-references it against the GBP profile** (issue #648, shipped) — see "Places enrichment" below.
+- **Write permission.** The provider scope covers profile management. Canonry limits GBP writes to approved editorial Local Posts.
+- **300 QPM shared quota** — across all GBP sub-APIs on one Google Cloud project. Canonry's sync worker caps per-location concurrency at 4 (~28 in-flight calls at peak) to stay well under the cap.
+- **Privacy-redacted keyword impressions** — for each keyword aggregated over the requested window, Google returns either an exact `value` or only a `threshold` floor (`<N`). Canonry stores both shapes (`valueCount` / `valueThreshold`) against the row's `periodStart`/`periodEnd` and surfaces a "% thresholded" stat so the user understands data fidelity. Note the Performance API aggregates each keyword over the **whole** requested date range — it does not break impressions down per calendar month.
+- **Separate API access.** Canonry uses the legacy v4 host for Reviews and Local Posts. Other GBP clients use v1. The v1 sync can continue when v4 reviews are unavailable.
+- **Multi-location chains** — a 200-location chain hits ~600+ API calls per sync. Default sync may take minutes for large chains; scope with `canonry gbp sync <project> --location locations/XXX` to retry a subset.
+
+## Real-World Data Shapes & Signal Patterns
+
+Validated against three live businesses of different types (a computer-support shop, a roofing contractor, and a beachfront boutique hotel). Bake these into any parsing or analysis code. Counts marked illustrative below are stand-ins for the observed values; the patterns are what was observed.
+
+### Response-shape quirks (the parser MUST handle these)
+
+- **Values are string-encoded integers.** Keyword counts come as `{ "insightsValue": { "value": "10412" } }` or `{ "insightsValue": { "threshold": "15" } }` — note the nesting under `insightsValue` and that `"10412"` is a string. `Number()` it.
+- **Daily-metric zero days omit the value entirely.** A datedValue with no traffic is `{ "date": {"year":2026,"month":5,"day":1} }` — there is no `"value": "0"`. Treat a missing `value` as 0; don't skip the row.
+- **Dates are split objects** (`{year, month, day}`), not ISO strings. Reassemble.
+
+### Signal patterns (what the data actually looks like)
+
+- **`BUSINESS_DIRECTION_REQUESTS` is the most reliably-populated conversion signal** across every business type — even a tiny roofing contractor logged 58/30d (illustrative) while its website-clicks (2) and call-clicks (1) were near-zero. For local/service businesses it's the headline AEO-conversion proxy, not website clicks.
+- **Most of the 11 daily metrics are all-zero** for non-retail businesses (`BUSINESS_CONVERSATIONS`, `BUSINESS_BOOKINGS`, `BUSINESS_FOOD_*` were 0 for all three). Syncing all 11 is fine (zeros are cheap) but the dashboard should hide all-zero series.
+- **Impressions skew to Maps for physical-destination businesses.** The hotel pulled about three times as many desktop-maps impressions as desktop-search in 30 days (illustrative: 7,150 vs 2,180) — people find it on Maps.
+- **Keyword thresholding scales with volume.** A busy hotel was ~89% thresholded (its head terms like `hotels`, at an illustrative 10,412, had exact values); both small businesses were **100% thresholded** (every keyword redacted). For the typical SMB location, expect zero exact keyword values — design the UI to lead with the `<N` floor, not exact counts.
+- **An empty Lodging resource is the norm, but it does NOT prove the owner set no amenities.** A real operating hotel returned a lodging resource with only `{ "name": ... }` and zero place-action links, yet its GBP "Hotel details" panel had amenities filled in (breakfast, wifi, parking, accessibility). So `populatedGroupCount === 0` means "canonry can't read structured attributes via this API response", not "the hotel has none". Surface the lodging signal as a **verify** (check the "Hotel details" panel), not a confirmed gap. The place-action emptiness is a separate, genuinely owner-readable signal.
+- **The Places cross-reference is a thin slice for hotels, not the full rendered listing.** Run live against the beachfront hotel at the Atmosphere tier, Place Details surfaced exactly one structured amenity, `wheelchair accessibility`, even though the rendered Google hotel module advertises far more (wifi, pool, room service, room rates). Those richer fields come from **Hotel Center**, which the Places API does not expose. So a thin or empty `gbp places` amenity list is NOT evidence the public listing is sparse; Places only carries a narrow, schema-bound subset (breakfast, dining, parking, pet-friendly, accessibility, restroom, family-friendly, outdoor seating, reservations). Read `gbp-listing-discrepancy` as a **floor** on the public-vs-owner gap (proof the listing advertises *at least* the named amenities), never a complete inventory. The owner-control point still stands at any size: even one amenity the profile fails to assert is a structured-data gap the operator can close.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Every API call returns HTTP 403 | Access form not yet approved (0 QPM) | Submit the form; wait for approval email. Check quota in Cloud Console. |
+| `redirect_uri_mismatch` during connect | The OAuth client lacks the Canonry callback URL | Add the exact URI that `canonry gbp connect <project>` prints |
+| "App not verified" warning at consent | Consent screen in test mode | Add the OAuth user to test users, or publish the consent screen |
+| Empty accounts list after connect | OAuth user lacks manager access on any profile | Ask the profile owner to add the user at [business.google.com](https://business.google.com) → Users |
+| Lodging endpoint returns 400 `FAILED_PRECONDITION` | Location primary category is not a lodging category | Update the primary category in the GBP UI to `Hotel`, `Resort`, `Motel`, etc. |
+| Lodging returns 200 with only `{ "name": ... }` | The GBP Lodging API returned no readable structured groups. In live testing this happened even when the "Hotel details" panel had amenities set | Not an error, and not proof of a gap. Surface as a verify: have the operator check the "Hotel details" panel; flag only if genuinely unset there |
+| Place action links empty | No CTAs configured | Set them up in the GBP UI; for many local businesses this is genuinely empty (an AEO gap) |
+| Reviews 403 `SERVICE_DISABLED` while v1 APIs work (`gbp reviews` shows `unavailable (SERVICE_DISABLED)`) | Legacy v4 `mybusiness.googleapis.com` not enabled for this account/project | See "The legacy Google My Business API" above — enable via the approval-email shortcut as the approved account; can't be done via library or gcloud. Meanwhile, the Places fallback covers review alerts partially |
+| No review alerts arrive | No subscribed webhook, first-sync baseline, missing review source, or delivery failure | Run `cnry notify list <project>` and `cnry doctor --project <project> --check gbp.reviews.access --check gbp.reviews.delivery` |
+| Q&A API unreachable | Google retired the Q&A API on 2025-11-03 | Permanent. Q&A is not available programmatically |
+| Keyword impressions mostly `threshold` instead of `value` | Google redacts low-volume counts | Read `keywords.thresholdedPct` in the summary |
+
+## Related Files in This Skill
+
+- `references/canonry-cli.md` — full CLI command reference
+- `references/aeo-analysis.md` — interpretation patterns for citation and visibility data

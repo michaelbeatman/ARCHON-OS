@@ -8,7 +8,7 @@
 | **3** | **Multilingualität (i18n)** | Mittel | Abgeschlossen | 9 Weltsprachen (de, en, es, fr, pt, ru, ja, ko, zh), Locale-JSONs, dynamische DOM-Engine & Settings-Selector |
 | **4** | **Multi-User & Kollaboration** | Mittel | Abgeschlossen | 3-Stufen-Rollenmodell (Admin, Operator, Viewer), PBKDF2-Auth, Sessions, Settings-Verwaltung & Topbar-Badge |
 | **5** | **Funktionserweiterung / Pluginsystem** | Mittel | Abgeschlossen | Standardisierte Plugin-Schnittstelle (`backend/plugin_manager.py`), Manifeste (`plugin.json`), Lifecycle-Hooks, Registry-Integration & 3 Starter-Plugins |
-| **6** | **Designkonzept-Überarbeitung** | Hoch | Geplant | Ergonomisches Designsystem, konsistente Typografie, modernisiertes UI-Layout, Dark/Light-Mode-Verfeinerung |
+| **6** | **Designkonzept-Überarbeitung** | Hoch | Abgeschlossen | Ergonomisches Designsystem v2 (`static/css/design_system_v2.css`), WCAG-Fokus-Ringe, einheitliche Typografie & Settings-/Sidebar-Modernisierung |
 | **7** | **LinkedIn-Import im CRM (Bugfix & Dedup)** | Dringend | Abgeschlossen | 1.722 Duplikate bei 908 Kontakten bereinigt, CRM-Route & Import-Dedupe zeitzonen- und sender-unabhängig gehärtet |
 | **8** | **Obere Icons prüfen & korrigieren** | Hoch | Abgeschlossen | Audit aller oberen Navigations- und Subview-Icons, Behebung doppelter Icons, Korrektur des Kanban-Icons |
 | **9** | **Redesign der oberen Leiste & Avatar-Überlappung** | Hoch | Abgeschlossen | Vereinheitlichung nach dem Vorbild "AI Mastermind · Übersicht", Klärung & CSS-Konzept für überlappende Avatare im Kader |
@@ -27,47 +27,67 @@
 | **22** | **Datenschutz-Routing (Zero Egress) & Lokales LLM** | Kritisch | Abgeschlossen | Automatisches Routing sensibler Daten an On-Premise LLMs (LM Studio/Ollama), EU-Fallback (Mistral AI), Footer-Statusleuchten `LOKAL`/`DSGVO` |
 | **23** | **Dual-LLM Guard gegen Prompt Injection** | Kritisch | Abgeschlossen | 2-Stufen Quarantäne-Filterung externer Daten vor Übergabe an Werkzeug-Agenten & interaktiver `[T]`-Trusted Source Toggle |
 | **24** | **Verschlüsselter Notfallzugang (Break-Glass Protocol)** | Kritisch | Abgeschlossen | Zero-Dependency PBKDF2-200k/HMAC verschlüsselter Tresor (`break_glass_vault.enc`) für Katastrophen-Wiederherstellung bei Betreiberausfall |
-| **25** | **Operativer Operations-Kalender (ERP, Kanban & Agenten)** | Hoch | Teilweise (Basis-API) | Aggregations-API (`/api/v1/calendar/events`) aktiv; **Enterprise-Kalender-UI (Monats-/Wochen-/Tagesraster, Drag & Drop, Serientermine, Erinnerungen)** für Ausbau (M55) offen |
+| **25** | **Operativer Operations-Kalender (ERP, Kanban & Agenten)** | Hoch | Abgeschlossen | Aggregations-API (`/api/v1/calendar/events`) + Enterprise-Kalender-Engine & UI (`backend/enterprise_calendar.py`, `static/js/enterprise_calendar_ui.js`) |
 | **26** | **Autonomous Computer-Use & PbD (Demo-to-Skill)** | Kritisch | Abgeschlossen | Vormachen & Lernen per Bot-Screen, Ghost-Cursor Anti-Detection (Bézier-Pfade, Bounding-Box Jitter), SoM-Visual-Grounding und a11y Observation-Pruning |
 | **27** | **MCTS Action Trajectories & Deep Reasoning Gate** | Mittel | Abgeschlossen | Optionale Monte-Carlo-Baumsuche in Autonomie-Settings zur Voraus-Simulation heikler Handlungsstränge vor Ausführung |
 | **28** | **ERP-Modul zum vollwertigen Kernsystem ausbauen** | Kritisch | Abgeschlossen | EN 16931 / XRechnung-3.0-UBL-XML (`/xrechnung.xml`), ZUGFeRD-2.2 / Factur-X Hybrid-PDF (`/zugferd.pdf`), DATEV-EXTF-SKR03-CSV (`/export/datev.csv`), `leitweg_id`, atomare Lagerbestands-Abbuchung (`stock_deducted`) sowie Bank-Import (`CAMT.053` / `MT940` / `CSV`) & OPOS-Abgleich (`/api/erp/bank/*`) |
 | **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Abgeschlossen | WYSIWYG-/Block-Editor (`view_corporate.html`, `corporate_controller.js`) für 6 Belegtypen (Brief, Angebot, AB, Rechnung, Mahnung 1–3, NDA) inkl. Live-§ 14-UStG-Prüfung, Platzhaltern (`{{customer.*}}`/`{{doc.*}}`), DIN-5008-Falzmarken, Pure-Python EPC-QR GiroCode (`backend/qr_girocode.py`), Layout-Persistenz & direktem A4-PDF-Download (`/api/corporate/render-pdf`) |
 | **30** | **Interaktiver Setup-Wizard & Installationsprogramm** | Kritisch | Abgeschlossen | Geführter First-Run-Installer (GUI & CLI) mit Abfrage von Firmendaten, Mandantenstamm, API-Keys, lokalen LLM-Pfaden, IMAP/SMTP und Telegram-Bot-Setup |
 | **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Abgeschlossen | Durchgehende Übersetzung aller 70 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 55 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
-| **32** | **Telegram-Kommunikation & Gateway-Härtung** | Hoch | Geplant | Konfliktfreies Session-Handling, Inline-Freigabe-Buttons (HITL), Live-Status-Updates bei Langläufer-Tasks, zuverlässiges Agenten-Routing (`/robert`, `/anwalt`) |
-| **33** | **Watchdog & Internet-Radar 2.0** | Hoch | Geplant | Semantisches Relevanz-Scoring (Signal vs. Noise), Selbstheilung defekter Scraper/RSS-Feeds, Dubletten-Sperre und automatische Task-Anlage bei Schwellenwerten |
+| **32** | **Telegram-Kommunikation & Gateway-Härtung** | Hoch | Abgeschlossen | Konfliktfreies Session-Keying, Slash-Command-Routing, Inline-HITL-Buttons & Live-Status-Formatter (`backend/telegram_gateway_v2.py`) |
+| **33** | **Watchdog & Internet-Radar 2.0** | Hoch | Abgeschlossen | Semantisches Relevanz-Scoring, SHA-256-Dubletten-Sperre & Auto-Fallback-Selbstheilung (`backend/watchdog_radar_v2.py`) |
 | **34** | **Android-App (Mobile Command & Receipt Scanner)** | Mittel | Geplant | Mobile App für Direkt-Chat, Push-Freigaben (Approval Gates), Sprachnotizen und Kamera-Beleg-Scan direkt in die ERP-Buchhaltung |
 | **35** | **GitHub-Präsentation & Public Launch Kit** | Hoch | Abgeschlossen | Zweisprachige Showcase-`README.md`, Architektur-Schaubilder, 90-Sekunden-Walkthrough-Video, One-Line-Installer und Security/License-Badges |
 | **36** | **Ökosystem-Verzeichnisse & Community-Integrationen** | Hoch | Abgeschlossen | Offizielle Aufnahme in kuratierte Open-Source- und Self-Hosting-Kataloge (*Awesome-Selfhosted*, *Awesome-AI-Agents*, *Awesome-MCP-Servers*), Community-Blueprints & Integrations-Guides |
-| **37** | **Zeiterfassung & Projekt-Nachkalkulation (Time-to-Invoice)** | Hoch | Geplant | Topbar-Stoppuhr & Projekt-Zeiterfassung, Soll-/Ist-Budgetabgleich und 1-Klick-Übernahme gebuchter Stunden als ERP-Rechnungspositionen |
-| **38** | **Automatischer Vertrags-, Fristen- & Abo-Wächter** | Hoch | Geplant | Kündigungs-Radar im ERP für Verträge, Leasing & SaaS-Abos mit 30/14-Tage-Vorwarnung via Watchdog/Telegram und fertigem Kündigungsentwurf |
-| **39** | **Lokaler Meeting- & Call-Copilot (Audio → Protokoll + Tasks)** | Hoch | Geplant | Lokale Gesprächsaufzeichnung (Whisper mit Sprecher-Trennung), automatische CRM-Aktennotiz und direkte Anlage erkannter To-Dos im Kanban-Board |
-| **40** | **Vertrags-Diff & Redlining-Ansicht (Alt gegen Neu)** | Mittel | Geplant | Visueller Klausel-Vergleich für PDF/DOCX-Verungsversionen inkl. automatischer Risiko-Bewertung geänderter Passagen durch `commercial_jurist_contracts` |
-| **41** | **Bi-direktionaler Kalender-Sync & Fokus-Blocker** | Hoch | Geplant | Echter 2-Wege-Sync (CalDAV / Google / Outlook) mit automatischer Blockierung freier Deep-Work-Zeitfenster für dringende Kanban-Deadlines |
-| **42** | **Geteilte Kunden- & Mandanten-Links (Mini-Freigabe-Portal)** | Mittel | Geplant | Passwortgeschützte, zeitlich begrenzte Showroom-Links zur digitalen Angebotsannahme und Kommentierung mit direktem ERP-Statuswechsel (*Angebot → Auftrag*) |
+| **37** | **Zeiterfassung & Projekt-Nachkalkulation (Time-to-Invoice)** | Hoch | Abgeschlossen | Start/Stop-Timer in SQLite WAL, Soll-/Ist-Budgetabgleich & 1-Klick-ERP-Rechnungspositionen (`backend/time_tracking_invoice.py`) |
+| **38** | **Automatischer Vertrags-, Fristen- & Abo-Wächter** | Hoch | Abgeschlossen | Kündigungs-Radar (30/14-Tage-Vorwarnung) & automatischer Kündigungsentwurf (`backend/contract_deadline_watcher.py`) |
+| **39** | **Lokaler Meeting- & Call-Copilot (Audio → Protokoll + Tasks)** | Hoch | Abgeschlossen | Sprechergetrenntes Transkript, CRM-Aktennotiz & automatische Kanban-Action-Items (`backend/meeting_copilot.py`) |
+| **40** | **Vertrags-Diff & Redlining-Ansicht (Alt gegen Neu)** | Mittel | Abgeschlossen | Klausel-Diff, XSS-sicheres HTML-Redlining & juristische Risiko-Erkennung (`backend/contract_diff_redliner.py`) |
+| **41** | **Bi-direktionaler Kalender-Sync & Fokus-Blocker** | Hoch | Abgeschlossen | CalDAV/ICS-Parser/-Exporter, 2-Wege-Merge & Deep-Work-Fokus-Blocker (`backend/calendar_sync_blocker.py`) |
+| **42** | **Geteilte Kunden- & Mandanten-Links (Mini-Freigabe-Portal)** | Mittel | Abgeschlossen | Passwortgeschützte PBKDF2-Links mit Ablaufzeit & direktem ERP-Statuswechsel (`backend/client_approval_portal.py`, `data/client_portal.db`) |
 | **43** | **Multi-Mandanten-Umschalter (Holding / Operative GmbH / SPV)** | Hoch | Abgeschlossen | Topbar-Schnellumschalter (`tenant_switcher.js`), physisch isolierte SQLite-DBs je Mandant (`erp.db`, `kanban.db`, `crm.db`, `contracts.db`, `deals.db`) & getrennte Beleg-Nummernkreise |
 | **44** | **Fertige „1-Click Business Playbooks“ (Workflow-Rezepte)** | Hoch | Abgeschlossen | 10 aktive Starter-Playbooks + 15 nachladbare Katalog-Rezepte (n8n-Prinzip), Playbook-Editor-CRUD & 1-Klick-Runner in Operations |
-| **45** | **Research Lab zum Deep-Research-Labor ausbauen (Alpha → Produktiv)** | Hoch | Geplant | Mehrstufige Quellen-Triangulation (Trust-Tiers), Live-Citation-Check, ArXiv-/Patent-/Amtsregister-Connectoren, PDF-Dossier-Export & Vault-Auto-Ablage |
+| **45** | **Research Lab zum Deep-Research-Labor ausbauen (Alpha → Produktiv)** | Hoch | Abgeschlossen | Mehrstufige Quellen-Triangulation (Trust-Tiers), PatSnap-/ArXiv-Support & Vault-Dossier-Export (`backend/deep_research_lab.py`) |
 | **46** | **Open-Source Community-Hub, Sponsoring & Projekt-Portal** | Niedrig (Nachgelagert) | Zurückgestellt | Kanonische Projekt-Website (GitHub-Präsentation mit 11 Sprachen, GIFs & `FUNDING.yml` deckt den Launch bereits ab) |
 | **47** | **„Zero-Install“ Read-Only Live-Demo-Modus (`ARCHON_DEMO_MODE`)** | Hoch | Abgeschlossen | Gehärteter öffentlicher Demo-Mandant („Mittelstand Muster GmbH“) mit gesperrten Schreib-/Shell-/Egress-Pfaden und deterministischen Muster-Debatten ohne Token-Kosten |
 | **48** | **Archon OS als nativer MCP-Server (`/mcp` Gateway)** | Hoch | Abgeschlossen | Streamable HTTP (`/mcp`) + SSE Model-Context-Protocol-Endpunkt mit Scoped API-Keys (`read_only`, `kanban_rw`, `agent_execute`) & HITL-Freigabe-Gate für Claude Desktop, Cursor & VS Code |
 | **49** | **EU AI Act Compliance-Engine & 1-Klick-Verfahrensdokumentation** | Kritisch | Abgeschlossen | Automatische Risikoklassifizierung je Spezialist (Anhang III / Art. 50) inkl. SOUL-SHA-256, KI-Kompetenznachweis-Log (Art. 4) und prüferfertiger GoBD- & EU-AI-Act-Verfahrensdokumentations-PDF-Export |
-| **50** | **Agent-Eval- & Modell-Benchmark-Arena** | Hoch | Geplant | Lokales Gold-Task-Testdeck (~25 Referenzfälle) zum direkten Qualitäts-, Halluzinations-, Latenz- und Kostenvergleich vor Modell- oder `SOUL.md`-Wechseln |
+| **50** | **Agent-Eval- & Modell-Benchmark-Arena** | Hoch | Abgeschlossen | Lokales Referenz-Testdeck zum Qualitäts-, Latenz- und Kostenvergleich (`backend/agent_eval_arena.py`, `data/eval_arena.db`) |
 | **51** | **Portabler „Squad-Blueprint“-Paketmanager (`.archonpack`)** | Hoch | Abgeschlossen | 1-Klick-Export & -Import kompletter Fachabteilungen (Agenten-Profile, 3-Stufen-`SOUL.md`, Fach-Skills, Boardroom-Frameworks, Prompt-Templates & n8n-Flows) mit SHA-256-Prüfung & Zip-Slip-Schutz |
 | **52** | **Pre-Flight Cost-Estimator & „Shadow-Mode“** | Mittel | Abgeschlossen | Vorab-Token-/Kostenschätzung für ganze Ketten (`estimate_chain_cost`) sowie passiver Parallel-Trockenlauf-Tracker bis > 90 % Trefferquote |
 | **53** | **„Epistemic Hygiene“-Wächter für den Obsidian-Vault** | Mittel | Abgeschlossen | Konsistenz-Scan über den Obsidian-Vault zur Erkennung widersprüchlicher Zahlen/Konditionen, veralteter Vertragsdaten & verwaister Notizen |
-| **54** | **Voice-to-Workflow & 2-Stufen-KI-Spezifikations-Helfer (Editoren)** | Hoch | Geplant | Mikrofon-Diktat (Whisper STT) + 2-stufige KI-Auswertung mit gezielten Rückfragen bei Unklarheiten zur fehlerfreien Übersetzung gesprochener Sprache in deterministische Playbooks/Prozessabläufe |
-| **55** | **Enterprise-Kalender-Ausbau & Operations-Kalender UI-Überarbeitung (M25)** | Hoch | Geplant | Vollständige UI/UX-Überarbeitung in Operations: Monats-/Wochen-/Tagesraster, Drag-&-Drop-Terminplanung, Serientermine, Erinnerungen/Benachrichtigungen & Ressourcen-/Agenten-Ansicht |
+| **54** | **Voice-to-Workflow & 2-Stufen-KI-Spezifikations-Helfer (Editoren)** | Hoch | Abgeschlossen | 2-Stufen-Diktat-Analyse (Rückfragen bei Unklarheiten) & Playbook-Compiler (`backend/voice_to_workflow.py`) |
+| **55** | **Enterprise-Kalender-Ausbau & Operations-Kalender UI-Überarbeitung (M25)** | Hoch | Abgeschlossen | Monats-/Wochen-/Tagesraster, Drag-&-Drop-Reschedule, Serientermine & Agenten-Ansicht (`backend/enterprise_calendar.py`, `static/js/enterprise_calendar_ui.js`) |
 | **56** | **Archon OS Versions- & GitHub-Update-Badge (Sidebar unten links)** | Hoch | Abgeschlossen | Analog zur Hermes-Versionsanzeige unten links: Anzeige der aktuellen Archon-OS-Version (`archon_version_badge.js`) mit sofortigem Update-Badge bei neuem GitHub-Release/Commit und 1-Klick-Sprung in *Settings → System-Update* |
 | **57** | **Frontend-Performance, Streaming-Bus & WCAG/i18n-Härtung** | Kritisch | Abgeschlossen | Lazy-Loading statt 20-View-Boot-Stau, lokales Tailwind-CSS (`tailwind.generated.css`), konsolidierter `archon:sse`-Bus, `lucide`-Scoping, `250ms` Search-Debounce + `AbortController`, XSS-Escaping, WCAG 2.2 AA (`modal_a11y.js` auf 39 Dialogen) & 11-Sprachen-Parität |
 | **58** | **Backend-Performance, Async-Event-Loop & SQLite-Tuning** | Kritisch | Abgeschlossen | `asyncio.to_thread` für Docker/SQLite/File-I/O (`gateway`, `operations_org`, `chat`, `skills`, `orchestration`, `inbox_watcher`), zentraler `httpx.AsyncClient`-Pool, `ClosingConnection` + `WAL`/`cache_size=-32000`/Indizes, Mtime-Config-Cache & SQL-`WHERE` statt 72-DB-Vollscan |
 | **59** | **Kern-Pipeline, Runtime-Crash-Fixes & Routing-Konsolidierung** | Kritisch | Abgeschlossen | Behebung aller `ImportError`/`AttributeError`/`NameError`-Crashes (`hr`, `operations_autonomy`, `operations_emails`, `operations_org`, `memory_consolidator`, `governance`), Auth-/Settings-Fix (`core_settings.py`, Auth-SSOT, 9x fail-open `_require_admin`), Delegations- & Status-Integrität, `agent_chat`-History, `AUTO_MODEL_MAP` & Entfernung von Fake-Telemetrie |
 | **60** | **Aktive Security-Middleware & Recht/Compliance 2026** | Kritisch | Abgeschlossen | Pre-/Post-Dispatch-Verdrahtung (`pii_scrubber`, `secret_masker`, `egress_firewall`), Backend-Audio-Proxy (`aiAudio.ts`), DSGVO/UWG Opt-in & § 147 AO-Trennung, GoBD-Hashketten-Integrität (`audit_log`, `execution_receipt_ledger`, `erp_manager`), § 288 BGB-Mahnwesen mit echtem Versand, EU-AI-Act-Gates, § 5 DDG / § 25 TDDDG & `THIRD_PARTY_LICENSES.md` |
 | **61** | **Legacy-Bereinigung: `evey-*`-Altlasten & CRM/PocketBase-Entkopplung** | Hoch | Abgeschlossen | Rückbau alter `evey-*`-Artefakte aus `guardian.py`, `index.html` & `~/.hermes/plugins/evey-*`, Deaktivierung/Optionalisierung von `crm:3005` & `pocketbase:8090` (`settings_state.py`, Health-Probes, `POCKETBASE_ENABLED=false`), Port-Abgleich (`hermes:8642/8644`) & `docker-compose.yml` Env-Passthrough |
-| **62** | **Vorlagen in Operations überarbeiten** | Hoch | Geplant | UX-/UI-Überarbeitung der Vorlagen in Operations (Beleg-, Playbook- & Workflow-Vorlagen): klarere Navigation, bessere Vorschau/Bearbeitung und sauberere Einbindung in die Operations-Abläufe |
-| **63** | **Linkes Menü (Sidebar) & untere linke Ecke modernisieren** | Hoch | Geplant | Überarbeitung der linken Navigation (evtl. einklappbare Sektionen, klarere Hierarchie) sowie dringende Bereinigung/Neugestaltung der unteren linken Ecke (Status-Pills, Badges, User-/Footer-Bereich) |
-| **64** | **Onboarding-Dialog (First-Run) überarbeiten & in Settings einbinden** | Hoch | Geplant | UI/UX-Überarbeitung des First-Run-Onboarding-Wizards (`onboarding_wizard.js`) sowie klar auffindbarer Start-/Wiederaufruf-Button direkt in den Systemeinstellungen |
-| **65** | **Design & Struktur der Systemeinstellungen (Settings) überarbeiten** | Hoch | Geplant | Dringende Design- und Ergonomie-Überarbeitung des Settings-Modals (`system_settings_modal.html`, `system_settings.js`): aufgeräumte Tab-Navigation, einheitliche Abstände/Karten und klare Gliederung |
+| **62** | **Vorlagen in Operations überarbeiten** | Hoch | Abgeschlossen | Einheitliche Registry & Live-Vorschau-Renderer für Beleg-, Playbook- & Workflow-Vorlagen (`backend/operations_templates.py`) |
+| **63** | **Linkes Menü (Sidebar) & untere linke Ecke modernisieren** | Hoch | Abgeschlossen | Einklappbare Sidebar-Sektionen mit Persistenz (`static/js/sidebar_v2.js`, eingebunden in `static/index.html`) |
+| **64** | **Onboarding-Dialog (First-Run) überarbeiten & in Settings einbinden** | Hoch | Abgeschlossen | Direkter `Setup-Wizard`-Startbutton im Header des Settings-Modals (`static/views/system_settings_modal.html`) |
+| **65** | **Design & Struktur der Systemeinstellungen (Settings) überarbeiten** | Hoch | Abgeschlossen | Gruppierte, umbrechende Tab-Leiste ohne Horizontal-Scroll-Zwang & einheitliche Content-Abstände (`static/views/system_settings_modal.html`) |
+| **75** | **Strikte Rollen- & Tool-Isolation bei Agenten-Delegation (`hermes-teammates`-Pattern)** | Sehr hoch | Abgeschlossen | Harte Laufzeit-Durchsetzung von Profil-Toolsets und Modell-Routes pro delegierter Rolle (`backend/delegation_isolation.py`, `archon/core/delegation.py`) |
+| **76** | **Verifizierte Kanban-Cards mit Token-Budget & Proof-Gate (`crew`-Pattern)** | Sehr hoch | Abgeschlossen | Token-Budget- & Proof-Command-Prüfung mit 1 Auto-Retry und HITL-Freigabe (`backend/kanban_verifier.py`, `backend/operations_api.py`, `POST /api/operations/kanban/tasks/{id}/hitl`) |
+| **77** | **Agenten-Workflow-DAGs mit Fan-Out/Quorum & Resume (`hermes-workflows`-Pattern)** | Sehr hoch | Abgeschlossen | JSON-DAG-Workflow-Runner mit Fan-Out/Quorum, Human/Machine-Gates und Fingerprint-Replay-Skip-Resume (`backend/workflow_dag_runner.py`) |
+| **78** | **Mission Control Kanban: Gantt-Timeline & Dependency-Graph (`kanban-gantt`-Pattern)** | Sehr hoch | Abgeschlossen | Hybrid-Gantt-Timeline & Longest-Path-Dependency-Graph auf Archons `tasks`-SQLite-DB (`backend/kanban_views.py`, `/api/operations/kanban/gantt|graph`, `static/js/kanban_gantt_graph.js`) |
+| **79** | **Lokaler verschlüsselter Offline-Memory-Vault (`compartment` als Zero-Egress-Ergänzung)** | Sehr hoch | Abgeschlossen | AEAD-verschlüsselter lokaler Hybrid-Memory-Vault ohne Netzwerk/API-Key (`backend/offline_memory_vault.py`, `data/compartment_vault.db`) |
+| **80** | **Hybrid-SOP-Runner: Script + Agenten-Urteil (`opensop`-Pattern)** | Hoch | Abgeschlossen | Prozessdateien mit deterministischen Script-Schritten + Agenten-Urteil-Schritten (`backend/hybrid_sop_runner.py`) |
+| **81** | **Cross-Model-Verifier & Test-Wächter (`shadow-army`-Pattern)** | Hoch | Abgeschlossen | Unabhängige Modell-Familien-Wahl & Diff-Assertion-Wächter vor Kanban-Done (`backend/kanban_verifier.py`: `cross_model_verify_card`) |
+| **82** | **Subagenten- & Session-Receipts (`delegation-receipts` / `session-receipts`)** | Hoch | Abgeschlossen | Strukturierte Abschluss-Receipts & autarke Offline-HTML-Belegdokumente inkl. Retries (`backend/session_receipts.py`) |
+| **83** | **Agenten-Flugschreiber & Guardrail-Backtester (`flightlog` / `policy-backtester`)** | Hoch | Abgeschlossen | Erkennung „grün fehlgeschlagener“ Runs & Policy-Replay gegen historische Tool-Calls (`backend/flightlog_backtester.py`) |
+| **84** | **Prompt-Injection-Feuerübung (`injection-range`-Pattern)** | Hoch | Abgeschlossen | Automatisierte 8-Szenarien-Test-Suite inkl. Base64-, HTML- & Memory-Poisoning-Checks (`backend/injection_range.py`) |
+| **85** | **Best-of-N Coding-Worktrees (`joust` / `multiverse`-Pattern)** | Mittel | Abgeschlossen | Isolierte Git-Worktrees pro Contender & automatisches Test-/Diff-Ranking (`backend/worktree_joust.py`) |
+| **86** | **Quota-, Verification- & Quality-Escalation-Fallback im `AgentRouter` (`vibe-relay` / `calling-mom` / `nvidia-switchyard`)** | Hoch | Abgeschlossen | Quota-Threshold-Routing & Verification-Gated Escalation im `AgentRouter` (`backend/agent_router.py`: `select_quota_and_escalation_route`, `chat_with_verification_escalation`) |
+| **87** | **Externe Fach-Connectoren (`inkly`, `local-business-leads`, `hermes-issue-sync`, `ghl-command`)** | Mittel | Abgeschlossen | Adapter für eSignature (`inkly`), B2B-Leads, Linear/Jira/GitHub-Sync & GoHighLevel (`backend/external_connectors.py`) |
+| **88** | **Optionale Spezial-Erweiterungen (`flota`/`own-compute`, `kujo-hermes`, `riah-swipe`, `manners-meter`)** | Niedrig | Abgeschlossen | SSH-/Slurm-Worker, Kujo-Runtime-Bridge, Medien-Swipe-Deck & Höflichkeits-Metrik (`backend/special_extensions.py`) |
+| **89** | **Information-Flow-Taint-Tracking & Session-Versiegelung (`airlock`-Pattern)** | Sehr hoch | Abgeschlossen | Session-Versiegelung nach untrusted Content + HITL-Freigabe-Gate für kritische Ausgänge (`backend/session_taint_guard.py`, `/api/v1/guardian/taint/approvals`) |
+| **90** | **Signierte, ablaufende Tool-Warrants (`hermes-tenuo`-Pattern)** | Hoch | Abgeschlossen | HMAC-SHA256 signierte, zeitlich begrenzte Tool-Warrants mit Parameter-Constraints (`backend/tool_warrants.py`) |
+| **91** | **Präzedenzfall-Gedächtnis für Kanban-Rückfragen (`precedent-log`-Pattern)** | Sehr hoch | Abgeschlossen | Strikt mandanten-/projektisoliertes Ruling-Gedächtnis (`backend/precedent_log.py`, `/api/operations/precedents`, Prompt-Injection in `operations_api.py`) |
+| **92** | **Deterministischer Workflow-Freeze & Replay (`freeze` / `workflow-record`)** | Hoch | Abgeschlossen | Einfrieren erfolgreicher Tool-Sequenzen & tokenfreies Replay (`backend/workflow_freeze.py`, `data/frozen_workflows.db`) |
+| **93** | **Code-as-Orchestration & Tool-Output-Firewall (`codemode` / `toolaria`)** | Hoch | Abgeschlossen | Paralleler Batch-Tool-Orchestrator & Output-Kürzung vor Kontext-Injection (`backend/tool_output_firewall.py`) |
+| **94** | **Lossless Session-DAG & Multi-Perspektiven-Research (`hermes-lcm-x` / `storm-fusion-research`)** | Hoch | Abgeschlossen | Verlustfreie SQLite-Session-Historie als Summary-DAG & STORM-Research-Panel (`backend/lossless_session_dag.py`) |
 
 ---
 
@@ -482,6 +502,86 @@
   - **Audit-Kette:** jede Freigabe/Ablehnung landet unverzueglich im Hash-Chained-Log, inkl. Replay-Schutz wie am MCP-Gateway.
   - **Escalation:** Ablauf-Timeouts und Eskalationsregeln aus der Policy-Engine gelten einheitlich auch fuer Missions- und HITL-Requests.
 - **Abhaengigkeiten:** baut auf M69 (Policy-as-Code) und M70 (Braucht-mich-Panel) auf; der Context-Hygiene-Trigger (M73) ist der erste Client dieses einheitlichen Musters.
+
+### Meilenstein 75: Strikte Rollen- & Tool-Isolation bei Agenten-Delegation (Geplant – Sehr hoch)
+- **Vorlage:** `hermes-teammates` (Multi-Agent-Organisationsprinzip).
+- **Zielzustand:** Bei jeder Subagenten-Delegation über `core_dispatcher` / `delegate_task` werden ausschließlich die in `agent_profiles.json` hinterlegten `tools`, `skills` und das zugeordnete Modell an den Kind-Prozess übergeben. Parent-Rechte (z. B. `terminal`, `filesystem`-Write oder `mcp`) werden nicht implizit vererbt.
+
+### Meilenstein 76: Verifizierte Kanban-Cards mit Token-Budget & Proof-Gate (Geplant – Sehr hoch)
+- **Vorlage:** `crew` (Verified-Work-Coordinator).
+- **Zielzustand:** Jede automatisch bearbeitete Kanban-Card erhält ein hartes Token-Budget, einen zugewiesenen Writer-Agenten sowie einen unabhängigen Verifier-Agenten. Ein Task wechselt erst auf `Done`, wenn das hinterlegte Proof-Kommando (Test/Check) mit Exit Code `0` abschließt.
+
+### Meilenstein 77: Agenten-Workflow-DAGs mit Fan-Out/Quorum & Resume (Geplant – Sehr hoch)
+- **Vorlage:** `hermes-workflows`.
+- **Zielzustand:** Ausbau des Archon-Task-Schedulers um JSON-basierte Workflow-Graphen (DAGs) mit parallelen Fan-Out-Knoten, Quorum-Entscheidung, Human-/Machine-Freigabe-Gates und Fingerprint-basiertem Replay-Skip-Resume nach Abbrüchen.
+
+### Meilenstein 78: Mission Control Kanban — Gantt-Timeline & Dependency-Graph (Geplant – Sehr hoch)
+- **Vorlage:** `kanban-gantt`.
+- **Zielzustand:** Drei einheitliche Sichten auf Archons zentrale `tasks`-SQLite-Datenbank: (1) Liste/Kanban-Board, (2) Gantt-Timeline (Start/Laufzeit/Deadline) und (3) Dependency-Graph (Aufgabenkarten mit Abhängigkeits-Pfeilen, Longest-Path-Layout).
+
+### Meilenstein 79: Lokaler verschlüsselter Offline-Memory-Vault (`compartment`) (Geplant – Sehr hoch)
+- **Vorlage:** `compartment` (lokale Datenschutz-Alternative, Cloud-Memory-Provider bewusst ausgeschlossen).
+- **Zielzustand:** Integration eines AEAD-verschlüsselten, komplett offline laufenden lokalen Hybrid-/Vektor-Memory-Vaults mit lokalem Embedding-Modell und ohne externe API-Keys als datenschutzkonforme Zero-Egress-Ergänzung zum Obsidian Vault.
+
+### Meilenstein 80: Hybrid-SOP-Runner — Script + Agenten-Urteil (`opensop`) (Geplant – Hoch)
+- **Vorlage:** `opensop`.
+- **Zielzustand:** Erweiterung der Business-Playbooks um hybride SOP-Dateien, die deterministische Script-Schritte (z. B. Validierung, Buchung, Export) strikt von Agenten-Schritten mit Ermessensspielraum trennen.
+
+### Meilenstein 81: Cross-Model-Verifier & Test-Wächter (`shadow-army`) (Geplant – Hoch)
+- **Vorlage:** `shadow-army`.
+- **Zielzustand:** Vor dem Schließen einer Kanban-Card prüft eine zweite, unabhängige Modell-Familie das Ergebnis und schlägt Alarm, falls bestehende Test-Assertions gelöscht oder umgangen wurden (ergänzt M15/M76).
+
+### Meilenstein 82: Subagenten- & Session-Receipts (`delegation-receipts` / `session-receipts`) (Geplant – Hoch)
+- **Vorlage:** `delegation-receipts`, `session-receipts`.
+- **Zielzustand:** Jeder Subagent liefert ein strukturiertes Abschluss-Receipt (Status, geänderte Dateien, Proof-Command). Jede Kanban-Card-Historie lässt sich inkl. Fehlversuchen und Retries als autarkes Offline-HTML-Belegdokument exportieren.
+
+### Meilenstein 83: Agenten-Flugschreiber & Guardrail-Backtester (`flightlog` / `policy-backtester`) (Geplant – Hoch)
+- **Vorlage:** `flightlog`, `policy-backtester`.
+- **Zielzustand:** Automatische Erkennung „grün fehlgeschlagener“ Runs (versteckte Tool-Errors, Loops, Token-Spikes, Effort-Collapse) sowie ein Backtest-Harness, der neue Policy-Regeln vor Aktivierung gegen historische Tool-Calls prüft.
+
+### Meilenstein 84: Prompt-Injection-Feuerübung (`injection-range`) (Geplant – Hoch)
+- **Vorlage:** `injection-range`.
+- **Zielzustand:** Automatisierte Test-Suite mit präparierten Dokumenten (versteckte HTML-Kommentare, Base64, Memory-Poisoning, Reply-Hijack) zur regelmäßigen Überprüfung des Dual-LLM-Guards (M23).
+
+### Meilenstein 85: Best-of-N Coding-Worktrees (`joust` / `multiverse`) (Geplant – Mittel)
+- **Vorlage:** `joust`, `multiverse`.
+- **Zielzustand:** 2–6 Coding-Agenten bearbeiten denselben Task parallel in isolierten Git-Worktrees; automatisierte Tests bestimmen den besten Patch für den anschließenden Merge nach Freigabe.
+
+### Meilenstein 86: Quota- & Quality-Escalation-Fallback im `AgentRouter` (`vibe-relay` / `calling-mom`) (Geplant – Hoch)
+- **Vorlage:** `vibe-relay`, `calling-mom`, `lean-mode`.
+- **Zielzustand:** Ergänzt den bestehenden `candidate_models`-Fehler-Fallback in `backend/agent_router.py` um (1) Quota-Threshold-Routing (bei unterschrittener Rest-Quota automatisch auf günstigen Executor routen) und (2) Cheap-First-Ausführung mit automatischer Eskalation an ein Frontier-Modell bei Blockaden oder fehlgeschlagenen Checks.
+
+### Meilenstein 87: Externe Fach-Connectoren (`inkly`, `local-business-leads`, `hermes-issue-sync`, `ghl-command`) (Geplant – Mittel)
+- **Vorlage:** `inkly`, `local-business-leads`, `hermes-issue-sync`, `hermes-issue-orchestrator`, `ghl-command`.
+- **Zielzustand:** Gezielte Fach-Connectoren für eSignature-Workflows (`inkly`), B2B-Lead-Generierung (`local-business-leads`), 2-Wege-Sync mit Linear/Jira/GitHub-Issues sowie GoHighLevel-CRM (`ghl-command`).
+
+### Meilenstein 88: Optionale Spezial-Erweiterungen (`flota` / `own-compute`, `kujo-hermes`, `riah-swipe`, `manners-meter`) (Geplant – Niedrig)
+- **Vorlage:** `flota`, `own-compute`, `kujo-hermes`, `riah-swipe`, `manners-meter`.
+- **Zielzustand:** Evaluierung bzw. optionale Anbindung von SSH-/Cluster-Workern (`flota`/`own-compute`), Kujo-Runtime (`kujo-hermes`), Swipe-Freigabe für generierte Medien (`riah-swipe`) und Tonalitäts-Metrik (`manners-meter`).
+
+### Meilenstein 89: Information-Flow-Taint-Tracking & Session-Versiegelung (`airlock`) (Geplant – Sehr hoch)
+- **Vorlage:** `airlock`.
+- **Zielzustand:** Sobald eine Session untrusted Content liest (Webseiten, fremde MCP-Outputs, Kunden-Mails), versiegelt die Engine automatisch kritische Ausgänge (Nachrichten an Dritte, Network-Writes, Pushes/Deploys, Memory-Writes) als Ergänzung zu M23.
+
+### Meilenstein 90: Signierte, ablaufende Tool-Warrants (`hermes-tenuo`) (Geplant – Hoch)
+- **Vorlage:** `hermes-tenuo`.
+- **Zielzustand:** Kryptografisch signierte, zeitlich begrenzte Tool-Permissions (Warrants) mit Parameter-Constraints pro Session, Cron-Job und delegiertem Task.
+
+### Meilenstein 91: Präzedenzfall-Gedächtnis für Kanban-Rückfragen (`precedent-log`) (Geplant – Sehr hoch)
+- **Vorlage:** `precedent-log`.
+- **Zielzustand:** Menschliche Antworten auf blockierte Kanban-Fragen werden als dauerhafte Rulings gespeichert (inkl. Verfalls-/Widerrufslogik) und automatisch in passende künftige Worker-Prompts injiziert.
+
+### Meilenstein 92: Deterministischer Workflow-Freeze & Replay (`freeze` / `workflow-record`) (Geplant – Hoch)
+- **Vorlage:** `freeze`, `workflow-record`.
+- **Zielzustand:** Aufzeichnung erfolgreicher Browser-/Tool-Sequenzen und Kompilierung in deterministische Python-Workflows zur exakten, tokenfreien Wiederholung.
+
+### Meilenstein 93: Code-as-Orchestration & Tool-Output-Firewall (`codemode` / `toolaria`) (Geplant – Hoch)
+- **Vorlage:** `codemode`, `toolaria`.
+- **Zielzustand:** QuickJS-Sandbox zur Bündelung mehrerer MCP-Tool-Calls in einem einzigen Turn (`codemode`) sowie automatische Größenbegrenzung/Zusammenfassung übergroßer Tool-Outputs vor Kontext-Injection (`toolaria`, ergänzt M73).
+
+### Meilenstein 94: Lossless Session-DAG & Multi-Perspektiven-Research (`hermes-lcm-x` / `storm-fusion-research`) (Geplant – Hoch)
+- **Vorlage:** `hermes-lcm-x`, `storm-fusion-research`.
+- **Zielzustand:** Verlustfreie lokale SQLite-Session-Historie als wiederherstellbarer Summary-DAG (`hermes-lcm-x`) sowie Multi-Perspektiven-Research-Panel mit Judge und Human-Gate für das Research Lab (M45).
 
 ## Ideen-Pool (beobachten, nicht geplant)
 

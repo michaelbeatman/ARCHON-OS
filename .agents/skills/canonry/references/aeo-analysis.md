@@ -1,0 +1,253 @@
+# AEO Analysis: Interpreting Canonry Results
+
+Canonry tracks two independent signals per (query × provider): **mention** (the brand is named in the AI answer text, `answerMentioned`) and **citation** (the domain appears in the grounding sources, `cited`/`citedDomains`). **Mention is the primary read; citation is secondary.** Never compute one from the other, and never coerce `answerMentioned` null → false — null means "not checked," not "not mentioned."
+
+## What Mention Means
+
+A "mentioned" query means the client's brand was NAMED in the AI provider's answer text when that query was asked — the model said the brand out loud in its prose. This is the primary gauge of AI visibility: it is what the user actually reads. It does NOT mean:
+- The AI recommended them positively (it may name them neutrally or unfavorably)
+- The brand was the headline answer
+- It will persist on the next sweep
+
+A "not-mentioned" query means the answer text never named the client. `answerMentioned = null` is distinct: the mention was not checked for that snapshot — treat it as missing, not negative.
+
+**Mention share** is the competitive read: of all brand names appearing across the answer set (the project plus tracked competitors), the fraction that were the project = AI share-of-voice. A competitor taking mention share on a query you used to own is the highest-signal regression. A competitor is named by its domain label (4+ letters or digits) plus its curated aliases and the names Canonry detected from the stored answers themselves (`autoAliases`); when answers call a competitor something its domain does not say ("TuneSpoke" for `spoketuneworks.example`, a 3-letter brand), check `cnry competitor aliases detect <project>`, or the share overstates the project. Names it lists only for review mix the competitor's real names with partners, rivals, places and services: confirm in the answers that a name refers to that competitor, then add it with `cnry competitor aliases <project> <domain> --add <name>`. Never `--set` from the review list: it replaces the curated list.
+
+### First diagnostic read (mention-first)
+
+```bash
+cnry get <project> mentionCoverage.populations --format json
+cnry get <project> scores.mentionShare --format json
+cnry analytics <project> --feature gaps --format json
+```
+
+Select the population by `queryClass`. Its `mentionCoverage` and
+`citationCoverage` each contain a numerator, denominator, and rate. Use the
+reported scope for mention share.
+
+## What Citation Means
+
+A "cited" query means the client's domain appeared in an AI provider's grounding sources when that query was asked — the structured source list, not the prose. It is the **secondary** signal. It does NOT mean:
+- The AI recommended them positively
+- The citation is prominent
+- It will persist on the next sweep
+- That the brand was also mentioned in the answer text (citation and mention are independent — a model can cite the domain without naming the brand, and vice versa)
+
+A "not-cited" query means the AI answered without grounding on the client's domain.
+
+A citation is `not-measured` when the adapter captures no structured sources, as with Local chat completions. Cited rates exclude these answers. Their mention measurements remain available.
+
+## Reading Evidence Output
+
+`cnry citations visibility <project>` renders a two-glyph cell per (query × engine): citation first, mention second. Uppercase = present, lowercase = absent, `·` = citation not measured (the engine returns no sources), `–` = no snapshot. **C/c = cited** (secondary), **M/m = mentioned** (primary). The legend prints above the table; keep it when you quote the table, and never collapse the two signals into one cell. Lead your interpretation with the mention glyph.
+
+```
+(cell = [citation][mention];  C=cited c=not ·=not measured, M=mentioned m=not, –=no data)
+Query                      gemini  local  openai  Cite  Ment
+AEO Agency NYC             CM      ·M     CM      2/2   3/3   ← mentioned AND cited: branded/direct match, fully visible
+best plumber brooklyn      cM      ·M     cM      0/2   3/3   ← mentioned but NOT cited: named in the answer, domain not in sources (mention win, citation gap)
+ai seo tools               Cm      ·m     cm      1/2   0/3   ← cited but NOT mentioned: domain grounded, brand never named (citation without share of voice)
+how to fix a leaky faucet  cm      ·m     cm      0/2   0/3   ← neither: informational gap, no page for this topic
+```
+
+`Cite` counts the engines that cited the query out of those whose sources were checked (`·` when none were); `Ment` counts the engines that mentioned it. Above the table, `Cited in sources: X/Y engines` and `Mentioned in answers: X/Y engines` report each signal independently — a query can be one, both, or neither.
+
+`cnry evidence <project>` is the per-query citation history instead: one line per query with its latest citation (`✓ cited`, `✗ not-cited` or `· not measured (no sources)`, plus a transition such as `(lost)`), then `Cited: X / Y` over the queries whose latest answers carried sources and `Not measured: N`. It prints no mention line; read mention from its `--format json` (each run's `mentionState` and `mentionTransition`) or from `cnry citations visibility`.
+
+### Which threads and pages engines cite
+
+`cnry citations urls <project>` lists every cited page once, across the sweeps in the window: how many answers cite it, how many of those mention the brand (`answersMentionUnchecked` were never checked, never "not mentioned"), the engines and queries behind it, and its first and last sweep. Links are compared one way (https, no `www.`, no `utm_*` parameters, a Reddit thread by its id), so a thread cited with and without its title slug is one row.
+
+- `--category forum,social,video` keeps discussion threads and posts, the places a person can reply.
+- `--new-in-latest` keeps pages the latest sweep cited for the first time. "First" means within the window; the default window is `all`. It needs an earlier sweep that captured pages: answers stored before page capture (August 2026) are left out and counted in `answersPagesNotCaptured`.
+- Reading a cited thread itself is a separate step: Canonry stores the link, not the thread's text.
+
+### Query Categories
+
+**Branded/direct queries** (e.g., "[business name] [city]"):
+- If mentioned: good — the engine names you for your own core queries (and check the citation as the secondary confirmation)
+- If not mentioned, read the exact answer and check the project's recorded brand names. Use separate site and search evidence to investigate possible causes.
+
+**Competitive queries** (e.g., "best [service] [city]"):
+- If not mentioned: check who IS mentioned (mention share) — competitor analysis needed. Then check who is cited as the secondary lens.
+- Harder wins; require established authority and trust signals
+
+**Informational/how-to queries** (e.g., "how to [do X]"):
+- If not mentioned (and not cited): almost always a content gap — no page targeting this topic, or it's not indexed
+- High-leverage — informational content positions a site as authoritative to AI models, earning the mention first and the citation second
+
+## Using Analytics
+
+### Mention + Citation Rate Trends (`--feature metrics`)
+`BrandMetricsDto` returns both `mentionTrend` (primary) and `trend` (the citation trend, secondary) over time across providers. Read mention first. Use to identify:
+- Improving or declining mention trends (does the engine name you more or less often?), then citation trends
+- Provider-specific performance differences
+- Impact of content/indexing changes over time
+
+**Query normalization:** When new queries are added to a project mid-history, canonry automatically normalizes each time bucket to only include queries that existed before that bucket started. This prevents newly-added (typically not-yet-mentioned/uncited) queries from creating a false drop in the rate trend. The chart displays dashed vertical annotation lines at points where queries were added (e.g. "+3 q"), and each bucket's tooltip shows the query count ("q") used for that bucket's calculation.
+
+### Gap Analysis (`--feature gaps`)
+`GapAnalysisDto` returns mention buckets — `mentionedQueries[]`, `mentionGap[]` (a competitor is mentioned but you're not), `notMentioned[]` (nobody named) — alongside the cited buckets (`cited[]`, `gap[]`, `uncited[]`, and `citationNotMeasured[]` for queries whose engines return no sources, which are in none of the other three). Read the mention buckets first. Priorities:
+- **`mentionGap[]` queries** are highest priority — competitors are taking mention share (AI share-of-voice) you're not winning
+- **`notMentioned[]` queries** may need content or may be too broad
+- The cited `gap[]` / `uncited[]` buckets are the secondary lens on the same queries
+
+### Source Breakdown (`--feature sources`)
+Shows which source categories AI models cite for your queries. Helps identify:
+- Whether competitors dominate specific categories
+- Content format opportunities (FAQ, how-to, comparison pages)
+
+### Winnability gate + briefs (`canonry content targets|map|brief`)
+Every content target carries a deterministic `winnabilityClass`: **ownable** (worth writing for) or **ceded** (the cited surface is dominated by aggregators/OTAs or editorial media, a head term first-party content cannot realistically win). It is derived (no LLM) by classifying each cited domain through the shared surface classifier (own > tracked competitor > stored discovery class > static allow-list), so well-known aggregators/editorial cede immediately, no discovery run required. **`canonry discover run`** improves recall for niche domains the allow-list misses; a target only fails open to `ownable` when none of its cited surface is recognized. `canonry doctor --project <project> --check content.winnability.coverage` reports recognized-coverage of the cited surface and, when the project has no ICP, nudges you to set one (discovery needs it). It is advice, not an instrument fault: it shows in `canonry doctor` and never sends a health alert.
+- `canonry content targets <project> --ownable` — the winnable shortlist (ownable rows sort first by default).
+- `canonry content map <project>` — the winnability map: which cited surfaces are ceded vs the ranked ownable targets.
+- `canonry content brief <project> <targetRef>` — synthesize a structured brief (angle, why-winnable, schema hookup) for an **ownable** target. Ceded targets are rejected — don't chase them.
+Recommend briefs only for ownable targets; for ceded head terms, advise earning placement on the aggregator/editorial surface instead of writing a competing page.
+
+## Diagnosing Mention + Citation Gaps
+
+### Step 0: Read the mention signal first
+Read both signals in `cnry analytics <project> --feature gaps`. The `notMentioned[]` and `mentionGap[]` buckets use answer text. The `gap[]` and `uncited[]` buckets use citations. Report `answerMentioned = null` as unavailable.
+
+`cnry health <project>` shows mention and citation rates with separate denominators. `cnry health <project> --history` shows both signals over time.
+
+### Stored competitor suggestions
+
+`competitor suggest` and the competitor suggestions API read stored answer and
+citation evidence only. They do not run a provider sweep. Treat `namingAnswers`
+and `citingAnswers` as separate answer counts, and use `pairedAnswers`
+only when the name and source occur in the same answer. Probe and non-terminal
+runs are reported as excluded evidence and do not enter candidate counts. An
+exact suggestion read refuses with `VALIDATION_ERROR` above 10,000 eligible
+answer rows instead of sampling; narrow the window or select one Advanced
+market with `groupKey`.
+
+Suggestions preserve the selected query class and Advanced market scope. Keep
+branded and non-brand results separate; never pool their shares into one
+percentage. Review `unresolvedNames` and answer samples before adding an alias
+because a recommended name can be a partner, place, service, or unrelated
+entity.
+
+### Step 1: Check indexing
+Read stored indexing evidence as one possible explanation for a change in visibility.
+```bash
+cnry google coverage <project>
+```
+For a key page, read its stored inspection with `cnry google inspections <project> --url <url>`. Report the inspection date. Use the [indexing workflow](indexing.md) for an approved submission.
+
+### Step 2: Check if content exists
+Is there a page on the site targeting that query? If not, that's the gap — not a canonry or provider issue.
+
+### Step 3: Check competitors
+For competitive queries, if others are mentioned/cited and the client isn't (check mention share first, cited domains second):
+- Do competitors have more specific, dedicated pages?
+- Do they have stronger schema/structured data?
+- Are they more established in the index?
+
+Take a `runId` from `cnry evidence <project> --format json` (it lists each query's runs and their citation states) and run `cnry run show <run-id> --format json`. Its snapshots carry the evidence: use `citedDomains` and `citedUrls` for citation evidence, and the answer text with Canonry's shared matcher for mention evidence. `competitorOverlap` is a legacy mixed field and must not be treated as either metric by itself.
+
+### Step 4: Check across providers
+Gemini, OpenAI, Claude, and Perplexity may behave differently. One citing a domain while another doesn't is normal — each has its own knowledge base and update schedule.
+
+### Step 5: Check analytics trends
+```bash
+cnry analytics <project> --feature metrics --window 30d
+```
+Read the mention and citation trends. Use `--feature gaps` for the latest eligible sweep. Its window controls the consistency history.
+
+### Step 6: Check GA4 traffic for impact
+A lost mention (or lost citation) isn't always a lost user. Before declaring a regression real, confirm whether AI-referral traffic actually fell on the same window:
+```bash
+cnry ga status <project>                          # confirm lastSyncedAt is recent; re-sync if stale
+cnry ga ai-referral-daily <project> --format json
+                                                      # AI sessions per day and per source, deduplicated across
+                                                      # attribution dimensions; totals match `cnry ga traffic`
+cnry ga attribution <project> --trend             # 7d/30d direction per channel + biggest mover
+```
+Compare the same date range in both instruments. If AI sessions also fell, read `aiReferrals[]` from `cnry ga traffic` to find the sources with fewer sessions. A sweep and GA4 measure different populations. Their changes do not establish what caused the traffic change.
+
+## Trend Interpretation
+
+Read transitions on the mention signal first (primary), then the citation signal (secondary). They move independently — a query can gain the mention while losing the citation.
+
+**Stable mentioned** — the engine keeps naming you; monitor for regressions, no action needed. (Track the cited state as the secondary confirmation.)
+
+**New mention** (was not-mentioned, now mentioned) — primary win. Correlate with what changed: new content, indexing, schema update. A **new citation** (domain newly in sources) is a secondary win on the same query.
+
+**Regression** — investigate immediately, leading with a **lost mention** (was mentioned, now not). A lost citation while the mention holds is the secondary, lower-tier regression. Either way:
+- Did a competitor take the mention share (`mentionGap[]`)?
+- Did a competitor page launch?
+- Did the page get deindexed or go down?
+- Did the model update?
+- Check `cnry google deindexed <project>` for index losses
+
+**Fluctuation** (mentioned/cited in some runs, not others) — normal for competitive queries. Track the trend over 5+ runs before drawing conclusions. AI answers are non-deterministic.
+
+## Change since the previous sweep
+
+To answer "did it move since the last sweep?", read `populations[].comparison` from `cnry measurement-plan visibility <project> --format json` (MCP: `canonry_visibility_report`). Simple and Advanced projects return it the same way.
+
+- Every query class population carries its own comparison. Never pool branded and non-brand changes.
+- `comparison` is absent when the previous sweep cannot be read. Absent is not zero change: say the change is unavailable.
+- `state: available`: quote each metric's `delta` (current rate minus the previous rate) with both rates' numerators and denominators and the `previousRun` date. The previous sweep can predate the report's date window.
+- `state: unavailable`: report its `reason` (`no-previous-run`, `partial-run`, `scoped-run`, `definition-changed`, `model-changed`, `legacy-unknown`, `no-selected-run`). An unavailable reason is not zero change; never subtract rates by hand to fill it.
+- A metric inside an available comparison can still be unavailable (`current-unavailable`, `previous-unavailable`, `not-applicable`). Treat it the same way.
+
+## What to Recommend
+
+### Low overall mention rate (< 50%)
+Mention rate is the primary KPI — fix this before cited rate.
+1. Audit Google index coverage with `cnry google coverage <project>`.
+2. Submit the sitemap with `cnry google submit-sitemap <project> --configured`. Use the Google Indexing API for eligible job and livestream pages.
+3. Submit the sitemap with `cnry bing submit-sitemap <project> <url>`.
+4. Check core pages for schema (LocalBusiness / Organization / FAQPage) so the brand name is unambiguous
+5. Map `notMentioned[]` / `mentionGap[]` queries to pages — which have no corresponding page, and who is named instead?
+
+A low cited rate while the mention rate holds is the secondary problem: the engine names you but grounds on other sources — pursue the citation (schema, llms.txt, indexing) after the mention is secured.
+
+### Branded terms not mentioned
+Red flag — the engine won't even say your name. Check (the lost citation for your own name is the secondary signal here):
+- Is the homepage indexed?
+- Does `llms.txt` exist and list the business clearly?
+- Does schema include the exact brand name in `name` field?
+- Is a brand alias missing? (`spec.aliases` widens the `answerMentioned` detector for another name the brand goes by, such as a product or former name. Case, spacing and punctuation variants like "Acme Cloud" vs "AcmeCloud" already match.)
+
+### Informational terms not mentioned
+Content strategy play:
+- Does a page targeting this topic exist? If not, create it — give the engine a reason to name you.
+- Is it indexed? If not, submit it.
+- Is it structured for AI extraction? (FAQ schema, clear H2s, definition-style answers)
+
+### Provider variance (mentioned/cited on one, not others)
+Expected — each provider has independent knowledge. Focus on the ones that matter most for the client's audience. Don't over-optimize for one provider at the expense of others.
+
+## The AEO Timeline Reality
+
+- Site changes → weeks/months to appear in sweeps (or never)
+- Google indexing → 24–72h with Indexing API, longer organic
+- Bing indexing → hours with IndexNow, days without
+- Model training updates → unknown schedule, outside our control
+
+**Never say:** "Deploy this and re-run canonry to see if it worked."
+**Always say:** "This positions the site correctly. Canonry will tell us if/when that pays off."
+
+## Sentiment
+
+Sentiment is a branded figure: read `canonry sentiment <project> --query-class branded
+--format json` for the favorable share. Non-brand answers name the brand almost only to
+recommend it, so read them as exceptions with `canonry sentiment evidence <project>
+--query-class non-brand --outcome mixed,unfavorable`. Favorable is favorable /
+(favorable + mixed + unfavorable); never pool the classes. Missing mentions, factual statements, and
+unknown judgments stay outside this denominator, so sentiment cannot replace
+mention coverage. Zero judged answers are unavailable. Inspect the returned
+coverage, frozen scope, and per-query source evidence before interpreting a score.
+The feature is default-off, has no theme setup, and has not passed independent
+human evaluation for either query class. Native Aero reads these scores but
+cannot enable sentiment or submit a backfill; client reports do not consume them.
+
+Competitor impact previews use the latest stored landscape and its exact run
+IDs, query population and tracked basis. Compare project and competitor mention
+counts before comparing percentages. A competitor change restates every stored
+period; an apply-mode add may move again after alias detection. Use an explicit
+preview before a separate curated write, and do not substitute its result for
+the overview card's separate instrument.

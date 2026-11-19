@@ -828,8 +828,16 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             modell = p_mod if p_mod and p_mod not in ("", "free-forever") else "auto/best-coding"
     t_model = modell or "auto/best-coding"
 
+    # M75: Strikte Rollen- & Tool-Isolation (keine implizite Vererbung von Parent-Tools)
+    from backend.delegation_isolation import (
+        build_isolated_system_prompt_header,
+        resolve_isolated_execution_scope,
+    )
+    isolated_scope = resolve_isolated_execution_scope(ziel, requested_model=t_model, profiles=profiles)
+    isolation_header = build_isolated_system_prompt_header(isolated_scope)
+
     tgt_sess = f"mc_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{ziel}"
-    msg_text = f"Message from 🤖 {d_name} (@{delegator_id}): {auftrag}"
+    msg_text = f"{isolation_header}\nMessage from 🤖 {d_name} (@{delegator_id}): {auftrag}"
     with _get_state_db() as conn:
         _ensure_session_exists(conn, tgt_sess, ziel, t_model, auftrag[:50])
     _save_message_to_db(tgt_sess, "user", msg_text)
@@ -850,7 +858,16 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             )
             kconn.execute(
                 "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
-                (task_id, "created", json.dumps({"title": auftrag[:80], "assignee": ziel, "via": "delegation_engine_v2", "delegator": delegator_id, "reasoning_level": reasoning_lvl}), now_iso)
+                (task_id, "created", json.dumps({
+                    "title": auftrag[:80],
+                    "assignee": ziel,
+                    "via": "delegation_engine_v2",
+                    "delegator": delegator_id,
+                    "reasoning_level": reasoning_lvl,
+                    "isolated": True,
+                    "allowed_tools": isolated_scope["allowed_tools"],
+                    "allowed_skills": isolated_scope["allowed_skills"],
+                }), now_iso)
             )
             kconn.commit()
         finally:

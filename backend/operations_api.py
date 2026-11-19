@@ -565,7 +565,7 @@ async def _execute_kanban_task_async(task_id: str):
     conn = _get_kanban_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT id, title, body, assignee, status, model_override, provider_override, task_type, block_kind FROM tasks WHERE id = ?", (task_id,))
+        cur.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
         row = cur.fetchone()
         if not row:
             return
@@ -653,7 +653,23 @@ async def _execute_kanban_task_async(task_id: str):
         pass
 
     from backend.agent_aliases import resolve_agent_id
-    assignee = resolve_agent_id(t_dict.get("assignee") or "hermes-researcher")
+    raw_assignee = (t_dict.get("assignee") or "").strip()
+    if not raw_assignee:
+        # Kein Profil manuell zugewiesen -> automatisch an den Root-Orchestrator ('default') uebergeben
+        raw_assignee = "default"
+        try:
+            c_asgn = _get_kanban_connection()
+            now_asgn_iso = datetime.datetime.now().isoformat()
+            c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
+            c_asgn.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
+                (task_id, json.dumps({"assignee": raw_assignee, "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now_asgn_iso),
+            )
+            c_asgn.commit()
+            c_asgn.close()
+        except Exception:
+            pass
+    assignee = resolve_agent_id(raw_assignee)
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
     model = (t_dict.get("model_override") or "").strip()
@@ -696,7 +712,18 @@ async def _execute_kanban_task_async(task_id: str):
             except Exception:
                 pass
 
-        task_prompt = f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}{proj_context}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte."
+        # M91: Praezedenzfall-Gedaechtnis (strikt pro Mandant/Projekt isoliert)
+        precedent_block = ""
+        try:
+            from backend.precedent_log import find_matching_precedents, format_precedents_for_prompt
+            _tenant_id = str(t_dict.get("tenant_id") or "default")
+            _project_id = str(t_dict.get("project_id") or "")
+            _matched_precs = find_matching_precedents(_tenant_id, _project_id, f"{title} {body}")
+            precedent_block = format_precedents_for_prompt(_matched_precs)
+        except Exception:
+            pass
+
+        task_prompt = f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}{proj_context}{precedent_block}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte."
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=assignee,
             agent_name=agent_name,
@@ -707,16 +734,70 @@ async def _execute_kanban_task_async(task_id: str):
             provider=provider_override,
             task_id=task_id
         )
-        is_success = res.get("status") == "success" and not (res.get("content") or "").startswith("[FEHLER:")
-        target_status = "done" if is_success else "failed"
-        reply = res.get("content", "").strip() or f"Aufgabe '{title}' erfolgreich von {agent_name} abgeschlossen."
+        # M76: Verifizierte Kanban-Cards mit Token-Budget & Proof-Gate
+        raw_reply = (res.get("content") or "").strip()
+        _token_used = int(res.get("total_tokens") or res.get("tokens_used") or 0)
+        _token_budget = int(t_dict.get("token_budget") or 0)
+        _proof_cmd = str(t_dict.get("proof_command") or "").strip()
+        _retry_cnt = int(t_dict.get("retry_count") or 0)
+
+        from backend.kanban_verifier import verify_card_completion
+        verdict = verify_card_completion(
+            task_id=task_id,
+            result_text=raw_reply,
+            proof_command=_proof_cmd or None,
+            token_used=_token_used,
+            token_budget=_token_budget,
+            retry_count=_retry_cnt,
+        )
+        if verdict["status"] == "retry":
+            res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=assignee,
+                agent_name=agent_name,
+                prompt=f"{task_prompt}\n\n[VERIFIER RETRY]: {verdict['reason']}",
+                role=role,
+                system_prompt=system_prompt,
+                model=model,
+                provider=provider_override,
+                task_id=task_id,
+            )
+            raw_reply = (res.get("content") or "").strip()
+            _token_used += int(res.get("total_tokens") or res.get("tokens_used") or 0)
+            verdict = verify_card_completion(
+                task_id=task_id,
+                result_text=raw_reply,
+                proof_command=_proof_cmd or None,
+                token_used=_token_used,
+                token_budget=_token_budget,
+                retry_count=_retry_cnt + 1,
+            )
+
+        is_success = verdict["status"] == "done" and res.get("status") == "success"
+        target_status = "done" if is_success else ("blocked" if verdict["status"] == "blocked" else "failed")
+        reply = raw_reply or f"Aufgabe '{title}' abgeschlossen ({target_status})."
+        if not is_success and verdict.get("reason"):
+            reply = f"{reply}\n\n[VERIFIER / HITL]: {verdict['reason']}"
         now_iso = datetime.datetime.now().isoformat()
         
         c = _get_kanban_connection()
         try:
-            c.execute("UPDATE tasks SET status = ?, completed_at = ?, result = ? WHERE id = ?", (target_status, now_iso, reply, task_id))
-            c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)", 
-                      (task_id, json.dumps({"status": target_status, "summary": reply[:200]}), now_iso))
+            if target_status == "blocked" and verdict.get("block_kind"):
+                c.execute(
+                    "UPDATE tasks SET status = 'blocked', block_kind = ?, result = ? WHERE id = ?",
+                    (verdict["block_kind"], reply, task_id),
+                )
+                c.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'awaiting_approval', ?, ?)",
+                    (task_id, json.dumps({"block_kind": verdict["block_kind"], "options": verdict.get("hitl_options", []), "reason": verdict.get("reason")}), now_iso),
+                )
+                c.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'blocked', ?, ?)",
+                    (task_id, json.dumps({"reason": verdict["block_kind"]}), now_iso),
+                )
+            else:
+                c.execute("UPDATE tasks SET status = ?, completed_at = ?, result = ? WHERE id = ?", (target_status, now_iso, reply, task_id))
+                c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)", 
+                          (task_id, json.dumps({"status": target_status, "summary": reply[:200], "verified": is_success}), now_iso))
             c.commit()
             _sync_to_memory_bridge(task_id, title, assignee, target_status, reply)
         finally:
@@ -1151,7 +1232,23 @@ async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
     from backend.agent_aliases import resolve_agent_id
-    assignee = resolve_agent_id(t_dict.get("assignee") or "hermes-researcher")
+    raw_assignee = (t_dict.get("assignee") or "").strip()
+    if not raw_assignee:
+        # Kein Profil manuell zugewiesen -> automatisch an den Root-Orchestrator ('default') uebergeben
+        raw_assignee = "default"
+        try:
+            c_asgn = _get_kanban_connection()
+            now_asgn_iso = datetime.datetime.now().isoformat()
+            c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
+            c_asgn.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
+                (task_id, json.dumps({"assignee": raw_assignee, "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now_asgn_iso),
+            )
+            c_asgn.commit()
+            c_asgn.close()
+        except Exception:
+            pass
+    assignee = resolve_agent_id(raw_assignee)
     result = t_dict.get("result") or ""
     now_iso = datetime.datetime.now().isoformat()
 

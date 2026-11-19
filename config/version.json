@@ -1,14 +1,13 @@
 {
-  "version": "v0.5.4.2",
-  "codename": "Archon Global Hardened",
-  "released_at": "2026-11-18 14:08",
-  "previous_version": "v0.5.4.1",
-  "commit": "e06f8183",
+  "version": "v0.5.5",
+  "codename": "Archon Orchestration & Governance v2",
+  "released_at": "2026-11-19 08:30",
+  "previous_version": "v0.5.4.2",
+  "commit": "v0.5.5",
   "features": [
-    "M31 Global Edition: Bilingual parity (EN/DE) across 70 Specialists, 832 Prompt Templates, and 55 Boardroom Frameworks",
-    "M30 First-Run Onboarding: Interactive 4-Step Web Setup Wizard + Multi-Arch CLI Installer (amd64 & Apple Silicon arm64)",
-    "M47 Zero-Install Live Demo Mode (ARCHON_DEMO_MODE=true): Read-only ASGI showcase tenant with zero token cost",
-    "Zero-Trust & RBAC Hardening: Non-root runtime (uid 1000), Socket Proxy, 72-router viewer write lock & deterministic SQLite handle closing",
-    "M35 & M36 Public Launch & Ecosystem Kit: SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, manifests & Roadmap M0–M53"
+    "Hermes Marketplace Integration: 18 Skills (.agents/skills/) & 6 MCP Servers (.mcp.json) assigned to specialist profiles",
+    "Orchestration & Security v2 (M75-M94): Delegation Isolation, Session Taint Guard (HITL), Verifier & Proof Gate, Tenant-Isolated Precedent Log, Workflow DAGs, Offline AEAD Vault, Tool Warrants & Flightlog",
+    "Business Operations & UI v2 (M6, M25/M55, M32-M65): Design System v2, Settings Ergonomics, Kanban Start/Quick-Assign/Gantt/Graph, Enterprise Calendar, Time-to-Invoice & Client Approval Portal",
+    "Compliance & Hardening: Art. 17 DSGVO Erasure, § 201 StGB Consent Gate, EU AI Act Art. 50/Annex III Guards, Legacy RCE/CORS Removal & 31 /api/v2/* Routes"
   ]
 }

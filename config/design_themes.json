@@ -176,8 +176,8 @@
           },
           "os-btn-primary": {
             "normal": {
-              "background-color": "#18181b",
-              "color": "#fafafa",
+              "background-color": "#d9d9d9",
+              "color": "#313030",
               "border-color": "#18181b",
               "border-width": "1px",
               "border-style": "solid",

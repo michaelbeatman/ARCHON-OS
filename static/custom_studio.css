@@ -1,10 +1,131 @@
 /* ========================================================================= */
-/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-13 23:31:33               */
+/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-17 22:17:24               */
 /* ========================================================================= */
 
-.archon-nav-item {
-  margin-top: 0px !important;
-  margin-bottom: 0px !important;
-  padding-bottom: 1px !important;
+#log-pane-containers {
+  box-shadow: none !important;
+  border-width: 0px !important;
+  border-color: #ffffff !important;
+  border-radius: 0px !important;
+}
+
+div#view-log-stream > div.flex-1 {
+  border-width: 0px !important;
+}
+
+#library-main-area {
+  padding-left: 0px !important;
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+  padding-right: 0px !important;
+  border-width: 0px !important;
+}
+
+main#library-subtab-rag > div.h-10 {
+  border-width: 0px !important;
+}
+
+aside.flex-shrink-0 > div.px-2\.5 {
   padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
+
+aside.flex-shrink-0 > div.px-2\.5 > div.pt-0\.5 {
+  margin-top: 0px !important;
+  padding-top: 02px !important;
+}
+
+#sidebar-archon-version-row {
+  margin-top: 0px !important;
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
+
+#sidebar-update-leds-row {
+  margin-top: 0px !important;
+}
+
+div#archon-sidebar-footer > div.px-1 {
+  padding-top: 0px !important;
+  font-size: 12px !important;
+}
+
+div#topbar-user-badge > div.flex > span.font-medium {
+  font-size: 12px !important;
+}
+
+button#nav-mission-control > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+  padding-bottom: 2px !important;
+}
+
+button#nav-operations-erp > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+  padding-bottom: 2px !important;
+}
+
+aside.flex-shrink-0 > nav.flex-1 {
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+}
+
+nav.flex-1 > div > div.px-2 {
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+}
+
+button#nav-operations > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-inbox > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-agent-profiles > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-showroom > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-watchdog > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-research > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-library > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-ai-mastermind > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-addresses > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-items > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-finance > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-corporate > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-approval-policies > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
+}
+
+button#nav-log-stream > div.min-w-0 > div.text-xs {
+  font-size: 14px !important;
 }

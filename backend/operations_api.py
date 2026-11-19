@@ -954,6 +954,7 @@ class KanbanBulkActionRequest(BaseModel):
     task_ids: List[str]
     action: str  # "move", "assign", "tag", "delete"
     payload: Dict[str, Any] = {}
+    assignee: Optional[str] = None
 
 class KanbanBulkUndoRequest(BaseModel):
     undo_token: str
@@ -1018,6 +1019,10 @@ def api_kanban_bulk_action(req: KanbanBulkActionRequest):
 
         elif action == "assign":
             target_assignee = req.payload.get("assignee")
+            if target_assignee is None:
+                target_assignee = req.assignee
+            if target_assignee is None:
+                raise HTTPException(status_code=400, detail="Kein Ziel-Agent übergeben.")
             cursor.execute(f"""
                 UPDATE tasks
                 SET assignee = ?

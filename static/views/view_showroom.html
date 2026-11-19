@@ -5,20 +5,24 @@
   <!-- ========================================================================= -->
   <div id="showroom-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
 
-    <!-- LINKSBÜNDIG: ÜBERSCHRIFT, STATUS, BADGE, SUBTITLE -->
-    <div class="flex items-center gap-3 min-w-0 flex-1">
-      <h2 data-i18n="view.showroom.title" id="showroom-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
-        Showroom · Projekt-Explorer
-      </h2>
-      <button data-i18n-title="view.showroom.title_help" type="button" onclick="openContextHelp('showroom')" title="Hilfe zum Showroom" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
-        <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-      </button>
-      <span id="showroom-total-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
-        <span id="showroom-projects-count-badge">0 Projekte</span>
-      </span>
-      <span data-i18n="view.showroom.subtitle" id="showroom-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-semibold truncate hidden xl:inline pl-1">
-        · Dateibaumstruktur nach Windows Explorer: Zwischenberichte, Medien &amp; Endprodukte
-      </span>
+    <!-- LINKSBÜNDIG: ÜBERSCHRIFT, ? + STATUS, UNTERTITEL DARUNTER -->
+    <div class="flex items-center gap-3 min-w-0 flex-1 pr-3">
+      <div class="min-w-0">
+        <div class="flex items-center gap-1.5">
+          <h2 data-i18n="view.showroom.title" id="showroom-main-title" class="text-[var(--foreground)] tracking-tight leading-none truncate">
+            Showroom · Projekt-Explorer
+          </h2>
+          <button data-i18n-title="view.showroom.title_help" type="button" onclick="openContextHelp('showroom')" title="Hilfe zum Showroom" class="w-4 h-4 rounded-full hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0" style="margin-top: -2px;">
+            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          </button>
+          <span id="showroom-total-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
+            <span id="showroom-projects-count-badge">0 Projekte</span>
+          </span>
+        </div>
+        <div data-i18n="view.showroom.subtitle" id="showroom-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-medium truncate">
+          Dateibaumstruktur nach Windows Explorer: Zwischenberichte, Medien &amp; Endprodukte
+        </div>
+      </div>
     </div>
 
     <!-- RECHTSBÜNDIG: DIE 4 GROSSEN ICON-KACHELN IM KADER-STIL (72px) -->

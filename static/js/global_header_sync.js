@@ -72,28 +72,44 @@
     // Find top-level view containers (#view-*) and ensure their first header bar has the rightmost SYNC button
     const views = main.querySelectorAll('[id^="view-"]:not([id$="-mount"])');
     views.forEach((view) => {
-      if (view.querySelector('.archon-global-sync-btn')) return;
-      // Locate the top header bar (first direct child with border-b and flex)
+      // Locate the top header bar (<div id="*-global-header"> or <header id="*-global-header">)
       const header = Array.from(view.children).find((el) =>
-        el.tagName === 'DIV' &&
-        el.classList.contains('border-b') &&
-        (el.classList.contains('flex') || el.classList.contains('justify-between'))
+        (el.tagName === 'DIV' || el.tagName === 'HEADER') &&
+        ((el.id && el.id.endsWith('-global-header')) ||
+          (el.classList.contains('border-b') && (el.classList.contains('flex') || el.classList.contains('justify-between'))))
       );
       if (!header) return;
 
-      // Ensure 80px alignment & title styling consistency on standard view headers
-      const titleEl = header.querySelector('h1, h2');
-      if (titleEl && !titleEl.dataset.archonStyled) {
-        titleEl.dataset.archonStyled = '1';
-        titleEl.classList.remove('text-sm', 'text-base', 'text-lg', 'uppercase', 'font-mono');
-        titleEl.classList.add('text-[22px]', 'font-black', 'tracking-tight', 'leading-none');
+      const isAgentProfiles = header.id === 'agent-profiles-global-header';
+      if (!isAgentProfiles) {
+        // Clean borderless Operations-Header-Look
+        header.style.setProperty('border-width', '0px', 'important');
+        header.style.setProperty('border-bottom-width', '0px', 'important');
+
+        const titleEl = header.querySelector('h1, h2');
+        if (titleEl && !titleEl.dataset.archonStyled) {
+          titleEl.dataset.archonStyled = '1';
+          titleEl.classList.remove('text-sm', 'text-base', 'text-lg', 'uppercase', 'font-mono', 'font-black');
+          titleEl.classList.add('tracking-tight', 'leading-none');
+          titleEl.style.setProperty('font-size', '28px', 'important');
+          titleEl.style.setProperty('font-weight', '500', 'important');
+          titleEl.style.setProperty('line-height', '1.05', 'important');
+          titleEl.style.setProperty('margin', '0', 'important');
+        }
+        const helpBtn = header.querySelector('button[onclick*="openContextHelp"]');
+        if (helpBtn && !helpBtn.dataset.archonStyled) {
+          helpBtn.dataset.archonStyled = '1';
+          helpBtn.classList.remove('w-5', 'h-5', 'rounded-md');
+          helpBtn.classList.add('w-4', 'h-4', 'rounded-full', 'self-start');
+          helpBtn.style.setProperty('margin-top', '-2px', 'important');
+        }
+        const subEl = header.querySelector('[id$="-main-subtitle"]');
+        if (subEl && subEl.textContent && /^[•·]\s*/.test(subEl.textContent.trim())) {
+          subEl.textContent = subEl.textContent.trim().replace(/^[•·]\s*/, '');
+        }
       }
-      const helpBtn = header.querySelector('button[onclick*="openContextHelp"]');
-      if (helpBtn && !helpBtn.dataset.archonStyled) {
-        helpBtn.dataset.archonStyled = '1';
-        helpBtn.classList.remove('w-5', 'h-5', 'rounded-md');
-        helpBtn.classList.add('-mt-1.5', 'w-4', 'h-4', 'rounded-full', 'self-start');
-      }
+
+      if (view.querySelector('.archon-global-sync-btn')) return;
 
       // Append global SYNC button as the outermost right element
       const children = Array.from(header.children).filter((c) => !c.classList.contains('hidden'));

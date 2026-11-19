@@ -400,22 +400,34 @@ async function initMasterChat() {
       const labelMission = document.getElementById("master-chat-label-mission");
       const inputEl = document.getElementById("master-chat-input");
       if (mode === "mission") {
-        if (switchTrack) switchTrack.className = "w-10 h-5 bg-zinc-900 dark:bg-zinc-100 rounded-full p-0.5 transition-colors duration-200 ease-in-out relative flex items-center";
-        if (switchKnob) {
-          switchKnob.style.transform = "translateX(20px)";
-          switchKnob.className = "w-4 h-4 bg-white dark:bg-zinc-900 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out";
+        if (switchTrack) {
+          switchTrack.className = "bg-zinc-900 dark:bg-zinc-100 rounded-full p-0.5 transition-colors duration-200 ease-in-out relative flex items-center";
+          switchTrack.style.width = "34px";
+          switchTrack.style.height = "17px";
         }
-        if (labelDirect) labelDirect.className = "text-xs font-mono font-medium transition-colors text-[var(--muted-foreground)]";
-        if (labelMission) labelMission.className = "text-xs font-mono font-bold transition-colors text-[var(--foreground)]";
+        if (switchKnob) {
+          switchKnob.style.width = "13px";
+          switchKnob.style.height = "13px";
+          switchKnob.style.transform = "translateX(17px)";
+          switchKnob.className = "bg-white dark:bg-zinc-900 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out";
+        }
+        if (labelDirect) labelDirect.className = "text-[11px] font-mono font-medium transition-colors text-[var(--muted-foreground)]";
+        if (labelMission) labelMission.className = "text-[11px] font-mono font-bold transition-colors text-[var(--foreground)]";
         if (inputEl) inputEl.placeholder = chatT('ui.chat_engine.placeholder_mission', 'Missions-Auftrag formulieren (wird als Task in Operations angelegt und im Approval Gate gestoppt)...');
       } else {
-        if (switchTrack) switchTrack.className = "w-10 h-5 bg-zinc-900 dark:bg-zinc-100 rounded-full p-0.5 transition-colors duration-200 ease-in-out relative flex items-center";
-        if (switchKnob) {
-          switchKnob.style.transform = "translateX(0px)";
-          switchKnob.className = "w-4 h-4 bg-white dark:bg-zinc-900 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out";
+        if (switchTrack) {
+          switchTrack.className = "bg-zinc-900 dark:bg-zinc-100 rounded-full p-0.5 transition-colors duration-200 ease-in-out relative flex items-center";
+          switchTrack.style.width = "34px";
+          switchTrack.style.height = "17px";
         }
-        if (labelDirect) labelDirect.className = "text-xs font-mono font-bold transition-colors text-[var(--foreground)]";
-        if (labelMission) labelMission.className = "text-xs font-mono font-medium transition-colors text-[var(--muted-foreground)]";
+        if (switchKnob) {
+          switchKnob.style.width = "13px";
+          switchKnob.style.height = "13px";
+          switchKnob.style.transform = "translateX(0px)";
+          switchKnob.className = "bg-white dark:bg-zinc-900 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out";
+        }
+        if (labelDirect) labelDirect.className = "text-[11px] font-mono font-bold transition-colors text-[var(--foreground)]";
+        if (labelMission) labelMission.className = "text-[11px] font-mono font-medium transition-colors text-[var(--muted-foreground)]";
         if (inputEl) inputEl.placeholder = chatT('ui.chat_engine.placeholder_direct', 'Nachricht an den Agenten eingeben (Enter zum Senden, Shift+Enter für Zeilenumbruch)...');
       }
     }

@@ -52,7 +52,7 @@
               "color": "#0f172a",
               "font-family": "'Outfit', sans-serif",
               "font-size": "15",
-              "gap": "12px",
+              "gap": "10px",
               "font-weight": "500",
               "border-color": "#959697",
               "border-width": "1px"

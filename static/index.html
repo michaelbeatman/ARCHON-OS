@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="/static/custom.css?v=2026111113">
   <link rel="stylesheet" href="/static/css/design_system_v2.css?v=2026111901">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
-  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=2026111113">
+  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=2026112023">
   <script src="/static/vendor/lucide.min.js"></script>
   <script>
     // Performance-Booster: Verhindert, dass lucide.createIcons() bei jedem Aufruf alle 800+ bereits gerenderten SVGs
@@ -1029,19 +1029,23 @@
         <!-- ========================================================================= -->
         <!-- 1. OPERATIONS HEADER (80px FLUCHTLINIE MIT DEN 6 ICON-TABS)               -->
         <!-- ========================================================================= -->
-        <div id="operations-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+        <div id="operations-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b-0 shrink-0 flex items-center justify-between relative overflow-visible z-20" style="border-bottom-width: 0px;">
 
-          <!-- LINKSBÜNDIG: ÜBERSCHRIFT & STATUS -->
-          <div class="flex items-center gap-3 min-w-0 flex-1">
-            <h2 data-i18n="ui.ops.title" id="ops-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
-              Operations
-            </h2>
-            <span data-i18n="ui.ops.badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25 shrink-0">
-              Projekt-Zentrale
-            </span>
-            <span data-i18n="ui.ops.subtitle" id="ops-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-semibold truncate hidden lg:inline pl-1">
-              • Alle Projekte, Master Chat, Kanban &amp; Workflows
-            </span>
+          <!-- LINKSBÜNDIG: ÜBERSCHRIFT (AUF LOGOHÖHE) + ? OBEN RECHTS + UNTERTITEL DARUNTER -->
+          <div class="min-w-0 flex-1 pr-3">
+            <div class="min-w-0">
+              <div style="display: inline-flex; align-items: flex-start; gap: 4px; width: fit-content; max-width: 100%;">
+                <h2 data-i18n="ui.ops.title" id="ops-main-title" class="text-[var(--foreground)] tracking-tight leading-none truncate" style="font-size: 28px; font-weight: 500; line-height: 1.05; margin: 0;">
+                  Operations
+                </h2>
+                <button type="button" onclick="openContextHelp('operations')" title="Hilfe zu Operations" data-i18n-title="help.operations" class="w-4 h-4 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0" style="margin-top: -2px;">
+                  <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <div data-i18n="ui.ops.subtitle" id="ops-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-medium truncate" style="display: block; margin-top: 2px; line-height: 1.2;">
+                Alle Projekte, Master Chat, Kanban &amp; Workflows
+              </div>
+            </div>
           </div>
 
           <!-- RECHTSBÜNDIG: DIE 6 ICON-TABS (Operations, Master Chat, Kanban, Organisation, n8n, Kommunikation) -->
@@ -2102,12 +2106,12 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/archon_i18n.js"></script>
   <script src="/static/js/auth_manager.js?v=20261116b"></script>
   <script src="/static/js/auth_gate.js"></script>
-  <script src="/static/js/chat_engine.js?v=2026111113"></script>
+  <script src="/static/js/chat_engine.js?v=2026112016"></script>
   <script src="/static/js/system_settings.js?v=2026112011"></script>
   <script src="/static/js/settings_search.js?v=2026111113"></script>
   <script src="/static/js/system_update_badge.js?v=20261117"></script>
-  <script src="/static/js/agent_profiles.js?v=2026111113"></script>
-  <script src="/static/js/customizer.js?v=2026112015"></script>
+  <script src="/static/js/agent_profiles.js?v=2026112020"></script>
+  <script src="/static/js/customizer.js?v=2026112018"></script>
   <script src="/static/js/component_design_studio.js?v=2026111113"></script>
   <script src="/static/js/command_palette.js?v=2026111113"></script>
   <script>
@@ -2132,15 +2136,15 @@ print('Ausführung erfolgreich!')</textarea>
   </script>
   <script src="/static/js/mission_control_cockpit.js?v=2026111113"></script>
   <script src="/static/js/research_lab.js?v=2026111113"></script>
-  <script src="/static/js/operations_kanban.js?v=2026112007"></script>
+  <script src="/static/js/operations_kanban.js?v=2026112021"></script>
   <script src="/static/js/kanban_gantt_graph.js?v=2026111902"></script>
   <script src="/static/js/sidebar_v2.js?v=2026111901"></script>
   <script src="/static/js/enterprise_calendar_ui.js?v=2026111901"></script>
   <script src="/static/js/v2_capabilities_panel.js?v=2026111901"></script>
-  <script src="/static/js/global_header_sync.js?v=2026112008"></script>
+  <script src="/static/js/global_header_sync.js?v=2026112019"></script>
   <script src="/static/js/operations_projects.js?v=2026112012"></script>
   <script src="/static/js/appshell_architect.js?v=2026111113"></script>
-  <script src="/static/js/css_live_studio.js?v=2026112015"></script>
+  <script src="/static/js/css_live_studio.js?v=2026112016"></script>
   <script src="/static/js/guardian.js?v=2026111113"></script>
   <script src="/static/js/finance_controller.js?v=2026111113"></script>
   <script src="/static/js/approval_policies_controller.js?v=2026112010"></script>
@@ -2692,6 +2696,8 @@ print('Ausführung erfolgreich!')</textarea>
           const el = document.getElementById(mountId);
           if (el) el.outerHTML = html;
           if (afterFn) afterFn();
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+          if (typeof window.reapplyArchonStudioToDOM === 'function') window.reapplyArchonStudioToDOM();
         });
         if (mountId === 'view-operations-mount') {
           window._opsViewMountPromise = p.finally(() => { window._opsViewMountPromise = null; });
@@ -2703,13 +2709,13 @@ print('Ausführung erfolgreich!')</textarea>
         _v2Mount('/static/views/view_app_frame_studio.html?v=2026111113', 'view-app-frame-studio-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); }),
         _v2Mount('/static/views/system_settings_modal.html?v=2026112014', 'system-settings-mount'),
         _v2Mount('/static/views/operations_view.html?v=2026111902', 'view-operations-mount'),
-        _v2Mount('/static/views/agent_profiles_view.html?v=2026111113', 'view-agent-profiles-mount'),
-        _v2Mount('/static/views/master_chat_view.html?v=2026111113', 'view-master-chat-mount'),
+        _v2Mount('/static/views/agent_profiles_view.html?v=2026112020', 'view-agent-profiles-mount'),
+        _v2Mount('/static/views/master_chat_view.html?v=2026112020', 'view-master-chat-mount'),
       ];
       const _deferredSpecs = [
         ['library', '/static/views/library_view.html?v=2026111113', 'view-library-mount', null],
-        ['inbox', '/static/views/inbox_view.html?v=2026111113', 'view-inbox-mount', null],
-        ['showroom', '/static/views/view_showroom.html?v=2026111113', 'view-showroom-mount', null],
+        ['inbox', '/static/views/inbox_view.html?v=2026112019', 'view-inbox-mount', null],
+        ['showroom', '/static/views/view_showroom.html?v=2026112019', 'view-showroom-mount', null],
         ['log-stream', '/static/views/log_stream_view.html?v=2026112012', 'view-log-stream-mount', null],
         ['guardian', '/static/views/view_guardian.html?v=2026111113', 'view-guardian-mount', null],
         ['plugins', '/static/views/view_plugins.html?v=2026112010', 'view-plugins-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof loadPluginSettingsRegistry === 'function') loadPluginSettingsRegistry(); if (typeof loadSystemSettings === 'function') loadSystemSettings(); }],

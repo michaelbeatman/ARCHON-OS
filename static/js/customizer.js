@@ -370,6 +370,11 @@
       syncInputsWithSettings();
       initCustomCSS();
     }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => { loadThemeFromServer(); });
+    } else {
+      loadThemeFromServer();
+    }
     function syncInputsWithSettings() {
       Object.keys(themeSettings).forEach(key => {
         applyCustomizerSetting(key, themeSettings[key], false);

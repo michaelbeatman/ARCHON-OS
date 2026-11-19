@@ -1,16 +1,70 @@
 /* ========================================================================= */
-/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-19 16:01:06               */
+/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-19 21:18:17               */
 /* ========================================================================= */
 
-#settings-tab-update {
-  margin-top: 1.5px !important;
-}
-
 #sidebar-logo-img {
-  width: 225px !important;
-  height: 69px !important;
+  width: 95% !important;
+  height: auto !important;
 }
 
-#system-settings-modal-card {
-  width: 1236px !important;
+/* ========================================================================= */
+/* ARCHON STUDIO — Übernommen aus Live-Overrides (2026-11-19)                */
+/* ========================================================================= */
+#mission-control-global-header,
+#operations-global-header,
+#master-chat-header-bar,
+#main-viewport-scroll,
+#ops-view-projects,
+#ops-view-chat,
+div#ops-view-projects > div.shrink-0 {
+  border-width: 0px !important;
+}
+
+div#view-operations > div.flex-1 {
+  padding: 0px !important;
+  border-width: 0px !important;
+}
+
+#mc-catalog-col {
+  box-shadow: none !important;
+}
+
+#mc-main-title {
+  width: auto !important;
+  font-weight: 500 !important;
+  font-size: 29px !important;
+  line-height: normal !important;
+}
+
+#ops-main-title {
+  font-weight: 500 !important;
+  font-size: 28px !important;
+}
+
+/* Einheitlicher Operations-Header-Look für alle Views außer Agenten-Kader */
+[id$="-global-header"]:not(#agent-profiles-global-header) {
+  border-width: 0px !important;
+  border-bottom-width: 0px !important;
+}
+
+[id$="-global-header"]:not(#agent-profiles-global-header) h2 {
+  font-size: 28px !important;
+  font-weight: 500 !important;
+  line-height: 1.05 !important;
+}
+
+[id$="-global-header"]:not(#agent-profiles-global-header) [id$="-main-subtitle"] {
+  display: block !important;
+  margin-top: 2px !important;
+  line-height: 1.2 !important;
+}
+
+#master-chat-messages,
+#master-chat-input {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+.ops-col-todo,
+.ops-col-in_progress {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
 }

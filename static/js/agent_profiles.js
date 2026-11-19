@@ -1373,18 +1373,21 @@
 
       const fullButtons = [
         "prof-soul-mode-btn-full",
+        "prof-overview-soul-btn-full",
         "agent-chat-soul-btn-full",
         "master-chat-soul-btn-full",
         "settings-soul-btn-full"
       ];
       const proButtons = [
         "prof-soul-mode-btn-pro",
+        "prof-overview-soul-btn-pro",
         "agent-chat-soul-btn-pro",
         "master-chat-soul-btn-pro",
         "settings-soul-btn-pro"
       ];
       const compactButtons = [
         "prof-soul-mode-btn-compact",
+        "prof-overview-soul-btn-compact",
         "agent-chat-soul-btn-compact",
         "master-chat-soul-btn-compact",
         "settings-soul-btn-compact"
@@ -1396,11 +1399,11 @@
         if (isFull) {
           el.className = id.startsWith("settings-")
             ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40 shadow-2xs"
-            : "px-2 py-0.5 rounded font-bold transition-all bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 cursor-pointer";
+            : "inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold transition-all bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 cursor-pointer whitespace-nowrap";
         } else {
           el.className = id.startsWith("settings-")
             ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
-            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+            : "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer whitespace-nowrap";
         }
       });
 
@@ -1410,11 +1413,11 @@
         if (isPro) {
           el.className = id.startsWith("settings-")
             ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/40 shadow-2xs"
-            : "px-2 py-0.5 rounded font-bold transition-all bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 cursor-pointer";
+            : "inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold transition-all bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 cursor-pointer whitespace-nowrap";
         } else {
           el.className = id.startsWith("settings-")
             ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
-            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+            : "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer whitespace-nowrap";
         }
       });
 
@@ -1424,17 +1427,19 @@
         if (isCompact) {
           el.className = id.startsWith("settings-")
             ? "px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 shadow-2xs"
-            : "px-2 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer";
+            : "inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer whitespace-nowrap";
         } else {
           el.className = id.startsWith("settings-")
             ? "px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--muted-foreground)] border border-[var(--border)]"
-            : "px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer";
+            : "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer whitespace-nowrap";
         }
       });
     }
 
     async function switchGlobalOrAgentSoulMode(mode, applyGlobal = true) {
       const targetMode = mode === "full" ? "full" : (mode === "pro" ? "pro" : "compact");
+      // Optimistic immediate UI feedback so the button highlights at once
+      updateSoulModeUI(targetMode);
       const statusEl = document.getElementById("prof-soul-save-status");
       if (statusEl) statusEl.innerText = "Schalte SOUL-Modus um...";
       try {
@@ -1460,10 +1465,10 @@
           }
           updateSoulModeUI(targetMode, data.avg_active_chars ? Math.round(data.avg_active_chars) : undefined);
           const label = targetMode === "full"
-            ? "🔥 Full-SOUL (~17.200 Zeichen)"
+            ? "Full-SOUL (~17.200 Zeichen)"
             : targetMode === "pro"
-            ? "🎯 Pro / Skills+ (~6.800 Zeichen)"
-            : "⚡ Standard-SOUL (~3.100 Zeichen)";
+            ? "Pro / Skills+ (~6.800 Zeichen)"
+            : "Standard-SOUL (~3.100 Zeichen)";
           showArchonToast(
             applyGlobal
               ? `Alle ${data.updated_profiles || 59} Agenten auf ${label} umgeschaltet!`

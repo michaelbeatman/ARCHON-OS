@@ -9,18 +9,32 @@
               <img id="master-chat-selected-avatar" src="/static/avatars/hermes_default_avatar.png" class="w-full h-full object-cover group-hover:opacity-90 transition" onerror="this.src='/static/avatars/avatar_001.jpg'">
             </div>
             <div class="min-w-0 flex-1 flex flex-col justify-center space-y-1">
-              <!-- Zeile 1: Name / Dropdown -->
-              <div class="flex items-center gap-2">
-                <select 
-                  id="master-chat-profile-select" 
-                  onchange="onMasterChatProfileChanged(this.value)"
-                  class="bg-[var(--background)] border border-[var(--border)] rounded-md px-3 py-1 text-sm font-semibold text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 cursor-pointer font-sans"
-                >
-                  <!-- Profile dynamisch injiziert -->
-                </select>
-                <button type="button" onclick="openContextHelp('master_chat')" data-i18n-title="view.master_chat.title_help" title="Hilfe zum Master Chat" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer">
-                  <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-                </button>
+              <!-- Zeile 1: Name / Dropdown (schmaler) + ? links, SOUL-Intensität rechtsbündig -->
+              <div class="flex items-center justify-between gap-2 w-full">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <select 
+                    id="master-chat-profile-select" 
+                    onchange="onMasterChatProfileChanged(this.value)"
+                    class="bg-[var(--background)] border border-[var(--border)] rounded-md px-2.5 py-1 text-sm font-semibold text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-zinc-400 cursor-pointer font-sans max-w-[210px] sm:max-w-[240px] truncate"
+                  >
+                    <!-- Profile dynamisch injiziert -->
+                  </select>
+                  <button type="button" onclick="openContextHelp('master_chat')" data-i18n-title="view.master_chat.title_help" title="Hilfe zum Master Chat" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+                    <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+                <!-- SOUL.md Modus Umschalter (Standard ~3k | Pro ~6.8k | Full-SOUL ~17k) -->
+                <div class="flex items-center gap-1.5 shrink-0" data-i18n-title="view.master_chat.title_soul" title="SOUL.md Experten-Tiefe umschalten (Standard ~3k | Pro ~6.8k inkl. Skill-Blaupausen | Full-SOUL ~17k)">
+                  <span class="hidden xl:inline-flex items-center gap-1 font-semibold text-[var(--foreground)] text-[10px] uppercase tracking-wide">
+                    <i data-lucide="dna" class="w-3 h-3 text-[var(--muted-foreground)]"></i>
+                    <span data-i18n="view.master_chat.label_soul">SOUL:</span>
+                  </span>
+                  <div class="flex items-center rounded-md border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono select-none shadow-2xs gap-0.5">
+                    <button type="button" id="master-chat-soul-btn-compact" onclick="switchGlobalOrAgentSoulMode('compact', true)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer whitespace-nowrap"><i data-lucide="zap" class="w-3 h-3 shrink-0"></i><span data-i18n="view.master_chat.soul_compact">Standard (~3k)</span></button>
+                    <button type="button" id="master-chat-soul-btn-pro" onclick="switchGlobalOrAgentSoulMode('pro', true)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer whitespace-nowrap"><i data-lucide="target" class="w-3 h-3 shrink-0"></i><span data-i18n="view.master_chat.soul_pro">Pro (~6.8k)</span></button>
+                    <button type="button" id="master-chat-soul-btn-full" onclick="switchGlobalOrAgentSoulMode('full', true)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer whitespace-nowrap"><i data-lucide="flame" class="w-3 h-3 shrink-0"></i><span data-i18n="view.master_chat.soul_full">Full-SOUL</span></button>
+                  </div>
+                </div>
               </div>
               <!-- Zeile 2: Kategorie & Beschreibung links, Switch rechtbündig ans Ende -->
               <div class="flex items-center justify-between gap-3 w-full">
@@ -42,18 +56,20 @@
                 </button>
 
                 <!-- Zweifarbiger / Monochromer Switch: "Direkt" [Switch] "Mission" -->
-                <div class="flex items-center gap-2 shrink-0 select-none cursor-pointer" onclick="toggleMasterChatModeSwitch()" data-i18n-title="view.master_chat.title_mode_switch" title="Zwischen Direkt-Dialog und Mission umschalten">
-                  <span id="master-chat-label-direct" data-i18n="view.master_chat.label_direct" class="text-xs font-mono font-bold transition-colors text-[var(--foreground)]">Direkt</span>
+                <div class="flex items-center gap-1.5 shrink-0 select-none cursor-pointer" onclick="toggleMasterChatModeSwitch()" data-i18n-title="view.master_chat.title_mode_switch" title="Zwischen Direkt-Dialog und Mission umschalten">
+                  <span id="master-chat-label-direct" data-i18n="view.master_chat.label_direct" class="text-[11px] font-mono font-bold transition-colors text-[var(--foreground)]">Direkt</span>
                   <div 
                     id="master-chat-mode-switch" 
-                    class="w-10 h-5 bg-zinc-900 dark:bg-zinc-100 rounded-full p-0.5 transition-colors duration-200 ease-in-out relative flex items-center"
+                    class="bg-zinc-900 dark:bg-zinc-100 rounded-full p-0.5 transition-colors duration-200 ease-in-out relative flex items-center"
+                    style="width: 34px; height: 17px;"
                   >
                     <div 
                       id="master-chat-switch-pill" 
-                      class="w-4 h-4 bg-white dark:bg-zinc-900 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out translate-x-0"
+                      class="bg-white dark:bg-zinc-900 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out"
+                      style="width: 13px; height: 13px; transform: translateX(0px);"
                     ></div>
                   </div>
-                  <span id="master-chat-label-mission" data-i18n="view.master_chat.label_mission" class="text-xs font-mono font-medium transition-colors text-[var(--muted-foreground)]">Mission</span>
+                  <span id="master-chat-label-mission" data-i18n="view.master_chat.label_mission" class="text-[11px] font-mono font-medium transition-colors text-[var(--muted-foreground)]">Mission</span>
                 </div>
               </div>
             </div>
@@ -210,7 +226,7 @@
                 <!-- Right: Status -->
                   <div class="flex items-center gap-2">
                     <div class="flex items-center gap-1">
-                      <span data-i18n="view.master_chat.label_reasoning" class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide">🧠 Reasoning:</span>
+                      <span data-i18n="view.master_chat.label_reasoning" class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide">Reasoning:</span>
                       <select 
                         id="master-chat-reasoning-select" 
                         onchange="onMasterChatReasoningChange(this.value)"
@@ -224,16 +240,6 @@
                         <option data-i18n="view.master_chat.opt_reasoning_high" value="high">Hoch (~8k)</option>
                         <option data-i18n="view.master_chat.opt_reasoning_max" value="max">Maximal (~16k)</option>
                       </select>
-                    </div>
-                    <span class="text-[var(--border)]">|</span>
-                    <!-- SOUL.md Modus Umschalter (Standard ~3k | Pro ~6.8k | Full-SOUL ~17k) -->
-                    <div class="flex items-center gap-1" data-i18n-title="view.master_chat.title_soul" title="SOUL.md Experten-Tiefe umschalten (Standard ~3k | Pro ~6.8k inkl. Skill-Blaupausen | Full-SOUL ~17k)">
-                      <span data-i18n="view.master_chat.label_soul" class="font-semibold text-[var(--foreground)] text-[10.5px] uppercase tracking-wide">🧬 SOUL:</span>
-                      <div class="flex items-center rounded-md border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono select-none shadow-2xs">
-                        <button type="button" id="master-chat-soul-btn-compact" onclick="switchGlobalOrAgentSoulMode('compact', true)" data-i18n="view.master_chat.soul_compact" class="px-2 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer">⚡ Standard (~3k)</button>
-                        <button type="button" id="master-chat-soul-btn-pro" onclick="switchGlobalOrAgentSoulMode('pro', true)" data-i18n="view.master_chat.soul_pro" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">🎯 Pro (~6.8k)</button>
-                        <button type="button" id="master-chat-soul-btn-full" onclick="switchGlobalOrAgentSoulMode('full', true)" data-i18n="view.master_chat.soul_full" class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer">🔥 Full-SOUL</button>
-                      </div>
                     </div>
                     <span class="text-[var(--border)]">|</span>
                     <div class="flex items-center gap-1.5">

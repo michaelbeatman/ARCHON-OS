@@ -92,6 +92,13 @@
         if (res.ok) {
           const data = await res.json();
           if (data) {
+            if (data.migration_version) {
+              const studioCssLink = document.getElementById("archon-custom-studio-css") || document.querySelector('link[href*="custom_studio.css"]');
+              if (studioCssLink) {
+                const baseHref = studioCssLink.href.split("?")[0];
+                studioCssLink.href = `${baseHref}?v=${encodeURIComponent(data.migration_version)}`;
+              }
+            }
             if (data.migration_version && data.migration_version !== localStorage.getItem("archon_theme_migration_version")) {
               studioRules = data.rules || {};
               studioTextOverrides = data.textOverrides || {};
@@ -185,6 +192,13 @@
       setupStudioDraggable();
       setupStudioGizmoListeners();
     }
+    window.reapplyArchonStudioToDOM = function reapplyArchonStudioToDOM() {
+      try {
+        applyStudioRulesToDOM();
+        applyStudioTextOverridesToDOM();
+        applyStudioHtmlOverridesToDOM();
+      } catch (e) {}
+    };
     // Top-Level Immediate Shortcut
     window.addEventListener("keydown", (e) => {
       if (e.altKey && (e.key === "s" || e.key === "S" || e.code === "KeyS")) {

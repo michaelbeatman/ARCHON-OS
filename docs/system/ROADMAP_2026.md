@@ -603,6 +603,21 @@
 - **Ausgangslage:** Eingehende Archon-API-Tokens (`API-Keys & Zugriffs-Governance` mit `read_only` / `kanban_rw` / `agent_execute` / `admin_full` Scopes) und ausgehende LLM-Provider-Keys (OpenRouter, Google/Gemini, OmniRoute, Groq, OpenAI) liegen aktuell in getrennten Bereichen.
 - **Zielzustand:** Konsolidierte API-Key-Verwaltung inklusive direkter Sichtbarkeit der konfigurierten Provider-Keys sowie Verknüpfung bzw. Vereinheitlichung der Scope-Steuerung mit OmniRoute.
 
+### Meilenstein 99: Context-Compaction Audit, Modell-dynamische Fenster & UI-Steuerung (M73-Ausbau) (Geplant – Hoch)
+- **Ausgangslage:** Session-Compaction ist in M73 (`archon/routers/context_meter.py`, `backend/context_compactor.py`) grundsätzlich implementiert (`auto_compact_pct` 85 %, `auto_compact_min_messages` 24, `[HIERARCHICAL_MEMORY_STATE]`), nutzt aber aktuell ein statisches Standard-Fenster (`DEFAULT_MAX_CONTEXT_TOKENS = 32000`) und bietet keine direkte Konfiguration im Settings-UI.
+- **Zielzustand:**
+  - **Modell-dynamisches Kontextfenster:** Automatische Anpassung von `max_context_tokens` an das jeweils aktive LLM-Modell (z. B. 128k / 200k / 1M) statt pauschalem 32k-Limit.
+  - **Settings-UI & Transparenz:** Konfigurierbare Parameter (`enabled`, `trigger_token_threshold`, `auto_compact_pct`, `keep_recent_turns`) direkt im System Control Center sowie sichtbare Compaction-Marker mit Vorher/Nachher-Einsparung im Chatverlauf.
+  - **Verzahnung mit M93 & M94:** Kombination mit der Tool-Output-Firewall (`toolaria`, M93) und verlustfreier Wiederherstellung über den Session-Summary-DAG (`hermes-lcm-x`, M94).
+
+### Meilenstein 100: KPI-Dashboard für Output-Wirtschaftlichkeit (Geplant – Hoch)
+- **Ausgangslage:** Kosten liegen bereits pro Task und pro Modell vor (Token-Budgets, geschätzte und tatsächliche Kosten, Budget-Warnung vor Task-Start). Ein Deliverable hängt über die Projekt-Vault-Struktur (`01_PROJEKTE/<id>`, Ordner `03_Endprodukte`) am Task. Was fehlt, ist die Aggregation zu einer Wirtschaftlichkeitsaussage pro Prozess: Welche Kosten stehen welchem Output gegenüber, und wie entwickelt sich das über die Zeit. Ausgangspunkt war das Fachgespräch mit Aleksandar Milincic (19.11.2026) zur Cost Attribution: Prozessgrenze = Task mit explizitem done plus Deliverable-Datei; die Bewertung des Outputs bleibt menschliches Urteil.
+- **Zielzustand:**
+  - **Erfassen:** Pro Prozess (Task mit Deliverable) werden Kosten (Tokens, Modell, geschätzt und tatsächlich), Aufwand und Deliverable-Typ automatisch erfasst. Tasks ohne Deliverable fallen in einen sichtbaren "General"-Posten (nicht zuordenbare Kosten).
+  - **Aggregieren:** Rollup pro Projekt, pro Agenten-Profil und pro Zeitraum, aufbauend auf den vorhandenen Endpunkten des Operations- und Kanban-Bereichs statt neuer Parallel-Tabellen.
+  - **Vergleichen:** Zeitreihen-Ansicht zur Wirtschaftlichkeit je Output-Typ (z. B. veröffentlichtes Video, gesendete Angebotsunterlage), damit Trends sichtbar werden, ob ein Output-Typ im Verhältnis zu seinem Aufwand trägt.
+  - **Bewertung bewusst manuell:** Das Dashboard liefert die belegte Kosten- und Aufwandsseite. Die Wertseinschätzung des Outputs bleibt eine menschliche Eingabe (z. B. eine einfache Nutzenskala je Deliverable), konsistent zum Grundsatz, dass das System den Nachweis liefert, nicht das Urteil.
+
 ## Ideen-Pool (beobachten, nicht geplant)
 
 Themen, die im Blick bleiben, aber keinen Meilenstein und keinen Zeitslot haben. Sie werden erst dann zu Meilensteinen, wenn ein klarer Nutzen oder ein Community-Signal vorliegt.

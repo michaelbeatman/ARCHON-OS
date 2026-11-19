@@ -141,7 +141,7 @@
       const titleEl = document.getElementById('ops-main-title') || document.getElementById('mc-main-title');
       const subtitleEl = document.getElementById('ops-main-subtitle') || document.getElementById('mc-main-subtitle');
       if (titleEl) titleEl.textContent = meta.title;
-      if (subtitleEl) subtitleEl.textContent = meta.subtitle;
+      if (subtitleEl) subtitleEl.textContent = String(meta.subtitle || '').replace(/^•\s*/, '');
 
       tabs.forEach(t => {
         const btn = document.getElementById(`ops-subtab-${t}`);
@@ -1556,19 +1556,73 @@
       }
     }
 
-    // Schnell-Zuweisung eines Profils direkt auf der Kanban-Karte
+    const KANBAN_FALLBACK_ASSIGNEES = [
+      ['executive_decision_architect', 'CEO Robert'],
+      ['senior_fullstack_engineer', 'Senior Fullstack Engineer'],
+      ['system_architect_orchestrator', 'System Architect'],
+      ['devops_cloud_sec_specialist', 'DevOps & Cloud Sec'],
+      ['qa_test_engineer', 'QA & Test Engineer'],
+      ['legal_counsel', 'Legal Counsel'],
+      ['finance_lead', 'Finance Lead'],
+      ['knowledge_librarian', 'Knowledge Librarian'],
+      ['lead_enrichment_analyst', 'Lead Analyst'],
+      ['bi_controller', 'BI Controller'],
+      ['database_performance_tuner', 'DB Tuner'],
+    ];
+
+    function buildKanbanAssigneeOptions(selectedAssignee) {
+      const sel = selectedAssignee || '';
+      const defaultLabel = !sel ? '🤖 Auto (Orchestrator)' : 'Hermes Root (default)';
+      const options = [['default', defaultLabel]];
+      const seen = new Set(['default']);
+      if (Array.isArray(window.hermesProfilesData) && window.hermesProfilesData.length > 0) {
+        window.hermesProfilesData.forEach(p => {
+          if (!p || !p.id || seen.has(p.id)) return;
+          seen.add(p.id);
+          const label = p.person_name ? `${p.person_name} (${p.name || p.id})` : (p.name || p.id);
+          options.push([p.id, label]);
+        });
+      } else {
+        KANBAN_FALLBACK_ASSIGNEES.forEach(([id, label]) => {
+          if (!seen.has(id)) {
+            seen.add(id);
+            options.push([id, label]);
+          }
+        });
+      }
+      if (sel && !seen.has(sel)) {
+        options.push([sel, sel]);
+      }
+      return options.map(([val, label]) => {
+        const isSel = (val === 'default' && (!sel || sel === 'default')) || val === sel;
+        return `<option value="${opsEscapeHtml(val)}" ${isSel ? 'selected' : ''}>${opsEscapeHtml(label)}</option>`;
+      }).join('');
+    }
+
+    // Schnell-Zuweisung eines Profils direkt auf der Kanban-Karte & Detail-Modal
     async function quickAssignKanbanTask(taskId, assigneeId) {
       if (!assigneeId) return;
       try {
         const res = await fetch('/api/operations/kanban/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'assign', task_ids: [taskId], assignee: assigneeId }),
+          body: JSON.stringify({ action: 'assign', task_ids: [taskId], payload: { assignee: assigneeId } }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           if (typeof showNotification === 'function') showNotification('Zuweisung', data.detail || 'Profil-Zuweisung fehlgeschlagen', 'error');
           return;
+        }
+        if (typeof currentOpsDetailTaskId !== 'undefined' && currentOpsDetailTaskId === taskId) {
+          currentOpsDetailTaskAssignee = assigneeId;
+          const prof = Array.isArray(window.hermesProfilesData) ? window.hermesProfilesData.find(p => p.id === assigneeId) : null;
+          const displayName = (prof && (prof.person_name || prof.name)) || assigneeId;
+          const nameEl = document.getElementById('ops-detail-assignee-name');
+          if (nameEl) nameEl.textContent = displayName;
+          const selEl = document.getElementById('ops-detail-assignee-select');
+          if (selEl) selEl.value = assigneeId;
+          const avatarEl = document.getElementById('ops-detail-assignee-avatar');
+          if (avatarEl && prof && prof.avatar) avatarEl.src = prof.avatar;
         }
         if (typeof showNotification === 'function') showNotification('Zuweisung', `Profil '${assigneeId}' zugewiesen.`, 'success');
         await loadOperationsData(false);
@@ -1734,18 +1788,7 @@
                   <select onclick="event.stopPropagation()" onchange="event.stopPropagation(); quickAssignKanbanTask('${t.id}', this.value)"
                     class="flex-1 px-1.5 py-1 rounded-lg border ${!t.assignee ? 'border-amber-500/60' : 'border-[var(--border)]'} bg-[var(--secondary)] text-[10px] text-[var(--foreground)] cursor-pointer"
                     title="Profil zuweisen oder ändern (leer = Orchestrator übernimmt automatisch)">
-                    <option value="default" ${(!t.assignee || t.assignee === 'default') ? 'selected' : ''}>${!t.assignee ? '🤖 Auto (Orchestrator)' : 'Hermes Root (default)'}</option>
-                    <option value="executive_decision_architect" ${t.assignee === 'executive_decision_architect' ? 'selected' : ''}>CEO Robert</option>
-                    <option value="senior_fullstack_engineer" ${t.assignee === 'senior_fullstack_engineer' ? 'selected' : ''}>Senior Fullstack Engineer</option>
-                    <option value="system_architect_orchestrator" ${t.assignee === 'system_architect_orchestrator' ? 'selected' : ''}>System Architect</option>
-                    <option value="devops_cloud_sec_specialist" ${t.assignee === 'devops_cloud_sec_specialist' ? 'selected' : ''}>DevOps &amp; Cloud Sec</option>
-                    <option value="qa_test_engineer" ${t.assignee === 'qa_test_engineer' ? 'selected' : ''}>QA &amp; Test Engineer</option>
-                    <option value="legal_counsel" ${t.assignee === 'legal_counsel' ? 'selected' : ''}>Legal Counsel</option>
-                    <option value="finance_lead" ${t.assignee === 'finance_lead' ? 'selected' : ''}>Finance Lead</option>
-                    <option value="knowledge_librarian" ${t.assignee === 'knowledge_librarian' ? 'selected' : ''}>Knowledge Librarian</option>
-                    <option value="lead_enrichment_analyst" ${t.assignee === 'lead_enrichment_analyst' ? 'selected' : ''}>Lead Analyst</option>
-                    <option value="bi_controller" ${t.assignee === 'bi_controller' ? 'selected' : ''}>BI Controller</option>
-                    <option value="database_performance_tuner" ${t.assignee === 'database_performance_tuner' ? 'selected' : ''}>DB Tuner</option>
+                    ${buildKanbanAssigneeOptions(t.assignee)}
                   </select>
                 </div>` : ''}
                 <div class="pt-1 flex items-center justify-between border-t border-[var(--border)]/50 text-[10px]">
@@ -2756,23 +2799,7 @@
         if (nameEl) nameEl.textContent = task.assignee_name || task.assignee || kanT('ui.operations_kanban.unassigned', 'Nicht zugewiesen');
         const selEl = document.getElementById('ops-detail-assignee-select');
         if (selEl) {
-          if (!selEl.options.length) {
-            const opts = [
-              ['default', '🤖 Auto / Hermes Root (default)'],
-              ['executive_decision_architect', 'CEO Robert'],
-              ['senior_fullstack_engineer', 'Senior Fullstack Engineer'],
-              ['system_architect_orchestrator', 'System Architect'],
-              ['devops_cloud_sec_specialist', 'DevOps & Cloud Sec'],
-              ['qa_test_engineer', 'QA & Test Engineer'],
-              ['legal_counsel', 'Legal Counsel'],
-              ['finance_lead', 'Finance Lead'],
-              ['knowledge_librarian', 'Knowledge Librarian'],
-              ['lead_enrichment_analyst', 'Lead Analyst'],
-              ['bi_controller', 'BI Controller'],
-              ['database_performance_tuner', 'DB Tuner'],
-            ];
-            selEl.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-          }
+          selEl.innerHTML = buildKanbanAssigneeOptions(task.assignee);
           selEl.value = task.assignee || 'default';
         }
         const qgEl = document.getElementById('ops-detail-quality-gate');

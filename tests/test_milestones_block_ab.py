@@ -148,6 +148,9 @@ def test_m45_deep_research_lab(tmp_path):
 def test_m65_settings_modal_ergonomics():
     with open("static/views/system_settings_modal.html", "r", encoding="utf-8") as f:
         html = f.read()
+    with open("static/views/view_approval_policies.html", "r", encoding="utf-8") as f:
+        approvals_html = f.read()
     assert "flex-wrap" in html
-    for tab_id in ["btn-tab-kernel", "btn-tab-autonomy", "btn-tab-plugins", "btn-tab-users", "btn-tab-update"]:
+    for tab_id in ["btn-tab-kernel", "btn-tab-plugins", "btn-tab-corporate", "btn-tab-users", "btn-tab-update"]:
         assert tab_id in html
+    assert "approvals-subtab-btn-autonomy" in approvals_html

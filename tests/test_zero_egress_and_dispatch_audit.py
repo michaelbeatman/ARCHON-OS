@@ -380,6 +380,8 @@ def test_autonomy_settings_enforces_immutable_sha256_audit_and_syncs_privacy(tmp
 
 def test_system_settings_ui_and_docs_contain_zero_egress_controls():
     modal_html = (REPO_ROOT / "static" / "views" / "system_settings_modal.html").read_text(encoding="utf-8")
+    approvals_html = (REPO_ROOT / "static" / "views" / "view_approval_policies.html").read_text(encoding="utf-8")
+    combined_html = modal_html + "\n" + approvals_html
     settings_js = (REPO_ROOT / "static" / "js" / "system_settings.js").read_text(encoding="utf-8")
     search_js = (REPO_ROOT / "static" / "js" / "settings_search.js").read_text(encoding="utf-8")
 
@@ -392,7 +394,7 @@ def test_system_settings_ui_and_docs_contain_zero_egress_controls():
         "sec4-ze-worker-net",
         "aut-sandbox-zero-egress-net",
     ):
-        assert elem_id in modal_html, f"Missing UI control {elem_id}"
+        assert elem_id in combined_html, f"Missing UI control {elem_id}"
         assert elem_id in settings_js or elem_id == "sec4-zero-egress-governance-card"
 
     assert "verifyZeroEgressSettingsPosture" in settings_js

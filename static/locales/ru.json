@@ -22,7 +22,7 @@
     "css_studio": "Живая CSS-студия",
     "research": "Исследовательская лаборатория",
     "corporate": "Корпоратив и мандаты",
-    "approval_policies": "Политики согласования",
+    "approval_policies": "Автономия и одобрения",
     "automation": "Движок рабочих процессов",
     "dashboard": "Панель",
     "dashboard_desc": "Mission Control и Кокпит",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "Предложения, пайплайн и SLA",
     "finance_desc": "Документы, OCR и напоминания",
     "corporate_desc": "Основные данные и Шаблоны",
-    "approval_policies_desc": "Пороги и Согласования",
+    "approval_policies_desc": "Пороги, правила и модули",
     "guardian_desc": "Страж ставок и бюджета",
     "logs_desc": "Живой аудит",
     "palette_title": "Палитра команд и быстрый поиск (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "Экономика и ERP",
       "infrastructure": "Инфраструктура и управление",
       "economy_alpha_title": "Этот раздел ещё в разработке (альфа)"
-    }
+    },
+    "plugins_desc": "Модули, роутер и защитные правила",
+    "autonomy": "Модули автономии",
+    "autonomy_desc": "36 подсистем"
   },
   "common": {
     "save": "Сохранить",
@@ -192,7 +195,9 @@
       "tab_update": "ОБНОВЛЕНИЕ СИСТЕМЫ",
       "tab_users": "ПОЛЬЗОВАТЕЛИ И РОЛИ",
       "onboarding_btn": "Мастер настройки",
-      "onboarding_title": "Перезапустить мастер настройки"
+      "onboarding_title": "Перезапустить мастер настройки",
+      "tab_guardrails_router": "РОУТЕР И ПРАВИЛА",
+      "tab_corporate": "КОРПОРАЦИЯ И ТЕНАНТ"
     },
     "keys": {
       "close_btn": "Закрыть",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "Агент помощи/поддержки (Профиль)"
     },
     "update": {
       "active_commit": "Активный коммит",
@@ -2559,7 +2565,9 @@
       "tab_planning": "Планирование и задачи",
       "tab_bridges": "Мосты и интерфейсы",
       "tab_memory": "Память и знания",
-      "tab_tools": "Инструменты и исполнение"
+      "tab_tools": "Инструменты и исполнение",
+      "mode_catalog": "Каталог плагинов",
+      "mode_autonomy": "Модули автономии (36)"
     },
     "research": {
       "title": "Research Lab · Лаборатория",
@@ -2923,7 +2931,9 @@
       "reject_title": "Отклонить согласование",
       "ph_reject_reason": "Укажите причину отклонения...",
       "cancel": "Отмена",
-      "reject_confirm": "Отклонить безвозвратно"
+      "reject_confirm": "Отклонить безвозвратно",
+      "tab_autonomy": "Автономия",
+      "tab_autonomy_title": "36 модулей автономии, отказоустойчивости и предприятия"
     },
     "corporate": {
       "title": "Корпоративный контур и юрлица",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "Фильтр участников",
       "title_comm_refresh": "Обновить ленту",
       "ph_comm_input": "Отправить сообщение или указание в канал (Enter)...",
-      "action_send": "Отправить"
+      "action_send": "Отправить",
+      "mode_board": "Доска",
+      "mode_gantt": "Гант",
+      "mode_graph": "Граф",
+      "subtasks_tab": "Подзадачи"
     },
     "operations_erp": {
       "title": "Дела и договоры — Предложения и заказы",
@@ -3743,7 +3757,8 @@
       "due_title": "Срок исполнения",
       "tags_placeholder": "Теги через запятую",
       "comment_placeholder": "Напишите сообщение или указание агенту...",
-      "start_now": "Запустить сейчас"
+      "start_now": "Запустить сейчас",
+      "back_to_parent": "Родительская задача"
     },
     "roles": {
       "title": "Управление ролями и промптами ИИ",

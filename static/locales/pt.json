@@ -22,7 +22,7 @@
     "css_studio": "Studio CSS ao Vivo",
     "research": "Laboratório de pesquisa",
     "corporate": "Corporativo e Entidades",
-    "approval_policies": "Políticas de aprovação",
+    "approval_policies": "Autonomia e aprovações",
     "automation": "Motor de fluxos de trabalho",
     "dashboard": "Painel",
     "dashboard_desc": "Mission Control e Cockpit",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "Propostas, pipeline e SLA",
     "finance_desc": "Comprovantes, OCR e cobrança",
     "corporate_desc": "Dados mestres e Modelos",
-    "approval_policies_desc": "Limites e Aprovações",
+    "approval_policies_desc": "Limites, regras e módulos",
     "guardian_desc": "Guarda de taxa e orçamento",
     "logs_desc": "Auditoria ao vivo",
     "palette_title": "Paleta de comandos e busca rápida (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "Negócios e ERP",
       "infrastructure": "Infraestrutura e governança",
       "economy_alpha_title": "Esta seção ainda está em construção (alfa)"
-    }
+    },
+    "plugins_desc": "Módulos, Roteador e Guardrails",
+    "autonomy": "Módulos de autonomia",
+    "autonomy_desc": "36 subsistemas"
   },
   "common": {
     "save": "Salvar",
@@ -192,7 +195,9 @@
       "tab_update": "ATUALIZAÇÃO DO SISTEMA",
       "tab_users": "UTILIZADORES E PAPÉIS",
       "onboarding_btn": "Assistente de configuração",
-      "onboarding_title": "Reiniciar assistente de configuração"
+      "onboarding_title": "Reiniciar assistente de configuração",
+      "tab_guardrails_router": "ROTEADOR & GUARDRAILS",
+      "tab_corporate": "CORPORATIVO & MANDANTE"
     },
     "keys": {
       "close_btn": "Fechar",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "Agente de ajuda/suporte (Perfil)"
     },
     "update": {
       "active_commit": "Commit ativo",
@@ -2559,7 +2565,9 @@
       "tab_planning": "Planejamento e tarefas",
       "tab_bridges": "Pontes e interfaces",
       "tab_memory": "Memória e conhecimento",
-      "tab_tools": "Ferramentas e execução"
+      "tab_tools": "Ferramentas e execução",
+      "mode_catalog": "Catálogo de plugins",
+      "mode_autonomy": "Módulos de autonomia (36)"
     },
     "research": {
       "title": "Research Lab · Laboratório",
@@ -2923,7 +2931,9 @@
       "reject_title": "Rejeitar aprovação",
       "ph_reject_reason": "Informe o motivo da rejeição...",
       "cancel": "Cancelar",
-      "reject_confirm": "Rejeitar irrevogavelmente"
+      "reject_confirm": "Rejeitar irrevogavelmente",
+      "tab_autonomy": "Autonomia",
+      "tab_autonomy_title": "36 módulos de autonomia, resiliência e empresa"
     },
     "corporate": {
       "title": "Corporativo e entidades",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "Filtro de participantes",
       "title_comm_refresh": "Atualizar o feed",
       "ph_comm_input": "Enviar uma mensagem ou instrução ao canal (Enter)...",
-      "action_send": "Enviar"
+      "action_send": "Enviar",
+      "mode_board": "Quadro",
+      "mode_gantt": "Gantt",
+      "mode_graph": "Grafo",
+      "subtasks_tab": "Subtarefas"
     },
     "operations_erp": {
       "title": "Processos e contratos — Propostas e pedidos",
@@ -3743,7 +3757,8 @@
       "due_title": "Data de vencimento",
       "tags_placeholder": "Tags, separadas por vírgulas",
       "comment_placeholder": "Escreva uma mensagem ou instrução para o agente...",
-      "start_now": "Iniciar agora"
+      "start_now": "Iniciar agora",
+      "back_to_parent": "Tarefa principal"
     },
     "roles": {
       "title": "Gerenciar papéis e prompts de IA",

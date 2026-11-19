@@ -145,14 +145,58 @@ HELP_CONTEXT_DATA = {
     },
     "system_settings": {
         "title": "System Control Center (Einstellungen)",
-        "subtitle": "Zentrale Steuerung für Hermes Core, 36+ Autonomie-Module, Zero-Egress & RBAC",
-        "purpose": "Verwaltet alle Laufzeit-, Sicherheits- und Datenschutz-Richtlinien. Über 'AUTONOMIE & MODULE -> Modul 32' sowie 'PROVIDER & GATEWAY' steuerst du Zero-Egress, den Privacy-Router Hard-Block für Finanzen/Verträge/CRM und das isolierte Docker-Worker-Netzwerk (Internal=true), während die SHA-256-LLM-Dispatch-Hashkette als GoBD-Invariante dauerhaft erzwungen wird.",
+        "subtitle": "Zentrale Steuerung für Hermes Core, Router & Guardrails, Zero-Egress & RBAC",
+        "purpose": "Verwaltet alle Laufzeit-, Sicherheits- und Datenschutz-Richtlinien. Über 'ROUTER & GUARDRAILS' sowie 'PROVIDER & GATEWAY' steuerst du PreDecision, Memory, Injection Guard, Quality Gate, Token-Budgets, Zero-Egress und das isolierte Worker-Netzwerk.",
         "top_actions": [
             "Drücke '/' für die globale Schnellsuche (z. B. 'Zero-Egress', 'Hard-Block', 'Worker', 'SHA-256') und springe direkt zur Karte.",
             "Prüfe per Klick auf 'Posture prüfen' live die Zero-Egress-Konfiguration, das Worker-Netz (Internal=true) und die SHA-256-Hashkette.",
             "Nutze 'Live-Dock' oben rechts, um das Einstellungsfenster seitlich anzudocken."
         ],
         "starter_prompt": "Welche Einstellungen gibt es für Zero-Egress, den Privacy-Router Hard-Block und das isolierte Worker-Netzwerk?"
+    },
+    "approvals": {
+        "title": "Approval-Policies & Freigaberegeln",
+        "subtitle": "Schwellenwerte, 4-Augen-Prinzip, Eskalation & Urlaubsmodus",
+        "purpose": "Steuert, welche finanziellen, vertraglichen oder operativen Aktionen Agenten eigenständig ausführen dürfen und ab welchem Betrag bzw. Risiko eine menschliche Freigabe (HITL) oder ein 4-Augen-Check greift.",
+        "top_actions": [
+            "Auto-Freigabe-Höchstgrenze & 4-Augen-Schwellenwert anpassen und speichern.",
+            "Eskalation & Urlaubsmodus konfigurieren: Lege fest, an welche Vertretung offene Freigaben bei Abwesenheit oder Zeitüberschreitung automatisch weitergeleitet werden.",
+            "Offene Freigabe-Anfragen rechts direkt genehmigen, ablehnen oder prüfen."
+        ],
+        "starter_prompt": "Wie funktioniert der Urlaubsmodus bei den Approval-Policies und wie richte ich eine Vertretung ein?",
+        "faq": {
+            "urlaub": "Der **Urlaubsmodus** (Vertretungs- & Eskalationsregel) verhindert, dass Freigaben liegen bleiben, wenn der primäre Entscheider abwesend ist: Ist der Modus aktiv oder läuft die konfigurierte Eskalationsfrist (Stunden) ab, werden offene HITL- und 4-Augen-Freigaben automatisch an die hinterlegte Vertretung bzw. den Fallback-Eskalationspfad weitergeleitet (oder nach Policy sicher blockiert)."
+        }
+    },
+    "mission_control": {
+        "title": "Dashboard / Mission Control",
+        "subtitle": "Echtzeit-Telemetrie, Flottenlast & HITL-Freigaben",
+        "purpose": "Zentrales Cockpit über Systemauslastung, aktive Agenten, Token-Verbrauch, laufende Tasks und offene Freigaben.",
+        "top_actions": [
+            "Nutze die KPI-Karten oben, um direkt in Tasks, Freigaben oder Token-Analysen zu springen.",
+            "Synchronisiere die Live-Daten jederzeit über das Sync-Icon rechts oben."
+        ],
+        "starter_prompt": "Welche Kennzahlen zeigt das Mission Control Dashboard in Echtzeit an?"
+    },
+    "plugins": {
+        "title": "Erweiterungen & Modul-Zentrale",
+        "subtitle": "Alle Plugin-Gruppen & 36 Autonomie-Subsysteme",
+        "purpose": "Zentrale Steuerung aller Hermes-Plugins nach Fachbereichen sowie der 36 Autonomie-, Resilienz- und Enterprise-Module.",
+        "top_actions": [
+            "Wechsle oben zwischen 'Plugin-Katalog' und 'Autonomie-Module (36)'.",
+            "Filtere im Katalog über die Fachbereichs-Pills oder aktiviere/konfiguriere einzelne Module."
+        ],
+        "starter_prompt": "Was ist der Unterschied zwischen dem Plugin-Katalog und den 36 Autonomie-Modulen?"
+    },
+    "guardian": {
+        "title": "Token Guard",
+        "subtitle": "Raten-, Kosten- & Budgetwächter",
+        "purpose": "Überwacht Tages- und Task-Budgets, Kontextlängen und Ratenlimits über alle Modelle hinweg.",
+        "top_actions": [
+            "Prüfe aktive Budgets und Drosselungen pro Modell.",
+            "Passe Tageslimits oder Task-Obergrenzen direkt an."
+        ],
+        "starter_prompt": "Wie greift der Token Guard, wenn ein Agent sein Tagesbudget erreicht?"
     }
 }
 
@@ -182,50 +226,101 @@ async def api_ask_help_assistant(payload: dict = Body(...)):
     if not question:
         raise HTTPException(status_code=400, detail="Keine Frage übermittelt.")
 
-    ctx = HELP_CONTEXT_DATA.get(view_id, {})
+    normalized = (view_id or "").strip().lower().replace("-", "_")
+    ctx = HELP_CONTEXT_DATA.get(view_id) or HELP_CONTEXT_DATA.get(normalized) or {}
     view_title = ctx.get("title", view_id)
-    view_purpose = ctx.get("purpose", "")
+    view_purpose = ctx.get("purpose", "Bereich im Archon Agentic OS.")
+    top_actions = ctx.get("top_actions", [])
 
     system_prompt = (
-        f"Du bist der hochkompetente, freundliche und präzise Archon OS System-Assistent.\n"
+        f"Du bist der hochkompetente, präzise Archon OS System-Assistent.\n"
         f"Der Nutzer befindet sich gerade in der Ansicht '{view_title}'.\n"
         f"Zweck dieser Ansicht: {view_purpose}\n"
+        f"Zentrale Aktionen: {'; '.join(top_actions)}\n"
         f"Beantworte die Frage des Nutzers direkt, konkret und hilfreich auf Deutsch. "
         f"Verzichte auf Floskeln, Begrüßungen und Füllwörter. Gib praxisnahe Schritt-für-Schritt-Anleitungen."
     )
 
-    # Provider-Schluessel ermitteln
+    import json as _json
+    import os as _os
     import api_provider
     from backend.agent_router import router_instance
     all_keys = api_provider.collect_keys()
     reply_text = ""
+
+    # Konfiguriertes Support-/Hilfe-Profil aus model_routing & agent_profiles laden
+    support_profile_id = "default"
+    try:
+        from backend.model_routing import load_config as _load_mr
+        support_profile_id = (_load_mr() or {}).get("support_profile_id") or "default"
+    except Exception:
+        pass
+
+    profile_cfg = {}
+    for prof_path in ("data/agent_profiles.json", "agent_profiles.json"):
+        if _os.path.exists(prof_path):
+            try:
+                with open(prof_path, "r", encoding="utf-8") as _pf:
+                    raw = _json.load(_pf)
+                items = raw.get("profiles", raw) if isinstance(raw, dict) else raw
+                if isinstance(items, list):
+                    profile_cfg = next((p for p in items if isinstance(p, dict) and p.get("id") == support_profile_id), {})
+                elif isinstance(items, dict):
+                    profile_cfg = items.get(support_profile_id, {}) or {}
+                if profile_cfg:
+                    break
+            except Exception:
+                pass
+
+    prof_prompt = str(profile_cfg.get("system_prompt") or "").strip()
+    if prof_prompt:
+        system_prompt = f"{prof_prompt}\n\n---\n{system_prompt}"
 
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": question}
     ]
 
-    if all_keys.get("OPENROUTER_API_KEY"):
+    # Geordnete Provider-Kaskade: erst das konfigurierte Support-Profil, dann lokales Ollama/Gateway, dann Cloud-Keys
+    candidates = []
+    prof_prov = str(profile_cfg.get("provider") or "").strip().lower()
+    prof_mod = str(profile_cfg.get("model") or "").strip()
+    if prof_prov and prof_mod:
+        candidates.append((prof_prov, prof_mod, True))
+
+    candidates.extend([
+        ("ollama", "qwen2.5:7b", True),
+        ("omniroute", "auto", bool(all_keys.get("OMNIROUTE_API_KEY"))),
+        ("openrouter", "google/gemini-2.5-flash", bool(all_keys.get("OPENROUTER_API_KEY"))),
+        ("google", "gemini-2.5-flash", bool(all_keys.get("GEMINI_API_KEY") or all_keys.get("GOOGLE_API_KEY"))),
+        ("groq", "llama-3.3-70b-versatile", bool(all_keys.get("GROQ_API_KEY"))),
+        ("openai", "gpt-4o-mini", bool(all_keys.get("OPENAI_API_KEY"))),
+    ])
+    for prov, mod, enabled in candidates:
+        if not enabled or reply_text:
+            continue
         try:
-            reply_text = await router_instance.chat_completion(messages, "openrouter", "google/gemini-2.5-flash", all_keys, max_tokens=500)
+            res = await router_instance.chat_completion(messages, prov, mod, all_keys, max_tokens=500)
+            if isinstance(res, str) and res.strip():
+                reply_text = res.strip()
         except Exception:
             pass
 
-    if not reply_text and (all_keys.get("GEMINI_API_KEY") or all_keys.get("GOOGLE_API_KEY")):
-        try:
-            reply_text = await router_instance.chat_completion(messages, "google", "gemini-1.5-flash", all_keys, max_tokens=500)
-        except Exception:
-            pass
-
-    # 3. Fallback: Heuristische Antwort aus dem Spickzettel
+    # Fallback: Keyword-basierte / kontextspezifische Offline-Antwort
     if not reply_text:
-        actions_txt = "\n- ".join(ctx.get("top_actions", []))
-        reply_text = (
-            f"**{view_title}**\n\n"
-            f"{view_purpose}\n\n"
-            f"**Wichtigste Aktionen in diesem Bereich:**\n- {actions_txt}\n\n"
-            f"*(Hinweis: Für vertiefte KI-Antworten bitte OpenRouter oder Gemini API-Key in den Einstellungen hinterlegen.)*"
-        )
+        q_low = question.lower()
+        faq = ctx.get("faq", {})
+        matched_faq = next((ans for kw, ans in faq.items() if kw in q_low), None)
+        actions_txt = "\n- ".join(top_actions) if top_actions else "Siehe Bedienelemente im Kopfbereich der Ansicht."
+        if matched_faq:
+            reply_text = f"{matched_faq}\n\n**Weitere Aktionen in {view_title}:**\n- {actions_txt}"
+        else:
+            reply_text = (
+                f"**{view_title}**\n\n"
+                f"{view_purpose}\n\n"
+                f"**Wichtigste Aktionen in diesem Bereich:**\n- {actions_txt}\n\n"
+                f"*(Hinweis: Keiner der konfigurierten KI-Provider war erreichbar — bitte Ollama oder einen gültigen API-Key in den Einstellungen prüfen.)*"
+            )
 
     return {
         "status": "success",

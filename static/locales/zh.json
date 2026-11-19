@@ -22,7 +22,7 @@
     "css_studio": "CSS实时工作室",
     "research": "研究实验室",
     "corporate": "企业与管理",
-    "approval_policies": "审批策略",
+    "approval_policies": "自主与审批",
     "automation": "工作流引擎",
     "dashboard": "仪表盘",
     "dashboard_desc": "Mission Control 与驾驶舱",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "报价、销售管道与 SLA",
     "finance_desc": "凭证、OCR 与催收",
     "corporate_desc": "主数据与模板",
-    "approval_policies_desc": "阈值与审批",
+    "approval_policies_desc": "阈值、规则与模块",
     "guardian_desc": "速率与预算守卫",
     "logs_desc": "实时审计",
     "palette_title": "命令面板与快速搜索 (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "业务与 ERP",
       "infrastructure": "基础设施与治理",
       "economy_alpha_title": "此区块仍在建设中（内测）"
-    }
+    },
+    "plugins_desc": "模块、路由与护栏",
+    "autonomy": "自主模块",
+    "autonomy_desc": "36个子系统"
   },
   "common": {
     "save": "保存",
@@ -192,7 +195,9 @@
       "tab_update": "系统更新",
       "tab_users": "用户与角色",
       "onboarding_btn": "设置向导",
-      "onboarding_title": "重新启动设置向导"
+      "onboarding_title": "重新启动设置向导",
+      "tab_guardrails_router": "路由与护栏",
+      "tab_corporate": "企业与租户"
     },
     "keys": {
       "close_btn": "关闭",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "帮助/支持代理（配置）"
     },
     "update": {
       "active_commit": "当前提交",
@@ -2559,7 +2565,9 @@
       "tab_planning": "计划与任务",
       "tab_bridges": "桥接与接口",
       "tab_memory": "记忆与知识",
-      "tab_tools": "工具与执行"
+      "tab_tools": "工具与执行",
+      "mode_catalog": "插件目录",
+      "mode_autonomy": "自主模块 (36)"
     },
     "research": {
       "title": "Research Lab · 实验室",
@@ -2923,7 +2931,9 @@
       "reject_title": "拒绝审批",
       "ph_reject_reason": "填写拒绝原因……",
       "cancel": "取消",
-      "reject_confirm": "永久拒绝"
+      "reject_confirm": "永久拒绝",
+      "tab_autonomy": "自主模块",
+      "tab_autonomy_title": "36 个自主、韧性与企业模块"
     },
     "corporate": {
       "title": "企业与实体",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "参与者筛选",
       "title_comm_refresh": "刷新信息流",
       "ph_comm_input": "向频道发送消息或指令（回车）...",
-      "action_send": "发送"
+      "action_send": "发送",
+      "mode_board": "看板",
+      "mode_gantt": "甘特图",
+      "mode_graph": "依赖图",
+      "subtasks_tab": "子任务"
     },
     "operations_erp": {
       "title": "工单与合同 — 报价与订单",
@@ -3743,7 +3757,8 @@
       "due_title": "截止日期",
       "tags_placeholder": "标签，以逗号分隔",
       "comment_placeholder": "撰写给智能体的消息或指令...",
-      "start_now": "立即启动"
+      "start_now": "立即启动",
+      "back_to_parent": "父任务"
     },
     "roles": {
       "title": "管理 AI 角色与提示词",

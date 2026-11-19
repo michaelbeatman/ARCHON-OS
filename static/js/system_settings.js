@@ -286,15 +286,15 @@
           loadHermesFormSettings();
         }
       } else if (targetTab === "autonomy") {
-        if (typeof loadMemoryConsolidationSettings === "function") {
-          loadMemoryConsolidationSettings();
+        if (typeof closeSystemSettingsModal === "function") {
+          closeSystemSettingsModal();
         }
-        if (typeof loadAutonomyModulesSettings === "function") {
-          loadAutonomyModulesSettings();
+        if (typeof setTab === "function") {
+          Promise.resolve(setTab("plugins")).then(() => {
+            if (typeof setPluginsViewMode === "function") setPluginsViewMode("autonomy");
+          });
         }
-        if (typeof enrichAutonomyCardsAndThresholds === "function") {
-          enrichAutonomyCardsAndThresholds();
-        }
+        return;
       } else if (targetTab === "services") {
         if (typeof renderSettingsServices === "function") {
           renderSettingsServices();
@@ -307,11 +307,7 @@
           loadModelRoutingSettings();
         }
       } else if (targetTab === "plugins") {
-        if (targetSubTab) {
-          setPluginSubTab(targetSubTab);
-        } else {
-          setPluginSubTab("registry");
-        }
+        setPluginSubTab(targetSubTab || "jev");
       } else if (targetTab === "comm") {
         if (targetSubTab) {
           setCommSubTab(targetSubTab);
@@ -322,12 +318,39 @@
         if (typeof window.cdsRenderUI === "function") {
           window.cdsRenderUI();
         }
+      } else if (targetTab === "corporate") {
+        if (typeof window.initCorporateView === "function") {
+          window.initCorporateView();
+        }
       }
       lucide.createIcons();
     }
 
+    function setPluginsViewMode(mode) {
+      const m = mode === "autonomy" ? "autonomy" : "registry";
+      const regPane = document.getElementById("plugin-view-pane-registry");
+      const autoPane = document.getElementById("plugin-view-pane-autonomy");
+      const btnReg = document.getElementById("btn-plugins-mode-registry");
+      const btnAuto = document.getElementById("btn-plugins-mode-autonomy");
+      const activeCls = "px-3 py-1 rounded-lg font-mono text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] shadow-2xs";
+      const idleCls = "px-3 py-1 rounded-lg font-mono text-xs font-medium transition flex items-center gap-1.5 cursor-pointer text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
+      if (regPane) regPane.classList.toggle("hidden", m !== "registry");
+      if (autoPane) autoPane.classList.toggle("hidden", m !== "autonomy");
+      if (btnReg) btnReg.className = m === "registry" ? activeCls : idleCls;
+      if (btnAuto) btnAuto.className = m === "autonomy" ? activeCls : idleCls;
+      if (m === "registry") {
+        loadPluginSettingsRegistry();
+      } else {
+        if (typeof loadMemoryConsolidationSettings === "function") loadMemoryConsolidationSettings();
+        if (typeof loadAutonomyModulesSettings === "function") loadAutonomyModulesSettings();
+        if (typeof enrichAutonomyCardsAndThresholds === "function") enrichAutonomyCardsAndThresholds();
+      }
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    }
+    window.setPluginsViewMode = setPluginsViewMode;
+
     function setPluginSubTab(subTab) {
-      const subTabs = ["registry", "jev", "memory", "email-guard", "validate", "cost"];
+      const subTabs = ["jev", "memory", "email-guard", "validate", "cost"];
       subTabs.forEach(st => {
         const pane = document.getElementById(`plugin-subtab-${st}`);
         const btn = document.getElementById(`btn-plugin-sub-${st}`);
@@ -351,6 +374,12 @@
     }
 
     let settingsPluginsData = [];
+    let settingsPluginsSelectedCat = "ALL";
+
+    function selectPluginRegistryCategory(cat) {
+      settingsPluginsSelectedCat = cat || "ALL";
+      renderPluginSettingsRegistry();
+    }
     const SETTINGS_PLUGIN_CAT_META = {
       "Sicherheit & Wächter": { icon: "shield-alert", color: "text-rose-500", desc: "Budgetgrenzen, Session-Wächter und Injection-Abwehr" },
       "Performance & Cache": { icon: "zap", color: "text-amber-500", desc: "Token-Optimierung, lokales Caching und Fast-Routing" },
@@ -421,11 +450,13 @@
     }
 
     function updatePluginSettingsCounters() {
-      const badge = document.getElementById("settings-plugins-stats-badge");
-      if (!badge) return;
       const total = settingsPluginsData.length;
       const active = settingsPluginsData.filter(p => p.enabled).length;
-      badge.innerText = cfgT('ui.system_settings.plugins_active_count', '{active} von {total} aktiv', { active: active, total: total });
+      const label = cfgT('ui.system_settings.plugins_active_count', '{active} von {total} aktiv', { active: active, total: total });
+      const badge = document.getElementById("settings-plugins-stats-badge");
+      if (badge) badge.innerText = label;
+      const headerBadge = document.getElementById("plugins-active-badge");
+      if (headerBadge) headerBadge.innerText = label;
     }
 
     function filterPluginSettingsRegistry() {
@@ -438,7 +469,38 @@
       const searchInput = document.getElementById("settings-plugins-search");
       const q = (searchInput ? searchInput.value : "").trim().toLowerCase();
 
+      // Render dynamic category filter pills across ALL plugin groups
+      const pillsEl = document.getElementById("settings-plugins-cat-pills");
+      const categoriesOrder = Object.keys(SETTINGS_PLUGIN_CAT_META);
+      if (pillsEl) {
+        const allCatCounts = {};
+        settingsPluginsData.forEach(p => {
+          const c = p.category || "Weitere Module";
+          allCatCounts[c] = (allCatCounts[c] || 0) + 1;
+        });
+        const allCatsSorted = Object.keys(allCatCounts).sort((a, b) => {
+          const idxA = categoriesOrder.indexOf(a);
+          const idxB = categoriesOrder.indexOf(b);
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        });
+        const pillCls = (isActive) => isActive
+          ? "px-2.5 py-1 rounded-lg border font-mono text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+          : "px-2.5 py-1 rounded-lg border font-mono text-[11px] font-medium transition flex items-center gap-1.5 cursor-pointer bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:text-[var(--foreground)]";
+        const allLabel = cfgT('common.all', 'Alle');
+        let pillsHtml = `<button type="button" onclick="selectPluginRegistryCategory('ALL')" class="${pillCls(settingsPluginsSelectedCat === 'ALL')}"><span>${escapeHtml(allLabel)}</span><span class="opacity-75 text-[10px]">(${settingsPluginsData.length})</span></button>`;
+        allCatsSorted.forEach(cat => {
+          const safeCatJs = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          const meta = SETTINGS_PLUGIN_CAT_META[cat] || SETTINGS_PLUGIN_CAT_META["Weitere Module"];
+          const catLabel = cfgT(PLUGIN_CAT_LABEL_KEYS[cat], cat);
+          pillsHtml += `<button type="button" onclick="selectPluginRegistryCategory('${safeCatJs}')" class="${pillCls(settingsPluginsSelectedCat === cat)}"><i data-lucide="${meta.icon}" class="w-3 h-3 ${settingsPluginsSelectedCat === cat ? '' : meta.color}"></i><span>${escapeHtml(catLabel)}</span><span class="opacity-75 text-[10px]">(${allCatCounts[cat]})</span></button>`;
+        });
+        pillsEl.innerHTML = pillsHtml;
+      }
+
       let list = settingsPluginsData;
+      if (settingsPluginsSelectedCat && settingsPluginsSelectedCat !== "ALL") {
+        list = list.filter(p => (p.category || "Weitere Module") === settingsPluginsSelectedCat);
+      }
       if (q) {
         list = list.filter(p => {
           const nameMatch = (p.name || "").toLowerCase().includes(q);
@@ -460,7 +522,6 @@
       }
 
       // Group by category maintaining canonical category order
-      const categoriesOrder = Object.keys(SETTINGS_PLUGIN_CAT_META);
       const groups = {};
       list.forEach(p => {
         const cat = p.category || "Weitere Module";
@@ -1086,6 +1147,7 @@
     window.closeSystemSettingsModal = closeSystemSettingsModal;
     window.setSettingsTab = setSettingsTab;
     window.setPluginSubTab = setPluginSubTab;
+    window.selectPluginRegistryCategory = selectPluginRegistryCategory;
     window.loadPluginSettingsRegistry = loadPluginSettingsRegistry;
     window.updatePluginSettingsCounters = updatePluginSettingsCounters;
     window.filterPluginSettingsRegistry = filterPluginSettingsRegistry;
@@ -3212,8 +3274,23 @@ function _mrEsc(v) {
 
 async function loadModelRoutingSettings() {
   try {
-    const res = await fetch("/api/settings/model-routing");
+    const [res, profRes] = await Promise.all([
+      fetch("/api/settings/model-routing"),
+      fetch("/api/hermes/profiles").catch(() => null),
+    ]);
     const data = await res.json();
+    const spEl = document.getElementById("mr-support-profile");
+    if (spEl && profRes && profRes.ok) {
+      const pData = await profRes.json().catch(() => ({}));
+      const list = Array.isArray(pData.profiles) ? pData.profiles : (Array.isArray(pData) ? pData : []);
+      if (list.length) {
+        spEl.innerHTML = list.map(p => {
+          const id = _mrEsc(p.id || "");
+          const label = _mrEsc((p.name || p.id || "") + (p.model ? ` (${p.model})` : ""));
+          return `<option value="${id}">${label}</option>`;
+        }).join("");
+      }
+    }
     if (data && data.config) {
       _mrConfig = data.config;
       renderModelRoutingRows();
@@ -3230,8 +3307,18 @@ function renderModelRoutingRows() {
   if (en) en.checked = !!_mrConfig.enabled;
   const ao = document.getElementById("mr-autonomy-operations");
   const ar = document.getElementById("mr-autonomy-orchestrator");
+  const sp = document.getElementById("mr-support-profile");
   if (ao) ao.value = (_mrConfig.autonomy || {}).operations || "approval";
   if (ar) ar.value = (_mrConfig.autonomy || {}).orchestrator || "approval";
+  if (sp) {
+    const wanted = _mrConfig.support_profile_id || "default";
+    const hasOpt = Array.from(sp.options).some(o => o.value === wanted);
+    if (hasOpt) {
+      sp.value = wanted;
+    } else if (sp.options.length > 0) {
+      sp.value = sp.options[0].value;
+    }
+  }
 
   box.innerHTML = (_mrConfig.routes || []).map((r, i) => `
     <div class="grid grid-cols-12 gap-2 items-center" data-mr-row="${i}">
@@ -3275,7 +3362,8 @@ async function saveModelRoutingSettings() {
     autonomy: {
       operations: (document.getElementById("mr-autonomy-operations") || {}).value || "approval",
       orchestrator: (document.getElementById("mr-autonomy-orchestrator") || {}).value || "approval"
-    }
+    },
+    support_profile_id: (document.getElementById("mr-support-profile") || {}).value || "default"
   };
   try {
     const res = await fetch("/api/settings/model-routing", {

@@ -109,10 +109,8 @@
 </style>
 </head>
 <body class="h-screen flex overflow-hidden">
-      <!-- VIEW: APP FRAME STUDIO (Extracted) -->
+      <!-- VIEW: APP FRAME STUDIO / CSS LIVE STUDIO -->
       <div id="view-app-frame-studio-mount"></div>
-
-
   <!-- SIDEBAR -->
   <aside class="flex-shrink-0 flex flex-col border-r h-full overflow-y-auto theme-sidebar transition-colors duration-300 w-[200px]" style="width: var(--sidebar-width, 200px); min-width: var(--sidebar-width, 200px); max-width: var(--sidebar-width, 200px);">
     <!-- Header -->
@@ -287,15 +285,6 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <!-- 5. Corporate & Mandant -->
-          <button id="nav-corporate" onclick="setTab('corporate')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
-            <i data-lucide="building-2" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.corporate">Corporate &amp; Mandant</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate" data-i18n="nav.corporate_desc">Stammdaten &amp; Vorlagen</div>
-            </div>
-            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
-          </button>
         </div>
       </div>
       <!-- VISUELLE TRENNLINIE -->
@@ -306,16 +295,25 @@
           INFRASTRUKTUR & GOVERNANCE
         </div>
         <div class="space-y-[2px]">
-          <!-- 1. Approval-Policies -->
-          <button id="nav-approval-policies" onclick="setTab('approval-policies')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
-            <i data-lucide="shield-alert" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+          <!-- 1. Plugins (Katalog) -->
+          <button id="nav-plugins" onclick="setTab('plugins')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
+            <i data-lucide="puzzle" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.approval_policies">Approval-Policies</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate" data-i18n="nav.approval_policies_desc">Schwellen & Freigaben</div>
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.plugins">Plugins</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate" data-i18n="nav.plugins_desc">Katalog &amp; Fachbereiche</div>
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <!-- 2. Token Guard -->
+          <!-- 2. Autonomie & Freigaben (Approval-Policies + 36 Autonomie-Module) -->
+          <button id="nav-approval-policies" onclick="setTab('approval-policies')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
+            <i data-lucide="shield-alert" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
+            <div class="min-w-0 flex-1 leading-tight">
+              <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.approval_policies">Autonomie &amp; Freigaben</div>
+              <div class="text-[9.5px] font-mono text-muted-custom truncate" data-i18n="nav.approval_policies_desc">Schwellen, Regeln &amp; Module</div>
+            </div>
+            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
+          </button>
+          <!-- 4. Token Guard -->
           <button id="nav-guardian" onclick="setTab('guardian')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="gauge" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
@@ -324,7 +322,7 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <!-- 3. Telemetrie & Logs -->
+          <!-- 5. Telemetrie & Logs -->
           <button id="nav-log-stream" onclick="setTab('log-stream')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
             <i data-lucide="activity" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
             <div class="min-w-0 flex-1 leading-tight">
@@ -555,28 +553,27 @@
         <!-- ========================================================================= -->
         <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, DURCHGEHEND)                -->
         <!-- ========================================================================= -->
-        <div id="mission-control-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
-          <!-- LINKSBÜNDIG: ÜBERSCHRIFT DER ANSICHT & STATUS -->
-          <div class="flex items-center gap-3 min-w-0 flex-1">
-            <h2 data-i18n="ui.dashboard.title" id="mc-main-title" class="text-base sm:text-lg font-black text-[var(--foreground)] tracking-tight truncate">
-              Dashboard
-            </h2>
-            <button data-i18n-title="ui.dashboard.help_title" type="button" onclick="openContextHelp('mission_control')" title="Hilfe zum Dashboard" class="w-5 h-5 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
-              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-            </button>
-            <span data-i18n="ui.dashboard.badge_nominal" id="mc-total-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
-              Nominal
-            </span>
-            <span data-i18n="ui.dashboard.subtitle" id="mc-main-subtitle" class="text-xs text-[var(--muted-foreground)] font-semibold truncate hidden lg:inline pl-1">
-              • Mission Control: Echtzeit-Telemetrie, Flottenlast, Token-Sparkline &amp; HITL-Freigaben
+        <div id="mission-control-global-header" data-archon-view-header="mission-control" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+          <!-- LINKSBÜNDIG: ÜBERSCHRIFT AUF LOGOHÖHE + HOCHGESTELLTES ? + KOMPAKTER UNTERTITEL -->
+          <div class="flex flex-col justify-center min-w-0 flex-1 pr-4">
+            <div class="flex items-start gap-0.5 min-w-0">
+              <h2 data-i18n="ui.dashboard.title" id="mc-main-title" class="text-[22px] sm:text-[24px] font-black text-[var(--foreground)] tracking-tight leading-none truncate">
+                Dashboard
+              </h2>
+              <button data-i18n-title="ui.dashboard.help_title" type="button" onclick="openContextHelp('mission_control')" title="Hilfe zum Dashboard" class="-mt-1 w-4 h-4 rounded-full hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-sky-500 flex items-center justify-center transition cursor-pointer shrink-0">
+                <i data-lucide="help-circle" class="w-3 h-3"></i>
+              </button>
+              <span data-i18n="ui.dashboard.badge_nominal" id="mc-total-badge" class="hidden" aria-hidden="true">Nominal</span>
+            </div>
+            <span data-i18n="ui.dashboard.subtitle" id="mc-main-subtitle" class="text-[11px] text-[var(--muted-foreground)] font-medium leading-tight mt-1 truncate">
+              Echtzeit-Telemetrie, Flottenlast &amp; HITL-Freigaben
             </span>
           </div>
 
-          <!-- RECHTSBÜNDIG: REFRESH -->
-          <div class="flex items-center gap-2">
-            <button data-i18n-title="ui.dashboard.refresh_title" type="button" onclick="fetchMissionControlData()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="Telemetrie aktualisieren">
-              <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-emerald-500"></i>
-              <span data-i18n="ui.dashboard.sync" class="hidden sm:inline">Sync</span>
+          <!-- RECHTSBÜNDIG: GLOBALER SYNC-BUTTON (ÄUSSERSTES ICON, OHNE RAND) -->
+          <div class="flex items-center gap-2 shrink-0">
+            <button data-i18n-title="ui.dashboard.refresh_title" type="button" onclick="window.syncActiveView ? window.syncActiveView(this) : fetchMissionControlData()" class="archon-global-sync-btn w-9 h-9 p-0 border-0 bg-transparent hover:opacity-80 transition cursor-pointer flex items-center justify-center shrink-0" title="Inhalte aktualisieren (Sync)">
+              <img src="/static/img/sync_icon.png" alt="Sync" class="w-8 h-8 object-contain pointer-events-none">
             </button>
           </div>
 
@@ -1418,7 +1415,6 @@
       <div id="view-items-mount"></div>
       <div id="view-operations-erp-mount"></div>
       <div id="view-finance-mount"></div>
-      <div id="view-corporate-mount"></div>
 
       <!-- VIEW CONTAINER: APPROVAL-POLICIES & FREIGABEREGELN (t-5596bd) -->
       <div id="view-approval-policies-mount"></div>
@@ -2113,21 +2109,12 @@ print('Ausführung erfolgreich!')</textarea>
           </div>
         </div>
       </div>
-      <!-- VIEW CONTAINER: BRAIN & ARCHIV (SECOND BRAIN NATIVE HUB) -->
-      <!-- VIEW: VIEW-BRAIN (Extracted) -->
-      <div id="view-brain-mount"></div>
-
-    
-      <!-- ========================================================================= -->
-      <!-- VIEW: DESIGN SYSTEM PLAYGROUND / STYLEGUIDE LAB (KITCHEN SINK)            -->
-      <!-- ========================================================================= -->
-      <!-- VIEW: VIEW-DESIGN-SYSTEM (Extracted) -->
     </main>
   <script src="/static/js/archon_i18n.js"></script>
   <script src="/static/js/auth_manager.js?v=20261116b"></script>
   <script src="/static/js/auth_gate.js"></script>
   <script src="/static/js/chat_engine.js?v=2026111113"></script>
-  <script src="/static/js/system_settings.js?v=2026111113"></script>
+  <script src="/static/js/system_settings.js?v=2026112009"></script>
   <script src="/static/js/settings_search.js?v=2026111113"></script>
   <script src="/static/js/system_update_badge.js?v=20261117"></script>
   <script src="/static/js/agent_profiles.js?v=2026111113"></script>
@@ -2156,17 +2143,18 @@ print('Ausführung erfolgreich!')</textarea>
   </script>
   <script src="/static/js/mission_control_cockpit.js?v=2026111113"></script>
   <script src="/static/js/research_lab.js?v=2026111113"></script>
-  <script src="/static/js/operations_kanban.js?v=2026111903"></script>
-  <script src="/static/js/kanban_gantt_graph.js?v=2026111901"></script>
+  <script src="/static/js/operations_kanban.js?v=2026112007"></script>
+  <script src="/static/js/kanban_gantt_graph.js?v=2026111902"></script>
   <script src="/static/js/sidebar_v2.js?v=2026111901"></script>
   <script src="/static/js/enterprise_calendar_ui.js?v=2026111901"></script>
   <script src="/static/js/v2_capabilities_panel.js?v=2026111901"></script>
-  <script src="/static/js/operations_projects.js?v=2026111113"></script>
+  <script src="/static/js/global_header_sync.js?v=2026112008"></script>
+  <script src="/static/js/operations_projects.js?v=2026112007"></script>
   <script src="/static/js/appshell_architect.js?v=2026111113"></script>
   <script src="/static/js/css_live_studio.js?v=2026111113"></script>
   <script src="/static/js/guardian.js?v=2026111113"></script>
   <script src="/static/js/finance_controller.js?v=2026111113"></script>
-  <script src="/static/js/approval_policies_controller.js?v=2026111113"></script>
+  <script src="/static/js/approval_policies_controller.js?v=2026112010"></script>
   <script src="/static/js/prompt_studio.js?v=2026111113"></script>
   <script src="/static/js/wissensbibliothek.js?v=2026111113"></script>
   <script src="/static/js/skill_markt.js?v=2026111113"></script>
@@ -2724,8 +2712,8 @@ print('Ausführung erfolgreich!')</textarea>
       };
       const _coreViews = [
         _v2Mount('/static/views/view_app_frame_studio.html?v=2026111113', 'view-app-frame-studio-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); }),
-        _v2Mount('/static/views/system_settings_modal.html?v=2026111113', 'system-settings-mount'),
-        _v2Mount('/static/views/operations_view.html?v=2026111113', 'view-operations-mount'),
+        _v2Mount('/static/views/system_settings_modal.html?v=2026112009', 'system-settings-mount'),
+        _v2Mount('/static/views/operations_view.html?v=2026111902', 'view-operations-mount'),
         _v2Mount('/static/views/agent_profiles_view.html?v=2026111113', 'view-agent-profiles-mount'),
         _v2Mount('/static/views/master_chat_view.html?v=2026111113', 'view-master-chat-mount'),
       ];
@@ -2735,16 +2723,14 @@ print('Ausführung erfolgreich!')</textarea>
         ['showroom', '/static/views/view_showroom.html?v=2026111113', 'view-showroom-mount', null],
         ['log-stream', '/static/views/log_stream_view.html?v=2026111113', 'view-log-stream-mount', null],
         ['guardian', '/static/views/view_guardian.html?v=2026111113', 'view-guardian-mount', null],
-        ['plugins', '/static/views/view_plugins.html?v=2026111113', 'view-plugins-mount', null],
+        ['plugins', '/static/views/view_plugins.html?v=2026112010', 'view-plugins-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof loadPluginSettingsRegistry === 'function') loadPluginSettingsRegistry(); if (typeof loadSystemSettings === 'function') loadSystemSettings(); }],
         ['research', '/static/views/view_research.html?v=2026111113', 'view-research-mount', null],
         ['watchdog', '/static/views/watchdog_view.html?v=2026111113', 'view-watchdog-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }],
         ['finance', '/static/views/view_finance.html?v=2026111113', 'view-finance-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initFinanceView === 'function') initFinanceView(); }],
-        ['approval-policies', '/static/views/view_approval_policies.html?v=2026111113', 'view-approval-policies-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initApprovalPoliciesView === 'function') initApprovalPoliciesView(); }],
+        ['approval-policies', '/static/views/view_approval_policies.html?v=2026112010', 'view-approval-policies-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initApprovalPoliciesView === 'function') initApprovalPoliciesView(); }],
         ['addresses', '/static/views/view_addresses.html?v=2026111113', 'view-addresses-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initAddressesView === 'function') initAddressesView(); }],
         ['items', '/static/views/view_items.html?v=2026111113', 'view-items-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initItemsView === 'function') initItemsView(); }],
         ['operations-erp', '/static/views/view_operations_erp.html?v=2026111113', 'view-operations-erp-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initOperationsErpView === 'function') initOperationsErpView(); }],
-        ['corporate', '/static/views/view_corporate.html?v=2026111113', 'view-corporate-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initCorporateView === 'function') initCorporateView(); }],
-        ['brain', '/static/views/view_brain.html?v=2026111113', 'view-brain-mount', null],
       ];
       const _activeStartTab = currentTab || 'mission-control';
       const _bgSpecs = [];
@@ -2940,6 +2926,11 @@ print('Ausführung erfolgreich!')</textarea>
         setTab("operations", "automation");
         return;
       }
+      if (tabId === "autonomy") {
+        setTab("approval-policies");
+        setTimeout(() => { if (typeof setApprovalsSubTab === "function") setApprovalsSubTab("autonomy"); }, 120);
+        return;
+      }
       if (!document.getElementById(`view-${tabId}`) && window._v2MountPromises && window._v2MountPromises['tab:' + tabId]) {
         window._v2MountPromises['tab:' + tabId].finally(() => setTab(tabId, subtab));
         return;
@@ -2966,14 +2957,12 @@ print('Ausführung erfolgreich!')</textarea>
         "view-watchdog",
         "view-kanban",
         "view-workspace-gallery",
-        "view-brain",
         "view-agent-terminal",
         "view-addresses",
         "view-items",
         "view-operations-erp",
         "view-finance",
-        "view-approval-policies",
-        "view-corporate"
+        "view-approval-policies"
       ];
       // Verstecke ausnahmslos alle Views per inline-style und class
       allViews.forEach(id => {
@@ -3054,10 +3043,13 @@ print('Ausführung erfolgreich!')</textarea>
         if (typeof initFinanceView === 'function') initFinanceView();
       }
       if (tabId === "corporate") {
-        if (typeof initCorporateView === 'function') initCorporateView();
+        if (typeof openSystemSettingsModal === 'function') openSystemSettingsModal('corporate');
+        return;
       }
       if (tabId === "plugins") {
-        if (shouldFetchTab('plugins')) loadPluginCenterData();
+        if (typeof loadPluginSettingsRegistry === 'function') loadPluginSettingsRegistry();
+        if (typeof loadSystemSettings === 'function') loadSystemSettings();
+        if (typeof loadGuardianConfig === 'function') loadGuardianConfig();
       }      if (tabId === "automation") {
         const iframe = document.getElementById("automation-n8n-iframe");
         const extLink = document.getElementById("n8n-external-link");
@@ -10263,9 +10255,12 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <div id="ops-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeTaskDetailModal()"></div>
-    <div class="relative w-[760px] max-w-[95vw] max-h-[90vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal">
+    <div id="ops-detail-card" class="relative w-[760px] max-w-[95vw] max-h-[90vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal transition-transform duration-150">
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <button id="btn-ops-detail-back-parent" type="button" onclick="closeTaskDetailModal()" class="hidden px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--background)] text-[11px] font-mono font-bold text-[var(--foreground)] transition cursor-pointer shrink-0 flex items-center gap-1">
+            <span aria-hidden="true">←</span> <span data-i18n="ui.task_detail.back_to_parent">Parent-Task</span>
+          </button>
           <span id="ops-detail-badge-id" class="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">t-000000</span>
           <span id="ops-detail-badge-date" class="px-2 py-0.5 rounded text-[10.5px] font-mono text-[var(--muted-foreground)] bg-[var(--background)] border border-[var(--border)] hidden"></span>
           <h2 data-i18n="ui.task_detail.title" id="ops-detail-title" class="text-base font-bold text-[var(--foreground)] tracking-tight line-clamp-1">Task Details</h2>
@@ -12281,7 +12276,7 @@ ${logExcerpt}
           <!-- Input row -->
           <div class="flex gap-2">
             <input type="text" id="help-chat-input" placeholder="Frage zu dieser Ansicht oder den Optionen stellen..." data-i18n-placeholder="ui.help_modal.input_placeholder" class="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs text-[var(--foreground)] focus:outline-none font-mono" onkeydown="if(event.key === 'Enter') submitContextHelpQuestion()">
-            <button type="button" id="help-chat-submit-btn" onclick="submitContextHelpQuestion()" class="px-3.5 py-1.5 rounded-lg bg-zinc-900 text-[var(--foreground)] dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs hover:opacity-90">
+            <button type="button" id="help-chat-submit-btn" onclick="submitContextHelpQuestion()" class="px-3.5 py-1.5 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs hover:opacity-90">
               <i data-lucide="send" class="w-3.5 h-3.5"></i>
               <span data-i18n="ui.help_modal.submit">Fragen</span>
             </button>
@@ -12294,7 +12289,7 @@ ${logExcerpt}
 
       <!-- Footer -->
       <div class="px-5 py-3 border-t border-[var(--border)] flex justify-end bg-[var(--background)]/60">
-        <button onclick="closeContextHelp()" class="bg-zinc-900 text-[var(--foreground)] dark:bg-zinc-100 dark:text-zinc-900 py-1.5 px-4 rounded-lg text-xs hover:opacity-90 transition font-semibold cursor-pointer shadow-2xs" data-i18n="ui.help_modal.understood">
+        <button onclick="closeContextHelp()" class="bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 py-1.5 px-4 rounded-lg text-xs hover:opacity-90 transition font-semibold cursor-pointer shadow-2xs" data-i18n="ui.help_modal.understood">
           Verstanden
         </button>
       </div>
@@ -13556,7 +13551,7 @@ ${logExcerpt}
   <script src="/static/erp_studio.js?v=2026111113"></script>
   <script src="/static/js/crm_studio.js?v=2026111113"></script>
   <script src="/static/js/demo_banner.js" defer></script>
-  <script src="/static/js/onboarding_wizard.js" defer></script>
+  <script src="/static/js/onboarding_wizard.js?v=2026111903" defer></script>
   <script src="/static/js/tenant_switcher.js?v=20261116b" defer></script>
   <script src="/static/js/playbooks_studio.js" defer></script>
   <script src="/static/js/operations_calendar.js" defer></script>

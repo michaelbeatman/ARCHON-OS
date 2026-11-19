@@ -22,7 +22,7 @@
     "css_studio": "Studio CSS en direct",
     "research": "Laboratoire de recherche",
     "corporate": "Corporate & Entités",
-    "approval_policies": "Politiques de validation",
+    "approval_policies": "Autonomie et approbations",
     "automation": "Moteur de workflows",
     "dashboard": "Tableau de bord",
     "dashboard_desc": "Mission Control et Cockpit",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "Devis, pipeline et SLA",
     "finance_desc": "Justificatifs, OCR et relances",
     "corporate_desc": "Données de base et Modèles",
-    "approval_policies_desc": "Seuils et Validations",
+    "approval_policies_desc": "Seuils, règles et modules",
     "guardian_desc": "Garde des débits et du budget",
     "logs_desc": "Audit en direct",
     "palette_title": "Palette de commandes et recherche rapide (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "Gestion et ERP",
       "infrastructure": "Infrastructure et gouvernance",
       "economy_alpha_title": "Cette section est encore en construction (alpha)"
-    }
+    },
+    "plugins_desc": "Modules, Routeur et Guardrails",
+    "autonomy": "Modules d'autonomie",
+    "autonomy_desc": "36 sous-systèmes"
   },
   "common": {
     "save": "Enregistrer",
@@ -192,7 +195,9 @@
       "tab_update": "MISE À JOUR SYSTÈME",
       "tab_users": "UTILISATEURS ET RÔLES",
       "onboarding_btn": "Assistant de configuration",
-      "onboarding_title": "Relancer l'assistant de configuration"
+      "onboarding_title": "Relancer l'assistant de configuration",
+      "tab_guardrails_router": "ROUTEUR & GUARDRAILS",
+      "tab_corporate": "CORPORATE & MANDANT"
     },
     "keys": {
       "close_btn": "Fermer",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "Agent d'aide/support (Profil)"
     },
     "update": {
       "active_commit": "Commit actif",
@@ -2559,7 +2565,9 @@
       "tab_planning": "Planification et tâches",
       "tab_bridges": "Ponts et interfaces",
       "tab_memory": "Mémoire et connaissances",
-      "tab_tools": "Outils et exécution"
+      "tab_tools": "Outils et exécution",
+      "mode_catalog": "Catalogue des plugins",
+      "mode_autonomy": "Modules d'autonomie (36)"
     },
     "research": {
       "title": "Research Lab · Laboratoire",
@@ -2923,7 +2931,9 @@
       "reject_title": "Rejeter la validation",
       "ph_reject_reason": "Saisir le motif du rejet...",
       "cancel": "Annuler",
-      "reject_confirm": "Rejeter définitivement"
+      "reject_confirm": "Rejeter définitivement",
+      "tab_autonomy": "Autonomie",
+      "tab_autonomy_title": "36 modules d'autonomie, résilience et entreprise"
     },
     "corporate": {
       "title": "Entreprise et entités",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "Filtre des participants",
       "title_comm_refresh": "Actualiser le flux",
       "ph_comm_input": "Envoyer un message ou une instruction au canal (Entrée)...",
-      "action_send": "Envoyer"
+      "action_send": "Envoyer",
+      "mode_board": "Tableau",
+      "mode_gantt": "Gantt",
+      "mode_graph": "Graphe",
+      "subtasks_tab": "Sous-tâches"
     },
     "operations_erp": {
       "title": "Dossiers et contrats — Offres et commandes",
@@ -3743,7 +3757,8 @@
       "due_title": "Date d'échéance",
       "tags_placeholder": "Étiquettes séparées par des virgules",
       "comment_placeholder": "Rédiger un message ou une instruction pour l'agent...",
-      "start_now": "Démarrer maintenant"
+      "start_now": "Démarrer maintenant",
+      "back_to_parent": "Tâche parente"
     },
     "roles": {
       "title": "Gérer les rôles et prompts IA",

@@ -22,7 +22,7 @@
     "css_studio": "CSS Live Studio",
     "research": "Forschungslabor",
     "corporate": "Corporate & Mandant",
-    "approval_policies": "Freigabe-Richtlinien",
+    "approval_policies": "Autonomie & Freigaben",
     "automation": "Workflow-Engine",
     "dashboard": "Dashboard",
     "dashboard_desc": "Mission Control & Cockpit",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "Angebote, Pipeline & SLA",
     "finance_desc": "Belege, OCR & Mahnwesen",
     "corporate_desc": "Stammdaten & Vorlagen",
-    "approval_policies_desc": "Schwellen & Freigaben",
+    "approval_policies_desc": "Schwellen, Regeln & Module",
     "guardian_desc": "Raten- & Budgetwächter",
     "logs_desc": "Live-Audit",
     "palette_title": "Befehlspalette & Schnellsuche (Strg + K)",
@@ -55,7 +55,10 @@
       "economy": "Wirtschaft & ERP",
       "infrastructure": "Infrastruktur & Governance",
       "economy_alpha_title": "Diese Sektion befindet sich noch im Aufbau (Alpha)"
-    }
+    },
+    "plugins_desc": "Module, Router & Guardrails",
+    "autonomy": "Autonomie-Module",
+    "autonomy_desc": "36 Subsysteme"
   },
   "common": {
     "save": "Speichern",
@@ -192,7 +195,9 @@
       "tab_update": "SYSTEM-UPDATE",
       "tab_users": "BENUTZER & ROLLEN",
       "onboarding_btn": "Setup-Wizard",
-      "onboarding_title": "Setup-Wizard erneut starten"
+      "onboarding_title": "Setup-Wizard erneut starten",
+      "tab_guardrails_router": "ROUTER & GUARDRAILS",
+      "tab_corporate": "CORPORATE & MANDANT"
     },
     "keys": {
       "close_btn": "Schließen",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hashkette: PFLICHT-AKTIV",
       "sha256_mandatory_title": "GoBD-Revisionspflicht: Nicht abschaltbar",
-      "check_posture": "Posture prüfen"
+      "check_posture": "Posture prüfen",
+      "support_profile": "Hilfe-/Support-Agent (Profil)"
     },
     "update": {
       "active_commit": "Aktiver Commit",
@@ -2559,7 +2565,9 @@
       "tab_planning": "Planung & Tasks",
       "tab_bridges": "Brücken & Schnittstellen",
       "tab_memory": "Gedächtnis & Wissen",
-      "tab_tools": "Tools & Execution"
+      "tab_tools": "Tools & Execution",
+      "mode_catalog": "Plugin-Katalog",
+      "mode_autonomy": "Autonomie-Module (36)"
     },
     "research": {
       "title": "Research Lab · Labor",
@@ -2923,7 +2931,9 @@
       "reject_title": "Freigabe ablehnen",
       "ph_reject_reason": "Begründung für die Ablehnung eingeben...",
       "cancel": "Abbrechen",
-      "reject_confirm": "Unwiderruflich ablehnen"
+      "reject_confirm": "Unwiderruflich ablehnen",
+      "tab_autonomy": "Autonomie",
+      "tab_autonomy_title": "36 Autonomie-, Resilienz- & Enterprise-Module"
     },
     "corporate": {
       "title": "Corporate & Mandanten",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "Teilnehmer-Filter",
       "title_comm_refresh": "Feed aktualisieren",
       "ph_comm_input": "Funkspruch oder Anweisung an den Kanal senden (Enter)...",
-      "action_send": "Senden"
+      "action_send": "Senden",
+      "mode_board": "Board",
+      "mode_gantt": "Gantt",
+      "mode_graph": "Graph",
+      "subtasks_tab": "Teilaufgaben"
     },
     "operations_erp": {
       "title": "Vorgänge & Verträge — Angebote & Aufträge",
@@ -3936,7 +3950,8 @@
       "due_title": "Fälligkeitsdatum",
       "tags_placeholder": "Tags, mit Komma getrennt",
       "comment_placeholder": "Nachricht oder Anweisung an den Agenten verfassen...",
-      "start_now": "Jetzt starten"
+      "start_now": "Jetzt starten",
+      "back_to_parent": "Parent-Task"
     },
     "tasks": {
       "backlog": "📥 Backlog",

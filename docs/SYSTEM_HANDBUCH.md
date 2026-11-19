@@ -614,10 +614,10 @@ Das System Control Center (Settings) ist die zentrale Schaltstelle zur Konfigura
 - Steuerung von Task-Queues, Watchdog-Intervallen (30s) und Event-Loops.
 - Zum Notfallbetrieb siehe [Anhang IV.8: Break-Glass Recovery](#iv8-break-glass-recovery--notfallzugriff) und [Anhang V.17: Chaos Resilience](#v17-chaos-resilience--störungs-simulation).
 
-### 14.2 Autonomie & Module (Erweiterungen & Modul-Zentrale)
-Die 36 Autonomie-, Resilienz- und Enterprise-Module sind in der **Erweiterungen & Modul-Zentrale** gebündelt (Sidebar → „Erweiterungen & Modul-Zentrale"), mit zwei Ansichten:
-- **Plugin-Katalog:** Alle Hermes-Spezial-Plugins nach Fachbereichen, mit Volltextsuche (Plugins, Tools, Beschreibungen) und Kategorie-Pills zum Filtern.
-- **Autonomie-Module (36):** Die Subsysteme 1–36 (u. a. Modul 32 „Zero-Egress & Privacy-Router", Modul 5 „Ephemeral Docker Sandbox", nächtliche Speicherkonsolidierung) mit Deduplizierungs-Filter; jede Card aktivier-/konfigurierbar.
+### 14.2 Autonomie & Module (eigener Menüpunkt „Autonomie-Module")
+Die 36 Autonomie-, Resilienz- und Enterprise-Module sind in der **Erweiterungen & Modul-Zentrale** gebündelt, die **zwei eigene Sidebar-Menüpunkte** in der Säule „Infrastruktur & Governance" bedient (Reihenfolge: **Plugins → Autonomie-Module → Freigabe-Richtlinien → Token Guard → Telemetrie**):
+- **Plugins:** Der Plugin-Katalog — alle Hermes-Spezial-Plugins nach Fachbereichen, mit Volltextsuche (Plugins, Tools, Beschreibungen) und Kategorie-Pills zum Filtern.
+- **Autonomie-Module:** Die Subsysteme 1–36 (u. a. Modul 32 „Zero-Egress & Privacy-Router", Modul 5 „Ephemeral Docker Sandbox", nächtliche Speicherkonsolidierung) mit Deduplizierungs-Filter; jede Card aktivier-/konfigurierbar. Technisch teilt der Menüpunkt denselben View wie Plugins (`view_plugins.html`) und schaltet nur den Anzeige-Modus (`setPluginsViewMode('autonomy')`); der aktive Menüpunkt wird entsprechend markiert.
 - Steuerung flüchtiger Sandbox-Container für Code-Ausführungen (`t-a42e5d`).
 - Die Guardrail-Seite (PreDecision, Memory, Injection Guard, Quality Gate, Token-Budgets, Zero-Egress, Worker-Netz) liegt im System Control Center unter dem Reiter **ROUTER & GUARDRAILS**; die klassischen Sub-Reiter (JEV, Memory, E-Mail-Guard, Validate, Cost) bleiben im Einstellungs-Modal erreichbar.
 
@@ -890,7 +890,7 @@ $$\text{current\_hash} = \text{SHA-256}(\text{prev\_hash} \parallel \text{"|"} \
 1. **Forensische Ansicht:** Seitenleiste **Telemetrie & Logs** → Reiter **GoBD / Revisions-Log** → Kategorie-Pill **`LLM-Dispatches`** wählen. Jede Zeile zeigt unmittelbar `Provider / Modell → Ziel-Host (Ziel-Endpunkt)` sowie den verketteten SHA-256-Block-Hash.
 2. **System Control Center (Einstellungen):**
    - Reiter **PROVIDER & GATEWAY** → Karte *„Zero-Egress, Privacy-Router Hard-Block & SHA-256 Dispatch-Audit"* → Button **„Posture prüfen"**.
-   - Reiter **ROUTER & GUARDRAILS** → Bereich *Zero-Egress, Privacy-Router & Worker-Netz*; die vollständigen 36 Autonomie-Module (inkl. **Bereich 7 / Modul 32**) liegen seit der Neuordnung in der **Erweiterungen & Modul-Zentrale** (Sidebar → „Erweiterungen & Modul-Zentrale" → Modus **Autonomie-Module (36)**).
+   - Reiter **ROUTER & GUARDRAILS** → Bereich *Zero-Egress, Privacy-Router & Worker-Netz*; die vollständigen 36 Autonomie-Module (inkl. **Bereich 7 / Modul 32**) liegen unter **Autonomie & Freigaben → Reiter `Autonomie`** (Säule „Infrastruktur & Governance").
 3. **1-Klick GoBD- & EU-AI-Act-Verfahrensdokumentation als PDF (M49):**
    - In **Operations** → Kachel **`AI Act / GoBD`** → **„GoBD + EU AI Act PDF herunterladen"** (`GET /api/v1/governance/compliance/verfahrensdokumentation.pdf`). Kapitel 3 dokumentiert live die Anzahl verifizierter Blöcke, die Zahl signierter LLM-Dispatches, den aktiven Hard-Block-Status sowie die Docker-Worker-Netzwerk-Isolation (`Internal=true`).
 
@@ -1135,7 +1135,7 @@ Zusätzlich schreibt jeder erlaubte und jeder geblockte LLM-Aufruf einen signier
 
 Alle steuerbaren Parameter sind an drei synchronisierten Stellen im Web-UI verfügbar (Single Source of Truth):
 
-1. **System Control Center → Reiter `ROUTER & GUARDRAILS`** *(Schnellsuche mit Taste `/` nach `Zero-Egress` oder `Hard-Block`)* sowie die vollständigen 36 Module in der **Erweiterungen & Modul-Zentrale** (Sidebar → Modus „Autonomie-Module (36)") → **Bereich 7 / Modul 32**:
+1. **System Control Center → Reiter `ROUTER & GUARDRAILS`** *(Schnellsuche mit Taste `/` nach `Zero-Egress` oder `Hard-Block`)* sowie die vollständigen 36 Module unter **Autonomie & Freigaben → Reiter `Autonomie`** → **Bereich 7 / Modul 32**:
    - `Sensibles Lokal-Routing` (`sensitive_local_routing`)
    - `Hard-Block (Lokal offline)` (`hard_block_on_local_offline`)
    - `Strict Zero-Egress (Alle)` (`zero_egress_strict`)
@@ -3421,7 +3421,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 | **26** | **Autonomous Computer-Use & PbD (Demo-to-Skill)** | Kritisch | Abgeschlossen | Vormachen & Lernen per Bot-Screen, Ghost-Cursor Anti-Detection (Bézier-Pfade, Bounding-Box Jitter), SoM-Visual-Grounding und a11y Observation-Pruning |
 | **27** | **MCTS Action Trajectories & Deep Reasoning Gate** | Mittel | Abgeschlossen | Optionale Monte-Carlo-Baumsuche in Autonomie-Settings zur Voraus-Simulation heikler Handlungsstränge vor Ausführung |
 | **28** | **ERP-Modul zum vollwertigen Kernsystem ausbauen** | Kritisch | Abgeschlossen | EN 16931 / XRechnung-3.0-UBL-XML (`/xrechnung.xml`), ZUGFeRD-2.2 / Factur-X Hybrid-PDF (`/zugferd.pdf`), DATEV-EXTF-SKR03-CSV (`/export/datev.csv`), `leitweg_id`, atomare Lagerbestands-Abbuchung (`stock_deducted`) sowie Bank-Import (`CAMT.053` / `MT940` / `CSV`) & OPOS-Abgleich (`/api/erp/bank/*`) |
-| **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Abgeschlossen | WYSIWYG-/Block-Editor (`view_corporate.html`, `corporate_controller.js`) für 6 Belegtypen (Brief, Angebot, AB, Rechnung, Mahnung 1–3, NDA) inkl. Live-§ 14-UStG-Prüfung, Platzhaltern (`{{customer.*}}`/`{{doc.*}}`), DIN-5008-Falzmarken, Pure-Python EPC-QR GiroCode (`backend/qr_girocode.py`), Layout-Persistenz & direktem A4-PDF-Download (`/api/corporate/render-pdf`) |
+| **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Abgeschlossen | WYSIWYG-/Block-Editor (System Control Center → `CORPORATE & MANDANT`, `corporate_controller.js`) für 6 Belegtypen (Brief, Angebot, AB, Rechnung, Mahnung 1–3, NDA) inkl. Live-§ 14-UStG-Prüfung, Platzhaltern (`{{customer.*}}`/`{{doc.*}}`), DIN-5008-Falzmarken, Pure-Python EPC-QR GiroCode (`backend/qr_girocode.py`), Layout-Persistenz & direktem A4-PDF-Download (`/api/corporate/render-pdf`) |
 | **30** | **Interaktiver Setup-Wizard & Installationsprogramm** | Kritisch | Abgeschlossen | Geführter First-Run-Installer (GUI & CLI) mit Abfrage von Firmendaten, Mandantenstamm, API-Keys, lokalen LLM-Pfaden, IMAP/SMTP und Telegram-Bot-Setup |
 | **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Abgeschlossen | Durchgehende Übersetzung aller 70 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 55 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
 | **32** | **Telegram-Kommunikation & Gateway-Härtung** | Hoch | Abgeschlossen | Konfliktfreies Session-Keying, Slash-Command-Routing, Inline-HITL-Buttons & Live-Status-Formatter (`backend/telegram_gateway_v2.py`) |
@@ -3651,7 +3651,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 - **Bankkonten-Import & OPOS-Zahlungsabgleich (`erp_bank_transactions`):** Parser & APIs für ISO 20022 `CAMT.053` XML (mit `<!DOCTYPE`/`<!ENTITY`-XXE-Schutz), SWIFT `MT940` (`.sta`) und Bank-`CSV` (`/api/erp/bank/import`, `/api/erp/bank/transactions`, `/api/erp/bank/transactions/{tx_id}/match`) inkl. SHA-256-Deduplizierung, Konfidenz-Matching gegen offene Ausgangsrechnungen (`auto_mark_paid`) und modalem OPOS-Dialog (`Bank-Import & OPOS`). *(Hinweis: Echtzeit-HBCI/FinTS/PSD2-Online-Abruf bleibt als späteres Gateway-Plugin optional.)*
 
 ### Meilenstein 29: Visueller Formular- & Beleg-Editor im ERP-Modul (Abgeschlossen – Hoch)
-- **Interaktiver Vorlagen-Baukasten (`corporate_manager.py`, `view_corporate.html`, `corporate_controller.js`):** Einheitlicher visueller Editor für Geschäftsbriefe (DIN 5008 mit optionalen Falzmarken 105/148,5/210 mm), Angebote, Auftragsbestätigungen, Ausgangsrechnungen, Mahnungen (Stufen 1–3 nach § 286/§ 288 BGB) und NDAs — inkl. 1-Klick-Absprung `Beleg-Editor` direkt aus ERP-Belegen (`erp_studio.js`).
+- **Interaktiver Vorlagen-Baukasten (`corporate_manager.py`, System Control Center → `CORPORATE & MANDANT`, `corporate_controller.js`):** Einheitlicher visueller Editor für Geschäftsbriefe (DIN 5008 mit optionalen Falzmarken 105/148,5/210 mm), Angebote, Auftragsbestätigungen, Ausgangsrechnungen, Mahnungen (Stufen 1–3 nach § 286/§ 288 BGB) und NDAs — inkl. 1-Klick-Absprung `Beleg-Editor` direkt aus ERP-Belegen (`erp_studio.js`).
 - **Dynamische Datenbindung, Platzhalter & § 14 UStG-Check:** Mandanten- und Beleg-Persistenz (`GET/POST /api/corporate/template-layout`), Live-ERP-Belegverknüpfung, sichere `{{company.*}}` / `{{customer.*}}` / `{{doc.*}}`-Platzhalter sowie automatische § 14 Abs. 4 UStG Live-Compliance-Prüfung (`validate_ustg_compliance()`).
 - **Pure-Python GiroCode EPC-QR & A4-PDF-Export:** Abhängigkeitsfreier ISO-18004-QR-Matrix-Generator (`backend/qr_girocode.py`) als gestochen scharfes Vektor-SVG in Rechnungen/Mahnungen sowie echter PDF-Download via `POST /api/corporate/render-pdf` (`build_corporate_template_pdf`).
 
@@ -3817,7 +3817,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 - **Operations-Kalender UI/UX:** Grundlegende Überarbeitung der Kalender-Ansicht innerhalb von *Operations* (`operations_calendar.js`) über das bestehende Kachel-/API-Fundament hinaus: vollständiges Monats-, Wochen- und Tagesraster, Drag-&-Drop-Terminplanung, Serientermine, Erinnerungen/Benachrichtigungen sowie Ressourcen- und Agenten-Ansicht.
 
 ### Meilenstein 62: Vorlagen in Operations überarbeiten (Geplant – Hoch)
-- **Vorlagen-UX in Operations:** Überarbeitung des Vorlagen-Bereichs in Operations (Formular-, Beleg- und Workflow-Vorlagen unter *Operations* / `view_corporate.html` / `corporate_controller.js`): klarere Navigation, übersichtlichere Vorschau/Bearbeitung und nahtlosere Übergabe in den operativen Workflow.
+- **Vorlagen-UX in Operations & Settings:** Überarbeitung des Vorlagen-Bereichs (Formular-, Beleg- und Workflow-Vorlagen unter *System Control Center → CORPORATE & MANDANT* / `corporate_controller.js`): klarere Navigation, übersichtlichere Vorschau/Bearbeitung und nahtlosere Übergabe in den operativen Workflow.
 
 ### Meilenstein 63: Linkes Menü (Sidebar) & untere linke Ecke modernisieren (Geplant – Hoch)
 - **Navigationsstruktur:** Überarbeitung und Modernisierung der linken Seitenleiste inkl. Prüfung/Umsetzung einklappbarer Sektionen für weniger visuelles Rauschen und bessere Übersicht bei vielen Modulen.

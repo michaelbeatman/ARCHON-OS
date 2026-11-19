@@ -112,23 +112,22 @@
       const progressColor = isDone ? "bg-emerald-500" : (p.progress > 50 ? "bg-sky-500" : "bg-amber-500");
 
       const teamChips = (p.assignee_objects && p.assignee_objects.length > 0)
-        ? p.assignee_objects.map(a => `
-            <button type="button"
-                    onclick="event.stopPropagation(); openAgentChat('${escapeHtml(a.id)}', '${escapeHtml(a.person_name || a.id)}')"
-                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-[var(--secondary)] hover:bg-indigo-500/15 text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-500/50 transition cursor-pointer group/chip"
-                    title="Direktchat mit ${escapeHtml(a.person_name || a.id)} im Master Chat öffnen">
-              <i data-lucide="message-square" class="w-3 h-3 text-indigo-500 group-hover/chip:scale-110 transition-transform"></i>
-              <span class="font-bold text-[var(--foreground)]">${escapeHtml(a.person_name || a.id)}</span>
-              ${a.role ? `<span class="text-[9.5px] text-muted-custom truncate max-w-[130px] font-normal">${escapeHtml(', ' + a.role.split('(')[0].trim())}</span>` : ''}
-            </button>
-          `).join("")
-        : (p.assignees || []).map(a => `
-            <button type="button"
-                    onclick="event.stopPropagation(); openAgentChat('${escapeHtml(a)}', '${escapeHtml(a)}')"
-                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]">
-              <i data-lucide="user" class="w-2.5 h-2.5 opacity-60"></i> ${escapeHtml(a)}
-            </button>
-          `).join("") || `<span class="text-[10px] text-muted-custom italic">Kernteam</span>`;
+        ? p.assignee_objects.map(a =>
+            renderAgentIdentityBadge(
+              a.id,
+              a.person_name || a.id,
+              a.avatar_url,
+              `event.stopPropagation(); openAgentChat('${escapeHtml(a.id)}', '${escapeHtml(a.person_name || a.id)}')`
+            )
+          ).join("")
+        : (p.assignees || []).map(a =>
+            renderAgentIdentityBadge(
+              a,
+              a,
+              null,
+              `event.stopPropagation(); openAgentChat('${escapeHtml(a)}', '${escapeHtml(a)}')`
+            )
+          ).join("") || `<span class="text-[10px] text-muted-custom italic">Kernteam</span>`;
 
       const files = p.files_summary || { zwischenberichte: 0, medien: 0, endprodukte: 0 };
       const totalFiles = (files.zwischenberichte || 0) + (files.medien || 0) + (files.endprodukte || 0);
@@ -166,22 +165,33 @@
            </div>`
         : ``;
 
+      const taskNum = p.task_number || formatTaskNumber(p.created_at) || String(p.seq_number || '');
+      const dateStr = formatOpDate(p.created_at, false);
+      const leadDisplay = p.lead_agent_display || p.lead_agent || '—';
+
       return `
         <div onclick="openProjectDetailModal('${escapeHtml(p.id)}')"
              class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5 flex flex-col justify-between shadow-xs hover:border-sky-500/40 hover:shadow-sm transition group cursor-pointer"
              title="Projekt-Detail öffnen">
           <div>
-            <div class="flex items-start justify-between gap-2.5 mb-2.5">
-              <div class="min-w-0 flex-1">
-                <h3 class="text-sm sm:text-base font-bold text-[var(--foreground)] tracking-tight truncate group-hover:text-sky-500 transition" title="${escapeHtml(p.title)}">
-                  ${escapeHtml(p.title)}
-                </h3>
-                <div class="text-[10px] font-mono text-muted-custom truncate mt-0.5">
-                  📁 ${escapeHtml(p.folder || p.id)}
-                </div>
+            <div class="space-y-1.5 mb-2.5">
+              <!-- Reihe 1: Schlichte Tasknummer (YYYYMMDDHHMMSS) & US-Datum -->
+              <div class="flex items-center justify-between gap-2 text-[10.5px] font-mono text-muted-custom">
+                <span>${escapeHtml(taskNum)}</span>
+                <span>${escapeHtml(dateStr)}</span>
               </div>
-              <div class="shrink-0">
-                ${statusBadge}
+              <!-- Reihe 2: Dick & schwarz die Taskbezeichnung -->
+              <h3 class="text-sm sm:text-base font-black text-zinc-950 dark:text-zinc-50 tracking-tight truncate group-hover:text-sky-500 transition" title="${escapeHtml(p.title)}">
+                ${escapeHtml(p.title)}
+              </h3>
+              <!-- Reihe 3: 2 Spalten: links Lead/Auftraggeber, rechts Status -->
+              <div class="flex items-center justify-between gap-2 pt-0.5">
+                <span class="text-[11px] font-mono text-muted-custom truncate min-w-0" title="${escapeHtml(leadDisplay)}">
+                  Lead: <strong class="text-[var(--foreground)] font-semibold">${escapeHtml(leadDisplay)}</strong>
+                </span>
+                <div class="shrink-0">
+                  ${statusBadge}
+                </div>
               </div>
             </div>
 
@@ -230,16 +240,95 @@
   // Übersicht editierbar -> PUT /api/operations/projects/{id}/meta (Sidecar projects_meta.json).
   // ==============================
 
+  function parseOpDate(val) {
+    if (val === null || val === undefined || val === "") return null;
+    const s = String(val).trim();
+    if (/^\d+(\.\d+)?$/.test(s)) {
+      let num = Number(s);
+      if (num > 0 && num < 1e12) num *= 1000;
+      const d = new Date(num);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  function formatOpDate(iso, withTime) {
+    const d = parseOpDate(iso);
+    if (!d) return "";
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    if (!withTime) return `${mm}/${dd}/${yyyy}`;
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${mm}/${dd}/${yyyy} ${hh}:${min}`;
+  }
+
+  function formatTaskNumber(iso) {
+    const d = parseOpDate(iso);
+    if (!d) return "";
+    return (
+      String(d.getFullYear()) +
+      String(d.getMonth() + 1).padStart(2, "0") +
+      String(d.getDate()).padStart(2, "0") +
+      String(d.getHours()).padStart(2, "0") +
+      String(d.getMinutes()).padStart(2, "0") +
+      String(d.getSeconds()).padStart(2, "0")
+    );
+  }
+
+  function renderAgentIdentityBadge(id, name, avatarUrl, onClickExpr) {
+    const safeId = escapeHtml(id || "unassigned");
+    const safeName = escapeHtml(name || id || "Unassigned");
+    const fallbackSrc = "/static/avatars/hermes_default_avatar.png";
+    const svgFallback = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23334155'/%3E%3Ccircle cx='16' cy='12' r='5' fill='%23cbd5e1'/%3E%3Cpath d='M6 27c1.8-5 6-7 10-7s8.2 2 10 7' fill='%23cbd5e1'/%3E%3C/svg%3E";
+    const src = escapeHtml(avatarUrl || fallbackSrc);
+    return `
+      <button type="button"
+              onclick="${onClickExpr}"
+              class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-[var(--secondary)] hover:bg-indigo-500/10 text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-500/40 transition cursor-pointer text-left shrink-0"
+              title="Direktchat mit ${safeName} öffnen">
+        <img src="${src}" onerror="if(this.dataset.fb){this.onerror=null;this.src='${svgFallback}';}else{this.dataset.fb='1';this.src='${fallbackSrc}';}" alt="${safeName}"
+             class="w-7 h-7 rounded-full object-cover border border-[var(--border)] bg-[var(--card)] shrink-0">
+        <div class="min-w-0 leading-tight">
+          <div class="text-[11px] font-bold text-[var(--foreground)] truncate max-w-[160px]">${safeName}</div>
+          <div class="text-[9.5px] font-mono text-muted-custom truncate max-w-[160px]">${safeId}</div>
+        </div>
+      </button>
+    `;
+  }
+
+  function renderFormattedResult(rawText) {
+    const txt = (rawText || "").trim();
+    if (!txt) return "";
+    if (window.marked && typeof window.marked.parse === "function") {
+      try {
+        return `<div class="prose prose-xs dark:prose-invert max-w-none text-xs leading-relaxed">${window.marked.parse(txt)}</div>`;
+      } catch (e) { /* fallback */ }
+    }
+    return `<div class="text-xs text-[var(--foreground)] leading-relaxed whitespace-pre-wrap font-sans">${escapeHtml(txt)}</div>`;
+  }
+
+  function getSubtasksTabLabel() {
+    if (typeof window.t === "function") {
+      return window.t("view.operations.subtasks_tab", "Teilaufgaben");
+    }
+    const lang = (localStorage.getItem("archon_lang") || document.documentElement.lang || "de").toLowerCase();
+    return lang.startsWith("en") ? "Sub-Tasks" : "Teilaufgaben";
+  }
+
   function ensureProjectModal() {
     if (projectModalEl) return projectModalEl;
     projectModalEl = document.createElement("div");
     projectModalEl.id = "project-detail-modal";
-    projectModalEl.className = "fixed inset-0 z-[70] hidden items-center justify-center p-4 bg-black/40 backdrop-blur-sm";
+    projectModalEl.className = "fixed inset-0 z-[99999] hidden items-center justify-center p-4 bg-black/50 backdrop-blur-md";
     projectModalEl.innerHTML = `
-      <div class="relative w-full max-w-3xl max-h-[85vh] rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-2xl flex flex-col overflow-hidden">
+      <div class="relative w-[96vw] max-w-6xl h-[88vh] max-h-[88vh] rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl flex flex-col overflow-hidden">
         <div class="flex items-start justify-between gap-3 p-5 border-b border-[var(--border)] shrink-0">
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 mb-1">
+              <span id="pdm-seq-badge" class="hidden px-1.5 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] text-[10px] font-mono font-bold text-[var(--muted-foreground)] shrink-0"></span>
               <h2 id="pdm-title" class="text-lg font-bold text-[var(--foreground)] tracking-tight truncate">Projekt</h2>
               <span id="pdm-status-badge" class="shrink-0"></span>
             </div>
@@ -249,10 +338,12 @@
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
-        <div class="flex items-center gap-1 px-5 pt-3 border-b border-[var(--border)] shrink-0" id="pdm-tabs">
-          <button onclick="switchProjectModalTab('overview')" data-tab="overview" class="pdm-tab px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-muted-custom hover:text-[var(--foreground)] transition cursor-pointer">Übersicht</button>
-          <button onclick="switchProjectModalTab('tasks')" data-tab="tasks" class="pdm-tab px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-muted-custom hover:text-[var(--foreground)] transition cursor-pointer">Aufgaben</button>
-          <button onclick="switchProjectModalTab('files')" data-tab="files" class="pdm-tab px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-muted-custom hover:text-[var(--foreground)] transition cursor-pointer">Dateien</button>
+        <div class="flex items-center gap-1 px-5 pt-3 border-b border-[var(--border)] shrink-0 overflow-x-auto" id="pdm-tabs">
+          <button onclick="switchProjectModalTab('overview')" data-tab="overview" class="pdm-tab px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-muted-custom hover:text-[var(--foreground)] transition cursor-pointer whitespace-nowrap">Übersicht</button>
+          <button onclick="switchProjectModalTab('tasks')" data-tab="tasks" id="pdm-tab-btn-tasks" class="pdm-tab px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-muted-custom hover:text-[var(--foreground)] transition cursor-pointer whitespace-nowrap">${escapeHtml(getSubtasksTabLabel())}</button>
+          <button onclick="switchProjectModalTab('tools')" data-tab="tools" class="pdm-tab px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-muted-custom hover:text-[var(--foreground)] transition cursor-pointer whitespace-nowrap">Tools</button>
+          <button onclick="switchProjectModalTab('files')" data-tab="files" class="pdm-tab px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-muted-custom hover:text-[var(--foreground)] transition cursor-pointer whitespace-nowrap">Dateien</button>
+          <button onclick="switchProjectModalTab('results')" data-tab="results" class="pdm-tab px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-muted-custom hover:text-[var(--foreground)] transition cursor-pointer whitespace-nowrap">Ergebnisse</button>
         </div>
         <div id="pdm-body" class="flex-1 overflow-y-auto custom-scrollbar p-5"></div>
       </div>
@@ -291,8 +382,21 @@
     modal.classList.remove("hidden");
     modal.classList.add("flex");
 
+    const seqEl = document.getElementById("pdm-seq-badge");
+    const taskNum = p.task_number || formatTaskNumber(p.created_at) || "";
+    if (seqEl) {
+      seqEl.classList.add("hidden");
+    }
+    const tasksBtn = document.getElementById("pdm-tab-btn-tasks");
+    if (tasksBtn) tasksBtn.textContent = getSubtasksTabLabel();
+    const dtStr = formatOpDate(p.created_at, false);
     document.getElementById("pdm-title").textContent = p.title || p.id;
-    document.getElementById("pdm-folder").textContent = "📁 " + (p.folder || p.id) + "  ·  Lead: " + (p.lead_agent_display || p.lead_agent || "—");
+    const headerMetaParts = [
+      taskNum,
+      dtStr,
+      "Lead: " + (p.lead_agent_display || p.lead_agent || "—"),
+    ].filter(Boolean);
+    document.getElementById("pdm-folder").textContent = headerMetaParts.join(" | ");
     updateProjectModalStatusBadge(p.status);
 
     await fetchProjectMeta(projectId);
@@ -331,6 +435,10 @@
       renderProjectOverviewTab(body, p);
     } else if (projectModalTab === "tasks") {
       renderProjectTasksTab(body, p);
+    } else if (projectModalTab === "tools") {
+      renderProjectToolsTab(body, p);
+    } else if (projectModalTab === "results") {
+      renderProjectResultsTab(body, p);
     } else {
       renderProjectFilesTab(body, p);
     }
@@ -349,16 +457,14 @@
     const progressColor = status === "completed" ? "bg-emerald-500" : (p.progress > 50 ? "bg-sky-500" : "bg-amber-500");
 
     const teamChips = (p.assignee_objects && p.assignee_objects.length > 0)
-      ? p.assignee_objects.map(a => `
-          <button type="button"
-                  onclick="openAgentChat('${escapeHtml(a.id)}', '${escapeHtml(a.person_name || a.id)}')"
-                  class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium bg-[var(--secondary)] hover:bg-indigo-500/15 text-[var(--foreground)] border border-[var(--border)] hover:border-indigo-500/50 transition cursor-pointer group/chip"
-                  title="Direktchat mit ${escapeHtml(a.person_name || a.id)} öffnen">
-            <i data-lucide="message-square" class="w-3 h-3 text-indigo-500 group-hover/chip:scale-110 transition-transform"></i>
-            <span class="font-bold">${escapeHtml(a.person_name || a.id)}</span>
-            ${a.role ? `<span class="text-[9.5px] text-muted-custom truncate max-w-[160px] font-normal">${escapeHtml(', ' + a.role.split('(')[0].trim())}</span>` : ''}
-          </button>
-        `).join("")
+      ? p.assignee_objects.map(a =>
+          renderAgentIdentityBadge(
+            a.id,
+            a.person_name || a.id,
+            a.avatar_url,
+            `openAgentChat('${escapeHtml(a.id)}', '${escapeHtml(a.person_name || a.id)}')`
+          )
+        ).join("")
       : `<span class="text-[11px] text-muted-custom italic">Kernteam</span>`;
 
     const leadOptions = cadre.map(c =>
@@ -376,6 +482,21 @@
           <label class="text-[11px] font-mono text-muted-custom mb-1 block">Ziel</label>
           <textarea id="pdm-goal" rows="2" placeholder="Konkretes Ziel / Definition of Done"
             class="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)]/50 px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-muted-custom/60 focus:outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/30 resize-y font-mono">${escapeHtml(goal)}</textarea>
+        </div>
+        <div>
+          <label class="text-[11px] font-mono text-muted-custom mb-1 block">Speicherort (Obsidian-Ordner)</label>
+          <button type="button" onclick="openProjectObsidianFolder('${escapeHtml(p.folder || ("01_PROJEKTE/" + p.id))}')"
+            class="w-full flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/50 hover:bg-[var(--secondary)] hover:border-amber-500/50 px-3 py-2 text-xs font-mono text-[var(--foreground)] transition cursor-pointer text-left"
+            title="Obsidian-Ordner öffnen">
+            <span class="flex items-center gap-2 min-w-0">
+              <i data-lucide="folder-open" class="w-4 h-4 text-amber-500 shrink-0"></i>
+              <span class="break-all">${escapeHtml(p.folder || ("01_PROJEKTE/" + p.id))}</span>
+            </span>
+            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold shrink-0 flex items-center gap-1">
+              <span>Obsidian öffnen</span>
+              <i data-lucide="external-link" class="w-3 h-3"></i>
+            </span>
+          </button>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -457,48 +578,172 @@
     }
   };
 
-  // --- Tab: Aufgaben (Liste, direkt anklickbar -> Kanban-Task-Detail) ---
+  // --- Tab: Teilaufgaben (Liste mit Avatar/Name/ID, Datum, Token, Modell & Kosten) ---
   function renderProjectTasksTab(body, p) {
     const subtasks = p.subtasks || [];
     if (subtasks.length === 0) {
       body.innerHTML = `
         <div class="py-12 text-center text-muted-custom">
           <i data-lucide="list-checks" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-          <p class="text-xs font-mono">Keine Aufgaben für dieses Projekt verknüpft.</p>
-          <p class="text-[10px] font-mono opacity-70 mt-1">Aufgaben werden im Operations-Kanban gepflegt.</p>
+          <p class="text-xs font-mono">Keine Teilaufgaben für dieses Projekt verknüpft.</p>
+          <p class="text-[10px] font-mono opacity-70 mt-1">Teilaufgaben werden im Operations-Kanban gepflegt.</p>
         </div>`;
       return;
     }
+    const totalTokens = Number(p.total_tokens || 0);
+    const totalCost = Number(p.total_cost_usd || 0);
     body.innerHTML = `
-      <div class="flex items-center justify-between text-[11px] font-mono text-muted-custom mb-3">
+      <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-muted-custom mb-3 pb-2 border-b border-[var(--border)]">
         <span>${p.tasks_completed || 0} von ${p.tasks_total || 0} erledigt</span>
-        <span class="opacity-70">Klick auf eine Aufgabe öffnet den Kanban-Detail-Dialog</span>
+        <div class="flex items-center gap-3">
+          <span>Gesamt: <strong class="text-[var(--foreground)]">${totalTokens.toLocaleString('de-DE')} Tokens</strong></span>
+          <span>Kosten: <strong class="text-emerald-600 dark:text-emerald-400">$${totalCost.toFixed(4)}</strong></span>
+        </div>
       </div>
-      <div class="space-y-1.5">
-        ${subtasks.map(st => `
+      <div class="space-y-2">
+        ${subtasks.map(st => {
+          const stTokens = Number(st.tokens_total || 0);
+          const stCost = Number(st.cost_usd || 0);
+          const stModel = st.model || "—";
+          const stDate = formatOpDate(st.created_at, true);
+          const agentBadge = renderAgentIdentityBadge(
+            st.assignee || "unassigned",
+            st.assignee_person_name || st.assignee || "Unassigned",
+            st.assignee_avatar,
+            `event.stopPropagation(); openAgentChat('${escapeHtml(st.assignee || '')}', '${escapeHtml(st.assignee_person_name || st.assignee || '')}')`
+          );
+          return `
           <div onclick="openTaskDetailModal('${escapeHtml(st.id)}')"
-               class="flex items-start justify-between gap-2 p-2.5 rounded-lg bg-[var(--secondary)]/40 border border-[var(--border)]/50 hover:border-sky-500/40 hover:bg-[var(--secondary)]/70 transition cursor-pointer">
-            <div class="min-w-0 flex-1">
-              <div class="font-medium text-[12px] text-[var(--foreground)]">${escapeHtml(st.title || st.id)}</div>
-              <button type="button"
-                      onclick="event.stopPropagation(); openAgentChat('${escapeHtml(st.assignee || '')}', '${escapeHtml(st.assignee_person_name || st.assignee || '')}')"
-                      class="text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline cursor-pointer inline-flex items-center gap-1 mt-0.5 text-left font-mono"
-                      title="Direktchat mit Agent öffnen">
-                <i data-lucide="user" class="w-2.5 h-2.5"></i>
-                <span class="font-semibold">${escapeHtml(st.assignee_person_name || st.assignee || 'unassigned')}</span>
-                ${st.assignee_title ? `<span class="text-[9px] text-muted-custom opacity-80 font-normal">${escapeHtml('(' + st.assignee_title.split('(')[0].trim() + ')')}</span>` : ''}
-              </button>
+               class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-[var(--secondary)]/35 border border-[var(--border)]/70 hover:border-sky-500/40 hover:bg-[var(--secondary)]/65 transition cursor-pointer">
+            <div class="min-w-0 flex-1 space-y-1.5">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-semibold text-[12.5px] text-[var(--foreground)]">${escapeHtml(st.title || st.id)}</span>
+                ${stDate ? `<span class="text-[10px] font-mono text-muted-custom">· ${escapeHtml(stDate)}</span>` : ''}
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                ${agentBadge}
+              </div>
             </div>
-            <span class="px-1.5 py-0.5 rounded text-[9px] uppercase font-bold shrink-0 ${st.status === 'done' || st.status === 'review' || st.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}">
-              ${escapeHtml(st.status || 'todo')}
-            </span>
-          </div>
-        `).join("")}
+            <div class="flex sm:flex-col items-end justify-between sm:justify-center gap-1.5 shrink-0 text-right font-mono">
+              <span class="px-1.5 py-0.5 rounded text-[9px] uppercase font-bold ${st.status === 'done' || st.status === 'review' || st.status === 'completed' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-amber-500/20 text-amber-500'}">
+                ${escapeHtml(st.status || 'todo')}
+              </span>
+              <div class="text-[10px] text-muted-custom space-y-0.5">
+                <div class="truncate max-w-[190px]" title="${escapeHtml(stModel)}">🤖 ${escapeHtml(stModel)}</div>
+                <div>${stTokens.toLocaleString('de-DE')} Tok · <span class="text-emerald-600 dark:text-emerald-400 font-bold">$${stCost.toFixed(4)}</span></div>
+              </div>
+            </div>
+          </div>`;
+        }).join("")}
       </div>
     `;
   }
 
-  // --- Tab: Dateien (ersetzt den alten alert()-Placeholder) ---
+  // --- Tab: Tools (Freigegebene & eingesetzte Tools + Token-Umfang) ---
+  function renderProjectToolsTab(body, p) {
+    const approved = p.approved_tools || [];
+    const used = p.used_tools || [];
+    const subtasks = p.subtasks || [];
+    const perToolStats = {};
+    subtasks.forEach(st => {
+      const tList = st.tools_used || [];
+      const perToolTok = tList.length > 0 ? Math.round((st.tokens_total || 0) / tList.length) : 0;
+      tList.forEach(tName => {
+        if (!perToolStats[tName]) perToolStats[tName] = { calls: 0, tokens: 0 };
+        perToolStats[tName].calls += Math.max(1, Number(st.tool_call_count || 1));
+        perToolStats[tName].tokens += perToolTok;
+      });
+    });
+
+    body.innerHTML = `
+      <div class="space-y-4">
+        <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2">
+          <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">Eingesetzte Tools &amp; Token-Umfang</div>
+          ${used.length === 0
+            ? `<p class="text-xs font-mono text-muted-custom italic">Bisher keine Tool-Aufrufe für die Teilaufgaben protokolliert.</p>`
+            : `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                ${used.map(t => {
+                  const st = perToolStats[t] || { calls: 0, tokens: 0 };
+                  return `
+                    <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs font-mono">
+                      <span class="font-bold text-[var(--foreground)] truncate">${escapeHtml(t)}</span>
+                      <span class="text-[10.5px] text-muted-custom shrink-0">${st.tokens.toLocaleString('de-DE')} Tok</span>
+                    </div>`;
+                }).join("")}
+               </div>`}
+        </div>
+        <div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2">
+          <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--foreground)]">Freigegebene Profil-Tools (${approved.length})</div>
+          ${approved.length === 0
+            ? `<p class="text-xs font-mono text-muted-custom italic">Keine expliziten Tool-Freigaben im Profil hinterlegt.</p>`
+            : `<div class="flex flex-wrap gap-1.5">
+                ${approved.map(t => `<span class="px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--card)] text-[11px] font-mono text-[var(--foreground)]">${escapeHtml(t)}</span>`).join("")}
+               </div>`}
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Tab: Ergebnisse (Formatierte Ergebnisse pro Teilaufgabe + Endprodukte direkt gerendert) ---
+  function renderProjectResultsTab(body, p) {
+    const subtasks = (p.subtasks || []).filter(st => (st.result || "").trim().length > 0);
+    const hasPrimary = Boolean(p.primary_document);
+    if (subtasks.length === 0 && !hasPrimary) {
+      body.innerHTML = `
+        <div class="py-12 text-center text-muted-custom">
+          <i data-lucide="file-check-2" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+          <p class="text-xs font-mono">Für diese Aufgabe liegen noch keine Ergebnisse vor.</p>
+        </div>`;
+      return;
+    }
+    body.innerHTML = `
+      <div class="space-y-4">
+        ${hasPrimary ? `
+          <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 overflow-hidden">
+            <div class="p-3.5 flex items-center justify-between gap-3 border-b border-emerald-500/20">
+              <div class="min-w-0">
+                <div class="text-[10px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400">Haupt-Endprodukt (Showroom)</div>
+                <div class="text-xs font-mono text-[var(--foreground)] truncate">${escapeHtml(p.primary_document)}</div>
+              </div>
+              <button type="button" onclick="openProjectHtmlReport('${escapeHtml(p.primary_document)}', '${escapeHtml(p.title)}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shrink-0 cursor-pointer">
+                HTML / Vollansicht öffnen
+              </button>
+            </div>
+            <div id="pdm-primary-result-preview" class="p-4 bg-[var(--card)] max-h-[420px] overflow-y-auto custom-scrollbar">
+              <div class="text-xs font-mono text-muted-custom">Lade formatiertes Ergebnis...</div>
+            </div>
+          </div>` : ''}
+        ${subtasks.map(st => `
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2.5">
+            <div class="flex items-center justify-between gap-2 pb-2 border-b border-[var(--border)]">
+              <div class="font-bold text-xs text-[var(--foreground)] truncate">${escapeHtml(st.title || st.id)}</div>
+              <span class="text-[10px] font-mono text-muted-custom shrink-0">${escapeHtml(formatOpDate(st.completed_at || st.created_at, true))}</span>
+            </div>
+            ${renderFormattedResult(st.result)}
+          </div>
+        `).join("")}
+      </div>
+    `;
+    if (hasPrimary) {
+      const prevEl = document.getElementById("pdm-primary-result-preview");
+      const rawUrl = "/api/operations/raw?path=" + encodeURIComponent("/opt/data/obsidian/" + p.primary_document);
+      fetch(rawUrl)
+        .then(r => r.ok ? r.text() : Promise.reject(new Error("HTTP " + r.status)))
+        .then(txt => {
+          if (!prevEl) return;
+          if (p.primary_document.toLowerCase().endsWith(".html") || p.primary_document.toLowerCase().endsWith(".htm")) {
+            prevEl.innerHTML = `<iframe class="w-full h-[360px] rounded-lg border border-[var(--border)] bg-white" sandbox="allow-same-origin" srcdoc="${escapeHtml(txt)}"></iframe>`;
+          } else {
+            prevEl.innerHTML = renderFormattedResult(txt);
+          }
+        })
+        .catch(() => {
+          if (prevEl) prevEl.innerHTML = `<div class="text-xs font-mono text-muted-custom italic">Vorschau nicht verfügbar — bitte über den Button öffnen.</div>`;
+        });
+    }
+  }
+
+  // --- Tab: Dateien (leerer Zustand ohne 404-Fehler) ---
   function renderProjectFilesTab(body, p) {
     body.innerHTML = `
       <div class="py-12 flex flex-col items-center justify-center text-muted-custom">
@@ -513,7 +758,7 @@
           body.innerHTML = `
             <div class="py-12 text-center text-muted-custom">
               <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-              <p class="text-xs font-mono">Keine Dateien im Projektordner <span class="text-[var(--foreground)]">${escapeHtml(data.folder || "")}</span>.</p>
+              <p class="text-xs font-mono">Keine Dateien für diese Aufgabe verwendet.</p>
             </div>`;
         } else {
           const byDir = {};
@@ -560,6 +805,15 @@
       closeProjectDetailModal();
     }
   });
+
+  window.openProjectObsidianFolder = function(relFolder) {
+    const clean = String(relFolder || "").replace(/^\/+/, "");
+    const vaultBase = localStorage.getItem("archon_obsidian_vault_path") || "";
+    const uri = vaultBase
+      ? `obsidian://open?path=${encodeURIComponent(vaultBase.replace(/\/+$/, "") + "/" + clean)}`
+      : `obsidian://open?file=${encodeURIComponent(clean)}`;
+    window.location.href = uri;
+  };
 
   window.openProjectHtmlReport = function(relPath, title) {
     const rawUrl = "/api/operations/raw?path=" + encodeURIComponent("/opt/data/obsidian/" + relPath);

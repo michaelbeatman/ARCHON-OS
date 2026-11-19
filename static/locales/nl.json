@@ -22,7 +22,7 @@
     "css_studio": "CSS Live Studio",
     "research": "Onderzoekslaboratorium",
     "corporate": "Bedrijf & Klant",
-    "approval_policies": "Goedkeuringsbeleid",
+    "approval_policies": "Autonomie & goedkeuringen",
     "automation": "Workflow-Engine",
     "dashboard": "Dashboard",
     "dashboard_desc": "Missiecontrole & Cockpit",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "Offertes, pipeline & SLA",
     "finance_desc": "Belegen, OCR & incassowezien",
     "corporate_desc": "Basgegevens & sjablonen",
-    "approval_policies_desc": "Drempels & goedkeuringen",
+    "approval_policies_desc": "Drempels, regels & modules",
     "guardian_desc": "Tarief- & budgetwacht",
     "logs_desc": "Live-audit",
     "palette_title": "Commando-palet & snelle zoekopdracht (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "Economie & ERP",
       "infrastructure": "Infrastructuur & governance",
       "economy_alpha_title": "Deze sectie is nog in ontwikkeling (Alpha)"
-    }
+    },
+    "plugins_desc": "Modules, Router & Guardrails",
+    "autonomy": "Autonomiemodules",
+    "autonomy_desc": "36 subsystemen"
   },
   "common": {
     "save": "Opslaan",
@@ -192,7 +195,9 @@
       "tab_update": "SYSTEMUPDATE",
       "tab_users": "GEBRUIKERS & ROLLEN",
       "onboarding_btn": "Installatiewizard",
-      "onboarding_title": "Installatiewizard opnieuw starten"
+      "onboarding_title": "Installatiewizard opnieuw starten",
+      "tab_guardrails_router": "ROUTER & GUARDRAILS",
+      "tab_corporate": "CORPORATE & MANDANT"
     },
     "keys": {
       "close_btn": "Sluiten",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256-hashketen: VERPLICHT",
       "sha256_mandatory_title": "GoBD-auditvereiste: kan niet worden uitgeschakeld",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "Help-/Support-agent (Profiel)"
     },
     "update": {
       "active_commit": "Actieve commit",
@@ -2563,7 +2569,9 @@
       "tab_planning": "Planning & taken",
       "tab_bridges": "Bruggen & interfaces",
       "tab_memory": "Geheugen & kennis",
-      "tab_tools": "Tools & uitvoering"
+      "tab_tools": "Tools & uitvoering",
+      "mode_catalog": "Plugin-catalogus",
+      "mode_autonomy": "Autonomie-modules (36)"
     },
     "research": {
       "title": "Research Lab · Laboratorium",
@@ -2927,7 +2935,9 @@
       "reject_title": "Goedkeuring weigeren",
       "ph_reject_reason": "Reden voor weigering invoeren...",
       "cancel": "Annuleren",
-      "reject_confirm": "Onherroepelijk weigeren"
+      "reject_confirm": "Onherroepelijk weigeren",
+      "tab_autonomy": "Autonomie",
+      "tab_autonomy_title": "36 autonomie-, veerkracht- & enterprise-modules"
     },
     "corporate": {
       "title": "Corporate & mandanten",
@@ -3251,7 +3261,11 @@
       "comm_filter_title": "Deelnemersfilter",
       "title_comm_refresh": "Feed vernieuwen",
       "ph_comm_input": "Funkspruch of instructie naar het kanaal sturen (Enter)...",
-      "action_send": "Versturen"
+      "action_send": "Versturen",
+      "mode_board": "Bord",
+      "mode_gantt": "Gantt",
+      "mode_graph": "Graaf",
+      "subtasks_tab": "Subtaken"
     },
     "operations_erp": {
       "title": "Processen & contracten — Offertes & opdrachten",
@@ -3940,7 +3954,8 @@
       "due_title": "Vervaldatum",
       "tags_placeholder": "Tags, gescheiden door komma's",
       "comment_placeholder": "Bericht of instructie voor de agent schrijven...",
-      "start_now": "Nu starten"
+      "start_now": "Nu starten",
+      "back_to_parent": "Bovenliggende taak"
     },
     "tasks": {
       "backlog": "📥 Backlog",

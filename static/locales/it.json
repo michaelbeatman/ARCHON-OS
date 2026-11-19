@@ -22,7 +22,7 @@
     "css_studio": "CSS Live Studio",
     "research": "Laboratorio di Ricerca",
     "corporate": "Corporate & Mandante",
-    "approval_policies": "Politiche di Approvazione",
+    "approval_policies": "Autonomia e approvazioni",
     "automation": "Workflow Engine",
     "dashboard": "Dashboard",
     "dashboard_desc": "Mission Control & Cockpit",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "Offerte, pipeline & SLA",
     "finance_desc": "Documenti, OCR & solleciti",
     "corporate_desc": "Dati anagrafici & modelli",
-    "approval_policies_desc": "Soglie & approvazioni",
+    "approval_policies_desc": "Soglie, regole e moduli",
     "guardian_desc": "Guardiano rate & budget",
     "logs_desc": "Audit live",
     "palette_title": "Tavolozza comandi & ricerca rapida (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "Economia & ERP",
       "infrastructure": "Infrastruttura & governance",
       "economy_alpha_title": "Questa sezione è ancora in costruzione (Alpha)"
-    }
+    },
+    "plugins_desc": "Moduli, Router e Guardrails",
+    "autonomy": "Moduli di autonomia",
+    "autonomy_desc": "36 sottosistemi"
   },
   "common": {
     "save": "Salva",
@@ -192,7 +195,9 @@
       "tab_update": "AGGIORNAMENTO SISTEMA",
       "tab_users": "UTENTI E RUOLI",
       "onboarding_btn": "Procedura guidata",
-      "onboarding_title": "Riavvia procedura guidata"
+      "onboarding_title": "Riavvia procedura guidata",
+      "tab_guardrails_router": "ROUTER E GUARDRAILS",
+      "tab_corporate": "CORPORATE & MANDANTE"
     },
     "keys": {
       "close_btn": "Chiudi",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "Agente di aiuto/supporto (Profilo)"
     },
     "update": {
       "active_commit": "Commit attivo",
@@ -2563,7 +2569,9 @@
       "tab_planning": "Pianificazione & Task",
       "tab_bridges": "Bridge & Interfacce",
       "tab_memory": "Memoria & Conoscenza",
-      "tab_tools": "Strumenti & Esecuzione"
+      "tab_tools": "Strumenti & Esecuzione",
+      "mode_catalog": "Catalogo plugin",
+      "mode_autonomy": "Moduli di autonomia (36)"
     },
     "research": {
       "title": "Research Lab · Laboratorio",
@@ -2927,7 +2935,9 @@
       "reject_title": "Rifiuta approvazione",
       "ph_reject_reason": "Inserisci motivo del rifiuto...",
       "cancel": "Annulla",
-      "reject_confirm": "Rifiuta irrevocabilmente"
+      "reject_confirm": "Rifiuta irrevocabilmente",
+      "tab_autonomy": "Autonomia",
+      "tab_autonomy_title": "36 moduli di autonomia, resilienza e impresa"
     },
     "corporate": {
       "title": "Corporate e mandanti",
@@ -3251,7 +3261,11 @@
       "comm_filter_title": "Filtro partecipanti",
       "title_comm_refresh": "Aggiorna feed",
       "ph_comm_input": "Invia messaggio radio o istruzione al canale (Invio)...",
-      "action_send": "Invia"
+      "action_send": "Invia",
+      "mode_board": "Bacheca",
+      "mode_gantt": "Gantt",
+      "mode_graph": "Grafo",
+      "subtasks_tab": "Sotto-attività"
     },
     "operations_erp": {
       "title": "Operazioni & Contratti — Offerte & Ordini",
@@ -3938,7 +3952,8 @@
       "due_title": "Data di scadenza",
       "tags_placeholder": "Tag, separati da virgola",
       "comment_placeholder": "Scrivi un messaggio o un'istruzione per l'agente...",
-      "start_now": "Avvia ora"
+      "start_now": "Avvia ora",
+      "back_to_parent": "Attività principale"
     },
     "tasks": {
       "backlog": "📥 Backlog",

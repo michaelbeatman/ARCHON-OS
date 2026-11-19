@@ -22,7 +22,7 @@
     "css_studio": "CSSライブスタジオ",
     "research": "リサーチラボ",
     "corporate": "コーポレート＆エンティティ",
-    "approval_policies": "承認ポリシー",
+    "approval_policies": "自律・承認ポリシー",
     "automation": "ワークフローエンジン",
     "dashboard": "ダッシュボード",
     "dashboard_desc": "Mission Control とコックピット",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "見積、パイプライン、SLA",
     "finance_desc": "証憑、OCR、督促",
     "corporate_desc": "マスターデータとテンプレート",
-    "approval_policies_desc": "しきい値と承認",
+    "approval_policies_desc": "しきい値・ルール・モジュール",
     "guardian_desc": "レートと予算のガード",
     "logs_desc": "ライブ監査",
     "palette_title": "コマンドパレットとクイック検索 (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "ビジネスと ERP",
       "infrastructure": "インフラとガバナンス",
       "economy_alpha_title": "このセクションはまだ構築中です（アルファ）"
-    }
+    },
+    "plugins_desc": "モジュール・ルーター・ガードレール",
+    "autonomy": "オートノミー・モジュール",
+    "autonomy_desc": "36サブシステム"
   },
   "common": {
     "save": "保存",
@@ -192,7 +195,9 @@
       "tab_update": "システムアップデート",
       "tab_users": "ユーザーとロール",
       "onboarding_btn": "セットアップウィザード",
-      "onboarding_title": "セットアップウィザードを再起動"
+      "onboarding_title": "セットアップウィザードを再起動",
+      "tab_guardrails_router": "ルーター・ガードレール",
+      "tab_corporate": "法人・テナント"
     },
     "keys": {
       "close_btn": "閉じる",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "ヘルプ/サポートエージェント (プロフィール)"
     },
     "update": {
       "active_commit": "有効なコミット",
@@ -2559,7 +2565,9 @@
       "tab_planning": "計画とタスク",
       "tab_bridges": "ブリッジとインターフェース",
       "tab_memory": "記憶と知識",
-      "tab_tools": "ツールと実行"
+      "tab_tools": "ツールと実行",
+      "mode_catalog": "プラグインカタログ",
+      "mode_autonomy": "自律モジュール (36)"
     },
     "research": {
       "title": "Research Lab · ラボ",
@@ -2923,7 +2931,9 @@
       "reject_title": "承認を却下",
       "ph_reject_reason": "却下理由を入力...",
       "cancel": "キャンセル",
-      "reject_confirm": "完全に却下"
+      "reject_confirm": "完全に却下",
+      "tab_autonomy": "自律",
+      "tab_autonomy_title": "36個の自律・レジリエンス・エンタープライズモジュール"
     },
     "corporate": {
       "title": "コーポレート＆法人",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "参加者フィルター",
       "title_comm_refresh": "フィードを更新",
       "ph_comm_input": "チャネルにメッセージまたは指示を送信（Enter）...",
-      "action_send": "送信"
+      "action_send": "送信",
+      "mode_board": "ボード",
+      "mode_gantt": "ガント",
+      "mode_graph": "グラフ",
+      "subtasks_tab": "サブタスク"
     },
     "operations_erp": {
       "title": "案件・契約 — 見積と受注",
@@ -3743,7 +3757,8 @@
       "due_title": "期限日",
       "tags_placeholder": "タグ（カンマ区切り）",
       "comment_placeholder": "エージェントへのメッセージまたは指示を入力...",
-      "start_now": "今すぐ開始"
+      "start_now": "今すぐ開始",
+      "back_to_parent": "親タスク"
     },
     "roles": {
       "title": "AI ロール＆プロンプトを管理",

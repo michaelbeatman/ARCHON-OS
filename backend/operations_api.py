@@ -1608,7 +1608,7 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
 
 
 def _get_agent_cadre_map():
-    """Liest Agenten-Klarnamen und Rollen aus config/org_hierarchy.json."""
+    """Liest Agenten-Klarnamen, Rollen, Avatare, Modelle und Tools aus org_hierarchy.json + Hermes-Profilen."""
     import json
     from pathlib import Path
     mapping = {}
@@ -1628,11 +1628,88 @@ def _get_agent_cadre_map():
                     "id": nid,
                     "person_name": p_name or nid,
                     "role": short_role,
-                    "display": display
+                    "display": display,
+                    "avatar_url": "/static/avatars/hermes_default_avatar.png",
+                    "tools": [],
+                    "model": "",
+                    "provider": "",
                 }
         except Exception:
             pass
+    try:
+        from archon.core.profiles import api_get_hermes_profiles
+        for p in api_get_hermes_profiles() or []:
+            pid = p.get("id")
+            if not pid:
+                continue
+            entry = mapping.setdefault(pid, {
+                "id": pid,
+                "person_name": p.get("name") or pid,
+                "role": "",
+                "display": p.get("name") or pid,
+                "avatar_url": "",
+                "tools": [],
+                "model": "",
+                "provider": "",
+            })
+            if p.get("avatar_url"):
+                entry["avatar_url"] = p["avatar_url"]
+            elif not entry.get("avatar_url"):
+                entry["avatar_url"] = "/static/avatars/hermes_default_avatar.png"
+            if isinstance(p.get("tools"), list):
+                entry["tools"] = list(p["tools"])
+            if p.get("model"):
+                entry["model"] = p["model"]
+            if p.get("provider"):
+                entry["provider"] = p["provider"]
+    except Exception:
+        pass
     return mapping
+
+
+def _get_session_usage_map():
+    """Liest Token-, Modell-, Kosten- und Tool-Nutzung pro session_id aus state.db."""
+    import json
+    import sqlite3
+    usage = {}
+    db_path = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.join("data", "state.db")
+    if not os.path.exists(db_path):
+        return usage
+    try:
+        conn = sqlite3.connect(db_path, timeout=2.0)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, model, input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd, tool_names, tool_call_count FROM sessions"
+            )
+            for sid, model, inp, out, est_c, act_c, tnames, tcalls in cur.fetchall():
+                if not sid:
+                    continue
+                tools_list = []
+                if tnames:
+                    try:
+                        parsed = json.loads(tnames)
+                        if isinstance(parsed, list):
+                            tools_list = [str(x) for x in parsed if x]
+                    except Exception:
+                        tools_list = [x.strip() for x in str(tnames).split(",") if x.strip()]
+                inp_i = int(inp or 0)
+                out_i = int(out or 0)
+                cost = float(act_c if act_c is not None else (est_c or 0.0))
+                usage[sid] = {
+                    "model": model or "",
+                    "tokens_input": inp_i,
+                    "tokens_output": out_i,
+                    "tokens_total": inp_i + out_i,
+                    "cost_usd": round(cost, 6),
+                    "tools_used": tools_list,
+                    "tool_call_count": int(tcalls or 0),
+                }
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return usage
 
 
 @router.get("/projects/overview")
@@ -1646,17 +1723,29 @@ def get_projects_overview():
     vault = _P(get_vault_dir()).resolve()
     p_root = vault / "01_PROJEKTE"
     cadre_map = _get_agent_cadre_map()
+    session_usage = _get_session_usage_map()
 
     # 1. Hole alle Tasks aus kanban.db gruppiert nach project_id
     tasks_by_project = {}
     conn = _get_kanban_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT id, title, assignee, status, priority, created_at, completed_at, result, project_id FROM tasks ORDER BY rowid ASC")
+        cur.execute("SELECT id, title, assignee, status, priority, created_at, completed_at, result, project_id, session_id, model_override, skills FROM tasks ORDER BY rowid ASC")
         for r in cur.fetchall():
-            tid, title, assignee, status, prio, cat, comp, res, pid = r
+            tid, title, assignee, status, prio, cat, comp, res, pid, sid, mod_ov, skills_raw = r
             if not pid:
                 continue
+            su = session_usage.get(sid or "", {})
+            a_info = cadre_map.get(assignee or "", {})
+            model_used = su.get("model") or mod_ov or a_info.get("model") or ""
+            tools_used = list(su.get("tools_used") or [])
+            if not tools_used and skills_raw:
+                try:
+                    parsed_sk = json.loads(skills_raw)
+                    if isinstance(parsed_sk, list):
+                        tools_used = [str(x) for x in parsed_sk if x]
+                except Exception:
+                    pass
             tasks_by_project.setdefault(pid, []).append({
                 "id": tid,
                 "title": title,
@@ -1664,10 +1753,39 @@ def get_projects_overview():
                 "status": status,
                 "created_at": cat,
                 "completed_at": comp,
-                "result_preview": (res or "")[:200]
+                "result": res or "",
+                "result_preview": (res or "")[:200],
+                "model": model_used,
+                "tokens_input": su.get("tokens_input", 0),
+                "tokens_output": su.get("tokens_output", 0),
+                "tokens_total": su.get("tokens_total", 0),
+                "cost_usd": su.get("cost_usd", 0.0),
+                "tools_used": tools_used,
+                "tool_call_count": su.get("tool_call_count", 0),
             })
     finally:
         conn.close()
+
+    def _parse_ts_and_num(val, fallback_ts: float):
+        ts = None
+        if val is not None and str(val).strip() != "":
+            s = str(val).strip()
+            try:
+                num = float(s)
+                if num > 1e12:
+                    num = num / 1000.0
+                if num > 1e8:
+                    ts = num
+            except Exception:
+                try:
+                    dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+                    ts = dt.timestamp()
+                except Exception:
+                    pass
+        if ts is None:
+            ts = fallback_ts
+        dt_obj = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+        return ts, dt_obj.strftime("%Y%m%d%H%M%S"), dt_obj.isoformat()
 
     # 2. Scanne Obsidian 01_PROJEKTE
     projects = []
@@ -1737,27 +1855,46 @@ def get_projects_overview():
                 clean_parts = [p for p in folder_name.split("-") if not p.isdigit() and p not in ("projekt", "delegationsprojekt")]
                 proj_title = " ".join(clean_parts).title() or folder_name
 
-            # Enrich assignees & subtasks with Klarnamen + Title
+            # Enrich assignees & subtasks with Klarnamen + Avatar + Tools + Totals
             assignee_objs = []
+            approved_tools_set = set(cadre_map.get(lead_agent, {}).get("tools") or [])
             for a in sorted(list(assignees)):
-                a_info = cadre_map.get(a, {"id": a, "person_name": a, "role": "", "display": a})
+                a_info = cadre_map.get(a, {"id": a, "person_name": a, "role": "", "display": a, "avatar_url": f"/static/img/cadre_icons/{a}.png", "tools": []})
                 assignee_objs.append(a_info)
+                approved_tools_set.update(a_info.get("tools") or [])
 
             enriched_subtasks = []
+            proj_tokens = 0
+            proj_cost = 0.0
+            used_tools_set = set()
+            subtask_dates = []
             for st in subtasks:
                 st_c = dict(st)
                 asg = st_c.get("assignee") or ""
-                a_info = cadre_map.get(asg, {"id": asg, "person_name": asg, "role": "", "display": asg})
+                a_info = cadre_map.get(asg, {"id": asg, "person_name": asg, "role": "", "display": asg, "avatar_url": f"/static/img/cadre_icons/{asg}.png"})
                 st_c["assignee_person_name"] = a_info["person_name"]
                 st_c["assignee_title"] = a_info["role"]
                 st_c["assignee_display"] = a_info["display"]
+                st_c["assignee_avatar"] = a_info.get("avatar_url") or ""
+                proj_tokens += int(st_c.get("tokens_total") or 0)
+                proj_cost += float(st_c.get("cost_usd") or 0.0)
+                used_tools_set.update(st_c.get("tools_used") or [])
+                if st_c.get("created_at"):
+                    subtask_dates.append(str(st_c["created_at"]))
                 enriched_subtasks.append(st_c)
+
+            folder_ts = p_dir.stat().st_mtime
+            raw_created = min(subtask_dates) if subtask_dates else None
+            created_ts, task_num, proj_created = _parse_ts_and_num(raw_created, folder_ts)
 
             projects.append({
                 "id": folder_name,
                 "title": proj_title,
                 "status": status,
                 "folder": f"01_PROJEKTE/{folder_name}",
+                "created_at": proj_created,
+                "created_ts": created_ts,
+                "task_number": task_num,
                 "lead_agent": lead_agent,
                 "lead_agent_display": cadre_map.get(lead_agent, {}).get("display", lead_agent),
                 "assignees": sorted(list(assignees)),
@@ -1766,6 +1903,10 @@ def get_projects_overview():
                 "tasks_total": t_total,
                 "tasks_completed": t_done,
                 "subtasks": enriched_subtasks,
+                "total_tokens": proj_tokens,
+                "total_cost_usd": round(proj_cost, 6),
+                "approved_tools": sorted(approved_tools_set),
+                "used_tools": sorted(used_tools_set),
                 "primary_document": primary_doc,
                 "has_html_report": has_html,
                 "files_summary": {
@@ -1781,22 +1922,42 @@ def get_projects_overview():
             t_done = sum(1 for st in t_list if st.get("status") in ("done", "review", "completed"))
             progress = int((t_done / t_total) * 100) if t_total > 0 else 0
             asg_set = sorted(list({st.get("assignee") for st in t_list if st.get("assignee")}))
-            assignee_objs = [cadre_map.get(a, {"id": a, "person_name": a, "role": "", "display": a}) for a in asg_set]
+            assignee_objs = [cadre_map.get(a, {"id": a, "person_name": a, "role": "", "display": a, "avatar_url": f"/static/img/cadre_icons/{a}.png", "tools": []}) for a in asg_set]
+            approved_tools_set = set(cadre_map.get("executive_decision_architect", {}).get("tools") or [])
+            for a_obj in assignee_objs:
+                approved_tools_set.update(a_obj.get("tools") or [])
             enriched_subtasks = []
+            proj_tokens = 0
+            proj_cost = 0.0
+            used_tools_set = set()
+            subtask_dates = []
             for st in t_list:
                 st_c = dict(st)
                 asg = st_c.get("assignee") or ""
-                a_info = cadre_map.get(asg, {"id": asg, "person_name": asg, "role": "", "display": asg})
+                a_info = cadre_map.get(asg, {"id": asg, "person_name": asg, "role": "", "display": asg, "avatar_url": f"/static/img/cadre_icons/{asg}.png"})
                 st_c["assignee_person_name"] = a_info["person_name"]
                 st_c["assignee_title"] = a_info["role"]
                 st_c["assignee_display"] = a_info["display"]
+                st_c["assignee_avatar"] = a_info.get("avatar_url") or ""
+                proj_tokens += int(st_c.get("tokens_total") or 0)
+                proj_cost += float(st_c.get("cost_usd") or 0.0)
+                used_tools_set.update(st_c.get("tools_used") or [])
+                if st_c.get("created_at"):
+                    subtask_dates.append(str(st_c["created_at"]))
                 enriched_subtasks.append(st_c)
+
+            now_ts = datetime.datetime.now(datetime.timezone.utc).timestamp()
+            raw_created = min(subtask_dates) if subtask_dates else None
+            created_ts, task_num, proj_created = _parse_ts_and_num(raw_created, now_ts)
 
             projects.append({
                 "id": pid,
                 "title": pid.replace("projekt-", "").replace("-", " ").title(),
                 "status": "planned" if progress == 0 else ("completed" if t_done == t_total else "in_progress"),
                 "folder": f"01_PROJEKTE/{pid}",
+                "created_at": proj_created,
+                "created_ts": created_ts,
+                "task_number": task_num,
                 "lead_agent": "executive_decision_architect",
                 "lead_agent_display": cadre_map.get("executive_decision_architect", {}).get("display", "Robert, CEO"),
                 "assignees": asg_set,
@@ -1805,6 +1966,10 @@ def get_projects_overview():
                 "tasks_total": t_total,
                 "tasks_completed": t_done,
                 "subtasks": enriched_subtasks,
+                "total_tokens": proj_tokens,
+                "total_cost_usd": round(proj_cost, 6),
+                "approved_tools": sorted(approved_tools_set),
+                "used_tools": sorted(used_tools_set),
                 "primary_document": None,
                 "has_html_report": False,
                 "files_summary": {"zwischenberichte": 0, "medien": 0, "endprodukte": 0}
@@ -1826,6 +1991,13 @@ def get_projects_overview():
         if m.get("lead_agent"):
             p["lead_agent"] = m["lead_agent"]
             p["lead_agent_display"] = cadre_map.get(m["lead_agent"], {}).get("display", m["lead_agent"])
+
+    # Neueste Projekte/Tasks zuerst (absteigend nach created_ts)
+    projects.sort(key=lambda x: float(x.get("created_ts") or 0.0), reverse=True)
+
+    # Durchgehende Nummerierung (falls genutzt) + eindeutige YYYYMMDDHHMMSS Tasknummer
+    for idx, proj_item in enumerate(projects, start=1):
+        proj_item["seq_number"] = idx
 
     return {
         "status": "success",
@@ -1908,7 +2080,7 @@ def get_project_folder_files(project_id: str):
     if not str(proj).startswith(str((vault / "01_PROJEKTE").resolve())):
         raise HTTPException(status_code=400, detail="Ungueltiger Projekt-Pfad.")
     if not proj.is_dir():
-        raise HTTPException(status_code=404, detail="Projektordner nicht gefunden.")
+        return {"status": "success", "project_id": project_id, "folder": f"01_PROJEKTE/{project_id}", "files": []}
     files = []
     for f in sorted(proj.rglob("*")):
         if f.is_file() and not f.name.startswith("."):

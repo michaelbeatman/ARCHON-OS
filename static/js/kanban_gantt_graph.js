@@ -105,5 +105,35 @@
     }
   }
 
-  window.archonKanbanViews = { renderGantt, renderGraph };
+  function setOpsKanbanViewMode(mode) {
+    const m = ['board', 'gantt', 'graph'].includes(mode) ? mode : 'board';
+    const boardEl = document.getElementById('ops-kanban-columns-container');
+    const altEl = document.getElementById('ops-kanban-alt-view');
+    const btns = {
+      board: document.getElementById('btn-kanban-mode-board'),
+      gantt: document.getElementById('btn-kanban-mode-gantt'),
+      graph: document.getElementById('btn-kanban-mode-graph'),
+    };
+    Object.entries(btns).forEach(([k, btn]) => {
+      if (!btn) return;
+      const active = k === m;
+      btn.className = active
+        ? 'h-7 px-2.5 rounded-md font-bold bg-[var(--primary)] text-[var(--primary-foreground)] transition cursor-pointer'
+        : 'h-7 px-2.5 rounded-md font-medium text-muted-custom hover:text-primary-custom transition cursor-pointer';
+    });
+    if (m === 'board') {
+      if (boardEl) boardEl.classList.remove('hidden');
+      if (altEl) altEl.classList.add('hidden');
+      return;
+    }
+    if (boardEl) boardEl.classList.add('hidden');
+    if (altEl) {
+      altEl.classList.remove('hidden');
+      if (m === 'gantt') renderGantt(altEl);
+      else if (m === 'graph') renderGraph(altEl);
+    }
+  }
+
+  window.setOpsKanbanViewMode = setOpsKanbanViewMode;
+  window.archonKanbanViews = { renderGantt, renderGraph, setOpsKanbanViewMode };
 })();

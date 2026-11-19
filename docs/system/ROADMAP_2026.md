@@ -583,6 +583,22 @@
 - **Vorlage:** `hermes-lcm-x`, `storm-fusion-research`.
 - **Zielzustand:** Verlustfreie lokale SQLite-Session-Historie als wiederherstellbarer Summary-DAG (`hermes-lcm-x`) sowie Multi-Perspektiven-Research-Panel mit Judge und Human-Gate für das Research Lab (M45).
 
+### Meilenstein 95: Multi-User Urlaubs-/Vertretungs-Modus & Benutzer-spezifische Telegram-Kanäle (Geplant – Hoch)
+- **Ausgangslage / Architektur-Vorgabe:** Bei einem Timeout oder aktiver Abwesenheit (Urlaubsmodus) dürfen HITL- oder 4-Augen-Freigabe-Entscheidungen **niemals automatisch an einen Agenten** delegiert werden.
+- **Zielzustand:**
+  - **Multi-User-Vertretungskette:** Freigaben eskalieren bei Timeout oder Urlaubsmodus ausschließlich an einen hinterlegten menschlichen Stellvertreter (Multi-User-RBAC-Rolle, kein Agent-Fallback).
+  - **Eigene Telegram-Kanäle pro Benutzer:** Jeder Archon-OS-User kann einen eigenen Telegram-Chat/Bot-Kanal hinterlegen, sodass Freigabe-Anfragen, Timeouts und Vertretungs-Benachrichtigungen gezielt beim jeweils zuständigen oder vertretenden Menschen landen.
+
+### Meilenstein 96: Visueller Ergebnis-Template- & Report-Designer (Drag & Drop Variablen-Pool + Typografie-Properties) (Geplant – Sehr hoch)
+- **Ausgangslage:** Ergebnisse werden im Showroom und direkt in den Aufgaben/Teilaufgaben ausgegeben; aktuell fehlt ein visueller Editor, um Ausgabe-Layouts frei zu gestalten.
+- **Zielzustand:**
+  - **Zweigeteilter Designer (analog Formulareditor):** Links das Druck-/Ausgabe-Blatt (Canvas), rechts ein **Variablen-Pool**, in dem sämtliche verfügbaren Task-, Projekt-, Agenten-, Token-, Kosten-, Tool- und Ergebnis-Variablen als **Drag-&-Drop-Pills** liegen und direkt auf dem Blatt platziert werden können.
+  - **Eigenschafts-Inspektor je Variable:** Jede platzierte Variable besitzt individuelle Style-Properties (**Schriftgröße, Schriftart/Font, Farbe, Gewicht, Ausrichtung, Abstände**), sodass eigene Ergebnis- und Berichts-Templates per Klick als Standard-Ausgabe für Aufgaben & Showroom gespeichert werden können.
+
+### Meilenstein 97: Einheitliche Modal-, Header- & Blur-Overlay-UI-Überarbeitung (Geplant – Hoch)
+- **Ausgangslage:** Einzelne Dialoge und Modals weichen in Breite, Höhe, Z-Index und Backdrop-Blur leicht voneinander ab.
+- **Zielzustand:** Systemweite Vereinheitlichung aller Detail-Modals und Overlay-Dialoge nach dem Maßstab des **System Control Center** (einheitliche feste Größe, konsistente `backdrop-blur`-Abdeckung inklusive Header-Bereich, einheitliche Abstände und Typografie).
+
 ## Ideen-Pool (beobachten, nicht geplant)
 
 Themen, die im Blick bleiben, aber keinen Meilenstein und keinen Zeitslot haben. Sie werden erst dann zu Meilensteinen, wenn ein klarer Nutzen oder ein Community-Signal vorliegt.

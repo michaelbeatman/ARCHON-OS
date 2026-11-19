@@ -303,12 +303,18 @@ def _compute_profiles_mtime() -> float:
 
 try:
     _init_pfile = os.path.join(APP_ROOT, "agent_profiles.json")
+    _primary_dir = get_primary_hermes_profiles_dir()
+    _disk_count = (
+        sum(1 for d in os.listdir(_primary_dir) if os.path.isdir(os.path.join(_primary_dir, d)) and not d.startswith("."))
+        if os.path.isdir(_primary_dir) else 0
+    )
     if os.path.exists(_init_pfile):
         with open(_init_pfile, "r", encoding="utf-8") as _f_init:
             _init_data = json.load(_f_init)
-            if isinstance(_init_data, list) and len(_init_data) > 0:
+            if isinstance(_init_data, list) and len(_init_data) > 0 and (_disk_count == 0 or len(_init_data) >= _disk_count):
                 _HERMES_PROFILES_CACHE = _init_data
                 _HERMES_PROFILES_CACHE_TIME = time.time()
+                _HERMES_PROFILES_CACHE_MTIME = _compute_profiles_mtime()
                 logger.info(f"[Profiles] Fast pre-warm cache loaded {len(_HERMES_PROFILES_CACHE)} profiles.")
 except Exception as _e_init:
     logger.warning(f"[Profiles] Fast pre-warm warning: {_e_init}")

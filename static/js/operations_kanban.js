@@ -1245,6 +1245,7 @@
       }
 
       modal.classList.remove('hidden');
+
       if (window.lucide) lucide.createIcons();
     }
 
@@ -2227,6 +2228,7 @@
         if (effectiveAssignee) onOpsTaskAssigneeChanged(effectiveAssignee);
       });
       modal.classList.remove('hidden');
+
       if (window.lucide) lucide.createIcons();
       setTimeout(() => document.getElementById('ops-task-title')?.focus(), 50);
     }
@@ -2443,6 +2445,18 @@
       if (!modal) return;
       modal.classList.remove('hidden');
 
+      const parentModal = document.getElementById('project-detail-modal');
+      const cardEl = document.getElementById('ops-detail-card');
+      const backBtn = document.getElementById('btn-ops-detail-back-parent');
+      const hasVisibleParent = !!(parentModal && !parentModal.classList.contains('hidden'));
+      if (cardEl) {
+        cardEl.classList.toggle('translate-x-6', hasVisibleParent);
+        cardEl.classList.toggle('translate-y-5', hasVisibleParent);
+      }
+      if (backBtn) {
+        backBtn.classList.toggle('hidden', !hasVisibleParent);
+      }
+
       const badgeId = document.getElementById('ops-detail-badge-id');
       const titleEl = document.getElementById('ops-detail-title');
       const statusSelect = document.getElementById('ops-detail-status-select');
@@ -2470,7 +2484,10 @@
         const task = data.task;
         currentOpsDetailTaskAssignee = task.assignee || 'default';
 
-        if (badgeId) badgeId.textContent = task.task_num ? `#${task.task_num} · ${task.id}` : task.id;
+        if (badgeId) {
+          const tNumLabel = task.task_num ? `#${task.task_num} · ${task.id}` : task.id;
+          badgeId.textContent = task.project_id ? `Parenttask: #${task.project_id} | ${tNumLabel}` : tNumLabel;
+        }
         if (dateEl && task.created_at) {
           try {
             const raw = task.created_at;
@@ -2879,6 +2896,10 @@
     function closeTaskDetailModal() {
       const modal = document.getElementById('ops-detail-modal');
       if (modal) modal.classList.add('hidden');
+      const cardEl = document.getElementById('ops-detail-card');
+      if (cardEl) cardEl.classList.remove('translate-x-6', 'translate-y-5');
+      const backBtn = document.getElementById('btn-ops-detail-back-parent');
+      if (backBtn) backBtn.classList.add('hidden');
       currentOpsDetailTaskId = null;
     }
 
@@ -3767,6 +3788,7 @@
     }
 
     // Expose functions globally for index.html and onclick handlers
+    window.openTaskDetailModal = openTaskDetailModal; // 19.11.2026: fuer Projekt-Detail-Modal (Subtask-Direktklick)
     window.setOperationsTab = setOperationsTab;
     window._opsKanbanSetTab = setOperationsTab;
     window.loadOperationsData = loadOperationsData;

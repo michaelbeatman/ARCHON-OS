@@ -22,7 +22,7 @@
     "css_studio": "CSS Live Studio",
     "research": "Research Lab",
     "corporate": "Corporate & Entities",
-    "approval_policies": "Approval Policies",
+    "approval_policies": "Autonomy & Approvals",
     "automation": "Workflow Engine",
     "dashboard": "Dashboard",
     "dashboard_desc": "Mission Control & Cockpit",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "Quotes, Pipeline & SLA",
     "finance_desc": "Receipts, OCR & Dunning",
     "corporate_desc": "Master Data & Templates",
-    "approval_policies_desc": "Thresholds & Approvals",
+    "approval_policies_desc": "Thresholds, Rules & Modules",
     "guardian_desc": "Rate & Budget Guard",
     "logs_desc": "Live Audit",
     "palette_title": "Command Palette & Quick Search (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "Business & ERP",
       "infrastructure": "Infrastructure & Governance",
       "economy_alpha_title": "This section is still under construction (alpha)"
-    }
+    },
+    "plugins_desc": "Modules, Router & Guardrails",
+    "autonomy": "Autonomy Modules",
+    "autonomy_desc": "36 subsystems"
   },
   "common": {
     "save": "Save",
@@ -192,7 +195,9 @@
       "tab_update": "SYSTEM UPDATE",
       "tab_users": "USERS & ROLES",
       "onboarding_btn": "Setup Wizard",
-      "onboarding_title": "Relaunch Setup Wizard"
+      "onboarding_title": "Relaunch Setup Wizard",
+      "tab_guardrails_router": "ROUTER & GUARDRAILS",
+      "tab_corporate": "CORPORATE & TENANT"
     },
     "keys": {
       "close_btn": "Close",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "Help/Support Agent (Profile)"
     },
     "update": {
       "active_commit": "Active commit",
@@ -2559,7 +2565,9 @@
       "tab_planning": "Planning & tasks",
       "tab_bridges": "Bridges & interfaces",
       "tab_memory": "Memory & knowledge",
-      "tab_tools": "Tools & execution"
+      "tab_tools": "Tools & execution",
+      "mode_catalog": "Plugin Catalog",
+      "mode_autonomy": "Autonomy Modules (36)"
     },
     "research": {
       "title": "Research Lab · Laboratory",
@@ -2923,7 +2931,9 @@
       "reject_title": "Reject approval",
       "ph_reject_reason": "Enter the reason for rejection...",
       "cancel": "Cancel",
-      "reject_confirm": "Reject irrevocably"
+      "reject_confirm": "Reject irrevocably",
+      "tab_autonomy": "Autonomy",
+      "tab_autonomy_title": "36 Autonomy, Resilience & Enterprise Modules"
     },
     "corporate": {
       "title": "Corporate & Entities",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "Participant filter",
       "title_comm_refresh": "Refresh feed",
       "ph_comm_input": "Send a message or instruction to the channel (Enter)...",
-      "action_send": "Send"
+      "action_send": "Send",
+      "mode_board": "Board",
+      "mode_gantt": "Gantt",
+      "mode_graph": "Graph",
+      "subtasks_tab": "Sub-Tasks"
     },
     "operations_erp": {
       "title": "Cases & Contracts — Quotes & Orders",
@@ -3743,7 +3757,8 @@
       "due_title": "Due date",
       "tags_placeholder": "Tags, comma-separated",
       "comment_placeholder": "Write a message or instruction for the agent...",
-      "start_now": "Start now"
+      "start_now": "Start now",
+      "back_to_parent": "Parent Task"
     },
     "roles": {
       "title": "Manage AI roles & prompts",

@@ -1593,8 +1593,13 @@
   }
 
   window.openArchonSetupWizard = function (options) {
-    return openWizard(Object.assign({ force: false }, options || {}));
+    const normalized = options === true
+      ? { force: true }
+      : (options && typeof options === 'object' ? options : {});
+    return openWizard(Object.assign({ force: false }, normalized));
   };
+
+  window.openOnboardingWizard = window.openArchonSetupWizard;
 
   window.ArchonOnboardingWizard = {
     open: window.openArchonSetupWizard,

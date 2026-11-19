@@ -7,11 +7,6 @@ created_at: 2026-11-05T14:06:05.936541
 
 # Bewerbungen Prüfen und Senior Coder Selektieren
 
-> **[EU AI ACT — HOCHRISIKO-KI (ANHANG III / ART. 14 & ART. 50)]**
-> Bewerber-Screening und Personalauswahl unterliegen der Hochrisiko-Kategorie des EU AI Act.
-> Dieser Skill darf **niemals** vollautomatisch Absagen oder verbindliche Auswahlentscheidungen treffen.
-> Jede Vorauswahl erfordert zwingend menschliche Aufsicht (HITL), nachvollziehbare Kriterien und eine transparente KI-Kennzeichnung gegenüber Bewerbern.
-
 Dieser Skill wurde durch menschliches Vormachen im Bot-Screen (Programming by Demonstration) erlernt.
 
 ## Ziel-Kontext

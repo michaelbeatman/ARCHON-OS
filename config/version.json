@@ -1,8 +1,8 @@
 {
-  "version": "v0.5.5",
+  "version": "v0.5.5.1",
   "codename": "Archon Orchestration & Governance v2",
-  "released_at": "2026-11-19 08:30",
-  "previous_version": "v0.5.4.2",
+  "released_at": "2026-11-19 14:24",
+  "previous_version": "v0.5.5",
   "commit": "v0.5.5",
   "features": [
     "Hermes Marketplace Integration: 18 Skills (.agents/skills/) & 6 MCP Servers (.mcp.json) assigned to specialist profiles",

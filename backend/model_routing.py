@@ -40,6 +40,7 @@ DEFAULT_CONFIG = {
     "enabled": False,
     "routes": DEFAULT_ROUTES,
     "autonomy": {"operations": "approval", "orchestrator": "approval"},
+    "support_profile_id": "default",
 }
 
 
@@ -72,6 +73,7 @@ def load_config() -> dict:
         "enabled": bool(data.get("enabled", False)),
         "routes": [],
         "autonomy": {"operations": "approval", "orchestrator": "approval"},
+        "support_profile_id": str(data.get("support_profile_id") or "default").strip() or "default",
     }
     for item in data.get("routes", []):
         norm = _normalize_route(item)
@@ -114,6 +116,7 @@ def save_config(payload: dict) -> dict:
         "enabled": bool((payload or {}).get("enabled", False)),
         "routes": routes,
         "autonomy": clean_autonomy,
+        "support_profile_id": str((payload or {}).get("support_profile_id") or "default").strip() or "default",
     }
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
     with _LOCK:

@@ -41,6 +41,11 @@
             </div>
             <div id="ops-kanban-stats" class="flex items-center gap-2.5 text-[10px] font-mono text-muted-custom"></div>
             <div class="ml-auto flex items-center gap-1.5 shrink-0">
+              <div class="flex items-center rounded-lg border border-[var(--border)] bg-[var(--background)] p-0.5 text-xs font-mono" role="group">
+                <button type="button" id="btn-kanban-mode-board" onclick="window.setOpsKanbanViewMode && window.setOpsKanbanViewMode('board')" class="h-7 px-2.5 rounded-md font-bold bg-[var(--primary)] text-[var(--primary-foreground)] transition cursor-pointer" data-i18n="view.operations.mode_board">Board</button>
+                <button type="button" id="btn-kanban-mode-gantt" onclick="window.setOpsKanbanViewMode && window.setOpsKanbanViewMode('gantt')" class="h-7 px-2.5 rounded-md font-medium text-muted-custom hover:text-primary-custom transition cursor-pointer" data-i18n="view.operations.mode_gantt">Gantt</button>
+                <button type="button" id="btn-kanban-mode-graph" onclick="window.setOpsKanbanViewMode && window.setOpsKanbanViewMode('graph')" class="h-7 px-2.5 rounded-md font-medium text-muted-custom hover:text-primary-custom transition cursor-pointer" data-i18n="view.operations.mode_graph">Graph</button>
+              </div>
               <button data-i18n-title="view.operations.title_refresh" onclick="loadOperationsData()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="Aktualisieren">
                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
                 <span data-i18n="view.operations.action_sync">Sync</span>
@@ -61,6 +66,7 @@
           <div id="ops-kanban-columns-container" class="flex gap-1.5 w-full flex-1 min-h-0 overflow-x-auto pb-1">
             <!-- Dynamische Spalten -->
           </div>
+          <div id="ops-kanban-alt-view" class="hidden flex-1 min-h-0 overflow-y-auto"></div>
 
           <!-- FLOATING BULK-ACTION TOOLBAR (t-c2b384: Option A) -->
           <div id="ops-kanban-bulk-toolbar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl border border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-md text-[var(--foreground)] shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-150">

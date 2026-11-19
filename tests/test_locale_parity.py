@@ -270,7 +270,7 @@ SCANNER_PATH = REPO_ROOT / "scripts" / "i18n_scan_textnodes.py"
 
 SETTINGS_MODAL_DONE = frozenset({
     "general", "search", "users", "keys", "update", "routing",
-    "services", "frameworks", "comm", "kernel", "autonomy", "design", "plugins",
+    "services", "frameworks", "comm", "kernel", "autonomy", "design", "plugins", "corporate",
 })
 
 SETTINGS_MODAL_PENDING = frozenset()
@@ -334,11 +334,23 @@ SETTINGS_MODAL_EXCEPTIONS = {
     "Äußere Haupt-Container für Bereiche, Filterleisten und Sektionen": "cds-active-comp-desc, aus component_design_studio.js",
     "Alle Inhalts-Karten, Filter-Container, Dialoge & Listen": "cds-active-comp-usage, aus component_design_studio.js",
     "Lade Farbpalette…": "Platzhalter der Kanban-Palette, aus operations_kanban.js",
-    # Tab plugins: Statusanzeigen und Schalter-Beschriftungen (per JS gesetzt)
-    "Lade Status...": "Status-Badge settings-plugins-stats-badge, aus system_settings.js",
-    "Lade Plugin-Katalog und Konfigurationen...": "Ladehinweis des Plugin-Katalogs, aus JS",
+    # Tab plugins: Schalter-Beschriftungen (per JS gesetzt)
     "Inaktiv": "Schalter-Label setting-jev-toggle-label, wird per JS umgeschaltet",
     "Aktiv": "Schalter-Label der Plugin-Toggles, wird per JS umgeschaltet",
+    # Tab corporate: Platzhalter und Laufzeitwerte
+    "Archon Systems GmbH (Standard)": "Laufzeitwert: corporate_controller.js baut Option aus /api/corporate/companies neu",
+    "Friedrichstraße 123": "Beispiel-Adresse im Placeholder corp-input-street",
+    "Berlin": "Beispiel-Stadt im Placeholder corp-input-city",
+    "kontakt@firma.de": "Beispiel-Adresse im Placeholder corp-input-email",
+    "https://firma.de": "Beispiel-URL im Placeholder corp-input-web",
+    "Amtsgericht Charlottenburg": "Beispiel-Registergericht im Placeholder corp-input-court",
+    "HRB 248910 B": "Beispiel-Registernummer im Placeholder corp-input-hrb",
+    "Michael Mustermann, Dr. Anna Schmidt": "Beispiel-Namen im Placeholder corp-input-directors",
+    "DE345678901": "Beispiel-USt-IdNr. im Placeholder corp-input-vatid",
+    "Deutsche Bank Berlin": "Beispiel-Bankname im Placeholder corp-input-bankname",
+    "DE89 1007 0000 0123 4567 89": "Beispiel-IBAN im Placeholder corp-input-iban",
+    "DEUTDEDDBER": "Beispiel-BIC im Placeholder corp-input-bic",
+    "/static/img/logo.png": "Pfad-Identifier im Placeholder corp-input-logo",
 }
 
 ATTRIBUTE_SECTIONS = SETTINGS_MODAL_DONE
@@ -436,11 +448,9 @@ VIEWS_DONE = frozenset({
     "inbox_view.html",
     "view_approval_policies.html",
     # Etappe 3, Paket 5 (Views-Tranche A)
-    "view_corporate.html",
     "watchdog_view.html",
     "library_view.html",
     # Etappe 3, Paket 6 (Views-Tranche B1)
-    "view_brain.html",
     "operations_view.html",
     "view_operations_erp.html",
     "view_showroom.html",
@@ -921,18 +931,10 @@ VIEW_EXCEPTIONS = {
 # Zaehler und Fachreiter-Kopf schreibt static/index.html; ein Mixed-Knoten im
 # Action-Button.
     "view_plugins.html": {
-        "34 Module":
-            "Zaehler plugins-active-badge: static/index.html:9007-9008 setzt 'n / m aktiv'",
-        "Neu laden":
-            "Mixed-Knoten: Text und Kind-Element teilen sich den Elternknoten; archon_i18n.js:128-133 wuerde das Refresh-Icon loeschen (view_plugins.html:34)",
-        "Sicherheit & Wächter Module":
-            "Laufzeitwert plugin-center-tab-title: static/index.html:8983-8985 setzt '<Kategorie> Module' beim Reiterwechsel",
-        "Schutz vor unbegrenztem Tokenverbrauch, Endlosschleifen und Injection-Angriffen.":
-            "Laufzeitwert plugin-center-tab-desc: static/index.html:8984-8985 setzt catMeta.desc beim Reiterwechsel",
-        "-- aktiv":
-            "Laufzeitwert plugin-center-active-count: static/index.html:9025-9026 setzt 'n von m aktiv'",
-        "Lade Erweiterungen...":
-            "Ladezustand plugin-center-cards-grid: static/index.html:9030+ (renderPluginCenterCards) ersetzt das Grid",
+        "Lade Status...":
+            "Status-Badge settings-plugins-stats-badge, aus system_settings.js",
+        "Lade Plugin-Katalog und Konfigurationen...":
+            "Ladehinweis des Plugin-Katalogs, aus JS",
     },
 }
 

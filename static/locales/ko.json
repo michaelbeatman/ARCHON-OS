@@ -22,7 +22,7 @@
     "css_studio": "CSS 라이브 스튜디오",
     "research": "리서치 랩",
     "corporate": "법인 및 고객사",
-    "approval_policies": "승인 정책",
+    "approval_policies": "자율 및 승인",
     "automation": "워크플로 엔진",
     "dashboard": "대시보드",
     "dashboard_desc": "Mission Control 및 콕핏",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "견적, 파이프라인 및 SLA",
     "finance_desc": "전표, OCR 및 독촉",
     "corporate_desc": "기준 정보 및 템플릿",
-    "approval_policies_desc": "임계값 및 승인",
+    "approval_policies_desc": "임계값, 규칙 및 모듈",
     "guardian_desc": "요청률 및 예산 감시",
     "logs_desc": "실시간 감사",
     "palette_title": "명령 팔레트 및 빠른 검색 (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "비즈니스 및 ERP",
       "infrastructure": "인프라 및 거버넌스",
       "economy_alpha_title": "이 섹션은 아직 구축 중입니다 (알파)"
-    }
+    },
+    "plugins_desc": "모듈, 라우터 및 가드레일",
+    "autonomy": "오토노미 모듈",
+    "autonomy_desc": "36개 서브시스템"
   },
   "common": {
     "save": "저장",
@@ -192,7 +195,9 @@
       "tab_update": "시스템 업데이트",
       "tab_users": "사용자 및 역할",
       "onboarding_btn": "설정 마법사",
-      "onboarding_title": "설정 마법사 다시 실행"
+      "onboarding_title": "설정 마법사 다시 실행",
+      "tab_guardrails_router": "라우터 및 가드레일",
+      "tab_corporate": "법인 및 테넌트"
     },
     "keys": {
       "close_btn": "닫기",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "도움말/지원 에이전트 (프로필)"
     },
     "update": {
       "active_commit": "활성 커밋",
@@ -2559,7 +2565,9 @@
       "tab_planning": "계획 및 작업",
       "tab_bridges": "브리지 및 인터페이스",
       "tab_memory": "기억 및 지식",
-      "tab_tools": "도구 및 실행"
+      "tab_tools": "도구 및 실행",
+      "mode_catalog": "플러그인 카탈로그",
+      "mode_autonomy": "자율 모듈 (36)"
     },
     "research": {
       "title": "Research Lab · 실험실",
@@ -2923,7 +2931,9 @@
       "reject_title": "승인 거부",
       "ph_reject_reason": "거부 사유 입력...",
       "cancel": "취소",
-      "reject_confirm": "영구 거부"
+      "reject_confirm": "영구 거부",
+      "tab_autonomy": "자율",
+      "tab_autonomy_title": "36개 자율·복원력·엔터프라이즈 모듈"
     },
     "corporate": {
       "title": "법인 및 엔티티",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "참여자 필터",
       "title_comm_refresh": "피드 새로고침",
       "ph_comm_input": "채널에 메시지 또는 지시 전송 (Enter)...",
-      "action_send": "보내기"
+      "action_send": "보내기",
+      "mode_board": "보드",
+      "mode_gantt": "간트",
+      "mode_graph": "그래프",
+      "subtasks_tab": "하위 작업"
     },
     "operations_erp": {
       "title": "건 및 계약 — 견적 및 주문",
@@ -3743,7 +3757,8 @@
       "due_title": "마감일",
       "tags_placeholder": "태그 (쉼표로 구분)",
       "comment_placeholder": "에이전트에게 보낼 메시지 또는 지시 작성...",
-      "start_now": "지금 시작"
+      "start_now": "지금 시작",
+      "back_to_parent": "상위 작업"
     },
     "roles": {
       "title": "AI 역할 및 프롬프트 관리",

@@ -64,6 +64,7 @@
         "library",
         "brain",
         "plugins",
+        "autonomy",
         "guardian",
         "chat",
         "settings",
@@ -93,6 +94,8 @@
         "corporate_desc",
         "approval_policies_desc",
         "guardian_desc",
+        "plugins_desc",
+        "autonomy_desc",
         "logs_desc",
         "palette_title",
         "gateway_title",
@@ -231,6 +234,9 @@
         "guardian_desc": {
           "$ref": "#/definitions/message"
         },
+        "plugins_desc": {
+          "$ref": "#/definitions/message"
+        },
         "logs_desc": {
           "$ref": "#/definitions/message"
         },
@@ -276,6 +282,12 @@
               "$ref": "#/definitions/message"
             }
           }
+        },
+        "autonomy": {
+          "$ref": "#/definitions/message"
+        },
+        "autonomy_desc": {
+          "$ref": "#/definitions/message"
         }
       }
     },

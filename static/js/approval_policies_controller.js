@@ -31,8 +31,12 @@ async function initApprovalPoliciesView() {
 
 function setApprovalsSubTab(tab) {
   currentApprovalsTab = tab;
-  const tabs = ["finance", "email", "system"];
-  
+  const tabs = ["finance", "autonomy", "email", "system"];
+  const splitWrap = document.getElementById("approvals-split-wrap");
+  const autoWrap = document.getElementById("approvals-autonomy-wrap");
+  if (splitWrap) splitWrap.classList.toggle("hidden", tab === "autonomy");
+  if (autoWrap) autoWrap.classList.toggle("hidden", tab !== "autonomy");
+
   tabs.forEach(t => {
     const btn = document.getElementById(`approvals-subtab-btn-${t}`);
     const view = document.getElementById(`approvals-tab-${t}`);
@@ -51,6 +55,12 @@ function setApprovalsSubTab(tab) {
       if (tileWrap) tileWrap.classList.remove("active-tile");
     }
   });
+
+  if (tab === "autonomy") {
+    if (typeof loadMemoryConsolidationSettings === "function") loadMemoryConsolidationSettings();
+    if (typeof loadAutonomyModulesSettings === "function") loadAutonomyModulesSettings();
+    if (typeof enrichAutonomyCardsAndThresholds === "function") enrichAutonomyCardsAndThresholds();
+  }
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }

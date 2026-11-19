@@ -2,6 +2,12 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [Unreleased] — 2026-11-19 (UI-Konsolidierung & Operations-Feinschliff)
+
+### Changed
+- **Autonomie-Module in „Autonomie & Freigaben“ integriert:** Der separate Sidebar-Punkt `Autonomie-Module` (`#nav-autonomy`) wurde entfernt. Die 36 Autonomie-, Resilienz- & Enterprise-Module sitzen nun direkt als eigener Reiter **Autonomie** (mit eigenem Icon `static/img/cadre_icons/approval_autonomy.png`) hinter *Finanzen* in **Autonomie & Freigaben** (`view_approval_policies.html`).
+- **Corporate & Mandant in Settings integriert:** Die eigenständige Sidebar-Ansicht `view_corporate.html` (`nav-corporate`) wurde vollständig in das **System Control Center** als Reiter `CORPORATE & MANDANT` (`#settings-tab-corporate`) überführt. `setTab('corporate')` leitet nahtlos in diesen Reiter weiter.
+
 ## [Unreleased] — 2026-11-18 (Hermes Marketplace Skills & MCP Plugins)
 
 ### Added

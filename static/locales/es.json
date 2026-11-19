@@ -22,7 +22,7 @@
     "css_studio": "Estudio CSS en vivo",
     "research": "Laboratorio de investigación",
     "corporate": "Corporativo y entidades",
-    "approval_policies": "Políticas de aprobación",
+    "approval_policies": "Autonomía y aprobaciones",
     "automation": "Motor de flujos de trabajo",
     "dashboard": "Panel",
     "dashboard_desc": "Mission Control y Cabina",
@@ -41,7 +41,7 @@
     "operations_erp_desc": "Ofertas, pipeline y SLA",
     "finance_desc": "Comprobantes, OCR y cobros",
     "corporate_desc": "Datos maestros y Plantillas",
-    "approval_policies_desc": "Umbrales y Aprobaciones",
+    "approval_policies_desc": "Umbrales, reglas y módulos",
     "guardian_desc": "Guardia de tasa y presupuesto",
     "logs_desc": "Auditoría en vivo",
     "palette_title": "Paleta de comandos y búsqueda rápida (Ctrl + K)",
@@ -55,7 +55,10 @@
       "economy": "Negocio y ERP",
       "infrastructure": "Infraestructura y gobernanza",
       "economy_alpha_title": "Esta sección aún está en construcción (alfa)"
-    }
+    },
+    "plugins_desc": "Módulos, Router y Guardrails",
+    "autonomy": "Módulos de autonomía",
+    "autonomy_desc": "36 subsistemas"
   },
   "common": {
     "save": "Guardar",
@@ -192,7 +195,9 @@
       "tab_update": "ACTUALIZACIÓN DEL SISTEMA",
       "tab_users": "USUARIOS Y ROLES",
       "onboarding_btn": "Asistente de configuración",
-      "onboarding_title": "Reiniciar asistente de configuración"
+      "onboarding_title": "Reiniciar asistente de configuración",
+      "tab_guardrails_router": "ROUTER Y GUARDRAILS",
+      "tab_corporate": "CORPORATIVO Y MANDANTE"
     },
     "keys": {
       "close_btn": "Cerrar",
@@ -311,7 +316,8 @@
       "zero_egress": "Zero Egress",
       "sha256_mandatory": "SHA-256 Hash Chain: MANDATORY",
       "sha256_mandatory_title": "GoBD Audit Compliance: Cannot be disabled",
-      "check_posture": "Check Posture"
+      "check_posture": "Check Posture",
+      "support_profile": "Agente de ayuda/soporte (Perfil)"
     },
     "update": {
       "active_commit": "Commit activo",
@@ -2559,7 +2565,9 @@
       "tab_planning": "Planificación y tareas",
       "tab_bridges": "Puentes e interfaces",
       "tab_memory": "Memoria y conocimiento",
-      "tab_tools": "Herramientas y ejecución"
+      "tab_tools": "Herramientas y ejecución",
+      "mode_catalog": "Catálogo de plugins",
+      "mode_autonomy": "Módulos de autonomía (36)"
     },
     "research": {
       "title": "Research Lab · Laboratorio",
@@ -2923,7 +2931,9 @@
       "reject_title": "Rechazar aprobación",
       "ph_reject_reason": "Introduce el motivo del rechazo...",
       "cancel": "Cancelar",
-      "reject_confirm": "Rechazar de forma irreversible"
+      "reject_confirm": "Rechazar de forma irreversible",
+      "tab_autonomy": "Autonomía",
+      "tab_autonomy_title": "36 módulos de autonomía, resiliencia y empresa"
     },
     "corporate": {
       "title": "Corporativo y sociedades",
@@ -3247,7 +3257,11 @@
       "comm_filter_title": "Filtro de participantes",
       "title_comm_refresh": "Actualizar el feed",
       "ph_comm_input": "Enviar un mensaje o una instrucción al canal (Intro)...",
-      "action_send": "Enviar"
+      "action_send": "Enviar",
+      "mode_board": "Tablero",
+      "mode_gantt": "Gantt",
+      "mode_graph": "Grafo",
+      "subtasks_tab": "Subtareas"
     },
     "operations_erp": {
       "title": "Expedientes y contratos — Ofertas y pedidos",
@@ -3743,7 +3757,8 @@
       "due_title": "Fecha de vencimiento",
       "tags_placeholder": "Etiquetas, separadas por comas",
       "comment_placeholder": "Escribe un mensaje o instrucción para el agente...",
-      "start_now": "Iniciar ahora"
+      "start_now": "Iniciar ahora",
+      "back_to_parent": "Tarea principal"
     },
     "roles": {
       "title": "Gestionar roles y prompts de IA",

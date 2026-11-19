@@ -1,0 +1,125 @@
+/* Global Header Sync Button & Unified View Header Polish */
+(function () {
+  if (window.__archonGlobalHeaderSyncInit) return;
+  window.__archonGlobalHeaderSyncInit = true;
+
+  function triggerSpin(btn) {
+    if (!btn) return;
+    const img = btn.querySelector('img');
+    if (!img) return;
+    if (typeof img.animate === 'function') {
+      img.animate(
+        [{ transform: 'rotate(0deg)' }, { transform: 'rotate(-360deg)' }],
+        { duration: 750, easing: 'ease-in-out' }
+      );
+    }
+  }
+
+  async function syncActiveView(btn) {
+    triggerSpin(btn);
+    const tab = (typeof currentTab !== 'undefined' && currentTab) ? currentTab : 'mission-control';
+    try {
+      const loaders = {
+        'mission-control': () => typeof fetchMissionControlData === 'function' && fetchMissionControlData(),
+        'operations': () => typeof loadOperationsData === 'function' && loadOperationsData(),
+        'plugins': () => {
+          if (typeof loadPluginSettingsRegistry === 'function') loadPluginSettingsRegistry();
+          if (typeof loadSystemSettings === 'function') loadSystemSettings();
+        },
+        'guardian': () => typeof loadGuardianConfig === 'function' && loadGuardianConfig(),
+        'log-stream': () => typeof loadAuditLogs === 'function' && loadAuditLogs(),
+        'inbox': () => typeof loadInboxData === 'function' && loadInboxData(),
+        'agent-profiles': () => typeof loadAgentProfiles === 'function' && loadAgentProfiles(),
+        'library': () => typeof loadLibraryData === 'function' && loadLibraryData(),
+        'watchdog': () => typeof initWatchdogView === 'function' && initWatchdogView(),
+        'finance': () => typeof initFinanceView === 'function' && initFinanceView(),
+        'approval-policies': () => typeof initApprovalPoliciesView === 'function' && initApprovalPoliciesView(),
+        'addresses': () => typeof initAddressesView === 'function' && initAddressesView(),
+        'items': () => typeof initItemsView === 'function' && initItemsView(),
+        'operations-erp': () => typeof initOperationsErpView === 'function' && initOperationsErpView(),
+        'corporate': () => typeof initCorporateView === 'function' && initCorporateView(),
+        'research': () => typeof loadResearchProjects === 'function' && loadResearchProjects(),
+        'showroom': () => typeof loadShowroomArtifacts === 'function' && loadShowroomArtifacts(),
+      };
+      const fn = loaders[tab];
+      if (fn) {
+        await Promise.resolve(fn());
+      }
+      if (typeof fetchSystemHealth === 'function') {
+        fetchSystemHealth(true);
+      }
+    } catch (err) {
+      console.warn('[GlobalSync] Aktualisierung fehlgeschlagen:', err);
+    }
+  }
+
+  window.syncActiveView = syncActiveView;
+
+  function createSyncButton() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'archon-global-sync-btn w-9 h-9 p-0 border-0 bg-transparent hover:opacity-80 transition cursor-pointer flex items-center justify-center shrink-0';
+    btn.title = 'Inhalte aktualisieren (Sync)';
+    btn.setAttribute('aria-label', 'Sync');
+    btn.onclick = function () { syncActiveView(btn); };
+    btn.innerHTML = '<img src="/static/img/sync_icon.png" alt="Sync" class="w-8 h-8 object-contain pointer-events-none">';
+    return btn;
+  }
+
+  function enhanceViewHeaders() {
+    const main = document.querySelector('main');
+    if (!main) return;
+    // Find top-level view containers (#view-*) and ensure their first header bar has the rightmost SYNC button
+    const views = main.querySelectorAll('[id^="view-"]:not([id$="-mount"])');
+    views.forEach((view) => {
+      if (view.querySelector('.archon-global-sync-btn')) return;
+      // Locate the top header bar (first direct child with border-b and flex)
+      const header = Array.from(view.children).find((el) =>
+        el.tagName === 'DIV' &&
+        el.classList.contains('border-b') &&
+        (el.classList.contains('flex') || el.classList.contains('justify-between'))
+      );
+      if (!header) return;
+
+      // Ensure 80px alignment & title styling consistency on standard view headers
+      const titleEl = header.querySelector('h1, h2');
+      if (titleEl && !titleEl.dataset.archonStyled) {
+        titleEl.dataset.archonStyled = '1';
+        titleEl.classList.remove('text-sm', 'text-base', 'text-lg', 'uppercase', 'font-mono');
+        titleEl.classList.add('text-[22px]', 'font-black', 'tracking-tight', 'leading-none');
+      }
+      const helpBtn = header.querySelector('button[onclick*="openContextHelp"]');
+      if (helpBtn && !helpBtn.dataset.archonStyled) {
+        helpBtn.dataset.archonStyled = '1';
+        helpBtn.classList.remove('w-5', 'h-5', 'rounded-md');
+        helpBtn.classList.add('-mt-1.5', 'w-4', 'h-4', 'rounded-full', 'self-start');
+      }
+
+      // Append global SYNC button as the outermost right element
+      const children = Array.from(header.children).filter((c) => !c.classList.contains('hidden'));
+      const rightGroup = children.length >= 2 ? children[children.length - 1] : null;
+      if (rightGroup && rightGroup.classList.contains('flex')) {
+        rightGroup.appendChild(createSyncButton());
+      } else {
+        const wrap = document.createElement('div');
+        wrap.className = 'flex items-center gap-2 shrink-0 ml-auto';
+        wrap.appendChild(createSyncButton());
+        header.appendChild(wrap);
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    enhanceViewHeaders();
+    // Re-run when lazy views mount into the DOM
+    const main = document.querySelector('main');
+    if (main && typeof MutationObserver !== 'undefined') {
+      let timer = null;
+      const obs = new MutationObserver(() => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(enhanceViewHeaders, 80);
+      });
+      obs.observe(main, { childList: true, subtree: true });
+    }
+  });
+})();

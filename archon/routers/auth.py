@@ -349,3 +349,116 @@ def api_auth_delete_user(user_id: str, request: Request):
         return {"status": "success", "message": "Benutzer gelöscht."}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+def _resolve_target_passkey_user(request: Request, explicit_user_id: Optional[str] = None) -> tuple[str, str]:
+    curr = get_current_user_from_request(request)
+    curr_id = str(curr.get("id") or curr.get("username") or "admin")
+    curr_name = str(curr.get("username") or curr_id)
+    target_id = str(explicit_user_id or curr_id).strip() or curr_id
+    if target_id != curr_id and curr.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Passkeys anderer Benutzer verwalten.")
+    return target_id, curr_name
+
+
+def _request_rp_id_and_origin(request: Request) -> tuple[str, Optional[str]]:
+    host_hdr = (request.headers.get("host") or "localhost").split(":")[0].strip() or "localhost"
+    origin = request.headers.get("origin")
+    return host_hdr, origin
+
+
+@router.get("/api/auth/passkey/config")
+def api_get_passkey_config(request: Request, user_id: Optional[str] = None):
+    from backend.passkey_hitl import get_user_passkey_config
+    target_id, _ = _resolve_target_passkey_user(request, user_id)
+    return {"status": "success", **get_user_passkey_config(target_id)}
+
+
+@router.post("/api/auth/passkey/config")
+def api_update_passkey_config(request: Request, payload: dict = Body(...)):
+    from backend.passkey_hitl import update_user_passkey_config
+    target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
+    cfg = update_user_passkey_config(
+        target_id,
+        enabled=payload.get("enabled"),
+        scope=payload.get("scope"),
+        categories=payload.get("categories"),
+    )
+    return {"status": "success", **cfg}
+
+
+@router.post("/api/auth/passkey/register/options")
+def api_passkey_register_options(request: Request, payload: dict = Body(default={})):
+    from backend.passkey_hitl import create_registration_options
+    target_id, curr_name = _resolve_target_passkey_user(request, payload.get("user_id"))
+    rp_id, _ = _request_rp_id_and_origin(request)
+    username = str(payload.get("username") or curr_name or target_id)
+    opts = create_registration_options(target_id, username, rp_id)
+    return {"status": "success", "options": opts}
+
+
+@router.post("/api/auth/passkey/register/verify")
+def api_passkey_register_verify(request: Request, payload: dict = Body(...)):
+    from backend.passkey_hitl import verify_and_store_registration
+    target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
+    _, origin = _request_rp_id_and_origin(request)
+    try:
+        cfg = verify_and_store_registration(
+            user_id=target_id,
+            credential_id=str(payload.get("id") or ""),
+            client_data_b64=str(payload.get("clientDataJSON") or ""),
+            public_key_spki_b64=str(payload.get("publicKeySpki") or ""),
+            alg=int(payload.get("alg", -7)),
+            label=str(payload.get("label") or "Passkey"),
+            expected_origin=origin,
+        )
+        return {"status": "success", **cfg}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/api/auth/passkey/credentials/{cred_id}")
+def api_passkey_delete_credential(cred_id: str, request: Request, user_id: Optional[str] = None):
+    from backend.passkey_hitl import delete_user_credential
+    target_id, _ = _resolve_target_passkey_user(request, user_id)
+    cfg = delete_user_credential(target_id, cred_id)
+    return {"status": "success", **cfg}
+
+
+@router.post("/api/auth/passkey/hitl/options")
+def api_passkey_hitl_options(request: Request, payload: dict = Body(default={})):
+    from backend.passkey_hitl import create_hitl_assertion_options, is_passkey_required
+    target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
+    category = str(payload.get("category") or "all")
+    if not is_passkey_required(target_id, category) and not payload.get("force"):
+        return {"status": "success", "required": False}
+    rp_id, _ = _request_rp_id_and_origin(request)
+    try:
+        opts = create_hitl_assertion_options(
+            target_id,
+            rp_id,
+            category=category,
+            action_label=str(payload.get("action_label") or ""),
+        )
+        return {"status": "success", "required": True, "options": opts}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/auth/passkey/hitl/verify")
+def api_passkey_hitl_verify(request: Request, payload: dict = Body(...)):
+    from backend.passkey_hitl import verify_hitl_assertion
+    target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
+    _, origin = _request_rp_id_and_origin(request)
+    try:
+        proof = verify_hitl_assertion(
+            user_id=target_id,
+            credential_id=str(payload.get("id") or ""),
+            client_data_b64=str(payload.get("clientDataJSON") or ""),
+            authenticator_data_b64=str(payload.get("authenticatorData") or ""),
+            signature_b64=str(payload.get("signature") or ""),
+            expected_origin=origin,
+        )
+        return {"status": "success", "proof": proof}
+    except Exception as exc:
+        raise HTTPException(status_code=403, detail=str(exc))

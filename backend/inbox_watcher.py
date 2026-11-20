@@ -135,6 +135,18 @@ async def scan_and_process_inbox() -> Dict[str, Any]:
         try:
             shutil.move(fpath, target_path)
             processed_files.append({"file": fname, "task_id": task_id, "size": fsize})
+            try:
+                from backend.workflow_scheduler import dispatch_workflow_event
+                dispatch_workflow_event(
+                    source="inbox",
+                    event_type="new_item",
+                    title=fname,
+                    summary=content_preview[:400],
+                    payload={"file": fname, "ext": ext, "task_id": task_id, "size": fsize},
+                    correlation_id=task_id,
+                )
+            except Exception as wf_err:
+                print(f"[InboxWatcher] Workflow-Event notice: {wf_err}", file=sys.stderr)
         except Exception as e:
             print(f"[InboxWatcher] Move file error: {e}", file=sys.stderr)
 

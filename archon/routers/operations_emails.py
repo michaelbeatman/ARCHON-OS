@@ -78,6 +78,18 @@ def api_approve_email_draft(request: Request, draft_id: str, req: Dict[str, Any]
     try:
         from backend.email_draft_engine import email_draft_engine
         draft = email_draft_engine.approve_and_send(draft_id, approver_id=approver_id)
+        try:
+            from backend.workflow_scheduler import dispatch_workflow_event
+            dispatch_workflow_event(
+                source="approval",
+                event_type="email_approved",
+                title=f"E-Mail freigegeben: {draft.get('subject') or draft_id}",
+                summary=f"Empfaenger: {draft.get('recipient', '')} | Freigegeben durch {approver_id}",
+                payload={"draft_id": draft_id, "approver": approver_id},
+                correlation_id=f"mail-apr-{draft_id}",
+            )
+        except Exception:
+            pass
         return {"status": "success", "draft": draft, "message": "E-Mail freigegeben und versendet."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

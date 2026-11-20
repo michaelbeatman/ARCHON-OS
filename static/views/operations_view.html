@@ -42,14 +42,10 @@
             <div id="ops-kanban-stats" class="flex items-center gap-2.5 text-[10px] font-mono text-muted-custom"></div>
             <div class="ml-auto flex items-center gap-1.5 shrink-0">
               <div class="flex items-center rounded-lg border border-[var(--border)] bg-[var(--background)] p-0.5 text-xs font-mono" role="group">
-                <button type="button" id="btn-kanban-mode-board" onclick="window.setOpsKanbanViewMode && window.setOpsKanbanViewMode('board')" class="h-7 px-2.5 rounded-md font-bold bg-[var(--primary)] text-[var(--primary-foreground)] transition cursor-pointer" data-i18n="view.operations.mode_board">Board</button>
+                <button type="button" id="btn-kanban-mode-board" onclick="window.setOpsKanbanViewMode && window.setOpsKanbanViewMode('board')" class="h-7 px-2.5 rounded-md font-bold text-white transition cursor-pointer" style="background-color: #d42a2b; color: #ffffff;" data-i18n="view.operations.mode_board">Board</button>
                 <button type="button" id="btn-kanban-mode-gantt" onclick="window.setOpsKanbanViewMode && window.setOpsKanbanViewMode('gantt')" class="h-7 px-2.5 rounded-md font-medium text-muted-custom hover:text-primary-custom transition cursor-pointer" data-i18n="view.operations.mode_gantt">Gantt</button>
                 <button type="button" id="btn-kanban-mode-graph" onclick="window.setOpsKanbanViewMode && window.setOpsKanbanViewMode('graph')" class="h-7 px-2.5 rounded-md font-medium text-muted-custom hover:text-primary-custom transition cursor-pointer" data-i18n="view.operations.mode_graph">Graph</button>
               </div>
-              <button data-i18n-title="view.operations.title_refresh" onclick="loadOperationsData()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs" title="Aktualisieren">
-                <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-500"></i>
-                <span data-i18n="view.operations.action_sync">Sync</span>
-              </button>
               <button id="ops-kanban-archive-btn" onclick="toggleOpsKanbanArchive()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-bold text-primary-custom transition cursor-pointer flex items-center gap-1.5">
                 <i data-lucide="archive" class="w-3.5 h-3.5"></i> <span>Archiv (…)</span>
               </button>
@@ -200,13 +196,28 @@
               </button>
             </div>
 
-            <!-- Flowchart Actions -->
-            <div class="flex items-center gap-2">
+            <!-- Flowchart Actions & Hierarchie-Presets -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <select id="ops-org-preset-select" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:outline-none cursor-pointer">
+                <option data-i18n="view.operations.org_preset_choose" value="">Konfiguration wählen...</option>
+              </select>
+              <button type="button" onclick="loadOrgHierarchyPreset()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-mono text-[var(--foreground)] transition cursor-pointer flex items-center gap-1" data-i18n-title="view.operations.title_org_preset_open" title="Gespeicherte Hierarchie-Konfiguration öffnen">
+                <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.action_org_preset_open">Öffnen</span>
+              </button>
+              <button type="button" onclick="saveOrgHierarchyPreset()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-xs font-mono text-[var(--foreground)] transition cursor-pointer flex items-center gap-1" data-i18n-title="view.operations.title_org_preset_save" title="Aktuelle Hierarchie unter Namen als Preset speichern">
+                <i data-lucide="bookmark-plus" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.action_org_preset_save">Preset speichern</span>
+              </button>
+              <button type="button" id="btn-org-undo-layout" onclick="undoLastOrgLayout()" class="hidden px-2.5 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 transition cursor-pointer text-xs font-mono flex items-center gap-1" data-i18n-title="view.operations.title_org_undo" title="Letzte Layout-Änderung rückgängig machen">
+                <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+                <span data-i18n="view.operations.action_org_undo">Rückgängig</span>
+              </button>
               <button data-i18n-title="view.operations.title_org_reset" onclick="resetOrgHierarchyToDefault()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-muted-custom hover:text-primary-custom transition cursor-pointer text-xs flex items-center gap-1.5" title="Setzt auf die 6 Standard-Teams zurück">
                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
                 <span data-i18n="view.operations.action_org_reset">Reset (6 Teams)</span>
               </button>
-              <button data-i18n-title="view.operations.title_org_align" onclick="autoAlignOrgHierarchy()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-muted-custom hover:text-primary-custom transition cursor-pointer text-xs flex items-center gap-1.5" title="Richtet alle Knoten überlappungsfrei am 20px-Raster aus">
+              <button data-i18n-title="view.operations.title_org_align" onclick="autoAlignOrgHierarchy()" class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] text-muted-custom hover:text-primary-custom transition cursor-pointer text-xs flex items-center gap-1.5" title="Richtet alle Knoten am 20px-Raster aus (Positionen bleiben erhalten)">
                 <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
                 <span data-i18n="view.operations.action_org_align">Am Raster ausrichten</span>
               </button>
@@ -218,7 +229,7 @@
           </div>
 
           <!-- FLOWCHART CANVAS VIEW -->
-          <div id="ops-org-flow-container" class="flex-1 w-full relative overflow-auto bg-[var(--page-bg)] select-none" style="background-image: radial-gradient(var(--border) 1.2px, transparent 1.2px); background-size: 20px 20px;">
+          <div id="ops-org-flow-container" class="flex-1 w-full relative overflow-auto bg-[var(--page-bg)] select-none" style="background-image: radial-gradient(var(--border) 1.2px, transparent 1.2px); background-size: 20px 20px; background-attachment: local;">
             <svg id="ops-org-flow-svg" class="absolute inset-0 pointer-events-none" style="min-width: 3200px; min-height: 4000px; width: 3200px; height: 4000px; z-index: 5;">
               <defs>
                 <marker id="flow-arrow-down" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">

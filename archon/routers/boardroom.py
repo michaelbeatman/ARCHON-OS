@@ -359,6 +359,18 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
             }
             save_boardroom_history_item(hist_entry)
             res["history_id"] = hist_entry["id"]
+            try:
+                from backend.workflow_scheduler import dispatch_workflow_event
+                dispatch_workflow_event(
+                    source="boardroom",
+                    event_type="decision",
+                    title=req.task[:140],
+                    summary=str(res.get("synthesis", ""))[:600],
+                    payload={"framework": req.framework, "history_id": hist_entry["id"]},
+                    correlation_id=hist_entry["id"],
+                )
+            except Exception as wf_err:
+                print(f"[Boardroom] Workflow-Event notice: {wf_err}")
         except Exception as e:
             print(f"Error saving boardroom history item in run: {e}")
     except Exception as e:

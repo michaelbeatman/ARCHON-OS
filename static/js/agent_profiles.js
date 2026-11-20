@@ -1454,16 +1454,23 @@
         });
         if (res.ok) {
           const data = await res.json();
+          if (data.agent_markdown) {
+            const textarea = document.getElementById("prof-soul-inline-editor");
+            if (textarea) textarea.value = data.agent_markdown;
+          }
           await loadHermesProfilesFromServer();
           if (currentSelectedProfileId) {
-            await loadInlineSoulMarkdown(currentSelectedProfileId);
             const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
             if (prof) {
               const prevEl = document.getElementById("prof-edit-prompt-preview");
               if (prevEl) prevEl.innerText = prof.prompt || "";
             }
+            if (!data.agent_markdown) {
+              await loadInlineSoulMarkdown(currentSelectedProfileId);
+            }
           }
           updateSoulModeUI(targetMode, data.avg_active_chars ? Math.round(data.avg_active_chars) : undefined);
+          if (statusEl) statusEl.innerText = "Synchronisiert";
           const label = targetMode === "full"
             ? "Full-SOUL (~17.200 Zeichen)"
             : targetMode === "pro"

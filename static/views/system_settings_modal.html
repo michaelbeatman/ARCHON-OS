@@ -169,6 +169,64 @@
               </tbody>
             </table>
           </div>
+
+          <!-- Passkey / WebAuthn HITL-Verifizierung (pro Benutzer, 2-stufig) -->
+          <div id="passkey-hitl-settings-card" class="border border-[var(--border)] rounded-xl p-4 bg-[var(--card)] space-y-3.5 shadow-xs">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[var(--border)] pb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                  <i data-lucide="fingerprint" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-xs uppercase font-mono tracking-wider text-[var(--foreground)]" data-i18n="settings.users.passkey_title">Passkey / WebAuthn HITL-Verifizierung (M101)</h4>
+                  <p class="text-[11px] text-[var(--muted-foreground)]" data-i18n="settings.users.passkey_desc">Kryptographische Freigabe-Prüfung pro Benutzer (Google Passkey, Windows Hello, Touch ID, Hardware-Key) – optional &amp; selektiv.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <select id="passkey-user-select" onchange="window.loadPasskeyHitlSettings && window.loadPasskeyHitlSettings(this.value)" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:outline-none cursor-pointer">
+                  <option value="admin" data-i18n="settings.users.col_user">admin</option>
+                </select>
+                <label class="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] cursor-pointer select-none">
+                  <input type="checkbox" id="passkey-hitl-enabled" onchange="window.savePasskeyHitlSettings && window.savePasskeyHitlSettings()" class="rounded text-emerald-600 cursor-pointer" />
+                  <span class="text-xs font-mono font-bold text-[var(--foreground)]" data-i18n="settings.users.passkey_enable">Aktivieren</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Stufe 2: Geltungsbereich (Alle vs. Selektiv) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--background)] space-y-2">
+                <label class="block text-[11px] font-mono font-bold uppercase text-[var(--muted-foreground)]" data-i18n="settings.users.passkey_scope_label">Geltungsbereich</label>
+                <select id="passkey-hitl-scope" onchange="window.onPasskeyScopeChange && window.onPasskeyScopeChange(this.value)" class="w-full h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs font-mono text-[var(--foreground)] focus:outline-none cursor-pointer">
+                  <option value="all" data-i18n="settings.users.passkey_scope_all">Für alle HITL-Freigaben erzwingen</option>
+                  <option value="selected" data-i18n="settings.users.passkey_scope_selected">Nur für ausgewählte Kategorien</option>
+                </select>
+                <div id="passkey-categories-box" class="grid grid-cols-2 gap-1.5 pt-1 text-[11px] font-mono">
+                  <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="passkey-cat-payments" onchange="window.savePasskeyHitlSettings && window.savePasskeyHitlSettings()" checked class="rounded text-emerald-600 cursor-pointer" /><span data-i18n="settings.users.passkey_cat_payments">Zahlungen &amp; Finanzen</span></label>
+                  <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="passkey-cat-project_start" onchange="window.savePasskeyHitlSettings && window.savePasskeyHitlSettings()" checked class="rounded text-emerald-600 cursor-pointer" /><span data-i18n="settings.users.passkey_cat_project">Projektstart</span></label>
+                  <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="passkey-cat-budget_overrun" onchange="window.savePasskeyHitlSettings && window.savePasskeyHitlSettings()" checked class="rounded text-emerald-600 cursor-pointer" /><span data-i18n="settings.users.passkey_cat_budget">Budget-Überschreitung</span></label>
+                  <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="passkey-cat-destructive_actions" onchange="window.savePasskeyHitlSettings && window.savePasskeyHitlSettings()" checked class="rounded text-emerald-600 cursor-pointer" /><span data-i18n="settings.users.passkey_cat_destructive">System-Aktionen</span></label>
+                </div>
+              </div>
+
+              <!-- Registrierte Passkeys -->
+              <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[11px] font-mono font-bold uppercase text-[var(--muted-foreground)]" data-i18n="settings.users.passkey_devices_label">Registrierte Passkeys</span>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="window.testPasskeyHitlVerification && window.testPasskeyHitlVerification()" class="px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[11px] font-mono font-semibold text-[var(--foreground)] transition cursor-pointer" data-i18n="settings.users.passkey_test_btn">Testen</button>
+                    <button type="button" onclick="window.registerUserPasskey && window.registerUserPasskey()" class="px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-mono font-bold transition cursor-pointer flex items-center gap-1 shadow-2xs">
+                      <i data-lucide="key-round" class="w-3 h-3"></i>
+                      <span data-i18n="settings.users.passkey_add_btn">+ Passkey registrieren</span>
+                    </button>
+                  </div>
+                </div>
+                <div id="passkey-credentials-list" class="space-y-1 max-h-24 overflow-y-auto text-[11px] font-mono text-[var(--muted-foreground)]">
+                  <span data-i18n="settings.users.passkey_none">Noch kein Passkey registriert.</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- MODAL: NEUEN BENUTZER ANLEGEN -->

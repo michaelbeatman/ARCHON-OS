@@ -841,6 +841,11 @@ async def _start_gateway_idle_loop():
         _spawn_background(internet_watchdog_background_loop())
     except Exception as e:
         print(f"[Startup] Internet Watchdog init notice: {e}")
+    try:
+        from backend.workflow_scheduler import workflow_scheduler_background_loop
+        _spawn_background(workflow_scheduler_background_loop())
+    except Exception as e:
+        print(f"[Startup] Workflow Scheduler init notice: {e}")
 
 
 async def _cancel_background_tasks():

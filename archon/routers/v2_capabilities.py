@@ -106,6 +106,190 @@ async def api_v2_workflow_dag_run(request: Request, payload: Dict[str, Any] = Bo
     return {"status": "success", **res}
 
 
+@router.get("/api/v2/workflows/templates")
+async def api_v2_workflow_templates_list(request: Request):
+    require_admin_or_503(request)
+    from backend.workflow_templates import list_workflow_templates
+    return {"status": "ok", "templates": list_workflow_templates()}
+
+
+@router.post("/api/v2/workflows/templates")
+async def api_v2_workflow_templates_save(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.workflow_templates import save_workflow_template
+    try:
+        tpl = save_workflow_template(payload)
+        return {"status": "ok", "template": tpl}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/v2/workflows/templates/import-n8n")
+async def api_v2_workflow_templates_import_n8n(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.workflow_templates import import_n8n_workflow_json
+    try:
+        n8n_json = payload.get("workflow") if isinstance(payload.get("workflow"), dict) else payload
+        tpl = import_n8n_workflow_json(n8n_json, title_override=payload.get("title"))
+        return {"status": "ok", "template": tpl}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/api/v2/workflows/templates/{tpl_id}")
+async def api_v2_workflow_templates_delete(request: Request, tpl_id: str):
+    require_admin_or_503(request)
+    from backend.workflow_templates import delete_workflow_template
+    deleted = delete_workflow_template(tpl_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Custom template not found or built-in")
+    return {"status": "ok", "deleted": tpl_id}
+
+
+@router.post("/api/v2/workflows/templates/{tpl_id}/run")
+async def api_v2_workflow_templates_run(request: Request, tpl_id: str, payload: Dict[str, Any] = Body(default={})):
+    require_admin_or_503(request)
+    from backend.workflow_templates import materialize_workflow_to_kanban
+    try:
+        res = materialize_workflow_to_kanban(
+            tpl_id=tpl_id,
+            inputs=payload.get("inputs") or {},
+            cron_schedule=payload.get("cron_schedule"),
+            n8n_webhook_url=payload.get("n8n_webhook_url"),
+        )
+        return {"status": "success", **res}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/api/v2/workflows/schedules")
+async def api_v2_workflow_schedules_list(request: Request, template_id: Optional[str] = None):
+    require_admin_or_503(request)
+    from backend.workflow_scheduler import list_schedules
+    return {"status": "ok", "schedules": list_schedules(template_id=template_id)}
+
+
+@router.post("/api/v2/workflows/schedules")
+async def api_v2_workflow_schedules_save(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.workflow_scheduler import upsert_schedule
+    try:
+        sched = upsert_schedule(payload)
+        return {"status": "ok", "schedule": sched}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/api/v2/workflows/schedules/{schedule_id}")
+async def api_v2_workflow_schedules_delete(request: Request, schedule_id: str):
+    require_admin_or_503(request)
+    from backend.workflow_scheduler import delete_schedule
+    if not delete_schedule(schedule_id):
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    return {"status": "ok", "deleted": schedule_id}
+
+
+@router.get("/api/v2/workflows/events")
+async def api_v2_workflow_events_list(request: Request, limit: int = 100, source: Optional[str] = None):
+    require_admin_or_503(request)
+    from backend.workflow_scheduler import list_workflow_events
+    return {"status": "ok", "events": list_workflow_events(limit=limit, source=source)}
+
+
+@router.post("/api/v2/workflows/events/emit")
+async def api_v2_workflow_events_emit(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.workflow_scheduler import dispatch_workflow_event
+    res = dispatch_workflow_event(
+        source=str(payload.get("source") or "manual"),
+        event_type=str(payload.get("event_type") or "manual_trigger"),
+        title=str(payload.get("title") or "Manuelles Event"),
+        summary=str(payload.get("summary") or ""),
+        payload=payload.get("payload") if isinstance(payload.get("payload"), dict) else {},
+        correlation_id=payload.get("correlation_id"),
+    )
+    return {"status": "ok", **res}
+
+
+def _treasury_actor(request: Request) -> str:
+    try:
+        from archon.routers.auth import _resolve_target_passkey_user
+        uid, _ = _resolve_target_passkey_user(request)
+        return uid
+    except Exception:
+        return "admin"
+
+
+@router.get("/api/v2/treasury/overview")
+async def api_v2_treasury_overview(request: Request):
+    require_admin_or_503(request)
+    from backend.treasury_engine import get_treasury_overview
+    return {"status": "ok", **get_treasury_overview(user_id=_treasury_actor(request))}
+
+
+@router.post("/api/v2/treasury/accounts")
+async def api_v2_treasury_accounts_save(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.passkey_hitl import is_passkey_required
+    from backend.treasury_engine import upsert_account
+
+    uid = _treasury_actor(request)
+    if payload.get("id") and is_passkey_required(uid, category="payments") and not payload.get("passkey_verified"):
+        raise HTTPException(status_code=403, detail="passkey_verification_required")
+    try:
+        acc = upsert_account(payload)
+        return {"status": "ok", "account": acc}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/api/v2/treasury/accounts/{acc_id}")
+async def api_v2_treasury_accounts_delete(request: Request, acc_id: str):
+    require_admin_or_503(request)
+    from backend.treasury_engine import delete_account
+    if not delete_account(acc_id):
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"status": "ok", "deleted": acc_id}
+
+
+@router.post("/api/v2/treasury/payments/request")
+async def api_v2_treasury_payment_request(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.treasury_engine import request_payment
+    try:
+        tx = request_payment(payload, actor_id=_treasury_actor(request))
+        return {"status": "ok", "transaction": tx}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/api/v2/treasury/payments/{tx_id}/approve")
+async def api_v2_treasury_payment_approve(request: Request, tx_id: str, payload: Dict[str, Any] = Body(default={})):
+    require_admin_or_503(request)
+    from backend.treasury_engine import approve_payment
+    uid = _treasury_actor(request)
+    try:
+        tx = approve_payment(tx_id, approver_id=uid, passkey_verified=bool(payload.get("passkey_verified")))
+        return {"status": "ok", "transaction": tx}
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/api/v2/treasury/payments/{tx_id}/reject")
+async def api_v2_treasury_payment_reject(request: Request, tx_id: str, payload: Dict[str, Any] = Body(default={})):
+    require_admin_or_503(request)
+    from backend.treasury_engine import reject_payment
+    try:
+        tx = reject_payment(tx_id, rejected_by=_treasury_actor(request), reason=str(payload.get("reason") or ""))
+        return {"status": "ok", "transaction": tx}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 @router.post("/api/v2/workflows/sop/run")
 async def api_v2_hybrid_sop_run(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)

@@ -435,10 +435,19 @@ def run_watchdog_scan(force: bool = False) -> Dict[str, Any]:
     cfg["last_run"] = now_iso
     save_watchdog_config(cfg)
 
+    triggered_workflows = []
+    if new_findings:
+        try:
+            from backend.workflow_scheduler import dispatch_watchdog_triggers
+            triggered_workflows = dispatch_watchdog_triggers(new_findings)
+        except Exception as wf_err:
+            print(f"[Watchdog] Workflow-Trigger Fehler: {wf_err}", file=sys.stderr)
+
     return {
         "status": "success",
         "new_findings_count": len(new_findings),
         "findings": new_findings,
+        "triggered_workflows": triggered_workflows,
         "config": cfg
     }
 

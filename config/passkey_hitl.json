@@ -1,0 +1,15 @@
+{
+  "users": {
+    "usr_a10b330616de": {
+      "enabled": false,
+      "scope": "all",
+      "categories": {
+        "payments": true,
+        "project_start": true,
+        "budget_overrun": true,
+        "destructive_actions": true
+      },
+      "credentials": []
+    }
+  }
+}

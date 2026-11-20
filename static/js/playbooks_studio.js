@@ -265,8 +265,6 @@
   });
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", mountTileWithObserver);
-  } else {
-    mountTileWithObserver();
+    document.addEventListener("DOMContentLoaded", () => { /* Vorlagen jetzt direkt in 'Neue autonome Aufgabe' integriert (Option A) */ });
   }
 })();

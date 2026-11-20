@@ -372,6 +372,15 @@ def _enrich_task(
     task_dict["tokens"] = tmeta.get("tokens") or None
     task_dict["cost"] = tmeta.get("cost") or None
     task_dict["quality_review"] = tmeta.get("quality_review") or None
+    task_dict["soul_mode"] = tmeta.get("soul_mode") or None
+    task_dict["reasoning_effort"] = tmeta.get("reasoning_effort") or None
+    task_dict["tool_preset"] = tmeta.get("tool_preset") or None
+    task_dict["token_budget"] = tmeta.get("token_budget") or None
+    task_dict["cost_limit_usd"] = tmeta.get("cost_limit_usd") or None
+    task_dict["require_hitl"] = bool(tmeta.get("require_hitl"))
+    task_dict["cron_schedule"] = tmeta.get("cron_schedule") or None
+    task_dict["depends_on"] = tmeta.get("depends_on") or None
+    task_dict["trusted_input"] = bool(tmeta.get("trusted_input"))
     _dec = tmeta.get("decision") or None
     task_dict["decision"] = ({"typ": _dec.get("typ"),
                               "status": _dec.get("status") or "offen",
@@ -393,6 +402,16 @@ class TaskCreateRequest(BaseModel):
     provider_override: Optional[str] = None
     decompose: Optional[bool] = False
     team_id: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    soul_mode: Optional[str] = None
+    tool_preset: Optional[str] = None
+    token_budget: Optional[int] = None
+    cost_limit_usd: Optional[float] = None
+    require_hitl: Optional[bool] = False
+    due_date: Optional[str] = None
+    cron_schedule: Optional[str] = None
+    depends_on: Optional[str] = None
+    trusted_input: Optional[bool] = False
 
 
 class TaskStatusUpdateRequest(BaseModel):
@@ -514,8 +533,8 @@ def create_kanban_task(req: TaskCreateRequest):
             task_body = f"[Team: {team_name}]\n{task_body}".strip()
             
         cursor.execute("""
-            INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, model_override, provider_override)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, model_override, provider_override, block_kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             task_id,
             req.title,
@@ -526,17 +545,60 @@ def create_kanban_task(req: TaskCreateRequest):
             "Archon-User",
             now_iso,
             req.model_override,
-            req.provider_override
+            req.provider_override,
+            "hitl_gate" if req.require_hitl else None
         ))
+
+        if req.depends_on and str(req.depends_on).strip():
+            dep_id = str(req.depends_on).strip()
+            try:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO task_links (parent_id, child_id, kind, created_at) VALUES (?, ?, 'blocks', ?)",
+                    (dep_id, task_id, now_iso)
+                )
+            except Exception:
+                pass
         
         # Log event
         cursor.execute("""
             INSERT INTO task_events (task_id, kind, payload, created_at)
             VALUES (?, ?, ?, ?)
-        """, (task_id, "created", json.dumps({"title": req.title, "assignee": target_assignee, "team": req.team_id, "status": target_status}), now_iso))
+        """, (task_id, "created", json.dumps({
+            "title": req.title,
+            "assignee": target_assignee,
+            "team": req.team_id,
+            "status": target_status,
+            "soul_mode": req.soul_mode,
+            "reasoning_effort": req.reasoning_effort,
+            "tool_preset": req.tool_preset,
+        }), now_iso))
         
         conn.commit()
         _sync_to_memory_bridge(task_id, req.title, target_assignee, target_status)
+
+        # Sidecar-Metadaten (SOUL, Reasoning, Tool-Preset, Budget, HITL, Due, Cron, Dependency)
+        if any([
+            req.soul_mode, req.reasoning_effort, req.tool_preset,
+            req.token_budget, req.cost_limit_usd, req.require_hitl,
+            req.due_date, req.cron_schedule, req.depends_on, req.trusted_input
+        ]):
+            try:
+                from backend.kanban_sidecar import update_kanban_meta
+                def _save_create_meta(meta):
+                    tmeta = meta.setdefault("tasks", {}).setdefault(task_id, {})
+                    if req.soul_mode: tmeta["soul_mode"] = req.soul_mode
+                    if req.reasoning_effort: tmeta["reasoning_effort"] = req.reasoning_effort
+                    if req.tool_preset: tmeta["tool_preset"] = req.tool_preset
+                    if req.token_budget: tmeta["token_budget"] = int(req.token_budget)
+                    if req.cost_limit_usd is not None: tmeta["cost_limit_usd"] = float(req.cost_limit_usd)
+                    if req.require_hitl: tmeta["require_hitl"] = True
+                    if req.due_date: tmeta["due"] = str(req.due_date)[:10]
+                    if req.cron_schedule: tmeta["cron_schedule"] = str(req.cron_schedule).strip()
+                    if req.depends_on: tmeta["depends_on"] = str(req.depends_on).strip()
+                    if req.trusted_input: tmeta["trusted_input"] = True
+                update_kanban_meta(_save_create_meta)
+            except Exception as meta_err:
+                print(f"[OperationsAPI] Meta save warning: {meta_err}", file=sys.stderr)
         
         # Falls Decompose angefordert wurde und Hermes Container läuft:
         if req.decompose:
@@ -2379,6 +2441,37 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
             tmeta["tokens"] = payload["tokens"]
         if "cost" in payload:
             tmeta["cost"] = payload["cost"]
+        # Pro-Task Aufwand & Governance (SOUL, Reasoning, Tools, Budget, HITL, Cron)
+        for mk in ("soul_mode", "reasoning_effort", "tool_preset", "cron_schedule", "depends_on"):
+            if mk in payload:
+                val = str(payload[mk] or "").strip()
+                if val:
+                    tmeta[mk] = val
+                else:
+                    tmeta.pop(mk, None)
+        if "token_budget" in payload:
+            tb = payload["token_budget"]
+            if tb is not None and str(tb).strip() != "":
+                try:
+                    tmeta["token_budget"] = int(tb)
+                except (TypeError, ValueError):
+                    pass
+            else:
+                tmeta.pop("token_budget", None)
+        if "cost_limit_usd" in payload:
+            cl = payload["cost_limit_usd"]
+            if cl is not None and str(cl).strip() != "":
+                try:
+                    tmeta["cost_limit_usd"] = float(cl)
+                except (TypeError, ValueError):
+                    pass
+            else:
+                tmeta.pop("cost_limit_usd", None)
+        if "require_hitl" in payload:
+            if payload["require_hitl"]:
+                tmeta["require_hitl"] = True
+            else:
+                tmeta.pop("require_hitl", None)
         if not tmeta:
             meta["tasks"].pop(task_id, None)
         return dict(meta["tasks"].get(task_id, {}))

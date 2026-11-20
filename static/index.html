@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="/static/custom.css?v=2026111113">
   <link rel="stylesheet" href="/static/css/design_system_v2.css?v=2026111901">
   <!-- Custom Studio CSS Overrides (Active live edits only) -->
-  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=2026112023">
+  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=2026112030">
   <script src="/static/vendor/lucide.min.js"></script>
   <script>
     // Performance-Booster: Verhindert, dass lucide.createIcons() bei jedem Aufruf alle 800+ bereits gerenderten SVGs
@@ -1181,6 +1181,9 @@
           <!-- SUB-VIEWS 3, 4, 6: KANBAN, ORGANISATION, KOMMUNIKATION -->
           <div id="view-operations-mount"></div>
 
+          <!-- SUB-VIEW: WORKFLOWS (VISUELLER DAG-EDITOR) -->
+          <div id="ops-view-workflows" class="hidden relative flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs"></div>
+
           <!-- SUB-VIEW 5: N8N WORKFLOW ENGINE (AUTOMATION) -->
           <div id="ops-view-automation" class="hidden relative flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
             <div id="n8n-loading-overlay" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--card)]/95 text-[var(--foreground)] p-6">
@@ -2110,9 +2113,9 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/system_settings.js?v=2026112011"></script>
   <script src="/static/js/settings_search.js?v=2026111113"></script>
   <script src="/static/js/system_update_badge.js?v=20261117"></script>
-  <script src="/static/js/agent_profiles.js?v=2026112020"></script>
+  <script src="/static/js/agent_profiles.js?v=2026112029"></script>
   <script src="/static/js/customizer.js?v=2026112018"></script>
-  <script src="/static/js/component_design_studio.js?v=2026111113"></script>
+  <script src="/static/js/component_design_studio.js?v=2026112031"></script>
   <script src="/static/js/command_palette.js?v=2026111113"></script>
   <script>
     // Coalesce lucide.createIcons() calls within 35ms so multiple synchronous calls only scan the DOM once
@@ -2136,8 +2139,9 @@ print('Ausführung erfolgreich!')</textarea>
   </script>
   <script src="/static/js/mission_control_cockpit.js?v=2026111113"></script>
   <script src="/static/js/research_lab.js?v=2026111113"></script>
-  <script src="/static/js/operations_kanban.js?v=2026112021"></script>
-  <script src="/static/js/kanban_gantt_graph.js?v=2026111902"></script>
+  <script src="/static/js/operations_kanban.js?v=2026112040"></script>
+  <script src="/static/js/kanban_gantt_graph.js?v=2026112032"></script>
+  <script src="/static/js/passkey_hitl.js?v=2026112035"></script>
   <script src="/static/js/sidebar_v2.js?v=2026111901"></script>
   <script src="/static/js/enterprise_calendar_ui.js?v=2026111901"></script>
   <script src="/static/js/v2_capabilities_panel.js?v=2026111901"></script>
@@ -2146,7 +2150,8 @@ print('Ausführung erfolgreich!')</textarea>
   <script src="/static/js/appshell_architect.js?v=2026111113"></script>
   <script src="/static/js/css_live_studio.js?v=2026112016"></script>
   <script src="/static/js/guardian.js?v=2026111113"></script>
-  <script src="/static/js/finance_controller.js?v=2026111113"></script>
+  <script src="/static/js/finance_controller.js?v=2026112047"></script>
+  <script src="/static/js/treasury_studio.js?v=2026112047" defer></script>
   <script src="/static/js/approval_policies_controller.js?v=2026112010"></script>
   <script src="/static/js/prompt_studio.js?v=2026111113"></script>
   <script src="/static/js/wissensbibliothek.js?v=2026111113"></script>
@@ -2707,8 +2712,8 @@ print('Ausführung erfolgreich!')</textarea>
       };
       const _coreViews = [
         _v2Mount('/static/views/view_app_frame_studio.html?v=2026111113', 'view-app-frame-studio-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); }),
-        _v2Mount('/static/views/system_settings_modal.html?v=2026112014', 'system-settings-mount'),
-        _v2Mount('/static/views/operations_view.html?v=2026111902', 'view-operations-mount'),
+        _v2Mount('/static/views/system_settings_modal.html?v=2026112035', 'system-settings-mount'),
+        _v2Mount('/static/views/operations_view.html?v=2026112034', 'view-operations-mount'),
         _v2Mount('/static/views/agent_profiles_view.html?v=2026112020', 'view-agent-profiles-mount'),
         _v2Mount('/static/views/master_chat_view.html?v=2026112020', 'view-master-chat-mount'),
       ];
@@ -2716,12 +2721,12 @@ print('Ausführung erfolgreich!')</textarea>
         ['library', '/static/views/library_view.html?v=2026111113', 'view-library-mount', null],
         ['inbox', '/static/views/inbox_view.html?v=2026112019', 'view-inbox-mount', null],
         ['showroom', '/static/views/view_showroom.html?v=2026112019', 'view-showroom-mount', null],
-        ['log-stream', '/static/views/log_stream_view.html?v=2026112012', 'view-log-stream-mount', null],
+        ['log-stream', '/static/views/log_stream_view.html?v=2026112043', 'view-log-stream-mount', null],
         ['guardian', '/static/views/view_guardian.html?v=2026111113', 'view-guardian-mount', null],
         ['plugins', '/static/views/view_plugins.html?v=2026112010', 'view-plugins-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof loadPluginSettingsRegistry === 'function') loadPluginSettingsRegistry(); if (typeof loadSystemSettings === 'function') loadSystemSettings(); }],
         ['research', '/static/views/view_research.html?v=2026111113', 'view-research-mount', null],
         ['watchdog', '/static/views/watchdog_view.html?v=2026111113', 'view-watchdog-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initWatchdogView === 'function') initWatchdogView(); }],
-        ['finance', '/static/views/view_finance.html?v=2026111113', 'view-finance-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initFinanceView === 'function') initFinanceView(); }],
+        ['finance', '/static/views/view_finance.html?v=2026112047', 'view-finance-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initFinanceView === 'function') initFinanceView(); }],
         ['approval-policies', '/static/views/view_approval_policies.html?v=2026112010', 'view-approval-policies-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initApprovalPoliciesView === 'function') initApprovalPoliciesView(); }],
         ['addresses', '/static/views/view_addresses.html?v=2026111113', 'view-addresses-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initAddressesView === 'function') initAddressesView(); }],
         ['items', '/static/views/view_items.html?v=2026111113', 'view-items-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof initItemsView === 'function') initItemsView(); }],
@@ -2867,7 +2872,7 @@ print('Ausführung erfolgreich!')</textarea>
     const CACHE_TTL_MS = 30000; // 30 Sek
     function shouldFetchTab(tId) { const now = Date.now(); if (!_tabCacheTimestamps[tId] || (now - _tabCacheTimestamps[tId] > CACHE_TTL_MS)) { _tabCacheTimestamps[tId] = now; return true; } return false; }
     // Operations-Subnavigation fallback (nur wenn operations_kanban.js nicht geladen wurde)
-    const OPS_TABS = ["projects", "chat", "kanban", "org", "automation", "comm"];
+    const OPS_TABS = ["projects", "chat", "kanban", "org", "workflows", "automation", "comm"];
     if (typeof window.setOperationsTab !== "function") {
       window.setOperationsTab = function setOperationsTabFallback(tab) {
         if (typeof window._opsKanbanSetTab === "function") {
@@ -5924,7 +5929,7 @@ print('Ausführung erfolgreich!')</textarea>
       if (!mode) mode = "containers";
       currentLogStreamMode = mode;
 
-      const tabs = ["containers", "profiles", "audit", "comm"];
+      const tabs = ["containers", "profiles", "audit", "events", "comm"];
       const meta = {
         containers: {
           title: "Telemetrie & Logs — Container",
@@ -5937,6 +5942,10 @@ print('Ausführung erfolgreich!')</textarea>
         audit: {
           title: "Telemetrie & Logs — Audit-Trail",
           subtitle: "Kryptografisch verkettete SHA-256 Transaktionshistorie (Pillar 6 / Zero-Trust)"
+        },
+        events: {
+          title: "Telemetrie & Logs — Event-Bus Log",
+          subtitle: "Zentrale Trigger-Historie aus Watchdog, Posteingang, Research Lab & AI Boardroom"
         },
         comm: {
           title: "Telemetrie & Logs — Kommunikation",
@@ -5979,10 +5988,12 @@ print('Ausführung erfolgreich!')</textarea>
       const paneProf = document.getElementById("log-pane-profiles");
       const consoleLog = document.getElementById("logstream-main-console");
       const consoleAudit = document.getElementById("logstream-audit-console");
+      const consoleEvents = document.getElementById("logstream-events-console");
       const commView = document.getElementById("ops-view-comm");
       const badge = document.getElementById("logstream-source-count-badge");
 
       if (commView) commView.classList.toggle("hidden", mode !== "comm");
+      if (consoleEvents) consoleEvents.classList.toggle("hidden", mode !== "events");
 
       if (mode === "comm") {
         if (sidebarExp) sidebarExp.classList.add("hidden");
@@ -5990,6 +6001,12 @@ print('Ausführung erfolgreich!')</textarea>
         if (consoleAudit) consoleAudit.classList.add("hidden");
         if (badge) badge.innerText = "Live";
         if (typeof loadOperationsData === "function") loadOperationsData(false);
+      } else if (mode === "events") {
+        if (sidebarExp) sidebarExp.classList.add("hidden");
+        if (consoleLog) consoleLog.classList.add("hidden");
+        if (consoleAudit) consoleAudit.classList.add("hidden");
+        if (badge) badge.innerText = "Event-Bus";
+        if (typeof window.loadWorkflowEventsLog === "function") window.loadWorkflowEventsLog();
       } else if (mode === "audit") {
         if (sidebarExp) sidebarExp.classList.add("hidden");
         if (consoleLog) consoleLog.classList.add("hidden");
@@ -10092,12 +10109,12 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- OPERATIONS: NEUE AUFGABE MODAL                                            -->
   <!-- ========================================================================= -->
-  <div id="ops-new-task-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
+  <div id="ops-new-task-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeNewTaskModal()"></div>
-    <div class="relative w-[940px] max-w-[95vw] max-h-[92vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal">
-      <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]">
+    <div id="ops-new-task-modal-card" class="relative bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal" style="width: 1280px; max-width: 96vw; height: 92vh; max-height: 92vh; box-sizing: border-box;">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+          <div class="w-9 h-9 rounded-xl bg-[#d42a2b] text-white flex items-center justify-center shadow-xs">
             <i data-lucide="plus-circle" class="w-5 h-5"></i>
           </div>
           <div>
@@ -10115,42 +10132,27 @@ ${logExcerpt}
         </div>
       </div>
       
-      <form id="ops-new-task-form" onsubmit="submitNewTask(event)" class="overflow-y-auto flex-1 p-6 space-y-4.5">
+      <form id="ops-new-task-form" onsubmit="submitNewTask(event)" class="overflow-y-auto flex-1 p-6 space-y-4 custom-scrollbar">
         <div>
           <label data-i18n="ui.tasks.field_title" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1.5">Titel der Aufgabe *</label>
           <input type="text" id="ops-task-title" required data-i18n-placeholder="ui.tasks.field_title_placeholder" placeholder="z. B. Konkurrenzanalyse M&amp;A für Q4 erstellen" class="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans shadow-2xs" />
         </div>
         
+        <!-- MASTER-CHAT EINGABEMODUL (ohne Screen-Capture): SOUL+Trust oben rechts, Textarea + Icon-Bar, Provider/Modell/Reasoning darunter -->
         <div>
-          <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+          <div class="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
             <label data-i18n="ui.tasks.field_description" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)]">Beschreibung / Prompt / Ziel</label>
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <!-- Hidden File Input -->
-              <input type="file" id="ops-task-file-input" onchange="handleOpsTaskFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
-              
-              <!-- Dateianhang Button -->
-              <button type="button" id="ops-task-attach-btn" onclick="document.getElementById('ops-task-file-input').click()" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" data-i18n-title="ui.tasks.attach_title" title="Datei anhängen (PDF, TXT, CSV, MD, Bild, Code)">
-                <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
-                <span data-i18n="ui.tasks.attach">Anhang</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button type="button" id="ops-task-trust-btn" onclick="toggleOpsTaskTrust()" class="px-2 py-1 rounded-lg border border-zinc-500/20 bg-zinc-500/10 text-zinc-500 dark:text-zinc-300 font-mono text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer select-none hover:border-zinc-400 shadow-2xs" data-i18n-title="view.master_chat.title_trust" title="Dual-LLM Quarantäne aktiv: Unprivilegiertes Modell isoliert externe Eingaben vor der Werkzeugausführung. Klick aktiviert Trusted-Modus [T].">
+                <span id="ops-task-trust-dot" class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+                <span>T</span>
               </button>
-
-              <!-- Spracheingabe / Mikrofon Button -->
-              <button type="button" id="ops-task-mic-btn" onclick="toggleOpsTaskDictation()" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" data-i18n-title="ui.tasks.mic_title" title="Spracheingabe / Diktat starten (Mikrofon)">
-                <i data-lucide="mic" class="w-3.5 h-3.5"></i>
-                <span data-i18n="ui.tasks.mic_label" id="ops-task-mic-label">Diktat</span>
-              </button>
-
-              <!-- Prompt Studio Button -->
-              <button type="button" onclick="openSurePromptsModal('ops-task')" class="px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-indigo-600 hover:text-white text-[var(--muted-foreground)] text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" data-i18n-title="ui.tasks.studio_title" title="Archon Prompt Studio (1.079 Vorlagen: Enterprise &amp; Fabric SOP)">
-                <i data-lucide="layers" class="w-3.5 h-3.5"></i>
-                <span data-i18n="ui.tasks.studio">Prompt Studio (1.079)</span>
-              </button>
-
-              <!-- KI-Optimieren Button -->
-              <button type="button" id="ops-task-optimize-btn" onclick="optimizePromptWithAI('ops-task')" class="px-2.5 py-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-600 hover:text-white text-indigo-500 dark:text-indigo-400 text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-2xs" data-i18n-title="ui.tasks.optimize_title" title="KI Prompt-Optimierer (5-Felder SOP-Format)">
-                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-                <span data-i18n="ui.tasks.optimize">KI-Optimieren</span>
-              </button>
+              <input type="hidden" id="ops-task-soul-mode" value="compact" />
+              <div class="flex items-center rounded-md border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono select-none shadow-2xs gap-0.5" data-i18n-title="view.master_chat.title_soul" title="SOUL.md Experten-Tiefe für diese Aufgabe">
+                <button type="button" id="ops-task-soul-btn-compact" onclick="setOpsTaskSoulMode('compact')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer whitespace-nowrap"><i data-lucide="zap" class="w-3 h-3 shrink-0"></i><span data-i18n="view.master_chat.soul_compact">Standard (~3k)</span></button>
+                <button type="button" id="ops-task-soul-btn-pro" onclick="setOpsTaskSoulMode('pro')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer whitespace-nowrap"><i data-lucide="target" class="w-3 h-3 shrink-0"></i><span data-i18n="view.master_chat.soul_pro">Pro (~6.8k)</span></button>
+                <button type="button" id="ops-task-soul-btn-full" onclick="setOpsTaskSoulMode('full')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer whitespace-nowrap"><i data-lucide="flame" class="w-3 h-3 shrink-0"></i><span data-i18n="view.master_chat.soul_full">Full-SOUL</span></button>
+              </div>
             </div>
           </div>
 
@@ -10167,10 +10169,68 @@ ${logExcerpt}
             </button>
           </div>
 
-          <textarea id="ops-task-body" rows="6" onpaste="handleOpsTaskInputPaste(event)" data-i18n-placeholder="ui.tasks.body_placeholder" placeholder="Detaillierte Aufgabenstellung, Kriterien oder Kontext für den Agenten..." class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans leading-relaxed custom-scrollbar shadow-2xs"></textarea>
+          <div class="border border-[var(--border)] rounded-xl p-2 bg-[var(--card)] shadow-xs focus-within:border-zinc-500 transition">
+            <textarea id="ops-task-body" rows="6" onpaste="handleOpsTaskInputPaste(event)" data-i18n-placeholder="ui.tasks.body_placeholder" placeholder="Detaillierte Aufgabenstellung, Kriterien oder Kontext für den Agenten..." class="w-full px-2 py-1.5 text-xs bg-transparent text-[var(--foreground)] focus:outline-none font-sans leading-relaxed custom-scrollbar resize-y"></textarea>
+
+            <!-- Kompakte Icon-Buttons unter dem Eingabefeld (wie Master-Chat, ohne Screen) -->
+            <div class="mt-1.5 pt-1.5 border-t border-[var(--border)] flex items-center gap-1.5 flex-wrap">
+              <input type="file" id="ops-task-file-input" onchange="handleOpsTaskFileSelected(event)" class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
+              <button type="button" id="ops-task-attach-btn" onclick="document.getElementById('ops-task-file-input').click()" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-2xs" data-i18n-title="ui.tasks.attach_title" title="Datei anhängen (PDF, TXT, CSV, MD, Bild, Code)">
+                <i data-lucide="paperclip" class="w-4 h-4"></i>
+              </button>
+              <button type="button" id="ops-task-mic-btn" onclick="toggleOpsTaskDictation()" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer shadow-2xs" data-i18n-title="ui.tasks.mic_title" title="Spracheingabe / Diktat starten (Mikrofon)">
+                <i data-lucide="mic" class="w-4 h-4"></i>
+                <span id="ops-task-mic-label" class="sr-only" data-i18n="ui.tasks.mic_label">Diktat</span>
+              </button>
+              <button type="button" onclick="openSurePromptsModal('ops-task')" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-indigo-600 hover:text-white text-[var(--foreground)] transition cursor-pointer shadow-2xs" data-i18n-title="ui.tasks.studio_title" title="Archon Prompt Studio (1.079 Vorlagen: Enterprise &amp; Fabric SOP)">
+                <i data-lucide="layers" class="w-4 h-4"></i>
+              </button>
+              <button type="button" id="ops-task-optimize-btn" onclick="optimizePromptWithAI('ops-task')" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-indigo-600 hover:text-white text-[var(--foreground)] transition cursor-pointer shadow-2xs" data-i18n-title="ui.tasks.optimize_title" title="KI Prompt-Optimierer (5-Felder SOP-Format)">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Master-Chat Status-/Modell-Leiste direkt unter dem Eingabefeld -->
+          <div class="mt-2 px-1 flex items-center justify-between gap-2 flex-wrap text-[11px] font-mono">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span data-i18n="view.master_chat.label_provider" class="font-semibold text-[var(--foreground)] uppercase text-[10.5px]">PROVIDER:</span>
+              <select id="ops-task-provider" onchange="onOpsTaskProviderChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--foreground)] focus:outline-none cursor-pointer" style="width: 110px;">
+                <option value="omniroute" data-i18n="view.agent_profiles.omniroute">OmniRoute</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="google" data-i18n="view.agent_profiles.google_ai_gemini">Google AI (Gemini)</option>
+                <option value="groq" data-i18n="view.agent_profiles.groq">Groq</option>
+                <option value="openai" data-i18n="view.agent_profiles.openai">OpenAI</option>
+                <option value="nvidia" data-i18n="view.agent_profiles.nvidia_nim">NVIDIA NIM</option>
+              </select>
+              <button type="button" onclick="typeof openPriceCatalogForMasterChat === 'function' && openPriceCatalogForMasterChat()" class="p-1 rounded-md border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-emerald-600 transition cursor-pointer" data-i18n-title="view.agent_profiles.title_preise_modell_katalog_oeffnen" title="Preise &amp; Modell-Katalog öffnen">
+                <i data-lucide="circle-dollar-sign" class="w-3.5 h-3.5"></i>
+              </button>
+              <span data-i18n="view.master_chat.label_model" class="font-semibold text-[var(--foreground)] uppercase text-[10.5px]">MODELL:</span>
+              <select id="ops-task-model" onchange="onOpsTaskModelChange(this.value)" class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--foreground)] focus:outline-none cursor-pointer" style="width: 210px;">
+                <option data-i18n="ui.tasks.model_default" value="">OmniRoute Default (Auto)</option>
+              </select>
+              <span id="ops-task-model-cost" data-i18n="ui.tasks.cost_estimate_default" class="text-[11px] font-mono text-[var(--muted-foreground)] px-1.5 py-0.5 rounded bg-[var(--secondary)]/60">≈ Input: $0.00 | Output: $0.00 /1M</span>
+              <button type="button" onclick="populateOpsTaskModelDropdown()" class="p-1 rounded-md hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer" data-i18n-title="view.operations.title_refresh" title="Aktualisieren">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span data-i18n="view.master_chat.label_reasoning" class="font-semibold text-[var(--foreground)] uppercase text-[10.5px]">REASONING:</span>
+              <select id="ops-task-reasoning" class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--foreground)] focus:outline-none cursor-pointer" data-i18n-title="ui.tasks.field_reasoning" title="Reasoning-Grad">
+                <option data-i18n="ui.tasks.reasoning_auto" value="">Auto (Agenten-Standard)</option>
+                <option data-i18n="ui.tasks.reasoning_off" value="off">Aus (0 Tok)</option>
+                <option data-i18n="ui.tasks.reasoning_minimal" value="minimal">Minimal (~1k Tok)</option>
+                <option data-i18n="ui.tasks.reasoning_low" value="low">Niedrig (~2k Tok)</option>
+                <option data-i18n="ui.tasks.reasoning_medium" value="medium">Mittel (~4k Tok)</option>
+                <option data-i18n="ui.tasks.reasoning_high" value="high">Hoch (~8k Tok)</option>
+                <option data-i18n="ui.tasks.reasoning_max" value="max">Maximal (~16k Tok)</option>
+              </select>
+            </div>
+          </div>
         </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
             <label data-i18n="ui.tasks.field_column" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Start-Spalte</label>
             <select id="ops-task-column" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
@@ -10179,6 +10239,7 @@ ${logExcerpt}
               <option data-i18n="ui.board.review" value="review">Review &amp; QA</option>
               <option data-i18n="ui.board.blocked" value="blocked">Blockiert</option>
               <option data-i18n="ui.board.done" value="done">Abgeschlossen</option>
+              <option data-i18n="ui.task_detail.archived_status" value="archived">Archiviert</option>
             </select>
           </div>
           <div>
@@ -10190,9 +10251,6 @@ ${logExcerpt}
               <option data-i18n="ui.tasks.priority_p0" value="3">P0 - Kritisch (3)</option>
             </select>
           </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label data-i18n="ui.tasks.field_team" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Ziel-Team / Fachabteilung</label>
             <select id="ops-task-team" onchange="onOpsTaskTeamChange(this.value)" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans">
@@ -10213,29 +10271,46 @@ ${logExcerpt}
           </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+        <!-- ZUSATZ-OPTIONEN: Capability-Preset, Budget-Cap, Fälligkeit/Cron, Abhängigkeit -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label data-i18n="ui.tasks.field_model" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Modell-Route</label>
-                <select id="ops-task-model" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
-                  <option data-i18n="ui.tasks.model_default" value="">OmniRoute Default (Auto)</option>
-                </select>
-              </div>
-              <div>
-                <label data-i18n="ui.tasks.field_reasoning" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Reasoning-Grad</label>
-                <select id="ops-task-reasoning" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
-                  <option data-i18n="ui.tasks.reasoning_auto" value="">Auto (Agenten-Standard)</option>
-                  <option data-i18n="ui.tasks.reasoning_off" value="off">Aus (0 Tok)</option>
-                  <option data-i18n="ui.tasks.reasoning_minimal" value="minimal">Minimal (~1k Tok)</option>
-                  <option data-i18n="ui.tasks.reasoning_low" value="low">Niedrig (~2k Tok)</option>
-                  <option data-i18n="ui.tasks.reasoning_medium" value="medium">Mittel (~4k Tok)</option>
-                  <option data-i18n="ui.tasks.reasoning_high" value="high">Hoch (~8k Tok)</option>
-                  <option data-i18n="ui.tasks.reasoning_max" value="max">Maximal (~16k Tok)</option>
-                </select>
-              </div>
+            <label data-i18n="ui.tasks.field_tool_preset" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Tool-Profil (Preset)</label>
+            <select id="ops-task-tool-preset" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+              <option data-i18n="ui.tasks.preset_standard" value="standard">Standard (Profil)</option>
+              <option data-i18n="ui.tasks.preset_research" value="research">Nur Recherche &amp; Web</option>
+              <option data-i18n="ui.tasks.preset_code" value="code">Code &amp; Terminal</option>
+              <option data-i18n="ui.tasks.preset_erp" value="erp">ERP &amp; Finanzen</option>
+              <option data-i18n="ui.tasks.preset_readonly" value="readonly">Nur Lesen (Read-Only)</option>
+            </select>
+          </div>
+          <div>
+            <label data-i18n="ui.tasks.field_budget" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Token- / Kosten-Cap</label>
+            <div class="flex items-center gap-1.5">
+              <input type="number" id="ops-task-token-budget" min="0" step="1000" data-i18n-placeholder="ui.tasks.ph_tokens" placeholder="Max Tok" class="w-1/2 px-2.5 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input type="number" id="ops-task-cost-limit" min="0" step="0.1" data-i18n-placeholder="ui.tasks.ph_usd" placeholder="Max $" class="w-1/2 px-2.5 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
           </div>
+          <div>
+            <label data-i18n="ui.tasks.field_schedule" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Fällig &amp; Zeitplan</label>
+            <div class="flex items-center gap-1.5">
+              <input type="date" id="ops-task-due" class="w-1/2 px-2 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <select id="ops-task-cron" class="w-1/2 px-2 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option data-i18n="ui.tasks.cron_once" value="">Einmalig</option>
+                <option data-i18n="ui.tasks.cron_hourly" value="0 * * * *">Stündlich</option>
+                <option data-i18n="ui.tasks.cron_daily" value="0 9 * * *">Täglich (09:00)</option>
+                <option data-i18n="ui.tasks.cron_weekly" value="0 9 * * 1">Wöchentlich (Mo)</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label data-i18n="ui.tasks.field_depends" class="block text-xs font-mono font-bold uppercase text-[var(--muted-foreground)] mb-1">Wartet auf Task</label>
+            <select id="ops-task-depends-on" class="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+              <option data-i18n="ui.tasks.depends_none" value="">(Keine Abhängigkeit)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 flex items-start gap-3">
             <input type="checkbox" id="ops-task-decompose" class="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer shrink-0" />
             <div class="text-xs">
@@ -10243,16 +10318,42 @@ ${logExcerpt}
               <p data-i18n="ui.tasks.decompose_hint" class="text-[var(--muted-foreground)] text-[11px] mt-0.5">Hermes zerlegt das Ziel selbstständig in Subtasks und weist diese den Fachbereichen zu.</p>
             </div>
           </div>
+          <div class="p-3 rounded-xl border border-amber-500/25 bg-amber-500/5 flex items-start gap-3">
+            <input type="checkbox" id="ops-task-require-hitl" class="mt-0.5 w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer shrink-0" />
+            <div class="text-xs">
+              <label data-i18n="ui.tasks.hitl_label" for="ops-task-require-hitl" class="font-bold text-[var(--foreground)] cursor-pointer">HITL-Freigabe-Gate erzwingen</label>
+              <p data-i18n="ui.tasks.hitl_hint" class="text-[var(--muted-foreground)] text-[11px] mt-0.5">Aufgabe stoppt vor Ausführung / Abschluss und wartet auf menschliche Freigabe.</p>
+            </div>
+          </div>
         </div>
 
-        <div class="pt-3 border-t border-[var(--border)] flex justify-end gap-3">
-          <button data-i18n="ui.common.cancel" type="button" onclick="closeNewTaskModal()" class="px-4 py-2 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">
-            Abbrechen
-          </button>
-          <button type="submit" id="ops-task-submit-btn" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition cursor-pointer shadow-md flex items-center gap-2">
-            <i data-lucide="check" class="w-3.5 h-3.5"></i>
-            <span data-i18n="ui.tasks.create_submit">Aufgabe erstellen</span>
-          </button>
+        <div class="pt-3 border-t border-[var(--border)] flex items-center justify-between gap-3 flex-wrap shrink-0">
+          <!-- Task-Presets laden & speichern -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <select id="ops-task-preset-select" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:outline-none cursor-pointer" style="min-width: 170px;">
+              <option data-i18n="ui.tasks.preset_choose" value="">Preset wählen...</option>
+            </select>
+            <button type="button" onclick="loadOpsTaskPreset()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-xs font-mono font-semibold text-[var(--foreground)] transition cursor-pointer flex items-center gap-1" data-i18n-title="ui.tasks.preset_open_title" title="Ausgewähltes Task-Preset laden">
+              <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
+              <span data-i18n="ui.tasks.preset_open">Öffnen</span>
+            </button>
+            <button type="button" onclick="saveOpsTaskPreset()" class="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] hover:bg-[var(--card)] text-xs font-mono font-semibold text-[var(--foreground)] transition cursor-pointer flex items-center gap-1" data-i18n-title="ui.tasks.preset_save_title" title="Aktuelle Aufgabe als wiederverwendbares Preset speichern">
+              <i data-lucide="bookmark-plus" class="w-3.5 h-3.5"></i>
+              <span data-i18n="ui.tasks.preset_save">Als Preset speichern</span>
+            </button>
+            <button type="button" onclick="deleteOpsTaskPreset()" class="h-8 w-8 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-rose-500/10 hover:text-rose-600 text-[var(--muted-foreground)] transition cursor-pointer flex items-center justify-center" data-i18n-title="ui.tasks.preset_delete_title" title="Ausgewähltes Preset löschen">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <div class="flex items-center gap-3">
+            <button data-i18n="ui.common.cancel" type="button" onclick="closeNewTaskModal()" class="px-4 py-2 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition cursor-pointer">
+              Abbrechen
+            </button>
+            <button type="submit" id="ops-task-submit-btn" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition cursor-pointer shadow-md flex items-center gap-2">
+              <i data-lucide="check" class="w-3.5 h-3.5"></i>
+              <span data-i18n="ui.tasks.create_submit">Aufgabe erstellen</span>
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -10279,6 +10380,18 @@ ${logExcerpt}
       </div>
 
       <div class="overflow-y-auto flex-1 p-6 space-y-6">
+        <!-- ARCHIV-BANNER (Schreibgeschützt + Kopie anfertigen) -->
+        <div id="ops-detail-archived-banner" class="hidden p-3 rounded-xl border border-amber-500/35 bg-amber-500/10 flex items-center justify-between gap-3 flex-wrap text-xs">
+          <div class="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-mono">
+            <i data-lucide="lock" class="w-4 h-4 shrink-0"></i>
+            <span data-i18n="ui.task_detail.archived_readonly">Archiviert (schreibgeschützt) — Das Original bleibt unverändert.</span>
+          </div>
+          <button type="button" onclick="cloneArchivedKanbanTask(currentOpsDetailTaskId)" class="px-3 py-1.5 rounded-lg bg-[#d42a2b] hover:opacity-90 text-white font-mono text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shrink-0 shadow-xs">
+            <i data-lucide="copy-plus" class="w-3.5 h-3.5"></i>
+            <span data-i18n="ui.task_detail.clone_to_todo">Kopie nach To-Do anlegen</span>
+          </button>
+        </div>
+
         <!-- META BAR -->
         <div class="grid grid-cols-3 gap-3 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-xs">
           <div>
@@ -10291,6 +10404,7 @@ ${logExcerpt}
               <option data-i18n="ui.board.review" value="review">Review & QA</option>
               <option data-i18n="ui.board.blocked" value="blocked">Blockiert</option>
               <option data-i18n="ui.board.done" value="done">Abgeschlossen</option>
+              <option data-i18n="ui.task_detail.archived_status" value="archived">Archiviert</option>
             </select>
           </div>
           <div>
@@ -10308,7 +10422,7 @@ ${logExcerpt}
         </div>
 
         <!-- QUICK ORCHESTRATION ACTIONS -->
-        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)] text-xs font-mono">
+        <div id="ops-detail-quick-actions" class="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-[var(--border)] bg-[var(--secondary)] text-xs font-mono">
           <div class="flex items-center gap-1.5 text-muted-custom">
             <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i>
             <span data-i18n="ui.task_detail.quick_actions" class="font-bold uppercase text-[10px]">Schnellaktionen:</span>
@@ -10435,13 +10549,41 @@ ${logExcerpt}
           </div>
         </div>
 
-        <!-- FÄLLIGKEIT & TAGS (10.10.2026 — Sidecar-Metadaten, Engine unberührt) -->
-        <div>
-          <h4 data-i18n="ui.task_detail.section_due_tags" class="text-xs font-mono uppercase font-bold text-muted-custom mb-2">Fälligkeit &amp; Tags</h4>
-          <div class="flex items-center gap-2">
+        <!-- FÄLLIGKEIT, AUFWAND & GOVERNANCE (Sidecar-Metadaten) -->
+        <div class="space-y-2.5">
+          <h4 data-i18n="ui.task_detail.section_due_tags" class="text-xs font-mono uppercase font-bold text-muted-custom">Fälligkeit &amp; Tags</h4>
+          <div class="flex items-center gap-2 flex-wrap">
             <input type="date" id="ops-detail-due" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-primary-custom font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500" data-i18n-title="ui.task_detail.due_title" title="Fälligkeitsdatum" />
-            <input type="text" id="ops-detail-tags" data-i18n-placeholder="ui.task_detail.tags_placeholder" placeholder="Tags, mit Komma getrennt" class="flex-1 h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-primary-custom focus:outline-none focus:ring-1 focus:ring-indigo-500" />
-            <button data-i18n="ui.task_detail.save" onclick="saveOpsDetailMeta()" class="h-8 px-3 rounded-lg bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] text-xs font-bold cursor-pointer transition shadow-xs">Speichern</button>
+            <input type="text" id="ops-detail-tags" data-i18n-placeholder="ui.task_detail.tags_placeholder" placeholder="Tags, mit Komma getrennt" class="flex-1 min-w-[160px] h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs text-primary-custom focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+            <button id="ops-detail-meta-save-btn" data-i18n="ui.task_detail.save" onclick="saveOpsDetailMeta()" class="h-8 px-3 rounded-lg bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] text-xs font-bold cursor-pointer transition shadow-xs">Speichern</button>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+            <select id="ops-detail-soul-mode" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-primary-custom focus:outline-none" data-i18n-title="view.master_chat.title_soul" title="SOUL.md Experten-Tiefe">
+              <option data-i18n="view.master_chat.soul_compact" value="compact">Standard (~3k)</option>
+              <option data-i18n="view.master_chat.soul_pro" value="pro">Pro (~6.8k)</option>
+              <option data-i18n="view.master_chat.soul_full" value="full">Full-SOUL</option>
+            </select>
+            <select id="ops-detail-reasoning" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-primary-custom focus:outline-none" data-i18n-title="ui.tasks.field_reasoning" title="Reasoning-Grad">
+              <option data-i18n="ui.tasks.reasoning_auto" value="">Auto (Agenten-Standard)</option>
+              <option data-i18n="ui.tasks.reasoning_off" value="off">Aus (0 Tok)</option>
+              <option data-i18n="ui.tasks.reasoning_minimal" value="minimal">Minimal (~1k Tok)</option>
+              <option data-i18n="ui.tasks.reasoning_low" value="low">Niedrig (~2k Tok)</option>
+              <option data-i18n="ui.tasks.reasoning_medium" value="medium">Mittel (~4k Tok)</option>
+              <option data-i18n="ui.tasks.reasoning_high" value="high">Hoch (~8k Tok)</option>
+              <option data-i18n="ui.tasks.reasoning_max" value="max">Maximal (~16k Tok)</option>
+            </select>
+            <select id="ops-detail-tool-preset" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-primary-custom focus:outline-none" data-i18n-title="ui.tasks.field_tool_preset" title="Tool-Profil (Preset)">
+              <option data-i18n="ui.tasks.preset_standard" value="standard">Standard (Profil)</option>
+              <option data-i18n="ui.tasks.preset_research" value="research">Nur Recherche &amp; Web</option>
+              <option data-i18n="ui.tasks.preset_code" value="code">Code &amp; Terminal</option>
+              <option data-i18n="ui.tasks.preset_erp" value="erp">ERP &amp; Finanzen</option>
+              <option data-i18n="ui.tasks.preset_readonly" value="readonly">Nur Lesen (Read-Only)</option>
+            </select>
+            <input type="number" id="ops-detail-token-budget" min="0" step="1000" data-i18n-placeholder="ui.tasks.ph_tokens" placeholder="Max Tok" class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-primary-custom focus:outline-none" />
+            <label class="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-primary-custom flex items-center gap-1.5 cursor-pointer select-none">
+              <input type="checkbox" id="ops-detail-require-hitl" class="rounded text-amber-600 cursor-pointer" />
+              <span data-i18n="ui.tasks.hitl_short" class="truncate">HITL-Gate</span>
+            </label>
           </div>
         </div>
 
@@ -13561,8 +13703,9 @@ ${logExcerpt}
   <script src="/static/js/demo_banner.js" defer></script>
   <script src="/static/js/onboarding_wizard.js?v=2026111903" defer></script>
   <script src="/static/js/tenant_switcher.js?v=20261116b" defer></script>
-  <script src="/static/js/playbooks_studio.js" defer></script>
-  <script src="/static/js/operations_calendar.js" defer></script>
+  <script src="/static/js/playbooks_studio.js?v=2026112036" defer></script>
+  <script src="/static/js/workflow_templates_studio.js?v=2026112046" defer></script>
+  <script src="/static/js/operations_calendar.js?v=2026112045" defer></script>
   <script src="/static/js/eu_ai_act_studio.js" defer></script>
   <script src="/static/js/archon_version_badge.js?v=20261117" defer></script>
   <!-- MODAL: MIXTURE OF AGENTS (MoA) KONFIGURATION -->

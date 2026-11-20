@@ -490,7 +490,12 @@ function cdsApplyActiveThemeToDOM() {
   if (!styleEl) {
     styleEl = document.createElement("style");
     styleEl.id = "archon-cds-compiled";
-    document.head.appendChild(styleEl);
+    const studioCssLink = document.getElementById("archon-custom-studio-css");
+    if (studioCssLink && studioCssLink.parentNode === document.head) {
+      document.head.insertBefore(styleEl, studioCssLink);
+    } else {
+      document.head.appendChild(styleEl);
+    }
   }
   const nextCss = cssChunks.join("\n");
   if (styleEl.textContent !== nextCss) {

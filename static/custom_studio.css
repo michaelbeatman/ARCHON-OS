@@ -1,70 +1,117 @@
 /* ========================================================================= */
-/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-19 21:18:17               */
+/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-20 09:25:46               */
 /* ========================================================================= */
 
-#sidebar-logo-img {
-  width: 95% !important;
+div.group > div.p-3 > p.text-muted-custom {
+  height: 99px !important;
+}
+
+#ops-kanban-columns-container .group > div.p-3 > p.text-muted-custom {
+  height: 98px !important;
+}
+
+#ops-kanban-columns-container .group > div.p-3 > div.mt-1 > button.flex-1 {
+  background-color: #00bd16 !important;
+}
+
+div#ops-kanban-toolbar > button.h-8 {
+  background-color: #00bf0d !important;
+}
+
+/* ========================================================================= */
+/* ARCHON STUDIO — Sichere Kanban-Updates (2026-11-20)                       */
+/* ========================================================================= */
+#ops-kanban-filter-assignee {
+  width: 147px !important;
+}
+
+#ops-kanban-search {
+  width: 180px !important;
+}
+
+#ops-task-submit-btn {
+  background-color: #159768 !important;
+}
+
+#ops-kanban-columns-container .group {
+  border-color: #bababa !important;
+}
+
+/* ========================================================================= */
+/* ARCHON STUDIO — Master-Chat & Agent-Tab Rules (2026-11-20)                */
+/* ========================================================================= */
+#agent-tab-chat-status,
+div#agent-tab-status-indicator > span.px-2,
+#master-chat-current-status-badge {
+  display: none !important;
+}
+
+#master-chat-model-cost {
+  border-width: 0px !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  color: #4f4f4f !important;
+  background-color: #ffffff !important;
+}
+
+span#master-chat-model-cost > span.text-emerald-400,
+span#master-chat-model-cost > span.text-amber-400 {
+  box-shadow: none !important;
+  border-width: 0px !important;
+}
+
+#master-chat-context-meter {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+  border-width: 0px !important;
+}
+
+div#master-chat-footer-bar > div.flex {
   height: auto !important;
 }
 
-/* ========================================================================= */
-/* ARCHON STUDIO — Übernommen aus Live-Overrides (2026-11-19)                */
-/* ========================================================================= */
-#mission-control-global-header,
-#operations-global-header,
-#master-chat-header-bar,
-#main-viewport-scroll,
-#ops-view-projects,
-#ops-view-chat,
-div#ops-view-projects > div.shrink-0 {
-  border-width: 0px !important;
+#master-chat-footer-bar {
+  margin-top: 0px !important;
 }
 
-div#view-operations > div.flex-1 {
-  padding: 0px !important;
-  border-width: 0px !important;
+#master-chat-provider-select {
+  width: 100px !important;
 }
 
-#mc-catalog-col {
-  box-shadow: none !important;
+#master-chat-model-select {
+  width: 197px !important;
 }
 
-#mc-main-title {
+#master-chat-native-container {
+  padding: 4px !important;
+}
+
+#master-chat-input-wrapper {
+  margin-top: 4px !important;
+  padding-top: 4px !important;
+}
+
+#master-chat-input-card {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+#master-chat-selected-avatar {
   width: auto !important;
-  font-weight: 500 !important;
-  font-size: 29px !important;
-  line-height: normal !important;
+  height: 86px !important;
+  max-width: 100% !important;
 }
 
-#ops-main-title {
-  font-weight: 500 !important;
-  font-size: 28px !important;
+#master-chat-avatar-container {
+  width: 72px !important;
+  height: 72px !important;
+  border-width: 1px !important;
+  border-color: #030303 !important;
 }
 
-/* Einheitlicher Operations-Header-Look für alle Views außer Agenten-Kader */
-[id$="-global-header"]:not(#agent-profiles-global-header) {
-  border-width: 0px !important;
-  border-bottom-width: 0px !important;
+#master-chat-profile-select {
+  width: 100% !important;
 }
 
-[id$="-global-header"]:not(#agent-profiles-global-header) h2 {
-  font-size: 28px !important;
-  font-weight: 500 !important;
-  line-height: 1.05 !important;
-}
-
-[id$="-global-header"]:not(#agent-profiles-global-header) [id$="-main-subtitle"] {
-  display: block !important;
-  margin-top: 2px !important;
-  line-height: 1.2 !important;
-}
-
-#master-chat-messages,
-#master-chat-input {
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
-}
-
-.ops-col-todo,
-.ops-col-in_progress {
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+#master-chat-profile-category {
+  width: 359px !important;
 }

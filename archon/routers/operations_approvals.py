@@ -98,6 +98,18 @@ def api_approve_request(request: Request, request_id: str, req: Dict[str, Any] =
     try:
         from backend.approval_policy_engine import approval_engine
         res = approval_engine.approve_request(request_id, approver_id=approver_id)
+        try:
+            from backend.workflow_scheduler import dispatch_workflow_event
+            dispatch_workflow_event(
+                source="approval",
+                event_type="approved",
+                title=f"Freigabe erteilt: {request_id}",
+                summary=f"Freigegeben durch {approver_id}",
+                payload={"request_id": request_id, "approver": approver_id},
+                correlation_id=f"apr-{request_id}",
+            )
+        except Exception:
+            pass
         return {"status": "success", "result": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -115,6 +127,18 @@ def api_reject_request(request: Request, request_id: str, req: Dict[str, Any] = 
     try:
         from backend.approval_policy_engine import approval_engine
         res = approval_engine.reject_request(request_id, rejected_by=rejected_by, reason=reason)
+        try:
+            from backend.workflow_scheduler import dispatch_workflow_event
+            dispatch_workflow_event(
+                source="approval",
+                event_type="rejected",
+                title=f"Freigabe abgelehnt: {request_id}",
+                summary=reason,
+                payload={"request_id": request_id, "rejected_by": rejected_by},
+                correlation_id=f"rej-{request_id}",
+            )
+        except Exception:
+            pass
         return {"status": "success", "result": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

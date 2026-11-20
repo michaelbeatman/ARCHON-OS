@@ -2,6 +2,16 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [0.5.5.4] — 2026-11-20 (Passkey HITL, Visual Workflow Studio, Event-Bus & Treasury)
+
+### Added
+- **M101 Passkey / WebAuthn HITL (`backend/passkey_hitl.py`, `archon/routers/auth.py`, `static/js/passkey_hitl.js`):** Optional two-stage FIDO2/Passkey verification per user in Settings (global or selective for payments, project starts, budget overrides, destructive actions) with SHA-256 audit logging. See `docs/system/PASSKEY_HITL_GUIDE.md`.
+- **M102 Visual Multi-Agent Workflow Studio & Event-Bus (`backend/workflow_templates.py`, `backend/workflow_monetization_catalog.py`, `backend/workflow_scheduler.py`, `static/js/workflow_templates_studio.js`):**
+  - Dedicated **Workflows** tab under Operations with drag-and-drop 20px-grid node editor, configurable edge conditions & data modes, per-station Prompt/Expected-Output/Tools/Guardrails inspector, **52 curated templates** (including Dropshipping & 36 monetization workflows), and **n8n JSON import**.
+  - Active **Cron Scheduler** (`start_at`, `end_at`, `start_condition`, `end_condition`) and unified **Event-Bus** connecting Watchdog, Inbox, Research Lab, AI Boardroom, Calendar, and Approvals with loop protection and a live **Event-Bus** tab under Telemetrie & Logs. See `docs/system/WORKFLOW_TEMPLATES_GUIDE.md`.
+- **M103 Treasury & Payment Cockpit (`backend/treasury_engine.py`, `static/js/treasury_studio.js`):** Liquidity overview across bank accounts, PayPal, Stripe, watch-only crypto wallets, and capped agent-allowance (`x402`) wallets, categorized spend ledger with SHA-256 hash chain, and enforced Passkey/HITL payment approval queue. See `docs/system/TREASURY_PAYMENTS_GUIDE.md`.
+- **UI & Operations Polish:** Read-only archived task modal & clone action, DAW Gantt & interactive Dependency Graph improvements, non-destructive Org grid snap + hierarchy presets/undo, Playbooks consolidation, new transparent Cadre icons (`calendar.png`, `workflows.png`, `approvals.png`), and rebuilt `static/css/tailwind.generated.css`.
+
 ## [Unreleased] — 2026-11-19 (UI-Konsolidierung & Operations-Feinschliff)
 
 ### Changed

@@ -64,6 +64,8 @@ def build_gantt_items(
             "assignee": t.get("assignee") or "",
             "priority": t.get("priority", 1),
             "project_id": t.get("project_id") or "",
+            "parent_id": t.get("parent_id") or t.get("delegated_from") or "",
+            "subtasks": t.get("subtasks") or [],
             "start": start.isoformat(),
             "end": end.isoformat(),
             "duration_hours": dur_h,

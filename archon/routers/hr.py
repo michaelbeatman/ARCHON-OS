@@ -179,24 +179,37 @@ def api_get_hermes_soul(agent_id: str):
         with open(found_path, "r", encoding="utf-8") as f:
             content = f.read()
         pdir = os.path.dirname(found_path)
-        full_len = len(content)
-        pro_len = len(content)
-        compact_len = len(content)
+        full_content = pro_content = compact_content = None
+        full_len = pro_len = compact_len = len(content)
         if os.path.exists(os.path.join(pdir, "SOUL_FULL.md")):
             with open(os.path.join(pdir, "SOUL_FULL.md"), "r", encoding="utf-8", errors="ignore") as ff:
-                full_len = len(ff.read())
+                full_content = ff.read()
+                full_len = len(full_content)
         if os.path.exists(os.path.join(pdir, "SOUL_PRO.md")):
             with open(os.path.join(pdir, "SOUL_PRO.md"), "r", encoding="utf-8", errors="ignore") as fp:
-                pro_len = len(fp.read())
+                pro_content = fp.read()
+                pro_len = len(pro_content)
         if os.path.exists(os.path.join(pdir, "SOUL_COMPACT.md")):
             with open(os.path.join(pdir, "SOUL_COMPACT.md"), "r", encoding="utf-8", errors="ignore") as fc:
-                compact_len = len(fc.read())
-        if len(content) > 10500 or "SOUL-DIREKTIVE (FULL-EXPERT)" in content:
-            detected_mode = "full"
-        elif len(content) > 4500 or "SOUL-DIREKTIVE (PRO-MODUS)" in content:
-            detected_mode = "pro"
-        else:
+                compact_content = fc.read()
+                compact_len = len(compact_content)
+
+        if compact_content is not None and content == compact_content:
             detected_mode = "compact"
+        elif pro_content is not None and content == pro_content:
+            detected_mode = "pro"
+        elif full_content is not None and content == full_content:
+            detected_mode = "full"
+        elif "SOUL-DIREKTIVE (FULL-EXPERT)" in content:
+            detected_mode = "full"
+        elif "SOUL-DIREKTIVE (PRO-MODUS)" in content:
+            detected_mode = "pro"
+        elif "SOUL-DIREKTIVE (KOMPAKT)" in content:
+            detected_mode = "compact"
+        else:
+            clen = len(content)
+            candidates_dist = [("compact", abs(clen - compact_len)), ("pro", abs(clen - pro_len)), ("full", abs(clen - full_len))]
+            detected_mode = min(candidates_dist, key=lambda x: x[1])[0]
         return {
             "status": "success",
             "agent_id": agent_id,

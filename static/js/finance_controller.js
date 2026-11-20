@@ -29,7 +29,7 @@ async function initFinanceView() {
 
 function setFinanceSubTab(tab) {
   currentFinanceTab = tab;
-  const tabs = ["receipts", "analytics", "contracts", "dunning"];
+  const tabs = ["receipts", "analytics", "contracts", "dunning", "treasury"];
   tabs.forEach(t => {
     const btn = document.getElementById(`finance-subtab-btn-${t}`);
     const view = document.getElementById(`finance-view-${t}`);
@@ -55,6 +55,8 @@ function setFinanceSubTab(tab) {
     updateAnalyticsKPIs();
   } else if (tab === "dunning") {
     loadDunningInvoices();
+  } else if (tab === "treasury") {
+    if (typeof window.loadTreasuryStudio === "function") window.loadTreasuryStudio();
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }

@@ -103,7 +103,7 @@
         return;
       }
 
-      const tabs = ['projects', 'chat', 'kanban', 'org', 'automation', 'comm'];
+      const tabs = ['projects', 'chat', 'kanban', 'org', 'workflows', 'automation', 'comm'];
       const headerMeta = {
         projects: {
           title: 'Operations',
@@ -124,6 +124,11 @@
           title: kanT('ui.operations_kanban.tab_org_title', 'Organisation'),
           subtitle: kanT('ui.operations_kanban.tab_org_subtitle', '• Ablaufdiagramm, Hierarchien & Kader-Struktur'),
           img: '/static/img/cadre_icons/organisation.png?v=3'
+        },
+        workflows: {
+          title: 'Workflows',
+          subtitle: '• Visueller Multi-Agent Prozessablaufplan & DAG-Vorlagen',
+          img: '/static/img/cadre_icons/overview.png'
         },
         automation: {
           title: 'n8n-Automation',
@@ -488,7 +493,7 @@
               const done = (typeof t.completed_at === 'number') ? new Date(t.completed_at * 1000)
                 : (t.completed_at ? new Date(String(t.completed_at).replace(' ', 'T')) : null);
               return `
-              <div class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] flex items-center justify-between gap-2 text-xs">
+              <div onclick="openTaskDetailModal('${t.id}')" class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-indigo-400 hover:bg-[var(--secondary)]/40 transition cursor-pointer flex items-center justify-between gap-2 text-xs">
                 <div class="min-w-0">
                   <span class="font-mono font-bold text-muted-custom">${t.id}</span>
                   <span class="font-semibold text-primary-custom ml-2">${opsEscapeHtml((t.title || '').slice(0, 90))}</span>
@@ -498,6 +503,7 @@
                   ${(t.tags || []).slice(0, 2).map(tg => `<span>#${opsEscapeHtml(tg)}</span>`).join('')}
                   <span>${done && !isNaN(done) ? done.toLocaleDateString(kanLocale()) : ''}</span>
                   <span title="${kanT('ui.operations_kanban.assigned_to', 'Zugewiesen an')}">👤 ${opsEscapeHtml(t.assignee_name || '-')}</span>
+                  <button type="button" onclick="event.stopPropagation(); cloneArchivedKanbanTask('${t.id}');" class="px-2 py-0.5 rounded bg-[var(--secondary)] hover:bg-[#d42a2b] hover:text-white border border-[var(--border)] text-[var(--foreground)] font-semibold transition cursor-pointer" title="Kopie in To-Do anlegen (Original bleibt unverändert im Archiv)">Als Kopie wiederherstellen</button>
                 </div>
               </div>`;
             }).join('') : '<div class="text-xs text-muted-custom font-mono">Archiv leer</div>';
@@ -525,6 +531,16 @@
       }
       dueEl.value = (found && found.due_date) ? found.due_date : '';
       tagsEl.value = (found && found.tags && found.tags.length) ? found.tags.join(', ') : '';
+      const soulEl = document.getElementById('ops-detail-soul-mode');
+      if (soulEl) soulEl.value = (found && found.soul_mode) ? found.soul_mode : 'compact';
+      const reasEl = document.getElementById('ops-detail-reasoning');
+      if (reasEl) reasEl.value = (found && found.reasoning_effort) ? found.reasoning_effort : '';
+      const toolEl = document.getElementById('ops-detail-tool-preset');
+      if (toolEl) toolEl.value = (found && found.tool_preset) ? found.tool_preset : 'standard';
+      const tokEl = document.getElementById('ops-detail-token-budget');
+      if (tokEl) tokEl.value = (found && found.token_budget) ? String(found.token_budget) : '';
+      const hitlEl = document.getElementById('ops-detail-require-hitl');
+      if (hitlEl) hitlEl.checked = !!(found && found.require_hitl);
     }
 
     function saveOpsDetailMeta() {
@@ -533,6 +549,11 @@
       if (typeof currentOpsDetailTaskId === 'undefined' || !currentOpsDetailTaskId) return;
       const tagList = ((tagsEl && tagsEl.value) || '').split(',').map(s => s.trim()).filter(Boolean);
       const hasDue = !!(dueEl && dueEl.value);
+      const soulVal = document.getElementById('ops-detail-soul-mode')?.value || '';
+      const reasVal = document.getElementById('ops-detail-reasoning')?.value || '';
+      const toolVal = document.getElementById('ops-detail-tool-preset')?.value || '';
+      const tokVal = document.getElementById('ops-detail-token-budget')?.value || '';
+      const hitlVal = !!document.getElementById('ops-detail-require-hitl')?.checked;
       fetch('/api/operations/kanban/meta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -541,9 +562,15 @@
           task_id: currentOpsDetailTaskId,
           due: hasDue ? dueEl.value : null,
           clear_due: !hasDue,
-          tags: tagList
+          tags: tagList,
+          soul_mode: soulVal,
+          reasoning_effort: reasVal,
+          tool_preset: toolVal === 'standard' ? '' : toolVal,
+          token_budget: tokVal,
+          require_hitl: hitlVal
         })
       }).then(r => r.json()).then(() => {
+        if (typeof showNotification === 'function') showNotification('Task', 'Metadaten & Aufwand gespeichert.', 'success');
         loadOperationsData(false);
       }).catch(e => console.error('[Kanban] Fälligkeit/Tags speichern fehlgeschlagen:', e));
     }
@@ -627,81 +654,91 @@
       }
     }
 
+    let lastOrgHierarchyBackup = null;
+
+    function getOrgPresets() {
+      try {
+        const raw = localStorage.getItem('archon_org_hierarchy_presets_v1');
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function refreshOrgPresetDropdown(selectedName) {
+      const sel = document.getElementById('ops-org-preset-select');
+      if (!sel) return;
+      const firstOpt = sel.options[0] ? sel.options[0].outerHTML : '<option value="">Konfiguration wählen...</option>';
+      const list = getOrgPresets();
+      sel.innerHTML = firstOpt + list.map(p => `<option value="${opsEscapeHtml(p.name)}">${opsEscapeHtml(p.name)}</option>`).join('');
+      if (selectedName) sel.value = selectedName;
+    }
+
+    function saveOrgHierarchyPreset() {
+      const name = prompt('Name für diese Hierarchie-Konfiguration:', 'Meine Hierarchie');
+      if (!name || !name.trim()) return;
+      const cleanName = name.trim();
+      const snapshot = JSON.parse(JSON.stringify(currentHierarchyData || { nodes: [], links: [] }));
+      const list = getOrgPresets().filter(p => p.name !== cleanName);
+      list.unshift({ name: cleanName, saved_at: new Date().toISOString(), data: snapshot });
+      localStorage.setItem('archon_org_hierarchy_presets_v1', JSON.stringify(list));
+      refreshOrgPresetDropdown(cleanName);
+      if (typeof showArchonToast === 'function') showArchonToast(`Hierarchie '${cleanName}' als Preset gespeichert.`, 'success');
+    }
+    window.saveOrgHierarchyPreset = saveOrgHierarchyPreset;
+
+    function loadOrgHierarchyPreset() {
+      const sel = document.getElementById('ops-org-preset-select');
+      const name = sel?.value;
+      if (!name) return;
+      const found = getOrgPresets().find(p => p.name === name);
+      if (!found || !found.data) return;
+      lastOrgHierarchyBackup = JSON.parse(JSON.stringify(currentHierarchyData || { nodes: [], links: [] }));
+      const undoBtn = document.getElementById('btn-org-undo-layout');
+      if (undoBtn) undoBtn.classList.remove('hidden');
+      currentHierarchyData = JSON.parse(JSON.stringify(found.data));
+      renderOpsOrgFlowchart();
+      saveCurrentOrgHierarchy();
+      if (typeof showArchonToast === 'function') showArchonToast(`Hierarchie '${name}' geladen.`, 'success');
+    }
+    window.loadOrgHierarchyPreset = loadOrgHierarchyPreset;
+
+    function undoLastOrgLayout() {
+      if (!lastOrgHierarchyBackup) return;
+      currentHierarchyData = JSON.parse(JSON.stringify(lastOrgHierarchyBackup));
+      lastOrgHierarchyBackup = null;
+      const undoBtn = document.getElementById('btn-org-undo-layout');
+      if (undoBtn) undoBtn.classList.add('hidden');
+      renderOpsOrgFlowchart();
+      saveCurrentOrgHierarchy();
+      if (typeof showArchonToast === 'function') showArchonToast('Vorherige Hierarchie wiederhergestellt.', 'info');
+    }
+    window.undoLastOrgLayout = undoLastOrgLayout;
+
     function autoAlignOrgHierarchy() {
       const nodes = currentHierarchyData.nodes || [];
-      const links = currentHierarchyData.links || [];
       if (nodes.length === 0) return;
+      // Backup sichern, damit nichts verloren geht
+      lastOrgHierarchyBackup = JSON.parse(JSON.stringify(currentHierarchyData));
+      const undoBtn = document.getElementById('btn-org-undo-layout');
+      if (undoBtn) undoBtn.classList.remove('hidden');
 
-      const teamConfigs = [
-        { id: 'team_strategy', leadId: 'executive_decision_architect', colX: 60 },
-        { id: 'team_tech', leadId: 'system_architect_orchestrator', colX: 520 },
-        { id: 'team_legal', leadId: 'commercial_jurist_contracts', colX: 980 },
-        { id: 'team_realestate', leadId: 'construction_project_manager', colX: 1440 },
-        { id: 'team_growth', leadId: 'gtm_launch_strategist', colX: 1900 },
-        { id: 'team_operations', leadId: 'logistics_supply_chain_manager', colX: 2360 }
-      ];
-
-      const nodesMap = {};
-      nodes.forEach(n => nodesMap[n.id] = n);
-
-      // Apex placement (Top Center)
-      const apex1 = nodesMap['executive_decision_architect'];
-      if (apex1) {
-        apex1.x = 1320;
-        apex1.y = 40;
-        apex1.tier = 1;
-      }
-      const apex2 = nodesMap['system_architect_orchestrator'];
-      if (apex2) {
-        apex2.x = 1320;
-        apex2.y = 200;
-        apex2.tier = 1;
-      }
-
-      // Teams placement
-      teamConfigs.forEach(tcfg => {
-        const teamNodes = nodes.filter(n => n.team_id === tcfg.id && n.id !== 'executive_decision_architect' && n.id !== 'system_architect_orchestrator');
-        
-        // Lead
-        const lead = nodesMap[tcfg.leadId];
-        if (lead && lead.id !== 'executive_decision_architect' && lead.id !== 'system_architect_orchestrator') {
-          lead.x = tcfg.colX + 100;
-          lead.y = 380;
-          lead.tier = 2;
-        }
-
-        // Specialists in 2 clean columns without any overlap
-        const specialists = teamNodes.filter(n => n.id !== tcfg.leadId);
-        specialists.forEach((sp, idx) => {
-          const col = idx % 2;
-          const row = Math.floor(idx / 2);
-          sp.x = tcfg.colX + (col * 200); // 176px width + 24px gap = 200px step
-          sp.y = 560 + (row * 180);       // 145px height + 35px gap = 180px step
-          sp.tier = 3;
-        });
-      });
-
-      // Any remaining nodes
-      const processed = new Set([
-        'executive_decision_architect', 'system_architect_orchestrator',
-        ...nodes.filter(n => teamConfigs.some(tc => tc.id === n.team_id)).map(n => n.id)
-      ]);
-      const otherNodes = nodes.filter(n => !processed.has(n.id));
-      otherNodes.forEach((node, idx) => {
-        const col = idx % 2;
-        const row = Math.floor(idx / 2);
-        node.x = 2820 + (col * 200);
-        node.y = 560 + (row * 180);
+      // Bestehende Knoten nur sauber auf das 20px-Raster einrasten (keine Struktur zerstören!)
+      nodes.forEach(n => {
+        if (typeof n.x === 'number') n.x = Math.max(0, Math.round(n.x / 20) * 20);
+        if (typeof n.y === 'number') n.y = Math.max(0, Math.round(n.y / 20) * 20);
       });
 
       renderOpsOrgFlowchart();
       saveCurrentOrgHierarchy();
       if (typeof showArchonToast === 'function') {
-        showArchonToast(kanT('ui.operations_kanban.tiles_aligned', 'Kacheln sauber am 20px-Raster ausgerichtet (überlappungsfrei).'), 'success');
+        showArchonToast(kanT('ui.operations_kanban.tiles_aligned', 'Kacheln sauber am 20px-Raster ausgerichtet.'), 'success');
       }
     }
 
     function renderOpsOrgFlowchart() {
+      refreshOrgPresetDropdown();
       const nodesContainer = document.getElementById('ops-org-flow-nodes');
       const linksGroup = document.getElementById('ops-flow-links-group');
       if (!nodesContainer || !linksGroup) return;
@@ -1523,6 +1560,10 @@
     // Autonomie-Freigabe: gibt eine blockierte Aufgabe frei und startet sie.
     async function approveKanbanTask(taskId) {
       try {
+        if (typeof window.requirePasskeyForHitl === 'function') {
+          const pk = await window.requirePasskeyForHitl('project_start', `Kanban-Freigabe ${taskId}`);
+          if (!pk || !pk.verified) return;
+        }
         const res = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(taskId)}/approve`, { method: 'POST' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -1700,9 +1741,23 @@
                                mission_freigabe: 'Mission freigeben', permission_gate: 'Rechte freigeben' };
           const decTyp = decOpen ? (decTypName[t.decision.typ] || 'Entscheidung') : '';
           const projektName = t.obsidian ? String(t.obsidian).split('/').filter(Boolean).pop() : '';
+          const soulMode = t.soul_mode || '';
+          const soulIcon = soulMode === 'full' ? 'flame' : (soulMode === 'pro' ? 'target' : (soulMode === 'compact' ? 'zap' : ''));
+          const soulColor = soulMode === 'full' ? 'text-amber-600 border-amber-500/30 bg-amber-500/10' : (soulMode === 'pro' ? 'text-sky-600 border-sky-500/30 bg-sky-500/10' : 'text-emerald-600 border-emerald-500/30 bg-emerald-500/10');
+          const soulBadge = soulIcon
+            ? `<span class="inline-flex items-center justify-center px-1 py-0.5 rounded border ${soulColor} shrink-0" title="SOUL: ${opsEscapeHtml(soulMode)}"><i data-lucide="${soulIcon}" class="w-2.5 h-2.5"></i></span>`
+            : '';
+          const reas = t.reasoning_effort || '';
+          const reasMap = { off: '0', minimal: 'Min', low: 'L', medium: 'M', high: 'H', max: 'Max' };
+          const reasBadge = reas
+            ? `<span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[8.5px] font-mono font-bold shrink-0" title="Reasoning: ${opsEscapeHtml(reas)}"><i data-lucide="brain" class="w-2.5 h-2.5"></i>${reasMap[reas] || reas}</span>`
+            : '';
+          const hitlBadge = t.require_hitl
+            ? `<span class="inline-flex items-center justify-center px-1 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-600 shrink-0" title="HITL-Freigabe-Gate aktiv"><i data-lucide="shield-alert" class="w-2.5 h-2.5"></i></span>`
+            : '';
           const tokenBadge = (t.tokens || t.cost)
             ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border bg-indigo-500/10 text-indigo-500 border-indigo-500/30" title="Token & Kosten">🪙 ${t.tokens ? (typeof t.tokens === 'number' && t.tokens >= 1000 ? (t.tokens / 1000).toFixed(1) + 'k' : t.tokens) + ' Tok' : ''}${t.tokens && t.cost !== undefined ? ' · ' : ''}${t.cost !== undefined && t.cost !== null ? '$' + Number(t.cost).toFixed(2) : ''}</span>`
-            : '';
+            : `${soulBadge}${reasBadge}${hitlBadge}`;
           let qrBadge = '';
           if (t.quality_review) {
             const isAppr = t.quality_review.status === 'approved';
@@ -1743,7 +1798,8 @@
           const checkboxHtml = `
             <button type="button" 
                     onclick="event.stopPropagation(); toggleOpsTaskSelection('${t.id}');" 
-                    class="kanban-card-checkbox w-4 h-4 rounded-full border ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-2xs' : 'border-[var(--border)] bg-[var(--background)] hover:border-indigo-400 opacity-60 group-hover:opacity-100'} flex items-center justify-center transition-all cursor-pointer mr-1 shrink-0" 
+                    class="kanban-card-checkbox w-4 h-4 rounded border ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-2xs' : 'border-[var(--border)] bg-[var(--background)] hover:border-indigo-400 opacity-70 group-hover:opacity-100'} flex items-center justify-center transition-all cursor-pointer shrink-0" 
+                    style="border-radius: 4px;"
                     title="${kanT('ui.operations_kanban.mark_task_hint', 'Aufgabe markieren (Strg+Klick)')}">
               ${isSelected ? '<svg class="w-2.5 h-2.5 stroke-current stroke-3 fill-none" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
             </button>
@@ -1759,9 +1815,12 @@
                   <span class="px-1.5 py-0.2 rounded border ${prioClass} text-[9px] shrink-0">${prioText}</span>
                 </div>` : ''}
                 <div class="p-3 space-y-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2 flex-1 min-w-0">${opsEscapeHtml(t.title)}</h4>
+                    ${checkboxHtml}
+                  </div>
                   <div class="flex items-center justify-between flex-wrap gap-1 text-[10px] font-mono">
                     <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
-                      ${checkboxHtml}
                       ${numBadge}
                       <span class="text-[9.5px] font-mono text-muted-custom opacity-75 shrink-0 select-all" title="System-ID">${opsEscapeHtml(t.id)}</span>
                     </div>
@@ -1775,7 +1834,6 @@
                   <div class="flex items-center gap-1 min-w-0 flex-wrap text-[10px] font-mono">
                     ${statusBadge}${qrBadge}${dueBadge}${modelBadge}${tokenBadge}
                   </div>` : ''}
-                <h4 class="text-xs font-semibold text-primary-custom leading-snug line-clamp-2">${opsEscapeHtml(t.title)}</h4>
                 ${t.body ? `<p class="text-[11px] text-muted-custom line-clamp-2 leading-tight">${opsEscapeHtml(t.body)}</p>` : ''}
                 ${projektName ? `<div class="inline-block max-w-full truncate px-1.5 py-0.5 rounded text-[9px] font-mono text-muted-custom bg-[var(--secondary)] border border-[var(--border)]" title="${opsEscapeHtml(t.obsidian)}">📁 ${opsEscapeHtml(projektName)}</div>` : ''}
                 ${(t.block_kind === 'approval' || (t.block_kind && String(t.block_kind).endsWith('_hitl'))) ? `<button type="button" onclick="event.stopPropagation(); approveKanbanTask('${t.id}')"
@@ -2248,9 +2306,235 @@
     }
     window.onOpsTaskAssigneeChanged = onOpsTaskAssigneeChanged;
 
+    let opsTaskTrusted = false;
+    function toggleOpsTaskTrust() {
+      opsTaskTrusted = !opsTaskTrusted;
+      const btn = document.getElementById('ops-task-trust-btn');
+      const dot = document.getElementById('ops-task-trust-dot');
+      if (btn) {
+        btn.className = opsTaskTrusted
+          ? 'px-2 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer select-none shadow-2xs'
+          : 'px-2 py-1 rounded-lg border border-zinc-500/20 bg-zinc-500/10 text-zinc-500 dark:text-zinc-300 font-mono text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer select-none hover:border-zinc-400 shadow-2xs';
+      }
+      if (dot) dot.className = opsTaskTrusted ? 'w-1.5 h-1.5 rounded-full bg-emerald-500' : 'w-1.5 h-1.5 rounded-full bg-zinc-400';
+    }
+    window.toggleOpsTaskTrust = toggleOpsTaskTrust;
+
+    function setOpsTaskSoulMode(mode) {
+      const m = ['compact', 'pro', 'full'].includes(mode) ? mode : 'compact';
+      const hidden = document.getElementById('ops-task-soul-mode');
+      if (hidden) hidden.value = m;
+      const styles = {
+        compact: 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold transition-all bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-pointer whitespace-nowrap',
+        pro: 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold transition-all bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 cursor-pointer whitespace-nowrap',
+        full: 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold transition-all bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 cursor-pointer whitespace-nowrap',
+        inactive: 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer whitespace-nowrap'
+      };
+      ['compact', 'pro', 'full'].forEach(k => {
+        const b = document.getElementById(`ops-task-soul-btn-${k}`);
+        if (b) b.className = (k === m) ? styles[k] : styles.inactive;
+      });
+    }
+    window.setOpsTaskSoulMode = setOpsTaskSoulMode;
+
+    function populateOpsTaskDependsDropdown() {
+      const sel = document.getElementById('ops-task-depends-on');
+      if (!sel) return;
+      const firstOpt = sel.options[0] ? sel.options[0].outerHTML : '<option value="">(Keine Abhängigkeit)</option>';
+      const items = [];
+      if (typeof opsKanbanData !== 'undefined' && opsKanbanData && opsKanbanData.columns) {
+        Object.values(opsKanbanData.columns).forEach(arr => {
+          (arr || []).forEach(t => {
+            if (t && t.id && t.status !== 'archived') items.push(t);
+          });
+        });
+      }
+      sel.innerHTML = firstOpt + items.map(t => `<option value="${opsEscapeHtml(t.id)}">[${opsEscapeHtml(t.id)}] ${opsEscapeHtml((t.title || '').slice(0, 50))}</option>`).join('');
+    }
+
+    function getOpsTaskPresets() {
+      try {
+        const raw = localStorage.getItem('archon_task_presets_v1');
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    let cachedSystemPlaybooks = null;
+    async function fetchSystemPlaybooksForPresets() {
+      if (Array.isArray(cachedSystemPlaybooks)) return cachedSystemPlaybooks;
+      try {
+        const res = await fetch('/api/v1/playbooks?active_only=true');
+        if (res.ok) {
+          const data = await res.json();
+          cachedSystemPlaybooks = Array.isArray(data.playbooks) ? data.playbooks : [];
+          return cachedSystemPlaybooks;
+        }
+      } catch (e) {}
+      cachedSystemPlaybooks = [];
+      return [];
+    }
+
+    async function refreshOpsTaskPresetDropdown(selectedName) {
+      const sel = document.getElementById('ops-task-preset-select');
+      if (!sel) return;
+      const firstOpt = sel.options[0] ? sel.options[0].outerHTML : '<option value="">Preset wählen...</option>';
+      const presets = getOpsTaskPresets();
+      const playbooks = await fetchSystemPlaybooksForPresets();
+
+      let html = firstOpt;
+      if (presets.length) {
+        html += `<optgroup label="Eigene Task-Presets">` +
+          presets.map(p => `<option value="user:${opsEscapeHtml(p.name)}">${opsEscapeHtml(p.name)}</option>`).join('') +
+          `</optgroup>`;
+      }
+      if (playbooks.length) {
+        html += `<optgroup label="System-Vorlagen (Playbooks)">` +
+          playbooks.map(pb => `<option value="pb:${opsEscapeHtml(pb.id)}">${opsEscapeHtml(pb.title)} (${opsEscapeHtml(pb.category || 'Workflow')})</option>`).join('') +
+          `</optgroup>`;
+      }
+      sel.innerHTML = html;
+      if (selectedName) {
+        sel.value = selectedName.startsWith('user:') || selectedName.startsWith('pb:') ? selectedName : `user:${selectedName}`;
+      }
+    }
+
+    function saveOpsTaskPreset() {
+      const titleVal = document.getElementById('ops-task-title')?.value.trim() || '';
+      const name = prompt('Name für dieses Task-Preset:', titleVal || 'Mein Task-Preset');
+      if (!name || !name.trim()) return;
+      const cleanName = name.trim();
+      const preset = {
+        name: cleanName,
+        title: titleVal,
+        body: document.getElementById('ops-task-body')?.value || '',
+        column: document.getElementById('ops-task-column')?.value || 'todo',
+        priority: document.getElementById('ops-task-priority')?.value || '0',
+        team_id: document.getElementById('ops-task-team')?.value || '',
+        assignee: document.getElementById('ops-task-assignee')?.value || '',
+        provider: document.getElementById('ops-task-provider')?.value || 'omniroute',
+        model: document.getElementById('ops-task-model')?.value || '',
+        reasoning: document.getElementById('ops-task-reasoning')?.value || '',
+        soul_mode: document.getElementById('ops-task-soul-mode')?.value || 'compact',
+        tool_preset: document.getElementById('ops-task-tool-preset')?.value || 'standard',
+        token_budget: document.getElementById('ops-task-token-budget')?.value || '',
+        cost_limit_usd: document.getElementById('ops-task-cost-limit')?.value || '',
+        due_date: document.getElementById('ops-task-due')?.value || '',
+        cron_schedule: document.getElementById('ops-task-cron')?.value || '',
+        depends_on: document.getElementById('ops-task-depends-on')?.value || '',
+        decompose: !!document.getElementById('ops-task-decompose')?.checked,
+        require_hitl: !!document.getElementById('ops-task-require-hitl')?.checked,
+        trusted_input: !!opsTaskTrusted
+      };
+      const list = getOpsTaskPresets().filter(p => p.name !== cleanName);
+      list.unshift(preset);
+      localStorage.setItem('archon_task_presets_v1', JSON.stringify(list));
+      refreshOpsTaskPresetDropdown(cleanName);
+      if (typeof showNotification === 'function') showNotification('Preset', `Preset '${cleanName}' gespeichert.`, 'success');
+    }
+    window.saveOpsTaskPreset = saveOpsTaskPreset;
+
+    async function loadOpsTaskPreset() {
+      const sel = document.getElementById('ops-task-preset-select');
+      const rawVal = sel?.value;
+      if (!rawVal) return;
+
+      if (rawVal.startsWith('pb:')) {
+        const pbId = rawVal.slice(3);
+        const playbooks = await fetchSystemPlaybooksForPresets();
+        const pb = playbooks.find(p => String(p.id) === pbId);
+        if (!pb) return;
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+        setVal('ops-task-title', pb.title || '');
+        const varsHint = Array.isArray(pb.variables) && pb.variables.length
+          ? `Variablen: ${pb.variables.map(v => '{{' + v + '}}').join(', ')}\n\n`
+          : '';
+        const stepsText = Array.isArray(pb.steps) && pb.steps.length
+          ? pb.steps.map((st, i) => `### Schritt ${st.order || (i + 1)}: ${st.title || ''} (Agent: ${st.agent_id || 'auto'})\n${st.prompt_template || ''}`).join('\n\n')
+          : (pb.description || '');
+        setVal('ops-task-body', varsHint + stepsText);
+        if (Array.isArray(pb.steps) && pb.steps[0]?.agent_id) {
+          setVal('ops-task-assignee', pb.steps[0].agent_id);
+        }
+        const decEl = document.getElementById('ops-task-decompose');
+        if (decEl) decEl.checked = Array.isArray(pb.steps) && pb.steps.length > 1;
+        if (typeof showNotification === 'function') showNotification('Vorlage', `Playbook '${pb.title}' in Aufgabe geladen.`, 'success');
+        return;
+      }
+
+      const name = rawVal.startsWith('user:') ? rawVal.slice(5) : rawVal;
+      const preset = getOpsTaskPresets().find(p => p.name === name);
+      if (!preset) return;
+      const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+      setVal('ops-task-title', preset.title || '');
+      setVal('ops-task-body', preset.body || '');
+      setVal('ops-task-column', preset.column || 'todo');
+      setVal('ops-task-priority', preset.priority || '0');
+      setVal('ops-task-team', preset.team_id || '');
+      if (preset.team_id) onOpsTaskTeamChange(preset.team_id);
+      setVal('ops-task-assignee', preset.assignee || '');
+      setVal('ops-task-provider', preset.provider || 'omniroute');
+      setVal('ops-task-model', preset.model || '');
+      setVal('ops-task-reasoning', preset.reasoning || '');
+      setOpsTaskSoulMode(preset.soul_mode || 'compact');
+      setVal('ops-task-tool-preset', preset.tool_preset || 'standard');
+      setVal('ops-task-token-budget', preset.token_budget || '');
+      setVal('ops-task-cost-limit', preset.cost_limit_usd || '');
+      setVal('ops-task-due', preset.due_date || '');
+      setVal('ops-task-cron', preset.cron_schedule || '');
+      setVal('ops-task-depends-on', preset.depends_on || '');
+      const decEl = document.getElementById('ops-task-decompose');
+      if (decEl) decEl.checked = !!preset.decompose;
+      const hitlEl = document.getElementById('ops-task-require-hitl');
+      if (hitlEl) hitlEl.checked = !!preset.require_hitl;
+      if (!!preset.trusted_input !== !!opsTaskTrusted) toggleOpsTaskTrust();
+      onOpsTaskModelChange(preset.model || '');
+      if (typeof showNotification === 'function') showNotification('Preset', `Preset '${name}' geladen.`, 'success');
+    }
+    window.loadOpsTaskPreset = loadOpsTaskPreset;
+
+    function deleteOpsTaskPreset() {
+      const sel = document.getElementById('ops-task-preset-select');
+      const rawVal = sel?.value;
+      if (!rawVal) return;
+      if (rawVal.startsWith('pb:')) {
+        if (typeof showNotification === 'function') showNotification('Vorlage', 'System-Playbooks können nicht gelöscht werden.', 'info');
+        return;
+      }
+      const name = rawVal.startsWith('user:') ? rawVal.slice(5) : rawVal;
+      const list = getOpsTaskPresets().filter(p => p.name !== name);
+      localStorage.setItem('archon_task_presets_v1', JSON.stringify(list));
+      refreshOpsTaskPresetDropdown('');
+      if (typeof showNotification === 'function') showNotification('Preset', `Preset '${name}' gelöscht.`, 'info');
+    }
+    window.deleteOpsTaskPreset = deleteOpsTaskPreset;
+
+    function onOpsTaskProviderChange(provider) {
+      populateOpsTaskModelDropdown();
+    }
+    window.onOpsTaskProviderChange = onOpsTaskProviderChange;
+
+    function onOpsTaskModelChange(modelId) {
+      const badge = document.getElementById('ops-task-model-cost');
+      if (!badge) return;
+      const models = Array.isArray(window.masterChatModelsList) ? window.masterChatModelsList : [];
+      const found = models.find(m => m.id === modelId || m.name === modelId);
+      if (found && (found.input_cost !== undefined || found.output_cost !== undefined)) {
+        badge.textContent = `≈ Input: $${Number(found.input_cost || 0).toFixed(2)} | Output: $${Number(found.output_cost || 0).toFixed(2)} /1M`;
+      } else {
+        badge.textContent = '≈ Input: $0.00 | Output: $0.00 /1M';
+      }
+    }
+    window.onOpsTaskModelChange = onOpsTaskModelChange;
+
     function openNewTaskModal(defaultColumn, defaultAssignee, defaultTeam) {
       const modal = document.getElementById('ops-new-task-modal');
       if (!modal) return;
+      setOpsTaskSoulMode('compact');
+      populateOpsTaskDependsDropdown();
+      refreshOpsTaskPresetDropdown('');
       if (defaultColumn) {
         const colSelect = document.getElementById('ops-task-column');
         if (colSelect) colSelect.value = defaultColumn;
@@ -2453,8 +2737,18 @@
             priority,
             team_id: teamId,
             assignee,
+            provider_override: document.getElementById('ops-task-provider')?.value || null,
             model_override: model,
-            reasoning_override: document.getElementById('ops-task-reasoning')?.value || null,
+            reasoning_effort: document.getElementById('ops-task-reasoning')?.value || null,
+            soul_mode: document.getElementById('ops-task-soul-mode')?.value || 'compact',
+            tool_preset: document.getElementById('ops-task-tool-preset')?.value || 'standard',
+            token_budget: document.getElementById('ops-task-token-budget')?.value ? parseInt(document.getElementById('ops-task-token-budget').value, 10) : null,
+            cost_limit_usd: document.getElementById('ops-task-cost-limit')?.value ? parseFloat(document.getElementById('ops-task-cost-limit').value) : null,
+            due_date: document.getElementById('ops-task-due')?.value || null,
+            cron_schedule: document.getElementById('ops-task-cron')?.value || null,
+            depends_on: document.getElementById('ops-task-depends-on')?.value || null,
+            require_hitl: !!document.getElementById('ops-task-require-hitl')?.checked,
+            trusted_input: !!opsTaskTrusted,
             decompose
           })
         });
@@ -2481,6 +2775,50 @@
         }
       }
     }
+
+    async function cloneArchivedKanbanTask(taskId) {
+      if (!taskId) return;
+      try {
+        const res = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(taskId)}`);
+        if (!res.ok) throw new Error('Task konnte nicht geladen werden');
+        const data = await res.json();
+        const t = data.task || {};
+        const createRes = await fetch('/api/operations/kanban/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `${t.title || taskId} (Kopie)`,
+            body: t.body || '',
+            column: 'todo',
+            priority: t.priority || 0,
+            assignee: t.assignee || null,
+            model_override: t.model_override || null,
+            provider_override: t.provider_override || null,
+            soul_mode: t.soul_mode || null,
+            reasoning_effort: t.reasoning_effort || null,
+            tool_preset: t.tool_preset || null,
+            token_budget: t.token_budget || null,
+            cost_limit_usd: t.cost_limit_usd || null,
+            require_hitl: !!t.require_hitl,
+            due_date: t.due_date || null,
+            cron_schedule: t.cron_schedule || null
+          })
+        });
+        const created = await createRes.json();
+        if (!createRes.ok || created.status !== 'success') {
+          throw new Error(created.detail || 'Kopie konnte nicht erstellt werden');
+        }
+        if (typeof showNotification === 'function') {
+          showNotification('Archiv', `Kopie '${created.task_id}' in To-Do angelegt (Original bleibt unverändert).`, 'success');
+        }
+        if (typeof loadOperationsData === 'function') await loadOperationsData(false);
+        closeTaskDetailModal();
+        if (typeof toggleOpsKanbanArchive === 'function') toggleOpsKanbanArchive(false);
+      } catch (e) {
+        if (typeof showNotification === 'function') showNotification('Archiv', e.message || 'Fehler beim Kopieren', 'error');
+      }
+    }
+    window.cloneArchivedKanbanTask = cloneArchivedKanbanTask;
 
     async function openTaskDetailModal(taskId) {
       currentOpsDetailTaskId = taskId;
@@ -2917,6 +3255,18 @@
       } catch (err) {
         console.error("Detail load error:", err);
       }
+      // Archivierte Tasks im Detail-Modal schreibgeschützt sperren (Original bleibt unverändert)
+      const isArchivedTask = String(document.getElementById('ops-detail-status-select')?.value || '').toLowerCase() === 'archived';
+      const archBanner = document.getElementById('ops-detail-archived-banner');
+      if (archBanner) archBanner.classList.toggle('hidden', !isArchivedTask);
+      const quickBar = document.getElementById('ops-detail-quick-actions');
+      if (quickBar) quickBar.classList.toggle('hidden', isArchivedTask);
+      ['ops-detail-status-select', 'ops-detail-assignee-select', 'ops-detail-due', 'ops-detail-tags',
+       'ops-detail-soul-mode', 'ops-detail-reasoning', 'ops-detail-tool-preset', 'ops-detail-token-budget',
+       'ops-detail-require-hitl', 'ops-detail-meta-save-btn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = isArchivedTask;
+      });
       if (window.lucide) lucide.createIcons();
     }
 
@@ -3816,6 +4166,7 @@
 
     // Expose functions globally for index.html and onclick handlers
     window.openTaskDetailModal = openTaskDetailModal; // 19.11.2026: fuer Projekt-Detail-Modal (Subtask-Direktklick)
+    window.openOpsTaskDetailModal = openTaskDetailModal;
     window.setOperationsTab = setOperationsTab;
     window._opsKanbanSetTab = setOperationsTab;
     window.loadOperationsData = loadOperationsData;

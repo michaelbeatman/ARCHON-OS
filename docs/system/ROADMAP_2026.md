@@ -618,6 +618,31 @@
   - **Vergleichen:** Zeitreihen-Ansicht zur Wirtschaftlichkeit je Output-Typ (z. B. veröffentlichtes Video, gesendete Angebotsunterlage), damit Trends sichtbar werden, ob ein Output-Typ im Verhältnis zu seinem Aufwand trägt.
   - **Bewertung bewusst manuell:** Das Dashboard liefert die belegte Kosten- und Aufwandsseite. Die Wertseinschätzung des Outputs bleibt eine menschliche Eingabe (z. B. eine einfache Nutzenskala je Deliverable), konsistent zum Grundsatz, dass das System den Nachweis liefert, nicht das Urteil.
 
+### Meilenstein 101: Kryptographische HITL-Verifizierung per Passkey / WebAuthn (FIDO2) (Implementiert – Basis)
+- **Ausgangslage / Sicherheits-Ziel:** Bei sensiblen HITL-Freigaben (z. B. Zahlungen, Budget-Überschreitungen, Projektstarts, Berechtigungen) soll technisch ausgeschlossen sein, dass ein KI-Modell oder ein kompromittierter Prompt eine Freigabe selbst auslöst oder vortäuscht. Ein reiner API-Klick reicht dafür perspektivisch nicht aus.
+- **Zielzustand (Optional & zweistufig konfigurierbar in `Autonomie & Freigaben` / Settings):**
+  - **1. Master-Schalter (Optional):** Passkey-/WebAuthn-Pflicht grundsätzlich **ein- oder ausschaltbar** (Standard: optional aktivierbar pro Installation/Benutzer). Unterstützt werden Google Passkey, Windows Hello, Apple Touch ID/Face ID und Hardware-Keys (FIDO2/WebAuthn via `navigator.credentials.get()` + serverseitige Challenge-Response-Signaturprüfung), optional mit TOTP-Fallback.
+  - **2. Granularer Geltungsbereich:** Bei aktivierter Verifizierung wählbar zwischen **Alle HITL-Freigaben** oder **selektiv je Kategorie/Trigger** (z. B. nur Zahlungen/Finanzen, nur Projektstart, nur Budget-Überschreitung, nur destruktive System-/Egress-Aktionen).
+  - **GoBD-Nachweis:** Die signierte WebAuthn-Assertion (Credential-ID, Zeitstempel, Challenge-Hash) wird direkt in der manipulationssicheren SHA-256 Audit-Chain mitprotokolliert.
+  - **Dokumentations-Pflicht:** Vollständige Aktualisierung der System- und Benutzerhandbücher (Setup auf `localhost` vs. HTTPS-Domain, Passkey-Registrierung, Recovery/Vertretungs-Flow nach M95).
+
+### Meilenstein 102: Multi-Agent Workflow-Vorlagen-Studio (Visueller DAG-Runner & Starter-Workflows) (Implementiert)
+- **Ausgangslage / Ziel:** Reine Prompt-Vorlagen decken nur Einzelaufträge ab. Echte Workflows verknüpfen mehrere spezialisierte Agenten-Instanzen (Sequenz, paralleles Fan-Out/Fan-In, HITL-Gates) mit klarer Vorschau vor dem Start und direkter Bridge in Kanban, DAW-Gantt, Dependency-Graph und optionale n8n-Webhooks.
+- **Umgesetzte Architektur:**
+  - **Registry & Materializer (`backend/workflow_templates.py`):** 4 kuratierte Multi-Instanz-Starter-Workflows (*Wiederkehrende Content-Pipeline*, *Deep-Research -> Parallel-Analyse -> Dossier*, *Lead-Recherche -> CRM-Qualifizierung -> Angebot*, *Feature-Audit -> Security & Tests -> Release*) plus Persistenz eigener Vorlagen in `config/workflow_templates.json`.
+  - **API-Endpunkte (`archon/routers/v2_capabilities.py`):** `GET /api/v2/workflows/templates`, `POST /api/v2/workflows/templates`, `DELETE /api/v2/workflows/templates/{tpl_id}`, `POST /api/v2/workflows/templates/{tpl_id}/run` (legt verknüpfte Tasks + `task_links` + `kanban_meta.json` inkl. SOUL/Tool-Preset/HITL/Cron an und triggert optional einen n8n-Webhook).
+  - **Visuelles DAG-Studio (`static/js/workflow_templates_studio.js`):** Integriert im Tab `n8n-Automation` mit Layer-basierter SVG-Knotenvorschau vor der Ausführung, Schritt-Inspektor, Variablen-Eingabe, eigenem Schritt-Editor und direktem Sprung in das Kanban-Board.
+- **Dokumentation:** Siehe [WORKFLOW_TEMPLATES_GUIDE.md](WORKFLOW_TEMPLATES_GUIDE.md).
+
+### Meilenstein 103: Treasury-, Wallet- & Passkey-gesichertes Zahlungs-Cockpit (Implementiert)
+- **Ausgangslage / Ziel:** Zentrale Übersicht über Liquidität (Bankkonten, PayPal, Stripe, Krypto-Wallets *Watch-Only* und gedeckelte *Agent-Allowance*-Wallets), kategorisierte Ausgaben und eine unumgehbare Passkey-/HITL-Zahlungsfreigabe.
+- **Sicherheits-Prinzip (Zero-Trust / Cornell-Yale-Schutz):** Ist Passkey-HITL (`payments`) aktiv, kann kein KI-Agent selbstständig Zahlungen ausführen oder Limits erhöhen — jede Ausgabe landet zwingend in der Freigabe-Queue und erfordert die menschliche WebAuthn-/Handy-Passkey-Signatur.
+- **Implementierte Komponenten:**
+  - `backend/treasury_engine.py` (SQLite WAL `data/treasury.db`, Idempotency-Keys, Empfänger-Allowlists, SHA-256 Hash-Chain)
+  - API-Endpunkte in `archon/routers/v2_capabilities.py` (`/api/v2/treasury/*`)
+  - Frontend-Cockpit `static/js/treasury_studio.js` im Subtab **Treasury** unter **Rechnungswesen & Finanzen**.
+- **Dokumentation:** Siehe [TREASURY_PAYMENTS_GUIDE.md](TREASURY_PAYMENTS_GUIDE.md).
+
 ## Ideen-Pool (beobachten, nicht geplant)
 
 Themen, die im Blick bleiben, aber keinen Meilenstein und keinen Zeitslot haben. Sie werden erst dann zu Meilensteinen, wenn ein klarer Nutzen oder ein Community-Signal vorliegt.

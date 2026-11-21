@@ -6,10 +6,14 @@ aus Spezialisten-Rollen zusammen (max. `max_team_size`), weist Teilverantwortung
 das Team nach Projektabschluss (`auto_dissolve_on_complete`) wieder sauber auf.
 """
 
+import asyncio
 import os
 import json
+import logging
 import uuid
 import sqlite3
+
+logger = logging.getLogger("archon.ephemeral_team_spawner")
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -21,10 +25,14 @@ class _ArchonClosingConn(sqlite3.Connection):
         finally:
             self.close()
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db
+    DB_PATH = resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 
 def _get_cfg() -> Dict[str, Any]:
@@ -70,7 +78,14 @@ class EphemeralTeamSpawner:
     def __init__(self):
         _init_db()
 
-    def spawn_task_force(self, mission_title: str, mission_brief: str) -> Dict[str, Any]:
+    def spawn_task_force(
+        self,
+        mission_title: str,
+        mission_brief: str,
+        *,
+        execute_dag: bool = False,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
         cfg = _get_cfg()
         enabled = bool(cfg.get("enabled", True))
         max_size = int(cfg.get("max_team_size", 4))
@@ -97,6 +112,41 @@ class EphemeralTeamSpawner:
         final_status = "completed_and_dissolved" if auto_dissolve else "active"
         dissolved_at = now_iso if auto_dissolve else None
 
+        # Optionale Ausfuehrung ueber die zentrale Workflow-DAG-Engine (Fan-Out + Synthese)
+        dag_run: Optional[Dict[str, Any]] = None
+        if enabled and execute_dag:
+            try:
+                from backend.workflow_dag_runner import run_workflow_dag
+
+                specialists = [m for m in selected_members if m["role_id"] != "squad_commander"] or selected_members
+                nodes: List[Dict[str, Any]] = []
+                for idx, member in enumerate(specialists):
+                    nodes.append({
+                        "id": f"n_spec_{idx + 1}",
+                        "type": "task",
+                        "agent_id": member["role_id"],
+                        "title": member["title"],
+                        "prompt": f"Mission: {mission_title}\nAuftrag: {mission_brief}\nDein Fokus: {member['focus']}",
+                        "depends_on": [],
+                    })
+                nodes.append({
+                    "id": "n_squad_synthesis",
+                    "type": "task",
+                    "agent_id": "squad_commander",
+                    "title": "Ephemeral Squad Lead Synthese",
+                    "prompt": f"Synthetisiere die Ergebnisse der Task-Force fuer '{mission_title}'.",
+                    "depends_on": [n["id"] for n in nodes],
+                })
+                dag_def = {"workflow_id": team_id, "nodes": nodes, "edges": []}
+                eff_exec = (
+                    (lambda n, u: {"status": "success", "agent_id": n.get("agent_id"), "content": f"[Task-Force {n.get('title')}] OK"})
+                    if dry_run
+                    else None
+                )
+                dag_run = asyncio.run(run_workflow_dag(dag_def=dag_def, executor_fn=eff_exec))
+            except Exception as dag_exc:
+                logger.warning(f"[EphemeralTeamSpawner] DAG-Dispatch fuer {team_id} uebersprungen: {dag_exc}")
+
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""
                 INSERT INTO ephemeral_task_forces
@@ -109,7 +159,7 @@ class EphemeralTeamSpawner:
             ))
             conn.commit()
 
-        return {
+        res: Dict[str, Any] = {
             "team_id": team_id,
             "enabled": enabled,
             "mission_title": mission_title,
@@ -117,8 +167,12 @@ class EphemeralTeamSpawner:
             "max_team_size": max_size,
             "members": selected_members,
             "status": final_status,
-            "auto_dissolved": auto_dissolve
+            "auto_dissolved": auto_dissolve,
         }
+        if dag_run is not None:
+            res["workflow_run_id"] = dag_run.get("run_id")
+            res["dag_status"] = dag_run.get("status")
+        return res
 
 
 ephemeral_team_spawner = EphemeralTeamSpawner()

@@ -933,8 +933,8 @@ async def _run_synthesis_cascade(
             try:
                 with open(art_path, "r", encoding="utf-8") as f:
                     content = f.read()
-            except Exception:
-                pass
+            except Exception as read_exc:
+                logger.warning(f"[Orchestration] Artefakt {art_path} konnte nicht gelesen werden: {read_exc}")
         if not content:
             content = s.get("result_summary", "")
         reports.append(f"### Arbeitspaket von {sub_agent} ({sub_title})\n\n{content}\n")

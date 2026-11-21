@@ -39,5 +39,7 @@ def api_spawn_ephemeral_team(request: Request, payload: Dict = Body(...)):
     from backend.ephemeral_team_spawner import ephemeral_team_spawner
     return ephemeral_team_spawner.spawn_task_force(
         mission_title=payload.get("mission_title", "Spezial-Auftrag"),
-        mission_brief=payload.get("mission_brief", "")
+        mission_brief=payload.get("mission_brief", ""),
+        execute_dag=bool(payload.get("execute_dag", False)),
+        dry_run=bool(payload.get("dry_run", True)),
     )

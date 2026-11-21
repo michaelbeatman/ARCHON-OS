@@ -569,8 +569,8 @@ def save_agents(agents: List[Dict]):
                 if updated:
                     atomic_write_json(ssot_file, p_list)
                     invalidate_hermes_profiles_cache()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"[Agents] SSoT-Profile-Sync fehlgeschlagen: {exc}")
 
 @ttl_cache(seconds=60)
 def load_roles() -> List[Dict]:
@@ -783,8 +783,8 @@ def _spawn_background(coro, name: str = ""):
     def _done_cb(t):
         try:
             _BACKGROUND_TASKS.remove(t)
-        except ValueError:
-            pass
+        except ValueError as rm_exc:
+            logger.debug(f"[BackgroundTask] Task {t.get_name()} bereits aus Registry entfernt: {rm_exc}")
         if not t.cancelled():
             exc = t.exception()
             if exc:
@@ -1436,8 +1436,8 @@ async def sse_events_stream():
                 except asyncio.TimeoutError:
                     # Keepalive Heartbeat alle 20s
                     yield f": keepalive\n\n"
-        except asyncio.CancelledError:
-            pass
+        except asyncio.CancelledError as cancel_exc:
+            logger.debug(f"[SSE] Event-Stream vom Client geschlossen: {cancel_exc}")
         finally:
             with _SSE_SUB_LOCK:
                 if queue in _SSE_SUBSCRIBERS:

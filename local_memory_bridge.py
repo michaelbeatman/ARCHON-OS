@@ -1,11 +1,14 @@
 import os
 import sys
 import json
+import logging
 import sqlite3
 import datetime
 import time
 import math
 from typing import List, Dict, Optional, Any
+
+logger = logging.getLogger("archon.local_memory_bridge")
 
 class _ClosingMemoryConn(sqlite3.Connection):
     """SQLite-Verbindung, die beim Verlassen eines `with`-Blocks automatisch schliesst."""
@@ -447,8 +450,8 @@ tags: ["learning", "memory", "{agent_id}"]
                         conn.commit()
                         for mid in ids:
                             cooldown[("conv", mid)] = now_m
-                    except Exception:
-                        pass
+                    except Exception as touch_exc:
+                        logger.debug(f"[LocalMemoryBridge] Touch-Update auf conversations fehlgeschlagen: {touch_exc}")
 
             return top_items
 
@@ -605,8 +608,8 @@ tags: ["learning", "memory", "{agent_id}"]
                         conn.commit()
                         for mid in top_ids:
                             cooldown[("learn", mid)] = now_m
-                    except Exception:
-                        pass
+                    except Exception as touch_exc:
+                        logger.debug(f"[LocalMemoryBridge] Touch-Update auf learnings fehlgeschlagen: {touch_exc}")
 
             return top
 

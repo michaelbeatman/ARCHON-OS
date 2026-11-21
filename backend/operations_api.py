@@ -630,7 +630,7 @@ def create_kanban_task(req: TaskCreateRequest):
 
 
 async def _execute_kanban_task_async(task_id: str):
-    """Führt eine Kanban-Aufgabe autonom über core_dispatcher oder dag_scheduler aus."""
+    """Führt eine Kanban-Aufgabe autonom über core_dispatcher aus (alter dag_scheduler entfernt)."""
     import core_dispatcher
     conn = _get_kanban_connection()
     try:
@@ -657,14 +657,14 @@ async def _execute_kanban_task_async(task_id: str):
     except Exception as exc:
         print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
-    # Fall 1: Ist es ein DAG Epic?
+    # Fall 1: DAG-Epics des ALTEN 2-Tier-Schedulers — Scheduler ist entfernt (21.11.2026).
     if t_dict["id"].startswith("dag-") and not any(t_dict["id"].endswith(f"-{s}") for s in ["1", "2", "3", "4", "syn"]):
-            try:
-                from backend.dag_scheduler import dag_scheduler_instance
-                await dag_scheduler_instance.execute_dag(task_id)
-                return
-            except Exception as e:
-                print(f"[OperationsAPI] DAG Execution error for {task_id}: {e}", file=sys.stderr)
+        print(
+            f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Task {task_id} ist ein dag-*-Epic des entfernten "
+            "dag_scheduler — Ausfuehrung nicht moeglich. Nachfolger: Workflow-Engine (/api/v2/workflows/templates/{id}/run).",
+            file=sys.stderr,
+        )
+        return
 
     # Autonomie-Gate: der Eigentümer entscheidet, ob Operations selbst handeln dürfen.
     try:

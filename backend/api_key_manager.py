@@ -14,6 +14,9 @@ import time
 import datetime
 import threading
 from typing import Dict, Any, List, Optional, Tuple
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from backend.db_paths import resolve_db
@@ -141,8 +144,8 @@ class ApiKeyManager:
                     agent_id=created_by,
                     payload={"key_id": key_id, **details}
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("API-Key-Manager: Audit-Log-Eintrag fehlgeschlagen: %s", exc)
 
     @staticmethod
     def _emit_global_audit(key_id: str, action: str, details: Dict[str, Any], created_by: str) -> None:
@@ -154,8 +157,8 @@ class ApiKeyManager:
                 agent_id=created_by,
                 payload={"key_id": key_id, **details},
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("API-Key-Manager: Globaler Audit-Log-Eintrag fehlgeschlagen: %s", exc)
 
     def create_key(
         self,
@@ -242,8 +245,8 @@ class ApiKeyManager:
                 scopes_list = []
                 try:
                     scopes_list = json.loads(r["scopes"])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("API-Key-Manager: Scopes-JSON unlesbar: %s", exc)
 
                 result.append({
                     "key_id": r["key_id"],

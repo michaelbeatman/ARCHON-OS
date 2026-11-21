@@ -1,6 +1,7 @@
 """Regressionstest F-14: keine doppelten Pfad+Methode-Routen im Scope.
 
-AST-Scan ueber main.py, backend/main.py und backend/operations_api.py:
+AST-Scan ueber main.py und backend/operations_api.py (backend/main.py ist seit dem
+Triage-Lauf 21.11.2026 nach archive/20261121_legacy_workflows/ verschoben):
 Es darf keine Pfad+Methode-Kombination doppelt registriert sein.
 Vor dem Fix: GET /metrics (main.py + operations_api), GET / und GET /api/agents
 (main.py + backend/main.py).
@@ -16,9 +17,12 @@ if BASE_DIR not in sys.path:
 
 FILES = [
     os.path.join(BASE_DIR, "main.py"),
-    os.path.join(BASE_DIR, "backend", "main.py"),
     os.path.join(BASE_DIR, "backend", "operations_api.py"),
 ]
+
+_LEGACY_BACKEND_MAIN = os.path.join(
+    BASE_DIR, "archive", "20261121_legacy_workflows", "legacy_backend_main.py"
+)
 
 _ROUTE_DECORS = {"get", "post", "put", "delete", "patch", "api_route"}
 
@@ -76,8 +80,8 @@ def test_no_duplicate_metrics_route():
 
 
 def test_backend_main_has_no_root_or_agents_collision():
-    """backend/main.py darf GET / und GET /api/agents nicht mehr fuehren."""
-    with open(os.path.join(BASE_DIR, "backend", "main.py"), "r", encoding="utf-8") as f:
+    """Das archivierte backend/main.py (legacy_backend_main.py) darf GET / und GET /api/agents nicht mehr fuehren."""
+    with open(_LEGACY_BACKEND_MAIN, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read())
     routes = _collect_routes(tree)
     collisions = {"/", "/api/agents"}

@@ -19,6 +19,9 @@ from pathlib import Path
 
 from archon.core.config import config
 from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Optional dependencies with graceful fallback
 try:
@@ -223,8 +226,8 @@ def extract_pdf(pdf_path: str, assets_dir: str, doc_slug: str) -> dict:
                                     cropped.save(img_full_path, format="PNG")
                                     page_content += f"\n![[{img_filename}]]\n*Abbildung {page_idx}.{img_idx}*\n\n"
                                     total_images += 1
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.warning("BatchImporter: Bild-Extraktion (PDF) fehlgeschlagen: %s", exc)
                     
                     pages_data.append({
                         "page_num": page_idx,
@@ -391,8 +394,8 @@ def extract_epub(epub_path: str, assets_dir: str, doc_slug: str) -> dict:
                                     f_img.write(img_data)
                                 text_md += f"\n![[{img_out_name}]]\n*Abbildung {total_images + 1}*\n\n"
                                 total_images += 1
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.warning("BatchImporter: Bild-Extraktion (EPUB) fehlgeschlagen: %s", exc)
 
                 text_md = re.sub(r'<[^>]+>', '', text_md)
                 text_md = html.unescape(text_md)
@@ -766,8 +769,8 @@ def run_batch_ingest() -> dict:
         if os.path.exists(src_bib):
             try:
                 shutil.copytree(src_bib, dst_bib, dirs_exist_ok=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("BatchImporter: Kopieren der Wissensbibliothek fehlgeschlagen: %s", exc)
 
     return {
         "status": "success",
@@ -832,8 +835,8 @@ def list_indexed_books(vault_dir: str = None) -> list[dict]:
                         "is_index": f.startswith("_Index_"),
                         "size_bytes": os.path.getsize(fpath)
                     })
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("BatchImporter: Bucheintrag uebersprungen: %s", exc)
                     
     return sorted(books, key=lambda b: (b["category"], b["title"]))
 

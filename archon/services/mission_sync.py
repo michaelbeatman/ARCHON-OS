@@ -151,8 +151,8 @@ def _get_live_telemetry_metrics() -> Dict[str, Any]:
                 state_dbs.append(db)
             elif os.path.getmtime(db) >= today_start_ts:
                 state_dbs.append(db)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"State-DB {db} konnte nicht geprueft werden: {exc}")
     if not state_dbs:
         state_dbs = [d for d in all_dbs if d.endswith("state.db") and "/profiles/" not in d] or all_dbs[:1]
 
@@ -202,8 +202,8 @@ def _get_live_telemetry_metrics() -> Dict[str, Any]:
                     tokens_last_15m += tot
                     bucket_idx = min(14, max(0, int((now_ts - lseen) / 60)))
                     minute_buckets[14 - bucket_idx] += round(tot / 1000.0, 1)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error(f"Telemetrie-DB-Auswertung fehlgeschlagen: {exc}")
         finally:
             if con:
                 con.close()

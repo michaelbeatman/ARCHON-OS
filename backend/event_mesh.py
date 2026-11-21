@@ -64,8 +64,8 @@ class EventMesh:
                         safe_payload[txt_key] = san.get("clean_summary", "[GEFILTERT]")
                         safe_payload["_security_status"] = "blocked"
                         safe_payload["_detected_patterns"] = san.get("detected_patterns", [])
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[EventMesh] SICHERHEIT: Input-Sanitizer fehlgeschlagen, Payload wird UNSANITIZED weiterverarbeitet: {exc}", file=sys.stderr)
         payload_str = json.dumps(safe_payload, ensure_ascii=False)
 
         # 1. Protokollieren
@@ -97,8 +97,8 @@ class EventMesh:
                     role="hermes-orchestrator",
                     status="todo"
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[EventMesh] Kanban-Task fuer Event konnte nicht synchronisiert werden: {exc}", file=sys.stderr)
 
         return {
             "status": "success",
@@ -162,8 +162,8 @@ class EventMesh:
             if os.path.exists(cursor_file):
                 with open(cursor_file, "r", encoding="utf-8") as f:
                     seen = json.load(f) or {}
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[EventMesh] Cursor-Datei .event_mesh_processed.json nicht lesbar, Inbox wird vollstaendig neu gescannt: {exc}", file=sys.stderr)
         if not isinstance(seen, dict):
             seen = {}
 
@@ -194,10 +194,10 @@ class EventMesh:
             os.makedirs(target_dir, exist_ok=True)
             with open(cursor_file, "w", encoding="utf-8") as f:
                 json.dump(new_seen, f, indent=2, ensure_ascii=False)
-        except Exception:
+        except Exception as exc:
             # Cursor-Schreibfehler duerfen den Scan nicht abbrechen; der naechste
             # Lauf verarbeitet die Dateien dann erneut (sicher, nur teuer).
-            pass
+            print(f"[EventMesh] Cursor-Datei konnte nicht aktualisiert werden, Dateien werden erneut gescannt: {exc}", file=sys.stderr)
 
         return {
             "status": "success",

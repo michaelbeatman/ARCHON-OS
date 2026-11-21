@@ -11,6 +11,9 @@ import json
 import sqlite3
 import datetime
 from typing import Dict, Any, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
@@ -71,8 +74,8 @@ class TimeTravelDebugger:
             max_steps = int(cfg.get("max_trace_steps", 100))
             if step_index > max_steps:
                 return 0
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("TimeTravel: Trace-Konfiguration unlesbar: %s", exc)
 
         in_str = json.dumps(input_payload, ensure_ascii=False) if not isinstance(input_payload, str) else input_payload
         out_str = json.dumps(output_payload, ensure_ascii=False) if not isinstance(output_payload, str) else output_payload
@@ -100,12 +103,12 @@ class TimeTravelDebugger:
             for r in rows:
                 try:
                     r["input_payload"] = json.loads(r["input_payload"])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("TimeTravel: input_payload unlesbar: %s", exc)
                 try:
                     r["output_payload"] = json.loads(r["output_payload"])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("TimeTravel: output_payload unlesbar: %s", exc)
             return rows
 
     def fork_execution(self, task_id: str, from_step: int, new_prompt: Optional[str] = None, new_model: Optional[str] = None) -> Dict[str, Any]:
@@ -153,8 +156,8 @@ class TimeTravelDebugger:
                 role=last_step.get("agent_id", "hermes-coder"),
                 status="in_progress"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("TimeTravel: Fork-Task konnte nicht angelegt werden: %s", exc)
 
         return {
             "status": "success",

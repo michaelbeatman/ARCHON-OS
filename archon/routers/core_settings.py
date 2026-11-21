@@ -105,8 +105,8 @@ async def api_save_settings(request: Request, settings: Dict = Body(None)):
             agent_id="operator",
             payload={"changed_keys": keys_changed},
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"Audit-Log fuer gespeicherte Einstellungen fehlgeschlagen: {exc}")
     return {"status": "success"}
 
 
@@ -138,8 +138,8 @@ def api_get_agents():
                     a["avatar_url"] = prof["avatar_url"]
                 if "runtime_status" not in a and "runtime_status" in prof:
                     a["runtime_status"] = prof["runtime_status"]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"Profil-Anreicherung der Agent-Liste fehlgeschlagen: {exc}")
     return agents
 
 

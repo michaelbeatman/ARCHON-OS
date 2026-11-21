@@ -34,8 +34,8 @@ def _query_memory_stats() -> tuple[int, int, int]:
         stale_info = bridge.evict_stale_memories(threshold=0.1, table="learnings", dry_run=True)
         stale_cnt = stale_info.get("stale_count", 0)
         conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"Speicher-Statistiken konnten nicht gelesen werden: {exc}")
     return learnings_cnt, conv_cnt, stale_cnt
 
 
@@ -83,8 +83,8 @@ def api_get_agent_real_stats(agent_id: str):
             m = re.search(r"tasks_completed:\s*(\d+)", txt)
             if m:
                 tasks_completed = int(m.group(1))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Akte {akte} konnte nicht gelesen werden: {exc}")
 
     learnings_count = 0
     try:
@@ -95,8 +95,8 @@ def api_get_agent_real_stats(agent_id: str):
             c = conn.cursor()
             c.execute("SELECT COUNT(*) FROM learnings WHERE agent_id = ?", (clean_id,))
             learnings_count = c.fetchone()[0]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"Learnings fuer Agent {clean_id} konnten nicht gezaehlt werden: {exc}")
 
     return {
         "status": "ok",

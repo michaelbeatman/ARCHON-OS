@@ -18,6 +18,9 @@ import ipaddress
 import threading
 from typing import Dict, Any, List, Optional, Tuple
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+import logging
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -153,8 +156,8 @@ class ChainedAuditLog:
                 try:
                     conn.execute("PRAGMA journal_mode=WAL;")
                     conn.execute("PRAGMA synchronous=NORMAL;")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("Audit-Log: WAL-PRAGMA fehlgeschlagen: %s", exc)
             with conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS audit_log (
@@ -243,8 +246,8 @@ class ChainedAuditLog:
             try:
                 from backend.tenant_context import sanitize_tenant_id
                 company_id_val = sanitize_tenant_id(company_id_val)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Audit-Log: sanitize_tenant_id nicht verfuegbar: %s", exc)
 
         with self._lock:
             conn = self._get_conn()
@@ -289,8 +292,8 @@ class ChainedAuditLog:
             except Exception:
                 try:
                     conn.rollback()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Audit-Log: Rollback fehlgeschlagen: %s", exc)
                 raise
             finally:
                 conn.close()

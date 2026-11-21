@@ -65,8 +65,8 @@ def send_prompt_to_agent(
             ctx_inj = memory_bridge.get_agent_context_injection(agent_name, limit=3)
             if ctx_inj:
                 system_prompt = f"{system_prompt}\n\n{ctx_inj}"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Context-Injektion fuer Agent {agent_name} fehlgeschlagen: {exc}: {exc}")
 
     model_name = agent_config.get("model", "auto/best-free") if isinstance(agent_config, dict) else "auto/best-free"
     if model_name == "free-forever":
@@ -89,8 +89,8 @@ def send_prompt_to_agent(
                 c = msg.get("content")
                 if r in ["user", "assistant"] and c:
                     prior_messages.append({"role": r, "content": c})
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Konversationshistorie fuer Agent {agent_name} konnte nicht geladen werden: {exc}: {exc}")
 
     if len(prior_messages) > 14:
         prior_messages = prior_messages[-14:]
@@ -206,8 +206,8 @@ def exec_container_command_api(req: ContainerExecRequest, request: Request):
                 if a.get("id") == req.container_name:
                     agent_cfg = a
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Agent-Konfiguration fuer {req.container_name} konnte nicht geladen werden: {exc}: {exc}")
 
     try:
         import jev_router

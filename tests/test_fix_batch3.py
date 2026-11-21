@@ -1,6 +1,5 @@
 """Rot-Beweis fuer M-06, M-07, M-08, M-16, M-17.
 
-M-06: backend/dag_scheduler.py: decompose_task wirft NameError auf task_id.
 M-07: archon/routers/skills.py: execute_mcp_tool wirft NameError auf skills_engine.
 M-08: archon/routers/hermes_profiles.py: hire/fire rufen status-Handler ohne request auf (AttributeError).
 M-16: main.py: save_agents loescht inaktive und System-Agenten, wenn gefiltertes Array gepostet wird.
@@ -35,33 +34,6 @@ def _make_dummy_request(role: str = "admin") -> Request:
         },
     }
     return Request(scope)
-
-
-@pytest.mark.asyncio
-async def test_m06_dag_decompose_task_no_nameerror(monkeypatch, tmp_path):
-    """M-06: decompose_task darf keinen NameError auf task_id werfen."""
-    import sqlite3
-    import backend.dag_scheduler as dag_scheduler
-    from backend.dag_scheduler import DAGScheduler
-    import core_dispatcher
-
-    db_path = tmp_path / "kanban.db"
-    conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        "CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT, body TEXT, assignee TEXT, status TEXT, priority INTEGER, created_by TEXT, created_at TEXT)"
-    )
-    conn.commit()
-    conn.close()
-    monkeypatch.setattr(dag_scheduler, "KANBAN_DB", str(db_path))
-
-    scheduler = DAGScheduler()
-    # Mock dispatch_to_omniroute_or_container
-    mock_dispatch = AsyncMock(return_value={"content": '[]'})
-    monkeypatch.setattr(core_dispatcher, "dispatch_to_omniroute_or_container", mock_dispatch)
-
-    # Wenn decompose_task aufgerufen wird:
-    res = await scheduler.decompose_task("Test Parent", "Test Description", "orchestrator")
-    assert "parent_id" in res
 
 
 @pytest.mark.asyncio

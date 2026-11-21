@@ -12,6 +12,9 @@ import datetime
 import sqlite3
 import httpx
 from typing import Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -30,8 +33,8 @@ async def generate_morning_standup(force: bool = True) -> dict:
         standup_time = cfg.get("standup_time", "08:00")
         if not force and not cfg.get("standup_enabled", True):
             return {"status": "disabled", "message": "Proaktiver Morgen-Standup ist in den Einstellungen deaktiviert."}
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Standup: Modul-Konfiguration unlesbar: %s", exc)
 
     today_str = datetime.date.today().strftime("%Y-%m-%d")
     out_file = None
@@ -56,8 +59,8 @@ async def generate_morning_standup(force: bool = True) -> dict:
                 else:
                     open_tasks.append(item)
             conn.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Standup: Task-Abfrage fehlgeschlagen: %s", exc)
 
     # 2. Token-Kosten & Durchsatz
     today_cost = 0.0
@@ -68,8 +71,8 @@ async def generate_morning_standup(force: bool = True) -> dict:
             row = conn.execute("SELECT SUM(estimated_cost_usd) FROM session_model_usage WHERE last_seen >= ?", (today_start,)).fetchone()
             today_cost = float(row[0] or 0.0)
             conn.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Standup: Kosten-Abfrage fehlgeschlagen: %s", exc)
 
     # 3. Flotten-Zustand prüfen
     active_services = 0

@@ -7,7 +7,10 @@ Stellt sicher, dass sämtliche Schutz-, Resilienz-, Sandbox-, Governance- und Wa
 
 import os
 import json
+import logging
 from typing import Dict, Any
+
+logger = logging.getLogger("archon.autonomy_settings")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
@@ -352,8 +355,8 @@ def load_all_settings() -> Dict[str, Any]:
                 loaded = json.load(f)
                 if isinstance(loaded, dict):
                     data = loaded
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Konfigurations-Datei settings.json nicht lesbar, nutze Defaults: %s", exc)
 
     for section, defaults in DEFAULT_AUTONOMY_SETTINGS.items():
         if section not in data or not isinstance(data.get(section), dict):
@@ -428,7 +431,7 @@ def save_autonomy_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
             ze = dict(saved.get("zero_egress_governance") or {})
             ze.pop("sha256_dispatch_audit_enforced", None)
             save_privacy_config(ze, operator="system_settings")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error("Zero-Egress-Governance-Konfiguration konnte nicht synchronisiert werden: %s", exc)
 
     return saved

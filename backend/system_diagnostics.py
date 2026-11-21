@@ -9,6 +9,9 @@ import os
 import sys
 import time
 from typing import Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_system_health_score() -> Dict[str, Any]:
     score = 100
@@ -42,8 +45,8 @@ def get_system_health_score() -> Dict[str, Any]:
             recommendations.append("max_concurrent_agents in den Einstellungen erhöhen.")
         else:
             factors.append(f"Concurrency-Queue stabil: {queued} wartend, Auslastung {util}% (+20 Punkte)")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Systemdiagnose: Concurrency-Check fehlgeschlagen: %s", exc)
 
     # 3. Kryptografisches Audit-Log (20% Gewicht)
     try:
@@ -56,8 +59,8 @@ def get_system_health_score() -> Dict[str, Any]:
         else:
             count_val = audit_check.get("total_records", audit_check.get("total_events", 0))
             factors.append(f"Audit-Log: {count_val} Einträge integer (+20 Punkte)")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("Systemdiagnose: Audit-Log-Integritaetspruefung fehlgeschlagen: %s", exc)
 
     # 4. Deadlock Supervisor (15% Gewicht)
     try:
@@ -68,8 +71,8 @@ def get_system_health_score() -> Dict[str, Any]:
             factors.append(f"Deadlocks: {dl_res.get('resolved_count')} stagnierende Tasks aufgelöst (-5 Punkte)")
         else:
             factors.append("Deadlocks: 0 Blockaden festgestellt (+15 Punkte)")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Systemdiagnose: Deadlock-Check fehlgeschlagen: %s", exc)
 
     # 5. RAG Bridge (10% Gewicht)
     try:
@@ -80,8 +83,8 @@ def get_system_health_score() -> Dict[str, Any]:
             score -= 10
             factors.append("RAG-Vector-Engine nicht erreichbar (-10 Punkte)")
             recommendations.append("Docker-Container anything-llm auf Port 3001 prüfen.")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Systemdiagnose: RAG-Engine-Check fehlgeschlagen: %s", exc)
 
     score = max(0, min(100, score))
     status_label = "Optimal" if score >= 90 else "Gut" if score >= 75 else "Warnung" if score >= 50 else "Kritisch"

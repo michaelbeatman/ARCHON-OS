@@ -157,8 +157,8 @@ def api_reset_boardroom_frameworks(request: Request):
     if os.path.exists(FRAMEWORKS_FILE):
         try:
             os.remove(FRAMEWORKS_FILE)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Framework-Datei {FRAMEWORKS_FILE} konnte nicht geloescht werden: {exc}")
     core_dispatcher.CATEGORIZED_FRAMEWORKS = _deepcopy(core_dispatcher.DEFAULT_CATEGORIZED_FRAMEWORKS)
     core_dispatcher.CATEGORIZED_FRAMEWORKS_EN = _deepcopy(core_dispatcher.DEFAULT_CATEGORIZED_FRAMEWORKS_EN)
     _save_json(FRAMEWORKS_FILE, core_dispatcher.CATEGORIZED_FRAMEWORKS)
@@ -223,8 +223,8 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
                     "provider": hp.get("provider") or "openrouter",
                     "reasoning_level": hp.get("reasoning_level") or "medium"
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"Hot-Profile konnten nicht geladen werden, nutze Defaults: {exc}")
     
     override_reasoning = (req.reasoning_level or "profile").strip().lower()
 

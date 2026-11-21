@@ -230,8 +230,8 @@ class GracefulShutdownCoordinator:
             from backend.db_paths import resolve_db
             for fname in filenames:
                 candidates.append(resolve_db(fname))
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[GracefulShutdown] Warnung: resolve_db nicht verfuegbar, Fallback auf Workspace-DB-Pfade: {exc}", file=sys.stderr)
         for fname in filenames:
             if fname == "agent_os.db":
                 candidates.append(os.path.join(WORKSPACE_DIR, fname))
@@ -262,8 +262,8 @@ class GracefulShutdownCoordinator:
                             (new_status, task_id)
                         )
                         conn.commit()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[GracefulShutdown] Warnung: Task {task_id} konnte nicht als '{new_status}' markiert werden: {exc}", file=sys.stderr)
 
     def flush_all_databases(self) -> Dict[str, Any]:
         """
@@ -356,8 +356,8 @@ class GracefulShutdownCoordinator:
                     "step": cp.get("current_step_index"),
                     "total": cp.get("total_steps")
                 })
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[GracefulShutdown] Keine unterbrochenen Checkpoints wiederhergestellt (durable_checkpoint_manager nicht erreichbar): {exc}", file=sys.stderr)
 
         # Verwaiste 'in_progress' Tasks nach hartem Crash (z.B. Stromausfall) auf 'todo' zurücksetzen
         recovered_orphans = self._heal_orphan_tasks()
@@ -391,8 +391,8 @@ class GracefulShutdownCoordinator:
                         )
                         count += cur.rowcount
                         conn.commit()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[GracefulShutdown] Warnung: Verwaiste 'in_progress' Tasks in dieser DB konnten nicht zurueckgesetzt werden: {exc}", file=sys.stderr)
         return count
 
 

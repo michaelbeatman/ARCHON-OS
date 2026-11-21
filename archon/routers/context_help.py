@@ -4,6 +4,8 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 Archon OS Router fuer Kontext-Hilfe und UI-Assistenz.
 Extrahiert aus main.py zur Modularisierung und Entschlackung des Monolithen.
 """
+import logging
+logger = logging.getLogger("archon.routers.context_help")
 
 from typing import Any, Dict
 from fastapi import APIRouter, Body, HTTPException
@@ -253,8 +255,8 @@ async def api_ask_help_assistant(payload: dict = Body(...)):
     try:
         from backend.model_routing import load_config as _load_mr
         support_profile_id = (_load_mr() or {}).get("support_profile_id") or "default"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"model_routing-Konfiguration nicht ladbar, nutze Default-Support-Profil: {exc}")
 
     profile_cfg = {}
     for prof_path in ("data/agent_profiles.json", "agent_profiles.json"):
@@ -269,8 +271,8 @@ async def api_ask_help_assistant(payload: dict = Body(...)):
                     profile_cfg = items.get(support_profile_id, {}) or {}
                 if profile_cfg:
                     break
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Support-Profil {support_profile_id} konnte nicht geladen werden: {exc}")
 
     prof_prompt = str(profile_cfg.get("system_prompt") or "").strip()
     if prof_prompt:
@@ -303,8 +305,8 @@ async def api_ask_help_assistant(payload: dict = Body(...)):
             res = await router_instance.chat_completion(messages, prov, mod, all_keys, max_tokens=500)
             if isinstance(res, str) and res.strip():
                 reply_text = res.strip()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error(f"Help-Assistant-Chat an {prov}/{mod} fehlgeschlagen: {exc}")
 
     # Fallback: Keyword-basierte / kontextspezifische Offline-Antwort
     if not reply_text:

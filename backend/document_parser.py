@@ -268,8 +268,8 @@ class DocumentParserEngine:
                 "text": full_txt,
                 "markdown": full_txt
             }
-        except ImportError:
-            pass
+        except ImportError as exc:
+            print(f"[DocParser] pypdf nicht installiert, naechster PDF-Engine-Versuch: {exc}", file=sys.stderr)
 
         # 2. Versuch: pymupdf (fitz) falls vorhanden
         try:
@@ -287,8 +287,8 @@ class DocumentParserEngine:
                 "text": full_txt,
                 "markdown": full_txt
             }
-        except ImportError:
-            pass
+        except ImportError as exc:
+            print(f"[DocParser] pymupdf (fitz) nicht installiert, naechster PDF-Engine-Versuch: {exc}", file=sys.stderr)
 
         # 3. Native Zero-Dependency Extraktion von unkomprimierten Text-Blöcken
         try:
@@ -303,8 +303,8 @@ class DocumentParserEngine:
                 decompressed = None
                 try:
                     decompressed = zlib.decompress(raw_chunk)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[DocParser] PDF-Stream konnte nicht dekomprimiert werden (FlateDecode), Rohdaten werden gescannt: {exc}", file=sys.stderr)
 
                 chunk_to_scan = decompressed if decompressed else raw_chunk
                 # Suche nach Text in Klammern (Text) Tj oder [(Text)] TJ
@@ -314,8 +314,8 @@ class DocumentParserEngine:
                         decoded = tm.decode("utf-8", errors="ignore").strip()
                         if len(decoded) > 1:
                             extracted_chunks.append(decoded)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        print(f"[DocParser] PDF-Tj-Textblock konnte nicht dekodiert werden und wird uebersprungen: {exc}", file=sys.stderr)
 
             text = "\n".join(extracted_chunks) if extracted_chunks else "PDF enthält keine unverschlüsselten Text-Streams."
             return {

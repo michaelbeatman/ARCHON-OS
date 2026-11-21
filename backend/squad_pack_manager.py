@@ -20,9 +20,12 @@ import io
 import json
 import os
 import zipfile
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from archon.core.runtime import WORKSPACE_DIR
+
+logger = logging.getLogger("archon.squad_pack_manager")
 
 PACK_FORMAT_VERSION = "1.0"
 MAX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024  # 50 MB Schutz vor Zip-Bomben
@@ -154,8 +157,8 @@ class SquadPackManager:
                     try:
                         with open(fpath, "r", encoding="utf-8") as fh:
                             soul_files[f"agents/souls/{rel_sub}"] = fh.read()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("SOUL-Datei '%s' konnte nicht gelesen und wird übersprungen: %s", fpath, exc)
 
         # 4. Skills einsammeln
         skill_files: Dict[str, str] = {}
@@ -172,8 +175,8 @@ class SquadPackManager:
                     try:
                         with open(fpath, "r", encoding="utf-8") as fh:
                             skill_files[f"skills/{rel_sub}"] = fh.read()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Skill-Datei '%s' konnte nicht gelesen und wird übersprungen: %s", fpath, exc)
 
         # 5. Boardroom Frameworks
         fw_raw = self._load_json_safe("config/boardroom_frameworks.json", {"frameworks": []})
@@ -206,8 +209,8 @@ class SquadPackManager:
                         try:
                             with open(fpath, "r", encoding="utf-8") as fh:
                                 n8n_files[f"n8n/{fname}"] = fh.read()
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("n8n-Workflow-Datei '%s' konnte nicht gelesen und wird übersprungen: %s", fpath, exc)
 
         # Dateien zusammenstellen + SHA-256 berechnen
         entries: Dict[str, bytes] = {

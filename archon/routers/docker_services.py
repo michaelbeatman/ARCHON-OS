@@ -200,14 +200,14 @@ def post_docker_container_action(container_name: str, action: str = "start", rai
         if container_name in ["hermes-dashboard", "hermes"] and action in ["start", "restart"]:
             try:
                 docker_client.restart_container("hermes-dashboard-proxy")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"hermes-dashboard-proxy konnte nicht neu gestartet werden: {exc}")
 
         try:
             from archon.routers.containers import _docker_container_stats
             invalidate_ttl_cache(_docker_container_stats)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"TTL-Cache der Container-Statistiken konnte nicht invalidiert werden: {exc}")
 
         return {"status": "success", "message": f"Container {container_name} {action}ed."}
     except DockerError as e:

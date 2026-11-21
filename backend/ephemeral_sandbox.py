@@ -14,9 +14,12 @@ import subprocess
 import json
 import shlex
 import socket
+import logging
 from typing import Dict, Any, Optional
 
 from utils.docker_client import docker_client, DockerError, docker_cli_host_args
+
+logger = logging.getLogger("archon.ephemeral_sandbox")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SANDBOX_TEMP_DIR = "/opt/data/archon_sandbox_runs"
@@ -67,8 +70,8 @@ def _ensure_sandbox_network(net_name: Optional[str] = None) -> None:
              "--internal", target_net],
             capture_output=True, text=True, timeout=10,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Docker-Netzwerk '%s' konnte nicht erstellt werden (evtl. bereits vorhanden): %s", target_net, exc)
 
     # Fail-Closed Verifikation: Existierendes Netzwerk MUSS Internal=true sein (keine Internet-Route!)
     try:
@@ -85,8 +88,8 @@ def _ensure_sandbox_network(net_name: Optional[str] = None) -> None:
                     )
     except ZeroEgressNetworkIsolationError:
         raise
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("Zero-Egress-Verifikation des Docker-Netzwerks '%s' fehlgeschlagen (Netzwerk-Isolation NICHT verifiziert): %s", target_net, exc)
 
 
 def _ensure_sandbox_temp_dir():
@@ -374,8 +377,8 @@ class EphemeralSandbox:
             if os.path.exists(run_dir):
                 try:
                     shutil.rmtree(run_dir, ignore_errors=True)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Run-Verzeichnis '%s' konnte nicht entfernt werden: %s", run_dir, exc)
 
 
 ephemeral_sandbox = EphemeralSandbox()

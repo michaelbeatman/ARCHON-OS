@@ -17,6 +17,7 @@ import os
 import re
 import json
 import sqlite3
+import sys
 import datetime
 import threading
 import uuid
@@ -180,8 +181,8 @@ class CRMService:
                         msgs = json.loads(raw_nv)
                         if isinstance(msgs, list):
                             msg_count = len(msgs)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        print(f"[CRM] nachrichtenverlauf konnte nicht als JSON gelesen werden, 0 Nachrichten gezaehlt: {exc}", file=sys.stderr)
                 item["nachrichten_count"] = msg_count
                 
                 # Tags parsing
@@ -251,8 +252,8 @@ class CRMService:
                     parsed = json.loads(raw_nv)
                     if isinstance(parsed, list):
                         messages = parsed
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[CRM] nachrichtenverlauf des Kontakts konnte nicht als JSON gelesen werden, leere Historie: {exc}", file=sys.stderr)
             data["messages"] = messages
             data["nachrichten_count"] = len(messages)
 
@@ -471,8 +472,8 @@ class CRMService:
                             parsed = json.loads(raw_nv)
                             if isinstance(parsed, list):
                                 messages = parsed
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            print(f"[CRM] nachrichtenverlauf konnte vor dem Hinzufuegen der Nachricht nicht gelesen werden, Historie wird neu angelegt: {exc}", file=sys.stderr)
 
                     now_dt = datetime.datetime.now()
                     now_str = now_dt.strftime("%Y-%m-%d %H:%M")
@@ -602,8 +603,8 @@ class CRMService:
                             "timestamp": ts_str,
                             "is_starred": bool(m.get("isStarred"))
                         })
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[CRM] Eintrag im Nachrichtenverlauf konnte nicht geparst werden und wird uebersprungen: {exc}", file=sys.stderr)
 
             # Sort messages
             def parse_sort_key(item):

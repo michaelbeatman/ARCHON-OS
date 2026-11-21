@@ -30,6 +30,9 @@ import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
@@ -107,8 +110,8 @@ def _load_seen():
                 if isinstance(raw, set):
                     return list(raw)
                 return list(raw) if raw else []
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[Watchdog] _seen.json unlesbar, starte mit leerer Liste: %s", exc)
     return []
 
 
@@ -207,8 +210,8 @@ def _send_telegram_notification(text: str, reply_markup: dict = None) -> bool:
         import telegram_notify
         if telegram_notify.send_telegram_message(text, reply_markup=reply_markup):
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("[Watchdog] telegram_notify nicht verfuegbar oder Sendeversuch fehlgeschlagen: %s", exc)
 
     # 2. Standalone Fallback mit .env
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
@@ -225,8 +228,8 @@ def _send_telegram_notification(text: str, reply_markup: dict = None) -> bool:
                         elif line.startswith("TELEGRAM_CHAT_ID=") or line.startswith("TELEGRAM_HOME_CHANNEL="):
                             if not chat_id:
                                 chat_id = line.split("=", 1)[1].strip()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("[Watchdog] .env-Telegram-Zeilen unlesbar: %s", exc)
 
     if not token or not chat_id:
         return False
@@ -358,8 +361,8 @@ def run_watchdog_scan(force: bool = False) -> Dict[str, Any]:
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                                 """, (task_id, title, body, "research_scout", "ready", "normal", "internet_watchdog", now_iso))
                                 kconn.commit()
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.warning("[Watchdog] Kanban-Task-Insert fehlgeschlagen: %s", exc)
         except Exception as e:
             print(f"[Watchdog] Kanban-Sync Fehler: {e}", file=sys.stderr)
 

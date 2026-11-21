@@ -4,6 +4,8 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 Ausgelagert aus backend/operations_api.py.
 """
+import logging
+logger = logging.getLogger("archon.routers.operations_finetuning")
 
 import os
 import sqlite3
@@ -23,12 +25,12 @@ def _query_feedback_and_learnings_counts(db_path: str) -> tuple[int, int]:
         conn = sqlite3.connect(db_path)
         try:
             feedback_count = conn.execute("SELECT COUNT(*) FROM human_feedback").fetchone()[0]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"feedback_count aus {db_path} konnte nicht gelesen werden: {exc}")
         try:
             learnings_count = conn.execute("SELECT COUNT(*) FROM learnings").fetchone()[0]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"learnings_count aus {db_path} konnte nicht gelesen werden: {exc}")
         finally:
             conn.close()
     return feedback_count, learnings_count

@@ -10,7 +10,10 @@ import sys
 import json
 import sqlite3
 import datetime
+import logging
 from typing import Dict, Any, List, Optional
+
+logger = logging.getLogger("archon.sla_contract_enforcer")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
@@ -105,8 +108,8 @@ class SLAContractEnforcer:
             if not cfg.get("enabled", True):
                 return {"status": "success", "contract_id": contract_id, "is_compliant": True, "verdict": "COMPLIANT_BYPASSED"}
             auto_reject = bool(cfg.get("auto_reject_incomplete", True))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("SLA-Konfiguration 'sla_contracts' nicht lesbar, nutze Defaults (aktiv, auto_reject): %s", exc)
 
         try:
             conn = sqlite3.connect(DB_PATH, timeout=5.0)
@@ -172,12 +175,12 @@ class SLAContractEnforcer:
             for r in rows:
                 try:
                     r["contract_terms_json"] = json.loads(r["contract_terms_json"])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("contract_terms_json des Vertrags '%s' nicht parsbar, lasse Rohstring stehen: %s", r.get("id"), exc)
                 try:
                     r["violations_json"] = json.loads(r["violations_json"])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("violations_json des Vertrags '%s' nicht parsbar, lasse Rohstring stehen: %s", r.get("id"), exc)
             conn.close()
             return rows
         except Exception:

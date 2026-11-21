@@ -157,8 +157,9 @@ def _decision_self_api(method: str, path: str, payload: dict = None, timeout: fl
         svc_tok = app_main._get_service_token() if hasattr(app_main, "_get_service_token") else ""
         if svc_tok:
             headers["X-Archon-Service-Token"] = svc_tok
-    except Exception:
-        pass
+    except Exception as exc:
+        # HIGH_SECURITY: Selbstaufrufe laufen ohne Service-Token dann ggf. ohne Auth-Header — sichtbar machen.
+        logger.error(f"[Decision] FEHLER (HIGH_SECURITY) _decision_self_api: Service-Token konnte nicht geladen werden: {exc}")
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read().decode("utf-8") or "{}"
@@ -630,7 +631,7 @@ def _sync_org_hierarchy_node(
             import backend.operations_api as _ops_api
 
             _ops_api._PROFILES_MAP_CACHE["mtime"] = 0.0
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[SSOT] _sync_org_hierarchy_node: Profile-Cache-Invalidierung uebersprungen (Fallback): {exc}")
     except Exception as e:
         logger.warning(f"[SSOT] Could not sync org_hierarchy.json for {p_id}: {e}")

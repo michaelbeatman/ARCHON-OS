@@ -6,6 +6,8 @@ Automatisch aus main.py extrahiert (Critical-Hardening / Modularisierung).
 Enthaelt nur Endpunkte ohne Abhaengigkeit zu main.py-Interna; gemeinsame
 Helfer kommen aus archon.core.runtime.
 """
+import logging
+logger = logging.getLogger("archon.routers.crm")
 
 import asyncio
 import datetime
@@ -144,8 +146,8 @@ def api_crm_avatar(contact_id: str, filename: str):
         safe_pb = safe_path_within(cand_pb, [pb_avatar_dir], allow_write=False, allow_dirs=False)
         if os.path.isfile(safe_pb):
             return FileResponse(safe_pb)
-    except (PathJailError, ValueError):
-        pass
+    except (PathJailError, ValueError) as exc:
+        logger.warning(f"Avatar-Pfadschutz (PocketBase) hat Kandidat verworfen: {exc}")
 
     # 2. Static Avatars
     try:
@@ -153,8 +155,8 @@ def api_crm_avatar(contact_id: str, filename: str):
         safe_static = safe_path_within(cand_static, [static_avatar_dir], allow_write=False, allow_dirs=False)
         if os.path.isfile(safe_static):
             return FileResponse(safe_static)
-    except (PathJailError, ValueError):
-        pass
+    except (PathJailError, ValueError) as exc:
+        logger.warning(f"Avatar-Pfadschutz (Static) hat Kandidat verworfen: {exc}")
 
     raise HTTPException(status_code=404, detail="Avatar not found")
 

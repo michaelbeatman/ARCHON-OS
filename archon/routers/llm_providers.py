@@ -40,16 +40,16 @@ def api_get_llm_provider_models(provider: str = Query("openrouter")):
                 all_models = sorted(list(p_res["prices"].keys()))
                 if len(all_models) > 10:
                     return {"status": "ok", "provider": p, "models": all_models}
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Preis-Modelliste fuer Provider {p} konnte nicht geladen werden: {exc}")
     # 2. Dynamische Modelle aus api_provider
     try:
         import api_provider
         dyn_models = api_provider.list_provider_models(p)
         if dyn_models and len(dyn_models) > 0:
             return {"status": "ok", "provider": p, "models": dyn_models}
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"Dynamische Modelliste fuer Provider {p} konnte nicht abgerufen werden: {exc}")
     catalog = {
         "openrouter": [
             "deepseek/deepseek-v4.1-flash",

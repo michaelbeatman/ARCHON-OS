@@ -4,6 +4,8 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 Ausgelagert aus backend/operations_api.py.
 """
+import logging
+logger = logging.getLogger("archon.routers.operations_approvals")
 
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, HTTPException, Request
@@ -108,8 +110,8 @@ def api_approve_request(request: Request, request_id: str, req: Dict[str, Any] =
                 payload={"request_id": request_id, "approver": approver_id},
                 correlation_id=f"apr-{request_id}",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Event-Bus-Event fuer Freigabe {request_id} konnte nicht gesendet werden: {exc}")
         return {"status": "success", "result": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -137,8 +139,8 @@ def api_reject_request(request: Request, request_id: str, req: Dict[str, Any] = 
                 payload={"request_id": request_id, "rejected_by": rejected_by},
                 correlation_id=f"rej-{request_id}",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Event-Bus-Event fuer Ablehnung {request_id} konnte nicht gesendet werden: {exc}")
         return {"status": "success", "result": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

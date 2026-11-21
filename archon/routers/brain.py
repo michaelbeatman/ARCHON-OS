@@ -167,8 +167,8 @@ def api_brain_galaxy_data(vault_limit: int = Query(600, description="Max. Vault-
                 with open(path, "r", encoding="utf-8") as f:
                     agent_profiles = json.load(f)
                 break
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"agent_profiles.json unter {path} nicht lesbar: {exc}")
     
     if not agent_profiles:
         agent_profiles = DEFAULT_ROLES
@@ -621,8 +621,8 @@ a {{
                 try:
                     with open(sc, "w", encoding="utf-8") as f:
                         f.write(custom_scss_content)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(f"custom.scss konnte nicht nach {sc} geschrieben werden: {exc}")
 
         # Write inside archon-quartz container if active
         try:

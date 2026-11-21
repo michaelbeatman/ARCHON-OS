@@ -100,8 +100,8 @@ def _compute_soul_sha256(agent: Dict[str, Any]) -> str:
             try:
                 with open(cand, "r", encoding="utf-8") as fh:
                     prompt_text = fh.read().strip()
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[EUAIAct] SOUL.md des Spezialisten {aid} nicht lesbar, Fallback-Hash aus Metadaten: {exc}", file=sys.stderr)
     if not prompt_text:
         prompt_text = f"{aid}:{agent.get('name', '')}:{agent.get('description', '')}"
     return hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
@@ -262,8 +262,8 @@ class EUAIActInventoryManager:
                     for item in existing:
                         if item.get("is_manual_override"):
                             overrides[item["agent_id"]] = item
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[EUAIAct] Bestehendes Inventar konnte nicht geladen werden, manuelle Overrides bleiben unberuecksichtigt: {exc}", file=sys.stderr)
 
         for p in profiles:
             aid = p.get("id") or p.get("name")
@@ -299,8 +299,8 @@ class EUAIActInventoryManager:
                         loaded = json.load(f)
                     if loaded and isinstance(loaded, list) and "soul_sha256" in loaded[0]:
                         return loaded
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[EUAIAct] Gecachtes Inventar nicht lesbar, Inventar wird neu generiert: {exc}", file=sys.stderr)
         return self.generate_inventory(save=True)
 
     def get_stats(self) -> Dict[str, Any]:
@@ -380,8 +380,8 @@ class EUAIActInventoryManager:
                     agent_id=actor,
                     payload={"target_agent": agent_id, "updates": filtered},
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[EUAIAct] Warnung: Audit-Log-Eintrag fuer manuelle Neuklassifizierung fehlgeschlagen: {exc}", file=sys.stderr)
         return target
 
     def export_report_markdown(self) -> str:

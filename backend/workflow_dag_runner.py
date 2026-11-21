@@ -169,46 +169,57 @@ def _update_kanban_task_status(
 ) -> None:
     if not task_id:
         return
-    try:
-        from backend.operations_api import _get_kanban_connection
-
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        conn = _get_kanban_connection()
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    # Ein transienter SQLite-Lock (z. B. paralleler Task-Write) darf den Kanban-Sync
+    # NICHT still schlucken — sonst bleibt ein wartender Gate-Task sichtbar falsch.
+    # Deshalb: 1 Retry mit kurzem Backoff, erst danach sichtbarer DEBUG-Log.
+    last_exc: Exception = RuntimeError("nicht ausgefuehrt")
+    for _attempt in range(2):
         try:
-            if status == "in_progress":
-                conn.execute(
-                    "UPDATE tasks SET status = 'in_progress', started_at = COALESCE(started_at, ?) WHERE id = ?",
-                    (now_iso, task_id),
-                )
-            elif status == "done":
-                conn.execute(
-                    "UPDATE tasks SET status = 'done', completed_at = ?, result = ?, block_kind = NULL WHERE id = ?",
-                    (now_iso, (result or "")[:12000], task_id),
-                )
-            elif status in ("blocked", "failed", "review"):
-                conn.execute(
-                    "UPDATE tasks SET status = ?, result = COALESCE(?, result), block_kind = COALESCE(?, block_kind) WHERE id = ?",
-                    (status, (result or "")[:12000] if result is not None else None, block_kind, task_id),
-                )
-            else:
-                conn.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
+            from backend.operations_api import _get_kanban_connection
 
-            if event_kind:
-                conn.execute(
-                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
-                    (task_id, event_kind, json.dumps(event_payload or {}, ensure_ascii=False), now_iso),
-                )
-            conn.commit()
-        finally:
-            conn.close()
-    except Exception as exc:
-        logger.debug(f"[WorkflowDAG] Kanban-Sync fuer {task_id} uebersprungen: {exc}")
+            conn = _get_kanban_connection()
+            try:
+                if status == "in_progress":
+                    conn.execute(
+                        "UPDATE tasks SET status = 'in_progress', started_at = COALESCE(started_at, ?) WHERE id = ?",
+                        (now_iso, task_id),
+                    )
+                elif status == "done":
+                    conn.execute(
+                        "UPDATE tasks SET status = 'done', completed_at = ?, result = ?, block_kind = NULL WHERE id = ?",
+                        (now_iso, (result or "")[:12000], task_id),
+                    )
+                elif status in ("blocked", "failed", "review"):
+                    conn.execute(
+                        "UPDATE tasks SET status = ?, result = COALESCE(?, result), block_kind = COALESCE(?, block_kind) WHERE id = ?",
+                        (status, (result or "")[:12000] if result is not None else None, block_kind, task_id),
+                    )
+                else:
+                    conn.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
+
+                if event_kind:
+                    conn.execute(
+                        "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+                        (task_id, event_kind, json.dumps(event_payload or {}, ensure_ascii=False), now_iso),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+            last_exc = None
+            break
+        except Exception as exc:
+            last_exc = exc
+            if _attempt == 0:
+                time.sleep(0.5)
+    if last_exc is not None:
+        logger.debug(f"[WorkflowDAG] Kanban-Sync fuer {task_id} fehlgeschlagen (2 Versuche): {last_exc}")
 
     try:
         from archon.core.runtime import broadcast_event
         broadcast_event("kanban_updated", {"action": "workflow_node", "task_id": task_id, "status": status})
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[WorkflowDAG] broadcast_event fuer {task_id} fehlgeschlagen (Fallback): {exc}")
 
 
 def _register_hitl_gate_decision(run_id: str, wf_id: str, node: Dict[str, Any], upstream: Dict[str, Any]) -> Optional[str]:

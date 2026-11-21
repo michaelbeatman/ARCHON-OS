@@ -31,8 +31,8 @@ def _get_kanban_cards_file() -> str:
         tid = tenant_context.get_active_tenant_id()
         if tid not in PRIMARY_TENANT_IDS:
             return os.path.join(tenant_context.get_tenant_dir(tid), "kanban_cards.json")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"Tenant-Kontext nicht ermittelbar, falle auf Standard-Kanban-Cards-Datei zurueck: {exc}")
     return KANBAN_CARDS_FILE
 
 
@@ -60,8 +60,8 @@ def _resolve_active_kanban_db() -> str:
         tid = tenant_context.get_active_tenant_id()
         if tid not in PRIMARY_TENANT_IDS:
             return tenant_context.resolve_active_db("kanban.db", tid)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"Tenant-Kontext nicht ermittelbar, falle auf Standard-Kanban-DB zurueck: {exc}")
     cand_db = os.path.join(hermes_home, "kanban.db")
     return cand_db if os.path.exists(cand_db) else (KANBAN_DB_PATH if os.path.exists(KANBAN_DB_PATH) else cand_db)
 
@@ -88,8 +88,8 @@ def api_get_kanban():
         try:
             with open(cards_file, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Kanban-Cards-Datei {cards_file} nicht lesbar, gebe leere Liste zurueck: {exc}")
     return []
 
 

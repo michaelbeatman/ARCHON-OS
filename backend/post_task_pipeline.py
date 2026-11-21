@@ -21,6 +21,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from typing import Dict, Any, Optional, List
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Basispfade
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -81,8 +84,8 @@ def get_smtp_config() -> Dict[str, Any]:
                 row = cur.fetchone()
                 if row and row[0]:
                     return json.loads(row[0])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("[PostTaskPipeline] SMTP-Config nicht lesbar: %s", exc)
             finally:
                 if conn:
                     conn.close()
@@ -194,8 +197,8 @@ def project_folder_name(task: dict) -> str:
                 d_name = d.name.lower()
                 if parent_pid and (parent_pid.lower() in d_name or (key_slug and key_slug in d_name)):
                     return d.name
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("[PostTaskPipeline] Projektordner-Scan fehlgeschlagen: %s", exc)
 
     date_prefix = datetime.date.today().strftime("%Y%m%d")
     if parent_pid:
@@ -441,8 +444,8 @@ Verknüpftes Projekt:
         corpus_to_scan = f"{raw_title}\n{summary}\n{detailed_note}"
         try:
             bridge.harvest_facts_and_preferences(corpus_to_scan, agent_id=agent_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[PostTaskPipeline] Fact-Harvesting fehlgeschlagen: %s", exc)
         res = bridge.deduplicate_and_record_learning(
             agent_id=agent_id,
             category="Projekt-Execution",
@@ -462,8 +465,8 @@ Verknüpftes Projekt:
                     VALUES (?, ?, ?, ?)
                 """, (agent_id, "Projekt-Execution", lesson_summary, res.get("obsidian_link")))
                 conn.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("[PostTaskPipeline] Learning-Eintrag konnte nicht gespeichert werden: %s", exc)
             finally:
                 if conn:
                     conn.close()

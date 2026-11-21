@@ -4,6 +4,8 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 Ausgelagert aus backend/operations_api.py.
 """
+import logging
+logger = logging.getLogger("archon.routers.operations_sysops")
 
 import asyncio
 import json
@@ -217,8 +219,8 @@ async def api_stream_task_execution(task_id: str):
                     main._SSE_SUBSCRIBERS.append(q)
             else:
                 main._SSE_SUBSCRIBERS.append(q)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"SSE-Subscriber-Registrierung fehlgeschlagen: {exc}")
 
     async def event_generator():
         try:
@@ -237,8 +239,8 @@ async def api_stream_task_execution(task_id: str):
                         yield f"data: {payload}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
-        except asyncio.CancelledError:
-            pass
+        except asyncio.CancelledError as exc:
+            logger.debug(f"SSE-Stream wurde abgebrochen: {exc}")
         finally:
             try:
                 import main
@@ -250,8 +252,8 @@ async def api_stream_task_execution(task_id: str):
                                 main._SSE_SUBSCRIBERS.remove(q)
                     elif q in main._SSE_SUBSCRIBERS:
                         main._SSE_SUBSCRIBERS.remove(q)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"SSE-Subscriber-Deregistrierung fehlgeschlagen: {exc}")
 
     return StreamingResponse(
         event_generator(),

@@ -56,13 +56,13 @@ def api_save_watchdog_config(request: Request, payload: Dict = Body(...)):
     if "interval_minutes" in payload:
         try:
             cfg["interval_minutes"] = max(5, int(payload["interval_minutes"]))
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.debug(f"Ungueltiger interval_minutes-Wert {payload.get('interval_minutes')!r}, Uebernahme uebersprungen: {exc}")
     if "basket_threshold" in payload:
         try:
             cfg["basket_threshold"] = max(1, int(payload["basket_threshold"]))
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.debug(f"Ungueltiger basket_threshold-Wert {payload.get('basket_threshold')!r}, Uebernahme uebersprungen: {exc}")
     if "priority_keywords" in payload and isinstance(
         payload["priority_keywords"], list
     ):
@@ -217,8 +217,8 @@ async def api_watchdog_dispatch_action(
 
         try:
             await asyncio.to_thread(_bridge_sync)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Memory-Bridge-Sync fuer Task {task_id} fehlgeschlagen: {exc}")
 
     return {
         "ok": True,

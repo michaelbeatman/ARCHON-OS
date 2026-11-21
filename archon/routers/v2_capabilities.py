@@ -363,21 +363,8 @@ async def api_v2_treasury_payment_reject(request: Request, tx_id: str, payload: 
         raise HTTPException(status_code=404, detail=str(exc))
 
 
-@router.post("/api/v2/workflows/sop/run")
-async def api_v2_hybrid_sop_run(request: Request, payload: Dict[str, Any] = Body(...)):
-    require_admin_or_503(request)
-    from backend.hybrid_sop_runner import run_hybrid_sop
-
-    async def _agent_stub(step: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
-        return {"status": "ok", "step": step.get("id")}
-
-    res = await run_hybrid_sop(
-        sop_def=payload.get("sop") or {},
-        script_handlers={"noop": lambda s, c: {"ok": True}},
-        agent_handler=_agent_stub,
-        initial_context=payload.get("context"),
-    )
-    return {"status": "success", **res}
+# (M80 hybrid_sop_runner im Triage-Lauf 21.11.2026 entfernt: Stub-Runner ohne echten
+#  Agenten — Nachfolger ist die zentrale DAG-Engine /api/v2/workflows/dag/run.)
 
 
 @router.post("/api/v2/tools/firewall/guard")

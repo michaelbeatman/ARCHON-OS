@@ -28,8 +28,8 @@ class NotificationHub:
         self.db_path = db_path
         try:
             os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[NotificationHub] Warnung: Datenverzeichnis konnte nicht erstellt werden: {exc}", file=sys.stderr)
         self._init_db()
 
     def _get_conn(self):
@@ -55,8 +55,8 @@ class NotificationHub:
             # Sichere Spalten-Migration falls Tabelle bereits existiert
             try:
                 conn.execute("ALTER TABLE system_notifications ADD COLUMN suppressed_by_quiet_hours INTEGER DEFAULT 0")
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[NotificationHub] Warnung: Spalten-Migration 'suppressed_by_quiet_hours' übersprungen (vermutlich bereits vorhanden): {exc}", file=sys.stderr)
             conn.commit()
 
     def _get_policy(self) -> Dict[str, Any]:
@@ -75,8 +75,8 @@ class NotificationHub:
             cfg = get_module_config("notification_policy")
             if cfg and isinstance(cfg, dict):
                 default_policy.update(cfg)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[NotificationHub] Warnung: Benachrichtigungs-Policy nicht lesbar, nutze Defaults: {exc}", file=sys.stderr)
         return default_policy
 
     def get_policy(self) -> Dict[str, Any]:

@@ -11,10 +11,13 @@ import sys
 import time
 import subprocess
 import datetime
+import logging
 from typing import Dict, Any, List
 
 from archon.core.cache import ttl_cache  # noqa: E402
 from utils.docker_client import DockerError, docker_cli_host_args, validate_container_name
+
+logger = logging.getLogger("archon.fleet_self_healing")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -93,8 +96,8 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
                 agent_id="Watchdog-Daemon",
                 payload={"service": service_name, "container": container_target, "success": success, "log": output[:200]}
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Audit-Log-Eintrag für Selbstheilung von '%s' fehlgeschlagen: %s", service_name, exc)
 
         try:
             from backend.notification_hub import notification_hub
@@ -106,8 +109,8 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
                 severity=severity,
                 category="fleet_health"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Benachrichtigung über Selbstheilung von '%s' konnte nicht versendet werden: %s", service_name, exc)
 
         return {
             "status": "success" if success else "failed",
@@ -127,8 +130,8 @@ def check_fleet_and_heal() -> Dict[str, Any]:
         from backend.autonomy_settings import get_module_config
         cfg = get_module_config("fleet_and_hygiene")
         auto_restart = bool(cfg.get("auto_container_restart", True))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Fleet-Konfiguration 'fleet_and_hygiene' nicht lesbar, nutze Default auto_container_restart=True: %s", exc)
 
     try:
         proc = subprocess.run(

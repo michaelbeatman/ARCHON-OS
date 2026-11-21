@@ -24,16 +24,20 @@ class DecomposeTaskRequest(BaseModel):
 
 @router.post("/kanban/dag/decompose")
 async def api_dag_decompose_task(req: DecomposeTaskRequest):
-    """Zerlegt eine komplexe Aufgabe in einen Directed Acyclic Graph (DAG) mit parallelen Teilaufgaben."""
-    from backend.dag_scheduler import dag_scheduler_instance
-    return await dag_scheduler_instance.decompose_task(req.title, req.body or "", req.assignee or "orchestrator")
+    """ALTER 2-Tier-DAG-Scheduler entfernt (21.11.2026) — Nachfolger: Workflow-Studio + /api/v2/workflows/templates/{id}/run."""
+    raise HTTPException(
+        status_code=410,
+        detail="Der alte dag_scheduler wurde durch die Workflow-/DAG-Engine ersetzt: Templates unter /api/v2/workflows/templates anlegen und via /api/v2/workflows/templates/{id}/run ausfuehren.",
+    )
 
 
 @router.post("/kanban/dag/execute/{parent_id}")
 async def api_dag_execute_task(parent_id: str):
-    """Führt einen zerlegten DAG aus: Parallele Vorstufen -> abhängige Stufen -> Abschluss-Synthese."""
-    from backend.dag_scheduler import dag_scheduler_instance
-    return await dag_scheduler_instance.execute_dag(parent_id)
+    """ALTER 2-Tier-DAG-Scheduler entfernt (21.11.2026) — Nachfolger: /api/v2/workflows/dag/run bzw. Template-Run."""
+    raise HTTPException(
+        status_code=410,
+        detail="Der alte dag_scheduler wurde durch die Workflow-/DAG-Engine ersetzt: /api/v2/workflows/dag/run (DAG-JSON) oder Template-Run verwenden.",
+    )
 
 
 class WorkflowCheckpointCreateRequest(BaseModel):

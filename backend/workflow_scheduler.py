@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sqlite3
 import sys
@@ -17,6 +18,8 @@ from typing import Any, Dict, List, Optional, Set
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEDULES_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "workflow_schedules.db")
+
+logger = logging.getLogger("backend.workflow_scheduler")
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -559,8 +562,8 @@ def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any
                         correlation_id=cid,
                     )
                     triggered.extend(ev_res.get("triggered") or [])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"[WorkflowScheduler] WARNUNG evaluate_due_schedules: Kalender-Event-Abruf fehlgeschlagen (Fallback: uebersprungen): {exc}")
         return triggered
     finally:
         conn.close()

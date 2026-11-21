@@ -153,8 +153,8 @@ class ArchonMcpGateway:
                         return True
                 finally:
                     conn.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("HITL-Verbrauchstabellen-Prüfung für '%s' fehlgeschlagen (Datenbank nicht lesbar): %s", approval_id, exc)
             return False
 
     def _mark_hitl_consumed(self, approval_id: str, approval_engine: Any = None) -> None:
@@ -175,8 +175,8 @@ class ArchonMcpGateway:
                     conn.commit()
                 finally:
                     conn.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("HITL-Verbrauchseintrag für '%s' konnte nicht persistiert werden (wird nur im Speicher geführt): %s", approval_id, exc)
 
     # ------------------------------------------------------------------
     # Authentifizierung & Scope-Prüfung
@@ -587,8 +587,8 @@ class ArchonMcpGateway:
             from backend.demo_mode import is_demo_mode
             if is_demo_mode() and required_scope != "read_only":
                 return -32003, {"message": "Schreibende MCP-Tools sind im Read-Only Demo-Modus gesperrt."}
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Demo-Mode-Guard nicht prüfbar, Guard wird übergangen: %s", exc)
 
         # HITL-Gate prüfen
         allowed, pending = self._check_hitl_gate(name, arguments, key_info)

@@ -216,8 +216,8 @@ def save_profile(profile_data: Dict[str, Any], *,
                     with open(yml, "r", encoding="utf-8") as _fy:
                         _alt_tools = (_yaml.safe_load(_fy) or {}).get("tools") or []
                     break
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"Tools aus profile.yaml von {p_id} konnten nicht geladen werden: {exc}")
         _neue = [t for t in incoming_tools if t not in _alt_tools]
         if _neue:
             detail = (f"Profil '{p_id}' bekommt neue Tools: {', '.join(_neue[:8])}"
@@ -253,8 +253,8 @@ def save_profile(profile_data: Dict[str, Any], *,
                         if content:
                             prompt_val = content
                             break
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"Profil-Datei von {p_id} konnte nicht gelesen werden: {exc}")
         if not prompt_val:
             prompt_val = f"Du bist {person_name} ({profile_data.get('name', p_id)}). {profile_data.get('description', '')}".strip()
 
@@ -421,8 +421,8 @@ def save_profile(profile_data: Dict[str, Any], *,
                                 shutil.rmtree(full_entry, ignore_errors=True)
                             else:
                                 os.unlink(full_entry)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(f"Skill-Eintrag {full_entry} konnte nicht entfernt werden: {exc}")
             global_skills_dir = os.path.join(MEMORY_DIR, "hermes_skills")
             if not os.path.exists(global_skills_dir):
                 global_skills_dir = os.path.expanduser("~/.hermes/skills")

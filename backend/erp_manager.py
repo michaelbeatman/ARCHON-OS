@@ -30,9 +30,12 @@ import collections
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape as _xml_escape
 from typing import Dict, Any, List, Optional, Tuple
+import logging
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TENANTS_BASE_DIR = os.path.join(WORKSPACE_DIR, "data", "tenants")
+
+logger = logging.getLogger("archon.erp_manager")
 
 
 def _sanitize_company_id(company_id: Optional[str]) -> str:
@@ -42,8 +45,8 @@ def _sanitize_company_id(company_id: Optional[str]) -> str:
             active = corporate_manager.get_company()
             if active and active.get("id"):
                 company_id = active["id"]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Standard-Firma aus Corporate-Manager nicht ermittelbar, nutze übergebene company_id: %s", exc)
     try:
         from backend.tenant_context import sanitize_tenant_id
         return sanitize_tenant_id(company_id or "archon-systems")
@@ -1520,8 +1523,8 @@ class ERPManager:
                 comp_cfg = corporate_manager.get_company(cid)
                 if isinstance(comp_cfg, dict):
                     seller_is_small_business = bool((comp_cfg.get("tax") or {}).get("small_business"))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Kleinunternehmer-Status der Firma '%s' nicht ermittelbar, nutze Standard-Regime: %s", cid, exc)
 
             if seller_is_small_business:
                 tax_regime = "small_business"
@@ -2444,8 +2447,8 @@ class ERPManager:
                 fy_cfg = re.sub(r"[^0-9]", "", str((comp_cfg.get("tax") or {}).get("fiscal_year_start") or ""))
                 if len(fy_cfg) == 8:
                     year_start = fy_cfg
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Geschäftsjahres-Start der Firma '%s' nicht ermittelbar, nutze Beleg-Default: %s", cid, exc)
             datum_von = re.sub(r"[^0-9]", "", str(date_from or (doc_dates[0] if doc_dates else ""))[:10])
             datum_bis = re.sub(r"[^0-9]", "", str(date_to or (doc_dates[-1] if doc_dates else ""))[:10])
             header_currency = str((docs[0].get("currency") if docs else None) or "EUR").upper()

@@ -8,6 +8,7 @@ import html
 import os
 import json
 import re
+import sys
 import tempfile
 import threading
 import uuid
@@ -113,13 +114,13 @@ def _normalize_layout(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     out = dict(DEFAULT_TEMPLATE_LAYOUT)
     try:
         out["margin_mm"] = max(8, min(30, int(src.get("margin_mm", out["margin_mm"]))))
-    except (TypeError, ValueError):
-        pass
+    except (TypeError, ValueError) as exc:
+        print(f"[Corporate] Ungueltiger margin_mm im Layout, Default {DEFAULT_TEMPLATE_LAYOUT['margin_mm']} bleibt: {exc}", file=sys.stderr)
     try:
         cols = int(src.get("footer_columns", out["footer_columns"]))
         out["footer_columns"] = 2 if cols == 2 else 3
-    except (TypeError, ValueError):
-        pass
+    except (TypeError, ValueError) as exc:
+        print(f"[Corporate] Ungueltige footer_columns im Layout, Default bleibt: {exc}", file=sys.stderr)
     for bkey in ("show_logo", "show_girocode", "show_fold_marks", "show_bank_footer"):
         if bkey in src:
             out[bkey] = bool(src[bkey])
@@ -186,8 +187,8 @@ class CorporateManager:
             except BaseException:
                 try:
                     os.unlink(tmp)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    print(f"[Corporate] Temp-Datei {tmp} konnte nach Schreibfehler nicht entfernt werden: {exc}", file=sys.stderr)
                 raise
 
     def list_companies(self) -> List[Dict[str, Any]]:
@@ -581,8 +582,8 @@ class CorporateManager:
                             custom["recipient_street"] = ent["street"]
                         if ent.get("postal_code") or ent.get("city"):
                             custom["recipient_city"] = f"{ent.get('postal_code', '')} {ent.get('city', '')}".strip()
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[Corporate] Adressdaten des Empfaengers konnten nicht geladen werden, Musterempfaenger bleibt: {exc}", file=sys.stderr)
 
         today_de = datetime.now().strftime("%d.%m.%Y")
         due_date_de = custom.get("due_date") or datetime.now().strftime("%d.%m.%Y")

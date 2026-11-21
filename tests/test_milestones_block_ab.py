@@ -5,7 +5,6 @@ import time
 
 from backend.agent_eval_arena import run_eval_arena
 from backend.deep_research_lab import compile_research_dossier, triangulate_sources
-from backend.hybrid_sop_runner import run_hybrid_sop
 from backend.lossless_session_dag import (
     append_turn,
     compact_range_to_summary,
@@ -25,29 +24,6 @@ def test_m90_tool_warrants():
     assert verify_warrant_for_call(w, "sess_1", "terminal", {})["allowed"] is False
     assert verify_warrant_for_call(w, "sess_2", "pay", {"amount": 10.0})["allowed"] is False
     assert verify_warrant_for_call(w, "sess_1", "pay", {"amount": 10.0}, now_ts=time.time() + 120)["allowed"] is False
-
-
-def test_m80_hybrid_sop():
-    sop = {
-        "id": "sop-invoice",
-        "steps": [
-            {"id": "validate", "kind": "script", "handler": "check_tax"},
-            {"id": "review", "kind": "agent", "prompt": "Pruefe Plausibilitaet"},
-        ],
-    }
-
-    async def fake_agent(step, ctx):
-        return {"decision": "approved", "tax_ok": ctx["validate"]["ok"]}
-
-    res = asyncio.run(
-        run_hybrid_sop(
-            sop,
-            script_handlers={"check_tax": lambda st, ctx: {"ok": True, "rate": 0.19}},
-            agent_handler=fake_agent,
-        )
-    )
-    assert res["status"] == "completed"
-    assert res["context"]["review"]["tax_ok"] is True
 
 
 def test_m82_session_receipts():

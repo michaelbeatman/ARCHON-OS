@@ -20,6 +20,7 @@ import datetime
 import hashlib
 import json
 import os
+import sys
 import threading
 import uuid
 from typing import Any, Dict, List, Optional
@@ -96,8 +97,8 @@ class ComplianceEngine:
                         data = json.load(fh)
                     if isinstance(data, list):
                         return data
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[Compliance] KI-Kompetenzregister konnte nicht geladen werden ({self.literacy_file}), Seed-Entries werden verwendet: {exc}", file=sys.stderr)
             seeded = self._default_seed_entries()
             self._save_literacy_entries(seeded)
             return seeded
@@ -167,8 +168,8 @@ class ComplianceEngine:
                     "certificate_sha256": cert_hash,
                 },
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[Compliance] Audit-Log-Eintrag fuer AI-Act-Literacy-Add fehlgeschlagen: {exc}", file=sys.stderr)
 
         return entry
 
@@ -187,8 +188,8 @@ class ComplianceEngine:
                 agent_id=actor,
                 payload={"entry_id": entry_id},
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[Compliance] Audit-Log-Eintrag fuer AI-Act-Literacy-Delete fehlgeschlagen: {exc}", file=sys.stderr)
         return True
 
     # ------------------------------------------------------------------
@@ -368,8 +369,8 @@ class ComplianceEngine:
             try:
                 with open(vfile, "r", encoding="utf-8") as fh:
                     return fh.read().strip() or "v0.5.2.1"
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[Compliance] VERSION-Datei nicht lesbar, Fallback-Version v0.5.2.1: {exc}", file=sys.stderr)
         return "v0.5.2.1"
 
     def collect_verfahrensdokumentation_snapshot(self, company_id: Optional[str] = None) -> Dict[str, Any]:

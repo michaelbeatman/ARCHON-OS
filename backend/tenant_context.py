@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -25,7 +26,10 @@ from typing import Any, Dict, List, Optional
 
 from archon.core.runtime import WORKSPACE_DIR
 
+logger = logging.getLogger("archon.tenant_context")
+
 ISOLATED_TENANT_DBS = ("erp.db", "kanban.db", "crm.db", "contracts.db", "deals.db")
+CONSOLIDATED_TENANT_DBS = ("ops.db", "business.db", "memory.db")
 PRIMARY_TENANT_IDS = frozenset({"archon-systems", "default"})
 
 DEFAULT_NUMBER_PREFIXES = {
@@ -341,7 +345,7 @@ class TenantContextManager:
     def resolve_tenant_db(self, db_filename: str, company_id: Optional[str] = None) -> str:
         """Liefert den physisch isolierten SQLite-Pfad unter `data/tenants/<id>/<db>`."""
         fname = os.path.basename(db_filename)
-        if fname not in ISOLATED_TENANT_DBS:
+        if fname not in ISOLATED_TENANT_DBS and fname not in CONSOLIDATED_TENANT_DBS:
             raise ValueError(f"DB '{fname}' ist nicht für Mandanten-Isolation registriert.")
         tdir = self.get_tenant_dir(company_id)
         return os.path.join(tdir, fname)
@@ -352,13 +356,13 @@ class TenantContextManager:
         - Sekundäre Gesellschaften (Holding, SPV, weitere GmbHs) erhalten IMMER ihre
           physisch isolierte SQLite-Datei unter `data/tenants/<id>/<db_filename>` mit
           initialisiertem Schema.
-        - Für den Primärmandanten (`archon-systems`) bleiben die Live-Engines für
-          PocketBase-CRM (`pocketbase/pb_data/data.db`) und Hermes-Kanban (`kanban.db`)
-          angebunden, während `deals.db` & `contracts.db` verlustfrei nach
-          `data/tenants/archon-systems/` übernommen werden.
+        - Ist die Phase-2-Konsolidierung (`ops.db`/`business.db`/`memory.db`) aktiv und
+          die Ziel-Domänen-DB existiert, wird für den Primärmandanten transparent auf
+          `data/{ops,business,memory}.db` geroutet; für Sekundärmandanten auf deren
+          eigene konsolidierte `data/tenants/<id>/{ops,business,memory}.db` (falls vorhanden).
         """
         fname = os.path.basename(db_filename)
-        if fname not in ISOLATED_TENANT_DBS:
+        if fname not in ISOLATED_TENANT_DBS and fname not in CONSOLIDATED_TENANT_DBS:
             raise ValueError(f"DB '{fname}' ist nicht für Mandanten-Isolation registriert.")
 
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()
@@ -366,6 +370,25 @@ class TenantContextManager:
 
         with self._lock:
             is_primary_prod = self._is_default_workspace and (tid in PRIMARY_TENANT_IDS)
+
+            try:
+                from backend.db_consolidation import is_consolidation_active, resolve_consolidated_domain
+                data_dir = os.path.join(self.workspace_dir, "data")
+                if is_consolidation_active(data_dir):
+                    dom_name = fname if fname in CONSOLIDATED_TENANT_DBS else resolve_consolidated_domain(fname)
+                    if tid in PRIMARY_TENANT_IDS:
+                        cons_primary = os.path.join(data_dir, dom_name)
+                        if _db_has_tables(cons_primary):
+                            return cons_primary
+                    else:
+                        cons_tenant = os.path.join(self.get_tenant_dir(tid), dom_name)
+                        if _db_has_tables(cons_tenant):
+                            return cons_tenant
+            except Exception as cons_exc:
+                logger.debug(f"[TenantContext] Konsolidierungs-Aufloesung uebersprungen: {cons_exc}")
+
+            if fname in CONSOLIDATED_TENANT_DBS:
+                return os.path.join(self.workspace_dir, "data", fname) if (tid in PRIMARY_TENANT_IDS) else isolated_path
 
             if is_primary_prod and fname == "crm.db":
                 pb_db = os.path.join(self.workspace_dir, "pocketbase", "pb_data", "data.db")
@@ -430,8 +453,8 @@ class TenantContextManager:
                         "entity_type": comp.get("entity_type", "operative_gmbh"),
                     },
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"[TenantContext] GoBD-Audit-Log fuer Mandantenwechsel fehlgeschlagen: {exc}")
 
         return {
             "status": "switched",
@@ -456,8 +479,8 @@ class TenantContextManager:
                 try:
                     with open(fpath, "r", encoding="utf-8") as fh:
                         return json.load(fh)
-                except Exception:
-                    pass
+                except (OSError, ValueError) as exc:
+                    logger.warning(f"[TenantContext] number_ranges.json nicht lesbar ({fpath}): {exc}")
             year = datetime.datetime.now().year
             short_code = tid.upper()[:6]
             defaults = {

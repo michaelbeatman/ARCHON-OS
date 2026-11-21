@@ -9,11 +9,14 @@ import os
 import sys
 import glob
 import gzip
+import logging
 import sqlite3
 import datetime
 import shutil
 import tempfile
 from typing import Dict, Any, List, Optional
+
+logger = logging.getLogger("archon.db_backup_manager")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKUP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "backups", "db")
@@ -29,6 +32,9 @@ def _resolve_target(filename: str, legacy_subpath: str) -> str:
 
 
 DB_TARGETS = [
+    _resolve_target("ops.db", "~/.hermes/ops.db"),
+    _resolve_target("business.db", "~/.hermes/business.db"),
+    _resolve_target("memory.db", "~/.hermes/memory.db"),
     _resolve_target("agentic_memory.db", "~/.hermes/agentic_memory.db"),
     _resolve_target("kanban.db", "~/.hermes/kanban.db"),
     _resolve_target("state.db", "~/.hermes/state.db"),
@@ -111,8 +117,8 @@ class DBBackupManager:
                 if tmp_snapshot and os.path.exists(tmp_snapshot):
                     try:
                         os.unlink(tmp_snapshot)
-                    except OSError:
-                        pass
+                    except OSError as rm_exc:
+                        logger.debug(f"[DBBackupManager] Temp-Snapshot {tmp_snapshot} nicht entfernt: {rm_exc}")
 
         self._rotate_backups(keep_days=keep_days)
 
@@ -134,8 +140,8 @@ class DBBackupManager:
                     mtime = datetime.datetime.fromtimestamp(os.path.getmtime(f_path))
                     if mtime < cutoff:
                         os.remove(f_path)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.warning(f"[DBBackupManager] Backup-Rotation fehlgeschlagen: {exc}")
 
     def list_backups(self) -> List[Dict[str, Any]]:
         res = []
@@ -148,8 +154,8 @@ class DBBackupManager:
                         "size_bytes": os.path.getsize(f_path),
                         "created_at": datetime.datetime.fromtimestamp(os.path.getmtime(f_path)).isoformat()
                     })
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.warning(f"[DBBackupManager] Backup-Liste nicht lesbar: {exc}")
         return res
 
 db_backup_manager = DBBackupManager()

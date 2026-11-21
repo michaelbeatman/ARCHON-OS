@@ -64,6 +64,11 @@ export function ContentMachineCockpit() {
     ctr_pct: 0,
   });
 
+  // Content-Maschine v2: Quellen-Ingestion
+  const [ingestType, setIngestType] = useState<'url' | 'obsidian' | 'transcript'>('url');
+  const [ingestInput, setIngestInput] = useState('');
+  const [ingestTitle, setIngestTitle] = useState('');
+
   const loadOverview = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -194,6 +199,56 @@ export function ContentMachineCockpit() {
       await loadOverview();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Metriken konnten nicht gespeichert werden');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleIngestSource = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ingestInput.trim()) return;
+    setBusyId('ingest');
+    setError(null);
+    try {
+      await archonApi.ingestSource({
+        source_type: ingestType,
+        title: ingestTitle.trim() || undefined,
+        source_url: ingestType === 'url' ? ingestInput.trim() : undefined,
+        obsidian_path: ingestType === 'obsidian' ? ingestInput.trim() : undefined,
+        transcript: ingestType === 'transcript' ? ingestInput.trim() : undefined,
+        channels: selectedChannels.length > 0 ? selectedChannels : ['linkedin', 'youtube_shorts', 'tiktok'],
+      });
+      setIngestInput('');
+      setIngestTitle('');
+      await loadOverview();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Quellen-Ingestion fehlgeschlagen');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleClipMatrix = async (campId: string, dryRun: boolean) => {
+    setBusyId(`clip:${campId}`);
+    setError(null);
+    try {
+      await archonApi.generateClipMatrix(campId, { clip_count: 3, dry_run: dryRun });
+      await loadOverview();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Clip-Matrix konnte nicht erzeugt werden');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handlePublishDue = async () => {
+    setBusyId('publish-due');
+    setError(null);
+    try {
+      await archonApi.publishDueAssets({ dry_run: false });
+      await loadOverview();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Faellige Veroeffentlichung fehlgeschlagen');
     } finally {
       setBusyId(null);
     }
@@ -394,6 +449,14 @@ export function ContentMachineCockpit() {
                         Dry-Run
                       </button>
                       <button
+                        onClick={() => handleClipMatrix(camp.id, false)}
+                        disabled={busyId === `clip:${camp.id}`}
+                        className="px-2.5 py-1.5 rounded-md border border-fuchsia-500/40 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-200 text-xs"
+                        title="3x 9:16 Shorts & TikTok Clips aus Kampagne ableiten"
+                      >
+                        9:16 Clips
+                      </button>
+                      <button
                         onClick={() => handleDeleteCampaign(camp.id)}
                         disabled={busyId === camp.id}
                         className="p-1.5 rounded-md text-rose-400 hover:bg-rose-500/10"
@@ -409,11 +472,66 @@ export function ContentMachineCockpit() {
           </div>
         </div>
 
+        {/* Quellen-Ingestion v2 (URL / Obsidian / Transkript -> Kampagne) */}
+        <form
+          onSubmit={handleIngestSource}
+          className="p-4 rounded-xl border border-slate-800 bg-slate-900/70 flex flex-wrap items-end gap-3"
+        >
+          <div className="w-40">
+            <label className="block text-[11px] font-mono text-slate-400 mb-1">Quelle (1 &rarr; 6 Kanaele)</label>
+            <select
+              value={ingestType}
+              onChange={(e) => setIngestType(e.target.value as 'url' | 'obsidian' | 'transcript')}
+              className="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"
+            >
+              <option value="url">Web-Artikel URL</option>
+              <option value="obsidian">Obsidian-Notiz</option>
+              <option value="transcript">Rohtranskript</option>
+            </select>
+          </div>
+          <div className="w-56">
+            <label className="block text-[11px] font-mono text-slate-400 mb-1">Optionaler Titel</label>
+            <input
+              value={ingestTitle}
+              onChange={(e) => setIngestTitle(e.target.value)}
+              placeholder="Auto-Erkennung wenn leer"
+              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"
+            />
+          </div>
+          <div className="flex-1 min-w-[240px]">
+            <label className="block text-[11px] font-mono text-slate-400 mb-1">
+              {ingestType === 'url' ? 'https://...' : ingestType === 'obsidian' ? '01_PROJEKTE/.../Bericht.md' : 'Transkript / Notizen'}
+            </label>
+            <input
+              value={ingestInput}
+              onChange={(e) => setIngestInput(e.target.value)}
+              placeholder={ingestType === 'url' ? 'https://example.com/artikel' : 'Inhalt oder Pfad eingeben'}
+              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={busyId === 'ingest'}
+            className="px-4 py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-xs font-semibold"
+          >
+            Quelle einlesen
+          </button>
+        </form>
+
         {/* Assets & Editorial Queue */}
         <section className="p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-bold">Redaktions- &amp; Publishing-Queue ({filteredAssets.length} Assets)</h2>
             <div className="flex flex-wrap items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={handlePublishDue}
+                disabled={busyId === 'publish-due'}
+                className="px-2.5 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 font-medium"
+              >
+                Faellige publizieren
+              </button>
               <select
                 value={channelFilter}
                 onChange={(e) => setChannelFilter(e.target.value)}
@@ -457,13 +575,27 @@ export function ContentMachineCockpit() {
                       <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                         {asset.channel}
                       </span>
-                      <span
-                        className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                          STATUS_BADGE[asset.status] || STATUS_BADGE.draft
-                        }`}
-                      >
-                        {asset.status}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {typeof asset.quality_score === 'number' && (
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                              asset.quality_score >= 70
+                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                            }`}
+                            title={(asset.quality_report?.issues || []).join(' | ') || 'Qualitaets-Score'}
+                          >
+                            Q: {asset.quality_score}/100
+                          </span>
+                        )}
+                        <span
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                            STATUS_BADGE[asset.status] || STATUS_BADGE.draft
+                          }`}
+                        >
+                          {asset.status}
+                        </span>
+                      </div>
                     </div>
                     <h3 className="font-semibold text-sm">{asset.title}</h3>
                     {asset.hook && (

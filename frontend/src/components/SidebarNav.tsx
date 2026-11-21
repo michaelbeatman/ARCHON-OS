@@ -146,6 +146,15 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             </button>
 
             <Link
+              href="/cockpit"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition text-sky-300 hover:text-sky-200 hover:bg-sky-500/10 border border-sky-500/20"
+            >
+              <Compass className="w-4 h-4 text-sky-400" />
+              <span>Executive Cockpit</span>
+              <span className="ml-auto text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded font-mono">v2</span>
+            </Link>
+
+            <Link
               href="/content-studio"
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition text-fuchsia-300 hover:text-fuchsia-200 hover:bg-fuchsia-500/10 border border-fuchsia-500/20"
             >

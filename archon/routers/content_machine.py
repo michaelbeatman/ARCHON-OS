@@ -190,6 +190,72 @@ def api_cm_analytics():
     return {"status": "ok", **get_content_analytics()}
 
 
+@router.post("/api/v2/content-machine/ingest")
+def api_cm_ingest_source(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.content_machine import ingest_source_to_campaign
+    from utils.egress_guard import EgressBlocked
+    from utils.path_jail import PathJailError
+    try:
+        res = ingest_source_to_campaign(payload)
+        return {"status": "ok", **res}
+    except (EgressBlocked, PathJailError) as sec_err:
+        raise HTTPException(status_code=403, detail=str(sec_err))
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/v2/content-machine/campaigns/{campaign_id}/clip-matrix")
+async def api_cm_clip_matrix(request: Request, campaign_id: str, payload: Dict[str, Any] = Body(default={})):
+    require_admin_or_503(request)
+    from backend.content_machine import generate_video_clip_matrix
+    try:
+        res = await generate_video_clip_matrix(
+            campaign_id=campaign_id,
+            source_asset_id=payload.get("source_asset_id"),
+            script_text=payload.get("script_text"),
+            clip_count=int(payload.get("clip_count") or 3),
+            target_channels=payload.get("target_channels"),
+            dry_run=bool(payload.get("dry_run", False)),
+        )
+        return {"status": "ok", **res}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/v2/content-machine/assets/{asset_id}/dispatch-webhook")
+def api_cm_dispatch_webhook(request: Request, asset_id: str, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.content_machine import dispatch_asset_to_webhook
+    from utils.egress_guard import EgressBlocked
+    try:
+        res = dispatch_asset_to_webhook(
+            asset_id=asset_id,
+            webhook_url=str(payload.get("webhook_url") or ""),
+            dry_run=bool(payload.get("dry_run", False)),
+        )
+        return res
+    except EgressBlocked as sec_err:
+        raise HTTPException(status_code=403, detail=str(sec_err))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/v2/content-machine/publish-due")
+def api_cm_publish_due(request: Request, payload: Dict[str, Any] = Body(default={})):
+    require_admin_or_503(request)
+    from backend.content_machine import publish_scheduled_due_assets
+    res = publish_scheduled_due_assets(
+        webhook_url=payload.get("webhook_url"),
+        dry_run=bool(payload.get("dry_run", False)),
+    )
+    return res
+
+
 # =========================================================================
 # DATENBANK-KONSOLIDIERUNG (28 -> 3: ops.db, business.db, memory.db)
 # =========================================================================

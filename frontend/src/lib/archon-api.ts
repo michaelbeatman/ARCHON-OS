@@ -30,6 +30,14 @@ export interface ContentCampaign {
   updated_at: string;
 }
 
+export interface ContentAssetQualityReport {
+  score: number;
+  passed: boolean;
+  slop_hits: string[];
+  issues: string[];
+  suggestions: string[];
+}
+
 export interface ContentAsset {
   id: string;
   campaign_id: string;
@@ -48,6 +56,8 @@ export interface ContentAsset {
   external_url: string;
   decision_id: string;
   agent_id: string;
+  quality_score?: number;
+  quality_report?: ContentAssetQualityReport;
   created_at: string;
   updated_at: string;
 }
@@ -214,6 +224,65 @@ export const archonApi = {
         method: 'POST',
         body: JSON.stringify(metrics),
       }
+    ),
+  ingestSource: (payload: {
+    source_type: 'url' | 'obsidian' | 'transcript';
+    title?: string;
+    source_url?: string;
+    obsidian_path?: string;
+    transcript?: string;
+    channels?: string[];
+  }) =>
+    archonFetch<{ status: string; campaign: ContentCampaign; ingested_chars: number }>(
+      'api/v2/content-machine/ingest',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
+  generateClipMatrix: (
+    campaignId: string,
+    opts?: { source_asset_id?: string; clip_count?: number; dry_run?: boolean }
+  ) =>
+    archonFetch<{ status: string; count: number; clips_created: ContentAsset[] }>(
+      `api/v2/content-machine/campaigns/${encodeURIComponent(campaignId)}/clip-matrix`,
+      {
+        method: 'POST',
+        body: JSON.stringify(opts || {}),
+      }
+    ),
+  publishDueAssets: (opts?: { webhook_url?: string; dry_run?: boolean }) =>
+    archonFetch<{ status: string; due_count: number; published?: string[] }>(
+      'api/v2/content-machine/publish-due',
+      {
+        method: 'POST',
+        body: JSON.stringify(opts || {}),
+      }
+    ),
+
+  // Executive Cockpit & Operations (ohne PocketBase)
+  getSystemHealth: () =>
+    archonFetch<{
+      status: string;
+      services: Record<string, { status: string; latency_ms?: number }>;
+    }>('api/system/health'),
+  listKanbanTasks: (statusFilter?: string) =>
+    archonFetch<{ tasks?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> }>(
+      `api/operations/kanban/tasks${statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : ''}`
+    ),
+  moveKanbanTask: (taskId: string, status: string) =>
+    archonFetch<Record<string, unknown>>(`api/operations/kanban/tasks/${encodeURIComponent(taskId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  decideHitl: (decisionId: string, decision: 'approve' | 'reject', note = '') =>
+    archonFetch<Record<string, unknown>>('api/decisions/decide', {
+      method: 'POST',
+      body: JSON.stringify({ decision_id: decisionId, decision, note }),
+    }),
+  listCrmContacts: (limit = 25) =>
+    archonFetch<{ contacts?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> }>(
+      `api/crm/contacts?limit=${limit}`
     ),
 
   // Workflow & DAG Engine

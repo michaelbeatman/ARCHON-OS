@@ -204,5 +204,207 @@ def test_content_machine_router_registers_expected_routes():
     assert "/api/v2/content-machine/overview" in paths
     assert "/api/v2/content-machine/campaigns/{campaign_id}/generate" in paths
     assert "/api/v2/content-machine/assets/{asset_id}/metrics" in paths
+    assert "/api/v2/content-machine/ingest" in paths
+    assert "/api/v2/content-machine/campaigns/{campaign_id}/clip-matrix" in paths
+    assert "/api/v2/content-machine/assets/{asset_id}/dispatch-webhook" in paths
+    assert "/api/v2/content-machine/publish-due" in paths
     assert "/api/v2/system/db-consolidation/plan" in paths
     assert "/api/v2/system/db-consolidation/run" in paths
+
+
+# ---------------------------------------------------------------------------
+# 4. Content-Maschine v2: Quality Gate, Ingest (SSRF), Clip-Matrix & Publish-Due
+# ---------------------------------------------------------------------------
+
+def test_content_machine_v2_quality_gate_and_slop_detection(tmp_path):
+    import backend.content_machine as cm
+
+    biz_db = str(tmp_path / "business.db")
+    camp = cm.create_campaign(
+        {"title": "Quality Gate Test", "topic": "Zero-Trust Agenten"},
+        db_path=biz_db,
+    )
+
+    # Slop-lastiges Asset ohne Zahlenanker und ohne CTA
+    slop_asset = cm.create_asset(
+        {
+            "campaign_id": camp["id"],
+            "channel": "linkedin",
+            "title": "Slop Post",
+            "hook": "In today's fast-paced world we delve into a paradigm shift — a vibrant tapestry — that serves as a game-changer for every realm of modern software engineering and enterprise AI orchestration.",
+            "body": "Moreover, furthermore, it is important to note that we leverage cutting-edge solutions — with — many — dashes — to unlock potential.",
+            "cta": "",
+        },
+        db_path=biz_db,
+    )
+    assert slop_asset["quality_score"] < 70
+    assert len(slop_asset["quality_report"]["slop_hits"]) >= 3
+    assert slop_asset["quality_report"]["passed"] is False
+
+    # Sauberes, konkretes Asset mit Zahlenanker, kurzem Hook und klarem CTA
+    clean_asset = cm.create_asset(
+        {
+            "campaign_id": camp["id"],
+            "channel": "linkedin",
+            "title": "Sauberer Post",
+            "hook": "28 SQLite-Datenbanken auf 3 konsolidiert: Unsere Schreiblatenz sank um 64 Prozent.",
+            "body": (
+                "Wir haben gestern 28 isolierte SQLite-Dateien in 3 WAL-Datenbanken (ops.db, business.db, memory.db) "
+                "zusammengelegt. Vorher blockierten parallele Worker bei 140 Schreibzugriffen pro Sekunde. "
+                "Mit busy_timeout=5000 und strikter Domaenen-Trennung laufen 12 Agenten-Prozesse ohne Lock-Fehler."
+            ),
+            "cta": "Wie viele Datenbank-Dateien laufen in eurem Stack parallel?",
+        },
+        db_path=biz_db,
+    )
+    assert clean_asset["quality_score"] == 100
+    assert clean_asset["quality_report"]["slop_hits"] == []
+    assert clean_asset["quality_report"]["passed"] is True
+
+
+def test_content_machine_v2_ingest_clip_matrix_and_publish_due(tmp_path):
+    import backend.content_machine as cm
+    from utils.egress_guard import EgressBlocked
+
+    biz_db = str(tmp_path / "business.db")
+
+    # 1. Transcript-Ingestion legt Kampagne mit strukturiertem Brief an
+    ingested = cm.ingest_source_to_campaign(
+        {
+            "source_type": "transcript",
+            "title": "Podcast Episode 42: Lokale KI-Router",
+            "transcript": (
+                "In Folge 42 sprechen wir ueber Hardware-Abstraction-Layer fuer lokale LLMs. "
+                "Durch gezieltes Routing von Routine-Tasks auf 8B-Modelle senken Teams ihre API-Kosten um 72 Prozent, "
+                "waehrend komplexe Architektur-Entscheidungen auf Reasoning-Modellen bleiben."
+            ),
+            "target_audience": "AI Engineers & CTOs",
+        },
+        db_path=biz_db,
+    )
+    camp = ingested["campaign"]
+    assert camp["id"].startswith("camp-")
+    assert ingested["source_type"] == "transcript"
+    assert ingested["ingested_chars"] > 100
+
+    # 2. URL-Ingestion blockiert interne/loopback Ziele via SSRF-Guard
+    with pytest.raises(EgressBlocked):
+        cm.ingest_source_to_campaign(
+            {
+                "source_type": "url",
+                "source_url": "http://127.0.0.1:8420/api/admin/keys",
+            },
+            db_path=biz_db,
+        )
+
+    # 3. 9:16 Video-Clip-Repurposing-Matrix (dry_run=True) erzeugt YouTube Shorts + TikTok Clips
+    clip_res = asyncio.run(
+        cm.generate_video_clip_matrix(
+            campaign_id=camp["id"],
+            clip_count=3,
+            target_channels=["youtube_shorts", "tiktok"],
+            dry_run=True,
+            db_path=biz_db,
+        )
+    )
+    assert clip_res["count"] == 3
+    assert len(clip_res["clips_created"]) == 3
+    assert all(a["status"] == "review" for a in clip_res["clips_created"])
+    assert all(a["format_type"] == "video_clip_9_16" for a in clip_res["clips_created"])
+
+    # 4. Due-Publish-Sweep & Webhook-Dispatch (inkl. SSRF-Schutz)
+    first_clip = clip_res["clips_created"][0]
+    second_clip = clip_res["clips_created"][1]
+    cm.approve_asset(first_clip["id"], scheduled_at="2020-01-01T00:00:00Z", db_path=biz_db)
+    cm.approve_asset(second_clip["id"], scheduled_at="2099-01-01T00:00:00Z", db_path=biz_db)
+
+    due_res = cm.publish_scheduled_due_assets(db_path=biz_db)
+    assert due_res["due_count"] == 1
+    assert due_res["published"] == [first_clip["id"]]
+
+    with pytest.raises(EgressBlocked):
+        cm.dispatch_asset_to_webhook(
+            second_clip["id"],
+            webhook_url="http://169.254.169.254/latest/meta-data/",
+            dry_run=True,
+            db_path=biz_db,
+        )
+
+    wh_res = cm.dispatch_asset_to_webhook(
+        second_clip["id"],
+        webhook_url="http://localhost:5678/webhook/archon-content",
+        dry_run=True,
+        db_path=biz_db,
+    )
+    assert wh_res["status"] == "dry_run"
+    assert wh_res["payload"]["asset_id"] == second_clip["id"]
+
+
+# ---------------------------------------------------------------------------
+# 5. Tenant-Context & Backup-Manager Integration fuer die 3 konsolidierten DBs
+# ---------------------------------------------------------------------------
+
+def test_tenant_context_and_backup_manager_support_consolidated_dbs(tmp_path, monkeypatch):
+    import backend.db_backup_manager as bkp
+    import backend.db_consolidation as dbc
+    from backend.tenant_context import CONSOLIDATED_TENANT_DBS, TenantContextManager
+
+    assert CONSOLIDATED_TENANT_DBS == ("ops.db", "business.db", "memory.db")
+
+    src_dir = tmp_path / "legacy"
+    data_dir = tmp_path / "data"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    _create_sqlite(
+        str(src_dir / "deals.db"),
+        "CREATE TABLE deals (id TEXT PRIMARY KEY, title TEXT);",
+        [("INSERT INTO deals VALUES (?, ?)", ("d-1", "Deal 1"))],
+    )
+    _create_sqlite(
+        str(src_dir / "kanban.db"),
+        "CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT);",
+        [("INSERT INTO tasks VALUES (?, ?)", ("t-1", "Task 1"))],
+    )
+    _create_sqlite(
+        str(src_dir / "memory_Store.db"),
+        "CREATE TABLE learnings (id TEXT PRIMARY KEY, note TEXT);",
+        [("INSERT INTO learnings VALUES (?, ?)", ("l-1", "Note 1"))],
+    )
+
+    dbc.run_consolidation(
+        source_dirs=[str(src_dir)],
+        target_dir=str(data_dir),
+        dry_run=False,
+        create_backup=False,
+        activate=True,
+    )
+
+    tcm = TenantContextManager(workspace_dir=str(tmp_path))
+    resolved_deals = os.path.basename(tcm.resolve_active_db("deals.db", company_id="default"))
+    resolved_kanban = os.path.basename(tcm.resolve_active_db("kanban.db", company_id="default"))
+    resolved_mem = os.path.basename(tcm.resolve_active_db("memory.db", company_id="default"))
+
+    assert resolved_deals == "business.db"
+    assert resolved_kanban == "ops.db"
+    assert resolved_mem == "memory.db"
+
+    assert any(p.endswith("ops.db") for p in bkp.DB_TARGETS)
+    assert any(p.endswith("business.db") for p in bkp.DB_TARGETS)
+    assert any(p.endswith("memory.db") for p in bkp.DB_TARGETS)
+
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(
+        bkp,
+        "DB_TARGETS",
+        [
+            str(data_dir / "ops.db"),
+            str(data_dir / "business.db"),
+            str(data_dir / "memory.db"),
+        ],
+    )
+    monkeypatch.setattr(bkp, "WORKSPACE_DIR", str(tmp_path))
+    mgr = bkp.DBBackupManager(backup_dir=str(backup_dir))
+    res = mgr.checkpoint_and_backup(keep_days=7)
+    assert res["status"] == "success"
+    assert res["backed_up_count"] == 3

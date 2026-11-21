@@ -749,6 +749,14 @@ async def _dispatch_to_omniroute_or_container_exec(
     except Exception as cmp_err:
         logger.warning(f"[Dispatcher] Compliance-Engine Pruefung fuer '{agent_id}' fehlgeschlagen: {cmp_err}")
 
+    try:
+        from backend.execution_routing_guard import classify_execution_layer
+        _erg = classify_execution_layer((prompt or "")[:160], prompt or "")
+        if _erg.get("layer") in ("deterministic_n8n", "deterministic_script"):
+            logger.info(f"[ExecutionRoutingGuard] Hinweis fuer '{agent_id}': deterministische Route empfohlen ({_erg.get('target_engine')})")
+    except Exception:
+        pass
+
     classified_cat = ""
     try:
         from backend.data_classifier import DataClassifier

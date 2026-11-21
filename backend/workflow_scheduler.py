@@ -16,14 +16,26 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEDULES_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "workflow_schedules.db")
+_DEFAULT_SCHEDULES_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "workflow_schedules.db")
+SCHEDULES_DB_PATH = _DEFAULT_SCHEDULES_DB_PATH
 
 logger = logging.getLogger("backend.workflow_scheduler")
 
 
+def _resolve_schedules_db_path() -> str:
+    if SCHEDULES_DB_PATH != _DEFAULT_SCHEDULES_DB_PATH:
+        return SCHEDULES_DB_PATH
+    try:
+        from backend.db_paths import resolve_db
+        return resolve_db("workflow_schedules.db")
+    except Exception:
+        return SCHEDULES_DB_PATH
+
+
 def _get_conn() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(SCHEDULES_DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(SCHEDULES_DB_PATH, timeout=15)
+    db_file = _resolve_schedules_db_path()
+    os.makedirs(os.path.dirname(db_file) or ".", exist_ok=True)
+    conn = sqlite3.connect(db_file, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")

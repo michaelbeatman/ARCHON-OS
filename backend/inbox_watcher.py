@@ -19,7 +19,7 @@ from typing import Dict, Any, List
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
-DEFAULT_WATCH_DIR = os.path.join(WORKSPACE_DIR, "agent_workspace", "inbox")
+DEFAULT_WATCH_DIR = "/opt/data/inbox" if os.path.isdir("/opt/data/inbox") else os.path.join(WORKSPACE_DIR, "data", "inbox")
 
 def get_inbox_config() -> Dict[str, Any]:
     cfg = {
@@ -52,11 +52,8 @@ def save_inbox_config(new_cfg: Dict[str, Any]) -> bool:
         print(f"[InboxWatcher] Error saving config: {e}", file=sys.stderr)
         return False
 
-async def scan_and_process_inbox() -> Dict[str, Any]:
-    """
-    Durchsucht den konfigurierten Watch-Ordner nach neuen Dateien,
-    ignoriert temporäre oder unvollständige Uploads und überführt fertige Dateien in Kanban.
-    """
+def _scan_and_process_inbox_sync() -> Dict[str, Any]:
+    """Synchrone Ausfuehrung fuer scan_and_process_inbox (laeuft ueber asyncio.to_thread)."""
     cfg = get_inbox_config()
     watch_dir = cfg.get("watch_folder", DEFAULT_WATCH_DIR)
     proc_dir = cfg.get("processed_folder") or os.path.join(watch_dir, "processed")
@@ -107,9 +104,6 @@ async def scan_and_process_inbox() -> Dict[str, Any]:
         else:
             content_preview = f"[Binaerdatei {fname}, Typ: {ext}, Groesse: {fsize} Bytes]"
 
-        # Task in Kanban & Operations erstellen
-        # D-20: sekundengenaue IDs kollidierten (zwei Drops in derselben
-        # Sekunde -> UPDATE statt INSERT -> nur der letzte Dateiname ueberlebte).
         task_id = f"inbox-{datetime.datetime.now().strftime('%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
         title = f"[INBOX-DROP] {fname}"
         body = (
@@ -127,7 +121,7 @@ async def scan_and_process_inbox() -> Dict[str, Any]:
                 task_id=task_id,
                 title=title,
                 role=cfg.get("auto_assignee", "hermes-researcher"),
-                status="todo"
+                status="todo",
             )
         except Exception as e:
             print(f"[InboxWatcher] Task sync notice: {e}", file=sys.stderr)
@@ -143,8 +137,8 @@ async def scan_and_process_inbox() -> Dict[str, Any]:
                     source="inbox",
                     event_type="new_item",
                     title=fname,
-                    summary=content_preview[:400],
-                    payload={"file": fname, "ext": ext, "task_id": task_id, "size": fsize},
+                    summary=body[:600],
+                    payload={"file": fname, "ext": ext, "task_id": task_id, "size": fsize, "processed_path": target_path},
                     correlation_id=task_id,
                 )
             except Exception as wf_err:
@@ -158,6 +152,14 @@ async def scan_and_process_inbox() -> Dict[str, Any]:
         "processed_count": len(processed_files),
         "processed_items": processed_files
     }
+
+
+async def scan_and_process_inbox() -> Dict[str, Any]:
+    """
+    Durchsucht den konfigurierten Watch-Ordner nach neuen Dateien,
+    ignoriert temporäre oder unvollständige Uploads und überführt fertige Dateien in Kanban.
+    """
+    return await asyncio.to_thread(_scan_and_process_inbox_sync)
 
 async def inbox_watcher_background_loop():
     """Dauerschleife für den Watcher (wird als FastAPI Background-Task gestartet)."""

@@ -1,3 +1,5 @@
+import logging
+_archon_exc_logger = logging.getLogger("operations_org")
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 """Sub-Router fuer Org-Chart, Teams, Comm-Feed, Hierarchie und Concurrency Governance.
@@ -120,6 +122,7 @@ TEAMS_DEFINITION = [
             "b2b_outreach_specialist",
             "direct_response_copywriter",
             "storyteller_ghostwriter",
+            "linkedin_social_media_specialist",
             "video_script_architect",
             "content_repurposing_specialist",
             "speechwriter_keynote_designer",
@@ -186,6 +189,20 @@ def get_org_chart():
 
     def _enrich(agent_id: str, is_lead: bool = False):
         p = profiles.get(agent_id, {})
+        budget_info = {}
+        try:
+            from backend.role_budget_engine import get_role_usage_today
+            u = get_role_usage_today(agent_id)
+            budget_info = {
+                "daily_token_budget": u["daily_token_budget"],
+                "daily_cost_limit_eur": u["daily_cost_limit_eur"],
+                "tokens_used_today": u["tokens_used_today"],
+                "cost_eur_today": u["cost_eur_today"],
+                "token_utilization_pct": u["token_utilization_pct"],
+                "budget_status": u["budget_status"],
+            }
+        except Exception as _exc:
+            _archon_exc_logger.debug("[operations_org] Ignorierte Ausnahme (Z.202): %s", _exc)
         return {
             "id": agent_id,
             "name": p.get("name") or agent_id,
@@ -196,7 +213,8 @@ def get_org_chart():
             "provider": p.get("provider") or "omniroute",
             "is_lead": is_lead,
             "active_tasks": task_counts.get(agent_id, 0),
-            "status": "active",
+            "status": "paused" if budget_info.get("budget_status") == "paused_budget" else "active",
+            **budget_info,
         }
 
     chairman = _enrich("executive_decision_architect", is_lead=True)
@@ -729,6 +747,7 @@ async def update_concurrency_settings(request: Request, req: ConcurrencyUpdateRe
 
 @router.get("/governance/audit-log")
 def get_audit_log_entries(
+    request: Request,
     category: Optional[str] = None,
     search: Optional[str] = None,
     provider: Optional[str] = None,
@@ -737,6 +756,7 @@ def get_audit_log_entries(
     offset: int = 0,
 ):
     """Liefert die Einträge des revisionssicheren SHA-256 GoBD/ISO 27001 Audit-Logs mit Filterung (inkl. Provider & Ziel-Host)."""
+    require_admin_or_503(request)
     from backend.audit_log import chained_audit_log
     res = chained_audit_log.list_events(
         category=category,
@@ -757,12 +777,14 @@ def get_audit_log_entries(
 
 @router.get("/governance/audit-log/llm-dispatches")
 def get_audit_llm_dispatches(
+    request: Request,
     provider: Optional[str] = None,
     target_host: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ):
     """Liefert alle kryptografisch verketteten LLM-Dispatch-Nachweise (Provider, Modell, Ziel-Host, realer Ziel-Endpunkt)."""
+    require_admin_or_503(request)
     from backend.audit_log import chained_audit_log
     dispatches = chained_audit_log.list_llm_dispatches(
         limit=limit,
@@ -788,8 +810,9 @@ def get_zero_egress_posture_audit():
 
 
 @router.post("/governance/audit-log/verify")
-def verify_audit_log_chain():
+def verify_audit_log_chain(request: Request):
     """Führt eine vollständige kryptografische Prüfung aller Verkettungen im Audit-Log durch."""
+    require_admin_or_503(request)
     from backend.audit_log import chained_audit_log
     result = chained_audit_log.verify_integrity()
     return {
@@ -799,8 +822,9 @@ def verify_audit_log_chain():
 
 
 @router.get("/governance/audit-log/export")
-def export_audit_log(format: str = Query(default="json")):
+def export_audit_log(request: Request, format: str = Query(default="json")):
     """Generiert einen revisionssicheren Prüfbericht für GoBD / ISO 27001 Auditoren als JSON oder CSV."""
+    require_admin_or_503(request)
     from backend.audit_log import chained_audit_log
     res = chained_audit_log.generate_compliance_export(format_type=format)
     return Response(
@@ -808,3 +832,98 @@ def export_audit_log(format: str = Query(default="json")):
         media_type=res["content_type"],
         headers={"Content-Disposition": f'attachment; filename="{res["filename"]}"'},
     )
+
+
+# =========================================================================
+# 6. PAPERCLIP ROLE BUDGETS, TASK BUDGET SPLITTING & N8N/AGENT ROUTING
+# =========================================================================
+
+class RoleBudgetPolicyUpdateRequest(BaseModel):
+    agent_id: str
+    daily_token_budget: Optional[int] = None
+    daily_cost_limit_eur: Optional[float] = None
+    monthly_cost_limit_eur: Optional[float] = None
+    hard_cap_enabled: Optional[bool] = True
+    auto_pause_on_exceed: Optional[bool] = True
+
+
+class TaskBudgetAllocateRequest(BaseModel):
+    title: Optional[str] = ""
+    body: Optional[str] = ""
+    total_token_budget: Optional[int] = 120000
+    total_cost_limit_eur: Optional[float] = None
+    allow_autonomous_hiring: Optional[bool] = False
+    subtasks: Optional[List[Dict[str, Any]]] = None
+
+
+class RoutingClassifyRequest(BaseModel):
+    title: str
+    body: Optional[str] = ""
+
+
+@router.get("/org/budgets")
+def api_get_all_role_budgets():
+    """Liefert Tages- und Monats-Token-/Euro-Budgets sowie den Live-Verbrauch aller Rollen im Organigramm."""
+    from backend.role_budget_engine import list_all_role_budgets
+    _load_profiles_map, _, _, _, _, _ = _get_ops_deps()
+    profiles = list(_load_profiles_map().values())
+    return {"status": "success", **list_all_role_budgets(profiles=profiles)}
+
+
+@router.post("/org/budgets")
+def api_update_role_budget_policy(request: Request, req: RoleBudgetPolicyUpdateRequest):
+    """Setzt oder aktualisiert das harte Tages-/Monats-Token- und Euro-Limit einer Rolle."""
+    require_admin_or_503(request)
+    from backend.role_budget_engine import set_role_budget_policy, get_role_usage_today
+    policy = set_role_budget_policy(
+        agent_id=req.agent_id,
+        daily_token_budget=req.daily_token_budget,
+        daily_cost_limit_eur=req.daily_cost_limit_eur,
+        monthly_cost_limit_eur=req.monthly_cost_limit_eur,
+        hard_cap_enabled=req.hard_cap_enabled,
+        auto_pause_on_exceed=req.auto_pause_on_exceed,
+    )
+    usage = get_role_usage_today(req.agent_id)
+    return {"status": "success", "policy": policy, "usage": usage}
+
+
+@router.post("/tasks/{task_id}/allocate-budget")
+def api_allocate_task_budget(request: Request, task_id: str, req: TaskBudgetAllocateRequest):
+    """Teilt das Aufgaben-Token-/Euro-Budget gewichtet nach Aufgabenkomplexität auf die Sub-Agenten auf (inkl. optionalem CEO-Hiring)."""
+    require_admin_or_503(request)
+    from backend.role_budget_engine import (
+        allocate_task_budget_to_subagents,
+        plan_and_decompose_task_with_budgets,
+    )
+    if req.subtasks:
+        plan = allocate_task_budget_to_subagents(
+            parent_task_id=task_id,
+            total_token_budget=req.total_token_budget or 120000,
+            subtasks=req.subtasks,
+            total_cost_limit_eur=req.total_cost_limit_eur,
+        )
+        return {"status": "success", "budget_plan": plan}
+    res = plan_and_decompose_task_with_budgets(
+        parent_task_id=task_id,
+        title=req.title or f"Task {task_id}",
+        body=req.body or "",
+        total_token_budget=req.total_token_budget,
+        total_cost_limit_eur=req.total_cost_limit_eur,
+        allow_autonomous_hiring=bool(req.allow_autonomous_hiring),
+    )
+    return {"status": "success", **res}
+
+
+@router.get("/routing/matrix")
+def api_get_routing_matrix():
+    """Liefert die verbindliche 4-Schichten-Trennungsmatrix (Deterministisch n8n/Skript vs. Probabilistischer Archon-Agent)."""
+    from backend.execution_routing_guard import get_routing_architecture_matrix
+    return {"status": "success", **get_routing_architecture_matrix()}
+
+
+@router.post("/routing/classify")
+def api_classify_task_routing(req: RoutingClassifyRequest):
+    """Prüft für eine Aufgabe, ob sie deterministisch (tokenfrei in n8n/Skript) oder probabilistisch (Archon-Agent) ausgeführt wird."""
+    from backend.execution_routing_guard import classify_execution_layer
+    return {"status": "success", **classify_execution_layer(req.title, req.body or "")}
+

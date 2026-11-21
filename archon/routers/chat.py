@@ -632,6 +632,18 @@ async def api_chat_stream(req: ChatStreamRequest):
     if not user_msg:
         raise HTTPException(status_code=400, detail={"code": "chat_message_empty", "params": {}})
 
+    try:
+        from backend.dual_llm_sanitizer import sanitize_external_input
+        san = sanitize_external_input(user_msg, source_id=session_id, source_type="chat")
+        if not san.get("is_safe", True):
+            blocked_msg = f"🛑 [PROMPT-INJECTION-GUARD]: Eingabe blockiert ({', '.join(san.get('detected_patterns') or ['suspicious_pattern'])})."
+            async def _blocked_sse():
+                yield f"data: {json.dumps({'type': 'chunk', 'content': blocked_msg})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            return StreamingResponse(_blocked_sse(), media_type="text/event-stream")
+    except Exception as san_exc:
+        logger.debug(f"[Chat] Dual-LLM-Sanitizer uebersprungen: {san_exc}")
+
     if user_msg.lower().startswith("/termin ") or user_msg.lower().startswith("/kalender "):
         from backend.operations_calendar import operations_calendar
         query_txt = user_msg.split(" ", 1)[1].strip() if " " in user_msg else ""

@@ -258,7 +258,8 @@ def exec_container_command_api(req: ContainerExecRequest, request: Request):
 
 
 @router.post("/api/v1/agent/abort")
-def abort_agent_endpoint(payload: dict):
+def abort_agent_endpoint(request: Request, payload: dict):
+    require_admin_or_503(request)
     import main as app_main
 
     agent_id = payload.get("agent_id") or payload.get("profile") or payload.get("profile_handle", "unknown")

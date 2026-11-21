@@ -91,7 +91,8 @@ def api_save_plugin_settings(request: Request, plugin_id: str, payload: dict = B
 
 
 @router.post("/api/v1/plugins/discover")
-def api_discover_plugins():
+def api_discover_plugins(request: Request):
+    require_admin_or_503(request)
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     pm.load_all_plugins()

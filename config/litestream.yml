@@ -26,3 +26,25 @@ dbs:
         path: /opt/litestream_replicas/agentic_memory.db
         sync-interval: 10s
         retention: 72h
+
+  # 4. Konsolidierte Domaenen-DBs (Phase 2)
+  - path: /app/data/ops.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/ops.db
+        sync-interval: 5s
+        retention: 72h
+
+  - path: /app/data/business.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/business.db
+        sync-interval: 5s
+        retention: 72h
+
+  - path: /app/data/memory.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/memory.db
+        sync-interval: 10s
+        retention: 72h

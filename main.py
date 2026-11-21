@@ -272,16 +272,20 @@ async def tenant_context_middleware(request: Request, call_next):
     """Bindet optionalen Mandanten-Header (X-Tenant-Id / X-Company-Id) request-lokal via ContextVar."""
     hdr_tid = (request.headers.get("X-Tenant-Id") or request.headers.get("X-Company-Id") or "").strip()
     if not hdr_tid:
-        return await call_next(request)
-    try:
-        from backend.tenant_context import set_request_tenant, reset_request_tenant
-        tok = set_request_tenant(hdr_tid)
+        response = await call_next(request)
+    else:
         try:
-            return await call_next(request)
-        finally:
-            reset_request_tenant(tok)
-    except Exception:
-        return await call_next(request)
+            from backend.tenant_context import set_request_tenant, reset_request_tenant
+            tok = set_request_tenant(hdr_tid)
+            try:
+                response = await call_next(request)
+            finally:
+                reset_request_tenant(tok)
+        except Exception:
+            response = await call_next(request)
+    if request.url.path == "/static/sw_calendar.js":
+        response.headers["Service-Worker-Allowed"] = "/"
+    return response
 
 
 @app.middleware("http")

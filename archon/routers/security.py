@@ -1,5 +1,5 @@
 from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
 """Router /api/security — ausgelagerte Routen.
 
 Automatisch aus main.py extrahiert (Critical-Hardening / Modularisierung).
@@ -48,7 +48,8 @@ def api_pii_scrub(payload: Dict = Body(...)):
 
 
 @router.post("/api/security/pii-rehydrate")
-def api_pii_rehydrate(payload: Dict = Body(...)):
+def api_pii_rehydrate(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)
     from backend.pii_scrubber import pii_scrubber
     return pii_scrubber.rehydrate_text(
         response_text=payload.get("response_text", ""),

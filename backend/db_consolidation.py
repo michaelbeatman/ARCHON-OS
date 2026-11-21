@@ -56,6 +56,9 @@ CONSOLIDATION_DOMAIN_MAP: Dict[str, str] = {
     "taint_guard.db": "ops.db",
     "passkey_hitl.db": "ops.db",
     "workflow_templates.db": "ops.db",
+    "flightlog.db": "ops.db",
+    "lcm_sessions.db": "ops.db",
+    "watchdog_v2.db": "ops.db",
     "agent_scorecard.db": "ops.db",
     "telemetry.db": "ops.db",
     "precedent_log.db": "ops.db",
@@ -76,6 +79,8 @@ CONSOLIDATION_DOMAIN_MAP: Dict[str, str] = {
     "calendar.db": "business.db",
     "operations_calendar.db": "business.db",
     "content_machine.db": "business.db",
+    "time_tracking.db": "business.db",
+    "client_portal.db": "business.db",
     # 3. MEMORY (Langzeitgedaechtnis, Embeddings, Cache, Vault)
     "memory.db": "memory.db",
     "agentic_memory.db": "memory.db",

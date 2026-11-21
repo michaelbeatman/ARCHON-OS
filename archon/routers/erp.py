@@ -278,12 +278,14 @@ def api_erp_document_xrechnung_xml(doc_id: str, company_id: Optional[str] = None
 
 @router.get("/api/erp/export/datev.csv")
 def api_erp_export_datev_csv(
+    request: Request,
     company_id: Optional[str] = None,
     include_drafts: bool = False,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
     """Exportiert den DATEV-EXTF-Buchungsstapel (SKR03) als Semikolon-CSV mit UTF-8-BOM."""
+    require_admin_or_503(request)
     from backend.erp_manager import erp_manager
     csv_text = erp_manager.export_datev_extf_csv(
         company_id=company_id,
@@ -341,8 +343,9 @@ def api_erp_document_zugferd_pdf(doc_id: str, company_id: Optional[str] = None):
 
 
 @router.get("/api/erp/bank/transactions")
-def api_erp_list_bank_transactions(company_id: Optional[str] = None, match_status: Optional[str] = None):
+def api_erp_list_bank_transactions(request: Request, company_id: Optional[str] = None, match_status: Optional[str] = None):
     """Listet importierte Bankumsätze und deren OPOS-Matching-Status."""
+    require_admin_or_503(request)
     from backend.erp_manager import erp_manager
     return erp_manager.list_bank_transactions(company_id=company_id, match_status=match_status)
 

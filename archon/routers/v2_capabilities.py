@@ -65,7 +65,8 @@ def api_v2_compartment_store(request: Request, payload: Dict[str, Any] = Body(..
 
 
 @router.get("/api/v2/memory/compartment/recall")
-def api_v2_compartment_recall(namespace: str = "default", query: str = "", top_k: int = 5):
+def api_v2_compartment_recall(request: Request, namespace: str = "default", query: str = "", top_k: int = 5):
+    require_admin_or_503(request)
     from backend.offline_memory_vault import recall_memory
     return {"status": "success", "results": recall_memory(namespace, query, top_k=max(1, min(20, top_k)))}
 
@@ -425,7 +426,8 @@ def api_v2_render_receipt_html(payload: Dict[str, Any] = Body(...)):
 
 
 @router.get("/api/v2/sessions/{session_id}/lossless/search")
-def api_v2_lossless_search(session_id: str, q: str = ""):
+def api_v2_lossless_search(request: Request, session_id: str, q: str = ""):
+    require_admin_or_503(request)
     from backend.lossless_session_dag import search_lossless_history
     return {"status": "success", "turns": search_lossless_history(session_id, q)}
 

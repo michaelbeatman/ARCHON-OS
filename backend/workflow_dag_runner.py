@@ -34,6 +34,7 @@ logger = logging.getLogger("archon.workflow_dag")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "workflow_dags.db")
+_INITIAL_DEFAULT_DB_PATH = DEFAULT_DB_PATH
 
 ExecutorFn = Callable[[Dict[str, Any], Dict[str, Any]], Awaitable[Dict[str, Any]]]
 
@@ -45,20 +46,39 @@ FAILURE_NODE_STATES = {"failed", "rejected"}
 # Erzeugung neuer Locks geschuetzt ueber threading.Lock (Sync-Kontext, async-sicher).
 _RUN_LOCKS: Dict[str, asyncio.Lock] = {}
 _locks_guard = threading.Lock()
+_MAX_RUN_LOCKS = 512
 
 
 def _get_run_lock(run_id: str) -> asyncio.Lock:
     with _locks_guard:
         lock = _RUN_LOCKS.get(run_id)
         if lock is None:
+            if len(_RUN_LOCKS) >= _MAX_RUN_LOCKS:
+                for k in list(_RUN_LOCKS.keys()):
+                    if not _RUN_LOCKS[k].locked():
+                        _RUN_LOCKS.pop(k, None)
+                        if len(_RUN_LOCKS) < _MAX_RUN_LOCKS:
+                            break
             lock = asyncio.Lock()
             _RUN_LOCKS[run_id] = lock
         return lock
 
 
+def _resolve_dag_db_path(db_path: Optional[str] = None) -> str:
+    if db_path:
+        return db_path
+    if DEFAULT_DB_PATH != _INITIAL_DEFAULT_DB_PATH:
+        return DEFAULT_DB_PATH
+    try:
+        from backend.db_paths import resolve_db
+        return resolve_db("workflow_dags.db")
+    except Exception:
+        return DEFAULT_DB_PATH
+
+
 @contextmanager
 def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
-    path = db_path or DEFAULT_DB_PATH
+    path = _resolve_dag_db_path(db_path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     conn = sqlite3.connect(path, timeout=10.0)
     try:

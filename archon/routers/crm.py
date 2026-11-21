@@ -37,6 +37,7 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 @router.get("/api/crm/contacts")
 def api_crm_list_contacts(
+    request: Request,
     search: str = "",
     status: str = "",
     role: str = "all",
@@ -47,6 +48,7 @@ def api_crm_list_contacts(
     page: int = 1,
     limit: int = 100
 ):
+    require_admin_or_503(request)
     from backend.crm_service import crm_service
     return crm_service.list_contacts(
         search=search, status=status, role_filter=role, region=region,
@@ -55,7 +57,8 @@ def api_crm_list_contacts(
 
 
 @router.get("/api/crm/contacts/{contact_id}")
-def api_crm_get_contact(contact_id: str):
+def api_crm_get_contact(contact_id: str, request: Request):
+    require_admin_or_503(request)
     from backend.crm_service import crm_service
     contact = crm_service.get_contact_detail(contact_id)
     if not contact:

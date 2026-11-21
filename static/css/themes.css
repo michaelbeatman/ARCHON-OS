@@ -1643,3 +1643,466 @@ div.p-3 > div.flex > button.px-2 {
     #archon-sidebar-footer button:hover {
       background: color-mix(in srgb, var(--foreground) 6%, transparent) !important;
     }
+
+/* ============================================================
+   CSS Live Studio — Regeln fest uebernommen 21.11.2026
+   Quelle: Server-Store /api/theme/live-overrides (77 Regeln);
+   Store wurde danach geleert, Live-Pipeline greift nicht mehr.
+   Aenderung ggue. Store: Schatten auf den Hauptinseln (Kanban-
+   Spalten + Container) fest ENTFERNT (box-shadow: none).
+   ============================================================ */
+
+/* Studio: div.flex > div.flex > div.w-9 */
+div.flex > div.flex > div.w-9 {
+  background-color: #1e9867 !important;
+  display: none !important;
+}
+
+/* Studio: #ops-task-trust-btn */
+#ops-task-trust-btn {
+  display: none !important;
+}
+
+/* Studio: #master-chat-input-card */
+#master-chat-input-card {
+  box-shadow: none !important;
+  border-width: 0px !important;
+}
+
+/* Studio: #master-chat-input */
+#master-chat-input {
+  border-color: #242424 !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+/* Studio: div#view-operations > div.flex-1 */
+div#view-operations > div.flex-1 {
+  padding-left: 0px !important;
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+  border-width: 0px !important;
+}
+
+/* Studio: #master-chat-header-bar */
+#master-chat-header-bar {
+  border-width: 0px !important;
+}
+
+/* Studio: #ops-view-chat */
+#ops-view-chat {
+  border-width: 0px !important;
+}
+
+/* Studio: #master-chat-messages */
+#master-chat-messages {
+  border-width: 1px !important;
+  border-color: #797a7c !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+/* Studio: #master-chat-sidebar-header */
+#master-chat-sidebar-header {
+  border-width: 0px !important;
+}
+
+/* Studio: #master-chat-sessions-sidebar */
+#master-chat-sessions-sidebar {
+  border-width: 0px !important;
+}
+
+/* Studio: div#ops-kanban-toolbar > button.h-8 */
+div#ops-kanban-toolbar > button.h-8 {
+  background-color: #159768 !important;
+}
+
+/* Studio: div.p-3 > div.mt-1 > select.flex-1 */
+div.p-3 > div.mt-1 > select.flex-1 {
+  display: none !important;
+}
+
+/* Studio: div.p-3 > div.mt-1 > button.flex-1 */
+div.p-3 > div.mt-1 > button.flex-1 {
+  background-color: #159768 !important;
+  width: 140px !important;
+}
+
+/* Studio: div.group > div.p-3 > div.mt-1 */
+div.group > div.p-3 > div.mt-1 {
+  width: 30% !important;
+}
+
+/* Studio: div#ops-graph-canvas > div.relative > div.flex-1 */
+div#ops-graph-canvas > div.relative > div.flex-1 {
+  margin-left: 30px !important;
+  margin-right: 30px !important;
+}
+
+/* Studio: div#master-chat-header-bar > div.min-w-0 > div.flex */
+div#master-chat-header-bar > div.min-w-0 > div.flex {
+  width: 1033px !important;
+}
+
+/* Studio: div#ops-view-projects > div.shrink-0 */
+div#ops-view-projects > div.shrink-0 {
+  border-width: 0px !important;
+}
+
+/* Studio: #ops-view-projects */
+#ops-view-projects {
+  border-width: 0px !important;
+}
+
+/* Studio: .ops-col-todo */
+.ops-col-todo {
+  box-shadow: none !important;
+}
+
+/* Studio: .ops-col-done */
+.ops-col-done {
+  box-shadow: none !important;
+}
+
+/* Studio: .ops-col-in_progress */
+.ops-col-in_progress {
+  box-shadow: none !important;
+}
+
+/* Studio: #ops-kanban-columns-container */
+#ops-kanban-columns-container {
+  box-shadow: none !important;
+}
+
+/* Studio: .ops-col-review */
+.ops-col-review {
+  box-shadow: none !important;
+}
+
+/* Studio: .pl-2 */
+.pl-2 {
+  border-width: 0px !important;
+}
+
+/* Studio: div#ops-kanban-toolbar > div.ml-auto > div.flex */
+div#ops-kanban-toolbar > div.ml-auto > div.flex {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+/* Studio: div.flex > div.flex > div.w-84 */
+div.flex > div.flex > div.w-84 {
+  width: Auto !important;
+  height: auto !important;
+  box-shadow: none !important;
+}
+
+/* Studio: div.w-84 > div.relative > img.w-13 */
+div.w-84 > div.relative > img.w-13 {
+  width: 120px !important;
+  height: 120px !important;
+}
+
+/* Studio: div#ops-org-chart-container > div.flex */
+div#ops-org-chart-container > div.flex {
+  height: 230px !important;
+}
+
+/* Studio: #ops-org-grid-container */
+#ops-org-grid-container {
+  border-width: 0px !important;
+}
+
+/* Studio: main#ops-view-org > div.px-4 */
+main#ops-view-org > div.px-4 {
+  border-width: 0px !important;
+  height: auto !important;
+}
+
+/* Studio: form#ops-new-task-form > div > div.border */
+form#ops-new-task-form > div > div.border {
+  max-width: auto !important;
+  height: 300px !important;
+}
+
+/* Studio: #ops-task-body */
+#ops-task-body {
+  height: 80% !important;
+}
+
+/* Studio: form#ops-new-task-form > div.grid > div.p-3 */
+form#ops-new-task-form > div.grid > div.p-3 {
+  height: auto !important;
+}
+
+/* Studio: main#ops-view-org > div.px-4 > div.flex */
+main#ops-view-org > div.px-4 > div.flex {
+  width: auto !important;
+}
+
+/* Studio: #system-settings-modal-content-area */
+#system-settings-modal-content-area {
+  padding-top: 0px !important;
+}
+
+/* Studio: #settings-tab-memory */
+#settings-tab-memory {
+  margin-top: .5px !important;
+}
+
+/* Studio: aside.flex-shrink-0 > nav.flex-1 */
+aside.flex-shrink-0 > nav.flex-1 {
+  border-width: 0px !important;
+  border-color: #ffffff !important;
+}
+
+/* Studio: #sidebar-logo-img */
+#sidebar-logo-img {
+  border-width: 0px !important;
+}
+
+/* Studio: #main-viewport-scroll */
+#main-viewport-scroll {
+  border-width: 0px !important;
+}
+
+/* Studio: div#ops-kanban-columns-container > div.flex-1 > div.px-2\.5 */
+div#ops-kanban-columns-container > div.flex-1 > div.px-2\.5 {
+  border-color: #1c1c1c !important;
+  border-width: 0px !important;
+}
+
+/* Studio: #wd-scan-now-btn */
+#wd-scan-now-btn {
+  display: none !important;
+}
+
+/* Studio: header#watchdog-global-header > div.flex > button.w-8 */
+header#watchdog-global-header > div.flex > button.w-8 {
+  display: none !important;
+}
+
+/* Studio: header#research-global-header > div.flex > button.w-8 */
+header#research-global-header > div.flex > button.w-8 {
+  display: none !important;
+}
+
+/* Studio: div#boardroom-global-header > div.flex > button.w-8 */
+div#boardroom-global-header > div.flex > button.w-8 {
+  display: none !important;
+}
+
+/* Studio: div.px-6 > div.flex > div.w-9 */
+div.px-6 > div.flex > div.w-9 {
+  display: none !important;
+}
+
+/* Studio: div.px-6 > div.flex > button.px-3 */
+div.px-6 > div.flex > button.px-3 {
+  display: none !important;
+}
+
+/* Studio: #guard-refresh-btn */
+#guard-refresh-btn {
+  display: none !important;
+}
+
+/* Studio: #approvals-integrity-badge */
+#approvals-integrity-badge {
+  display: none !important;
+}
+
+/* Studio: div.px-3 > div.flex > button.px-2\.5 */
+div.px-3 > div.flex > button.px-2\.5 {
+  color: #32343e !important;
+}
+
+/* Studio: #wf-blank-btn */
+#wf-blank-btn {
+  color: #1a1c23 !important;
+}
+
+/* Studio: #wf-import-n8n-btn */
+#wf-import-n8n-btn {
+  color: #13120b !important;
+}
+
+/* Studio: div.space-y-3 > div.p-3 > div */
+div.space-y-3 > div.p-3 > div {
+  color: #000000 !important;
+}
+
+/* Studio: #tr-open-passkey-settings */
+#tr-open-passkey-settings {
+  color: #0b0b09 !important;
+}
+
+/* Studio: div.flex > div.flex > span.font-semibold */
+div.flex > div.flex > span.font-semibold {
+  font-size: 12px !important;
+}
+
+/* Studio: div.grid > div.flex > div.w-full */
+div.grid > div.flex > div.w-full {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+}
+
+/* Studio: #log-pane-profiles */
+#log-pane-profiles {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+/* Studio: #logstream-sidebar-explorer */
+#logstream-sidebar-explorer {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+/* Studio: section#logstream-main-console > div.px-4 */
+section#logstream-main-console > div.px-4 {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+/* Studio: div#view-log-stream > div.flex-1 */
+div#view-log-stream > div.flex-1 {
+  border-width: 0px !important;
+  padding-left: 0px !important;
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+  padding-right: 0px !important;
+}
+
+/* Studio: #logstream-main-console */
+#logstream-main-console {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+/* Studio: #logstream-terminal-container */
+#logstream-terminal-container {
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
+  margin-left: 4px !important;
+  margin-top: 4px !important;
+  margin-right: 4px !important;
+  margin-bottom: 4px !important;
+}
+
+/* Studio: .theme-sidebar */
+.theme-sidebar {
+  border-width: 0px !important;
+}
+
+/* Studio: #guard-subview-overview */
+#guard-subview-overview {
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+}
+
+/* Studio: div#guard-subview-overview > div.rounded-2xl */
+div#guard-subview-overview > div.rounded-2xl {
+  margin-top: 0px !important;
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+/* Studio: div#guard-subview-overview > div.grid > div.p-4 */
+div#guard-subview-overview > div.grid > div.p-4 {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+/* Studio: section#logstream-audit-console > div.px-5 */
+section#logstream-audit-console > div.px-5 {
+  border-width: 0px !important;
+}
+
+/* Studio: section#logstream-audit-console > div.flex-1 */
+section#logstream-audit-console > div.flex-1 {
+  border-width: 0px !important;
+}
+
+/* Studio: section#logstream-audit-console > div.flex-1 > div.rounded-2xl */
+section#logstream-audit-console > div.flex-1 > div.rounded-2xl {
+  border-width: 0px !important;
+}
+
+/* Studio: #logstream-events-console */
+#logstream-events-console {
+  border-width: 0px !important;
+}
+
+/* Studio: section#logstream-events-console > div.flex-1 > div.p-2\.5 */
+section#logstream-events-console > div.flex-1 > div.p-2\.5 {
+  border-width: 0px !important;
+}
+
+/* Studio: div#view-ai-mastermind > div.flex-1 */
+div#view-ai-mastermind > div.flex-1 {
+  border-width: 0px !important;
+}
+
+/* Studio: #boardroom-view-overview */
+#boardroom-view-overview {
+  border-width: 0px !important;
+}
+
+/* Studio: div#boardroom-history-list > div.p-3\.5 */
+div#boardroom-history-list > div.p-3\.5 {
+  border-width: 0px !important;
+}
+
+/* Studio: main#library-subtab-vault > div.h-full */
+main#library-subtab-vault > div.h-full {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+
+/* Studio: div.rounded-2xl > div.flex > span.font-mono */
+div.rounded-2xl > div.flex > span.font-mono {
+  font-family: \'Outfit\', sans-serif !important;
+  font-size: 14px !important;
+}
+
+/* Studio: div#research-subtab-labor > div.w-full */
+div#research-subtab-labor > div.w-full {
+  border-width: 0px !important;
+}
+
+/* Studio: div#research-subtab-labor > div.w-full > div.rounded-2xl */
+div#research-subtab-labor > div.w-full > div.rounded-2xl {
+  border-width: 0px !important;
+}
+
+/* Inseln hart flach: kein Schatten auf den Kanban-Spalten */
+.ops-col-todo, .ops-col-done, .ops-col-in_progress, .ops-col-review, .ops-col-blocked, .ops-col-archived, .ops-col-triage, .ops-col-scheduled, .ops-col-ready, #ops-kanban-columns-container {
+  box-shadow: none !important;
+}
+
+/* Spezifitaets-Overrides: die alte "Inseln-Sammelregel" (#view-log-stream section/aside,
+   #view-library #library-subtab-vault > div) hat haehere Spezifitaet als die nackten
+   Studio-Selektoren — hier mit Eltern-Praefix endgueltig gewinnen (auch :hover/:active). */
+#view-log-stream aside#logstream-sidebar-explorer,
+#view-log-stream section#logstream-main-console {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+#view-log-stream aside#logstream-sidebar-explorer:hover,
+#view-log-stream aside#logstream-sidebar-explorer:active,
+#view-log-stream section#logstream-main-console:hover,
+#view-log-stream section#logstream-main-console:active {
+  box-shadow: none !important;
+  transform: none !important;
+}
+#view-library #library-subtab-vault > div.h-full {
+  border-width: 0px !important;
+  box-shadow: none !important;
+}
+#view-library #library-subtab-vault > div.h-full:hover,
+#view-library #library-subtab-vault > div.h-full:active {
+  box-shadow: none !important;
+  transform: none !important;
+}

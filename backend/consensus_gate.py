@@ -4,6 +4,8 @@ Dual-Agent & Tri-Agent Konsens-Gate (Pillar 6 / Governance).
 Erzwingt ein Mehr-Augen-Prinzip und Debatten-Protokoll bei risikobehafteten Aufgaben.
 Drei unabhängige Rollen (Architekt, Security, QA) stimmen ab und fällen ein verbindliches Urteil.
 """
+import logging
+_archon_exc_logger = logging.getLogger("consensus_gate")
 
 import os
 import sys
@@ -262,8 +264,8 @@ def get_consensus_history(limit: int = 25) -> List[Dict[str, Any]]:
         for r in rows:
             try:
                 r["votes_json"] = json.loads(r["votes_json"])
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[consensus_gate] Ignorierte Ausnahme (Z.265): %s", _exc)
         conn.close()
         return rows
     except Exception:

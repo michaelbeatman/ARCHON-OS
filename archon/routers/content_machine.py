@@ -14,12 +14,14 @@ Phase 2 API-Router fuer:
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
 from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503
 
+logger = logging.getLogger("archon.routers.content_machine")
 router = APIRouter(dependencies=[Depends(forbid_viewer_writes)], tags=["content_machine"])
 
 
@@ -254,6 +256,72 @@ def api_cm_publish_due(request: Request, payload: Dict[str, Any] = Body(default=
         dry_run=bool(payload.get("dry_run", False)),
     )
     return res
+
+
+@router.get("/api/v2/content-machine/crm-inbox-preview")
+def api_cm_crm_inbox_preview():
+    from backend.competitor_idea_bridge import read_crm_telegram_inbox_items
+    return {"status": "ok", **read_crm_telegram_inbox_items()}
+
+
+@router.post("/api/v2/content-machine/import-crm-ideas")
+def api_cm_import_crm_ideas(request: Request, payload: Dict[str, Any] = Body(default={})):
+    require_admin_or_503(request)
+    from backend.competitor_idea_bridge import import_crm_telegram_ideas_to_archon
+    sync_kb = bool(payload.get("sync_to_kanban", True))
+    inc_media = bool(payload.get("include_media_batch_idea", True))
+    return import_crm_telegram_ideas_to_archon(
+        sync_to_kanban=sync_kb,
+        include_media_batch_idea=inc_media,
+    )
+
+
+@router.get("/api/v2/content-machine/voice-profile")
+def api_cm_get_voice_profile():
+    import os
+    from archon.core.runtime import APP_ROOT
+    voice_path = os.path.join(APP_ROOT, "config", "voice.md")
+    content = ""
+    if os.path.exists(voice_path):
+        with open(voice_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    return {"status": "ok", "path": "config/voice.md", "content": content}
+
+
+@router.post("/api/v2/content-machine/voice-profile")
+def api_cm_save_voice_profile(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    import os
+    from archon.core.runtime import APP_ROOT
+    content = str(payload.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="voice.md Inhalt darf nicht leer sein.")
+    targets = [
+        os.path.join(APP_ROOT, "config", "voice.md"),
+        os.path.join(APP_ROOT, "obsidian_vault", "00_SYSTEM", "voice.md"),
+    ]
+    for t in targets:
+        try:
+            os.makedirs(os.path.dirname(t), exist_ok=True)
+            with open(t, "w", encoding="utf-8") as f:
+                f.write(content + "\n")
+        except OSError as exc:
+            logger.warning(f"[ContentMachine] voice.md Ziel {t} nicht beschreibbar: {exc}")
+    return {"status": "ok", "path": "config/voice.md", "bytes": len(content)}
+
+
+@router.post("/api/v2/content-machine/humanize-score")
+def api_cm_humanize_and_score(payload: Dict[str, Any] = Body(...)):
+    from backend.content_machine import evaluate_asset_quality
+    text = str(payload.get("text") or payload.get("body") or "").strip()
+    hook = str(payload.get("hook") or (text.splitlines()[0] if text else "")).strip()
+    cta = str(payload.get("cta") or (text.splitlines()[-1] if text else "")).strip()
+    channel = str(payload.get("channel") or "linkedin").strip().lower()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text darf nicht leer sein.")
+    report = evaluate_asset_quality({"channel": channel, "hook": hook, "body": text, "cta": cta})
+    return {"status": "ok", **report}
+
 
 
 # =========================================================================

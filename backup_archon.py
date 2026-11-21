@@ -10,6 +10,8 @@ Einbindung: Der Nutzer legt selbst einen Windows-Aufgabenplaner-Job an (stündli
 
 Optionale Parameter: --local-days N (Standard 7), --nas-days N (Standard 180), --no-nas
 """
+import logging
+_archon_exc_logger = logging.getLogger("backup_archon")
 import os
 import sys
 import shutil
@@ -57,8 +59,8 @@ def backup_sqlite_safe(src_path: str, dst_path: str) -> bool:
                 src.close()
             if dst:
                 dst.close()
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[backup_archon] Ignorierte Ausnahme (Z.60): %s", _exc)
 
 
 def prune_old_backups(base_dir: str, days: int) -> int:
@@ -78,8 +80,8 @@ def prune_old_backups(base_dir: str, days: int) -> int:
                 if (now - mtime).days > days:
                     os.remove(full)
                     removed += 1
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[backup_archon] Ignorierte Ausnahme (Z.81): %s", _exc)
             continue
         try:
             stamp = entry.replace("archon_", "")

@@ -4,6 +4,8 @@ Paket 2 (Feature 9): 2-Stufen Core-Memory nach MemGPT/Letta-Vorbild (Pinned Work
 Verwaltet fest im System-Prompt angepinnte Arbeitsgedächtnis-Blöcke (z. B. `human_persona`, `system_persona`,
 `active_project_facts`), die der Agent zur Laufzeit selbstständig via `append` oder `replace` aktualisieren kann.
 """
+import logging
+_archon_exc_logger = logging.getLogger("core_memory_manager")
 
 import os
 import sqlite3
@@ -60,8 +62,8 @@ def _init_db() -> None:
         for col, cdef in (("agent_id", "TEXT DEFAULT 'global'"), ("tenant_id", "TEXT DEFAULT 'default'")):
             try:
                 conn.execute(f"ALTER TABLE core_memory_blocks ADD COLUMN {col} {cdef}")
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as _exc:
+                _archon_exc_logger.debug("[core_memory_manager] Ignorierte Ausnahme (Z.63): %s", _exc)
         # Standard-Blöcke anlegen, falls noch leer
         count = conn.execute("SELECT COUNT(*) FROM core_memory_blocks").fetchone()[0]
         if count == 0:

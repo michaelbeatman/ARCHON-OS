@@ -381,8 +381,8 @@ class PluginManager:
                 asyncio.create_task(plugin.on_unload())
             else:
                 plugin.on_unload()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug("[plugin_manager] Ignorierte Ausnahme (Z.384): %s", _exc)
 
         module_name = f"archon_plugin_{plugin_id.replace('.', '_').replace('-', '_')}"
         if module_name in sys.modules:

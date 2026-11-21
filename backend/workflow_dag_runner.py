@@ -23,6 +23,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import threading
@@ -307,6 +308,29 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     model = str(node.get("model") or prof.get("model") or "deepseek/deepseek-chat").strip()
     reasoning_level = str(node.get("reasoning_effort") or "medium").strip()
 
+    # Optionale Markenstimme (config/voice.md) automatisch fuer Content-/Marketing-Schritte injizieren
+    _voice_block = ""
+    _channel_hint = str(node.get("channel") or "").strip().lower()
+    _is_content_node = bool(
+        _channel_hint
+        or node.get("quality_gate")
+        or any(
+            kw in f"{agent_id} {role} {node.get('title', '')}".lower()
+            for kw in ("writer", "content", "linkedin", "youtube", "tiktok", "shorts", "social", "storyteller", "newsletter", "blog")
+        )
+    )
+    if _is_content_node:
+        try:
+            from archon.core.runtime import APP_ROOT
+            _voice_path = os.path.join(APP_ROOT, "config", "voice.md")
+            if os.path.isfile(_voice_path):
+                with open(_voice_path, "r", encoding="utf-8", errors="ignore") as _vf:
+                    _voice_txt = _vf.read(3000).strip()
+                if _voice_txt:
+                    _voice_block = f"\n\n[BRAND VOICE & STIL-VORGABEN (config/voice.md)]\n{_voice_txt}"
+        except OSError as _vexc:
+            logger.debug("[WorkflowDAG] config/voice.md nicht lesbar: %s", _vexc)
+
     # Prompt inkl. Upstream-Kontext & Guardrails aufbauen
     sections: List[str] = []
     node_title = str(node.get("title") or node.get("id") or "Workflow-Schritt")
@@ -330,6 +354,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         sections.append("[UPSTREAM-ERGEBNISSE AUS VORHERIGEN SCHRITTEN]\n" + "\n\n".join(up_blocks))
 
     full_prompt = "\n\n".join(sections)
+    eff_system_prompt = system_prompt + _voice_block
 
     await asyncio.to_thread(
         _update_kanban_task_status,
@@ -344,7 +369,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         agent_name=agent_name,
         prompt=full_prompt,
         role=role,
-        system_prompt=system_prompt,
+        system_prompt=eff_system_prompt,
         model=model,
         reasoning_level=reasoning_level,
         task_id=str(kanban_task_id or node.get("id") or ""),
@@ -353,6 +378,81 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     status_raw = str(res.get("status") or "success").lower()
     content = str(res.get("content") or "").strip()
     is_error = status_raw in ("error", "failed", "blocked") or (not content and bool(res.get("error")))
+
+    # Self-Critique / Anti-AI-Slop-Revisionsschleife fuer Content- & Quality-Gate-Knoten
+    quality_report: Optional[Dict[str, Any]] = None
+    revisions_used = 0
+    if not is_error and content and _is_content_node:
+        try:
+            from backend.content_machine import evaluate_asset_quality
+            max_rev = max(0, min(2, int(node.get("max_revisions") if node.get("max_revisions") is not None else 1)))
+            min_q = int(node.get("min_quality_score") or 75)
+            lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
+            quality_report = evaluate_asset_quality({
+                "channel": _channel_hint or "linkedin",
+                "hook": lines_c[0] if lines_c else "",
+                "body": content,
+                "cta": lines_c[-1] if len(lines_c) > 1 else "",
+            })
+            while revisions_used < max_rev and (not quality_report.get("passed") or int(quality_report.get("score", 0)) < min_q):
+                revisions_used += 1
+                rev_issues = "; ".join(quality_report.get("issues") or [])
+                rev_sugg = "; ".join(quality_report.get("suggestions") or [])
+                rev_prompt = (
+                    f"{full_prompt}\n\n"
+                    f"[SELBST-KRITIK / ANTI-AI-SLOP-PRUEFUNG (Revision {revisions_used}/{max_rev})]\n"
+                    f"Dein bisheriger Entwurf erreichte nur Quality-Score {quality_report.get('score')}/100.\n"
+                    f"Befunde: {rev_issues}\n"
+                    f"Konkrete Korrektur-Aufgaben: {rev_sugg}\n\n"
+                    f"BISHERIGER ENTWURF:\n{content[:4500]}\n\n"
+                    "Ueberarbeite den Text direkt, konkret, faktenbasiert (mit Zahlen-Anker & klarem CTA) und komplett ohne KI-Floskeln."
+                )
+                rev_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                    prompt=rev_prompt,
+                    role=role,
+                    system_prompt=eff_system_prompt,
+                    model=model,
+                    reasoning_level=reasoning_level,
+                    task_id=str(kanban_task_id or node.get("id") or ""),
+                )
+                rev_content = str(rev_res.get("content") or "").strip()
+                if rev_content and str(rev_res.get("status") or "success").lower() not in ("error", "failed", "blocked"):
+                    content = rev_content
+                    res["input_tokens"] = int(res.get("input_tokens") or 0) + int(rev_res.get("input_tokens") or 0)
+                    res["output_tokens"] = int(res.get("output_tokens") or 0) + int(rev_res.get("output_tokens") or 0)
+                    lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
+                    quality_report = evaluate_asset_quality({
+                        "channel": _channel_hint or "linkedin",
+                        "hook": lines_c[0] if lines_c else "",
+                        "body": content,
+                        "cta": lines_c[-1] if len(lines_c) > 1 else "",
+                    })
+                else:
+                    break
+        except Exception as _qexc:
+            logger.debug("[WorkflowDAG] Anti-Slop-Quality-Check uebersprungen: %s", _qexc)
+
+    # Automatisches Deliverable-Export-Handling (Showroom / Obsidian 03_Endprodukte)
+    deliverable_path = ""
+    if not is_error and content and (bool(node.get("save_to_showroom")) or _is_content_node):
+        try:
+            from archon.core.paths import PROJEKTE_DIR
+            wf_slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(node.get("workflow_id") or "workflow_deliverables")).strip("_")[:48] or "workflow_deliverables"
+            node_slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(node.get("id") or "step")).strip("_")[:40] or "step"
+            target_dir = os.path.join(PROJEKTE_DIR, f"WF_{wf_slug}", "03_Endprodukte")
+            os.makedirs(target_dir, exist_ok=True)
+            ts_tag = time.strftime("%Y%m%d_%H%M%S")
+            deliverable_path = os.path.join(target_dir, f"{ts_tag}_{node_slug}.md")
+            header_md = f"# {node_title}\n\n- **Agent:** `{agent_id}`\n- **Modell:** `{res.get('model') or model}`\n"
+            if quality_report is not None:
+                header_md += f"- **Anti-Slop Quality-Score:** `{quality_report.get('score')}/100` (Revisionen: {revisions_used})\n"
+            header_md += "\n---\n\n"
+            with open(deliverable_path, "w", encoding="utf-8") as _df:
+                _df.write(header_md + content + "\n")
+        except OSError as _dexc:
+            logger.debug("[WorkflowDAG] Showroom-Deliverable nicht geschrieben: %s", _dexc)
 
     out = {
         "status": "error" if is_error else "success",
@@ -365,6 +465,12 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         "output_tokens": int(res.get("output_tokens") or 0),
         "kanban_task_id": kanban_task_id,
     }
+    if quality_report is not None:
+        out["quality_score"] = int(quality_report.get("score", 0))
+        out["quality_report"] = quality_report
+        out["revisions_used"] = revisions_used
+    if deliverable_path:
+        out["deliverable_path"] = deliverable_path
 
     await asyncio.to_thread(
         _update_kanban_task_status,
@@ -569,8 +675,18 @@ async def _run_workflow_dag_locked(
                 statuses[nid] = "skipped_cached"
                 return
 
+            # Live-SSE-Broadcast fuer den Workflow-Editor (Node startet)
+            try:
+                from archon.core.runtime import broadcast_event
+                broadcast_event("workflow_node_state", {
+                    "run_id": rid, "workflow_id": wf_id, "node_id": nid, "status": "running"
+                })
+            except Exception as _bexc:
+                logger.debug("[WorkflowDAG] SSE running-Event uebersprungen: %s", _bexc)
+
             ntype = str(node.get("type") or "agent").lower()
             requires_gate = ntype == "gate" or bool(node.get("require_hitl"))
+            node_ctx = {**node, "workflow_id": wf_id}
 
             if ntype == "gate":
                 if approvals.get(nid) is True:
@@ -596,12 +712,35 @@ async def _run_workflow_dag_locked(
                     out = {"awaiting_gate": True, "decision_id": deci_id}
                     st = "awaiting_gate"
                     await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe vor Ausfuehrung.", block_kind="hitl_gate")
+            elif ntype == "quality_gate":
+                # Deterministisches Anti-AI-Slop & Qualitaets-Gate direkt als Workflow-Baustein
+                from backend.content_machine import evaluate_asset_quality
+                combined_up = "\n\n".join(
+                    str(v.get("content") or v.get("result") or "") if isinstance(v, dict) else str(v)
+                    for v in upstream.values()
+                ).strip()
+                lines_u = [ln.strip() for ln in combined_up.splitlines() if ln.strip()]
+                q_rep = evaluate_asset_quality({
+                    "channel": str(node.get("channel") or "linkedin"),
+                    "hook": lines_u[0] if lines_u else "",
+                    "body": combined_up,
+                    "cta": lines_u[-1] if len(lines_u) > 1 else "",
+                })
+                min_q = int(node.get("min_quality_score") or 70)
+                q_ok = bool(q_rep.get("passed")) and int(q_rep.get("score", 0)) >= min_q
+                out = {
+                    "status": "success" if q_ok else "error",
+                    "quality_score": int(q_rep.get("score", 0)),
+                    "quality_report": q_rep,
+                    "content": combined_up,
+                }
+                st = "completed" if q_ok else "failed"
             elif ntype == "fanout":
                 branches = node.get("branches") or []
                 if branches:
                     quorum = int(node.get("quorum_min") or max(1, len(branches)))
                     results = await asyncio.gather(
-                        *(_exec_with_retry_and_timeout(eff_executor, {**node, "branch": b}, upstream) for b in branches),
+                        *(_exec_with_retry_and_timeout(eff_executor, {**node_ctx, "branch": b}, upstream) for b in branches),
                         return_exceptions=True,
                     )
                     ok_results = [r for r in results if isinstance(r, dict) and r.get("status", "success") != "error"]
@@ -613,10 +752,10 @@ async def _run_workflow_dag_locked(
                         st = "failed"
                 else:
                     # Fanout ohne (nicht-leere) branches: als regulären Einzel-Task-Knoten ausführen
-                    out = await _exec_with_retry_and_timeout(eff_executor, node, upstream)
+                    out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
                     st = "failed" if out.get("status") == "error" else "completed"
             else:
-                out = await _exec_with_retry_and_timeout(eff_executor, node, upstream)
+                out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
                 st = "failed" if out.get("status") == "error" else "completed"
 
             outputs[nid] = out
@@ -633,6 +772,18 @@ async def _run_workflow_dag_locked(
                     (rid, nid, fp, st, json.dumps(out, ensure_ascii=False), time.time()),
                 )
                 conn.commit()
+            try:
+                from archon.core.runtime import broadcast_event
+                broadcast_event("workflow_node_state", {
+                    "run_id": rid,
+                    "workflow_id": wf_id,
+                    "node_id": nid,
+                    "status": st,
+                    "quality_score": out.get("quality_score") if isinstance(out, dict) else None,
+                    "deliverable_path": out.get("deliverable_path") if isinstance(out, dict) else None,
+                })
+            except Exception as _bexc:
+                logger.debug("[WorkflowDAG] SSE terminal-Event uebersprungen: %s", _bexc)
 
         await asyncio.gather(*(_run_one(nid) for nid in ready))
         for nid in ready:

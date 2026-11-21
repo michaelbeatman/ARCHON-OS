@@ -5,6 +5,8 @@ M43 — Multi-Mandanten-Umschalter & Physische DB-Isolation (Holding / Operative
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("tenants")
 
 from typing import Any, Dict
 
@@ -95,8 +97,8 @@ async def switch_active_tenant(request: Request, payload: Dict[str, Any] = Body(
                 "company": res["active_company"],
             },
         )
-    except Exception:
-        pass
+    except Exception as _exc:
+        _archon_exc_logger.debug("[tenants] Ignorierte Ausnahme (Z.98): %s", _exc)
     return res
 
 

@@ -313,8 +313,8 @@ def ensure_worker_zero_egress_network(network_name: str = ZERO_EGRESS_WORKER_NET
         cmd = ["docker", "network", "create", "--internal", network_name]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("[llm_egress_guard] Ignorierte Ausnahme (Z.316): %s", _exc)
     return inspect_worker_network_isolation(network_name)
 
 

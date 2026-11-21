@@ -4,6 +4,8 @@ Autonome Task-Selbstheilung mit Git/Snapshot-Rollback (Pillar 1 & 6).
 Überwacht fehlerhafte Task-Läufe, rollt fehlerhafte Datei-Patches automatisch zurück
 und startet eine iterative Reparatur-Schleife (max. 3 Retries) vor der Eskalation ins HITL-Board.
 """
+import logging
+_archon_exc_logger = logging.getLogger("task_self_healer")
 
 import os
 import re
@@ -217,8 +219,8 @@ Antworte strukturiert mit der korrigierten Fassung."""
                     role=worker_agent,
                     status="blocked"
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[task_self_healer] Ignorierte Ausnahme (Z.220): %s", _exc)
 
         return {
             "status": "repaired" if repaired_ok else "failed",

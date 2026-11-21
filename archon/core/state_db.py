@@ -7,6 +7,8 @@ abbrechen.
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("state_db")
 
 import os
 import sqlite3
@@ -39,8 +41,8 @@ def _configure_state_conn(conn: sqlite3.Connection, db_path: str) -> sqlite3.Con
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
             _STATE_WAL_INIT.add(abs_path)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[state_db] Ignorierte Ausnahme (Z.42): %s", _exc)
     return conn
 
 

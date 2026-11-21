@@ -12,6 +12,8 @@ Dieses Modul kümmert sich um:
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("secret_files")
 
 import os
 import tempfile
@@ -136,8 +138,8 @@ def write_secret_file(path: str, content: str) -> bool:
         except BaseException:
             try:
                 os.unlink(tmp)
-            except OSError:
-                pass
+            except OSError as _exc:
+                _archon_exc_logger.debug("[secret_files] Ignorierte Ausnahme (Z.139): %s", _exc)
             raise
         return True
     except Exception:

@@ -7,6 +7,8 @@ Ordnet wartende Aufgaben nach Prioritätsstufen:
 - P1 (Routine / Hintergrund-Recherche): Nachrangig
 Die Obergrenze max_concurrent_agents ist zur Laufzeit frei skalierbar.
 """
+import logging
+_archon_exc_logger = logging.getLogger("concurrency_throttle")
 
 import os
 import sys
@@ -29,8 +31,8 @@ def get_concurrency_config() -> Dict[str, Any]:
                 s = json.load(f)
                 if "concurrency" in s and isinstance(s["concurrency"], dict):
                     cfg.update(s["concurrency"])
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[concurrency_throttle] Ignorierte Ausnahme (Z.32): %s", _exc)
     return cfg
 
 def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:

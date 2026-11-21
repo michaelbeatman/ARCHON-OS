@@ -267,3 +267,56 @@ def test_parallel_resume_deduplicated_by_per_run_lock(tmp_path):
     r1, r2 = _run(_flow())
     assert r1["status"] == "completed"
     assert r2.get("status") == "already_running", r2
+
+
+def test_omnichannel_content_workflow_quality_gate_and_template(tmp_path):
+    """Prueft, dass die Content-Maschine als natives Workflow-Template mit
+    deterministischem quality_gate-Node direkt ueber die DAG-Engine laeuft."""
+    from backend import workflow_templates as wt
+
+    tpls = {t["id"]: t for t in wt.list_workflow_templates()}
+    assert "omnichannel_content_engine" in tpls
+    tpl = tpls["omnichannel_content_engine"]
+    node_types = {n["id"]: n["type"] for n in tpl["nodes"]}
+    assert node_types["cm_slop_gate"] == "quality_gate"
+    assert node_types["cm_hitl_release"] == "gate"
+
+    # 1. Sauberer Content passiert das deterministische quality_gate
+    db = str(tmp_path / "wf_qgate.db")
+    dag_ok = {
+        "id": "qgate-ok",
+        "nodes": [
+            {"id": "draft", "type": "agent", "depends_on": []},
+            {"id": "qgate", "type": "quality_gate", "channel": "linkedin", "min_quality_score": 70, "depends_on": ["draft"]},
+        ],
+        "edges": [{"from": "draft", "to": "qgate", "condition": "on_success", "data_mode": "full"}],
+    }
+
+    async def clean_exec(node, upstream):
+        return {
+            "status": "success",
+            "content": (
+                "Wir haben 28 SQLite-Dateien in 3 WAL-Datenbanken konsolidiert und die Latenz um 64 Prozent gesenkt.\n\n"
+                "Durch klare Domaenen-Trennung in ops.db, business.db und memory.db laufen 12 Agenten parallel ohne Locks.\n\n"
+                "Wie viele Datenbanken verwaltet euer Stack aktuell?"
+            ),
+        }
+
+    res_ok = _run(run_workflow_dag(dag_def=dag_ok, executor_fn=clean_exec, db_path=db))
+    assert res_ok["status"] == "completed"
+    assert res_ok["node_statuses"]["qgate"] == "completed"
+    assert res_ok["outputs"]["qgate"]["quality_score"] >= 85
+
+    # 2. Slop-lastiger Content wird vom quality_gate hart gestoppt
+    dag_slop = {**dag_ok, "id": "qgate-slop"}
+
+    async def slop_exec(node, upstream):
+        return {
+            "status": "success",
+            "content": "In today's fast-paced world we delve into a paradigm shift — a vibrant tapestry — that serves as a game-changer. Moreover, we leverage cutting-edge solutions.",
+        }
+
+    res_slop = _run(run_workflow_dag(dag_def=dag_slop, executor_fn=slop_exec, db_path=db))
+    assert res_slop["status"] == "failed"
+    assert res_slop["node_statuses"]["qgate"] == "failed"
+    assert len(res_slop["outputs"]["qgate"]["quality_report"]["slop_hits"]) >= 3

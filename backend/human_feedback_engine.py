@@ -5,6 +5,8 @@ Erfasst Daumen hoch/runter, Korrekturen und Bewertungen zu Agenten-Ergebnissen.
 Leitet negative Bewertungen automatisiert als Regressionstests an eval_regression_runner
 und als Fehlermuster an den prompt_optimizer weiter.
 """
+import logging
+_archon_exc_logger = logging.getLogger("human_feedback_engine")
 
 import os
 import sys
@@ -33,8 +35,8 @@ class HumanFeedbackEngine:
         try:
             from backend.eval_regression_runner import _init_db as init_eval_db
             init_eval_db()
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[human_feedback_engine] Ignorierte Ausnahme (Z.36): %s", _exc)
 
         with self._get_conn() as conn:
             conn.execute("""
@@ -174,8 +176,8 @@ class HumanFeedbackEngine:
                 current_prompt=f"Rollen-Direktiven für {agent_id}",
                 recent_failures=failures
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[human_feedback_engine] Ignorierte Ausnahme (Z.177): %s", _exc)
 
     def get_stats(self) -> Dict[str, Any]:
         """Gibt globale Feedback-Statistiken und Agenten-Rankings zurück."""

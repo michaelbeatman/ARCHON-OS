@@ -7,6 +7,8 @@ Verwaltung KI-generierter E-Mail-Entwuerfe vor dem Versand mit 5 Aktionen:
 4. Neu generieren (Prompt-Feedback)
 5. Abbrechen / Verwerfen
 """
+import logging
+_archon_exc_logger = logging.getLogger("email_draft_engine")
 
 import os
 import sqlite3
@@ -111,8 +113,8 @@ class EmailDraftEngine:
                     agent_id=created_by,
                     payload={"draft_id": draft_id, **details}
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[email_draft_engine] Ignorierte Ausnahme (Z.114): %s", _exc)
 
         if conn is not None:
             _do_log(conn)
@@ -269,8 +271,8 @@ class EmailDraftEngine:
                         with sqlite3.connect(kanban_db, timeout=5.0, factory=_ArchonClosingConn) as kconn:
                             kconn.execute("UPDATE tasks SET status = 'done' WHERE id = ?", (draft["source_task_id"],))
                             kconn.commit()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    _archon_exc_logger.debug("[email_draft_engine] Ignorierte Ausnahme (Z.272): %s", _exc)
 
             conn.commit()
 

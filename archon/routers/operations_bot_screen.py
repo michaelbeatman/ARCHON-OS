@@ -1,3 +1,5 @@
+import logging
+_archon_exc_logger = logging.getLogger("operations_bot_screen")
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 """Sub-Router fuer Bot Screen & Human Takeover (Virtual Desktop Integration).
@@ -183,6 +185,6 @@ def abort_bot_screen_execution(request: Request):
         )
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as _exc:
+        _archon_exc_logger.debug("[operations_bot_screen] Ignorierte Ausnahme (Z.186): %s", _exc)
     return {"status": "aborted", "state": _bot_screen_state}

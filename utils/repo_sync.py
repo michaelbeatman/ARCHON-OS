@@ -1,3 +1,5 @@
+import logging
+_archon_exc_logger = logging.getLogger("repo_sync")
 import os
 import json
 import re
@@ -105,8 +107,8 @@ def list_templates_for_source(source_id: str, search: str = None, category: str 
                         cat = meta.get("category", cat)
                         description = meta.get("description", description)
                         skills = meta.get("skills", skills)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    _archon_exc_logger.debug("[repo_sync] Ignorierte Ausnahme (Z.108): %s", _exc)
             else:
                 if any(k in item for k in ["strategy", "strategic", "decision", "plan", "goal", "wisdom", "analyze", "agility"]):
                     cat = "1. Strategie, Führung & Lebensplanung"
@@ -191,8 +193,8 @@ def get_template_detail(source_id: str, template_id: str):
                 category = meta.get("category", category)
                 description = meta.get("description", description)
                 skills = meta.get("skills", skills)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[repo_sync] Ignorierte Ausnahme (Z.194): %s", _exc)
 
     return {
         "id": template_id,

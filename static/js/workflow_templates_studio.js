@@ -57,6 +57,7 @@
   let _schedules = [];
   let _tplSearch = "";
   let _tplCat = "all";
+  let _profiles = [];
   let _agents = ["research", "writer", "qa", "engineer", "analyst", "security", "executive_decision_architect", "default"];
   let _activeTpl = null;
   let _selectedNodeId = null;
@@ -66,6 +67,43 @@
   let _connectMode = false;
   let _dirty = false;
   let _runParamsOpen = false;
+  let _liveNodeStates = {}; // { [nodeId]: { status, quality_score, deliverable_path } }
+
+  // Live-SSE-Listener: Knoten leuchten waehrend der Ausfuehrung in Echtzeit
+  window.addEventListener("archon:sse", (ev) => {
+    const msg = ev && ev.detail;
+    if (!msg || msg.type !== "workflow_node_state" || !msg.payload) return;
+    const p = msg.payload;
+    if (!p.node_id) return;
+    _liveNodeStates[p.node_id] = {
+      status: p.status || "running",
+      quality_score: p.quality_score,
+      deliverable_path: p.deliverable_path,
+    };
+    const card = document.querySelector(`[data-wf-card="${CSS.escape(p.node_id)}"]`);
+    if (card) {
+      let pill = card.querySelector("[data-wf-live-pill]");
+      if (!pill) {
+        pill = document.createElement("span");
+        pill.setAttribute("data-wf-live-pill", "1");
+        pill.className = "absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-xs pointer-events-none";
+        card.appendChild(pill);
+      }
+      const st = String(p.status || "");
+      const clsMap = {
+        running: "bg-sky-500 text-white animate-pulse",
+        completed: "bg-emerald-600 text-white",
+        skipped_cached: "bg-emerald-700 text-white",
+        awaiting_gate: "bg-amber-500 text-black",
+        failed: "bg-rose-600 text-white",
+        rejected: "bg-rose-700 text-white",
+      };
+      pill.className =
+        "absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-xs pointer-events-none " +
+        (clsMap[st] || "bg-zinc-600 text-white");
+      pill.textContent = p.quality_score != null ? `${st} · Q${p.quality_score}` : st;
+    }
+  });
 
   async function apiJson(url, opts = {}) {
     const res = await fetch(url, {
@@ -329,6 +367,8 @@
         const badgeCls =
           n.type === "gate"
             ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+            : n.type === "quality_gate"
+            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
             : n.type === "fanout"
             ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
             : n.type === "boardroom"
@@ -336,7 +376,19 @@
             : n.type === "research"
             ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
             : "bg-indigo-500/20 text-indigo-300 border-indigo-500/40";
-        const typeLabel = n.type === "gate" ? "HITL-Gate" : n.type === "fanout" ? "Parallel" : n.type === "boardroom" ? "Boardroom" : n.type === "research" ? "Research Lab" : "Agent";
+        const typeLabel = n.type === "gate" ? "HITL-Gate" : n.type === "quality_gate" ? "Anti-Slop QA" : n.type === "fanout" ? "Parallel" : n.type === "boardroom" ? "Boardroom" : n.type === "research" ? "Research Lab" : "Agent";
+        const liveState = _liveNodeStates[n.id];
+        const livePillHtml = liveState
+          ? `<span data-wf-live-pill="1" class="absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-xs pointer-events-none ${
+              liveState.status === "running"
+                ? "bg-sky-500 text-white animate-pulse"
+                : liveState.status === "completed" || liveState.status === "skipped_cached"
+                ? "bg-emerald-600 text-white"
+                : liveState.status === "awaiting_gate"
+                ? "bg-amber-500 text-black"
+                : "bg-rose-600 text-white"
+            }">${esc(liveState.quality_score != null ? `${liveState.status} · Q${liveState.quality_score}` : liveState.status)}</span>`
+          : "";
         const guardCount = (n.forbidden_actions || []).length;
         const toolCount = (n.allowed_tools || []).length;
         return `
@@ -351,6 +403,7 @@
             }">
             <button type="button" data-port-in="${esc(n.id)}" title="Eingangs-Port"
               class="absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 border-[var(--border)] bg-[var(--page-bg)] hover:border-indigo-400 hover:bg-indigo-500/30 flex items-center justify-center text-[9px] font-mono cursor-crosshair">●</button>
+            ${livePillHtml}
             <div class="flex items-center justify-between gap-1 pointer-events-none">
               <span class="text-[9px] font-mono px-1.5 py-0.5 rounded border ${badgeCls}">${typeLabel}</span>
               <span class="text-[10px] font-mono text-[var(--muted-foreground)] truncate">${esc(n.agent_id)}</span>
@@ -448,9 +501,21 @@
               </select>
             </label>
             <label class="block space-y-0.5">
-              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Agent</span>
+              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Agent / Profil</span>
               <select id="wf-ins-agent" class="w-full px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--page-bg)] font-mono">
-                ${agentOpts.map((a) => `<option value="${esc(a)}" ${node.agent_id === a ? "selected" : ""}>${esc(a)}</option>`).join("")}
+                ${
+                  _profiles.length
+                    ? `<optgroup label="Meine Agenten-Profile">${_profiles
+                        .map((p) => `<option value="${esc(p.id)}" ${node.agent_id === p.id ? "selected" : ""}>${esc(p.label)}</option>`)
+                        .join("")}</optgroup>`
+                    : ""
+                }
+                <optgroup label="Standard-Rollen">
+                  ${agentOpts
+                    .filter((a) => !_profiles.some((p) => p.id === a))
+                    .map((a) => `<option value="${esc(a)}" ${node.agent_id === a ? "selected" : ""}>${esc(a)}</option>`)
+                    .join("")}
+                </optgroup>
               </select>
             </label>
           </div>
@@ -1207,11 +1272,82 @@
 
   async function loadAgentsList() {
     try {
-      const data = await apiJson("/api/agents");
-      const list = Array.isArray(data) ? data : data.agents || [];
-      const ids = list.map((a) => a.id || a.agent_id).filter(Boolean);
-      if (ids.length) _agents = Array.from(new Set([...ids, ..._agents]));
+      let list = Array.isArray(window.hermesProfilesData) ? window.hermesProfilesData : null;
+      if (!list || !list.length) {
+        const data = await apiJson("/api/hermes/profiles");
+        list = Array.isArray(data) ? data : data.profiles || [];
+      }
+      if (Array.isArray(list) && list.length) {
+        _profiles = list
+          .map((p) => {
+            const id = p.id || p.agent_id;
+            if (!id) return null;
+            const name = p.name || p.display_name || id;
+            const role = p.role || p.department || "";
+            return { id, label: role ? `${name} (${role})` : name };
+          })
+          .filter(Boolean);
+        _agents = Array.from(new Set([..._profiles.map((p) => p.id), ..._agents]));
+        if (_activeTpl) renderAll();
+      }
     } catch (_) {}
+  }
+
+  function injectTaskModalWorkflowBridge() {
+    const presetSel = document.getElementById("ops-task-preset-select");
+    if (!presetSel || document.getElementById("ops-task-wf-select")) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "flex items-center gap-1.5 pl-2 border-l border-[var(--border)]";
+    wrap.innerHTML = `
+      <select id="ops-task-wf-select" class="h-8 px-2.5 rounded-lg border border-indigo-500/40 bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:outline-none cursor-pointer" style="max-width: 210px;">
+        <option value="">Workflow-DAG starten...</option>
+      </select>
+      <button type="button" id="ops-task-wf-run" class="h-8 px-2.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 text-xs font-mono font-semibold text-indigo-300 transition cursor-pointer whitespace-nowrap">
+        DAG starten
+      </button>
+    `;
+    presetSel.parentNode.appendChild(wrap);
+
+    const fillWfOptions = async () => {
+      if (!_templates.length) {
+        try {
+          const d = await apiJson("/api/v2/workflows/templates");
+          _templates = d.templates || [];
+        } catch (_) {}
+      }
+      const sel = document.getElementById("ops-task-wf-select");
+      if (!sel) return;
+      sel.innerHTML =
+        '<option value="">Workflow-DAG starten...</option>' +
+        _templates.map((t) => `<option value="${esc(t.id)}">${esc(t.title)} (${(t.nodes || []).length} Steps)</option>`).join("");
+    };
+    fillWfOptions();
+
+    const runBtn = document.getElementById("ops-task-wf-run");
+    if (runBtn) {
+      runBtn.onclick = async () => {
+        const wfId = document.getElementById("ops-task-wf-select")?.value;
+        if (!wfId) return alert("Bitte zuerst einen Workflow auswaehlen.");
+        const titleInput = document.getElementById("ops-task-title-input") || document.getElementById("new-task-title");
+        const topic = (titleInput?.value || "").trim() || prompt("Thema / Ziel fuer diesen Workflow-DAG eingeben:") || "";
+        if (!topic.trim()) return;
+        runBtn.disabled = true;
+        try {
+          const res = await apiJson(`/api/v2/workflows/templates/${encodeURIComponent(wfId)}/run`, {
+            method: "POST",
+            body: JSON.stringify({ inputs: { topic: topic.trim() } }),
+          });
+          if (typeof window.closeNewTaskModal === "function") window.closeNewTaskModal();
+          if (typeof window.loadKanbanTasks === "function") window.loadKanbanTasks();
+          alert(`Workflow-DAG gestartet (${res.run_id}): ${(res.created_tasks || []).length} verknuepfte Aufgaben angelegt.`);
+        } catch (err) {
+          alert(`Fehler: ${err.message}`);
+        } finally {
+          runBtn.disabled = false;
+        }
+      };
+    }
   }
 
   async function loadSchedules() {
@@ -1293,8 +1429,8 @@
     btn.className = "logstream-header-tile flex flex-col items-center justify-between min-w-[56px] sm:min-w-[62px] h-[72px] py-1 px-0.5 bg-transparent border-0 shadow-none opacity-80 hover:opacity-100 cursor-pointer select-none transition-transform hover:scale-105 duration-150";
     btn.setAttribute("onclick", "setLogStreamSourceMode('events')");
     btn.innerHTML = `
-      <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+      <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
+        <img src="/static/img/cadre_icons/telemetry_eventbus.png?v=2026112110" alt="Event-Bus" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
       </div>
       <span class="logstream-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none">Event-Bus</span>
     `;
@@ -1302,6 +1438,7 @@
   }
 
   let _eventSourceFilter = "all";
+  let _eventTabMode = "log"; // "log" | "matrix"
   window.loadWorkflowEventsLog = async function (sourceFilter) {
     ensureEventBusLogTabButton();
     if (sourceFilter !== undefined) _eventSourceFilter = sourceFilter;
@@ -1309,6 +1446,104 @@
     if (!pane) return;
 
     try {
+      if (_eventTabMode === "matrix") {
+        const mData = await apiJson("/api/v2/workflows/event-policies");
+        const srcs = mData.sources || [];
+        const tgts = mData.targets || [];
+        const pols = mData.policies || [];
+        const byKey = {};
+        pols.forEach((p) => (byKey[`${p.source}__${p.target}`] = p));
+        const tgtLabels = {
+          workflow: "Workflows (Standard)",
+          treasury: "Treasury & Zahlungen",
+          comms: "E-Mail & Outreach",
+          system: "Code & Release",
+        };
+        const polBtnCls = (pol) =>
+          pol === "deny"
+            ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+            : pol === "require_hitl"
+            ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+            : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+        const polLabels = { allow: "Erlaubt", require_hitl: "Nur HITL", deny: "Gesperrt" };
+
+        pane.innerHTML = `
+          <div class="p-3 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-2">
+              <button type="button" id="ev-tab-log" class="px-3 py-1 rounded-lg text-xs font-semibold border border-[var(--border)] hover:bg-[var(--secondary)]">Live Event-Log</button>
+              <button type="button" id="ev-tab-matrix" class="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white">Trigger-Matrix (Rechte & Schutz)</button>
+            </div>
+            <span class="text-[11px] font-mono text-[var(--muted-foreground)]">Klick auf Zelle schaltet: Erlaubt → Nur HITL → Gesperrt</span>
+          </div>
+          <div class="flex-1 overflow-auto p-3">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-[var(--border)] text-left font-mono text-[10px] uppercase text-[var(--muted-foreground)]">
+                  <th class="p-2">Ereignis-Quelle</th>
+                  ${tgts.map((t) => `<th class="p-2">${esc(tgtLabels[t] || t)}</th>`).join("")}
+                  <th class="p-2">Rate-Limit / Min</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${srcs
+                  .map((s) => {
+                    const rowMax = (byKey[`${s}__workflow`] || {}).max_per_min || 20;
+                    return `
+                      <tr class="border-b border-[var(--border)]/60 hover:bg-[var(--secondary)]/20">
+                        <td class="p-2 font-mono font-bold">${esc(s)}</td>
+                        ${tgts
+                          .map((t) => {
+                            const r = byKey[`${s}__${t}`] || { policy: "allow" };
+                            return `<td class="p-2">
+                              <button type="button" data-pol-src="${esc(s)}" data-pol-tgt="${esc(t)}" data-pol-cur="${esc(r.policy)}"
+                                class="px-2.5 py-1 rounded-lg border text-[11px] font-mono font-semibold transition ${polBtnCls(r.policy)}">
+                                ${polLabels[r.policy] || r.policy}
+                              </button>
+                            </td>`;
+                          })
+                          .join("")}
+                        <td class="p-2">
+                          <input type="number" min="1" max="500" value="${rowMax}" data-rate-src="${esc(s)}" class="w-20 px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] font-mono text-xs" />
+                        </td>
+                      </tr>`;
+                  })
+                  .join("")}
+              </tbody>
+            </table>
+          </div>`;
+
+        pane.querySelector("#ev-tab-log").onclick = () => {
+          _eventTabMode = "log";
+          window.loadWorkflowEventsLog();
+        };
+        pane.querySelectorAll("[data-pol-src]").forEach((btn) => {
+          btn.onclick = async () => {
+            const cur = btn.getAttribute("data-pol-cur");
+            const order = ["allow", "require_hitl", "deny"];
+            const next = order[(order.indexOf(cur) + 1) % order.length];
+            const src = btn.getAttribute("data-pol-src");
+            const tgt = btn.getAttribute("data-pol-tgt");
+            const rate = Number(pane.querySelector(`[data-rate-src="${src}"]`)?.value || 20);
+            await apiJson("/api/v2/workflows/event-policies", {
+              method: "POST",
+              body: JSON.stringify({ source: src, target: tgt, policy: next, max_per_min: rate }),
+            });
+            window.loadWorkflowEventsLog();
+          };
+        });
+        pane.querySelectorAll("[data-rate-src]").forEach((inp) => {
+          inp.onchange = async () => {
+            const src = inp.getAttribute("data-rate-src");
+            const r = byKey[`${src}__workflow`] || { policy: "allow" };
+            await apiJson("/api/v2/workflows/event-policies", {
+              method: "POST",
+              body: JSON.stringify({ source: src, target: "workflow", policy: r.policy, max_per_min: Number(inp.value || 20) }),
+            });
+          };
+        });
+        return;
+      }
+
       const qs = _eventSourceFilter && _eventSourceFilter !== "all" ? `&source=${encodeURIComponent(_eventSourceFilter)}` : "";
       const data = await apiJson(`/api/v2/workflows/events?limit=100${qs}`);
       const events = data.events || [];
@@ -1325,6 +1560,8 @@
       const badgeCls = (st) =>
         st === "triggered"
           ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+          : st === "blocked_policy" || st === "rate_limited"
+          ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
           : st === "skipped_loop"
           ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
           : "bg-[var(--secondary)] text-[var(--muted-foreground)] border-[var(--border)]";
@@ -1332,10 +1569,13 @@
       pane.innerHTML = `
         <div class="p-3 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2 shrink-0">
           <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" id="ev-tab-log" class="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white">Live Event-Log</button>
+            <button type="button" id="ev-tab-matrix" class="px-3 py-1 rounded-lg text-xs font-semibold border border-[var(--border)] hover:bg-[var(--secondary)]">Trigger-Matrix (Rechte & Schutz)</button>
+            <span class="mx-1 text-[var(--border)]">|</span>
             ${sources
               .map(
-                ([k, lbl]) => `<button type="button" data-ev-filter="${k}" class="px-2.5 py-1 rounded-lg text-xs font-mono border transition ${
-                  _eventSourceFilter === k ? "bg-indigo-600 text-white border-indigo-500" : "border-[var(--border)] hover:bg-[var(--secondary)]"
+                ([k, lbl]) => `<button type="button" data-ev-filter="${k}" class="px-2 py-1 rounded-lg text-[11px] font-mono border transition ${
+                  _eventSourceFilter === k ? "bg-indigo-600/30 text-indigo-200 border-indigo-500/60" : "border-[var(--border)] hover:bg-[var(--secondary)]"
                 }">${lbl}</button>`
               )
               .join("")}
@@ -1365,13 +1605,27 @@
                           : ""
                       }
                     </div>
-                    <div class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0">${esc((ev.created_at || "").replace("T", " ").slice(0, 19))}</div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button type="button" data-ev-replay="${esc(ev.id)}" class="px-2 py-0.5 rounded border border-[var(--border)] hover:bg-[var(--secondary)] text-[10px] font-mono">Replay</button>
+                      <span class="text-[10px] font-mono text-[var(--muted-foreground)]">${esc((ev.created_at || "").replace("T", " ").slice(0, 19))}</span>
+                    </div>
                   </div>`
                   )
                   .join("")
-              : '<div class="p-8 text-center text-xs text-[var(--muted-foreground)]">Noch keine Event-Bus-Einträge protokolliert. Sobald Watchdog, Posteingang, Research Lab oder AI Boardroom ein Signal senden, erscheint es hier in Echtzeit.</div>'
+              : '<div class="p-8 text-center text-xs text-[var(--muted-foreground)]">Noch keine Event-Bus-Einträge protokolliert. Sobald Watchdog, Posteingang, Kalender, Research Lab oder AI Boardroom ein Signal senden, erscheint es hier in Echtzeit.</div>'
           }
         </div>`;
+
+      pane.querySelector("#ev-tab-matrix").onclick = () => {
+        _eventTabMode = "matrix";
+        window.loadWorkflowEventsLog();
+      };
+      pane.querySelectorAll("[data-ev-replay]").forEach((b) => {
+        b.onclick = async () => {
+          await apiJson(`/api/v2/workflows/events/${encodeURIComponent(b.getAttribute("data-ev-replay"))}/replay`, { method: "POST" });
+          window.loadWorkflowEventsLog();
+        };
+      });
 
       pane.querySelectorAll("[data-ev-filter]").forEach((b) => {
         b.onclick = () => window.loadWorkflowEventsLog(b.getAttribute("data-ev-filter"));
@@ -1414,9 +1668,11 @@
     document.addEventListener("DOMContentLoaded", () => {
       injectStudioShell();
       ensureEventBusLogTabButton();
+      injectTaskModalWorkflowBridge();
     });
   } else {
     injectStudioShell();
     ensureEventBusLogTabButton();
+    injectTaskModalWorkflowBridge();
   }
 })();

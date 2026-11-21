@@ -162,8 +162,8 @@ async def api_system_health():
     client = _get_system_http_client()
     t_core = _check_service_health(
         "hermes_core",
-        ["http://hermes-agent:8642", "http://hermes:8642", "http://hermes:8644",
-         "http://host.docker.internal:8644"],
+        ["http://hermes:8642/health", "http://hermes:8642", "http://hermes-agent:8642/health",
+         "http://hermes-agent:8642", "http://host.docker.internal:8644"],
         client
     )
     t_omni = _check_service_health(

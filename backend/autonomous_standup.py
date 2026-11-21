@@ -4,6 +4,7 @@ Sammelt täglich (Standard 08:00 Uhr, konfigurierbar in settings.json) fällige 
 Server-Zustände, Inbox-Nachrichten und Token-Kosten und generiert ein Führungs-Briefing.
 """
 
+import asyncio
 import os
 import sys
 import json
@@ -40,39 +41,48 @@ async def generate_morning_standup(force: bool = True) -> dict:
     out_file = None
     now_str = datetime.datetime.now().strftime("%H:%M")
 
-    # 1. Kanban Aufgaben-Status
-    open_tasks = []
-    in_progress_tasks = []
-    blocked_tasks = []
-    if os.path.exists(KANBAN_DB):
-        try:
-            conn = sqlite3.connect(KANBAN_DB, timeout=5.0)
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT id, title, assignee, status, priority FROM tasks WHERE status != 'done' AND status != 'archived'").fetchall()
-            for r in rows:
-                st = (r["status"] or "todo").lower()
-                item = f"{r['title']} ({r['assignee'] or 'Nicht zugewiesen'})"
-                if st == "in_progress":
-                    in_progress_tasks.append(item)
-                elif st == "blocked":
-                    blocked_tasks.append(item)
-                else:
-                    open_tasks.append(item)
-            conn.close()
-        except Exception as exc:
-            logger.debug("Standup: Task-Abfrage fehlgeschlagen: %s", exc)
+    def _load_standup_db_stats():
+        o_tasks, p_tasks, b_tasks = [], [], []
+        if os.path.exists(KANBAN_DB):
+            try:
+                conn = sqlite3.connect(KANBAN_DB, timeout=5.0)
+                try:
+                    conn.row_factory = sqlite3.Row
+                    rows = conn.execute(
+                        "SELECT id, title, assignee, status, priority FROM tasks WHERE status != 'done' AND status != 'archived'"
+                    ).fetchall()
+                    for r in rows:
+                        st = (r["status"] or "todo").lower()
+                        item = f"{r['title']} ({r['assignee'] or 'Nicht zugewiesen'})"
+                        if st == "in_progress":
+                            p_tasks.append(item)
+                        elif st == "blocked":
+                            b_tasks.append(item)
+                        else:
+                            o_tasks.append(item)
+                finally:
+                    conn.close()
+            except Exception as exc:
+                logger.debug("Standup: Task-Abfrage fehlgeschlagen: %s", exc)
 
-    # 2. Token-Kosten & Durchsatz
-    today_cost = 0.0
-    if os.path.exists(STATE_DB):
-        try:
-            conn = sqlite3.connect(STATE_DB, timeout=5.0)
-            today_start = int(datetime.datetime.combine(datetime.date.today(), datetime.time.min).timestamp())
-            row = conn.execute("SELECT SUM(estimated_cost_usd) FROM session_model_usage WHERE last_seen >= ?", (today_start,)).fetchone()
-            today_cost = float(row[0] or 0.0)
-            conn.close()
-        except Exception as exc:
-            logger.warning("Standup: Kosten-Abfrage fehlgeschlagen: %s", exc)
+        cost_val = 0.0
+        if os.path.exists(STATE_DB):
+            try:
+                conn = sqlite3.connect(STATE_DB, timeout=5.0)
+                try:
+                    today_start = int(datetime.datetime.combine(datetime.date.today(), datetime.time.min).timestamp())
+                    row = conn.execute(
+                        "SELECT SUM(estimated_cost_usd) FROM session_model_usage WHERE last_seen >= ?",
+                        (today_start,),
+                    ).fetchone()
+                    cost_val = float(row[0] or 0.0)
+                finally:
+                    conn.close()
+            except Exception as exc:
+                logger.warning("Standup: Kosten-Abfrage fehlgeschlagen: %s", exc)
+        return o_tasks, p_tasks, b_tasks, cost_val
+
+    open_tasks, in_progress_tasks, blocked_tasks, today_cost = await asyncio.to_thread(_load_standup_db_stats)
 
     # 3. Flotten-Zustand prüfen
     active_services = 0

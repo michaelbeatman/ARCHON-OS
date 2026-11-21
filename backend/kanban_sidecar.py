@@ -14,6 +14,8 @@ Regeln:
 - Die Engine-DB (kanban.db) bleibt unberuehrt — nur der Sidecar.
 - Dieses Modul importiert NICHTS aus backend (Blatt-Modul, keine Zyklen).
 """
+import logging
+_archon_exc_logger = logging.getLogger("kanban_sidecar")
 
 import json
 import os
@@ -55,8 +57,8 @@ def _write_atomic(meta):
     except BaseException:
         try:
             os.unlink(tmp)
-        except OSError:
-            pass
+        except OSError as _exc:
+            _archon_exc_logger.debug("[kanban_sidecar] Ignorierte Ausnahme (Z.58): %s", _exc)
         raise
 
 

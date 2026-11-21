@@ -4,6 +4,8 @@ Obsidian-Vault Indexierer & Graph-Hygiene (Pillar 4 / 2nd Brain).
 Scannt 01_PROJEKTE, generiert eine saubere Map of Content (_MOC_Projekt_Index.md)
 und identifiziert verwaiste Notizen ohne Querverlinkung.
 """
+import logging
+_archon_exc_logger = logging.getLogger("vault_hygiene")
 
 import os
 import sys
@@ -43,8 +45,8 @@ def generate_vault_index_and_hygiene() -> Dict[str, Any]:
                                 txt = n_f.read()
                                 if "[[" not in txt:
                                     orphan_files.append(rel_p)
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            _archon_exc_logger.debug("[vault_hygiene] Ignorierte Ausnahme (Z.46): %s", _exc)
 
     # Generiere _MOC_Projekt_Index.md
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")

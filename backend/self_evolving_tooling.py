@@ -8,6 +8,8 @@ vollautomatisch neue Python-Tools und FastMCP-Werkzeuge zu synthetisieren,
 in einer isolierten Sandbox gegen Testfälle zu validieren (inklusive Traceback-
 Selbstkorrektur) und bei Erfolg permanent in der Skill-Bibliothek zu registrieren.
 """
+import logging
+_archon_exc_logger = logging.getLogger("self_evolving_tooling")
 
 import os
 import sys
@@ -125,8 +127,8 @@ if __name__ == "__main__":
                     resource.setrlimit(resource.RLIMIT_CPU, (timeout_seconds, timeout_seconds))
                     resource.setrlimit(resource.RLIMIT_FSIZE, (4 * 1024 * 1024, 4 * 1024 * 1024))
                     resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    _archon_exc_logger.debug("[self_evolving_tooling] Ignorierte Ausnahme (Z.128): %s", _exc)
 
             safe_env = {
                 "PATH": "/usr/local/bin:/usr/bin:/bin",

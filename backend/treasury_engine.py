@@ -9,6 +9,8 @@ Architektur nach Industriestandard (Stripe Agent Toolkit / Coinbase AgentKit / x
 - Manipulationssicheres Ausgaben-Ledger mit SHA-256 Hash-Chain in SQLite WAL (`data/treasury.db`).
 """
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("treasury_engine")
 
 import hashlib
 import json
@@ -352,8 +354,8 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
                 payload={"tx_id": tx_id, "amount": amount, "currency": tx_obj["currency"]},
                 correlation_id=f"payreq-{tx_id}",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[treasury_engine] Ignorierte Ausnahme (Z.355): %s", _exc)
 
     return {**tx_obj, "passkey_verified": bool(tx_obj["passkey_verified"])}
 
@@ -419,8 +421,8 @@ def approve_payment(tx_id: str, approver_id: str = "admin", passkey_verified: bo
             payload={"tx_id": tx_id, "approver": approver_id, "passkey_verified": passkey_verified},
             correlation_id=f"payapr-{tx_id}",
         )
-    except Exception:
-        pass
+    except Exception as _exc:
+        _archon_exc_logger.debug("[treasury_engine] Ignorierte Ausnahme (Z.422): %s", _exc)
     return updated
 
 

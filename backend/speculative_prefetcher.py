@@ -8,6 +8,8 @@ und lädt im Hintergrund antizipierte Ressourcen (CRM-Profile, ERP-Belege,
 Obsidian-Notizen, Heuristiken) vorab in einen ultra-schnellen RAM-Cache.
 Dadurch sinkt die Latenz bei der anschließenden Tool-Ausführung auf unter 5 ms.
 """
+import logging
+_archon_exc_logger = logging.getLogger("speculative_prefetcher")
 
 import os
 import re
@@ -154,8 +156,8 @@ class SpeculativePrefetcher:
             try:
                 from backend.db_paths import resolve_db
                 candidates.append(resolve_db("erp.db"))
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[speculative_prefetcher] Ignorierte Ausnahme (Z.157): %s", _exc)
         for candidate in candidates:
             if candidate and os.path.exists(candidate):
                 conn = sqlite3.connect(candidate, timeout=5.0)

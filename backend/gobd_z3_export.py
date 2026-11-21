@@ -10,6 +10,8 @@ Erzeugt ein prüferfertiges ZIP-Archiv mit:
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("gobd_z3_export")
 
 import datetime
 import hashlib
@@ -209,8 +211,8 @@ def build_gobd_z3_archive(
             comp = corporate_manager.get_company(cid)
             if isinstance(comp, dict) and comp.get("name"):
                 company_name = str(comp["name"])
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[gobd_z3_export] Ignorierte Ausnahme (Z.212): %s", _exc)
 
         doc_clauses = ["1=1"]
         doc_params: List[Any] = []
@@ -325,8 +327,8 @@ def build_gobd_z3_archive(
                 ])
         finally:
             aconn.close()
-    except Exception:
-        pass
+    except Exception as _exc:
+        _archon_exc_logger.debug("[gobd_z3_export] Ignorierte Ausnahme (Z.328): %s", _exc)
 
     schema_headers = {
         url: [col[0] for col in cols]

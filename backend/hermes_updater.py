@@ -532,8 +532,8 @@ def apply_hermes_update(channel: str = "latest", auto_restart: bool = True) -> D
                 obj = json.loads(line)
                 if obj.get("error"):
                     stream_error = obj["error"]
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug("[hermes_updater] Ignorierte Ausnahme (Z.535): %s", _exc)
         if stream_error:
             return {
                 "status": "error",

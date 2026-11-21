@@ -252,8 +252,8 @@ class WatchdogDaemon:
                             reason=f"Token Usage Limit Exceeded ({last_tokens} tokens/turn >= {CONFIG['MAX_TOKENS_PER_MIN']})",
                             details={"tokens": last_tokens, "file": file_path}
                         )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug("[watchdog_daemon] Ignorierte Ausnahme (Z.255): %s", _exc)
 
     def run_forever(self):
         logger.info("Watchdog supervisor loop started.")

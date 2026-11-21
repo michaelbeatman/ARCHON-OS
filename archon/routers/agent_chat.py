@@ -155,8 +155,8 @@ def load_profiles_list() -> List[Dict]:
                         return data
                     elif isinstance(data, dict) and "profiles" in data:
                         return data["profiles"]
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug("[agent_chat] Ignorierte Ausnahme (Z.158): %s", _exc)
     return []
 
 

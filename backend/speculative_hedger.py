@@ -133,17 +133,20 @@ class SpeculativeHedger:
         total_ms = round((time.perf_counter() - t0) * 1000, 2)
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
-            conn.execute("""
-                INSERT INTO speculative_hedge_logs
-                (call_id, primary_model, fallback_model, hedge_triggered, winning_source,
-                 winning_model, total_latency_ms, hedge_delay_seconds, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                call_id, primary_model, fallback_model, int(hedge_triggered),
-                winning_source, winning_model, total_ms, hedge_delay, now_iso
-            ))
-            conn.commit()
+        def _persist_hedge():
+            with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+                conn.execute("""
+                    INSERT INTO speculative_hedge_logs
+                    (call_id, primary_model, fallback_model, hedge_triggered, winning_source,
+                     winning_model, total_latency_ms, hedge_delay_seconds, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    call_id, primary_model, fallback_model, int(hedge_triggered),
+                    winning_source, winning_model, total_ms, hedge_delay, now_iso
+                ))
+                conn.commit()
+
+        await asyncio.to_thread(_persist_hedge)
 
         return {
             "call_id": call_id,

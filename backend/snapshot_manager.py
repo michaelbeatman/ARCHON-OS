@@ -5,6 +5,8 @@ Vor jedem Schreib- oder Patch-Vorgang wird ein Backup der Originaldatei
 in einem lokalen Ringpuffer (.hermes/snapshots/) hinterlegt.
 Ermöglicht sofortiges Undo bei fehlerhaften Änderungen.
 """
+import logging
+_archon_exc_logger = logging.getLogger("snapshot_manager")
 
 import os
 import sys
@@ -57,8 +59,8 @@ class SnapshotManager:
             if not cfg.get("auto_pre_write_snapshots", True):
                 return None
             max_snapshots = int(cfg.get("max_snapshots", 50))
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[snapshot_manager] Ignorierte Ausnahme (Z.60): %s", _exc)
 
         abs_path = os.path.abspath(target_file_path)
         if not os.path.exists(abs_path):
@@ -86,8 +88,8 @@ class SnapshotManager:
                     try:
                         if os.path.exists(r["compressed_path"]):
                             os.remove(r["compressed_path"])
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        _archon_exc_logger.debug("[snapshot_manager] Ignorierte Ausnahme (Z.89): %s", _exc)
                     conn.execute("DELETE FROM file_snapshots WHERE id = ?", (r["id"],))
                 conn.commit()
             return snap_id

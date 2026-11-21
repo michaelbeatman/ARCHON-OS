@@ -5,6 +5,8 @@ Säule 2: KOGNITION & WISSEN — Research Lab & Internet-Watchdog.
 Verwaltet den kuratierten Pool verifizierter Quellen, Trust-Tiers für die Quellen-Triangulation
 und Zitationsregeln für alle Text- und Recherche-Agenten.
 """
+import logging
+_archon_exc_logger = logging.getLogger("research_sources")
 
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse
@@ -298,8 +300,8 @@ def get_domain_reputation(domain_or_url: str) -> Dict[str, Any]:
     if "://" in clean_domain:
         try:
             clean_domain = urlparse(clean_domain).netloc.lower()
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[research_sources] Ignorierte Ausnahme (Z.301): %s", _exc)
     # Subdomains abfangen (z. B. www.handelsblatt.com -> handelsblatt.com)
     parts = clean_domain.split(".")
     base_domain = clean_domain

@@ -1,3 +1,5 @@
+import logging
+_archon_exc_logger = logging.getLogger("operations_emails")
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 """Sub-Router fuer Email Draft Approval Queue (t-7ca8cd).
@@ -89,8 +91,8 @@ def api_approve_email_draft(request: Request, draft_id: str, req: Dict[str, Any]
                 payload={"draft_id": draft_id, "approver": approver_id},
                 correlation_id=f"mail-apr-{draft_id}",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[operations_emails] Ignorierte Ausnahme (Z.92): %s", _exc)
         return {"status": "success", "draft": draft, "message": "E-Mail freigegeben und versendet."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

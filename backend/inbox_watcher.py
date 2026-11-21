@@ -4,6 +4,8 @@ Konfigurierbarer Ordner-Watcher für Archon OS / Robert.
 Überwacht ein vom Benutzer in den Einstellungen definiertes Verzeichnis (Drop-Zone)
 auf neue Dokumente, Notizen oder Medien und erstellt vollautonom Kanban-Aufgaben dafür.
 """
+import logging
+_archon_exc_logger = logging.getLogger("inbox_watcher")
 
 import os
 import sys
@@ -33,8 +35,8 @@ def get_inbox_config() -> Dict[str, Any]:
                 s = json.load(f)
                 if "inbox_watcher" in s and isinstance(s["inbox_watcher"], dict):
                     cfg.update(s["inbox_watcher"])
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[inbox_watcher] Ignorierte Ausnahme (Z.36): %s", _exc)
     return cfg
 
 def save_inbox_config(new_cfg: Dict[str, Any]) -> bool:

@@ -83,8 +83,8 @@ def toggle_trusted_source(source_id: str, operator: str = "operator") -> Dict[st
         except Exception:
             try:
                 os.unlink(tmp_path)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug("[dual_llm_sanitizer] Ignorierte Ausnahme (Z.86): %s", _exc)
             raise
 
     try:

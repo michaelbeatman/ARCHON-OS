@@ -162,18 +162,21 @@ class MapReduceExecutor:
         duration_ms = round((time.perf_counter() - t0) * 1000, 2)
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
-            conn.execute("""
-                INSERT INTO map_reduce_jobs
-                (job_id, task_title, total_items, max_workers, completed_items, failed_items,
-                 execution_mode, duration_ms, reduced_summary, results_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                job_id, task_title, len(items), effective_workers,
-                completed, failed, execution_mode, duration_ms,
-                reduced_summary, json.dumps(chunk_results, ensure_ascii=False), now_iso
-            ))
-            conn.commit()
+        def _persist_mr_job():
+            with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+                conn.execute("""
+                    INSERT INTO map_reduce_jobs
+                    (job_id, task_title, total_items, max_workers, completed_items, failed_items,
+                     execution_mode, duration_ms, reduced_summary, results_json, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    job_id, task_title, len(items), effective_workers,
+                    completed, failed, execution_mode, duration_ms,
+                    reduced_summary, json.dumps(chunk_results, ensure_ascii=False), now_iso
+                ))
+                conn.commit()
+
+        await asyncio.to_thread(_persist_mr_job)
 
         return {
             "job_id": job_id,

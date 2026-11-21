@@ -121,7 +121,7 @@ def _sanitize_ident(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]", "_", str(name or "").strip()) or "tbl"
 
 
-def _inspect_sqlite_file(db_path: str) -> Dict[str, Any]:
+def _inspect_sqlite_file(db_path: str, *, fast_count: bool = False) -> Dict[str, Any]:
     """Liest Tabellen, Spalten, Zeilenanzahl und Indizes einer SQLite-Datei (read-only)."""
     info: Dict[str, Any] = {
         "path": os.path.abspath(db_path),
@@ -136,22 +136,30 @@ def _inspect_sqlite_file(db_path: str) -> Dict[str, Any]:
     if not os.path.isfile(db_path) or info["size_bytes"] == 0:
         return info
 
+    # Bei sehr grossen DBs (> 25 MB) im schnellen Plan-Modus teure Full-Table-Scans vermeiden
+    skip_exact_count = fast_count and info["size_bytes"] > 25 * 1024 * 1024
+
     conn = None
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
+        conn.execute("PRAGMA busy_timeout=1500;")
         rows = conn.execute(
             "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
         ).fetchall()
         for tbl_name, create_sql in rows:
             cols = [c[1] for c in conn.execute(f'PRAGMA table_info("{tbl_name}")').fetchall()]
-            cnt_row = conn.execute(f'SELECT COUNT(*) FROM "{tbl_name}"').fetchone()
-            cnt = int(cnt_row[0]) if cnt_row else 0
+            if skip_exact_count:
+                cnt = -1
+            else:
+                cnt_row = conn.execute(f'SELECT COUNT(*) FROM "{tbl_name}"').fetchone()
+                cnt = int(cnt_row[0]) if cnt_row else 0
             info["tables"][tbl_name] = {
                 "columns": cols,
                 "row_count": cnt,
                 "create_sql": create_sql or "",
             }
-            info["total_rows"] += cnt
+            if cnt > 0:
+                info["total_rows"] += cnt
         info["valid_sqlite"] = True
     except sqlite3.Error as exc:
         info["error"] = str(exc)
@@ -165,7 +173,7 @@ def discover_legacy_databases(
     source_dirs: Optional[Sequence[str]] = None,
     include_consolidated: bool = False,
 ) -> List[str]:
-    """Findet alle aktiven .db-Dateien (ohne Backups/Snapshots/Browser-NSS-DBs)."""
+    """Findet alle aktiven .db-Dateien (ohne Backups/Snapshots/Browser-NSS-DBs/fremde Hermes-state.db)."""
     dirs = list(source_dirs) if source_dirs is not None else [
         DEFAULT_DATA_DIR,
         os.path.join(WORKSPACE_DIR, "memory"),
@@ -178,11 +186,15 @@ def discover_legacy_databases(
     for sdir in dirs:
         if not sdir or not os.path.isdir(sdir):
             continue
+        is_hermes_opt_dir = os.path.normpath(sdir) == os.path.normpath("/opt/data")
         for entry in sorted(os.listdir(sdir)):
             if not entry.endswith(".db"):
                 continue
             low = entry.lower()
             if low in skip_names:
+                continue
+            # Fremde, aktiv vom Hermes-Container beschriebene state.db in /opt/data nicht blind kopieren
+            if source_dirs is None and is_hermes_opt_dir and low == "state.db":
                 continue
             if not include_consolidated and low in CONSOLIDATED_DOMAINS:
                 continue
@@ -200,7 +212,7 @@ def plan_consolidation(
     """Erstellt einen vollstaendigen Dry-Run-Plan inklusive Kollisionsanalyse."""
     tgt_dir = os.path.abspath(target_dir or DEFAULT_DATA_DIR)
     legacy_paths = discover_legacy_databases(source_dirs=source_dirs, include_consolidated=False)
-    sources = [_inspect_sqlite_file(p) for p in legacy_paths]
+    sources = [_inspect_sqlite_file(p, fast_count=True) for p in legacy_paths]
 
     domains: Dict[str, Dict[str, Any]] = {
         d: {
@@ -263,10 +275,27 @@ def plan_consolidation(
 
 
 def _rewrite_create_table_sql(create_sql: str, src_table: str, dst_table: str) -> str:
-    """Macht CREATE TABLE idempotent (IF NOT EXISTS) und benennt bei Kollision um."""
+    """Macht CREATE [VIRTUAL] TABLE idempotent (IF NOT EXISTS) und benennt bei Kollision um."""
     sql = (create_sql or "").strip()
     if not sql:
         return ""
+    if re.match(r"^CREATE\s+VIRTUAL\s+TABLE\b", sql, flags=re.IGNORECASE):
+        sql = re.sub(
+            r"^CREATE\s+VIRTUAL\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)",
+            "CREATE VIRTUAL TABLE IF NOT EXISTS ",
+            sql,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        if src_table != dst_table:
+            sql = re.sub(
+                rf'(CREATE\s+VIRTUAL\s+TABLE\s+IF\s+NOT\s+EXISTS\s+)(["`\[]?){re.escape(src_table)}(["`\]]?)',
+                rf'\1"{dst_table}"',
+                sql,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+        return sql
     sql = re.sub(
         r"^CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)",
         "CREATE TABLE IF NOT EXISTS ",
@@ -367,10 +396,24 @@ def run_consolidation(
                             src_tbl = m["source_table"]
                             dst_tbl = m["target_table"]
                             tmeta = src_info["tables"].get(src_tbl) or {}
-                            create_sql = _rewrite_create_table_sql(tmeta.get("create_sql", ""), src_tbl, dst_tbl)
+                            raw_create = str(tmeta.get("create_sql") or "").strip()
+                            # Interne FTS5-Schattentabellen (*_data, *_idx, *_docsize, *_config, *_content)
+                            # werden automatisch durch die CREATE VIRTUAL TABLE erzeugt -> nicht manuell anlegen
+                            if any(
+                                src_tbl.endswith(suf)
+                                and src_tbl[:-len(suf)] in src_info["tables"]
+                                and "VIRTUAL TABLE" in str(src_info["tables"][src_tbl[:-len(suf)]].get("create_sql") or "").upper()
+                                for suf in ("_data", "_idx", "_docsize", "_config", "_content")
+                            ):
+                                continue
+                            create_sql = _rewrite_create_table_sql(raw_create, src_tbl, dst_tbl)
                             if not create_sql:
                                 continue
-                            conn.execute(create_sql)
+                            try:
+                                conn.execute(create_sql)
+                            except sqlite3.Error as tbl_err:
+                                warnings.append(f"Tabelle {src_tbl}->{dst_tbl} uebersprungen: {tbl_err}")
+                                continue
 
                             # Gemeinsame Spalten ermitteln (sicher bei Schema-Evolution)
                             dst_cols = [c[1] for c in conn.execute(f'PRAGMA main.table_info("{dst_tbl}")').fetchall()]
@@ -378,10 +421,13 @@ def run_consolidation(
                             common_cols = [c for c in src_cols if c in dst_cols]
                             if common_cols:
                                 cols_quoted = ", ".join(f'"{c}"' for c in common_cols)
-                                conn.execute(
-                                    f'INSERT OR IGNORE INTO main."{dst_tbl}" ({cols_quoted}) '
-                                    f'SELECT {cols_quoted} FROM legacy_src."{src_tbl}"'
-                                )
+                                try:
+                                    conn.execute(
+                                        f'INSERT OR IGNORE INTO main."{dst_tbl}" ({cols_quoted}) '
+                                        f'SELECT {cols_quoted} FROM legacy_src."{src_tbl}"'
+                                    )
+                                except sqlite3.Error as ins_err:
+                                    warnings.append(f"Datenkopie {src_tbl}->{dst_tbl} uebersprungen: {ins_err}")
 
                             # Indizes der Original-Tabelle mitnehmen (nur wenn nicht umbenannt)
                             if src_tbl == dst_tbl:

@@ -5,6 +5,8 @@ Erkennt wiederkehrende erfolgreiche Arbeitsabläufe von Agenten,
 generiert daraus neue, wiederverwendbare SKILL.md-Entwürfe,
 vermerkt diese in der Personalakte des Agenten und legt sie zur Freigabe vor.
 """
+import logging
+_archon_exc_logger = logging.getLogger("skill_synthesizer")
 
 import os
 import sys
@@ -120,8 +122,8 @@ Wird automatisch aktiviert bei: `{trigger_intent}`
             else:
                 with open(akte_path, "w", encoding="utf-8") as f:
                     f.write(f"# Personalakte: {agent_id}\n\n## Kompetenzen & Skill-Entwicklung\n{entry}")
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[skill_synthesizer] Ignorierte Ausnahme (Z.123): %s", _exc)
 
     def approve_skill(self, proposal_id: str) -> Dict[str, Any]:
         """Aktiviert einen freigegebenen Skill dauerhaft im System."""

@@ -103,7 +103,7 @@
         return;
       }
 
-      const tabs = ['projects', 'chat', 'kanban', 'org', 'workflows', 'content', 'automation', 'calendar', 'comm'];
+      const tabs = ['projects', 'chat', 'kanban', 'org', 'workflows', 'automation', 'calendar', 'comm'];
       const headerMeta = {
         projects: {
           title: 'Operations',
@@ -129,11 +129,6 @@
           title: 'Workflows',
           subtitle: '• Visueller Multi-Agent Prozessablaufplan & DAG-Vorlagen',
           img: '/static/img/cadre_icons/overview.png'
-        },
-        content: {
-          title: 'Content-Maschine 2.0',
-          subtitle: '• Multi-Channel Repurposing-DAG (LinkedIn, YouTube, Shorts, TikTok, X), Anti-Slop-Gate & 9:16 Clip-Matrix',
-          img: '/static/img/cadre_icons/medien.png?v=3'
         },
         automation: {
           title: 'n8n-Automation',
@@ -220,8 +215,6 @@
         if (typeof initMasterChat === 'function') initMasterChat();
       } else if (subtab === 'calendar') {
         if (typeof window.renderEmbeddedOperationsCalendar === 'function') window.renderEmbeddedOperationsCalendar();
-      } else if (subtab === 'content') {
-        if (typeof window.renderEmbeddedContentMachineStudio === 'function') window.renderEmbeddedContentMachineStudio();
       } else if (subtab === 'automation') {
         const iframe = document.getElementById('automation-n8n-iframe');
         const extLink = document.getElementById("n8n-external-link");
@@ -2543,9 +2536,34 @@
     }
     window.onOpsTaskModelChange = onOpsTaskModelChange;
 
+    function ensureAutonomousHiringOptionInModal() {
+      if (document.getElementById('ops-task-autonomous-hiring')) return;
+      const decomposeEl = document.getElementById('ops-task-decompose');
+      if (!decomposeEl) return;
+      const cardRow = decomposeEl.closest('.grid');
+      if (!cardRow) return;
+      cardRow.classList.remove('md:grid-cols-2');
+      cardRow.classList.add('md:grid-cols-3');
+      const hiringCard = document.createElement('div');
+      hiringCard.className = 'p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 flex items-start gap-3';
+      hiringCard.innerHTML = `
+        <input type="checkbox" id="ops-task-autonomous-hiring" class="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer shrink-0" />
+        <div class="text-xs">
+          <label for="ops-task-autonomous-hiring" class="font-bold text-[var(--foreground)] cursor-pointer">
+            ${kanT('ui.tasks.autonomous_hiring_label', 'Autonomes CEO-Hiring & Budget-Split')}
+          </label>
+          <p class="text-[var(--muted-foreground)] text-[11px] mt-0.5">
+            ${kanT('ui.tasks.autonomous_hiring_hint', 'CEO-Agent stellt bei Bedarf temporäre Spezial-Agenten ein und teilt das Token-Budget nach Aufgabenkomplexität auf.')}
+          </p>
+        </div>
+      `;
+      cardRow.appendChild(hiringCard);
+    }
+
     function openNewTaskModal(defaultColumn, defaultAssignee, defaultTeam) {
       const modal = document.getElementById('ops-new-task-modal');
       if (!modal) return;
+      ensureAutonomousHiringOptionInModal();
       setOpsTaskSoulMode('compact');
       populateOpsTaskDependsDropdown();
       refreshOpsTaskPresetDropdown('');
@@ -2762,6 +2780,7 @@
             cron_schedule: document.getElementById('ops-task-cron')?.value || null,
             depends_on: document.getElementById('ops-task-depends-on')?.value || null,
             require_hitl: !!document.getElementById('ops-task-require-hitl')?.checked,
+            allow_autonomous_hiring: !!document.getElementById('ops-task-autonomous-hiring')?.checked,
             trusted_input: !!opsTaskTrusted,
             decompose
           })

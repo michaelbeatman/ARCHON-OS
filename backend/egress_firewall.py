@@ -4,6 +4,8 @@ Paket 4 (Feature 17): Egress-Firewall & Domain-Allowlisting für Agenten.
 Prüft ausgehende HTTP-/Webhook-Aufrufe von Agenten gegen die Domain-Allowlist (`allowed_domains`)
 und blockiert unautorisierte Ziele oder direkte IP-Exfiltrationen (Prompt-Injection Data-Leak-Abwehr).
 """
+import logging
+_archon_exc_logger = logging.getLogger("egress_firewall")
 
 import os
 import re
@@ -103,8 +105,8 @@ class EgressFirewall:
                         agent_id=agent_id,
                         payload={"target_endpoint": clean_ep, "target_host": host, "egress_zone": zone, "reason": reason},
                     )
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    _archon_exc_logger.debug("[egress_firewall] Ignorierte Ausnahme (Z.106): %s", _exc)
                 return {
                     "allowed": False,
                     "blocked": True,

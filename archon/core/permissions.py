@@ -82,8 +82,8 @@ def save_permission_gates(data: dict) -> bool:
         except BaseException:
             try:
                 os.unlink(tmp)
-            except OSError:
-                pass
+            except OSError as _exc:
+                logger.debug("[permissions] Ignorierte Ausnahme (Z.85): %s", _exc)
             raise
         return True
     except Exception as e:

@@ -84,8 +84,8 @@ def run_sleep_cycle_consolidation(force: bool = False) -> Dict[str, Any]:
                 cur = conn.cursor()
                 cur.execute("DELETE FROM execution_traces WHERE created_at < ?", (cutoff_date,))
                 pruned_traces = cur.rowcount
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug("[memory_consolidator] Ignorierte Ausnahme (Z.87): %s", _exc)
 
             # 2. Veraltete unkritische Audit-Ereignisse bereinigen (Spalten: timestamp, action)
             # GoBD-Integrität: audit_log ist unveränderlich (kein DELETE auf hash-verkettete Logs).
@@ -96,8 +96,8 @@ def run_sleep_cycle_consolidation(force: bool = False) -> Dict[str, Any]:
         # 3. DB optimieren
         try:
             conn.execute("PRAGMA optimize;")
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug("[memory_consolidator] Ignorierte Ausnahme (Z.99): %s", _exc)
 
         conn.close()
 

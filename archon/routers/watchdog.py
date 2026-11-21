@@ -234,9 +234,7 @@ async def api_trigger_watchdog_run(request: Request):
     _require_admin(request)
     from backend.internet_watchdog import run_watchdog_scan
 
-    loop = asyncio.get_event_loop()
-    res = await loop.run_in_executor(None, run_watchdog_scan, True)
-    return res
+    return await asyncio.to_thread(run_watchdog_scan, True)
 
 
 @router.get("/alarms")

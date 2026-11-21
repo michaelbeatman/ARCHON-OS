@@ -4,6 +4,8 @@ OpenTelemetry- & Langfuse-kompatibler Tracer für Archon OS (Pillar 1 & 6).
 Erfasst hierarchische Traces und Spans für Tasks, Agenten-Delegationen,
 Tool-Ausführungen und LLM-Aufrufe mit Latenz, Token-Verbrauch und Kosten.
 """
+import logging
+_archon_exc_logger = logging.getLogger("otel_tracer")
 
 import os
 import sys
@@ -237,8 +239,8 @@ class OpenTelemetryTracer:
                 )
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     pass
-            except Exception:
-                pass  # Nie den laufenden Betrieb stören
+            except Exception as _exc:
+                _archon_exc_logger.debug("[otel_tracer] Ignorierte Ausnahme (Z.240): %s", _exc)
 
         if not hasattr(self, "_export_pool"):
             from concurrent.futures import ThreadPoolExecutor

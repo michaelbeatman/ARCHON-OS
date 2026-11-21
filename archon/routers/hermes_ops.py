@@ -138,8 +138,8 @@ def api_save_hermes_config(request: Request, payload: Dict = Body(...)):
                 else:
                     existing_obj = json.load(rf) or {}
             config_data = _restore_masked_dict_secrets(existing_obj, config_data)
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug("[hermes_ops] Ignorierte Ausnahme (Z.141): %s", _exc)
     try:
         if cfg_file.endswith(".yaml") or cfg_file.endswith(".yml"):
             try:

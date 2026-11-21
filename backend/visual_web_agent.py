@@ -4,6 +4,8 @@ Headless-Browser & Visueller Web-Agent (Pillar 3 & 6).
 Führt Web-Aktionen (Navigation, Formular-Eingaben, Daten-Extraktion) aus,
 erstellt für jeden Teilschritt Screenshots und hinterlegt einen visuellen Nachweis im Task-Dossier.
 """
+import logging
+_archon_exc_logger = logging.getLogger("visual_web_agent")
 
 import os
 import sys
@@ -36,8 +38,8 @@ class VisualWebAgent:
             from backend.autonomy_settings import get_module_config
             cfg = get_module_config("fleet_and_hygiene")
             capture_screenshots = bool(cfg.get("visual_browser_audit", True))
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[visual_web_agent] Ignorierte Ausnahme (Z.39): %s", _exc)
 
         # SSRF- & Path-Traversal-Schutz (Fail-Closed vor jeglichem Netz- oder Dateizugriff)
         from utils.egress_guard import EgressBlocked, check_public_url
@@ -127,8 +129,8 @@ class VisualWebAgent:
                         "extracted_text_preview": extracted_content[:300],
                         "duration_seconds": round(time.time() - t0, 2)
                     }
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[visual_web_agent] Ignorierte Ausnahme (Z.130): %s", _exc)
 
         try:
             req = urllib.request.Request(

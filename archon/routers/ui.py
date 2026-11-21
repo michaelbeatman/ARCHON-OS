@@ -132,8 +132,8 @@ def api_save_full_html(request: Request, req: FullHtmlSaveRequest):
             if os.path.exists(tmp_path):
                 try:
                     os.unlink(tmp_path)
-                except OSError:
-                    pass
+                except OSError as _exc:
+                    logger.debug("[ui] Ignorierte Ausnahme (Z.135): %s", _exc)
 
     if not written:
         raise HTTPException(

@@ -5,6 +5,8 @@ Misst die aktuelle Systemlast (CPU-Last, RAM-Belegung, freier Festplattenspeiche
 Überschreitet ein Wert die konfigurierten Schwellenwerte (`max_cpu_pct`, `max_ram_pct`, `min_free_disk_gb`),
 aktiviert der Protector automatisch Backpressure (Pausieren niedrig priorisierter Hintergrund-Jobs).
 """
+import logging
+_archon_exc_logger = logging.getLogger("resource_backpressure")
 
 import os
 import shutil
@@ -40,8 +42,8 @@ def _read_host_metrics() -> Dict[str, float]:
                 load1, _, _ = os.getloadavg()
                 cores = os.cpu_count() or 1
                 cpu_pct = round(min(100.0, (load1 / cores) * 100.0), 1)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[resource_backpressure] Ignorierte Ausnahme (Z.43): %s", _exc)
 
     try:
         usage = shutil.disk_usage(WORKSPACE_DIR)

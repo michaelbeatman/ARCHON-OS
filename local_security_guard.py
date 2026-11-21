@@ -6,6 +6,8 @@ Bietet:
 2. sanitize_injection_text: Bereinigt bösartige Formatierungs- und Delimiter-Token.
 3. validate_ai_output: Heuristische & modellgestützte Prüfung von Agenten-Ausgaben (Halluzinationen, Scheinquellen).
 """
+import logging
+_archon_exc_logger = logging.getLogger("local_security_guard")
 
 import re
 import json
@@ -147,8 +149,8 @@ def scan_prompt_injection(
                         verdict = "suspicious"
                 else:
                     llm_verdict = "safe"
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[local_security_guard] Ignorierte Ausnahme (Z.150): %s", _exc)
 
     return {
         "verdict": verdict,
@@ -226,8 +228,8 @@ def validate_ai_output(
                 if m:
                     llm_score = int(m.group(1))
                     base_score = round((base_score + llm_score) / 2)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[local_security_guard] Ignorierte Ausnahme (Z.229): %s", _exc)
 
     if base_score >= min_score:
         recommendation = "TRUST"

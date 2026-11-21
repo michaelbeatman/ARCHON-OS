@@ -173,8 +173,8 @@ def save_agents(agents: List[Dict]):
                 if updated:
                     atomic_write_json(ssot_file, p_list)
                     invalidate_hermes_profiles_cache()
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("[settings_state] Ignorierte Ausnahme (Z.176): %s", _exc)
 
 
 @ttl_cache(seconds=60)

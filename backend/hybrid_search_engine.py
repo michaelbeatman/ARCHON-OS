@@ -4,6 +4,8 @@ Paket 2 (Feature 6): Hybrid-Search (BM25 Volltextsuche via SQLite FTS5 + Vektor-
 Kombiniert exakte Keyword-/Fehlercode-Treffer (BM25) mit semantischen Vektor-Treffern über RRF:
 score(d) = bm25_weight * (1 / (rrf_k + rank_bm25)) + vector_weight * (1 / (rrf_k + rank_vec)).
 """
+import logging
+_archon_exc_logger = logging.getLogger("hybrid_search_engine")
 
 import os
 import re
@@ -143,8 +145,8 @@ class HybridSearchEngine:
                     for rank_idx, fr in enumerate(fts_rows, start=1):
                         bm25_ranks[fr["doc_id"]] = rank_idx
                         bm25_scores[fr["doc_id"]] = round(abs(float(fr["raw_bm25"] or 0.0)), 4)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    _archon_exc_logger.debug("[hybrid_search_engine] Ignorierte Ausnahme (Z.146): %s", _exc)
 
             # 2. Vektor-Cosine Ranking
             vec_scored = []

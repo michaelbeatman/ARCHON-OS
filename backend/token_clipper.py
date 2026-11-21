@@ -13,6 +13,8 @@ Präzisionsregeln (nach Audit 05.11.2026):
    Kein stilles Verschwinden von Kontext mehr — das Modell weiß, dass ältere
    Turns fehlen, und kann gezielt nachfragen.
 """
+import logging
+_archon_exc_logger = logging.getLogger("token_clipper")
 
 from typing import List, Dict, Tuple
 
@@ -36,8 +38,8 @@ def clip_messages_to_limit(messages: List[Dict], max_tokens: int = 8000) -> Tupl
         cfg = get_module_config("circuit_breaker")
         if not cfg.get("token_clipper_enabled", True):
             return messages, False, orig_tokens, orig_tokens
-    except Exception:
-        pass
+    except Exception as _exc:
+        _archon_exc_logger.debug("[token_clipper] Ignorierte Ausnahme (Z.39): %s", _exc)
 
     if orig_tokens <= max_tokens:
         return messages, False, orig_tokens, orig_tokens

@@ -189,14 +189,6 @@
             </div>
             <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
           </button>
-          <button id="nav-content-machine" onclick="setTab('content-machine')" class="archon-nav-item w-full flex items-center gap-2.5 px-2 py-[2px] rounded-md text-left transition-all duration-150 group">
-            <i data-lucide="clapperboard" class="w-4 h-4 shrink-0 text-black dark:text-white group-hover:text-[var(--foreground)] transition-colors"></i>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="text-xs font-semibold truncate text-[var(--foreground)]" data-i18n="nav.content_machine">Content-Maschine 2.0</div>
-              <div class="text-[9.5px] font-mono text-muted-custom truncate" data-i18n="nav.content_machine_desc">LinkedIn, YouTube, Shorts &amp; TikTok</div>
-            </div>
-            <span class="ml-auto flex-shrink-0 active-arrow hidden"><i data-lucide="chevron-right" class="w-3 h-3 text-black dark:text-white"></i></span>
-          </button>
         </div>
       </div>
       <!-- VISUELLE TRENNLINIE -->
@@ -1192,9 +1184,6 @@
           <!-- SUB-VIEW: WORKFLOWS (VISUELLER DAG-EDITOR) -->
           <div id="ops-view-workflows" class="hidden relative flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs"></div>
 
-          <!-- SUB-VIEW: CONTENT-MASCHINE 2.0 (MULTI-CHANNEL REPURPOSING & ANTI-SLOP) -->
-          <div id="ops-view-content" class="hidden relative flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs"></div>
-
           <!-- SUB-VIEW: KALENDER (FULLCALENDAR EINGEBETTET) -->
           <div id="ops-view-calendar" class="hidden relative flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs"></div>
 
@@ -2153,7 +2142,7 @@ print('Ausführung erfolgreich!')</textarea>
   </script>
   <script src="/static/js/mission_control_cockpit.js?v=2026111113"></script>
   <script src="/static/js/research_lab.js?v=2026111113"></script>
-  <script src="/static/js/operations_kanban.js?v=2026112101"></script>
+  <script src="/static/js/operations_kanban.js?v=2026112120"></script>
   <script src="/static/js/kanban_gantt_graph.js?v=2026112032"></script>
   <script src="/static/js/passkey_hitl.js?v=2026112035"></script>
   <script src="/static/js/sidebar_v2.js?v=2026111901"></script>
@@ -2886,7 +2875,7 @@ print('Ausführung erfolgreich!')</textarea>
     const CACHE_TTL_MS = 30000; // 30 Sek
     function shouldFetchTab(tId) { const now = Date.now(); if (!_tabCacheTimestamps[tId] || (now - _tabCacheTimestamps[tId] > CACHE_TTL_MS)) { _tabCacheTimestamps[tId] = now; return true; } return false; }
     // Operations-Subnavigation fallback (nur wenn operations_kanban.js nicht geladen wurde)
-    const OPS_TABS = ["projects", "chat", "kanban", "org", "workflows", "content", "automation", "calendar", "comm"];
+    const OPS_TABS = ["projects", "chat", "kanban", "org", "workflows", "automation", "calendar", "comm"];
     if (typeof window.setOperationsTab !== "function") {
       window.setOperationsTab = function setOperationsTabFallback(tab) {
         if (typeof window._opsKanbanSetTab === "function") {
@@ -2941,7 +2930,7 @@ print('Ausführung erfolgreich!')</textarea>
         return;
       }
       if (tabId === "content-machine" || tabId === "content-studio") {
-        setTab("operations", "content");
+        setTab("operations", "workflows");
         return;
       }
       if (tabId === "autonomy") {
@@ -3126,10 +3115,7 @@ print('Ausführung erfolgreich!')</textarea>
         "approval-policies": "nav-approval-policies",
         "corporate": "nav-corporate"
       };
-      const activeNavId =
-        (tabId === "operations" && subtab === "content")
-          ? "nav-content-machine"
-          : (navIds[tabId] || (tabId === "paperclip" ? "nav-operations" : `nav-${tabId}`));
+      const activeNavId = navIds[tabId] || (tabId === "paperclip" ? "nav-operations" : `nav-${tabId}`);
       const allNavBtns = document.querySelectorAll('.archon-nav-item');
       allNavBtns.forEach(btn => {
         const arrow = btn.querySelector('.active-arrow');
@@ -13725,8 +13711,7 @@ ${logExcerpt}
   <script src="/static/js/onboarding_wizard.js?v=2026111903" defer></script>
   <script src="/static/js/tenant_switcher.js?v=20261116b" defer></script>
   <script src="/static/js/playbooks_studio.js?v=2026112036" defer></script>
-  <script src="/static/js/workflow_templates_studio.js?v=2026112110" defer></script>
-  <script src="/static/js/content_machine_studio.js?v=2026112116" defer></script>
+  <script src="/static/js/workflow_templates_studio.js?v=2026112120" defer></script>
   <script src="/static/js/operations_calendar.js?v=2026112109" defer></script>
   <script src="/static/js/eu_ai_act_studio.js" defer></script>
   <script src="/static/js/archon_version_badge.js?v=20261117" defer></script>

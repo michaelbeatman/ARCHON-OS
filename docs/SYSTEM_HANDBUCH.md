@@ -3987,17 +3987,16 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 - **Mandanten- & Backup-Integration:** `TenantContextManager.resolve_active_db()` (`backend/tenant_context.py`) und `DBBackupManager` (`backend/db_backup_manager.py`) unterstützen `CONSOLIDATED_TENANT_DBS = ("ops.db", "business.db", "memory.db")` nativ.
 - **API-Steuerung:** `GET /api/v2/system/db-consolidation/plan` und `POST /api/v2/system/db-consolidation/run`.
 
-### 17.2 Multi-Channel Content-Maschine v1 & v2 (M107)
-- **Kanäle & Formate (`backend/content_machine.py`, `archon/routers/content_machine.py`):**
-  Unterstützt **LinkedIn** (Thought-Leadership & Carousel), **YouTube Longform** (8–15 Min. Skript & Kapitel), **YouTube Shorts** (9:16, ≤ 60 s), **TikTok** (9:16 Hook-Retention-Loop) und **X / Threads** (Thread-Sequenzen).
-- **Multi-Agent Repurposing-DAG (`run_campaign_repurpose_dag`):**
-  Startet auf der produktiven Workflow-DAG-Engine (`backend/workflow_dag_runner.py`):
-  `n_research` (`research_scout`) → `n_master_brief` (`content_strategist`) → paralleles Fan-Out auf alle gewählten Kanäle → `n_editorial_gate` (`executive_decision_architect`, echtes HITL-Gate im Decision Center).
-- **Content-Maschine v2 Erweiterungen:**
-  1. **Anti-AI-Slop- & Quality-Gate (`evaluate_asset_quality`):** Prüft jedes Asset automatisch auf verbotene KI-Floskeln (`_AI_SLOP_PHRASES`), Hook-Länge (`<= 180` Zeichen für Kurzform/Social), Mindestlänge, Zahlen-/Faktenanker (`\d+`), Call-to-Action und Gedankenstrich-Übernutzung (`> 3`) und speichert `quality_score` (0–100) + `quality_report_json`.
-  2. **Quellen-Ingestion (`POST /api/v2/content-machine/ingest`):** Erzeugt Kampagnen direkt aus öffentlichen Web-URLs (SSRF-geschützt über `utils.egress_guard.check_public_url`), Obsidian-Notizen (Pfad-geprüft über `utils.path_jail.safe_path_within`) oder Rohtranskripten.
-  3. **9:16 Video-Clip-Repurposing-Matrix (`POST /api/v2/content-machine/campaigns/{id}/clip-matrix`):** Zerlegt ein Longform-Skript in 1–6 vertikale Kurzvideo-Assets (`format_type = "video_clip_9_16"`, YouTube Shorts & TikTok) mit Timecodes, Visual-Hook und Loop-Ende.
-  4. **Publishing-Bridge & Performance-Loop:** `POST /api/v2/content-machine/assets/{id}/dispatch-webhook` (SSRF-geschützt via `check_target_url`), `POST /api/v2/content-machine/publish-due` (publiziert fällige `scheduled`-Assets) und `POST /api/v2/content-machine/assets/{id}/metrics` (berechnet Engagement-Rate und schreibt Top-Learnings in `memory.db`).
+### 17.2 Archon selbst als Multi-Channel Content-Maschine (Workflow-Studio, Showroom & Kalender, M107)
+- **Keine isolierte Zweit-UI:** Die Content-Maschine ist direkt in das visuelle **Workflow-Studio** (`Operations → Workflows`), **Kanban**, **Decision Center (HITL)** und **Showroom (`03_Endprodukte`)** integriert (die zwischenzeitliche separate SPA-Seitenleiste `content_machine_studio.js` wurde wieder entfernt).
+- **Kuratierter Omnichannel-DAG (`omnichannel_content_engine` in `backend/workflow_templates.py`):**
+  `cm_research` (Trend-, Fakten- & Hook-Recherche) → `cm_brief` (Master-Storyline) → paralleles Fan-Out auf **LinkedIn**, **YouTube Longform**, **YouTube Shorts & TikTok 9:16 Clip-Matrix (3 Clips)** und **X / Threads** → **`cm_slop_gate` (`type: "quality_gate"`)** → **`cm_hitl_release` (HITL-Freigabe)**.
+- **Native Engine-Bausteine in `backend/workflow_dag_runner.py`:**
+  1. **Automatische Brand-Voice-Injektion (`config/voice.md`):** Wird automatisch in jeden Content-/Writer-/Marketing-Knoten geladen.
+  2. **Deterministisches Anti-AI-Slop Quality-Gate (`type: "quality_gate"` + Self-Critique-Revisionsschleife `max_revisions`):** Bewertet jeden Content-Output über `evaluate_asset_quality` (0–100 Score, KI-Floskel-Check, Hook-Länge ≤ 180 Z., Zahlenanker, CTA) und lässt Entwürfe bei Score < 75 automatisch nachbessern, bevor sie ins HITL-Gate laufen.
+  3. **Automatische Showroom-Ablage (`03_Endprodukte`):** Content-Knoten (`save_to_showroom: true`) exportieren ihre fertigen Deliverables inkl. Quality-Score direkt nach `PROJEKTE_DIR/WF_<workflow_id>/03_Endprodukte/`.
+  4. **Live-Execution-Graph via SSE (`workflow_node_state`):** Während der Ausführung leuchten die Knoten im Workflow-Studio (`static/js/workflow_templates_studio.js`) live in Echtzeit (`running`, `completed · Q<score>`, `awaiting_gate`, `failed`).
+  5. **Wiederverwendbare Backend-APIs (`backend/content_machine.py`, `archon/routers/content_machine.py`):** Quellen-Ingestion (`url` SSRF-safe, `obsidian` path-jailed, `transcript`), 9:16-Clip-Matrix, Webhook-Dispatch, Due-Publish-Sweep und Performance-Feedback-Loop (`record_asset_metrics` → `memory.db`).
 
 ### 17.3 Next.js 16 UI-Konsolidierung gegen Archon FastAPI (M108)
 - **Direkte FastAPI-Bridge ohne PocketBase:** Über `frontend/src/app/api/archon/[...path]/route.ts` und `frontend/src/lib/archon-api.ts` kommuniziert das Next.js-16-Frontend direkt mit Archon FastAPI (`127.0.0.1:8420`).

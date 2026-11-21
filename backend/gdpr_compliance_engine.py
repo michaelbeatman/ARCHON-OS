@@ -6,6 +6,8 @@ Implementiert Betroffenenrechte nach:
 - Art. 17 DSGVO: Recht auf Löschung / Recht auf Vergessenwerden (Audit-sichere Anonymisierung/Löschung)
 - Art. 30 DSGVO: Manipulationssicheres Verzeichnis von Verarbeitungstätigkeiten & Löschquittungen
 """
+import logging
+_archon_exc_logger = logging.getLogger("gdpr_compliance_engine")
 
 import os
 import re
@@ -507,8 +509,8 @@ class GDPRComplianceEngine:
                                                 "size_bytes": os.path.getsize(fpath),
                                                 "match_type": "content"
                                             })
-                                except Exception:
-                                    pass
+                                except Exception as _exc:
+                                    _archon_exc_logger.debug("[gdpr_compliance_engine] Ignorierte Ausnahme (Z.510): %s", _exc)
             except Exception as e:
                 export["sources"]["obsidian_error"] = str(e)
 
@@ -854,8 +856,8 @@ class GDPRComplianceEngine:
                     severity="WARNING",
                     category="gdpr_compliance"
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[gdpr_compliance_engine] Ignorierte Ausnahme (Z.857): %s", _exc)
         else:
             results["receipt"] = {
                 "receipt_id": "DRY-RUN-PREVIEW",

@@ -9,6 +9,8 @@ Datei, die alle Loader still auf Defaults fallen liess.
 
 Dieses Blatt-Modul importiert nichts aus backend (keine Import-Zyklen).
 """
+import logging
+_archon_exc_logger = logging.getLogger("settings_json")
 
 import json
 import os
@@ -27,8 +29,8 @@ def _load_raw(path: str) -> Dict[str, Any]:
                 data = json.load(f)
                 if isinstance(data, dict):
                     return data
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[settings_json] Ignorierte Ausnahme (Z.30): %s", _exc)
     return {}
 
 
@@ -47,8 +49,8 @@ def _write_atomic(path: str, data: Dict[str, Any]) -> None:
     except BaseException:
         try:
             os.unlink(tmp)
-        except OSError:
-            pass
+        except OSError as _exc:
+            _archon_exc_logger.debug("[settings_json] Ignorierte Ausnahme (Z.50): %s", _exc)
         raise
 
 

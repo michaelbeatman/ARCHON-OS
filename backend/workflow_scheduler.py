@@ -568,8 +568,8 @@ def _run_workflow_events_retention(conn: sqlite3.Connection, now: datetime) -> N
         logger.warning(f"[WorkflowScheduler] Retention-Cleanup fehlgeschlagen (ignoriert): {exc}")
         try:
             conn.rollback()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug("[workflow_scheduler] Ignorierte Ausnahme (Z.571): %s", _exc)
 
 
 def _calendar_event_already_handled(conn: sqlite3.Connection, corr_id: str, today_start_iso: str) -> bool:
@@ -948,11 +948,7 @@ async def workflow_scheduler_background_loop() -> None:
     await asyncio.sleep(8)
     while True:
         try:
-            loop = asyncio.new_event_loop()
-            try:
-                await loop.run_in_executor(None, evaluate_due_schedules)
-            finally:
-                loop.close()
+            await asyncio.to_thread(evaluate_due_schedules)
         except Exception as exc:
             logger.error(f"[WorkflowScheduler] Loop-Fehler: {exc}")
         await asyncio.sleep(30)

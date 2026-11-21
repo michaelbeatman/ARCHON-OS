@@ -4,6 +4,8 @@ Archon OS Receipt OCR & Intelligent Expense Ingestion Engine.
 Processes receipt photos from Telegram or Web UI, extracts accounting metadata via Multimodal Vision,
 and creates finance tasks in kanban.db and agentic_memory.db.
 """
+import logging
+_archon_exc_logger = logging.getLogger("receipt_ocr_engine")
 
 import os
 import sys
@@ -300,8 +302,8 @@ class ReceiptOCREngine:
         try:
             with open(meta_json_path, "w", encoding="utf-8") as fh:
                 json.dump(result, fh, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[receipt_ocr_engine] Ignorierte Ausnahme (Z.303): %s", _exc)
 
         return result
 

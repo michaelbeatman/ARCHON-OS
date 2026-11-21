@@ -161,8 +161,8 @@ def compact_session_core(session_id: str) -> Dict[str, Any]:
             f"{result.get('original_tokens')} -> {result.get('compacted_tokens')} Tokens "
             f"({result.get('saved_pct')}% gespart, {len(deactivate_ids)} Nachrichten verdichtet)"
         )
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("[context_meter] Ignorierte Ausnahme (Z.164): %s", _exc)
 
     return {
         "compacted": True,

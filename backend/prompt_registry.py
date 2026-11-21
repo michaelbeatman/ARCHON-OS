@@ -4,6 +4,8 @@ Zentrale Prompt-Registry mit Versionierung, 1-Click Rollback,
 Unified Diff und Canary-Rollout (Canary Testing) für alle Archon OS Agenten.
 Ersetzt unstrukturierte .bak.N Dateien durch versionierte SQLite-Snapshots.
 """
+import logging
+_archon_exc_logger = logging.getLogger("prompt_registry")
 
 import os
 import sys
@@ -30,8 +32,8 @@ class PromptRegistry:
         self.db_path = db_path or _resolve_db_path()
         try:
             os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[prompt_registry] Ignorierte Ausnahme (Z.33): %s", _exc)
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:

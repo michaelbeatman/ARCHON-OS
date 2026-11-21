@@ -4,6 +4,8 @@ Zentraler Prometheus- & System-Metriken-Kollektor für Archon OS.
 Generiert konforme Metriken im Prometheus Exposition Text-Format (0.0.4)
 für Prometheus, Grafana, Uptime Kuma und interne Health-Monitore.
 """
+import logging
+_archon_exc_logger = logging.getLogger("metrics_collector")
 
 import os
 import sys
@@ -136,8 +138,8 @@ class MetricsCollector:
             cpu_pct = psutil.cpu_percent(interval=None)
             mem = psutil.virtual_memory()
             ram_bytes = mem.used
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[metrics_collector] Ignorierte Ausnahme (Z.139): %s", _exc)
         return {"cpu_percent": cpu_pct, "ram_bytes": ram_bytes}
 
     def check_and_dispatch_alerts(self, kanban: Dict[str, Any], telemetry: Dict[str, Any]) -> List[str]:

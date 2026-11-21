@@ -4,6 +4,8 @@ Autonomer SQLite Vacuum & Fragmentierungs-Optimizer (Pillar 4 / Storage Hygiene)
 Prüft Datenbanken, führt VACUUM und PRAGMA optimize durch und gibt ungenutzten
 Speicherplatz auf der Festplatte wieder frei.
 """
+import logging
+_archon_exc_logger = logging.getLogger("db_optimizer")
 
 import glob
 import os
@@ -58,8 +60,8 @@ def optimize_all_databases() -> Dict[str, Any]:
             conn = sqlite3.connect(db_path, timeout=15.0)
             try:
                 conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[db_optimizer] Ignorierte Ausnahme (Z.61): %s", _exc)
             conn.execute("PRAGMA optimize;")
             conn.execute("VACUUM;")
             conn.close()
@@ -84,8 +86,8 @@ def optimize_all_databases() -> Dict[str, Any]:
             if conn is not None:
                 try:
                     conn.close()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    _archon_exc_logger.debug("[db_optimizer] Ignorierte Ausnahme (Z.87): %s", _exc)
 
     return {
         "status": "success",

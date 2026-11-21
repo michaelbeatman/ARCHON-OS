@@ -17,6 +17,8 @@ Kostenhebel:
   - Seiten werden vor dem LLM auf relevante Absaetze gekuerzt (lexikalisch, ohne Embedding-Kosten)
   - Abbruch, sobald die Evidenz reicht
 """
+import logging
+_archon_exc_logger = logging.getLogger("research_engine_v2")
 
 import os
 import re
@@ -99,13 +101,13 @@ def _is_safe_url(url: str) -> bool:
     try:
         packed = socket.inet_aton(host)
         return _is_global_ip(socket.inet_ntoa(packed))
-    except OSError:
-        pass
+    except OSError as _exc:
+        _archon_exc_logger.debug("[research_engine_v2] Ignorierte Ausnahme (Z.102): %s", _exc)
     try:
         ip_obj = ipaddress.ip_address(host)
         return _is_global_ip(str(ip_obj))
-    except ValueError:
-        pass
+    except ValueError as _exc:
+        _archon_exc_logger.debug("[research_engine_v2] Ignorierte Ausnahme (Z.107): %s", _exc)
     # DNS-Auflösung gegen interne Rebinding-Ziele prüfen (bei Offline-DNS nicht blind durchlassen für einlabelige Hostnamen)
     if "." not in host:
         return False

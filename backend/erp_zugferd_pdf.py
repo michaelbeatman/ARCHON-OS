@@ -9,6 +9,8 @@ nach ISO 19005-3 / Factur-X EN 16931), das den vollständigen EN-16931-XML-Daten
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("erp_zugferd_pdf")
 
 import datetime
 import functools
@@ -69,8 +71,8 @@ def _get_srgb_icc_bytes() -> bytes:
                     raw = fh.read()
                 if len(raw) >= 128:
                     return raw
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[erp_zugferd_pdf] Ignorierte Ausnahme (Z.72): %s", _exc)
     try:
         from PIL import ImageCms
         return ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
@@ -730,8 +732,8 @@ def build_corporate_template_pdf(rendered: Dict[str, Any]) -> bytes:
             cmds.extend(_draw_qr_pdf_cmds(qr_mat, x=right_edge - 70.0, y=82.0, target_pt=66.0))
             cmds.append(b"0.32 0.36 0.44 rg")
             cmds.append(_txt_cmd("F2", 7.0, right_edge - 70.0, 73.0, "GiroCode EPC-QR"))
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[erp_zugferd_pdf] Ignorierte Ausnahme (Z.733): %s", _exc)
 
     # Fußzeile
     cmds.append(b"0.86 0.89 0.93 RG 0.5 w")

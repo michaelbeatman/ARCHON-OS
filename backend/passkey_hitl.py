@@ -4,6 +4,8 @@ Pro-User-Konfiguration & Signaturpruefung mittels `cryptography`.
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("passkey_hitl")
 
 import base64
 import datetime
@@ -54,8 +56,8 @@ def _load_store() -> Dict[str, Any]:
             data = json.load(fh)
         if isinstance(data, dict) and isinstance(data.get("users"), dict):
             return data
-    except Exception:
-        pass
+    except Exception as _exc:
+        _archon_exc_logger.debug("[passkey_hitl] Ignorierte Ausnahme (Z.57): %s", _exc)
     return {"users": {}}
 
 

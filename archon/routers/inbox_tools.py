@@ -53,8 +53,7 @@ async def api_scan_inbox_watcher_now():
     try:
         from backend.internet_watchdog import run_watchdog_scan
 
-        loop = asyncio.get_event_loop()
-        wd_res = await loop.run_in_executor(None, run_watchdog_scan, True)
+        wd_res = await asyncio.to_thread(run_watchdog_scan, True)
         res["internet_watchdog"] = wd_res
     except Exception as e:
         res["internet_watchdog_error"] = str(e)

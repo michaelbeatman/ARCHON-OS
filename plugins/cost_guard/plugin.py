@@ -4,6 +4,8 @@ plugins/cost_guard/plugin.py
 ============================
 Kostenüberwachung & Budget-Schutz für LLM-Aufrufe.
 """
+import logging
+_archon_exc_logger = logging.getLogger("plugin")
 
 import os
 import json
@@ -26,15 +28,15 @@ class CostGuardPlugin(BasePlugin):
                     data = json.load(f)
                     if data.get("date") == datetime.date.today().isoformat():
                         self.burn_data = data
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[plugin] Ignorierte Ausnahme (Z.29): %s", _exc)
 
     def _save_burn(self):
         try:
             with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(self.burn_data, f, indent=2)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[plugin] Ignorierte Ausnahme (Z.36): %s", _exc)
 
     async def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Any:
         if tool_name == "check_token_budget":

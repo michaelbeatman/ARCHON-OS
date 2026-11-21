@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 const ARCHON_TARGETS = [
   process.env.INTERNAL_ARCHON_URL,
   process.env.NEXT_PUBLIC_ARCHON_API_URL,
-  'http://archon-os:8420',
-  'http://host.docker.internal:8420',
-  'http://127.0.0.1:8420',
+  'http://archon-os:8501',
+  'http://host.docker.internal:8501',
+  'http://127.0.0.1:8501',
 ].filter((u): u is string => Boolean(u && u.trim()));
 
 function sanitizePathSegments(segments: string[]): string | null {

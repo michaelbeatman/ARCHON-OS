@@ -7,6 +7,8 @@ Verwaltet dynamische Projekt-Notebooks, extrahiert und indiziert Quellen (PDF/DO
 fuehrt abfragegestuetzte Retrieval-Synthesen (Grounded Deep Chat) mit exakten Seitenzitaten durch
 und synchronisiert Erkenntnisse 1-Click in den Obsidian-Vault.
 """
+import logging
+_archon_exc_logger = logging.getLogger("notebook_engine")
 
 import os
 import sys
@@ -116,8 +118,8 @@ def save_notebooks_data(data: Dict[str, dict]):
         if os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
-            except OSError:
-                pass
+            except OSError as _exc:
+                _archon_exc_logger.debug("[notebook_engine] Ignorierte Ausnahme (Z.119): %s", _exc)
 
 
 def _append_chat_history(notebook_id: str, entries: List[dict]) -> None:
@@ -645,8 +647,8 @@ citations: "{citations}"
                 with open(p, "w", encoding="utf-8") as f:
                     f.write(note_content)
                 written_paths.append(p)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[notebook_engine] Ignorierte Ausnahme (Z.648): %s", _exc)
 
     return {
         "status": "success",

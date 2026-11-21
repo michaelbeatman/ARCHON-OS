@@ -1,3 +1,5 @@
+import logging
+_archon_exc_logger = logging.getLogger("operations_receipts")
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 """Sub-Router fuer Beleg-Verarbeitung, OCR und Archivierung (Receipts Engine).
@@ -112,8 +114,8 @@ def api_receipt_patch(receipt_id: str, updates: Dict[str, Any] = Body(...)):
             agent_id="finance_operator",
             payload={"receipt_id": receipt_id, "updates": updates}
         )
-    except Exception:
-        pass
+    except Exception as _exc:
+        _archon_exc_logger.debug("[operations_receipts] Ignorierte Ausnahme (Z.115): %s", _exc)
     return {"status": "success", "receipt_id": receipt_id, "updated": updates}
 
 

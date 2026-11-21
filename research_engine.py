@@ -10,6 +10,8 @@ Unterstützt etablierte Suchmaschinen:
 5. Tavily AI Search (Agenten-Web-Extrakt)
 6. Perplexity Sonar / OmniRoute (KI-Recherche mit Quellen)
 """
+import logging
+_archon_exc_logger = logging.getLogger("research_engine")
 
 import os
 import re
@@ -165,8 +167,8 @@ def search_wikipedia(query: str, lang: str = "de", max_results: int = 3) -> List
                         with urllib.request.urlopen(sreq, timeout=4) as sresp:
                             sdata = json.loads(sresp.read().decode("utf-8"))
                             snippet = sdata.get("extract", "")
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        _archon_exc_logger.debug("[research_engine] Ignorierte Ausnahme (Z.168): %s", _exc)
                     if not snippet:
                         snippet = f"Wikipedia-Artikel: {title}"
                     results.append({

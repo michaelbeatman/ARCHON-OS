@@ -6,6 +6,8 @@ Bietet schnelles, deterministisches Vorfiltern von Benutzeranfragen:
 2. Tool-Pruning: Reduktion der MCP-Toolliste auf die 2-3 relevanten Werkzeuge vor dem LLM-Prompt.
 3. Fail-Open: Fällt bei Nichtverfügbarkeit oder Deaktivierung transparent auf die Standard-Pipeline zurück.
 """
+import logging
+_archon_exc_logger = logging.getLogger("jev_router")
 
 import os
 import json
@@ -50,8 +52,8 @@ def load_settings() -> dict:
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[jev_router] Ignorierte Ausnahme (Z.53): %s", _exc)
     return {}
 
 def get_jev_config() -> dict:

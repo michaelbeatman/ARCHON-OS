@@ -4,6 +4,8 @@ Virtueller Pre-Mortem Stresstest & War-Room-Simulation (Pillar 6 & 7).
 Simuliert vor kritischen Veröffentlichungen gegnerische Parteien
 (skeptischer Kunde, Pentester/Angreifer, Compliance-Auditor) und erstellt eine Risiko-Matrix.
 """
+import logging
+_archon_exc_logger = logging.getLogger("war_room_simulator")
 
 import os
 import sys
@@ -140,16 +142,21 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
     mitigations = [res.get("mandatory_fix", "") for res in results if res.get("mandatory_fix")]
     mitigation_text = "\n".join(f"• {m}" for m in mitigations)
 
-    try:
+    def _persist_war_room():
         conn = sqlite3.connect(DB_PATH, timeout=5.0)
-        with conn:
-            conn.execute("""
-                INSERT INTO war_room_simulations 
-                (topic, plan_summary, overall_risk_level, simulation_json, mitigation_advice, created_at)
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (topic[:250], proposal_text[:500], overall_risk, json.dumps(results, ensure_ascii=False), mitigation_text))
-            conn.commit()
-        conn.close()
+        try:
+            with conn:
+                conn.execute("""
+                    INSERT INTO war_room_simulations 
+                    (topic, plan_summary, overall_risk_level, simulation_json, mitigation_advice, created_at)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (topic[:250], proposal_text[:500], overall_risk, json.dumps(results, ensure_ascii=False), mitigation_text))
+                conn.commit()
+        finally:
+            conn.close()
+
+    try:
+        await asyncio.to_thread(_persist_war_room)
     except Exception as e:
         print(f"[WarRoomSimulator] Fehler beim Speichern: {e}", file=sys.stderr)
 
@@ -175,8 +182,8 @@ def get_war_room_history(limit: int = 20) -> List[Dict[str, Any]]:
         for r in rows:
             try:
                 r["simulation_json"] = json.loads(r["simulation_json"])
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[war_room_simulator] Ignorierte Ausnahme (Z.183): %s", _exc)
         conn.close()
         return rows
     except Exception:

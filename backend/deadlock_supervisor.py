@@ -4,6 +4,8 @@ Deadlock- & Stagnations-Wächter für parallele Subagenten (Pillar 1 & 2).
 Erkennt zirkuläre Abhängigkeiten und stagnierende Tasks im Kanban/Scheduler.
 Löst Blockaden nach konfigurierbarer Inaktivität autonom auf.
 """
+import logging
+_archon_exc_logger = logging.getLogger("deadlock_supervisor")
 
 import os
 import sys
@@ -31,8 +33,8 @@ def _to_dt(value) -> Optional[datetime.datetime]:
     s = str(value).strip()
     try:
         return datetime.datetime.fromtimestamp(float(s))
-    except ValueError:
-        pass
+    except ValueError as _exc:
+        _archon_exc_logger.debug("[deadlock_supervisor] Ignorierte Ausnahme (Z.34): %s", _exc)
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
     try:

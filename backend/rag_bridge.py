@@ -5,6 +5,8 @@ AnythingLLM Vector-RAG-System (Port 3001).
 Greift auf die 6.478 im Workspace 'ARCHON' (mein-workspace) indexierten
 Dokumente aus dem Obsidian-Vault zu und liefert relevante Kontexte an die Agenten.
 """
+import logging
+_archon_exc_logger = logging.getLogger("rag_bridge")
 
 import os
 import sys
@@ -67,8 +69,8 @@ class RAGBridge:
                         "context_chunks": chunks,
                         "source_count": len(chunks)
                     }
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[rag_bridge] Ignorierte Ausnahme (Z.70): %s", _exc)
 
         # 2. Versuch: Workspace Dokumenten-Suche
         try:
@@ -97,8 +99,8 @@ class RAGBridge:
                         "context_chunks": matching_docs,
                         "source_count": len(matching_docs)
                     }
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[rag_bridge] Ignorierte Ausnahme (Z.100): %s", _exc)
 
         # 3. Fallback: Lokale SQLite Learnings
         from local_memory_bridge import LocalMemoryBridge

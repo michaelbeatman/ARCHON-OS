@@ -3,6 +3,8 @@ backend/docuseal_client.py
 Archon OS DocuSeal E-Signature Integration Client.
 Handles contract signing workflows, templates, submission creation, and status synchronisation with Kanban and CRM.
 """
+import logging
+_archon_exc_logger = logging.getLogger("docuseal_client")
 
 import os
 import re
@@ -83,8 +85,8 @@ class DocuSealClient:
                     ):
                         try:
                             conn.execute(col_ddl)
-                        except sqlite3.OperationalError:
-                            pass
+                        except sqlite3.OperationalError as _exc:
+                            _archon_exc_logger.debug("[docuseal_client] Ignorierte Ausnahme (Z.86): %s", _exc)
                     conn.commit()
             except Exception as e:
                 print(f"[DocuSeal] Init Warning: {e}", file=sys.stderr)
@@ -425,8 +427,8 @@ class DocuSealClient:
                     severity="INFO",
                     category="legal_contract",
                 )
-        except Exception:
-            pass
+        except Exception as _exc:
+            _archon_exc_logger.debug("[docuseal_client] Ignorierte Ausnahme (Z.428): %s", _exc)
 
         return {
             "status": "processed",

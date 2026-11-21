@@ -18,6 +18,8 @@ Jetzt:
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("docker_client")
 
 import json
 import os
@@ -283,8 +285,8 @@ class DockerClient:
         finally:
             try:
                 sock.close()
-            except Exception:
-                pass
+            except Exception as _exc:
+                _archon_exc_logger.debug("[docker_client] Ignorierte Ausnahme (Z.286): %s", _exc)
 
     def _read_response(self, sock: socket.socket) -> tuple[int, bytes]:
         """Liest die komplette Antwort und liefert (HTTP-Status, Body)."""
@@ -312,8 +314,8 @@ class DockerClient:
                     if line.lower().startswith(b"content-length:"):
                         try:
                             content_length = int(line.split(b":", 1)[1].strip())
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            _archon_exc_logger.debug("[docker_client] Ignorierte Ausnahme (Z.315): %s", _exc)
             if headers_parsed:
                 body_part = response.split(b"\r\n\r\n", 1)[1]
                 if content_length is not None and len(body_part) >= content_length:

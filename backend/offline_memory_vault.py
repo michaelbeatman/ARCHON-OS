@@ -12,6 +12,8 @@ Eigenschaften:
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("offline_memory_vault")
 
 from contextlib import contextmanager
 import hashlib
@@ -50,8 +52,8 @@ def load_or_create_vault_key(key_path: Optional[str] = None) -> bytes:
         f.write(key)
     try:
         os.chmod(path, 0o600)
-    except OSError:
-        pass
+    except OSError as _exc:
+        _archon_exc_logger.debug("[offline_memory_vault] Ignorierte Ausnahme (Z.53): %s", _exc)
     return key
 
 

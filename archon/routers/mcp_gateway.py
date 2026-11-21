@@ -13,6 +13,8 @@ Endpunkte:
 """
 
 from __future__ import annotations
+import logging
+_archon_exc_logger = logging.getLogger("mcp_gateway")
 
 import asyncio
 import json
@@ -110,8 +112,8 @@ async def mcp_sse_stream(request: Request):
                     break
                 await asyncio.sleep(15)
                 yield ": keepalive\n\n"
-        except asyncio.CancelledError:
-            pass
+        except asyncio.CancelledError as _exc:
+            _archon_exc_logger.debug("[mcp_gateway] Ignorierte Ausnahme (Z.113): %s", _exc)
 
     return StreamingResponse(
         _event_generator(),

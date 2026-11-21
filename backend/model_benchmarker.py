@@ -91,27 +91,32 @@ async def run_model_benchmark(
     faster_model = model_a if dur_a <= dur_b else model_b
     summary = f"Modell '{faster_model}' war schneller ({min(dur_a, dur_b)}s vs {max(dur_a, dur_b)}s)."
 
-    # Persistent in SQLite hinterlegen
-    try:
+    # Persistent in SQLite hinterlegen (non-blocking)
+    def _persist_benchmark():
         conn = sqlite3.connect(DB_PATH, timeout=5.0)
-        with conn:
-            conn.execute("""
-                INSERT INTO model_benchmarks 
-                (prompt, model_a, model_b, dur_a, dur_b, chars_a, chars_b, winner, summary, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (
-                prompt[:500],
-                model_a,
-                model_b,
-                dur_a,
-                dur_b,
-                res_a.get("chars_generated", 0),
-                res_b.get("chars_generated", 0),
-                faster_model,
-                summary
-            ))
-            conn.commit()
-        conn.close()
+        try:
+            with conn:
+                conn.execute("""
+                    INSERT INTO model_benchmarks 
+                    (prompt, model_a, model_b, dur_a, dur_b, chars_a, chars_b, winner, summary, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    prompt[:500],
+                    model_a,
+                    model_b,
+                    dur_a,
+                    dur_b,
+                    res_a.get("chars_generated", 0),
+                    res_b.get("chars_generated", 0),
+                    faster_model,
+                    summary
+                ))
+                conn.commit()
+        finally:
+            conn.close()
+
+    try:
+        await asyncio.to_thread(_persist_benchmark)
     except Exception as err:
         print(f"[ModelBenchmarker] Fehler beim Speichern des Benchmark-Ergebnisses: {err}", file=sys.stderr)
 

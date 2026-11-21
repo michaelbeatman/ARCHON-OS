@@ -4,6 +4,8 @@ Secret-Masking & Red-Teaming Output Guard (Pillar 6 / Zero-Trust).
 Scannt Textausgaben von Modellen und Agenten auf vertrauliche API-Keys,
 Passwörter, JWT-Token oder private Zugangsdaten und maskiert diese vor der Weitergabe.
 """
+import logging
+_archon_exc_logger = logging.getLogger("secret_masker")
 
 import re
 from typing import Tuple
@@ -39,8 +41,8 @@ def mask_sensitive_text(text: str) -> Tuple[str, int]:
         cfg = get_module_config("fleet_and_hygiene")
         if not cfg.get("secret_masking_enabled", True):
             return text, 0
-    except Exception:
-        pass
+    except Exception as _exc:
+        _archon_exc_logger.debug("[secret_masker] Ignorierte Ausnahme (Z.42): %s", _exc)
 
     masked_text = text
     total_replacements = 0

@@ -103,7 +103,7 @@
         return;
       }
 
-      const tabs = ['projects', 'chat', 'kanban', 'org', 'workflows', 'automation', 'comm'];
+      const tabs = ['projects', 'chat', 'kanban', 'org', 'workflows', 'content', 'automation', 'calendar', 'comm'];
       const headerMeta = {
         projects: {
           title: 'Operations',
@@ -130,10 +130,20 @@
           subtitle: '• Visueller Multi-Agent Prozessablaufplan & DAG-Vorlagen',
           img: '/static/img/cadre_icons/overview.png'
         },
+        content: {
+          title: 'Content-Maschine 2.0',
+          subtitle: '• Multi-Channel Repurposing-DAG (LinkedIn, YouTube, Shorts, TikTok, X), Anti-Slop-Gate & 9:16 Clip-Matrix',
+          img: '/static/img/cadre_icons/medien.png?v=3'
+        },
         automation: {
           title: 'n8n-Automation',
           subtitle: kanT('ui.operations_kanban.tab_automation_subtitle', '• Workflow-Engine, Webhook-Pipelines & Prozess-Ketten'),
           img: '/static/img/cadre_icons/n8n.png?v=202610171046'
+        },
+        calendar: {
+          title: 'Kalender',
+          subtitle: '• Termine, Fokusblöcke, Deadlines, Cron-Jobs & Google/Outlook/CalDAV-Sync',
+          img: '/static/img/cadre_icons/calendar.png?v=2026112045'
         },
         comm: {
           title: kanT('ui.operations_kanban.tab_comm_title', 'Kommunikation'),
@@ -208,6 +218,10 @@
           vmc.style.display = 'flex';
         }
         if (typeof initMasterChat === 'function') initMasterChat();
+      } else if (subtab === 'calendar') {
+        if (typeof window.renderEmbeddedOperationsCalendar === 'function') window.renderEmbeddedOperationsCalendar();
+      } else if (subtab === 'content') {
+        if (typeof window.renderEmbeddedContentMachineStudio === 'function') window.renderEmbeddedContentMachineStudio();
       } else if (subtab === 'automation') {
         const iframe = document.getElementById('automation-n8n-iframe');
         const extLink = document.getElementById("n8n-external-link");

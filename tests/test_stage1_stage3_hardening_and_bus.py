@@ -293,3 +293,51 @@ def test_dag_runner_media_render_node():
     out = asyncio.run(_run())
     assert out["status"] == "success"
     assert out["media_matrix"]["clips"][0]["title"] == "Clip 1"
+
+
+def test_workflow_node_plugins_vst_discovery_and_execution(tmp_path, monkeypatch):
+    import backend.workflow_node_plugins as wnp
+    from backend.workflow_dag_runner import default_agent_node_executor
+
+    # 1. Core-Plugins inkl. FFmpeg, KinoCut, TTS, Suno, ImageGen, CalendarPublish vorhanden
+    core_ids = {p["plugin_id"] for p in wnp.list_workflow_node_plugins()}
+    for expected in ("ffmpeg", "kinocut", "tts", "suno", "image_gen", "calendar_publish"):
+        assert expected in core_ids
+
+    # 2. Deklaratives 3rd-Party-Plugin ("VST"-Pattern) aus plugins/workflow_nodes/*.json
+    pdir = tmp_path / "workflow_nodes"
+    pdir.mkdir(parents=True, exist_ok=True)
+    (pdir / "elevenlabs_custom.json").write_text(
+        json.dumps({
+            "plugin_id": "elevenlabs_custom",
+            "label": "ElevenLabs Dubbing",
+            "adapter": "http",
+            "http_endpoint": "https://api.example.com/dub",
+            "params_schema": [{"key": "target_lang", "label": "Sprache", "type": "select", "default": "de", "options": ["de", "en"]}],
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(wnp, "PLUGINS_NODES_DIR", str(pdir))
+    assert wnp.get_workflow_node_plugin("elevenlabs_custom")["third_party"] is True
+
+    # 3. Upstream-Template-Aufloesung + FFmpeg Dry-Run im DAG-Runner
+    async def _run_ffmpeg():
+        with patch("backend.workflow_dag_runner._update_kanban_task_status"):
+            return await default_agent_node_executor(
+                {
+                    "id": "n-ff",
+                    "type": "ffmpeg",
+                    "title": "Clip Cut",
+                    "plugin_params": {
+                        "mode": "aspect_9_16",
+                        "input_path": "{{upstream.n_prev.video_path}}",
+                        "dry_run": True,
+                    },
+                },
+                {"n_prev": {"video_path": str(tmp_path / "raw.mp4")}},
+            )
+
+    res = asyncio.run(_run_ffmpeg())
+    assert res["status"] == "success"
+    assert res["planned_only"] is True
+    assert "9:16" in res["command"] or "crop=" in res["command"]

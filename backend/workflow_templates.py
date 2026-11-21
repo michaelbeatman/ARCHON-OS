@@ -831,9 +831,11 @@ def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
             "max_retries": int(raw.get("max_retries") or 1),
             "timeout_sec": int(raw.get("timeout_sec") or 300),
         }
-        for opt_str in ("channel", "model"):
+        for opt_str in ("channel", "model", "plugin_id"):
             if raw.get(opt_str):
                 node_obj[opt_str] = str(raw[opt_str]).strip()
+        if isinstance(raw.get("plugin_params"), dict):
+            node_obj["plugin_params"] = dict(raw["plugin_params"])
         if raw.get("save_to_showroom") is not None:
             node_obj["save_to_showroom"] = bool(raw["save_to_showroom"])
         if raw.get("quality_gate") is not None:
@@ -1121,7 +1123,7 @@ _DAG_NODE_PASSTHROUGH_KEYS = (
     "max_retries", "timeout_sec", "soul_mode", "reasoning_effort",
     "tool_preset", "model", "channel", "save_to_showroom",
     "max_revisions", "min_quality_score", "quality_gate",
-    "max_turns", "output_schema", "media_config",
+    "max_turns", "output_schema", "media_config", "plugin_id", "plugin_params",
 )
 
 

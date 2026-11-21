@@ -160,6 +160,13 @@ async def api_v2_workflow_templates_list(request: Request):
     return {"status": "ok", "templates": await asyncio.to_thread(list_workflow_templates)}
 
 
+@router.get("/api/v2/workflows/node-plugins")
+async def api_v2_workflow_node_plugins(request: Request):
+    require_admin_or_503(request)
+    from backend.workflow_node_plugins import list_workflow_node_plugins
+    return {"status": "ok", "plugins": await asyncio.to_thread(list_workflow_node_plugins)}
+
+
 @router.post("/api/v2/workflows/templates")
 async def api_v2_workflow_templates_save(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)

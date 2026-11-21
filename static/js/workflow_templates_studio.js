@@ -55,6 +55,7 @@
 
   let _templates = [];
   let _schedules = [];
+  let _nodePlugins = [];
   let _tplSearch = "";
   let _tplCat = "all";
   let _profiles = [];
@@ -260,18 +261,30 @@
     const prevId = _selectedNodeId && existing.has(_selectedNodeId) ? _selectedNodeId : (_activeTpl.nodes.length ? _activeTpl.nodes[_activeTpl.nodes.length - 1].id : null);
 
     const defaults = {
-      agent: { title: `Agent-Station ${idx}`, agent_id: "research", tool_preset: "research", soul_mode: "analytical", require_hitl: false },
-      fanout: { title: `Parallel-Zweig ${idx}`, agent_id: "analyst", tool_preset: "research", soul_mode: "strict", require_hitl: false },
-      gate: { title: `HITL-Freigabe ${idx}`, agent_id: "executive_decision_architect", tool_preset: "minimal", soul_mode: "strict", require_hitl: true },
-      boardroom: { title: `Boardroom-Debatte ${idx}`, agent_id: "executive_decision_architect", tool_preset: "research", soul_mode: "strict", require_hitl: false },
-      research: { title: `Research-Lab Auftrag ${idx}`, agent_id: "research", tool_preset: "research", soul_mode: "analytical", require_hitl: false },
+      agent: { title: `Agent-Station ${counter}`, agent_id: "research", tool_preset: "research", soul_mode: "analytical", require_hitl: false },
+      fanout: { title: `Parallel-Zweig ${counter}`, agent_id: "analyst", tool_preset: "research", soul_mode: "strict", require_hitl: false },
+      gate: { title: `HITL-Freigabe ${counter}`, agent_id: "executive_decision_architect", tool_preset: "minimal", soul_mode: "strict", require_hitl: true },
+      boardroom: { title: `Boardroom-Debatte ${counter}`, agent_id: "executive_decision_architect", tool_preset: "research", soul_mode: "strict", require_hitl: false },
+      research: { title: `Research-Lab Auftrag ${counter}`, agent_id: "research", tool_preset: "research", soul_mode: "analytical", require_hitl: false },
     };
-    const cfg = defaults[type] || defaults.agent;
+    const pluginSpec = _nodePlugins.find((p) => p.plugin_id === type);
+    const cfg = pluginSpec
+      ? { title: `${pluginSpec.label} ${counter}`, agent_id: "default", tool_preset: "minimal", soul_mode: "default", require_hitl: false }
+      : (defaults[type] || defaults.agent);
+
+    const pluginParams = {};
+    if (pluginSpec && Array.isArray(pluginSpec.params_schema)) {
+      pluginSpec.params_schema.forEach((p) => {
+        if (p && p.key) pluginParams[p.key] = p.default !== undefined ? p.default : "";
+      });
+    }
 
     _activeTpl.nodes.push({
       id: nid,
       title: cfg.title,
       type,
+      plugin_id: pluginSpec ? pluginSpec.plugin_id : undefined,
+      plugin_params: pluginSpec ? pluginParams : undefined,
       agent_id: cfg.agent_id,
       tool_preset: cfg.tool_preset,
       allowed_tools: [...(PRESET_TOOLS[cfg.tool_preset] || [])],
@@ -501,6 +514,12 @@
                 <option value="gate" ${node.type === "gate" ? "selected" : ""}>HITL-Gate</option>
                 <option value="boardroom" ${node.type === "boardroom" ? "selected" : ""}>Boardroom-Debatte</option>
                 <option value="research" ${node.type === "research" ? "selected" : ""}>Research Lab</option>
+                ${_nodePlugins
+                  .map(
+                    (pl) =>
+                      `<option value="${esc(pl.plugin_id)}" ${node.type === pl.plugin_id ? "selected" : ""}>${esc(pl.icon || "🔌")} ${esc(pl.label)}</option>`
+                  )
+                  .join("")}
               </select>
             </label>
             <label class="block space-y-0.5">
@@ -530,6 +549,48 @@
             <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Erwarteter Output (Format / Abnahmekriterium)</span>
             <textarea id="wf-ins-expected" rows="2" placeholder="z. B. Markdown-Report mit 5 belegten Quellen" class="w-full px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--page-bg)]">${esc(node.expected_output || "")}</textarea>
           </label>
+          ${(() => {
+            const pl = _nodePlugins.find((x) => x.plugin_id === node.type);
+            if (!pl || !Array.isArray(pl.params_schema) || !pl.params_schema.length) return "";
+            const pvals = node.plugin_params || {};
+            const fieldsHtml = pl.params_schema
+              .map((ps) => {
+                const val = pvals[ps.key] !== undefined ? pvals[ps.key] : (ps.default !== undefined ? ps.default : "");
+                if (ps.type === "checkbox") {
+                  return `<label class="flex items-center gap-2 text-[11px] cursor-pointer pt-1">
+                    <input type="checkbox" data-plugin-param="${esc(ps.key)}" data-param-type="checkbox" ${val ? "checked" : ""} />
+                    <span>${esc(ps.label)}</span>
+                  </label>`;
+                }
+                if (ps.type === "select") {
+                  return `<label class="block space-y-0.5">
+                    <span class="text-[10px] font-mono text-[var(--muted-foreground)]">${esc(ps.label)}</span>
+                    <select data-plugin-param="${esc(ps.key)}" data-param-type="select" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] font-mono text-[11px]">
+                      ${(ps.options || []).map((o) => `<option value="${esc(o)}" ${String(val) === String(o) ? "selected" : ""}>${esc(o)}</option>`).join("")}
+                    </select>
+                  </label>`;
+                }
+                if (ps.type === "textarea") {
+                  return `<label class="block space-y-0.5">
+                    <span class="text-[10px] font-mono text-[var(--muted-foreground)]">${esc(ps.label)}</span>
+                    <textarea rows="2" data-plugin-param="${esc(ps.key)}" data-param-type="textarea" placeholder="${esc(ps.placeholder || "")}" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] text-[11px]">${esc(val)}</textarea>
+                  </label>`;
+                }
+                const itype = ps.type === "number" ? "number" : "text";
+                return `<label class="block space-y-0.5">
+                  <span class="text-[10px] font-mono text-[var(--muted-foreground)]">${esc(ps.label)}</span>
+                  <input type="${itype}" ${ps.min !== undefined ? `min="${ps.min}"` : ""} ${ps.max !== undefined ? `max="${ps.max}"` : ""} ${ps.step !== undefined ? `step="${ps.step}"` : ""} data-plugin-param="${esc(ps.key)}" data-param-type="${itype}" value="${esc(val)}" placeholder="${esc(ps.placeholder || "")}" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] font-mono text-[11px]" />
+                </label>`;
+              })
+              .join("");
+            return `<div class="p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/5 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-mono font-bold text-indigo-300">${esc(pl.icon || "🔌")} ${esc(pl.label)} — Parameter</span>
+                <span class="text-[9px] font-mono text-[var(--muted-foreground)]">${esc(pl.adapter || "local")}</span>
+              </div>
+              ${fieldsHtml}
+            </div>`;
+          })()}
         </div>`;
     } else if (_inspectorTab === "tools") {
       const allowed = new Set(node.allowed_tools || []);
@@ -793,6 +854,12 @@
               <button type="button" data-add-station="gate" class="px-2.5 py-1 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs font-semibold">+ HITL-Gate</button>
               <button type="button" data-add-station="boardroom" class="px-2.5 py-1 rounded-lg border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 text-xs font-semibold">+ Boardroom</button>
               <button type="button" data-add-station="research" class="px-2.5 py-1 rounded-lg border border-sky-500/40 bg-sky-500/15 hover:bg-sky-500/25 text-sky-200 text-xs font-semibold">+ Research</button>
+              ${_nodePlugins
+                .map(
+                  (pl) =>
+                    `<button type="button" data-add-station="${esc(pl.plugin_id)}" title="${esc(pl.description || pl.label)}" class="px-2 py-1 rounded-lg border border-fuchsia-500/35 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-200 text-xs font-semibold">${esc(pl.icon || "🔌")} + ${esc(pl.label)}</button>`
+                )
+                .join("")}
               <button type="button" id="wf-connect-toggle" class="px-2.5 py-1 rounded-lg border text-xs font-semibold ${
                 _connectMode || _connectFromId
                   ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
@@ -1076,6 +1143,20 @@
       bindVal("#wf-ins-cost", "cost_limit_usd", (el) => (el.value === "" ? null : Number(el.value)), false);
       bindVal("#wf-ins-hitl", "require_hitl", (el) => el.checked, false);
 
+      mount.querySelectorAll("[data-plugin-param]").forEach((el) => {
+        const key = el.getAttribute("data-plugin-param");
+        const ptype = el.getAttribute("data-param-type");
+        const handler = () => {
+          if (!selNode.plugin_params || typeof selNode.plugin_params !== "object") selNode.plugin_params = {};
+          if (ptype === "checkbox") selNode.plugin_params[key] = !!el.checked;
+          else if (ptype === "number") selNode.plugin_params[key] = el.value === "" ? 0 : Number(el.value);
+          else selNode.plugin_params[key] = el.value;
+          _dirty = true;
+        };
+        el.onchange = handler;
+        if (ptype !== "checkbox" && ptype !== "select") el.oninput = handler;
+      });
+
       const presetEl = mount.querySelector("#wf-ins-tools");
       if (presetEl) {
         presetEl.onchange = () => {
@@ -1271,6 +1352,16 @@
         }
       };
     }
+  }
+
+  async function loadNodePlugins() {
+    try {
+      const data = await apiJson("/api/v2/workflows/node-plugins");
+      if (Array.isArray(data.plugins)) {
+        _nodePlugins = data.plugins;
+        if (_activeTpl) renderAll();
+      }
+    } catch (_) {}
   }
 
   async function loadAgentsList() {
@@ -1672,10 +1763,12 @@
       injectStudioShell();
       ensureEventBusLogTabButton();
       injectTaskModalWorkflowBridge();
+      loadNodePlugins();
     });
   } else {
     injectStudioShell();
     ensureEventBusLogTabButton();
     injectTaskModalWorkflowBridge();
+    loadNodePlugins();
   }
 })();

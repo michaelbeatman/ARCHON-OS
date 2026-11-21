@@ -321,6 +321,34 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     node_type = str(node.get("type") or "agent").strip().lower()
     kanban_task_id = node.get("kanban_task_id")
 
+    # Standardisierte Node-Plugins ("VST-Schnittstelle": ffmpeg, kinocut, tts, suno, image_gen, calendar_publish, 3rd-Party)
+    from backend.workflow_node_plugins import is_workflow_node_plugin, execute_workflow_node_plugin
+    if is_workflow_node_plugin(node_type):
+        await asyncio.to_thread(
+            _update_kanban_task_status,
+            kanban_task_id,
+            "in_progress",
+            event_kind="workflow_node_started",
+            event_payload={"node_id": node.get("id"), "type": node_type},
+        )
+        pres = await execute_workflow_node_plugin(node_type, node, upstream)
+        p_err = str(pres.get("status") or "success").lower() in ("error", "failed", "blocked")
+        await asyncio.to_thread(
+            _update_kanban_task_status,
+            kanban_task_id,
+            "blocked" if p_err else "done",
+            result=str(pres.get("content") or pres.get("error") or ""),
+            block_kind="workflow_error" if p_err else None,
+            event_kind="workflow_node_failed" if p_err else "workflow_node_completed",
+            event_payload={"node_id": node.get("id"), "type": node_type, "status": pres.get("status", "success")},
+        )
+        return {
+            **pres,
+            "node_id": node.get("id"),
+            "agent_id": str(node.get("agent_id") or node_type),
+            "kanban_task_id": kanban_task_id,
+        }
+
     # Nativer Media-Render / Clip-Matrix Knoten (Content-Maschine im DAG)
     if node_type in ("media_render", "clip_matrix"):
         await asyncio.to_thread(

@@ -63,18 +63,16 @@ Technische Referenz der zehn neu umgesetzten Architektur-Meilensteine in Archon 
 
 ---
 
-## 4. Erweiterte Security-, Workflow- & Research-Module (Block A & B: M84, M90, M80, M82, M93, M92, M94, M50, M45, M65)
+## 4. Erweiterte Security-, Workflow- & Research-Module (Block A & B: M84, M90, M82, M93, M94, M45, M65)
 
 - **M84 — Prompt-Injection-Feuerübung (`backend/injection_range.py`):** 8 standardisierte Angriffsszenarien (inkl. Base64, HTML-Kommentare, Memory-Poisoning, Reply-Hijack, Tool-Smuggling) über `run_injection_drill()`.
 - **M90 — Signierte Tool-Warrants (`backend/tool_warrants.py`):** `issue_warrant()` + `verify_warrant_for_call()` mit HMAC-SHA256-Signatur, Ablaufzeit und Parameter-Constraints (`max_amount`, `allowed_path_prefixes`).
-- **M80 — Hybrid-SOP-Runner (`backend/hybrid_sop_runner.py`):** `run_hybrid_sop()` trennt deterministische `script`-Schritte strikt von `agent`-Entscheidungsschritten.
 - **M82 — Subagenten- & Session-Receipts (`backend/session_receipts.py`):** `build_delegation_receipt()` + `render_offline_html_receipt()` für autarke, XSS-sichere Offline-HTML-Belegdokumente inkl. Retries.
 - **M93 — Tool-Output-Firewall & Batching (`backend/tool_output_firewall.py`):** `guard_tool_output()` kappt übergroße MCP-/Web-Outputs; `run_batch_tool_calls()` bündelt parallele Tool-Calls in einem Turn.
-- **M92 — Workflow-Freeze & Replay (`backend/workflow_freeze.py`):** `freeze_tool_sequence()` + `replay_frozen_workflow()` in `data/frozen_workflows.db` (Replay mit `0` LLM-Tokens).
-- **M94 — Lossless Session-DAG & STORM-Panel (`backend/lossless_session_dag.py`):** Verlustfreie SQLite-Historie (`data/lcm_sessions.db`, `expand_summary_node`, `search_lossless_history`) sowie `run_storm_panel()` mit Judge & Human-Gate.
-- **M50 — Agent-Eval- & Modell-Benchmark-Arena (`backend/agent_eval_arena.py`):** `run_eval_arena()` vergleicht Modelle anhand des Referenz-Decks in `data/eval_arena.db` nach Score, Latenz und Kosten.
+- **M94 — Lossless Session-DAG & STORM-Panel (`backend/lossless_session_dag.py`):** Verlustfreie SQLite-Historie (`data/lcm_sessions.db` bzw. konsolidiert in `data/memory.db`, `expand_summary_node`, `search_lossless_history`) sowie `run_storm_panel()` mit Judge & Human-Gate.
 - **M45 — Deep-Research-Labor (`backend/deep_research_lab.py`):** `triangulate_sources()` (Trust-Tiers inkl. ArXiv/PatSnap/amtliche Quellen) und `compile_research_dossier()` mit Vault-Ablage unter `02_Research/`.
 - **M65 — Settings-Modal-Ergonomie (`static/views/system_settings_modal.html`):** Gruppierte, umbrechende Tab-Navigation mit visuellen Trennern und einheitlichem Content-Spacing.
+- *Hinweis zur Triage-Bereinigung (21.11.2026):* `hybrid_sop_runner.py` (M80) wurde in `backend/workflow_dag_runner.py` konsolidiert (`archive/20261121_legacy_workflows/`), und die unverdrahteten Stand-alone-Stubs M50 (`agent_eval_arena.py`) und M92 (`workflow_freeze.py`) wurden zugunsten von Event-Bus-Replay (M105) und DAG-Fingerprint-Resume (M77) entfernt.
 
 ---
 

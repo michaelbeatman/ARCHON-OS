@@ -70,24 +70,32 @@
 | **65** | **Design & Struktur der Systemeinstellungen (Settings) überarbeiten** | Hoch | Abgeschlossen | Gruppierte, umbrechende Tab-Leiste ohne Horizontal-Scroll-Zwang & einheitliche Content-Abstände (`static/views/system_settings_modal.html`) |
 | **75** | **Strikte Rollen- & Tool-Isolation bei Agenten-Delegation (`hermes-teammates`-Pattern)** | Sehr hoch | Abgeschlossen | Harte Laufzeit-Durchsetzung von Profil-Toolsets und Modell-Routes pro delegierter Rolle (`backend/delegation_isolation.py`, `archon/core/delegation.py`) |
 | **76** | **Verifizierte Kanban-Cards mit Token-Budget & Proof-Gate (`crew`-Pattern)** | Sehr hoch | Abgeschlossen | Token-Budget- & Proof-Command-Prüfung mit 1 Auto-Retry und HITL-Freigabe (`backend/kanban_verifier.py`, `backend/operations_api.py`, `POST /api/operations/kanban/tasks/{id}/hitl`) |
-| **77** | **Agenten-Workflow-DAGs mit Fan-Out/Quorum & Resume (`hermes-workflows`-Pattern)** | Sehr hoch | Abgeschlossen | JSON-DAG-Workflow-Runner mit Fan-Out/Quorum, Human/Machine-Gates und Fingerprint-Replay-Skip-Resume (`backend/workflow_dag_runner.py`) |
+| **77** | **Agenten-Workflow-DAGs mit Fan-Out/Quorum & Resume (`hermes-workflows`-Pattern)** | Sehr hoch | Abgeschlossen | JSON-DAG-Workflow-Runner mit Fan-Out/Quorum, Human/Machine-Gates und Fingerprint-Replay-Skip-Resume (`backend/workflow_dag_runner.py`, E2E-Regressionstest `tests/test_workflow_dag_e2e.py`) |
 | **78** | **Mission Control Kanban: Gantt-Timeline & Dependency-Graph (`kanban-gantt`-Pattern)** | Sehr hoch | Abgeschlossen | Hybrid-Gantt-Timeline & Longest-Path-Dependency-Graph auf Archons `tasks`-SQLite-DB (`backend/kanban_views.py`, `/api/operations/kanban/gantt|graph`, `static/js/kanban_gantt_graph.js`) |
 | **79** | **Lokaler verschlüsselter Offline-Memory-Vault (`compartment` als Zero-Egress-Ergänzung)** | Sehr hoch | Abgeschlossen | AEAD-verschlüsselter lokaler Hybrid-Memory-Vault ohne Netzwerk/API-Key (`backend/offline_memory_vault.py`, `data/compartment_vault.db`) |
-| **80** | **Hybrid-SOP-Runner: Script + Agenten-Urteil (`opensop`-Pattern)** | Hoch | Abgeschlossen | Prozessdateien mit deterministischen Script-Schritten + Agenten-Urteil-Schritten (`backend/hybrid_sop_runner.py`) |
+| **80** | **Hybrid-SOP-Runner: Script + Agenten-Urteil (`opensop`-Pattern)** | Hoch | Konsolidiert in M77/M102 | Archiviert nach `archive/20261121_legacy_workflows/hybrid_sop_runner.py` — vollständig abgelöst durch `backend/workflow_dag_runner.py` & `backend/workflow_templates.py` |
 | **81** | **Cross-Model-Verifier & Test-Wächter (`shadow-army`-Pattern)** | Hoch | Abgeschlossen | Unabhängige Modell-Familien-Wahl & Diff-Assertion-Wächter vor Kanban-Done (`backend/kanban_verifier.py`: `cross_model_verify_card`) |
 | **82** | **Subagenten- & Session-Receipts (`delegation-receipts` / `session-receipts`)** | Hoch | Abgeschlossen | Strukturierte Abschluss-Receipts & autarke Offline-HTML-Belegdokumente inkl. Retries (`backend/session_receipts.py`) |
 | **83** | **Agenten-Flugschreiber & Guardrail-Backtester (`flightlog` / `policy-backtester`)** | Hoch | Abgeschlossen | Erkennung „grün fehlgeschlagener“ Runs & Policy-Replay gegen historische Tool-Calls (`backend/flightlog_backtester.py`) |
 | **84** | **Prompt-Injection-Feuerübung (`injection-range`-Pattern)** | Hoch | Abgeschlossen | Automatisierte 8-Szenarien-Test-Suite inkl. Base64-, HTML- & Memory-Poisoning-Checks (`backend/injection_range.py`) |
-| **85** | **Best-of-N Coding-Worktrees (`joust` / `multiverse`-Pattern)** | Mittel | Abgeschlossen | Isolierte Git-Worktrees pro Contender & automatisches Test-/Diff-Ranking (`backend/worktree_joust.py`) |
+| **85** | **Best-of-N Coding-Worktrees (`joust` / `multiverse`-Pattern)** | Mittel | Bereinigt (Triage C) | Als unverdrahtetes Stand-alone-Modul entfernt (Worktree-Isolation läuft nativ über Subagent-Workspaces) |
 | **86** | **Quota-, Verification- & Quality-Escalation-Fallback im `AgentRouter` (`vibe-relay` / `calling-mom` / `nvidia-switchyard`)** | Hoch | Abgeschlossen | Quota-Threshold-Routing & Verification-Gated Escalation im `AgentRouter` (`backend/agent_router.py`: `select_quota_and_escalation_route`, `chat_with_verification_escalation`) |
-| **87** | **Externe Fach-Connectoren (`inkly`, `local-business-leads`, `hermes-issue-sync`, `ghl-command`)** | Mittel | Abgeschlossen | Adapter für eSignature (`inkly`), B2B-Leads, Linear/Jira/GitHub-Sync & GoHighLevel (`backend/external_connectors.py`) |
-| **88** | **Optionale Spezial-Erweiterungen (`flota`/`own-compute`, `kujo-hermes`, `riah-swipe`, `manners-meter`)** | Niedrig | Abgeschlossen | SSH-/Slurm-Worker, Kujo-Runtime-Bridge, Medien-Swipe-Deck & Höflichkeits-Metrik (`backend/special_extensions.py`) |
+| **87** | **Externe Fach-Connectoren (`inkly`, `local-business-leads`, `hermes-issue-sync`, `ghl-command`)** | Mittel | Bereinigt (Triage C) | Statische Mock-Adapter entfernt; echte Integrationen laufen über n8n/MCP & DocuSeal |
+| **88** | **Optionale Spezial-Erweiterungen (`flota`/`own-compute`, `kujo-hermes`, `riah-swipe`, `manners-meter`)** | Niedrig | Bereinigt (Triage C) | Unverdrahtete Theater-Stubs am 21.11.2026 entfernt |
 | **89** | **Information-Flow-Taint-Tracking & Session-Versiegelung (`airlock`-Pattern)** | Sehr hoch | Abgeschlossen | Session-Versiegelung nach untrusted Content + HITL-Freigabe-Gate für kritische Ausgänge (`backend/session_taint_guard.py`, `/api/v1/guardian/taint/approvals`) |
 | **90** | **Signierte, ablaufende Tool-Warrants (`hermes-tenuo`-Pattern)** | Hoch | Abgeschlossen | HMAC-SHA256 signierte, zeitlich begrenzte Tool-Warrants mit Parameter-Constraints (`backend/tool_warrants.py`) |
 | **91** | **Präzedenzfall-Gedächtnis für Kanban-Rückfragen (`precedent-log`-Pattern)** | Sehr hoch | Abgeschlossen | Strikt mandanten-/projektisoliertes Ruling-Gedächtnis (`backend/precedent_log.py`, `/api/operations/precedents`, Prompt-Injection in `operations_api.py`) |
-| **92** | **Deterministischer Workflow-Freeze & Replay (`freeze` / `workflow-record`)** | Hoch | Abgeschlossen | Einfrieren erfolgreicher Tool-Sequenzen & tokenfreies Replay (`backend/workflow_freeze.py`, `data/frozen_workflows.db`) |
+| **92** | **Deterministischer Workflow-Freeze & Replay (`freeze` / `workflow-record`)** | Hoch | Konsolidiert in M105 | Abgelöst durch Event-Bus Replay (`replay_workflow_event` in `backend/workflow_scheduler.py`) & DAG Fingerprint-Skip |
 | **93** | **Code-as-Orchestration & Tool-Output-Firewall (`codemode` / `toolaria`)** | Hoch | Abgeschlossen | Paralleler Batch-Tool-Orchestrator & Output-Kürzung vor Kontext-Injection (`backend/tool_output_firewall.py`) |
 | **94** | **Lossless Session-DAG & Multi-Perspektiven-Research (`hermes-lcm-x` / `storm-fusion-research`)** | Hoch | Abgeschlossen | Verlustfreie SQLite-Session-Historie als Summary-DAG & STORM-Research-Panel (`backend/lossless_session_dag.py`) |
+| **101** | **Passkey / WebAuthn HITL-Verifizierung (FIDO2)** | Kritisch | Abgeschlossen | Zweistufige kryptografische WebAuthn-Signaturprüfung (ES256/RS256, `rpIdHash`, `signCount`) für Zahlungen, Projektstarts & kritische Freigaben (`backend/passkey_hitl.py`) |
+| **102** | **Visuelles Multi-Agent Workflow-Studio & DAG-Materializer** | Sehr hoch | Abgeschlossen | 20px-Grid-Editor, 52 Vorlagen, n8n-Import & direkte E2E-Anbindung an `workflow_dag_runner.py` (`backend/workflow_templates.py`) |
+| **103** | **Treasury-, Wallet- & Passkey-gesichertes Zahlungs-Cockpit** | Hoch | Abgeschlossen | Liquiditätsübersicht, SHA-256 Spend-Ledger & Passkey-HITL-Freigabe (`backend/treasury_engine.py`) |
+| **104** | **Operations-Kalender 2.0 & Event-Bus-Kopplung** | Hoch | Abgeschlossen | Eigene Kalender-Engine mit 6 Farblayern, ICS/CalDAV-Sync & Event-Bus-Triggern (`backend/operations_calendar.py`) |
+| **105** | **Event-Bus Governance (Trigger-Matrix, Rate-Limits, Replay)** | Hoch | Abgeschlossen | Policy-Matrix (`allow`/`require_hitl`/`deny`), Loop-Schutz & Dead-Letter-Replay (`backend/workflow_scheduler.py`) |
+| **106** | **SQLite-Datenbank-Konsolidierung (`28 → 3` Domänen-DBs)** | Kritisch | Abgeschlossen | Zusammenführung von 28 SQLite-Dateien in `ops.db`, `business.db` & `memory.db` inkl. Mandanten- & Backup-Integration (`backend/db_consolidation.py`, `backend/db_paths.py`) |
+| **107** | **Multi-Channel Content-Maschine v1 & v2 (LinkedIn, YouTube, TikTok, X)** | Sehr hoch | Abgeschlossen | Repurposing-DAG, Anti-AI-Slop-Quality-Gate, Quellen-Ingestion (URL/Obsidian/Transkript), 9:16-Clip-Matrix & Publishing-Bridge (`backend/content_machine.py`) |
+| **108** | **Next.js 16 UI-Konsolidierung auf Archon FastAPI** | Hoch | Abgeschlossen | Direkter FastAPI-Proxy (`/api/archon/[...path]`) ohne PocketBase-Zwang für `/content-studio`, `/workflows` und `/cockpit` (`frontend/`) |
 
 ---
 
@@ -642,6 +650,40 @@
   - API-Endpunkte in `archon/routers/v2_capabilities.py` (`/api/v2/treasury/*`)
   - Frontend-Cockpit `static/js/treasury_studio.js` im Subtab **Treasury** unter **Rechnungswesen & Finanzen**.
 - **Dokumentation:** Siehe [TREASURY_PAYMENTS_GUIDE.md](TREASURY_PAYMENTS_GUIDE.md).
+
+### Meilenstein 104: Operations-Kalender 2.0 (Eigene Kalender-Engine, Layer, CalDAV/Google/Outlook/.ics & Event-Bus) (Implementiert)
+- **Ausgangslage / Ziel:** Ablösung des einfachen Listen-Kalenders durch einen vollwertigen Outlook-/Google-Calendar-Arbeitsplatz (ohne den separaten CRM-Kalender zu vermischen) — komplett in eigenem, direkt anpassbarem Vanilla-JS-Code ohne Fremdbibliothek.
+- **Umgesetzte Architektur:**
+  - **Frontend (`static/js/operations_calendar.js`):** Tag-/Wochen-/Monats-/Jahres-/Agenda-Ansicht mit Überlappungs-Spalten, Drag & Drop, Resize, Slot-Klick, Mini-Monatskalender, 6 ein-/ausblendbaren Farblayern (*Termine*, *Fokusblöcke*, *Kanban-Deadlines*, *Workflow-Cron-Jobs*, *ERP/Zahlungen*, *Externe Kalender*) und vollem Termindetail-Editor inkl. Serienterminen sowie Settings-Integration (`#settings-tab-comm`).
+  - **Backend & Sync (`backend/operations_calendar.py`, `archon/routers/operations_calendar.py`):** `PATCH /events/{id}`, `.ics`-Import/Export, externe Kalender-Quellen (Google ICS, Outlook/M365 ICS, Apple/Nextcloud CalDAV) und KI-Fokuszeit-Finder (`/focus-slots`).
+  - **Trigger-Bus-Anbindung:** `create_event`, `update_event`, `sync_source` und fällige Tagestickets (`calendar.due`) speisen automatisch den zentralen Event-Bus (`backend/workflow_scheduler.py`).
+- **Dokumentation:** Siehe [OPERATIONS_CALENDAR_GUIDE.md](OPERATIONS_CALENDAR_GUIDE.md).
+
+### Meilenstein 105: Event-Bus Governance (Trigger-Matrix, Rate-Limits, Loop-Schutz & Replay) (Implementiert)
+- **Ausgangslage / Ziel:** Verständliche, zentrale Steuerung für alle über den Event-Bus verbundenen Module (Watchdog, Posteingang, Kalender, Research Lab, AI Boardroom, Freigaben, Treasury) nach Industriestandard (AWS EventBridge / Circuit-Breaker / DLQ-Replay).
+- **Umgesetzte Architektur:**
+  - **Policy-Matrix & Circuit-Breaker (`backend/workflow_scheduler.py`):** Tabelle `event_bus_policies` für `allow` / `require_hitl` / `deny` pro Quelle × Ziel-Domäne (`workflow`, `treasury`, `comms`, `system`), konfigurierbare Rate-Limits (`/min`), Loop-Schutz (`correlation_id`) und Event-Replay (`replay_workflow_event`).
+  - **API & UI (`archon/routers/v2_capabilities.py`, `static/js/workflow_templates_studio.js`):** `/api/v2/workflows/event-policies`, `/events/{id}/replay` sowie der interaktive Tab **Trigger-Matrix (Rechte & Schutz)** direkt unter **Telemetrie & Logs → Event-Bus**.
+- **Dokumentation:** Siehe [EVENT_BUS_GOVERNANCE_GUIDE.md](EVENT_BUS_GOVERNANCE_GUIDE.md).
+
+### Meilenstein 106: SQLite-Datenbank-Konsolidierung (`28 → 3` Domänen-DBs) (Implementiert)
+- **Ausgangslage / Ziel:** 28 verstreute SQLite-Einzeldateien erzeugten unnötigen File-Descriptor-Overhead, unübersichtliche Backups und Split-Brain-Risiken.
+- **Umgesetzte Architektur:**
+  - `backend/db_consolidation.py` & `backend/db_paths.py` führen alle Tabellen kollisionsfrei (`<legacy_stem>__<table>`), idempotent und mit automatischem Backup in `data/ops.db`, `data/business.db` und `data/memory.db` (jeweils WAL-Modus, `busy_timeout=5000`, `PRAGMA integrity_check`) zusammen.
+  - Vollständige Einbindung in `backend/tenant_context.py` (`CONSOLIDATED_TENANT_DBS`) und `backend/db_backup_manager.py` (`DB_TARGETS`).
+  - Admin-API: `GET /api/v2/system/db-consolidation/plan`, `POST /api/v2/system/db-consolidation/run`.
+
+### Meilenstein 107: Multi-Channel Content-Maschine v1 & v2 (LinkedIn, YouTube Longform & Shorts, TikTok, X/Threads) (Implementiert)
+- **Ausgangslage / Ziel:** Archon OS soll neben der Unternehmenssteuerung als vollwertige Multi-Agenten-Content-Maschine arbeiten.
+- **Umgesetzte Architektur (`backend/content_machine.py`, `archon/routers/content_machine.py`):**
+  - **Repurposing-DAG (`run_campaign_repurpose_dag`):** `n_research` → `n_master_brief` → paralleles Fan-Out auf 5 Kanäle (`linkedin`, `youtube_longform`, `youtube_shorts`, `tiktok`, `x_threads`) → `n_editorial_gate` (HITL-Freigabe).
+  - **Content-Maschine v2:** Deterministisches **Anti-AI-Slop- & Quality-Gate** (`evaluate_asset_quality`), **Quellen-Ingestion** (`POST /api/v2/content-machine/ingest` für URL mit SSRF-Schutz, Obsidian-Vault mit `path_jail` und Transkripte), **9:16-Video-Clip-Matrix** (`POST /api/v2/content-machine/campaigns/{id}/clip-matrix`), **Publishing-Webhook-Bridge** (`dispatch-webhook`), **Due-Publish-Sweep** (`publish-due`) und Performance-Feedback-Loop (`record_asset_metrics` → `memory.db`).
+
+### Meilenstein 108: Next.js 16 UI-Konsolidierung gegen Archon FastAPI (Implementiert)
+- **Ausgangslage / Ziel:** Direkte Anbindung des Next.js-16-Frontends (`frontend/`) an Archon FastAPI ohne PocketBase-Abhängigkeit.
+- **Umgesetzte Architektur:**
+  - Server-seitiger Proxy `frontend/src/app/api/archon/[...path]/route.ts` und typisierter Client `frontend/src/lib/archon-api.ts`.
+  - Neue Arbeitsplätze: `/content-studio` (`ContentMachineCockpit.tsx`), `/workflows` (`WorkflowDagCockpit.tsx`) und `/cockpit` (`ExecutiveCockpit.tsx` für Health, 28→3 DB-Status, Kanban, HITL-Freigaben, DAG-Runs, Content-Pipeline & CRM).
 
 ## Ideen-Pool (beobachten, nicht geplant)
 

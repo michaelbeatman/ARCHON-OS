@@ -2,6 +2,32 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [0.5.6.0] — 2026-11-21 (Phase 1–3 Hardening, SQLite 28→3 Consolidation, Content-Maschine v2, Workflow-DAG E2E & Next.js 16 Cockpits)
+
+### Added
+- **M106 SQLite Database Consolidation (`28 → 3` Domain DBs: `backend/db_consolidation.py`, `backend/db_paths.py`, `backend/tenant_context.py`, `backend/db_backup_manager.py`):**
+  - Consolidated 28 scattered SQLite databases into 3 domain-isolated WAL databases: `data/ops.db` (Kanban, workflows, state, audit, security), `data/business.db` (ERP, CRM, deals, contracts, treasury, content machine), and `data/memory.db` (agentic memory, learnings, compartment vault, LCM sessions).
+  - Automatic schema-collision prefixing (`<legacy_stem>__<table>`), pre-migration backup snapshots (`data/_pre_consolidation_backups/<timestamp>/`), `PRAGMA integrity_check`, and transparent backward-compatible path resolution via `db_paths.resolve_db()`, `TenantContextManager.resolve_active_db()`, and `DBBackupManager`.
+  - Admin endpoints: `GET /api/v2/system/db-consolidation/plan` and `POST /api/v2/system/db-consolidation/run`.
+- **M107 Multi-Channel Content-Maschine v1 & v2 (`backend/content_machine.py`, `archon/routers/content_machine.py`):**
+  - Full campaign & asset pipeline for **LinkedIn**, **YouTube Longform**, **YouTube Shorts**, **TikTok**, and **X/Threads** stored in `data/business.db`.
+  - **Multi-Agent Repurposing DAG (`run_campaign_repurpose_dag`):** `n_research` → `n_master_brief` → parallel channel fan-out (`n_ch_linkedin`, `n_ch_youtube_longform`, `n_ch_youtube_shorts`, `n_ch_tiktok`, `n_ch_x_threads`) → `n_editorial_gate` (HITL approval).
+  - **Content-Maschine v2:** Deterministic **Anti-AI-Slop & Quality Gate** (`evaluate_asset_quality`, 0–100 score), **Source Ingestion** (`POST /api/v2/content-machine/ingest` for SSRF-guarded URLs, path-jailed Obsidian notes, and raw transcripts), **9:16 Video Clip Repurposing Matrix** (`POST /api/v2/content-machine/campaigns/{id}/clip-matrix`), **Webhook Publishing Bridge** (`POST /api/v2/content-machine/assets/{id}/dispatch-webhook`), and **Scheduled Due-Publish Sweep** (`POST /api/v2/content-machine/publish-due`) plus performance feedback learnings (`record_asset_metrics` → `memory.db`).
+- **M108 Next.js 16 FastAPI UI Consolidation (`frontend/`):**
+  - Direct server-side proxy (`frontend/src/app/api/archon/[...path]/route.ts`) and typed client (`frontend/src/lib/archon-api.ts`) talking directly to Archon FastAPI (`127.0.0.1:8420`) without PocketBase dependency.
+  - Added `/content-studio` (`ContentMachineCockpit.tsx`), `/workflows` (`WorkflowDagCockpit.tsx`), and `/cockpit` (`ExecutiveCockpit.tsx` for System Health, 28→3 DB Consolidation, Kanban, HITL Decisions, DAG Runs, Content Pipeline & CRM).
+
+### Changed & Fixed
+- **Phase 1 Security Hardening & P0 Logic Fixes (`fc41341`):**
+  - Cryptographic WebAuthn/Passkey verification (`backend/passkey_hitl.py` ES256/RS256 signature verification, `rpIdHash`, `signCount` replay protection).
+  - Enforced Zero-Egress (`evaluate_and_gate_llm_dispatch`) in `archon/routers/boardroom.py` and `archon/routers/chat.py`; hardened Showroom Python sandbox (`views_core.py`) with static AST inspection blocking `os`, `subprocess`, `socket`, `ctypes`, and `urllib`.
+  - Added public SSRF guard (`check_public_url` in `utils/egress_guard.py`) for `visual_web_agent.py` and fixed XSS in `static/js/boardroom.js` and `static/js/inbox.js`.
+  - Fixed P0 runtime bugs across `agent_router.py`, `delegation.py`, `orchestration.py`, `mission_control.py`, `erp_manager.py`, `dunning_engine.py`, `gdpr_compliance_engine.py`, and `obsidian_hygiene.py`.
+- **Workflow-DAG Engine E2E Wiring & Legacy Cleanup (`c6763dc`, `0a69dd4`, `5db6d0e`):**
+  - Unified `workflow_templates.py`, `workflow_dag_runner.py`, `workflow_scheduler.py`, `v2_capabilities.py`, and `decisions.py` onto a single production DAG execution and HITL-gate resume pipeline (`tests/test_workflow_dag_e2e.py`).
+  - Archived obsolete duplicate runners (`backend/dag_scheduler.py`, `backend/hybrid_sop_runner.py`, `backend/main.py`) to `archive/20261121_legacy_workflows/` and removed 7 unwired Triage-C theater modules (`worktree_joust`, `special_extensions`, `external_connectors`, `voice_to_workflow`, `contract_diff_redliner`, `agent_eval_arena`, `workflow_freeze`).
+  - Eliminated **407+** silent `except ...: pass` blocks across `archon/routers/*`, `backend/*`, `main.py`, `local_memory_bridge.py`, and `archon/core/orchestration.py` in favor of structured logging.
+
 ## [0.5.5.4] — 2026-11-20 (Passkey HITL, Visual Workflow Studio, Event-Bus & Treasury)
 
 ### Added

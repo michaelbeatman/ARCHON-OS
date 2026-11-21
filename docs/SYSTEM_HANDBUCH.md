@@ -1,10 +1,10 @@
 # ARCHON AGENTIC OS 2026
 ## Offizielles System-Handbuch, Modul-Referenz & Praxisführer
 
-> **System-Version:** v0.3.6 (Sentinel) / v0.3.7  
-> **Klassifizierung:** Intern / Streng Vertraulich (GoBD & ISO 27001 konform)  
-> **Stand:** 31. Oktober 2026  
-> **Geltungsbereich:** Gesamtes Archon OS Ökosystem (57 Fachagenten, 14 Fachmodule, Daemon-Kernel, Governance & Spezialleitfäden)
+> **System-Version:** v0.5.6.0 (Sentinel / Global Release & Content-Maschine Edition)  
+> **Klassifizierung:** Intern / Streng Vertraulich (GoBD, EU AI Act & ISO 27001 konform)  
+> **Stand:** 21. November 2026  
+> **Geltungsbereich:** Gesamtes Archon OS Ökosystem (70 Fachagenten, 3 konsolidierte Domänen-Datenbanken `ops.db`/`business.db`/`memory.db`, Multi-Channel Content-Maschine v2, Workflow-DAG-Engine, Next.js 16 Cockpits, Daemon-Kernel, Governance & Spezialleitfäden)
 
 ---
 
@@ -87,8 +87,9 @@
   - 14.8 Kommunikation
   - 14.9 Design
   - 14.10 Systemupdate
-- **15. Spezial-Feature: Archon Prompt Studio (824 Vorlagen & Fabric SOP)**
+- **15. Spezial-Feature: Archon Prompt Studio (832 Vorlagen & Fabric SOP)**
 - **16. Spezial-Feature: Visual CSS Live Studio & In-Place Inspector**
+- **17. Spezial-Feature: Multi-Channel Content-Maschine v2, SQLite-Konsolidierung (`28 → 3`) & Next.js 16 Cockpits (M106–M108)**
 - **Anhang I: 5 Praxis-Use-Cases**
 - **Anhang II: Archon OS Komplett-Glossar (118 Module + Upgrades)**
 - **Anhang III: Decision Engine & Boardroom (55 Lösungs-Frameworks)**
@@ -3969,9 +3970,41 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 - **Vorlage:** `codemode`, `toolaria`.
 - **Zielzustand:** QuickJS-Sandbox zur Bündelung mehrerer MCP-Tool-Calls in einem einzigen Turn (`codemode`) sowie automatische Größenbegrenzung/Zusammenfassung übergroßer Tool-Outputs vor Kontext-Injection (`toolaria`, ergänzt M73).
 
-### Meilenstein 94: Lossless Session-DAG & Multi-Perspektiven-Research (`hermes-lcm-x` / `storm-fusion-research`) (Geplant – Hoch)
+### Meilenstein 94: Lossless Session-DAG & Multi-Perspektiven-Research (`hermes-lcm-x` / `storm-fusion-research`) (Abgeschlossen – Hoch)
 - **Vorlage:** `hermes-lcm-x`, `storm-fusion-research`.
-- **Zielzustand:** Verlustfreie lokale SQLite-Session-Historie als wiederherstellbarer Summary-DAG (`hermes-lcm-x`) sowie Multi-Perspektiven-Research-Panel mit Judge und Human-Gate für das Research Lab (M45).
+- **Umgesetzter Zustand:** Verlustfreie lokale SQLite-Session-Historie als wiederherstellbarer Summary-DAG (`hermes-lcm-x`, konsolidiert in `data/memory.db`) sowie Multi-Perspektiven-Research-Panel mit Judge und Human-Gate für das Research Lab (M45).
+
+---
+
+## 17. Spezial-Feature: Multi-Channel Content-Maschine v2, SQLite-Konsolidierung (`28 → 3`) & Next.js 16 Cockpits (M106–M108)
+
+### 17.1 Datenbank-Konsolidierung (`28 → 3` SQLite-Domänen-DBs, M106)
+- **Zentrale Konsolidierungs-Engine (`backend/db_consolidation.py`, `backend/db_paths.py`):**
+  Alle 28 historisch gewachsenen SQLite-Einzeldateien werden kollisionsfrei, idempotent und mit automatischem Backup (`data/_pre_consolidation_backups/<timestamp>/`) in 3 WAL-Datenbanken (`PRAGMA journal_mode=WAL`, `busy_timeout=5000`, `PRAGMA integrity_check`) zusammengeführt:
+  1. **`data/ops.db`** — Kanban, Mission Control, Workflow-DAGs, State, Audit-Log, Execution Receipts, Precedents, Taint-Guard, Flightlog, Watchdog v2.
+  2. **`data/business.db`** — ERP, CRM, Deals, Contracts, Treasury, Time-Tracking, Client-Portal sowie alle Tabellen der Multi-Channel Content-Maschine (`content_campaigns`, `content_assets`, `content_metrics`, `content_repurpose_runs`).
+  3. **`data/memory.db`** — Agentic Memory (`user_profile`, `learnings`, `kv_store`, `tasks`, `conversations`, `ephemeral_task_forces`), Compartment Vault, LCM-Sessions.
+- **Mandanten- & Backup-Integration:** `TenantContextManager.resolve_active_db()` (`backend/tenant_context.py`) und `DBBackupManager` (`backend/db_backup_manager.py`) unterstützen `CONSOLIDATED_TENANT_DBS = ("ops.db", "business.db", "memory.db")` nativ.
+- **API-Steuerung:** `GET /api/v2/system/db-consolidation/plan` und `POST /api/v2/system/db-consolidation/run`.
+
+### 17.2 Multi-Channel Content-Maschine v1 & v2 (M107)
+- **Kanäle & Formate (`backend/content_machine.py`, `archon/routers/content_machine.py`):**
+  Unterstützt **LinkedIn** (Thought-Leadership & Carousel), **YouTube Longform** (8–15 Min. Skript & Kapitel), **YouTube Shorts** (9:16, ≤ 60 s), **TikTok** (9:16 Hook-Retention-Loop) und **X / Threads** (Thread-Sequenzen).
+- **Multi-Agent Repurposing-DAG (`run_campaign_repurpose_dag`):**
+  Startet auf der produktiven Workflow-DAG-Engine (`backend/workflow_dag_runner.py`):
+  `n_research` (`research_scout`) → `n_master_brief` (`content_strategist`) → paralleles Fan-Out auf alle gewählten Kanäle → `n_editorial_gate` (`executive_decision_architect`, echtes HITL-Gate im Decision Center).
+- **Content-Maschine v2 Erweiterungen:**
+  1. **Anti-AI-Slop- & Quality-Gate (`evaluate_asset_quality`):** Prüft jedes Asset automatisch auf verbotene KI-Floskeln (`_AI_SLOP_PHRASES`), Hook-Länge (`<= 180` Zeichen für Kurzform/Social), Mindestlänge, Zahlen-/Faktenanker (`\d+`), Call-to-Action und Gedankenstrich-Übernutzung (`> 3`) und speichert `quality_score` (0–100) + `quality_report_json`.
+  2. **Quellen-Ingestion (`POST /api/v2/content-machine/ingest`):** Erzeugt Kampagnen direkt aus öffentlichen Web-URLs (SSRF-geschützt über `utils.egress_guard.check_public_url`), Obsidian-Notizen (Pfad-geprüft über `utils.path_jail.safe_path_within`) oder Rohtranskripten.
+  3. **9:16 Video-Clip-Repurposing-Matrix (`POST /api/v2/content-machine/campaigns/{id}/clip-matrix`):** Zerlegt ein Longform-Skript in 1–6 vertikale Kurzvideo-Assets (`format_type = "video_clip_9_16"`, YouTube Shorts & TikTok) mit Timecodes, Visual-Hook und Loop-Ende.
+  4. **Publishing-Bridge & Performance-Loop:** `POST /api/v2/content-machine/assets/{id}/dispatch-webhook` (SSRF-geschützt via `check_target_url`), `POST /api/v2/content-machine/publish-due` (publiziert fällige `scheduled`-Assets) und `POST /api/v2/content-machine/assets/{id}/metrics` (berechnet Engagement-Rate und schreibt Top-Learnings in `memory.db`).
+
+### 17.3 Next.js 16 UI-Konsolidierung gegen Archon FastAPI (M108)
+- **Direkte FastAPI-Bridge ohne PocketBase:** Über `frontend/src/app/api/archon/[...path]/route.ts` und `frontend/src/lib/archon-api.ts` kommuniziert das Next.js-16-Frontend direkt mit Archon FastAPI (`127.0.0.1:8420`).
+- **Neue Cockpits in `frontend/src/`:**
+  - `/content-studio` (`ContentMachineCockpit.tsx`): Kampagnen, Quellen-Ingestion, 1-Klick-Repurposing-DAG, 9:16-Clip-Matrix, Quality-Score-Badges, HITL-Freigabe, Publishing-Queue & Analytics.
+  - `/workflows` (`WorkflowDagCockpit.tsx`): Starter- & Custom-DAG-Templates, Run-Start, HITL-Gate-Resume & DB-Konsolidierungs-Steuerung.
+  - `/cockpit` (`ExecutiveCockpit.tsx`): Konsolidiertes Führungs-Cockpit für System-Health, `28 → 3` DB-Status, Kanban-Board, HITL-Entscheidungen, aktive DAG-Runs, Content-Pipeline und CRM-Kontakte.
 
 ## Ideen-Pool (beobachten, nicht geplant)
 

@@ -22,13 +22,10 @@ Technische Referenz der umgesetzten Operations-, ERP-, Audio- und UI-Meilenstein
 
 ---
 
-## 3. Sync, Verträge, Kundenportal, Worktrees & Connectoren (M40, M41, M42, M85, M87)
+## 3. Sync, Verträge & Kundenportal (M41, M42)
 - **M41 — Kalender-Sync & Fokus-Blocker (`backend/calendar_sync_blocker.py`):** `parse_ics_events`, `export_ics_events`, `sync_calendar_bidirectional` und `schedule_focus_blocks`.
-- **M40 — Vertrags-Diff & Redlining (`backend/contract_diff_redliner.py`):** `diff_contract_clauses` + `assess_clause_risks` (HTML-Redlining & Risiko-Keywords).
-- **M42 — Kunden-Freigabe-Portal (`backend/client_approval_portal.py`):** `create_share_link`, `verify_share_access`, `submit_client_decision` in `data/client_portal.db`.
-- **M85 — Best-of-N Coding-Worktrees (`backend/worktree_joust.py`):** `plan_joust_worktrees`, `create_joust_worktrees`, `score_joust_contenders`.
-- **M87 — Externe Fach-Connectoren (`backend/external_connectors.py`):** Adapter für `inkly`, `local-business-leads`, `hermes-issue-sync` und `ghl-command`.
-- **M88 — Optionale Spezial-Erweiterungen (`backend/special_extensions.py`):** SSH-/Slurm-Worker (`flota`/`own-compute`), approval-gesteuerte Kujo-Bridge (`kujo-hermes`), Medien-Swipe-Deck (`riah-swipe`) und Höflichkeits-Metrik (`manners-meter`).
+- **M42 — Kunden-Freigabe-Portal (`backend/client_approval_portal.py`):** `create_share_link`, `verify_share_access`, `submit_client_decision` in `data/client_portal.db` (bzw. konsolidiert in `data/business.db`).
+- *Hinweis zur Triage-Bereinigung (21.11.2026):* Die unverdrahteten Stand-alone-Module M40 (`contract_diff_redliner.py`), M85 (`worktree_joust.py`), M87 (`external_connectors.py`), M88 (`special_extensions.py`) und M54 (`voice_to_workflow.py`) wurden im Rahmen des Phase-2-Audits entfernt; produktive Integrationen laufen direkt über n8n/MCP, DocuSeal und das Multi-Agent Workflow-Studio (M102/M107).
 
 ---
 

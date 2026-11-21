@@ -341,3 +341,36 @@ def test_workflow_node_plugins_vst_discovery_and_execution(tmp_path, monkeypatch
     assert res["status"] == "success"
     assert res["planned_only"] is True
     assert "9:16" in res["command"] or "crop=" in res["command"]
+
+
+def test_workflow_node_marketplace_install_uninstall_and_template_save(tmp_path, monkeypatch):
+    import backend.workflow_node_plugins as wnp
+    import backend.workflow_templates as wt
+
+    pdir = tmp_path / "workflow_nodes"
+    monkeypatch.setattr(wnp, "PLUGINS_NODES_DIR", str(pdir))
+
+    catalog = wnp.list_marketplace_plugins()
+    el = next(x for x in catalog if x["plugin_id"] == "elevenlabs")
+    assert el["installed"] is False
+    assert el["category"] == "audio"
+
+    wnp.install_marketplace_plugin("elevenlabs")
+    assert wnp.get_workflow_node_plugin("elevenlabs") is not None
+    assert next(x for x in wnp.list_marketplace_plugins() if x["plugin_id"] == "elevenlabs")["installed"] is True
+
+    wnp.uninstall_marketplace_plugin("elevenlabs")
+    assert wnp.get_workflow_node_plugin("elevenlabs") is None
+
+    # Template-Save behaelt Plugin-Typ und header_image bei
+    custom_file = tmp_path / "custom_tpls.json"
+    monkeypatch.setattr(wt, "CUSTOM_TEMPLATES_PATH", str(custom_file))
+    monkeypatch.setattr(wt, "_CUSTOM_TEMPLATES_CORRUPT", False)
+    saved = wt.save_workflow_template({
+        "title": "Media Pipeline",
+        "header_image": "https://example.com/banner.png",
+        "nodes": [{"id": "s1", "type": "ffmpeg", "title": "Render", "plugin_params": {"mode": "aspect_9_16"}}],
+    })
+    assert saved["header_image"] == "https://example.com/banner.png"
+    assert saved["nodes"][0]["type"] == "ffmpeg"
+    assert saved["nodes"][0]["plugin_params"]["mode"] == "aspect_9_16"

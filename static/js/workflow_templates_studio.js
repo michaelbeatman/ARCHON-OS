@@ -56,6 +56,8 @@
   let _templates = [];
   let _schedules = [];
   let _nodePlugins = [];
+  let _marketplaceItems = [];
+  let _paletteTab = "standard";
   let _tplSearch = "";
   let _tplCat = "all";
   let _profiles = [];
@@ -238,7 +240,7 @@
     renderAll();
   }
 
-  function addStation(type) {
+  function addStation(type, dropX, dropY) {
     if (!_activeTpl) return;
     let counter = _activeTpl.nodes.length + 1;
     let nid = `step_${counter}`;
@@ -256,8 +258,8 @@
         lastY = n.y || 40;
       }
     });
-    const newX = _activeTpl.nodes.length ? snap(maxX + 260) : 40;
-    const newY = _activeTpl.nodes.length ? snap(lastY) : 40;
+    const newX = typeof dropX === "number" ? snap(dropX) : (_activeTpl.nodes.length ? snap(maxX + 260) : 40);
+    const newY = typeof dropY === "number" ? snap(dropY) : (_activeTpl.nodes.length ? snap(lastY) : 40);
     const prevId = _selectedNodeId && existing.has(_selectedNodeId) ? _selectedNodeId : (_activeTpl.nodes.length ? _activeTpl.nodes[_activeTpl.nodes.length - 1].id : null);
 
     const defaults = {
@@ -782,97 +784,119 @@
       </aside>`;
   }
 
+  const PALETTE_CATEGORIES = [
+    { id: "standard", label: "Standard", icon: "⚙️" },
+    { id: "audio", label: "Musik & Audio", icon: "🎵" },
+    { id: "video", label: "Video & Schnitt", icon: "🎬" },
+    { id: "design", label: "Bild & Design", icon: "🖼️" },
+    { id: "docs", label: "Dokumente & Slides", icon: "📑" },
+    { id: "research", label: "Research & Scraping", icon: "🔍" },
+    { id: "business", label: "Publishing & Business", icon: "📅" },
+  ];
+
+  const STANDARD_PALETTE_ITEMS = [
+    { type: "agent", label: "Agent", icon: "🤖", desc: "Einzelner KI-Spezialist mit Prompt & Tools" },
+    { type: "fanout", label: "Parallel / Fanout", icon: "⚡", desc: "Parallele Zweige mit Quorum-Zusammenfuehrung" },
+    { type: "gate", label: "HITL-Gate", icon: "🛡️", desc: "Menschliche Freigabe vor dem naechsten Schritt" },
+    { type: "boardroom", label: "Boardroom", icon: "🏛️", desc: "Multi-Rollen-Debatte im AI Boardroom" },
+    { type: "research", label: "Research Lab", icon: "🧪", desc: "Tiefenrecherche mit Quellenbeleg" },
+  ];
+
+  function renderLeftPaletteHtml() {
+    const tabsHtml = PALETTE_CATEGORIES.map((c) => {
+      const active = _paletteTab === c.id;
+      return `<button type="button" data-palette-tab="${c.id}" class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium text-left transition ${
+        active
+          ? "bg-indigo-600/25 border border-indigo-500/50 text-indigo-100 font-semibold"
+          : "border border-transparent text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]"
+      }">
+        <span class="shrink-0">${c.icon}</span>
+        <span class="truncate">${esc(c.label)}</span>
+      </button>`;
+    }).join("");
+
+    let items = [];
+    if (_paletteTab === "standard") {
+      items = STANDARD_PALETTE_ITEMS;
+    } else {
+      items = _nodePlugins
+        .filter((p) => (p.category || "business") === _paletteTab)
+        .map((p) => ({
+          type: p.plugin_id,
+          label: p.label,
+          icon: p.icon || "🔌",
+          desc: p.description || "",
+          adapter: p.adapter || "local",
+        }));
+    }
+
+    const itemsHtml = items.length
+      ? items
+          .map(
+            (it) => `<div draggable="true" data-palette-type="${esc(it.type)}" data-add-station="${esc(it.type)}"
+              title="Auf Matrix ziehen oder klicken"
+              class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:border-indigo-500/60 hover:bg-indigo-500/10 cursor-grab active:cursor-grabbing transition select-none space-y-0.5">
+              <div class="flex items-center justify-between gap-1">
+                <span class="text-xs font-semibold text-[var(--foreground)] truncate">${esc(it.icon)} ${esc(it.label)}</span>
+                ${it.adapter ? `<span class="text-[9px] font-mono px-1 rounded bg-[var(--page-bg)] text-[var(--muted-foreground)]">${esc(it.adapter)}</span>` : ""}
+              </div>
+              <div class="text-[10px] text-[var(--muted-foreground)] line-clamp-2 leading-snug">${esc(it.desc)}</div>
+            </div>`
+          )
+          .join("")
+      : `<div class="p-3 rounded-lg border border-dashed border-[var(--border)] text-center space-y-2">
+          <div class="text-[11px] text-[var(--muted-foreground)]">Noch keine Bausteine in dieser Kategorie installiert.</div>
+          <button type="button" id="wf-palette-open-mkt" class="px-2.5 py-1 rounded bg-indigo-600/25 hover:bg-indigo-600/40 border border-indigo-500/40 text-[11px] text-indigo-200 font-semibold">Im Marktplatz installieren →</button>
+        </div>`;
+
+    return `
+      <aside style="width:268px;flex-shrink:0;" class="border-r border-[var(--border)] bg-[var(--card)]/40 flex flex-col min-h-0 overflow-hidden">
+        <div class="px-2.5 py-2 border-b border-[var(--border)] flex items-center justify-between">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-[var(--muted-foreground)]">Baustein-Palette</span>
+          <span class="text-[9px] font-mono text-[var(--muted-foreground)]">Ziehen / Klick</span>
+        </div>
+        <div class="p-2 border-b border-[var(--border)] space-y-0.5 shrink-0">${tabsHtml}</div>
+        <div class="flex-1 overflow-y-auto p-2 space-y-1.5">${itemsHtml}</div>
+      </aside>`;
+  }
+
   function renderAll() {
     const mount = document.getElementById("ops-workflow-templates-mount");
     if (!mount) return;
-
-    const q = _tplSearch.trim().toLowerCase();
-    const categories = Array.from(new Set(_templates.map((t) => t.category).filter(Boolean)));
-    const filtered = _templates.filter((t) => {
-      if (_tplCat !== "all" && t.category !== _tplCat) return false;
-      if (!q) return true;
-      return `${t.title} ${t.category} ${t.description}`.toLowerCase().includes(q);
-    });
-    const builtins = filtered.filter((t) => t.builtin);
-    const customs = filtered.filter((t) => !t.builtin);
-
-    const renderNavGroup = (label, items) => {
-      if (!items.length) return "";
-      return `
-        <div class="space-y-1">
-          <div class="text-[10px] font-mono uppercase tracking-wider text-[var(--muted-foreground)] px-2 pt-1">${esc(label)}</div>
-          ${items
-            .map((t) => {
-              const active = _activeTpl && _activeTpl.id === t.id;
-              return `
-                <button type="button" data-wf-select="${esc(t.id)}"
-                  class="w-full text-left px-2.5 py-2 rounded-lg border transition ${
-                    active ? "border-indigo-500/70 bg-indigo-500/15" : "border-transparent hover:bg-[var(--secondary)]"
-                  }">
-                  <div class="flex items-center justify-between gap-1">
-                    <span class="text-xs font-semibold truncate">${esc(t.title)}</span>
-                    <span class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0">${(t.nodes || []).length}</span>
-                  </div>
-                  <div class="text-[10px] text-[var(--muted-foreground)] truncate">${esc(t.category || "")}</div>
-                </button>`;
-            })
-            .join("")}
-        </div>`;
-    };
 
     const connectHint = _connectFromId
       ? `<span class="text-[11px] font-mono text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 px-2 py-1 rounded-lg">Verknüpfung ab <b>${esc(_connectFromId)}</b> → Ziel-Station anklicken (Esc = Abbruch)</span>`
       : _connectMode
       ? `<span class="text-[11px] font-mono text-indigo-300 bg-indigo-500/15 border border-indigo-500/40 px-2 py-1 rounded-lg">Quell-Station anklicken…</span>`
-      : `<span class="text-[10px] font-mono text-[var(--muted-foreground)] hidden md:inline">Station ziehen · → Port verknüpft · Linie anklicken konfiguriert</span>`;
+      : `<span class="text-[10px] font-mono text-[var(--muted-foreground)] hidden xl:inline">${_activeTpl ? `Aktiver Plan: ${esc(_activeTpl.title)}${_dirty ? " *" : ""}` : "Baustein auf Matrix ziehen"}</span>`;
 
     mount.innerHTML = `
-      <div style="display:flex;flex-direction:row;flex:1;min-height:0;overflow:hidden;">
-        <aside style="width:244px;flex-shrink:0;" class="border-r border-[var(--border)] p-2.5 overflow-y-auto space-y-2">
-          <div class="flex gap-1.5">
-            <button type="button" id="wf-blank-btn" class="flex-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 text-xs font-semibold text-left">
-              + Neu
-            </button>
-            <button type="button" id="wf-import-n8n-btn" title="n8n Workflow JSON (z. B. von n8n.io/workflows) importieren" class="px-2.5 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs font-semibold">
-              n8n Import
-            </button>
-          </div>
-          <input id="wf-tpl-search" value="${esc(_tplSearch)}" placeholder="Vorlage suchen..." class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] text-xs" />
-          <select id="wf-tpl-cat" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] text-[11px]">
-            <option value="all">Alle Kategorien (${_templates.length})</option>
-            ${categories.map((c) => `<option value="${esc(c)}" ${_tplCat === c ? "selected" : ""}>${esc(c)}</option>`).join("")}
-          </select>
-          ${renderNavGroup("Starter-Katalog", builtins)}
-          ${renderNavGroup("Eigene Workflows", customs)}
-        </aside>
-
-        <div style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;">
-          <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-2 shrink-0">
-            <div class="flex flex-wrap items-center gap-1.5">
-              <button type="button" data-add-station="agent" class="px-2.5 py-1 rounded-lg border border-indigo-500/40 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 text-xs font-semibold">+ Agent</button>
-              <button type="button" data-add-station="fanout" class="px-2.5 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 text-xs font-semibold">+ Parallel</button>
-              <button type="button" data-add-station="gate" class="px-2.5 py-1 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs font-semibold">+ HITL-Gate</button>
-              <button type="button" data-add-station="boardroom" class="px-2.5 py-1 rounded-lg border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 text-xs font-semibold">+ Boardroom</button>
-              <button type="button" data-add-station="research" class="px-2.5 py-1 rounded-lg border border-sky-500/40 bg-sky-500/15 hover:bg-sky-500/25 text-sky-200 text-xs font-semibold">+ Research</button>
-              ${_nodePlugins
-                .map(
-                  (pl) =>
-                    `<button type="button" data-add-station="${esc(pl.plugin_id)}" title="${esc(pl.description || pl.label)}" class="px-2 py-1 rounded-lg border border-fuchsia-500/35 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-200 text-xs font-semibold">${esc(pl.icon || "🔌")} + ${esc(pl.label)}</button>`
-                )
-                .join("")}
-              <button type="button" id="wf-connect-toggle" class="px-2.5 py-1 rounded-lg border text-xs font-semibold ${
-                _connectMode || _connectFromId
-                  ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
-                  : "border-[var(--border)] hover:bg-[var(--secondary)]"
-              }">Verknüpfen</button>
-              <button type="button" id="wf-auto-layout" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs">Auto-Layout</button>
-            </div>
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+        <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" id="wf-connect-toggle" class="px-2.5 py-1 rounded-lg border text-xs font-semibold ${
+              _connectMode || _connectFromId
+                ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
+                : "border-[var(--border)] hover:bg-[var(--secondary)]"
+            }">Verknüpfen</button>
+            <button type="button" id="wf-auto-layout" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs">Auto-Layout</button>
+            <button type="button" id="wf-import-n8n-btn" title="n8n Workflow JSON importieren" class="px-2.5 py-1 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs font-semibold">n8n Import</button>
             ${connectHint}
           </div>
-          ${renderCanvasHtml()}
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" id="wf-blank-btn" class="px-2.5 py-1 rounded-lg border border-indigo-500/40 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 text-xs font-semibold">+ Neu</button>
+            <button type="button" id="wf-open-browser-btn" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs font-semibold">📂 Öffnen</button>
+            <button type="button" id="wf-save-dialog-btn" class="px-2.5 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 text-xs font-semibold">💾 Speichern</button>
+            <button type="button" id="wf-marketplace-btn" class="px-2.5 py-1 rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 text-xs font-semibold">🧩 Marktplatz</button>
+          </div>
         </div>
-
-        ${renderInspectorHtml()}
+        <div style="display:flex;flex-direction:row;flex:1;min-height:0;overflow:hidden;">
+          ${renderLeftPaletteHtml()}
+          <div style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;">
+            ${renderCanvasHtml()}
+          </div>
+          ${renderInspectorHtml()}
+        </div>
       </div>`;
 
     bindAllEvents(mount);
@@ -993,6 +1017,52 @@
     mount.querySelectorAll("[data-add-station]").forEach((btn) => {
       btn.onclick = () => addStation(btn.getAttribute("data-add-station"));
     });
+
+    mount.querySelectorAll("[data-palette-tab]").forEach((tab) => {
+      tab.onclick = () => {
+        _paletteTab = tab.getAttribute("data-palette-tab") || "standard";
+        renderAll();
+      };
+    });
+
+    mount.querySelectorAll("[data-palette-type]").forEach((card) => {
+      card.addEventListener("dragstart", (ev) => {
+        if (ev.dataTransfer) {
+          ev.dataTransfer.setData("text/plain", card.getAttribute("data-palette-type") || "agent");
+          ev.dataTransfer.effectAllowed = "copy";
+        }
+      });
+    });
+
+    const canvasScroll = mount.querySelector("#wf-canvas-scroll");
+    if (canvasScroll) {
+      canvasScroll.addEventListener("dragover", (ev) => {
+        ev.preventDefault();
+        if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+      });
+      canvasScroll.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        const ptype = ev.dataTransfer ? ev.dataTransfer.getData("text/plain") : "";
+        if (!ptype) return;
+        const stage = mount.querySelector("#wf-canvas-stage") || canvasScroll;
+        const rect = stage.getBoundingClientRect();
+        const x = Math.max(20, ev.clientX - rect.left - NODE_W / 2);
+        const y = Math.max(20, ev.clientY - rect.top - NODE_H / 2);
+        addStation(ptype, x, y);
+      });
+    }
+
+    const openBrowserBtn = mount.querySelector("#wf-open-browser-btn");
+    if (openBrowserBtn) openBrowserBtn.onclick = () => openPresetBrowserModal();
+
+    const saveDlgBtn = mount.querySelector("#wf-save-dialog-btn");
+    if (saveDlgBtn) saveDlgBtn.onclick = () => openSaveWorkflowModal();
+
+    const mktBtn = mount.querySelector("#wf-marketplace-btn");
+    if (mktBtn) mktBtn.onclick = () => openNodeMarketplaceModal();
+
+    const mktLink = mount.querySelector("#wf-palette-open-mkt");
+    if (mktLink) mktLink.onclick = () => openNodeMarketplaceModal(_paletteTab);
 
     const connToggle = mount.querySelector("#wf-connect-toggle");
     if (connToggle) {
@@ -1362,6 +1432,368 @@
         if (_activeTpl) renderAll();
       }
     } catch (_) {}
+  }
+
+  function closeModalById(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  function openPresetBrowserModal() {
+    closeModalById("wf-preset-browser-modal");
+    const modal = document.createElement("div");
+    modal.id = "wf-preset-browser-modal";
+    modal.className = "fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4";
+    let previewId = (_activeTpl && _activeTpl.id) || (_templates[0] && _templates[0].id) || "";
+    let search = "";
+
+    const renderModal = () => {
+      const q = search.trim().toLowerCase();
+      const filtered = _templates.filter((t) => !q || `${t.title} ${t.category} ${t.description}`.toLowerCase().includes(q));
+      const groups = {};
+      filtered.forEach((t) => {
+        const folder = `${t.builtin ? "Starter-Katalog" : "Eigene Workflows"} / ${t.category || "Allgemein"}`;
+        if (!groups[folder]) groups[folder] = [];
+        groups[folder].push(t);
+      });
+      const sel = _templates.find((t) => t.id === previewId) || filtered[0] || null;
+      if (sel) previewId = sel.id;
+
+      const treeHtml = Object.keys(groups)
+        .sort()
+        .map(
+          (folder) => `<div class="space-y-1">
+            <div class="text-[10px] font-mono uppercase tracking-wider text-indigo-300 px-2 pt-1.5">📁 ${esc(folder)}</div>
+            ${groups[folder]
+              .map(
+                (t) => `<button type="button" data-ni-tpl="${esc(t.id)}" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition flex items-center justify-between gap-2 ${
+                  sel && sel.id === t.id ? "bg-indigo-600 text-white font-semibold" : "hover:bg-[var(--secondary)] text-[var(--foreground)]"
+                }">
+                  <span class="truncate">${esc(t.title)}</span>
+                  <span class="text-[10px] font-mono opacity-75 shrink-0">${(t.nodes || []).length}</span>
+                </button>`
+              )
+              .join("")}
+          </div>`
+        )
+        .join("") || `<div class="p-4 text-xs text-[var(--muted-foreground)]">Keine Vorlagen gefunden.</div>`;
+
+      const rightHtml = sel
+        ? `<div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+            ${
+              sel.header_image
+                ? `<div class="h-40 w-full bg-black/30 overflow-hidden border-b border-[var(--border)] shrink-0"><img src="${esc(sel.header_image)}" alt="" class="w-full h-full object-cover" /></div>`
+                : `<div class="h-28 w-full bg-gradient-to-r from-indigo-950 via-slate-900 to-fuchsia-950 border-b border-[var(--border)] flex items-end p-4 shrink-0">
+                    <span class="text-[11px] font-mono uppercase tracking-wider text-indigo-300">${esc(sel.category || "Workflow")}</span>
+                  </div>`
+            }
+            <div class="flex-1 overflow-y-auto p-5 space-y-3">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h3 class="text-lg font-bold text-[var(--foreground)]">${esc(sel.title)}</h3>
+                  <div class="text-[11px] font-mono text-[var(--muted-foreground)]">${sel.builtin ? "Starter-Katalog" : "Eigener Workflow"} · ${(sel.nodes || []).length} Stationen</div>
+                </div>
+              </div>
+              <p class="text-xs text-[var(--foreground)]/90 leading-relaxed whitespace-pre-wrap">${esc(sel.description || "Keine Beschreibung hinterlegt.")}</p>
+              <div class="space-y-1 pt-2 border-t border-[var(--border)]">
+                <div class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Enthaltene Bausteine</div>
+                <div class="flex flex-wrap gap-1.5">
+                  ${(sel.nodes || []).map((n) => `<span class="px-2 py-0.5 rounded border border-[var(--border)] bg-[var(--page-bg)] text-[11px] font-mono">${esc(n.type)}: ${esc(n.title)}</span>`).join("")}
+                </div>
+              </div>
+            </div>
+            <div class="p-3 border-t border-[var(--border)] flex items-center justify-between gap-2 bg-[var(--card)]">
+              ${!sel.builtin ? `<button type="button" id="ni-del-btn" class="px-3 py-1.5 rounded-lg border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 text-xs font-semibold">Löschen</button>` : `<span></span>`}
+              <button type="button" id="ni-load-btn" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">Workflow laden</button>
+            </div>
+          </div>`
+        : `<div class="flex-1 flex items-center justify-center text-xs text-[var(--muted-foreground)]">Bitte links ein Preset auswählen.</div>`;
+
+      modal.innerHTML = `
+        <div class="w-full max-w-4xl h-[76vh] rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl flex flex-col overflow-hidden">
+          <div class="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+            <div class="font-bold text-sm">📂 Workflow öffnen — Preset-Browser</div>
+            <button type="button" id="ni-close-btn" class="px-2 py-1 rounded hover:bg-[var(--secondary)] text-xs">✕</button>
+          </div>
+          <div class="flex-1 flex min-h-0 overflow-hidden">
+            <div class="w-72 border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--page-bg)]/50">
+              <div class="p-2 border-b border-[var(--border)]">
+                <input id="ni-search" value="${esc(search)}" placeholder="Preset suchen..." class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] text-xs" />
+              </div>
+              <div class="flex-1 overflow-y-auto p-2 space-y-2">${treeHtml}</div>
+            </div>
+            ${rightHtml}
+          </div>
+        </div>`;
+
+      modal.querySelector("#ni-close-btn").onclick = () => modal.remove();
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+      const sEl = modal.querySelector("#ni-search");
+      sEl.oninput = () => {
+        search = sEl.value;
+        renderModal();
+        const ref = modal.querySelector("#ni-search");
+        if (ref) { ref.focus(); ref.setSelectionRange(ref.value.length, ref.value.length); }
+      };
+      modal.querySelectorAll("[data-ni-tpl]").forEach((b) => {
+        b.onclick = () => { previewId = b.getAttribute("data-ni-tpl"); renderModal(); };
+        b.ondblclick = () => {
+          const found = _templates.find((t) => t.id === b.getAttribute("data-ni-tpl"));
+          if (!found) return;
+          _activeTpl = cloneTpl(found);
+          ensurePositions(_activeTpl);
+          _selectedNodeId = _activeTpl.nodes[0]?.id || null;
+          _selectedEdge = null;
+          _dirty = false;
+          modal.remove();
+          renderAll();
+        };
+      });
+      const loadBtn = modal.querySelector("#ni-load-btn");
+      if (loadBtn && sel) {
+        loadBtn.onclick = () => {
+          _activeTpl = cloneTpl(sel);
+          ensurePositions(_activeTpl);
+          _selectedNodeId = _activeTpl.nodes[0]?.id || null;
+          _selectedEdge = null;
+          _dirty = false;
+          modal.remove();
+          renderAll();
+        };
+      }
+      const delBtn = modal.querySelector("#ni-del-btn");
+      if (delBtn && sel && !sel.builtin) {
+        delBtn.onclick = async () => {
+          if (!confirm(`Workflow '${sel.title}' wirklich löschen?`)) return;
+          await apiJson(`/api/v2/workflows/templates/${encodeURIComponent(sel.id)}`, { method: "DELETE" });
+          await loadTemplates();
+          previewId = _templates[0]?.id || "";
+          renderModal();
+        };
+      }
+    };
+    document.body.appendChild(modal);
+    renderModal();
+  }
+
+  function openSaveWorkflowModal() {
+    if (!_activeTpl) return;
+    closeModalById("wf-save-dialog-modal");
+    const modal = document.createElement("div");
+    modal.id = "wf-save-dialog-modal";
+    modal.className = "fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4";
+    let headerImg = _activeTpl.header_image || "";
+
+    modal.innerHTML = `
+      <div class="w-full max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+          <div class="font-bold text-sm">💾 Workflow speichern</div>
+          <button type="button" id="wf-sv-close" class="px-2 py-1 rounded hover:bg-[var(--secondary)] text-xs">✕</button>
+        </div>
+        <div class="p-4 space-y-3 text-xs">
+          <label class="block space-y-1">
+            <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Titel</span>
+            <input id="wf-sv-title" value="${esc(_activeTpl.title || "")}" class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)]" />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Kategorie / Ordner</span>
+            <input id="wf-sv-cat" value="${esc(_activeTpl.builtin ? "Eigene Workflows" : _activeTpl.category || "Eigene Workflows")}" class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)]" />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Beschreibung</span>
+            <textarea id="wf-sv-desc" rows="3" placeholder="Wofuer ist dieser Workflow gedacht?" class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)]">${esc(_activeTpl.description || "")}</textarea>
+          </label>
+          <div class="space-y-1.5">
+            <span class="text-[10px] font-mono text-[var(--muted-foreground)]">Header-Bild (URL oder Upload)</span>
+            <div class="flex gap-2">
+              <input id="wf-sv-img-url" value="${esc(headerImg)}" placeholder="https://... oder Bild hochladen" class="flex-1 px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono" />
+              <label class="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] cursor-pointer font-semibold shrink-0">
+                Bild wählen<input id="wf-sv-img-file" type="file" accept="image/*" class="hidden" />
+              </label>
+            </div>
+            <div id="wf-sv-preview" class="${headerImg ? "" : "hidden"} h-28 rounded-lg overflow-hidden border border-[var(--border)] bg-black/30">
+              <img src="${esc(headerImg)}" class="w-full h-full object-cover" />
+            </div>
+          </div>
+          <div id="wf-sv-status" class="text-[11px] font-mono text-rose-400"></div>
+        </div>
+        <div class="px-4 py-3 border-t border-[var(--border)] flex justify-end gap-2">
+          <button type="button" id="wf-sv-cancel" class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs">Abbrechen</button>
+          <button type="button" id="wf-sv-submit" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">Speichern</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.querySelector("#wf-sv-close").onclick = () => modal.remove();
+    modal.querySelector("#wf-sv-cancel").onclick = () => modal.remove();
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+    const imgUrlEl = modal.querySelector("#wf-sv-img-url");
+    const previewEl = modal.querySelector("#wf-sv-preview");
+    const updatePrev = (src) => {
+      headerImg = src || "";
+      if (headerImg) {
+        previewEl.classList.remove("hidden");
+        previewEl.querySelector("img").src = headerImg;
+      } else {
+        previewEl.classList.add("hidden");
+      }
+    };
+    imgUrlEl.oninput = () => updatePrev(imgUrlEl.value.trim());
+    modal.querySelector("#wf-sv-img-file").onchange = (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        imgUrlEl.value = String(reader.result || "");
+        updatePrev(imgUrlEl.value);
+      };
+      reader.readAsDataURL(file);
+    };
+
+    modal.querySelector("#wf-sv-submit").onclick = async () => {
+      const title = modal.querySelector("#wf-sv-title").value.trim();
+      const cat = modal.querySelector("#wf-sv-cat").value.trim() || "Eigene Workflows";
+      const desc = modal.querySelector("#wf-sv-desc").value.trim();
+      if (!title) {
+        modal.querySelector("#wf-sv-status").textContent = "Bitte einen Titel eingeben.";
+        return;
+      }
+      try {
+        const res = await apiJson("/api/v2/workflows/templates", {
+          method: "POST",
+          body: JSON.stringify({
+            id: _activeTpl.builtin ? `${_activeTpl.id}_custom` : _activeTpl.id || undefined,
+            title,
+            category: cat,
+            description: desc,
+            header_image: headerImg,
+            inputs: _activeTpl.inputs || [{ key: "topic", label: "Thema / Ziel", default: "" }],
+            nodes: _activeTpl.nodes,
+            edges: _activeTpl.edges || [],
+          }),
+        });
+        _dirty = false;
+        modal.remove();
+        await loadTemplates(res.template.id);
+      } catch (err) {
+        modal.querySelector("#wf-sv-status").textContent = `Fehler: ${err.message}`;
+      }
+    };
+  }
+
+  async function openNodeMarketplaceModal(initialCat = "all") {
+    closeModalById("wf-node-marketplace-modal");
+    const modal = document.createElement("div");
+    modal.id = "wf-node-marketplace-modal";
+    modal.className = "fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4";
+    let activeCat = initialCat && initialCat !== "standard" ? initialCat : "all";
+    let search = "";
+
+    const refreshData = async () => {
+      try {
+        const d = await apiJson("/api/v2/workflows/node-plugins/marketplace");
+        _marketplaceItems = Array.isArray(d.items) ? d.items : [];
+      } catch (_) {}
+    };
+
+    const renderMkt = () => {
+      const q = search.trim().toLowerCase();
+      const filtered = _marketplaceItems.filter((it) => {
+        if (activeCat !== "all" && it.category !== activeCat) return false;
+        if (!q) return true;
+        return `${it.label} ${it.description} ${it.source_name} ${it.plugin_id}`.toLowerCase().includes(q);
+      });
+      const catLabel = (cid) => (PALETTE_CATEGORIES.find((c) => c.id === cid)?.label || cid);
+
+      modal.innerHTML = `
+        <div class="w-full max-w-5xl h-[82vh] rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl flex flex-col overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between gap-3">
+            <div>
+              <div class="font-bold text-sm">🧩 Baustein-Marktplatz — 3rd-Party & Media Plugins</div>
+              <div class="text-[11px] text-[var(--muted-foreground)]">Installiere externe Audio-, Video-, Bild-, Dokument-, Scraping- & Publishing-Module direkt in deine Workflow-Palette.</div>
+            </div>
+            <button type="button" id="mkt-close" class="px-2.5 py-1 rounded hover:bg-[var(--secondary)] text-xs">✕</button>
+          </div>
+          <div class="px-5 py-2.5 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2 bg-[var(--page-bg)]/40">
+            <div class="flex flex-wrap gap-1">
+              <button type="button" data-mkt-cat="all" class="px-2.5 py-1 rounded-lg text-xs font-semibold ${activeCat === "all" ? "bg-indigo-600 text-white" : "border border-[var(--border)] hover:bg-[var(--secondary)]"}">Alle (${_marketplaceItems.length})</button>
+              ${PALETTE_CATEGORIES.filter((c) => c.id !== "standard")
+                .map(
+                  (c) => `<button type="button" data-mkt-cat="${c.id}" class="px-2.5 py-1 rounded-lg text-xs ${
+                    activeCat === c.id ? "bg-indigo-600 text-white font-semibold" : "border border-[var(--border)] hover:bg-[var(--secondary)]"
+                  }">${c.icon} ${esc(c.label)}</button>`
+                )
+                .join("")}
+            </div>
+            <input id="mkt-search" value="${esc(search)}" placeholder="Plugin oder Anbieter suchen..." class="w-60 px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] text-xs" />
+          </div>
+          <div class="flex-1 overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
+            ${filtered
+              .map(
+                (it) => `<div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--page-bg)]/60 flex flex-col justify-between gap-3">
+                  <div class="space-y-1.5">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="font-bold text-xs text-[var(--foreground)]">${esc(it.icon || "🔌")} ${esc(it.label)}</div>
+                      <span class="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--card)] shrink-0">${esc(catLabel(it.category))}</span>
+                    </div>
+                    <p class="text-[11px] text-[var(--muted-foreground)] leading-relaxed">${esc(it.description || "")}</p>
+                  </div>
+                  <div class="pt-2 border-t border-[var(--border)]/60 flex items-center justify-between gap-2 text-[10px]">
+                    <div class="font-mono text-[var(--muted-foreground)] truncate">
+                      Quelle: ${it.source_url && it.source_url.startsWith("http") ? `<a href="${esc(it.source_url)}" target="_blank" rel="noreferrer" class="underline hover:text-[var(--foreground)]">${esc(it.source_name || it.source_url)}</a>` : esc(it.source_name || "Core")}
+                    </div>
+                    ${
+                      it.core
+                        ? `<span class="px-2 py-1 rounded bg-emerald-500/15 text-emerald-300 font-mono font-semibold shrink-0">Core aktiv</span>`
+                        : it.installed
+                        ? `<button type="button" data-mkt-uninst="${esc(it.plugin_id)}" class="px-2.5 py-1 rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 font-semibold shrink-0">Deinstallieren</button>`
+                        : `<button type="button" data-mkt-inst="${esc(it.plugin_id)}" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shrink-0">Installieren</button>`
+                    }
+                  </div>
+                </div>`
+              )
+              .join("")}
+          </div>
+        </div>`;
+
+      modal.querySelector("#mkt-close").onclick = () => modal.remove();
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+      modal.querySelectorAll("[data-mkt-cat]").forEach((b) => {
+        b.onclick = () => { activeCat = b.getAttribute("data-mkt-cat"); renderMkt(); };
+      });
+      const ms = modal.querySelector("#mkt-search");
+      ms.oninput = () => {
+        search = ms.value;
+        renderMkt();
+        const ref = modal.querySelector("#mkt-search");
+        if (ref) { ref.focus(); ref.setSelectionRange(ref.value.length, ref.value.length); }
+      };
+      modal.querySelectorAll("[data-mkt-inst]").forEach((b) => {
+        b.onclick = async () => {
+          const pid = b.getAttribute("data-mkt-inst");
+          b.disabled = true;
+          b.textContent = "Installiere...";
+          await apiJson(`/api/v2/workflows/node-plugins/marketplace/${encodeURIComponent(pid)}/install`, { method: "POST" });
+          await Promise.all([refreshData(), loadNodePlugins()]);
+          renderMkt();
+        };
+      });
+      modal.querySelectorAll("[data-mkt-uninst]").forEach((b) => {
+        b.onclick = async () => {
+          const pid = b.getAttribute("data-mkt-uninst");
+          b.disabled = true;
+          await apiJson(`/api/v2/workflows/node-plugins/marketplace/${encodeURIComponent(pid)}`, { method: "DELETE" });
+          await Promise.all([refreshData(), loadNodePlugins()]);
+          renderMkt();
+        };
+      });
+    };
+
+    document.body.appendChild(modal);
+    modal.innerHTML = `<div class="p-6 rounded-xl bg-[var(--card)] border border-[var(--border)] text-xs">Lade Baustein-Marktplatz...</div>`;
+    await refreshData();
+    renderMkt();
   }
 
   async function loadAgentsList() {

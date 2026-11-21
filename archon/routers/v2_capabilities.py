@@ -167,6 +167,36 @@ async def api_v2_workflow_node_plugins(request: Request):
     return {"status": "ok", "plugins": await asyncio.to_thread(list_workflow_node_plugins)}
 
 
+@router.get("/api/v2/workflows/node-plugins/marketplace")
+async def api_v2_workflow_node_plugins_marketplace(request: Request):
+    require_admin_or_503(request)
+    from backend.workflow_node_plugins import list_marketplace_plugins
+    return {"status": "ok", "items": await asyncio.to_thread(list_marketplace_plugins)}
+
+
+@router.post("/api/v2/workflows/node-plugins/marketplace/{plugin_id}/install")
+async def api_v2_workflow_node_plugin_install(request: Request, plugin_id: str):
+    require_admin_or_503(request)
+    from backend.workflow_node_plugins import install_marketplace_plugin
+    try:
+        res = await asyncio.to_thread(install_marketplace_plugin, plugin_id)
+        return res
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/api/v2/workflows/node-plugins/marketplace/{plugin_id}")
+async def api_v2_workflow_node_plugin_uninstall(request: Request, plugin_id: str):
+    require_admin_or_503(request)
+    from backend.workflow_node_plugins import uninstall_marketplace_plugin
+    try:
+        return await asyncio.to_thread(uninstall_marketplace_plugin, plugin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/api/v2/workflows/templates")
 async def api_v2_workflow_templates_save(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)

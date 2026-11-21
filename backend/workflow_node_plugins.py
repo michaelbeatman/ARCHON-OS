@@ -116,7 +116,7 @@ CORE_NODE_PLUGINS: Dict[str, Dict[str, Any]] = {
     "ffmpeg": {
         "plugin_id": "ffmpeg",
         "label": "FFmpeg Video/Audio",
-        "category": "media",
+        "category": "video",
         "icon": "🎬",
         "adapter": "local",
         "description": "Schneidet, konvertiert, skaliert (9:16 / 16:9), brennt Untertitel/Watermarks ein und extrahiert Audio.",
@@ -142,7 +142,7 @@ CORE_NODE_PLUGINS: Dict[str, Dict[str, Any]] = {
     "kinocut": {
         "plugin_id": "kinocut",
         "label": "KinoCut AI Repurpose",
-        "category": "media",
+        "category": "video",
         "icon": "✂️",
         "adapter": "mcp",
         "description": "Erstellt aus Langform-Skripten oder Videos plattformfertige Kurz-Clips (Shorts, Reels, LinkedIn).",
@@ -198,7 +198,7 @@ CORE_NODE_PLUGINS: Dict[str, Dict[str, Any]] = {
     "image_gen": {
         "plugin_id": "image_gen",
         "label": "Bild & Thumbnail",
-        "category": "media",
+        "category": "design",
         "icon": "🖼️",
         "adapter": "local",
         "description": "Generiert Thumbnails, Social-Visuals und Cover-Grafiken (Zero-Egress-konform).",
@@ -215,7 +215,7 @@ CORE_NODE_PLUGINS: Dict[str, Dict[str, Any]] = {
     "calendar_publish": {
         "plugin_id": "calendar_publish",
         "label": "Kalender & Publishing",
-        "category": "publishing",
+        "category": "business",
         "icon": "📅",
         "adapter": "local",
         "description": "Plant das freigegebene Deliverable im Operations-Kalender ein und verknuepft es mit dem Publishing-Kanal.",
@@ -615,3 +615,410 @@ async def execute_workflow_node_plugin(
         return {"status": "success", "content": json.dumps(data, ensure_ascii=False), **({k: v for k, v in data.items() if isinstance(data, dict)})}
 
     return {"status": "error", "error": f"Kein Ausfuehrungs-Adapter fuer Plugin '{spec['plugin_id']}' konfiguriert.", "content": ""}
+
+
+# =====================================================================
+# BAUSTEIN-MARKTPLATZ (3RD-PARTY KATALOG & INSTALLATION)
+# =====================================================================
+
+WORKFLOW_NODE_MARKETPLACE_CATALOG: List[Dict[str, Any]] = [
+    {
+        "plugin_id": "udio",
+        "label": "Udio AI Music",
+        "category": "audio",
+        "icon": "🎶",
+        "adapter": "http",
+        "source_name": "Udio",
+        "source_url": "https://www.udio.com",
+        "description": "Generiert komplette Songs, Intros und Hintergrundmusik per Prompt & Genre-Tags.",
+        "http_endpoint": "https://api.udio.com/v1/generate",
+        "outputs_schema": ["audio_path", "track_url", "content"],
+        "params_schema": [
+            {"key": "prompt", "label": "Musik-Prompt", "type": "textarea", "default": ""},
+            {"key": "tags", "label": "Genre / Stimmung", "type": "text", "default": "cinematic, electronic, 118bpm"},
+            {"key": "instrumental", "label": "Instrumental", "type": "checkbox", "default": True},
+            {"key": "duration_sec", "label": "Dauer (s)", "type": "number", "default": 30, "min": 10, "max": 240, "step": 5},
+        ],
+    },
+    {
+        "plugin_id": "elevenlabs",
+        "label": "ElevenLabs Voice & Dubbing",
+        "category": "audio",
+        "icon": "🗣️",
+        "adapter": "http",
+        "source_name": "ElevenLabs",
+        "source_url": "https://elevenlabs.io",
+        "description": "Hochwertige KI-Stimmen, Voice-Cloning und automatisches Video-Dubbing in 29+ Sprachen.",
+        "http_endpoint": "https://api.elevenlabs.io/v1/text-to-speech",
+        "outputs_schema": ["audio_path", "voice_id", "content"],
+        "params_schema": [
+            {"key": "text", "label": "Text ({{upstream.step_1.content}})", "type": "textarea", "default": ""},
+            {"key": "voice_id", "label": "Voice-ID", "type": "text", "default": "21m00Tcm4TlvDq8ikWAM"},
+            {"key": "model_id", "label": "Modell", "type": "select", "default": "eleven_multilingual_v2", "options": ["eleven_multilingual_v2", "eleven_turbo_v2_5"]},
+            {"key": "stability", "label": "Stabilitaet (0.0-1.0)", "type": "number", "default": 0.5, "min": 0, "max": 1, "step": 0.05},
+        ],
+    },
+    {
+        "plugin_id": "whisper",
+        "label": "Whisper / Deepgram STT",
+        "category": "audio",
+        "icon": "📝",
+        "adapter": "http",
+        "source_name": "OpenAI Whisper / Deepgram",
+        "source_url": "https://deepgram.com",
+        "description": "Transkribiert Audio/Video exakt mit Zeitstempeln (.srt/.vtt) fuer Untertitel und Repurposing.",
+        "http_endpoint": "https://api.deepgram.com/v1/listen",
+        "outputs_schema": ["srt_path", "transcript", "content"],
+        "params_schema": [
+            {"key": "input_path", "label": "Audio/Video-Pfad", "type": "text", "default": "{{upstream.step_1.video_path}}"},
+            {"key": "language", "label": "Sprache", "type": "select", "default": "de", "options": ["de", "en", "fr", "es", "auto"]},
+            {"key": "diarize", "label": "Sprechererkennung", "type": "checkbox", "default": True},
+        ],
+    },
+    {
+        "plugin_id": "runway",
+        "label": "Runway Gen-3/Gen-4",
+        "category": "video",
+        "icon": "🎥",
+        "adapter": "http",
+        "source_name": "RunwayML",
+        "source_url": "https://runwayml.com",
+        "description": "Text-to-Video und Image-to-Video Generierung fuer B-Roll, Intro-Szenen und Visuals.",
+        "http_endpoint": "https://api.dev.runwayml.com/v1/image_to_video",
+        "outputs_schema": ["video_path", "task_id", "content"],
+        "params_schema": [
+            {"key": "prompt", "label": "Szenen-Prompt", "type": "textarea", "default": ""},
+            {"key": "image_url", "label": "Startbild (optional)", "type": "text", "default": "{{upstream.step_1.image_path}}"},
+            {"key": "duration", "label": "Dauer (s)", "type": "select", "default": "5", "options": ["5", "10"]},
+            {"key": "ratio", "label": "Format", "type": "select", "default": "1280:720", "options": ["1280:720", "720:1280", "960:960"]},
+        ],
+    },
+    {
+        "plugin_id": "kling",
+        "label": "Kling AI Video",
+        "category": "video",
+        "icon": "🎞️",
+        "adapter": "http",
+        "source_name": "Kling AI",
+        "source_url": "https://klingai.com",
+        "description": "Realistische KI-Videosequenzen mit Kamerasteuerung und Lip-Sync.",
+        "http_endpoint": "https://api.klingai.com/v1/videos/text2video",
+        "outputs_schema": ["video_path", "content"],
+        "params_schema": [
+            {"key": "prompt", "label": "Video-Prompt", "type": "textarea", "default": ""},
+            {"key": "aspect_ratio", "label": "Format", "type": "select", "default": "9:16", "options": ["9:16", "16:9", "1:1"]},
+            {"key": "duration", "label": "Dauer (s)", "type": "select", "default": "5", "options": ["5", "10"]},
+        ],
+    },
+    {
+        "plugin_id": "heygen",
+        "label": "HeyGen AI Avatar",
+        "category": "video",
+        "icon": "🧑‍💼",
+        "adapter": "http",
+        "source_name": "HeyGen",
+        "source_url": "https://www.heygen.com",
+        "description": "Erstellt Sprecher-Videos mit deinem digitalen Avatar direkt aus einem Skript.",
+        "http_endpoint": "https://api.heygen.com/v2/video/generate",
+        "outputs_schema": ["video_path", "video_url", "content"],
+        "params_schema": [
+            {"key": "script", "label": "Sprecher-Skript", "type": "textarea", "default": "{{upstream.step_1.content}}"},
+            {"key": "avatar_id", "label": "Avatar-ID", "type": "text", "default": "default_avatar"},
+            {"key": "voice_id", "label": "Voice-ID", "type": "text", "default": ""},
+            {"key": "aspect_ratio", "label": "Format", "type": "select", "default": "9:16", "options": ["9:16", "16:9", "1:1"]},
+        ],
+    },
+    {
+        "plugin_id": "descript",
+        "label": "Descript Edit & Captions",
+        "category": "video",
+        "icon": "🪄",
+        "adapter": "http",
+        "source_name": "Descript",
+        "source_url": "https://www.descript.com",
+        "description": "Entfernt Fuellwoerter, verbessert Studio-Sound und exportiert untertitelte Clips.",
+        "http_endpoint": "https://api.descript.com/v1/projects",
+        "outputs_schema": ["video_path", "content"],
+        "params_schema": [
+            {"key": "input_path", "label": "Video-Pfad", "type": "text", "default": "{{upstream.step_1.video_path}}"},
+            {"key": "studio_sound", "label": "Studio Sound aktivieren", "type": "checkbox", "default": True},
+            {"key": "remove_filler_words", "label": "Fuellwoerter entfernen", "type": "checkbox", "default": True},
+        ],
+    },
+    {
+        "plugin_id": "flux_comfyui",
+        "label": "Flux / ComfyUI",
+        "category": "design",
+        "icon": "🎨",
+        "adapter": "http",
+        "source_name": "ComfyUI / Black Forest Labs",
+        "source_url": "https://www.comfy.org",
+        "description": "Lokale oder Cloud-Bildgenerierung ueber eigene ComfyUI-Workflows (Zero-Egress-faehig).",
+        "http_endpoint": "http://127.0.0.1:8188/prompt",
+        "outputs_schema": ["image_path", "content"],
+        "params_schema": [
+            {"key": "prompt", "label": "Bild-Prompt", "type": "textarea", "default": ""},
+            {"key": "width", "label": "Breite", "type": "number", "default": 1024, "min": 512, "max": 2048, "step": 64},
+            {"key": "height", "label": "Hoehe", "type": "number", "default": 1024, "min": 512, "max": 2048, "step": 64},
+            {"key": "steps", "label": "Sampling Steps", "type": "number", "default": 20, "min": 4, "max": 50, "step": 1},
+        ],
+    },
+    {
+        "plugin_id": "canva",
+        "label": "Canva Design Export",
+        "category": "design",
+        "icon": "🖌️",
+        "adapter": "http",
+        "source_name": "Canva Connect",
+        "source_url": "https://www.canva.com",
+        "description": "Befuellt Canva-Brand-Templates automatisch mit Text/Bildern und exportiert PNG/PDF.",
+        "http_endpoint": "https://api.canva.com/rest/v1/autofills",
+        "outputs_schema": ["image_path", "pdf_path", "content"],
+        "params_schema": [
+            {"key": "brand_template_id", "label": "Brand-Template-ID", "type": "text", "default": ""},
+            {"key": "headline", "label": "Headline", "type": "text", "default": "{{topic}}"},
+            {"key": "export_format", "label": "Export-Format", "type": "select", "default": "png", "options": ["png", "pdf", "jpg"]},
+        ],
+    },
+    {
+        "plugin_id": "bannerbear",
+        "label": "Bannerbear Auto-Visuals",
+        "category": "design",
+        "icon": "🐻",
+        "adapter": "http",
+        "source_name": "Bannerbear",
+        "source_url": "https://www.bannerbear.com",
+        "description": "Rendert Social-Media-Karten, Thumbnails und Karussell-Slides per Template-API.",
+        "http_endpoint": "https://api.bannerbear.com/v2/images",
+        "outputs_schema": ["image_path", "image_url", "content"],
+        "params_schema": [
+            {"key": "template_id", "label": "Template-UID", "type": "text", "default": ""},
+            {"key": "title", "label": "Titel-Layer", "type": "text", "default": "{{topic}}"},
+            {"key": "subtitle", "label": "Untertitel-Layer", "type": "text", "default": ""},
+        ],
+    },
+    {
+        "plugin_id": "marp_slides",
+        "label": "Marp / Pandoc Slides & PDF",
+        "category": "docs",
+        "icon": "📑",
+        "adapter": "mcp",
+        "source_name": "Marp / Archon Slides",
+        "source_url": "https://marp.app",
+        "description": "Wandelt Markdown-Decks in Praesentationen, LinkedIn-Carousel-PDFs oder HTML-Slides um.",
+        "mcp_tool": "archon__export_slides",
+        "outputs_schema": ["pdf_path", "content"],
+        "params_schema": [
+            {"key": "markdown", "label": "Slide-Markdown ({{upstream.step_1.content}})", "type": "textarea", "default": ""},
+            {"key": "theme", "label": "Theme", "type": "select", "default": "default", "options": ["default", "gaia", "uncover"]},
+            {"key": "export_format", "label": "Format", "type": "select", "default": "pdf", "options": ["pdf", "pptx", "html"]},
+        ],
+    },
+    {
+        "plugin_id": "opendockit",
+        "label": "OpenDocKit Office & PDF",
+        "category": "docs",
+        "icon": "📄",
+        "adapter": "mcp",
+        "source_name": "OpenDocKit MCP",
+        "source_url": "https://pypi.org/project/opendockit/",
+        "description": "Erzeugt, prueft und konvertiert strukturierte DOCX-, XLSX- und PDF-Dokumente.",
+        "mcp_tool": "opendockit__render_document",
+        "outputs_schema": ["doc_path", "content"],
+        "params_schema": [
+            {"key": "source_content", "label": "Inhalt ({{upstream.step_1.content}})", "type": "textarea", "default": ""},
+            {"key": "output_format", "label": "Ziel-Format", "type": "select", "default": "pdf", "options": ["pdf", "docx", "xlsx"]},
+            {"key": "template_name", "label": "Vorlage (optional)", "type": "text", "default": ""},
+        ],
+    },
+    {
+        "plugin_id": "gamma",
+        "label": "Gamma AI Presentations",
+        "category": "docs",
+        "icon": "✨",
+        "adapter": "http",
+        "source_name": "Gamma",
+        "source_url": "https://gamma.app",
+        "description": "Generiert strukturierte Pitch-Decks, Handouts und Web-Dokumente per KI.",
+        "http_endpoint": "https://public-api.gamma.app/v0.2/generations",
+        "outputs_schema": ["deck_url", "content"],
+        "params_schema": [
+            {"key": "input_text", "label": "Briefing / Gliederung", "type": "textarea", "default": "{{upstream.step_1.content}}"},
+            {"key": "num_cards", "label": "Anzahl Karten/Slides", "type": "number", "default": 8, "min": 3, "max": 30, "step": 1},
+            {"key": "language", "label": "Sprache", "type": "select", "default": "de", "options": ["de", "en"]},
+        ],
+    },
+    {
+        "plugin_id": "firecrawl",
+        "label": "Firecrawl Web-to-Markdown",
+        "category": "research",
+        "icon": "🔥",
+        "adapter": "http",
+        "source_name": "Firecrawl",
+        "source_url": "https://www.firecrawl.dev",
+        "description": "Crawlt Webseiten sauber in LLM-taugliches Markdown oder strukturierte JSON-Extrakte.",
+        "http_endpoint": "https://api.firecrawl.dev/v1/scrape",
+        "outputs_schema": ["markdown", "content"],
+        "params_schema": [
+            {"key": "url", "label": "Ziel-URL", "type": "text", "default": ""},
+            {"key": "only_main_content", "label": "Nur Hauptinhalt extrahieren", "type": "checkbox", "default": True},
+            {"key": "max_depth", "label": "Crawl-Tiefe", "type": "number", "default": 1, "min": 1, "max": 5, "step": 1},
+        ],
+    },
+    {
+        "plugin_id": "apify",
+        "label": "Apify Actor Scraper",
+        "category": "research",
+        "icon": "🕷️",
+        "adapter": "http",
+        "source_name": "Apify",
+        "source_url": "https://apify.com",
+        "description": "Startet Apify-Scraper (LinkedIn, YouTube, TikTok, Maps, Google Search) fuer strukturierte Rohdaten.",
+        "http_endpoint": "https://api.apify.com/v2/acts",
+        "outputs_schema": ["items", "content"],
+        "params_schema": [
+            {"key": "actor_id", "label": "Actor-ID", "type": "text", "default": "apify/web-scraper"},
+            {"key": "query_or_url", "label": "Suchbegriff / URL", "type": "text", "default": "{{topic}}"},
+            {"key": "max_items", "label": "Max. Datensaetze", "type": "number", "default": 20, "min": 1, "max": 500, "step": 5},
+        ],
+    },
+    {
+        "plugin_id": "yt_transcript",
+        "label": "YouTube Transcript Extractor",
+        "category": "research",
+        "icon": "📺",
+        "adapter": "mcp",
+        "source_name": "Archon / YouTube MCP",
+        "source_url": "https://github.com/youtube",
+        "description": "Extrahiert Zeitstempel-Transkripte und Kapitel aus YouTube-Videos als Content-Basis.",
+        "mcp_tool": "archon__youtube_transcript",
+        "outputs_schema": ["transcript", "content"],
+        "params_schema": [
+            {"key": "video_url", "label": "YouTube-URL", "type": "text", "default": ""},
+            {"key": "language", "label": "Bevorzugte Sprache", "type": "select", "default": "de", "options": ["de", "en", "auto"]},
+        ],
+    },
+    {
+        "plugin_id": "patsnap",
+        "label": "PatSnap Patent & Research",
+        "category": "research",
+        "icon": "🔬",
+        "adapter": "mcp",
+        "source_name": "PatSnap MCP",
+        "source_url": "https://www.patsnap.com",
+        "description": "Recherchiert Patente, Prior Art, Anmelder und Rechtsstand ueber den PatSnap-MCP-Server.",
+        "mcp_tool": "patsnap__search_patents",
+        "outputs_schema": ["patents", "content"],
+        "params_schema": [
+            {"key": "query", "label": "Suchbegriff / Technologie", "type": "text", "default": "{{topic}}"},
+            {"key": "limit", "label": "Max. Treffer", "type": "number", "default": 10, "min": 1, "max": 50, "step": 1},
+        ],
+    },
+    {
+        "plugin_id": "n8n_webhook",
+        "label": "n8n Automation Webhook",
+        "category": "business",
+        "icon": "⚡",
+        "adapter": "http",
+        "source_name": "n8n",
+        "source_url": "https://n8n.io",
+        "description": "Uebergibt freigegebene Workflow-Ergebnisse an beliebige n8n-Automationen.",
+        "http_endpoint": "http://127.0.0.1:5678/webhook/archon-execution",
+        "outputs_schema": ["webhook_response", "content"],
+        "params_schema": [
+            {"key": "webhook_url", "label": "n8n Webhook-URL", "type": "text", "default": "http://127.0.0.1:5678/webhook/archon-execution"},
+            {"key": "action", "label": "Action-Name", "type": "text", "default": "publish_content"},
+            {"key": "payload_text", "label": "Nutzdaten ({{upstream.step_1.content}})", "type": "textarea", "default": ""},
+        ],
+    },
+    {
+        "plugin_id": "youtube_publish",
+        "label": "YouTube Data Upload",
+        "category": "business",
+        "icon": "▶️",
+        "adapter": "http",
+        "source_name": "YouTube Data API v3",
+        "source_url": "https://developers.google.com/youtube/v3",
+        "description": "Laedt fertige Videos/Shorts mit Titel, Beschreibung, Tags und Sichtbarkeit zu YouTube hoch.",
+        "http_endpoint": "https://www.googleapis.com/upload/youtube/v3/videos",
+        "outputs_schema": ["video_id", "youtube_url", "content"],
+        "params_schema": [
+            {"key": "video_path", "label": "Video-Datei", "type": "text", "default": "{{upstream.step_1.video_path}}"},
+            {"key": "title", "label": "Video-Titel", "type": "text", "default": "{{topic}}"},
+            {"key": "privacy_status", "label": "Sichtbarkeit", "type": "select", "default": "unlisted", "options": ["private", "unlisted", "public"]},
+            {"key": "tags", "label": "Tags (Komma)", "type": "text", "default": "AI, Automation, Archon"},
+        ],
+    },
+    {
+        "plugin_id": "linkedin_publish",
+        "label": "LinkedIn Post & Carousel",
+        "category": "business",
+        "icon": "💼",
+        "adapter": "http",
+        "source_name": "LinkedIn / Typefully / n8n",
+        "source_url": "https://developer.linkedin.com",
+        "description": "Veroeffentlicht Text-Posts, Dokument-Karussells (PDF) oder Videos nach HITL-Freigabe.",
+        "http_endpoint": "http://127.0.0.1:5678/webhook/archon-execution",
+        "outputs_schema": ["post_url", "content"],
+        "params_schema": [
+            {"key": "post_text", "label": "Post-Text", "type": "textarea", "default": "{{upstream.step_1.content}}"},
+            {"key": "attachment_path", "label": "PDF/Bild/Video (optional)", "type": "text", "default": ""},
+            {"key": "visibility", "label": "Sichtbarkeit", "type": "select", "default": "PUBLIC", "options": ["PUBLIC", "CONNECTIONS"]},
+        ],
+    },
+]
+
+
+def list_marketplace_plugins() -> List[Dict[str, Any]]:
+    """Liefert den kompletten Baustein-Marktplatz inkl. Installationsstatus."""
+    installed_map = {p["plugin_id"]: p for p in list_workflow_node_plugins()}
+    items: List[Dict[str, Any]] = []
+    # Core-Plugins als vorinstalliert mit auffuehren
+    for pid, spec in CORE_NODE_PLUGINS.items():
+        items.append({
+            **spec,
+            "source_name": "Archon Core",
+            "source_url": "internal://archon-os",
+            "installed": True,
+            "core": True,
+        })
+    # 3rd-Party-Katalog
+    for spec in WORKFLOW_NODE_MARKETPLACE_CATALOG:
+        pid = spec["plugin_id"]
+        items.append({
+            **spec,
+            "installed": pid in installed_map,
+            "core": False,
+        })
+    return items
+
+
+def install_marketplace_plugin(plugin_id: str) -> Dict[str, Any]:
+    """Installiert ein Plugin aus dem Marktplatz als deklaratives Manifest in plugins/workflow_nodes/."""
+    pid = re.sub(r"[^a-zA-Z0-9_-]+", "", str(plugin_id or "").strip().lower())
+    if not pid:
+        raise ValueError("plugin_id_required")
+    if pid in CORE_NODE_PLUGINS:
+        return {"status": "already_installed", "plugin": CORE_NODE_PLUGINS[pid]}
+    spec = next((x for x in WORKFLOW_NODE_MARKETPLACE_CATALOG if x["plugin_id"] == pid), None)
+    if not spec:
+        raise KeyError(f"Plugin '{pid}' nicht im Marktplatz gefunden.")
+    os.makedirs(PLUGINS_NODES_DIR, exist_ok=True)
+    target = os.path.join(PLUGINS_NODES_DIR, f"{pid}.json")
+    tmp = f"{target}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(spec, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, target)
+    return {"status": "installed", "plugin": {**spec, "installed": True, "third_party": True}}
+
+
+def uninstall_marketplace_plugin(plugin_id: str) -> Dict[str, Any]:
+    """Deinstalliert ein 3rd-Party-Plugin aus plugins/workflow_nodes/ (Core-Module geschuetzt)."""
+    pid = re.sub(r"[^a-zA-Z0-9_-]+", "", str(plugin_id or "").strip().lower())
+    if pid in CORE_NODE_PLUGINS:
+        raise ValueError("Core-Bausteine koennen nicht deinstalliert werden.")
+    target = os.path.join(PLUGINS_NODES_DIR, f"{pid}.json")
+    if os.path.isfile(target):
+        os.remove(target)
+        return {"status": "uninstalled", "plugin_id": pid}
+    return {"status": "not_installed", "plugin_id": pid}

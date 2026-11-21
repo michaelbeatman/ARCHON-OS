@@ -809,8 +809,14 @@ def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
             continue
         nid = str(raw.get("id") or f"step_{idx}").strip()
         ntype = str(raw.get("type") or "agent").strip().lower()
-        if ntype not in {"agent", "fanout", "gate", "quality_gate", "boardroom", "research"}:
-            ntype = "agent"
+        valid_types = {"agent", "fanout", "gate", "quality_gate", "boardroom", "research", "media_render", "clip_matrix"}
+        if ntype not in valid_types:
+            try:
+                from backend.workflow_node_plugins import is_workflow_node_plugin
+                if not is_workflow_node_plugin(ntype):
+                    ntype = "agent"
+            except Exception:
+                ntype = "agent"
         deps = raw.get("depends_on") or []
         if isinstance(deps, str):
             deps = [d.strip() for d in deps.split(",") if d.strip()]
@@ -883,6 +889,7 @@ def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
         "title": title,
         "category": str(payload.get("category") or "Eigene Workflows").strip(),
         "description": str(payload.get("description") or "").strip(),
+        "header_image": str(payload.get("header_image") or "").strip()[:350000],
         "schedule_hint": str(payload.get("schedule_hint") or "").strip(),
         "n8n_webhook_hint": str(payload.get("n8n_webhook_hint") or "").strip(),
         "inputs": payload.get("inputs") if isinstance(payload.get("inputs"), list) else [{"key": "topic", "label": "Thema / Ziel", "default": ""}],

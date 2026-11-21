@@ -145,6 +145,45 @@ class ArchonMcpServer:
                     "type": "object",
                     "properties": {}
                 }
+            },
+            {
+                "name": "archon__list_workflow_node_plugins",
+                "description": "Listet alle verfügbaren Workflow-Bausteine (Standard-Nodes + installierte Media/3rd-Party-Plugins inkl. params_schema), damit der Orchestrator gültige Workflows bauen kann.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "archon__create_workflow_template",
+                "description": "Erstellt und speichert ein neues Workflow-DAG-Template im Workflow-Studio (und startet es optional direkt via auto_run=true).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "Optionale eindeutige Template-ID"},
+                        "title": {"type": "string", "description": "Name des Workflows"},
+                        "category": {"type": "string", "default": "Eigene Workflows"},
+                        "description": {"type": "string", "default": ""},
+                        "nodes": {"type": "array", "description": "Liste der Workflow-Knoten (id, title, type, agent_id, prompt, depends_on, plugin_params)"},
+                        "edges": {"type": "array", "description": "Optionale Kanten-Definitionen ({from, to, condition, data_mode})"},
+                        "inputs": {"type": "array", "description": "Optionale Eingabe-Parameter"},
+                        "auto_run": {"type": "boolean", "default": False, "description": "Wenn true, wird der Workflow direkt gestartet"},
+                        "run_inputs": {"type": "object", "description": "Optionale Laufzeit-Inputs bei auto_run=true"}
+                    },
+                    "required": ["title", "nodes"]
+                }
+            },
+            {
+                "name": "archon__run_workflow_template",
+                "description": "Startet ein gespeichertes Workflow-Template über die zentrale DAG-Engine in Operations/Kanban.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "template_id": {"type": "string", "description": "ID des Workflow-Templates"},
+                        "inputs": {"type": "object", "description": "Laufzeit-Parameter (z. B. {topic: '...'})"}
+                    },
+                    "required": ["template_id"]
+                }
             }
         ]
 
@@ -165,12 +204,50 @@ class ArchonMcpServer:
                 return self._trigger_boardroom(arguments)
             elif name == "archon__get_system_metrics":
                 return self._get_metrics(arguments)
+            elif name == "archon__list_workflow_node_plugins":
+                return self._list_workflow_node_plugins(arguments)
+            elif name == "archon__create_workflow_template":
+                return self._create_workflow_template(arguments)
+            elif name == "archon__run_workflow_template":
+                return self._run_workflow_template(arguments)
             else:
                 return {"status": "error", "message": f"Unbekanntes Werkzeug: '{name}'"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
     # --- Tool Implementierungen ---
+
+    def _list_workflow_node_plugins(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        from backend.workflow_node_plugins import list_workflow_node_plugins
+        return {
+            "status": "success",
+            "standard_types": ["agent", "fanout", "gate", "quality_gate", "boardroom", "research"],
+            "plugins": list_workflow_node_plugins(),
+        }
+
+    def _create_workflow_template(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        from backend.workflow_templates import save_workflow_template, launch_workflow_run
+        tpl = save_workflow_template({
+            "id": args.get("id") or "",
+            "title": args.get("title") or "",
+            "category": args.get("category") or "Eigene Workflows",
+            "description": args.get("description") or "",
+            "nodes": args.get("nodes") or [],
+            "edges": args.get("edges") or [],
+            "inputs": args.get("inputs") or [{"key": "topic", "label": "Thema / Ziel", "default": ""}],
+        })
+        out: Dict[str, Any] = {"status": "success", "template": tpl}
+        if bool(args.get("auto_run")):
+            out["run"] = launch_workflow_run(tpl["id"], inputs=args.get("run_inputs") or {})
+        return out
+
+    def _run_workflow_template(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        from backend.workflow_templates import launch_workflow_run
+        tpl_id = str(args.get("template_id") or "").strip()
+        if not tpl_id:
+            return {"status": "error", "message": "template_id fehlt."}
+        res = launch_workflow_run(tpl_id, inputs=args.get("inputs") or {})
+        return {"status": "success", **res}
 
     def _create_task(self, args: Dict[str, Any]) -> Dict[str, Any]:
         title = args.get("title", "").strip()

@@ -374,3 +374,36 @@ def test_workflow_node_marketplace_install_uninstall_and_template_save(tmp_path,
     assert saved["header_image"] == "https://example.com/banner.png"
     assert saved["nodes"][0]["type"] == "ffmpeg"
     assert saved["nodes"][0]["plugin_params"]["mode"] == "aspect_9_16"
+
+
+def test_mcp_orchestrator_workflow_builder_tools(tmp_path, monkeypatch):
+    import backend.workflow_templates as wt
+    from scripts.archon_mcp_server import ArchonMcpServer
+
+    custom_file = tmp_path / "custom_tpls.json"
+    monkeypatch.setattr(wt, "CUSTOM_TEMPLATES_PATH", str(custom_file))
+    monkeypatch.setattr(wt, "_CUSTOM_TEMPLATES_CORRUPT", False)
+
+    srv = ArchonMcpServer()
+    names = {t["name"] for t in srv.get_tool_definitions()}
+    assert "archon__list_workflow_node_plugins" in names
+    assert "archon__create_workflow_template" in names
+    assert "archon__run_workflow_template" in names
+
+    plugs = srv.execute_tool("archon__list_workflow_node_plugins", {})
+    assert plugs["status"] == "success"
+    assert any(p["plugin_id"] == "ffmpeg" for p in plugs["plugins"])
+
+    created = srv.execute_tool(
+        "archon__create_workflow_template",
+        {
+            "title": "Orchestrator Auto Pipeline",
+            "category": "Content & Marketing",
+            "nodes": [
+                {"id": "s1", "type": "research", "title": "Recherche", "prompt": "Recherchiere {{topic}}"},
+                {"id": "s2", "type": "tts", "title": "Voiceover", "depends_on": ["s1"]},
+            ],
+        },
+    )
+    assert created["status"] == "success"
+    assert created["template"]["nodes"][1]["type"] == "tts"
